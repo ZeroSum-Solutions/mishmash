@@ -1,0 +1,2421 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Lantern &amp; Loft — Personal Home Tutoring & Mentorship</title>
+		<meta
+			name="description"
+			content="Lantern & Loft is a boutique one-on-one home-tutoring and mentorship studio. Personal learning that lights the way for every student."
+		>
+		<style>
+/* Self-hosted variable fonts — vendored from Google Fonts */
+
+
+
+
+/* ============ TOKENS ============ */
+:root {
+	--paper: #f7f2e7;
+	--surface: #fffdf8;
+	--ink: #1c1a17;
+	--taupe: #6b6357;
+	--indigo: #3b2f63;
+	--indigo-tint: #e3def0;
+	--amber: #e8a22b;
+	--amber-tint: #fae9c8;
+	--sage: #7fa77c;
+	--sage-tint: #dde8d4;
+	--clay: #c9673e;
+	--lavender: #e7e0f4;
+	--border: #eae2d2;
+	--shadow-sm: 0 2px 8px rgba(28, 26, 23, 0.06);
+	--shadow-md: 0 14px 38px -16px rgba(28, 26, 23, 0.22);
+	--shadow-lg: 0 30px 70px -28px rgba(28, 26, 23, 0.34);
+	--serif: "Fraunces", Georgia, serif;
+	--sans: "Plus Jakarta Sans", system-ui, sans-serif;
+	--maxw: 1200px;
+	--radius: 22px;
+	--radius-lg: 40px;
+}
+
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+html {
+	scroll-behavior: smooth;
+	overflow-x: clip;
+}
+body {
+	font-family: var(--sans);
+	color: var(--ink);
+	background: var(--paper);
+	line-height: 1.6;
+	-webkit-font-smoothing: antialiased;
+	overflow-x: hidden;
+	position: relative;
+}
+/* paper grain */
+body::before {
+	content: "";
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	z-index: 0;
+	opacity: 0.5;
+	background-image: radial-gradient(
+		rgba(28, 26, 23, 0.05) 1px,
+		transparent 1.4px
+	);
+	background-size: 22px 22px;
+}
+img {
+	max-width: 100%;
+	display: block;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+h1,
+h2,
+h3,
+h4 {
+	font-family: var(--serif);
+	font-weight: 600;
+	line-height: 1.08;
+	letter-spacing: -0.01em;
+}
+
+.wrap {
+	width: 100%;
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 0 24px;
+	position: relative;
+	z-index: 1;
+}
+.eyebrow {
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: var(--indigo);
+}
+.eyebrow.clay {
+	color: var(--clay);
+}
+.lede {
+	color: var(--taupe);
+	font-size: clamp(16px, 1.5vw, 19px);
+}
+section {
+	position: relative;
+	z-index: 1;
+}
+
+/* ============ BUTTONS ============ */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 16px;
+	font-family: var(--sans);
+	font-weight: 700;
+	font-size: 17px;
+	cursor: pointer;
+	border: none;
+	transition:
+		background 0.3s ease,
+		color 0.3s ease,
+		transform 0.15s ease,
+		box-shadow 0.3s ease;
+}
+.btn-primary {
+	background: var(--indigo);
+	color: #fff;
+	padding: 8px 8px 8px 26px;
+	border-radius: 100px;
+	box-shadow: 0 18px 36px -16px rgba(59, 47, 99, 0.6);
+}
+.btn-primary .chip {
+	width: 46px;
+	height: 46px;
+	border-radius: 50%;
+	background: var(--amber);
+	color: var(--indigo);
+	display: grid;
+	place-items: center;
+	flex: 0 0 auto;
+	transition:
+		transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
+		background 0.3s;
+}
+.btn-primary:hover {
+	background: var(--ink);
+}
+.btn-primary:hover .chip {
+	transform: rotate(45deg);
+}
+.btn-primary .chip svg {
+	width: 20px;
+	height: 20px;
+}
+.btn-solid {
+	background: var(--indigo);
+	color: #fff;
+	padding: 16px 30px;
+	border-radius: 100px;
+}
+.btn-solid:hover {
+	background: var(--ink);
+	transform: translateY(-2px);
+}
+.btn-ghost {
+	background: var(--surface);
+	color: var(--ink);
+	padding: 14px 26px;
+	border-radius: 100px;
+	border: 1px solid var(--border);
+	box-shadow: var(--shadow-sm);
+}
+.btn-ghost:hover {
+	background: var(--amber-tint);
+}
+.link-arrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	font-weight: 700;
+	border-bottom: 2px solid var(--ink);
+	padding-bottom: 3px;
+	transition: gap 0.25s ease;
+}
+.link-arrow:hover {
+	gap: 20px;
+}
+.link-arrow svg {
+	width: 18px;
+	height: 18px;
+}
+:focus-visible {
+	outline: 3px solid var(--amber);
+	outline-offset: 3px;
+	border-radius: 6px;
+}
+
+/* ============ NAV ============ */
+.nav-shell {
+	position: fixed;
+	top: 16px;
+	left: 0;
+	right: 0;
+	z-index: 100;
+	padding: 0 18px;
+}
+.nav {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	background: rgba(255, 253, 248, 0.82);
+	backdrop-filter: blur(14px);
+	border: 1px solid var(--border);
+	border-radius: 100px;
+	box-shadow: var(--shadow-sm);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 12px 10px 18px;
+}
+.brand {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-family: var(--serif);
+	font-weight: 600;
+	font-size: 21px;
+}
+.brand .mark {
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	background: var(--indigo);
+	color: #fff;
+	display: grid;
+	place-items: center;
+	font-family: var(--serif);
+	font-weight: 700;
+	font-size: 20px;
+	box-shadow: inset 0 0 0 3px var(--amber);
+}
+.nav-links {
+	display: flex;
+	gap: 30px;
+	font-weight: 600;
+	font-size: 15px;
+}
+.nav-links a {
+	color: var(--taupe);
+	transition: color 0.2s;
+}
+.nav-links a:hover {
+	color: var(--indigo);
+}
+.nav-cta {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.nav-pill {
+	background: var(--indigo);
+	color: #fff;
+	padding: 11px 22px;
+	border-radius: 100px;
+	font-weight: 700;
+	font-size: 15px;
+	box-shadow: inset 0 0 0 2px transparent;
+	transition:
+		background 0.25s,
+		box-shadow 0.25s,
+		color 0.25s;
+}
+.nav-pill:hover {
+	background: var(--amber-tint);
+	color: var(--indigo);
+	box-shadow: inset 0 0 0 2px var(--amber);
+}
+.hamburger {
+	display: none;
+	width: 44px;
+	height: 44px;
+	border-radius: 50%;
+	border: 1px solid var(--border);
+	background: var(--surface);
+	cursor: pointer;
+	place-items: center;
+}
+.hamburger svg {
+	width: 22px;
+	height: 22px;
+}
+.mobile-sheet {
+	display: none;
+	max-width: var(--maxw);
+	margin: 10px auto 0;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 26px;
+	box-shadow: var(--shadow-lg);
+	padding: 18px;
+}
+.mobile-sheet.open {
+	display: block;
+}
+.mobile-sheet a {
+	display: block;
+	padding: 14px 12px;
+	font-weight: 600;
+	border-bottom: 1px solid var(--border);
+	text-align: center;
+}
+.mobile-sheet a:last-child {
+	border: none;
+	background: var(--indigo);
+	color: #fff;
+	border-radius: 100px;
+	margin-top: 10px;
+}
+
+/* ============ HERO ============ */
+.hero {
+	padding: 150px 0 70px;
+	overflow: hidden;
+}
+.hero-glow {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 52%;
+	height: 115%;
+	background: linear-gradient(
+		135deg,
+		rgba(232, 162, 43, 0.22),
+		rgba(231, 224, 244, 0.35)
+	);
+	transform: skewX(-12deg) translateX(120px);
+	z-index: 0;
+	border-radius: 60px;
+}
+.hero-grid {
+	display: grid;
+	grid-template-columns: 1.05fr 0.95fr;
+	gap: 60px;
+	align-items: center;
+}
+.hero-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 26px;
+}
+.hero h1 {
+	font-size: clamp(40px, 6vw, 80px);
+}
+.hero h1 .hl {
+	position: relative;
+	color: var(--amber);
+	white-space: nowrap;
+}
+.hero h1 .hl svg {
+	position: absolute;
+	left: 0;
+	bottom: -0.12em;
+	width: 100%;
+	height: 0.3em;
+}
+.hero .lede {
+	max-width: 30em;
+}
+.hero-actions {
+	display: flex;
+	align-items: center;
+	gap: 28px;
+	flex-wrap: wrap;
+}
+.trust {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
+.avatars {
+	display: flex;
+}
+.avatars img {
+	width: 42px;
+	height: 42px;
+	border-radius: 50%;
+	border: 3px solid var(--paper);
+	object-fit: cover;
+	margin-left: -14px;
+	box-shadow: var(--shadow-sm);
+}
+.avatars img:first-child {
+	margin-left: 0;
+}
+.trust span {
+	font-size: 14px;
+	font-weight: 700;
+	color: var(--taupe);
+}
+.trust b {
+	color: var(--ink);
+}
+
+.hero-cards {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 24px;
+	align-items: start;
+}
+.card-info {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	padding: 30px;
+	min-height: 380px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	box-shadow: var(--shadow-md);
+	transform: translateY(40px);
+	transition:
+		transform 0.4s ease,
+		box-shadow 0.4s ease;
+}
+.card-info:hover {
+	transform: translateY(28px);
+	box-shadow: var(--shadow-lg);
+}
+.icon-chip {
+	width: 56px;
+	height: 56px;
+	border-radius: 18px;
+	background: var(--indigo-tint);
+	color: var(--indigo);
+	display: grid;
+	place-items: center;
+}
+.icon-chip svg {
+	width: 28px;
+	height: 28px;
+}
+.card-info h3 {
+	font-size: 28px;
+}
+.card-info p {
+	color: var(--taupe);
+	margin-top: 12px;
+}
+.card-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-top: 22px;
+	border-top: 1px solid var(--border);
+}
+.card-foot span {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--indigo);
+}
+.card-foot .dot {
+	width: 38px;
+	height: 38px;
+	border-radius: 50%;
+	background: var(--amber-tint);
+	display: grid;
+	place-items: center;
+}
+.card-foot .dot svg {
+	width: 18px;
+	height: 18px;
+	color: var(--clay);
+}
+.card-photo {
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+	position: relative;
+	aspect-ratio: 4 / 5;
+	box-shadow: var(--shadow-lg);
+}
+.card-photo img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.7s ease;
+}
+.card-photo:hover img {
+	transform: scale(1.07);
+}
+.card-photo .cap {
+	position: absolute;
+	left: 22px;
+	bottom: 22px;
+	color: #fff;
+	z-index: 2;
+}
+.card-photo .cap b {
+	font-size: 18px;
+	display: block;
+	font-family: var(--serif);
+}
+.card-photo .cap span {
+	font-size: 12px;
+	opacity: 0.85;
+}
+.card-photo::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(to top, rgba(28, 26, 23, 0.6), transparent 55%);
+}
+
+.doodle {
+	position: absolute;
+	color: var(--amber);
+	pointer-events: none;
+	z-index: 2;
+}
+.doodle.d1 {
+	top: 120px;
+	right: 8%;
+	width: 34px;
+}
+.doodle.d2 {
+	bottom: 90px;
+	left: 46%;
+	width: 26px;
+	color: var(--clay);
+}
+.doodle.d3 {
+	top: 240px;
+	left: 2%;
+	width: 22px;
+	color: var(--sage);
+}
+.float {
+	animation: float 4s ease-in-out infinite;
+}
+.float.alt {
+	animation-delay: 1.6s;
+}
+@keyframes float {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-14px);
+	}
+}
+
+/* ============ MARQUEE ============ */
+.marquee {
+	background: var(--sage-tint);
+	padding: 22px 0;
+	overflow: hidden;
+	border-top: 1px solid var(--border);
+	border-bottom: 1px solid var(--border);
+}
+.marquee-track {
+	display: flex;
+	white-space: nowrap;
+	width: max-content;
+	animation: scroll 28s linear infinite;
+}
+.marquee:hover .marquee-track {
+	animation-play-state: paused;
+}
+.marquee-group {
+	display: flex;
+	align-items: center;
+	gap: 46px;
+	padding: 0 23px;
+}
+.marquee-group span {
+	font-family: var(--serif);
+	font-size: clamp(20px, 2.6vw, 32px);
+	font-weight: 600;
+	color: var(--ink);
+}
+.marquee-group .star {
+	width: 30px;
+	height: 30px;
+	color: var(--clay);
+	animation: spin 12s linear infinite;
+}
+@keyframes scroll {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
+}
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* ============ APPROACH / ABOUT ============ */
+.about {
+	padding: 120px 0;
+}
+.about-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 40px;
+	margin-bottom: 70px;
+}
+.about-head h2 {
+	font-size: clamp(30px, 4.5vw, 58px);
+	max-width: 14em;
+}
+.about-head .eyebrow {
+	margin-bottom: 14px;
+	display: block;
+}
+.icon-cluster {
+	display: flex;
+	padding-top: 10px;
+	flex: 0 0 auto;
+}
+.icon-cluster .b {
+	width: 64px;
+	height: 64px;
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	border: 5px solid var(--paper);
+	margin-left: -16px;
+	box-shadow: var(--shadow-sm);
+}
+.icon-cluster .b:first-child {
+	margin-left: 0;
+}
+.icon-cluster .b svg {
+	width: 30px;
+	height: 30px;
+	color: #fff;
+}
+
+.stats {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 26px;
+	margin-bottom: 80px;
+}
+.stat .num {
+	font-family: var(--serif);
+	font-weight: 700;
+	font-size: clamp(34px, 4.5vw, 56px);
+	display: flex;
+	align-items: baseline;
+}
+.stat .num .suf {
+	font-size: 0.6em;
+}
+.stat p {
+	color: var(--taupe);
+	font-size: 15px;
+	margin-top: 4px;
+}
+.stat::before {
+	content: "";
+	display: block;
+	width: 38px;
+	height: 4px;
+	border-radius: 4px;
+	background: var(--amber);
+	margin-bottom: 14px;
+}
+
+.tilts {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 26px;
+}
+.tilt {
+	border-radius: var(--radius);
+	padding: 38px;
+	display: flex;
+	flex-direction: column;
+	gap: 40px;
+	transition:
+		transform 0.5s ease,
+		box-shadow 0.5s ease;
+}
+.tilt.sage {
+	background: var(--sage-tint);
+	transform: rotate(-3.5deg);
+}
+.tilt.lav {
+	background: var(--lavender);
+	transform: rotate(3.5deg);
+}
+.tilt:hover {
+	transform: rotate(0);
+	box-shadow: var(--shadow-md);
+}
+.tilt .badge {
+	width: 60px;
+	height: 60px;
+	border-radius: 50%;
+	background: var(--surface);
+	display: grid;
+	place-items: center;
+	box-shadow: var(--shadow-sm);
+}
+.tilt .badge svg {
+	width: 28px;
+	height: 28px;
+	color: var(--indigo);
+}
+.tilt h3 {
+	font-size: 24px;
+	margin-bottom: 8px;
+}
+.tilt p {
+	color: var(--taupe);
+}
+.tilt-img {
+	border-radius: var(--radius);
+	overflow: hidden;
+	box-shadow: var(--shadow-md);
+	transform: translateY(14px);
+}
+.tilt-img img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	min-height: 280px;
+}
+
+/* ============ WHY ============ */
+.why {
+	padding: 120px 0;
+	background: var(--surface);
+	border-top: 1px solid var(--border);
+	border-bottom: 1px solid var(--border);
+}
+.why-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 64px;
+	align-items: center;
+}
+.why-img {
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+	box-shadow: var(--shadow-lg);
+}
+.why-img img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	min-height: 420px;
+}
+.why-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+}
+.why-copy h2 {
+	font-size: clamp(30px, 4.2vw, 54px);
+}
+.why-feats {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 30px;
+	border-top: 1px solid var(--border);
+	padding-top: 30px;
+}
+.why-feats h3 {
+	font-size: 22px;
+	margin-bottom: 8px;
+}
+.why-feats p {
+	color: var(--taupe);
+	font-size: 15px;
+}
+
+/* ============ SUBJECTS ============ */
+.subjects {
+	padding: 120px 0;
+	background: rgba(231, 224, 244, 0.28);
+}
+.center-head {
+	text-align: center;
+	max-width: 720px;
+	margin: 0 auto 64px;
+}
+.center-head .eyebrow {
+	display: block;
+	margin-bottom: 14px;
+}
+.center-head h2 {
+	font-size: clamp(30px, 4.5vw, 58px);
+}
+.subj-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 26px;
+}
+.subj {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 34px;
+	transition:
+		transform 0.3s ease,
+		box-shadow 0.3s ease;
+}
+.subj:hover {
+	transform: translateY(-8px);
+	box-shadow: var(--shadow-md);
+}
+.subj h4 {
+	font-size: 26px;
+	display: inline-block;
+	transform-origin: left;
+	transition: transform 0.3s;
+}
+.subj:hover h4 {
+	transform: scale(1.06);
+}
+.subj p {
+	color: var(--taupe);
+	margin-top: 12px;
+}
+.c-indigo {
+	color: var(--indigo);
+}
+.c-sage {
+	color: var(--sage);
+}
+.c-amber {
+	color: var(--amber);
+}
+.c-clay {
+	color: var(--clay);
+}
+
+/* ============ PROGRAMS ============ */
+.programs {
+	padding: 120px 0;
+}
+.prog-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	gap: 30px;
+	margin-bottom: 56px;
+	flex-wrap: wrap;
+}
+.prog-head h2 {
+	font-size: clamp(30px, 4.5vw, 58px);
+}
+.prog-head .eyebrow {
+	display: block;
+	margin-bottom: 12px;
+}
+.prog-stack {
+	display: flex;
+	flex-direction: column;
+	gap: 36px;
+}
+.prog {
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+}
+.prog.sage {
+	background: var(--sage-tint);
+}
+.prog.lav {
+	background: var(--lavender);
+}
+.prog-inner {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+}
+.prog.rev .prog-inner {
+	grid-template-columns: 1fr 1fr;
+	direction: rtl;
+}
+.prog.rev .prog-text,
+.prog.rev .prog-pic {
+	direction: ltr;
+}
+.prog-text {
+	padding: 50px;
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+}
+.prog-num {
+	width: 60px;
+	height: 60px;
+	border-radius: 50%;
+	background: var(--surface);
+	display: grid;
+	place-items: center;
+	font-family: var(--serif);
+	font-weight: 700;
+	font-size: 24px;
+}
+.prog-text h3 {
+	font-size: clamp(26px, 3vw, 38px);
+}
+.prog-text p {
+	color: var(--taupe);
+}
+.prog-tag {
+	align-self: flex-start;
+	background: var(--surface);
+	padding: 9px 20px;
+	border-radius: 100px;
+	font-weight: 700;
+	font-size: 14px;
+}
+.prog-pic {
+	overflow: hidden;
+	min-height: 360px;
+}
+.prog-pic img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.7s ease;
+}
+.prog:hover .prog-pic img {
+	transform: scale(1.06);
+}
+
+/* ============ PROCESS ============ */
+.process {
+	padding: 120px 0;
+	background: var(--surface);
+	border-top: 1px solid var(--border);
+	border-bottom: 1px solid var(--border);
+}
+.process-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 64px;
+}
+.process-left {
+	display: flex;
+	flex-direction: column;
+	gap: 26px;
+}
+.process-left h2 {
+	font-size: clamp(30px, 4.2vw, 54px);
+}
+.process-left img {
+	border-radius: var(--radius);
+	width: 100%;
+	height: 360px;
+	object-fit: cover;
+	box-shadow: var(--shadow-md);
+}
+.proc-cols {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 24px;
+}
+.proc-col {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+}
+.proc-col:last-child {
+	margin-top: 48px;
+}
+.proc-card {
+	background: var(--paper);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 30px;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+.proc-card .glyph {
+	width: 44px;
+	height: 44px;
+	color: var(--amber);
+	animation: spin 12s linear infinite;
+}
+.proc-card h4 {
+	font-size: 20px;
+	margin-bottom: 6px;
+}
+.proc-card p {
+	color: var(--taupe);
+	font-size: 14px;
+}
+
+/* ============ PRICING ============ */
+.pricing {
+	padding: 120px 0;
+}
+.price-grid {
+	display: grid;
+	grid-template-columns: 1fr 2fr;
+	gap: 26px;
+}
+.plan {
+	border-radius: var(--radius-lg);
+	padding: 40px;
+	display: flex;
+	flex-direction: column;
+}
+.plan.basic {
+	background: var(--sage-tint);
+}
+.plan.feat {
+	background: var(--amber-tint);
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 40px;
+	padding: 40px;
+}
+.plan h3 {
+	font-size: 26px;
+}
+.plan .desc {
+	color: var(--taupe);
+	margin: 16px 0;
+}
+.plan .price {
+	font-family: var(--serif);
+	font-weight: 700;
+	font-size: 44px;
+	margin-bottom: 8px;
+}
+.plan .price .per {
+	font-size: 17px;
+	font-weight: 400;
+	color: var(--taupe);
+}
+.plan ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	margin: 22px 0;
+	flex: 1;
+}
+.plan li {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-weight: 500;
+}
+.plan li svg {
+	width: 20px;
+	height: 20px;
+	color: var(--sage);
+	flex: 0 0 auto;
+}
+.plan .btn-solid,
+.plan .btn-plan {
+	text-align: center;
+	justify-content: center;
+	margin-top: auto;
+}
+.btn-plan {
+	background: var(--surface);
+	color: var(--ink);
+	padding: 16px;
+	border-radius: 100px;
+	font-weight: 700;
+	transition:
+		background 0.25s,
+		color 0.25s;
+}
+.btn-plan:hover {
+	background: var(--indigo);
+	color: #fff;
+}
+.plan-pic {
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+.plan-pic img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	min-height: 320px;
+}
+.plan-left {
+	display: flex;
+	flex-direction: column;
+}
+
+/* ============ CTA BANNER ============ */
+.cta {
+	padding: 60px 0 120px;
+}
+.cta-card {
+	max-width: 880px;
+	margin: 0 auto;
+	position: relative;
+	overflow: hidden;
+	border: 4px solid var(--indigo);
+	border-radius: 44px;
+	padding: 90px 40px;
+	text-align: center;
+	box-shadow: var(--shadow-md);
+}
+.cta-bg {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+}
+.cta-bg img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	opacity: 0.35;
+	transition: transform 0.7s ease;
+}
+.cta-card:hover .cta-bg img {
+	transform: scale(1.05);
+}
+.cta-card::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: rgba(247, 242, 231, 0.6);
+	z-index: 1;
+}
+.cta-inner {
+	position: relative;
+	z-index: 2;
+	max-width: 30em;
+	margin: 0 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+	align-items: center;
+}
+.cta-inner h2 {
+	font-size: clamp(28px, 4vw, 48px);
+}
+.cta-inner p {
+	font-weight: 600;
+	font-size: 18px;
+}
+.blob {
+	position: absolute;
+	width: 220px;
+	height: 220px;
+	border-radius: 50%;
+	filter: blur(60px);
+	z-index: 0;
+}
+.blob.a {
+	background: rgba(232, 162, 43, 0.4);
+	top: -90px;
+	right: -60px;
+}
+.blob.b {
+	background: rgba(127, 167, 124, 0.4);
+	bottom: -90px;
+	left: -60px;
+}
+
+/* ============ FOOTER ============ */
+.footer {
+	background: var(--ink);
+	color: #fff;
+	padding: 90px 0 40px;
+	position: relative;
+	overflow: hidden;
+}
+.footer-grid {
+	display: grid;
+	grid-template-columns: 4fr 2fr 2fr 4fr;
+	gap: 50px;
+	position: relative;
+	z-index: 2;
+}
+.f-brand {
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+}
+.f-brand .brand {
+	color: #fff;
+	font-size: 30px;
+}
+.f-brand p {
+	color: rgba(255, 255, 255, 0.6);
+	max-width: 30ch;
+}
+.f-brand .contact p {
+	color: rgba(255, 255, 255, 0.8);
+	margin-top: 6px;
+	font-size: 15px;
+}
+.f-col h4 {
+	font-family: var(--sans);
+	font-size: 18px;
+	margin-bottom: 18px;
+}
+.f-col ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.f-col a {
+	color: rgba(255, 255, 255, 0.6);
+	transition: color 0.2s;
+}
+.f-col a:hover {
+	color: #fff;
+}
+.socials {
+	display: flex;
+	gap: 12px;
+	margin-bottom: 26px;
+}
+.socials a {
+	width: 46px;
+	height: 46px;
+	border-radius: 50%;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	display: grid;
+	place-items: center;
+	transition: background 0.25s;
+}
+.socials a svg {
+	width: 20px;
+	height: 20px;
+	color: #fff;
+	transition: color 0.25s;
+}
+.socials a:hover {
+	background: #fff;
+}
+.socials a:hover svg {
+	color: var(--ink);
+}
+.wa {
+	background: var(--sage);
+	color: var(--ink);
+	padding: 14px 24px;
+	border-radius: 100px;
+	font-weight: 700;
+	display: inline-flex;
+	gap: 10px;
+	align-items: center;
+	transition: transform 0.25s;
+}
+.wa:hover {
+	transform: scale(1.04);
+}
+.wa svg {
+	width: 20px;
+	height: 20px;
+}
+.f-deco {
+	position: absolute;
+	bottom: -80px;
+	right: -50px;
+	width: 260px;
+	color: rgba(255, 255, 255, 0.06);
+	animation: spin 26s linear infinite;
+	z-index: 0;
+}
+.footer-bottom {
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	margin-top: 60px;
+	padding-top: 28px;
+	display: flex;
+	justify-content: space-between;
+	gap: 16px;
+	flex-wrap: wrap;
+	color: rgba(255, 255, 255, 0.45);
+	font-size: 14px;
+	position: relative;
+	z-index: 2;
+}
+
+/* ============ REVEAL ============ */
+.reveal {
+	opacity: 0;
+	transform: translateY(30px);
+	transition:
+		opacity 0.8s ease,
+		transform 0.8s ease;
+}
+.reveal.from-left {
+	transform: translateX(-80px);
+}
+.reveal.from-right {
+	transform: translateX(80px);
+}
+.reveal.in {
+	opacity: 1;
+	transform: none;
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 1023px) {
+	.hero-glow {
+		display: none;
+	}
+	.hero-grid {
+		grid-template-columns: 1fr;
+		gap: 48px;
+	}
+	.hero-cards {
+		max-width: 560px;
+	}
+	.card-info {
+		transform: none;
+		min-height: 0;
+	}
+	.card-info:hover {
+		transform: translateY(-6px);
+	}
+	.why-grid,
+	.process-grid,
+	.price-grid {
+		grid-template-columns: 1fr;
+		gap: 40px;
+	}
+	.plan.feat {
+		grid-template-columns: 1fr;
+	}
+	.price-grid .plan.feat .plan-pic img {
+		min-height: 240px;
+	}
+}
+@media (max-width: 860px) {
+	.nav-links {
+		display: none;
+	}
+	.nav-cta .nav-pill {
+		display: none;
+	}
+	.hamburger {
+		display: grid;
+	}
+	.about-head {
+		flex-direction: column;
+	}
+	.stats {
+		grid-template-columns: 1fr 1fr;
+		gap: 32px;
+	}
+	.tilts {
+		grid-template-columns: 1fr;
+	}
+	.tilt.sage,
+	.tilt.lav {
+		transform: none;
+	}
+	.subj-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+	.why-feats {
+		grid-template-columns: 1fr;
+	}
+	.prog-inner,
+	.prog.rev .prog-inner {
+		grid-template-columns: 1fr;
+		direction: ltr;
+	}
+	.prog-pic {
+		min-height: 280px;
+		order: 2;
+	}
+	.proc-col:last-child {
+		margin-top: 0;
+	}
+	.footer-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+	.f-brand {
+		grid-column: 1 / -1;
+	}
+}
+@media (max-width: 560px) {
+	.wrap {
+		padding: 0 18px;
+	}
+	.hero {
+		padding: 130px 0 50px;
+	}
+	.hero-cards {
+		grid-template-columns: 1fr;
+	}
+	.subj-grid {
+		grid-template-columns: 1fr;
+	}
+	.proc-cols {
+		grid-template-columns: 1fr;
+	}
+	.footer-grid {
+		grid-template-columns: 1fr;
+	}
+	.hero-actions {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation: none;
+		transition: none;
+	}
+	.reveal {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body id="top">
+		<!-- NAV -->
+		<div class="nav-shell">
+			<nav class="nav" aria-label="Primary">
+				<a class="brand" href="#top" aria-label="Lantern and Loft home">
+					<span class="mark">L</span>
+					<span>Lantern&nbsp;&amp;&nbsp;Loft</span>
+				</a>
+				<div class="nav-links">
+					<a href="#top">Home</a>
+					<a href="#approach">Approach</a>
+					<a href="#subjects">Subjects</a>
+					<a href="#programs">Programs</a>
+					<a href="#pricing">Pricing</a>
+				</div>
+				<div class="nav-cta">
+					<a href="#contact" class="nav-pill">Book a Session</a>
+					<button
+						class="hamburger"
+						id="hamburger"
+						aria-label="Open menu"
+						aria-expanded="false"
+						aria-controls="mobileSheet"
+					>
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+						>
+							<path d="M4 6h16M4 12h16M4 18h16" />
+						</svg>
+					</button>
+				</div>
+			</nav>
+			<div class="mobile-sheet" id="mobileSheet">
+				<a href="#top">Home</a>
+				<a href="#approach">Approach</a>
+				<a href="#subjects">Subjects</a>
+				<a href="#programs">Programs</a>
+				<a href="#pricing">Pricing</a>
+				<a href="#contact">Book a Session</a>
+			</div>
+		</div>
+
+		<main>
+			<!-- HERO -->
+			<section class="hero">
+				<div class="hero-glow" aria-hidden="true"></div>
+				<svg
+					class="doodle d1 float"
+					viewBox="0 0 24 24"
+					fill="currentColor"
+					aria-hidden="true"
+				>
+					<path d="M12 0l2.4 7.6L22 10l-7.6 2.4L12 20l-2.4-7.6L2 10l7.6-2.4z" />
+				</svg>
+				<svg
+					class="doodle d2 float alt"
+					viewBox="0 0 24 24"
+					fill="currentColor"
+					aria-hidden="true"
+				>
+					<path d="M12 0l2.4 7.6L22 10l-7.6 2.4L12 20l-2.4-7.6L2 10l7.6-2.4z" />
+				</svg>
+				<svg
+					class="doodle d3 float"
+					viewBox="0 0 24 24"
+					fill="currentColor"
+					aria-hidden="true"
+				>
+					<path d="M12 0l2.4 7.6L22 10l-7.6 2.4L12 20l-2.4-7.6L2 10l7.6-2.4z" />
+				</svg>
+				<div class="wrap">
+					<div class="hero-grid">
+						<div class="hero-copy reveal from-left">
+							<span class="eyebrow">One-on-one home tutoring</span>
+							<h1>
+								Personal learning that
+								<span class="hl"
+									>lights<svg
+										viewBox="0 0 200 12"
+										preserveAspectRatio="none"
+										aria-hidden="true"
+									>
+										<path
+											d="M3 8 C 50 2, 150 2, 197 7"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="4"
+											stroke-linecap="round"
+										/>
+									</svg></span
+								>
+								the way for every student
+							</h1>
+							<p class="lede">
+								Warm, focused mentorship from experienced tutors — delivered at
+								your kitchen table or over a quiet call — to build deep
+								understanding and lasting confidence.
+							</p>
+							<div class="hero-actions">
+								<a href="#contact" class="btn btn-primary">
+									<span>Book a Consultation</span>
+									<span class="chip"
+										><svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2.4"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M5 12h14M13 6l6 6-6 6" />
+										</svg></span
+									>
+								</a>
+								<div class="trust">
+									<div class="avatars">
+										<img
+											src="assets/avatar-1.jpg"
+											alt="Parent of a Lantern & Loft student"
+										>
+										<img
+											src="assets/avatar-2.jpg"
+											alt="Parent of a Lantern & Loft student"
+										>
+										<img
+											src="assets/avatar-3.jpg"
+											alt="Parent of a Lantern & Loft student"
+										>
+									</div>
+									<span>Join <b>500+ families</b></span>
+								</div>
+							</div>
+						</div>
+
+						<div class="hero-cards reveal from-right">
+							<div class="card-info">
+								<div>
+									<div class="icon-chip">
+										<svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M22 10L12 5 2 10l10 5 10-5z" />
+											<path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5" />
+										</svg>
+									</div>
+									<h3>Expert Mentors</h3>
+									<p>
+										Subject specialists with years of patient, one-to-one
+										teaching experience.
+									</p>
+								</div>
+								<div class="card-foot">
+									<span>Meet the team</span>
+									<span class="dot"
+										><svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2.4"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M5 12h14M13 6l6 6-6 6" />
+										</svg></span
+									>
+								</div>
+							</div>
+							<div class="card-photo">
+								<img
+									src="assets/hero-portrait.jpg"
+									alt="A focused student smiling while studying at a desk"
+								>
+								<div class="cap">
+									<b>Prisha S.</b><span>Class 10 · 98% in finals</span>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- MARQUEE -->
+			<div class="marquee" aria-hidden="true">
+				<div class="marquee-track">
+					<div class="marquee-group">
+						<span>Concept clarity</span>
+						<svg class="star" viewBox="0 0 24 24" fill="currentColor">
+							<path
+								d="M12 1l2.2 7L21 9.5l-5.6 4.3L17.6 21 12 16.7 6.4 21l2.2-7.2L3 9.5 9.8 8z"
+							/>
+						</svg>
+						<span>Exam confidence</span>
+						<svg class="star" viewBox="0 0 24 24" fill="currentColor">
+							<path
+								d="M12 1l2.2 7L21 9.5l-5.6 4.3L17.6 21 12 16.7 6.4 21l2.2-7.2L3 9.5 9.8 8z"
+							/>
+						</svg>
+						<span>Joyful habits</span>
+						<svg class="star" viewBox="0 0 24 24" fill="currentColor">
+							<path
+								d="M12 1l2.2 7L21 9.5l-5.6 4.3L17.6 21 12 16.7 6.4 21l2.2-7.2L3 9.5 9.8 8z"
+							/>
+						</svg>
+						<span>Real progress</span>
+						<svg class="star" viewBox="0 0 24 24" fill="currentColor">
+							<path
+								d="M12 1l2.2 7L21 9.5l-5.6 4.3L17.6 21 12 16.7 6.4 21l2.2-7.2L3 9.5 9.8 8z"
+							/>
+						</svg>
+					</div>
+					<div class="marquee-group">
+						<span>Concept clarity</span>
+						<svg class="star" viewBox="0 0 24 24" fill="currentColor">
+							<path
+								d="M12 1l2.2 7L21 9.5l-5.6 4.3L17.6 21 12 16.7 6.4 21l2.2-7.2L3 9.5 9.8 8z"
+							/>
+						</svg>
+						<span>Exam confidence</span>
+						<svg class="star" viewBox="0 0 24 24" fill="currentColor">
+							<path
+								d="M12 1l2.2 7L21 9.5l-5.6 4.3L17.6 21 12 16.7 6.4 21l2.2-7.2L3 9.5 9.8 8z"
+							/>
+						</svg>
+						<span>Joyful habits</span>
+						<svg class="star" viewBox="0 0 24 24" fill="currentColor">
+							<path
+								d="M12 1l2.2 7L21 9.5l-5.6 4.3L17.6 21 12 16.7 6.4 21l2.2-7.2L3 9.5 9.8 8z"
+							/>
+						</svg>
+						<span>Real progress</span>
+						<svg class="star" viewBox="0 0 24 24" fill="currentColor">
+							<path
+								d="M12 1l2.2 7L21 9.5l-5.6 4.3L17.6 21 12 16.7 6.4 21l2.2-7.2L3 9.5 9.8 8z"
+							/>
+						</svg>
+					</div>
+				</div>
+			</div>
+
+			<!-- APPROACH / ABOUT -->
+			<section class="about" id="approach">
+				<div class="wrap">
+					<div class="about-head">
+						<div class="reveal">
+							<span class="eyebrow">About Lantern &amp; Loft</span>
+							<h2>
+								One-to-one learning support for students of every level and
+								pace.
+							</h2>
+						</div>
+						<div class="icon-cluster reveal from-right">
+							<span class="b" style="background:var(--sage)"
+								><svg viewBox="0 0 24 24" fill="currentColor">
+									<path
+										d="M12 21s-7-4.5-7-10a4 4 0 017-2.6A4 4 0 0119 11c0 5.5-7 10-7 10z"
+									/>
+								</svg></span
+							>
+							<span class="b" style="background:var(--indigo)"
+								><svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path d="M12 3l8 4-8 4-8-4 8-4zM4 11l8 4 8-4M4 15l8 4 8-4" />
+								</svg></span
+							>
+							<span class="b" style="background:var(--amber)"
+								><svg viewBox="0 0 24 24" fill="currentColor">
+									<path
+										d="M12 2l2.5 6.5L21 9l-5 4.2L17.5 20 12 16.3 6.5 20 8 13.2 3 9l6.5-.5z"
+									/>
+								</svg></span
+							>
+						</div>
+					</div>
+
+					<div class="stats reveal" id="stats">
+						<div class="stat">
+							<div class="num">
+								<span class="counter" data-target="500">0</span
+								><span class="suf">+</span>
+							</div>
+							<p>Families supported to date</p>
+						</div>
+						<div class="stat">
+							<div class="num">
+								<span class="counter" data-target="15">0</span
+								><span class="suf">+</span>
+							</div>
+							<p>Academic subjects covered</p>
+						</div>
+						<div class="stat">
+							<div class="num">
+								<span class="counter" data-target="98">0</span
+								><span class="suf">%</span>
+							</div>
+							<p>Students who improved grades</p>
+						</div>
+						<div class="stat">
+							<div class="num">
+								<span class="counter" data-target="50">0</span
+								><span class="suf">+</span>
+							</div>
+							<p>Experienced subject mentors</p>
+						</div>
+					</div>
+
+					<div class="tilts">
+						<div class="tilt sage reveal">
+							<span class="badge"
+								><svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<circle cx="12" cy="8" r="4" />
+									<path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" />
+								</svg></span
+							>
+							<div>
+								<h3>Individual attention</h3>
+								<p>
+									Every learner gets a tailored path tuned to their strengths
+									and the spots that need care.
+								</p>
+							</div>
+						</div>
+						<div class="tilt-img reveal">
+							<img
+								src="assets/about-student.jpg"
+								alt="A student working through a problem with a tutor"
+							>
+						</div>
+						<div class="tilt lav reveal">
+							<span class="badge"
+								><svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+								>
+									<path d="M4 19V5M4 19h16M8 16V9M13 16V6M18 16v-4" />
+								</svg></span
+							>
+							<div>
+								<h3>Concept clarity</h3>
+								<p>
+									We build deep, durable understanding of the core ideas — never
+									rote memorisation.
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- WHY -->
+			<section class="why">
+				<div class="wrap">
+					<div class="why-grid">
+						<div class="why-img reveal from-left">
+							<img
+								src="assets/why-tutor.jpg"
+								alt="A tutor patiently guiding a student through their work"
+							>
+						</div>
+						<div class="why-copy reveal from-right">
+							<div>
+								<span class="eyebrow">Why families choose us</span>
+								<h2 style="margin-top:14px">
+									What makes Lantern &amp; Loft the right fit
+								</h2>
+							</div>
+							<p class="lede">
+								A nurturing, low-pressure space where students feel safe to ask
+								questions, explore freely, and grow through steady, joyful
+								learning.
+							</p>
+							<div class="why-feats">
+								<div>
+									<h3>Structured learning</h3>
+									<p>
+										Personalised plans that cover the full syllabus with room
+										for revision.
+									</p>
+								</div>
+								<div>
+									<h3>Doubt solving</h3>
+									<p>
+										Immediate, unhurried answers so progress never stalls
+										between sessions.
+									</p>
+								</div>
+							</div>
+							<a href="#contact" class="btn btn-primary">
+								<span>Talk to us</span>
+								<span class="chip"
+									><svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2.4"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M5 12h14M13 6l6 6-6 6" />
+									</svg></span
+								>
+							</a>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- SUBJECTS -->
+			<section class="subjects" id="subjects">
+				<div class="wrap">
+					<div class="center-head reveal">
+						<span class="eyebrow clay">Subjects offered</span>
+						<h2>Comprehensive coverage for every goal</h2>
+					</div>
+					<div class="subj-grid">
+						<div class="subj reveal">
+							<h4 class="c-indigo">Mathematics</h4>
+							<p>
+								From foundations to advanced problem-solving and full board exam
+								preparation.
+							</p>
+						</div>
+						<div class="subj reveal">
+							<h4 class="c-sage">Science</h4>
+							<p>
+								In-depth Physics, Chemistry, Biology and general science for
+								every level.
+							</p>
+						</div>
+						<div class="subj reveal">
+							<h4 class="c-amber">English</h4>
+							<p>
+								Grammar, reading comprehension, writing craft and spoken-English
+								support.
+							</p>
+						</div>
+						<div class="subj reveal">
+							<h4 class="c-clay">Social Studies</h4>
+							<p>
+								History, Geography, Civics and Economics taught through real
+								storytelling.
+							</p>
+						</div>
+						<div class="subj reveal">
+							<h4 class="c-sage">Commerce</h4>
+							<p>
+								Focused support for Accountancy, Business Studies and Economics
+								streams.
+							</p>
+						</div>
+						<div class="subj reveal">
+							<h4 class="c-indigo">Foundation</h4>
+							<p>
+								Early learning, homework help and reading/writing development
+								for young minds.
+							</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- PROGRAMS -->
+			<section class="programs" id="programs">
+				<div class="wrap">
+					<div class="prog-head">
+						<div class="reveal">
+							<span class="eyebrow">Our programs</span>
+							<h2>Support for every grade</h2>
+						</div>
+						<a href="#contact" class="btn-ghost reveal"
+							>Enquire for your grade</a
+						>
+					</div>
+					<div class="prog-stack">
+						<div class="prog sage reveal">
+							<div class="prog-inner">
+								<div class="prog-text">
+									<div class="prog-num">01</div>
+									<h3>Primary &amp; Middle School</h3>
+									<p>
+										Foundation learning support, concept building and homework
+										help for students in Class 1 to 8 across all boards.
+									</p>
+									<span class="prog-tag"
+										>Class 1 – 8 · CBSE / ICSE / State</span
+									>
+									<a href="#contact" class="link-arrow"
+										>Discuss academic goals
+										<svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2.4"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M5 12h14M13 6l6 6-6 6" />
+										</svg></a
+									>
+								</div>
+								<div class="prog-pic">
+									<img
+										src="assets/program-primary.jpg"
+										alt="Younger students learning together"
+									>
+								</div>
+							</div>
+						</div>
+						<div class="prog lav rev reveal">
+							<div class="prog-inner">
+								<div class="prog-text">
+									<div class="prog-num">02</div>
+									<h3>Secondary &amp; Senior Secondary</h3>
+									<p>
+										Intensive board exam preparation, advanced subject coaching
+										and performance-focused learning strategies.
+									</p>
+									<span class="prog-tag">Class 9 – 12 · All Boards</span>
+									<a href="#contact" class="link-arrow"
+										>Start board prep
+										<svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2.4"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M5 12h14M13 6l6 6-6 6" />
+										</svg></a
+									>
+								</div>
+								<div class="prog-pic">
+									<img
+										src="assets/program-secondary.jpg"
+										alt="A senior student studying for board exams"
+									>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- PROCESS -->
+			<section class="process">
+				<div class="wrap">
+					<div class="process-grid">
+						<div class="process-left reveal from-left">
+							<span class="eyebrow clay">Our approach</span>
+							<h2>Learning moments that shine</h2>
+							<p class="lede">
+								A closer look at how every session is built to spark curiosity
+								and quiet, steady confidence.
+							</p>
+							<a href="#contact" class="btn-solid" style="align-self:flex-start"
+								>Book an assessment</a
+							>
+							<img
+								src="assets/approach-reading.jpg"
+								alt="A student reading in a warm, well-lit room"
+							>
+						</div>
+						<div class="proc-cols reveal from-right">
+							<div class="proc-col">
+								<div class="proc-card">
+									<svg class="glyph" viewBox="0 0 24 24" fill="currentColor">
+										<path
+											d="M12 2l2.5 6.5L21 9l-5 4.2L17.5 20 12 16.3 6.5 20 8 13.2 3 9l6.5-.5z"
+										/>
+									</svg>
+									<div>
+										<h4>Assessment</h4>
+										<p>
+											We map the student's current level and learning needs
+											before anything else.
+										</p>
+									</div>
+								</div>
+								<div class="proc-card">
+									<svg class="glyph" viewBox="0 0 24 24" fill="currentColor">
+										<path
+											d="M12 2l2.5 6.5L21 9l-5 4.2L17.5 20 12 16.3 6.5 20 8 13.2 3 9l6.5-.5z"
+										/>
+									</svg>
+									<div>
+										<h4>Personalised plan</h4>
+										<p>
+											A strategy shaped around individual strengths and
+											improvement areas.
+										</p>
+									</div>
+								</div>
+							</div>
+							<div class="proc-col">
+								<div class="proc-card">
+									<svg class="glyph" viewBox="0 0 24 24" fill="currentColor">
+										<path
+											d="M12 2l2.5 6.5L21 9l-5 4.2L17.5 20 12 16.3 6.5 20 8 13.2 3 9l6.5-.5z"
+										/>
+									</svg>
+									<div>
+										<h4>Regular teaching</h4>
+										<p>
+											Consistent sessions focused on understanding and steady
+											practice.
+										</p>
+									</div>
+								</div>
+								<div class="proc-card">
+									<svg class="glyph" viewBox="0 0 24 24" fill="currentColor">
+										<path
+											d="M12 2l2.5 6.5L21 9l-5 4.2L17.5 20 12 16.3 6.5 20 8 13.2 3 9l6.5-.5z"
+										/>
+									</svg>
+									<div>
+										<h4>Monitoring</h4>
+										<p>
+											Regular feedback and progress reviews shared openly with
+											parents.
+										</p>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- PRICING -->
+			<section class="pricing" id="pricing">
+				<div class="wrap">
+					<div class="center-head reveal">
+						<span class="eyebrow">Fee plans</span>
+						<h2>Simple plans for serious growth</h2>
+					</div>
+					<div class="price-grid">
+						<div class="plan basic reveal from-left">
+							<h3>Basic Care</h3>
+							<p class="desc">
+								A steady plan for regular subjects and consistent homework
+								support.
+							</p>
+							<div class="price">₹3,000<span class="per">/month</span></div>
+							<ul>
+								<li>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2.6"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M4 12l5 5L20 6" />
+									</svg>3 sessions per week
+								</li>
+								<li>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2.6"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M4 12l5 5L20 6" />
+									</svg>Core subject support
+								</li>
+								<li>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2.6"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M4 12l5 5L20 6" />
+									</svg>Homework help
+								</li>
+							</ul>
+							<a href="#contact" class="btn-solid">Select Basic</a>
+						</div>
+						<div class="plan feat reveal from-right">
+							<div class="plan-left">
+								<h3>Academic Excellence</h3>
+								<p class="desc">
+									A complete plan for total academic development and board exam
+									mastery.
+								</p>
+								<div class="price">₹6,000<span class="per">/month</span></div>
+								<ul>
+									<li>
+										<svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2.6"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M4 12l5 5L20 6" />
+										</svg>Daily sessions (Mon–Fri)
+									</li>
+									<li>
+										<svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2.6"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M4 12l5 5L20 6" />
+										</svg>Board exam mock tests
+									</li>
+									<li>
+										<svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2.6"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M4 12l5 5L20 6" />
+										</svg>Weekend doubt clearing
+									</li>
+								</ul>
+								<a href="#contact" class="btn-plan">Select Excellence</a>
+							</div>
+							<div class="plan-pic">
+								<img
+									src="assets/pricing-excellence.jpg"
+									alt="A confident student celebrating strong results"
+								>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- CTA -->
+			<section class="cta">
+				<div class="wrap">
+					<div class="cta-card reveal">
+						<div class="cta-bg"><img src="assets/cta-bg.jpg" alt=""></div>
+						<span class="blob a" aria-hidden="true"></span>
+						<span class="blob b" aria-hidden="true"></span>
+						<div class="cta-inner">
+							<h2>Ready to see your child thrive?</h2>
+							<p>
+								Schedule a free assessment session today and start the path to
+								academic confidence.
+							</p>
+							<a href="#contact" class="btn-solid">Book a Free Assessment</a>
+						</div>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<!-- FOOTER -->
+		<footer class="footer" id="contact">
+			<svg
+				class="f-deco"
+				viewBox="0 0 24 24"
+				fill="currentColor"
+				aria-hidden="true"
+			>
+				<path
+					d="M12 1l2.2 7L21 9.5l-5.6 4.3L17.6 21 12 16.7 6.4 21l2.2-7.2L3 9.5 9.8 8z"
+				/>
+			</svg>
+			<div class="wrap">
+				<div class="footer-grid">
+					<div class="f-brand">
+						<a class="brand" href="#top"
+							><span class="mark">L</span><span>Lantern &amp; Loft</span></a
+						>
+						<p>
+							Warm, one-to-one learning support from experienced tutors —
+							helping students build strong foundations and quiet confidence.
+						</p>
+						<div class="contact">
+							<p><strong>Phone:</strong> +91 98765 43210</p>
+							<p><strong>WhatsApp:</strong> +91 98765 43210</p>
+						</div>
+					</div>
+					<div class="f-col">
+						<h4>Quick Links</h4>
+						<ul>
+							<li><a href="#top">Home</a></li>
+							<li><a href="#approach">Approach</a></li>
+							<li><a href="#subjects">Subjects</a></li>
+							<li><a href="#programs">Programs</a></li>
+							<li><a href="#pricing">Pricing</a></li>
+						</ul>
+					</div>
+					<div class="f-col">
+						<h4>Subjects</h4>
+						<ul>
+							<li><a href="#subjects">Mathematics</a></li>
+							<li><a href="#subjects">Science</a></li>
+							<li><a href="#subjects">English</a></li>
+							<li><a href="#subjects">Commerce</a></li>
+							<li><a href="#subjects">Foundation</a></li>
+						</ul>
+					</div>
+					<div class="f-col">
+						<h4>Follow Us</h4>
+						<div class="socials">
+							<a href="#" aria-label="Facebook"
+								><svg viewBox="0 0 24 24" fill="currentColor">
+									<path
+										d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H7v3h3v6h3v-6h3l1-3h-4v-2c0-.6.4-1 1-1z"
+									/>
+								</svg></a
+							>
+							<a href="#" aria-label="Instagram"
+								><svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<rect x="3" y="3" width="18" height="18" rx="5" />
+									<circle cx="12" cy="12" r="4" />
+									<circle
+										cx="17.5"
+										cy="6.5"
+										r="1"
+										fill="currentColor"
+										stroke="none"
+									/>
+								</svg></a
+							>
+							<a href="#" aria-label="LinkedIn"
+								><svg viewBox="0 0 24 24" fill="currentColor">
+									<path
+										d="M6.5 8A1.5 1.5 0 116.5 5a1.5 1.5 0 010 3zM5 10h3v9H5v-9zm5 0h3v1.3c.5-.8 1.5-1.5 3-1.5 2.3 0 3 1.5 3 3.8V19h-3v-4.6c0-1.1-.4-1.9-1.4-1.9-.9 0-1.4.6-1.6 1.2-.1.2-.1.5-.1.8V19h-3v-9z"
+									/>
+								</svg></a
+							>
+						</div>
+						<a href="https://wa.me/919876543210" class="wa">
+							<svg viewBox="0 0 24 24" fill="currentColor">
+								<path
+									d="M12 2a10 10 0 00-8.6 15l-1.2 4.4 4.5-1.2A10 10 0 1012 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6-2.8-1.2-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.8 0-1.3.7-1.9 1-2.2.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2 0 .4-.1.5l-.3.4c-.1.2-.3.3-.1.6.1.3.7 1.1 1.5 1.8 1 .9 1.8 1.1 2.1 1.3.2.1.4.1.5-.1l.6-.8c.2-.2.4-.2.6-.1l1.7.9c.2.1.4.2.4.3.1.1.1.6 0 1.1z"
+								/>
+							</svg>
+							WhatsApp Us
+						</a>
+					</div>
+				</div>
+				<div class="footer-bottom">
+					<p>© 2024 Lantern &amp; Loft Home Tutoring · All Rights Reserved</p>
+					<p>A warmer path to academic confidence</p>
+				</div>
+			</div>
+		</footer>
+
+		<script>
+(() => {
+	// ---- Mobile menu ----
+	var burger = document.getElementById("hamburger");
+	var sheet = document.getElementById("mobileSheet");
+	if (burger && sheet) {
+		burger.addEventListener("click", (e) => {
+			e.stopPropagation();
+			var open = sheet.classList.toggle("open");
+			burger.setAttribute("aria-expanded", open ? "true" : "false");
+		});
+		sheet.querySelectorAll("a").forEach((a) => {
+			a.addEventListener("click", () => {
+				sheet.classList.remove("open");
+				burger.setAttribute("aria-expanded", "false");
+			});
+		});
+		document.addEventListener("click", (e) => {
+			if (!sheet.contains(e.target) && !burger.contains(e.target)) {
+				sheet.classList.remove("open");
+				burger.setAttribute("aria-expanded", "false");
+			}
+		});
+	}
+
+	var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	// ---- Scroll reveals (staggered within a section) ----
+	var revealObserver = new IntersectionObserver(
+		(entries, obs) => {
+			entries.forEach((entry) => {
+				if (entry.isIntersecting) {
+					entry.target.classList.add("in");
+					obs.unobserve(entry.target);
+				}
+			});
+		},
+		{ threshold: 0.12 },
+	);
+
+	var seenParents = new Map();
+	document.querySelectorAll(".reveal").forEach((el) => {
+		if (!reduce) {
+			var parent = el.parentElement;
+			var idx = seenParents.get(parent) || 0;
+			el.style.transitionDelay = `${idx * 0.09}s`;
+			seenParents.set(parent, idx + 1);
+			revealObserver.observe(el);
+		} else {
+			el.classList.add("in");
+		}
+	});
+
+	// ---- Animated stat counters ----
+	function runCounters() {
+		document.querySelectorAll(".counter").forEach((el) => {
+			var target = +el.getAttribute("data-target");
+			if (reduce) {
+				el.textContent = target;
+				return;
+			}
+			var duration = 1400,
+				start = null;
+			function step(ts) {
+				if (!start) start = ts;
+				var p = Math.min((ts - start) / duration, 1);
+				var eased = 1 - (1 - p) ** 3;
+				el.textContent = Math.round(target * eased);
+				if (p < 1) requestAnimationFrame(step);
+				else el.textContent = target;
+			}
+			requestAnimationFrame(step);
+		});
+	}
+
+	var stats = document.getElementById("stats");
+	if (stats) {
+		var statObserver = new IntersectionObserver(
+			(entries, obs) => {
+				entries.forEach((entry) => {
+					if (entry.isIntersecting) {
+						runCounters();
+						obs.unobserve(entry.target);
+					}
+				});
+			},
+			{ threshold: 0.3 },
+		);
+		statObserver.observe(stats);
+	}
+})();
+
+		</script>
+	</body>
+</html>

@@ -1,0 +1,149 @@
+---
+name: voltframe-dev-h29
+description: |
+  A single-creator developer portfolio landing page for **Voltframe**, built on a near-black stage (`#0F0F0F`) with one decisive electric-yellow accent (`#FAE100`). Its core motif is the *framed hero box* — a hairline-bordered rectangle with glowing corner nodes and gradient edge highlights that wraps the name like a blueprint bracket or schematic frame. The mood is precise and engineered: "terminal calm meets neon blueprint" — a quiet dark canvas where one live wire of yellow does all the emotional work, surrounded by a faint 50px grid, blurred pulsing orbs, and floating dust particles. Typography pairs self-hosted **Onest** for headings and nav with **Inter** as the utility face.
+tags:
+  - "landing-page"
+  - "landing-pages"
+  - "claude-directory"
+triggers:
+  - "voltframe"
+  - "bracketed"
+  - "voltage"
+  - "developer"
+  - "portfolio"
+  - "landing"
+  - "landing-page"
+od:
+  mode: prototype
+  platform: desktop
+  upstream: "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/voltframe-dev-h29"
+  upstream_license: MIT
+  preview:
+    type: html
+    entry: example.html
+  design_system:
+    requires: false
+  category: "landing-page"
+  scenario: "marketing"
+  example_prompt: "Build Voltframe — Bracketed Voltage Developer Portfolio Landing Page as a self-contained responsive page in this template's own visual system. Follow the build spec in this skill exactly — palette, typography, section order, and motion are part of the identity. Ask only for the missing essentials first: brand name, real copy, and any imagery to swap in."
+---
+
+# Voltframe — Bracketed Voltage Developer Portfolio Landing Page
+
+> Landing page vendored from the MIT-licensed `pulkitxm/claude-directory` gallery.
+
+A single-creator developer portfolio landing page for **Voltframe**, built on a near-black stage (`#0F0F0F`) with one decisive electric-yellow accent (`#FAE100`). Its core motif is the *framed hero box* — a hairline-bordered rectangle with glowing corner nodes and gradient edge highlights that wraps the name like a blueprint bracket or schematic frame. The mood is precise and engineered: "terminal calm meets neon blueprint" — a quiet dark canvas where one live wire of yellow does all the emotional work, surrounded by a faint 50px grid, blurred pulsing orbs, and floating dust particles. Typography pairs self-hosted **Onest** for headings and nav with **Inter** as the utility face.
+
+## Workflow
+
+1. **Clone `example.html`** into the user's workspace as the working file.
+2. **Replace placeholder content** with the user's real brand name, headlines,
+   body copy, numbers, and imagery. Match existing image dimensions when
+   swapping assets.
+3. **Preserve the design system.** The palette, type scale, spacing rhythm, and
+   motion in the build spec below are the identity — do not substitute fonts,
+   recolour the palette, or strip decorative elements.
+4. **Extend by duplicating sections**, never by importing a layout from another
+   template. If a section is missing, design it from scratch in this template's
+   own vocabulary.
+5. **Keep motion accessible.** Every animation must stay behind
+   `prefers-reduced-motion`, as the build spec requires.
+
+## Output contract
+
+Emit between `<artifact>` tags:
+
+```
+<artifact identifier="voltframe-dev-h29" type="text/html" title="Voltframe — Bracketed Voltage Developer Portfolio Landing Page">
+<!doctype html>
+<html>...</html>
+</artifact>
+```
+
+## Build spec
+
+The upstream prompt that produced this design, verbatim.
+
+# VOLTFRAME — A "BRACKETED VOLTAGE" DEVELOPER PORTFOLIO LANDING PAGE
+
+## NAMED AESTHETIC IDENTITY
+
+**VOLTFRAME** — A SINGLE-CREATOR DEVELOPER PORTFOLIO BUILT ON A NEAR-BLACK STAGE WITH ONE DECISIVE ELECTRIC-YELLOW ACCENT. THE CORE MOTIF IS THE **FRAMED HERO BOX**: A HAIRLINE-BORDERED RECTANGLE WITH GLOWING CORNER NODES AND EDGE HIGHLIGHTS THAT WRAPS THE NAME LIKE A BLUEPRINT BRACKET OR A SCHEMATIC FRAME. THE MOOD IS PRECISE, CONFIDENT, AND ENGINEERED — A QUIET DARK CANVAS PUNCTUATED BY VOLTAGE-YELLOW LIGHT, FLOATING DUST PARTICLES, AND SOFT PULSING ORBS. THINK "TERMINAL CALM MEETS NEON BLUEPRINT": EVERYTHING IS CENTERED, RESTRAINED, AND MONOCHROME EXCEPT THE ONE LIVE WIRE OF YELLOW.
+
+## DESIGN LANGUAGE & MOOD
+
+- A CENTERED, NARROW-COLUMN LAYOUT (MAX CONTENT WIDTH ~750PX) ON AN INFINITE DARK STAGE. GENEROUS VERTICAL RHYTHM AND BREATHING ROOM.
+- ONE ACCENT COLOR DOES ALL THE EMOTIONAL WORK: ELECTRIC YELLOW. EVERYTHING ELSE IS BLACK, WHITE, AND TRANSLUCENT WHITE SURFACES.
+- DECORATION IS SCHEMATIC, NOT DECORATIVE: HAIRLINE BORDERS, TINY CORNER NODE DOTS, GRADIENT EDGE HIGHLIGHTS, A FAINT 50PX GRID, AND BLURRED GRADIENT ORBS.
+- INTERACTIONS REWARD CURIOSITY: HOVERING THE HERO TITLE WORDS TURNS THEM YELLOW ONE AT A TIME; CARDS LIFT AND GAIN A YELLOW RING ON HOVER.
+
+## COLOR PALETTE (EXACT)
+
+- BACKGROUND: `#0F0F0F`
+- TEXT: `#FFFFFF`
+- TEXT-MUTED: `RGBA(255, 255, 255, 0.65)`
+- TEXT-DARK (ON YELLOW/WHITE BUTTONS): `#1D1D1D`
+- PRIMARY (ELECTRIC YELLOW): `#FAE100`
+- PRIMARY-DARK: `#834900`
+- BORDER (HAIRLINE): `RGBA(255, 255, 255, 0.15)`
+- SURFACE-LIGHT: `RGBA(255, 255, 255, 0.03)`
+- SURFACE-MEDIUM: `RGBA(255, 255, 255, 0.05)`
+- SURFACE-DARK: `RGBA(255, 255, 255, 0.08)`
+- CARD SHADOW: `0 8PX 32PX RGBA(0,0,0,0.4), INSET 0 1PX 0 RGBA(255,255,255,0.1)`
+- CARD HOVER SHADOW: `0 12PX 48PX RGBA(0,0,0,0.5), INSET 0 1PX 0 RGBA(255,255,255,0.15), 0 0 0 1PX RGBA(250,225,0,0.2)`
+
+## TYPOGRAPHY
+
+- PRIMARY FONT (HEADINGS, NAV, BUTTONS): **ONEST** — WEIGHTS 300, 400, 500, 600, 700. SELF-HOSTED/VENDORED LOCALLY.
+- SECONDARY FONT (UTILITY/FALLBACK BODY): **INTER** — WEIGHTS 400, 600, 700.
+- HERO TITLE: ~65PX, WEIGHT 500, TIGHT TRACKING, LINE-HEIGHT ~1.28, CENTERED, EACH WORD AN INLINE-BLOCK THAT TURNS YELLOW ON HOVER.
+- SECTION HEADINGS: ~36PX (4XL), WEIGHT 500, TIGHT TRACKING, CENTERED, WITH PER-WORD STAGGERED REVEAL.
+- BODY: 14PX, WEIGHT 500, LINE-HEIGHT 24PX, MUTED WHITE.
+- ANTIALIASED RENDERING; CUSTOM YELLOW-TINTED SCROLLBAR.
+
+## FULL LAYOUT & SECTION BREAKDOWN (TOP TO BOTTOM)
+
+1. **STICKY HEADER** — TRANSLUCENT, BACKDROP-BLURRED. LEFT: A SPARKLE/STAR SVG MARK IN YELLOW + THE CREATOR NAME. RIGHT (DESKTOP): "WORK" AND "CONTACT" PILL LINKS. MOBILE: ANIMATED HAMBURGER THAT OPENS A FULL-SCREEN SLIDE-IN MENU FROM THE RIGHT. HEADER SLIDES DOWN ON LOAD.
+2. **HERO** — A FULL-WIDTH SECTION WITH ABSOLUTELY-POSITIONED AMBIENT BACKGROUND: TWO LARGE PULSING BLURRED YELLOW ORBS, A FAINT 50PX GRID OVERLAY, AND FOUR FLOATING YELLOW PARTICLE DOTS. CENTERED COLUMN CONTAINS:
+   - THE **FRAMED TITLE BOX**: A HAIRLINE-BORDERED RECTANGLE HOLDING THE ~65PX TITLE ("FULL STACK DEVELOPER BUILDING DIGITAL PRODUCTS" OR EQUIVALENT, WORDS HOVER-YELLOW). FOUR CORNER NODE DOTS (TWO YELLOW + PULSING, TWO NEUTRAL THAT TURN YELLOW ON GROUP HOVER), TWO GRADIENT EDGE-HIGHLIGHT LINES, AND A SOFT YELLOW GLOW THAT FADES IN ON HOVER.
+   - A SHORT MUTED SUBTITLE WITH A SMALL GRADIENT UNDERLINE.
+   - DUAL CTAS: PRIMARY ("VIEW MY WORK") WHITE-FILLED WITH AN ARROW THAT NUDGES RIGHT ON HOVER; SECONDARY ("GET IN TOUCH") GHOST/OUTLINE THAT GAINS A YELLOW BORDER ON HOVER. BOTH LIFT ON HOVER.
+   - A TECH-STACK STRIP: THREE LABELED LOGO CHIPS (E.G. REACT, NODE.JS, TYPESCRIPT) AT REDUCED OPACITY.
+3. **SKILLS / BADGE** — A CENTERED PILL BADGE ("5+ YEARS BUILDING AMAZING PRODUCTS") WITH A STAR ICON THAT ROTATES ON HOVER, FOLLOWED BY THREE EQUAL ICON-OVER-TEXT SKILL COLUMNS (FRONTEND, BACKEND, INFRA/DEVOPS).
+4. **FEATURED WORK** — HEADING + A SINGLE-COLUMN STACK OF THREE LARGE PROJECT CARDS (MIN-HEIGHT ~333PX). EACH CARD: SUBTLE GRADIENT SURFACE, HAIRLINE BORDER, TOP-LEFT TECH BADGES, TOP-RIGHT "TRAFFIC LIGHT" NODE DOTS (ONE YELLOW), A LARGE BLURRED YELLOW ACCENT ORB, AND BOTTOM-ALIGNED TITLE + DESCRIPTION + A "VIEW PROJECT" LINK WITH ARROW. CARDS LIFT AND GAIN A YELLOW RING ON HOVER.
+5. **CLIENT TESTIMONIALS** — HEADING + A 2-COLUMN GRID OF FOUR GLASS CARDS, EACH WITH A ROUNDED AVATAR (VENDORED LOCAL IMAGE), NAME, ROLE, AND QUOTE.
+6. **ABOUT** — HEADING + TWO STACKED GLASS PARAGRAPH PANELS.
+7. **GET IN TOUCH** — HEADING + A GLASS PANEL WITH AN INTRO LINE AND TWO CTAS ("EMAIL ME" FILLED, "DOWNLOAD RESUME" GHOST).
+8. **FOOTER** — A TOP HAIRLINE RULE, A ROW OF FOUR SOCIAL ICON BUTTONS (X/TWITTER, LINKEDIN, GITHUB, EMAIL) THAT TURN YELLOW AND LIFT ON HOVER, AND A COPYRIGHT LINE.
+
+## MOTION / ANIMATION / INTERACTION SPEC
+
+- **ON-LOAD**: HEADER SLIDES DOWN FROM ABOVE (DELAYED ~0.3S).
+- **SCROLL REVEAL**: ELEMENTS WITH `.ANIMATE-ON-SCROLL` FADE + RISE 20PX VIA AN INTERSECTIONOBSERVER (THRESHOLD ~0.1), TRANSITION ~0.6S EASE-OUT.
+- **STAGGERED HEADINGS**: SECTION HEADING WORDS REVEAL ONE BY ONE (NTH-CHILD DELAYS 0.0S → 0.4S).
+- **AMBIENT**: ORBS PULSE SLOWLY (OPACITY + SCALE, ~4S LOOP, OFFSET DELAYS); PARTICLE DOTS FLOAT UP-DOWN (~6S LOOP, OFFSET DELAYS); TWO HERO CORNER NODES PULSE WITH AN EXPANDING YELLOW RING (~2S LOOP).
+- **HOVER**: HERO TITLE WORDS → YELLOW INDIVIDUALLY; HERO BOX → SOFT YELLOW GLOW FADES IN AND NEUTRAL CORNER NODES TURN YELLOW; PRIMARY CTA ARROW NUDGES RIGHT; CARDS LIFT 2PX AND GAIN A YELLOW RING; AVATARS SCALE UP; SOCIAL ICONS TURN YELLOW AND LIFT.
+- **SMOOTH SCROLL** FOR IN-PAGE ANCHOR LINKS WITH A ~100PX HEADER OFFSET.
+- RESPECT `PREFERS-REDUCED-MOTION` BY KEEPING CONTENT VISIBLE WITHOUT REQUIRED MOTION.
+
+## RESPONSIVE BEHAVIOR
+
+- DESKTOP: CENTERED ~750PX COLUMN; HERO TITLE BOX MAX ~600PX; 2-COLUMN TESTIMONIALS; THREE INLINE SKILL COLUMNS; DESKTOP NAV VISIBLE.
+- MOBILE (<768PX): HERO TITLE SCALES DOWN; SKILL COLUMNS AND TESTIMONIALS STACK TO ONE COLUMN; CONTACT CTAS STACK; DESKTOP NAV HIDES AND THE HAMBURGER + FULL-SCREEN SLIDE-IN MENU TAKES OVER (BODY SCROLL LOCKS WHILE OPEN).
+- ALL ASSETS (FONTS, AVATAR IMAGES) VENDORED LOCALLY FOR FULLY OFFLINE OPERATION.
+
+## DELIVERABLE
+
+A SINGLE SELF-CONTAINED, RESPONSIVE STATIC SITE (`INDEX.HTML` + LOCAL `STYLES.CSS` + `SCRIPT.JS` + VENDORED ASSETS). NO BUILD STEP REQUIRED; RUNNABLE FROM A STATIC SERVER. PLAIN HTML/CSS/JS — NO FRAMEWORK, NO CDN TAILWIND. HAND-AUTHORED CSS THAT IMPLEMENTS THE TOKENS ABOVE.
+
+## Source & license
+
+Vendored from MIT-licensed
+[`pulkitxm/claude-directory`](https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/voltframe-dev-h29).
+The upstream MIT licence text ships in this template at [`LICENSE`](./LICENSE) and
+must be redistributed alongside any copy of `example.html` or `assets/`.
+
+Webfonts and full-resolution imagery are **not** vendored: local `@font-face`
+rules are served from the Google Fonts CDN and referenced images are
+downscaled. Fetch the upstream folder for the original assets.

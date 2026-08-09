@@ -1,0 +1,183 @@
+---
+name: monolith-grid-atelier-h59
+description: |
+  A multi-section landing page for Monolith, a fictional high-end interior-architecture studio, built on a "Grid Monument" design language — a Swiss-modernist, architect's-drawing aesthetic ruled by a visible structural grid in bone-white, near-black ink, and a single warm taupe/sandstone accent, everything flat and hairline-divided. Sections include a `mix-blend-mode: difference` fixed header with a full-screen overlay menu, a full-viewport hero with a structural grid overlay, an ethos/stats modular grid with a rotating SVG text seal, a 3-column grid of 3D flip cards, a foundation feature panel, a contact form with an animated submit state, and footer — all self-contained and offline-runnable with `prefers-reduced-motion` support.
+tags:
+  - "landing-page"
+  - "landing-pages"
+  - "claude-directory"
+triggers:
+  - "monolith grid atelier"
+  - "monolith"
+  - "grid"
+  - "atelier"
+  - "swiss-modernist"
+  - "interior"
+  - "architecture"
+  - "studio"
+  - "landing"
+  - "landing-page"
+od:
+  mode: prototype
+  platform: desktop
+  upstream: "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/monolith-grid-atelier-h59"
+  upstream_license: MIT
+  preview:
+    type: html
+    entry: example.html
+  design_system:
+    requires: false
+  category: "landing-page"
+  scenario: "marketing"
+  example_prompt: "Build Monolith Grid Atelier — Swiss-Modernist Interior Architecture Studio Landing Page as a self-contained responsive page in this template's own visual system. Follow the build spec in this skill exactly — palette, typography, section order, and motion are part of the identity. Ask only for the missing essentials first: brand name, real copy, and any imagery to swap in."
+---
+
+# Monolith Grid Atelier — Swiss-Modernist Interior Architecture Studio Landing Page
+
+> Landing page vendored from the MIT-licensed `pulkitxm/claude-directory` gallery.
+
+A multi-section landing page for Monolith, a fictional high-end interior-architecture studio, built on a "Grid Monument" design language — a Swiss-modernist, architect's-drawing aesthetic ruled by a visible structural grid in bone-white, near-black ink, and a single warm taupe/sandstone accent, everything flat and hairline-divided. Sections include a `mix-blend-mode: difference` fixed header with a full-screen overlay menu, a full-viewport hero with a structural grid overlay, an ethos/stats modular grid with a rotating SVG text seal, a 3-column grid of 3D flip cards, a foundation feature panel, a contact form with an animated submit state, and footer — all self-contained and offline-runnable with `prefers-reduced-motion` support.
+
+## Workflow
+
+1. **Clone `example.html`** into the user's workspace as the working file.
+2. **Replace placeholder content** with the user's real brand name, headlines,
+   body copy, numbers, and imagery. Match existing image dimensions when
+   swapping assets.
+3. **Preserve the design system.** The palette, type scale, spacing rhythm, and
+   motion in the build spec below are the identity — do not substitute fonts,
+   recolour the palette, or strip decorative elements.
+4. **Extend by duplicating sections**, never by importing a layout from another
+   template. If a section is missing, design it from scratch in this template's
+   own vocabulary.
+5. **Keep motion accessible.** Every animation must stay behind
+   `prefers-reduced-motion`, as the build spec requires.
+
+## Output contract
+
+Emit between `<artifact>` tags:
+
+```
+<artifact identifier="monolith-grid-atelier-h59" type="text/html" title="Monolith Grid Atelier — Swiss-Modernist Interior Architecture Studio Landing Page">
+<!doctype html>
+<html>...</html>
+</artifact>
+```
+
+## Build spec
+
+The upstream prompt that produced this design, verbatim.
+
+# MONOLITH — SWISS-GRID BESPOKE SPATIAL DESIGN STUDIO LANDING PAGE
+
+## AESTHETIC IDENTITY
+
+BUILD A FULL, MULTI-SECTION, FULLY RESPONSIVE MARKETING LANDING PAGE FOR A
+FICTIONAL HIGH-END INTERIOR-ARCHITECTURE STUDIO NAMED **MONOLITH**. THE NAMED
+DESIGN LANGUAGE IS **"GRID MONUMENT"** — A SWISS-MODERNIST, ARCHITECT'S-DRAWING
+AESTHETIC THAT FEELS LIKE A PRINTED SPATIAL MONOGRAPH RULED BY A VISIBLE
+STRUCTURAL GRID. THE MOOD IS QUIET, EXPENSIVE, AND PRECISE: BONE-WHITE PAPER,
+NEAR-BLACK INK, AND A SINGLE WARM TAUPE / SANDSTONE ACCENT. RESTRAINT OVER
+EXCESS — A SPACE IS DEFINED AS MUCH BY WHAT IS LEFT OUT AS BY WHAT IS PUT IN.
+STRICTLY AVOID GENERIC SAAS / AI-SLOP LOOKS: NO PURPLE GRADIENTS, NO
+GLASSMORPHISM BLUR CARDS, NO NEON, NO EMOJI, NO ROUNDED "FRIENDLY" SHAPES IN THE
+LAYOUT CHROME. EVERYTHING IS FLAT, MATTE, SHARP-CORNERED, AND DIVIDED BY HAIRLINE
+1PX RULES.
+
+## COLOR SYSTEM
+
+- **INK / STUDIO-DARK**: `RGB(28, 28, 28)` — NEAR-BLACK, USED FOR TYPE, DARK
+  PANELS, AND THE FOOTER.
+- **PAPER / SURFACE**: `RGB(255, 255, 255)` — PURE WHITE.
+- **LIGHT / OFFWHITE**: `RGB(247, 245, 242)` — WARM BONE TINT FOR ALTERNATING
+  SECTION BACKGROUNDS.
+- **ACCENT / SANDSTONE**: `RGB(166, 150, 128)` — WARM TAUPE, USED SPARINGLY FOR
+  LABELS, HOVER FILLS, ITALIC EMPHASIS, AND THE ROTATING SEAL.
+- HAIRLINE RULES ARE INK AT 10% OPACITY (`RGBA(28,28,28,0.1)`).
+
+## TYPOGRAPHY
+
+- **DISPLAY / SANS**: A TIGHT GROTESQUE (E.G. SPACE GROTESK / NEUE-HAAS STYLE),
+  WEIGHTS 400–700, USED UPPERCASE WITH NEGATIVE TRACKING (`-0.03EM`) FOR HEROES
+  AND HEADINGS, AND IN ALL-CAPS WITH WIDE TRACKING (`0.3EM`) FOR MICRO-LABELS.
+- **SERIF ACCENT**: AN ITALIC EDITORIAL SERIF (E.G. PLAYFAIR DISPLAY ITALIC)
+  USED ONLY FOR SINGLE EMPHASIS WORDS AND PULL-QUOTES — IT WHISPERS, NEVER
+  SHOUTS.
+- HERO HEADLINE: `CLAMP(2.5REM, 8VW, 88PX)`, LINE-HEIGHT `0.95`.
+- BODY: 16–18PX, RELAXED LINE-HEIGHT, INK AT 65–70% OPACITY.
+
+## LAYOUT & SECTION BREAKDOWN
+
+A WIDE MAX-WIDTH CANVAS (≈1920PX) WITH VERTICAL HAIRLINE SIDE BORDERS. SECTIONS,
+TOP TO BOTTOM:
+
+1. **FIXED HEADER** — TRANSPARENT, USING `MIX-BLEND-MODE: DIFFERENCE` SO THE
+   LOGO AND NAV INVERT AGAINST WHATEVER SCROLLS UNDER THEM. LEFT: WORDMARK
+   "MONOLITH". RIGHT: DESKTOP NAV (WORK / ETHOS / STUDIO / CONTACT) PLUS A
+   TWO-LINE HAMBURGER THAT ANIMATES INTO AN X. THE HAMBURGER OPENS A FULL-SCREEN
+   DARK OVERLAY MENU WITH OVERSIZED UPPERCASE LINKS THAT SLIDE IN FROM THE RIGHT.
+2. **HERO** — FULL-VIEWPORT (`100VH`, MIN 800PX). A FULL-BLEED GRAYSCALE
+   INTERIOR PHOTOGRAPH WITH A SUBTLE DARK SCRIM. OVERLAID ON TOP: A VISIBLE
+   STRUCTURAL GRID OF THREE VERTICAL + THREE HORIZONTAL HAIRLINES (AT 1/4, 1/2,
+   3/4) DRAWN OVER THE WHOLE HERO. HEADLINE BOTTOM-LEFT-ANCHORED: "THE WEIGHT OF
+   _SPACE_" (THE SECOND WORD IN ITALIC SERIF). SUBHEAD BENEATH. A SPLIT
+   TWO-BUTTON BLOCK (ONE WHITE-ON-INK "ENQUIRE", ONE INK-ON-WHITE "SELECTED
+   WORK") THAT INVERT ON HOVER. THE HEADLINE USES `MIX-BLEND-DIFFERENCE`.
+3. **ETHOS / STATS** — A 4-COLUMN × 2-ROW MODULAR GRID ON BONE BACKGROUND. A
+   LARGE 2×2 MOTTO BLOCK ("SILENT _MASS_, VOCAL _PRESENCE_") WITH A SERIF
+   PULL-QUOTE; TWO STAT TILES THAT INVERT COLOR ON HOVER (E.G. "420+ CURATED
+   SPACES", "14 GLOBAL COMMISSIONS"); AND A 2-WIDE "METHOD" BLOCK CONTAINING A
+   SLOWLY ROTATING CIRCULAR SVG TEXT SEAL ("MONOLITH • SPATIAL • ATELIER •").
+4. **SELECTED WORK** — A 3-COLUMN GRID OF TALL (≈600PX) **3D FLIP CARDS**. EACH
+   CARD HAS A FRONT FACE (SERIES LABEL, A CIRCULAR GRAYSCALE PORTRAIT IMAGE, AND
+   A TITLE) THAT FLIPS 180° ON HOVER (PRESERVE-3D, BACKFACE-HIDDEN) TO REVEAL A
+   BACK FACE WITH A DESCRIPTION AND A "VIEW PORTFOLIO" UNDERLINE LINK. THREE
+   COLOR VARIANTS: INK, SANDSTONE, AND BONE.
+5. **THE FOUNDATION** — A CENTERED OVERSIZED HEADING ("THE _FOUNDATION_"),
+   THEN A FULL-WIDTH DARK FEATURE PANEL ("RESTRAINT OVER _EXCESS_") WITH A
+   CIRCULAR IMAGE, AND BELOW IT A 2-UP GRID OF STUDIO/SCIENCE PANELS WITH
+   CIRCULAR IMAGES THAT SCALE ON HOVER.
+6. **CONTACT** — A FRAMED 2-COLUMN BLOCK: LEFT IS A BONE FORM PANEL ("BEGIN YOUR
+   _COMMISSION_") WITH FLOATING-LABEL INPUTS (NAME, EMAIL), A PROJECT-TYPE
+   SELECT, AND A FULL-WIDTH INK SUBMIT BUTTON THAT SHOWS A "SENDING… →
+   RECEIVED" SUCCESS STATE; RIGHT IS A FULL-BLEED IMAGE WITH AN ADDRESS CAPTION.
+7. **FOOTER** — INK BACKGROUND, 4-COLUMN: WORDMARK + TAGLINE, EXPERTISE LIST,
+   STUDIO ADDRESS, CONNECT LINKS, AND A BOTTOM HAIRLINE BAR WITH COPYRIGHT.
+
+## MOTION / ANIMATION / INTERACTION SPEC
+
+- **SCROLL REVEAL**: EVERY MAJOR BLOCK FADES + RISES 30PX INTO PLACE VIA
+  INTERSECTIONOBSERVER, EASED WITH `CUBIC-BEZIER(0.16, 1, 0.3, 1)` OVER ~1S,
+  STAGGERED.
+- **FLIP CARDS**: 800MS 3D Y-ROTATION ON HOVER.
+- **ROTATING SEAL**: 12S LINEAR INFINITE SPIN.
+- **HOVER INVERSIONS**: BUTTONS AND STAT TILES SWAP FG/BG OVER 500–700MS.
+- **MENU**: FULL-SCREEN PANEL SLIDES FROM THE RIGHT OVER 700MS WITH AN
+  EASE-IN-OUT EXPO CURVE; HAMBURGER LINES MORPH TO AN X.
+- **FORM**: PREVENT-DEFAULT SUBMIT WITH AN ANIMATED BUTTON STATE.
+- RESPECT `PREFERS-REDUCED-MOTION`.
+
+## RESPONSIVE BEHAVIOR
+
+- DESKTOP: FULL MODULAR GRIDS, 3-UP CARDS, VISIBLE HERO GRID OVERLAY, DESKTOP
+  NAV.
+- TABLET: GRIDS COLLAPSE TO 2-UP / STACKED; CARDS REMAIN FLIPPABLE.
+- MOBILE: SINGLE COLUMN, HAMBURGER-ONLY NAV, HERO HEADLINE SCALES DOWN VIA
+  `CLAMP`, GENEROUS VERTICAL RHYTHM, TOUCH-FRIENDLY TAP TARGETS.
+
+## DELIVERY
+
+SELF-CONTAINED AND RUNNABLE OFFLINE: VENDOR ALL FONTS AND ALL IMAGERY LOCALLY
+(GRAYSCALE INTERIOR / ARCHITECTURAL PHOTOGRAPHY), REFERENCE EVERYTHING WITH
+RELATIVE PATHS, AND SHIP DISTINCTIVE, POLISHED, NON-GENERIC UI.
+
+## Source & license
+
+Vendored from MIT-licensed
+[`pulkitxm/claude-directory`](https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/monolith-grid-atelier-h59).
+The upstream MIT licence text ships in this template at [`LICENSE`](./LICENSE) and
+must be redistributed alongside any copy of `example.html` or `assets/`.
+
+Webfonts and full-resolution imagery are **not** vendored: local `@font-face`
+rules are served from the Google Fonts CDN and referenced images are
+downscaled. Fetch the upstream folder for the original assets.

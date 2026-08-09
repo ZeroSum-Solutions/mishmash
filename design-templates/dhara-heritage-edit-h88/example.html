@@ -1,0 +1,1633 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Dhara — Modern Indian Heritage</title>
+		<meta
+			name="description"
+			content="Dhara — modern silhouettes, ancient roots. Minimalist Indian wear handwoven by master artisans for the discerning global aesthetic."
+		>
+		<style>
+/* ===== DHARA — "Soft Heritage Edit" ===== */
+
+/* cyrillic-ext */
+
+/* cyrillic-ext */
+
+/* cyrillic-ext */
+
+/* cyrillic-ext */
+
+/* cyrillic-ext */
+
+/* cyrillic-ext */
+
+/* cyrillic-ext */
+
+/* cyrillic-ext */
+
+
+
+:root {
+	--base: #fdfcfb;
+	--rose: #e6d5d1;
+	--cream: #f2eee3;
+	--mauve: #e7e1ec;
+	--green: #4b594d;
+	--ink: #3d3d3d;
+	--light: #ffffff;
+	--gold: #c5a059;
+	--gap: 10px;
+	--maxw: 1505px;
+	--maxw-narrow: 1445px;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+::-webkit-scrollbar {
+	width: 7px;
+}
+::-webkit-scrollbar-track {
+	background: var(--base);
+}
+::-webkit-scrollbar-thumb {
+	background: var(--green);
+	border-radius: 10px;
+}
+
+body {
+	font-family: "Manrope", "Inter Tight", system-ui, sans-serif;
+	background: var(--base);
+	color: var(--ink);
+	overflow-x: hidden;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+img {
+	display: block;
+	max-width: 100%;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+button {
+	font-family: inherit;
+	cursor: pointer;
+}
+
+.eyebrow {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.4em;
+	color: rgba(61, 61, 61, 0.55);
+}
+.display {
+	font-weight: 300;
+	letter-spacing: -0.03em;
+	line-height: 0.95;
+}
+
+/* ===== Scroll reveal ===== */
+.reveal {
+	opacity: 0;
+	transform: translateY(22px);
+	transition:
+		opacity 0.85s ease-out,
+		transform 0.85s ease-out;
+}
+.reveal.in {
+	opacity: 1;
+	transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.reveal {
+		opacity: 1;
+		transform: none;
+		transition: none;
+	}
+	html {
+		scroll-behavior: auto;
+	}
+}
+
+/* ===== Utility bar ===== */
+.utility {
+	background: var(--green);
+	color: var(--light);
+	text-align: center;
+	padding: 11px 16px;
+}
+.utility p {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+}
+
+/* ===== Header ===== */
+.header {
+	position: sticky;
+	top: 0;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 18px clamp(20px, 5vw, 60px);
+	background: rgba(253, 252, 251, 0.92);
+	backdrop-filter: blur(12px);
+	border-bottom: 1px solid rgba(61, 61, 61, 0.1);
+}
+.header-left {
+	display: flex;
+	align-items: center;
+	gap: clamp(24px, 5vw, 56px);
+}
+.wordmark {
+	font-size: clamp(17px, 2vw, 21px);
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.28em;
+}
+.wordmark span {
+	color: var(--green);
+}
+.nav {
+	display: flex;
+	align-items: center;
+	gap: 40px;
+}
+.nav a {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.15em;
+	color: rgba(61, 61, 61, 0.8);
+	transition:
+		color 0.25s,
+		border-color 0.25s;
+	padding-bottom: 2px;
+	border-bottom: 1px solid transparent;
+}
+.nav a:hover {
+	color: var(--ink);
+	border-color: var(--green);
+}
+.header-right {
+	display: flex;
+	align-items: center;
+	gap: 24px;
+}
+.utils {
+	display: flex;
+	gap: 24px;
+}
+.utils a {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.15em;
+	color: rgba(61, 61, 61, 0.8);
+}
+.utils a:hover {
+	color: var(--ink);
+}
+.burger {
+	display: none;
+	background: none;
+	border: none;
+	padding: 4px;
+	color: var(--ink);
+}
+
+/* ===== Mobile menu ===== */
+.mobile-menu {
+	position: fixed;
+	inset: 0;
+	z-index: 100;
+	background: var(--base);
+	display: flex;
+	flex-direction: column;
+	transform: translateX(100%);
+	transition: transform 0.5s cubic-bezier(0.6, 0.05, 0.2, 1);
+}
+.mobile-menu.open {
+	transform: none;
+}
+.mm-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 18px 20px;
+	border-bottom: 1px solid rgba(61, 61, 61, 0.1);
+}
+.mm-top button {
+	background: none;
+	border: none;
+	color: var(--ink);
+	padding: 6px;
+}
+.mm-nav {
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+	padding: 48px 40px;
+	margin-top: 24px;
+}
+.mm-nav a.big {
+	font-size: 30px;
+	font-weight: 300;
+	letter-spacing: -0.02em;
+}
+.mm-rule {
+	height: 1px;
+	background: rgba(61, 61, 61, 0.12);
+	margin: 8px 0;
+}
+.mm-nav a.small {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	color: rgba(61, 61, 61, 0.6);
+}
+.mm-foot {
+	margin-top: auto;
+	padding: 40px;
+	background: rgba(242, 238, 227, 0.4);
+}
+.mm-foot .lbl {
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	color: rgba(61, 61, 61, 0.4);
+	margin-bottom: 6px;
+}
+.mm-foot p {
+	font-style: italic;
+	color: rgba(61, 61, 61, 0.8);
+}
+
+/* ===== Hero ===== */
+.hero {
+	display: flex;
+	justify-content: center;
+	overflow: hidden;
+}
+.hero-inner {
+	width: 100%;
+	max-width: var(--maxw);
+	padding: 30px;
+	display: flex;
+	flex-direction: column;
+	gap: var(--gap);
+}
+.hero-slider {
+	position: relative;
+	width: 100%;
+	height: 700px;
+	overflow: hidden;
+}
+.hero-slider img {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	filter: grayscale(0.2);
+	opacity: 0;
+	transition: opacity 1.5s ease-in-out;
+}
+.hero-slider img.active {
+	opacity: 1;
+}
+.hero-slider::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: rgba(61, 61, 61, 0.08);
+}
+.hero-pill {
+	position: absolute;
+	bottom: 36px;
+	left: 36px;
+	z-index: 3;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.4em;
+	color: rgba(61, 61, 61, 0.85);
+	background: rgba(253, 252, 251, 0.82);
+	backdrop-filter: blur(4px);
+	padding: 12px 24px;
+}
+
+.hero-grid {
+	display: grid;
+	grid-template-columns: 740fr 380fr 324fr;
+	gap: var(--gap);
+	min-height: 430px;
+}
+.hb {
+	padding: clamp(40px, 4vw, 56px);
+	display: flex;
+	flex-direction: column;
+}
+.hb1 {
+	background: var(--rose);
+	justify-content: space-between;
+}
+.hb1 h1 {
+	font-size: clamp(42px, 7vw, 95px);
+	line-height: 0.9;
+	max-width: 660px;
+}
+.hb1 .sub {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.25em;
+	color: rgba(61, 61, 61, 0.6);
+}
+.hb2 {
+	background: var(--cream);
+	padding: 0;
+}
+.hb2-text {
+	padding: clamp(40px, 4vw, 48px);
+	flex-grow: 1;
+	display: flex;
+	align-items: center;
+}
+.hb2-text p {
+	font-size: clamp(20px, 2vw, 24px);
+	line-height: 1.3;
+	max-width: 280px;
+}
+.cta-bar {
+	background: var(--green);
+	color: var(--light);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 32px;
+	transition: filter 0.3s;
+}
+.cta-bar:hover {
+	filter: brightness(1.12);
+}
+.cta-bar span {
+	font-size: 20px;
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+}
+.cta-bar svg {
+	width: 30px;
+	height: 30px;
+	transition: transform 0.3s;
+}
+.cta-bar:hover svg {
+	transform: translate(4px, -4px);
+}
+.hb3 {
+	background: var(--mauve);
+	justify-content: space-between;
+}
+.hb3 .stat {
+	font-size: clamp(60px, 8vw, 100px);
+	font-weight: 300;
+	letter-spacing: -0.05em;
+	line-height: 1;
+}
+.hb3 p {
+	font-size: clamp(17px, 1.6vw, 20px);
+	line-height: 1.3;
+}
+
+/* ===== Section shell ===== */
+.section {
+	padding: clamp(56px, 8vw, 96px) clamp(24px, 5vw, 60px);
+}
+.container {
+	max-width: var(--maxw-narrow);
+	margin: 0 auto;
+}
+.sec-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	border-bottom: 1px solid rgba(61, 61, 61, 0.1);
+	padding-bottom: 36px;
+	margin-bottom: 56px;
+	gap: 16px;
+}
+.sec-head .title {
+	font-size: clamp(28px, 4vw, 40px);
+	margin-top: 14px;
+}
+.viewall {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	border-bottom: 1px solid rgba(61, 61, 61, 0.3);
+	padding-bottom: 4px;
+	transition: border-color 0.25s;
+	white-space: nowrap;
+}
+.viewall:hover {
+	border-color: var(--green);
+}
+
+/* ===== Category ===== */
+.cat-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: var(--gap);
+}
+.cat-card {
+	position: relative;
+	aspect-ratio: 3 / 4;
+	overflow: hidden;
+	background: var(--cream);
+}
+.cat-card img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	filter: grayscale(0.2);
+	transition:
+		transform 1s,
+		filter 1s;
+}
+.cat-card:hover img {
+	transform: scale(1.05);
+	filter: grayscale(0);
+}
+.cat-overlay {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	padding: 36px;
+	background: linear-gradient(to top, rgba(61, 61, 61, 0.6), transparent 55%);
+	color: var(--light);
+}
+.cat-overlay h3 {
+	font-size: 28px;
+	font-weight: 300;
+	margin-bottom: 12px;
+}
+.cat-overlay .sub {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	opacity: 0;
+	transition: opacity 0.4s;
+}
+.cat-card:hover .cat-overlay .sub {
+	opacity: 1;
+}
+
+/* ===== Product grid ===== */
+.shop-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 72px;
+	gap: 24px;
+	flex-wrap: wrap;
+}
+.shop-head .pills {
+	display: flex;
+	gap: 14px;
+}
+.pill {
+	padding: 9px 24px;
+	border: 1px solid rgba(61, 61, 61, 0.2);
+	background: transparent;
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	transition: all 0.25s;
+}
+.pill:hover {
+	background: var(--ink);
+	color: var(--light);
+	border-color: var(--ink);
+}
+.prod-grid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	column-gap: 20px;
+	row-gap: 60px;
+}
+.prod {
+	cursor: pointer;
+}
+.prod-img {
+	aspect-ratio: 4 / 5;
+	background: var(--cream);
+	overflow: hidden;
+	position: relative;
+	margin-bottom: 22px;
+}
+.prod-img img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.7s;
+}
+.prod:hover .prod-img img {
+	transform: scale(1.05);
+}
+.quick-add {
+	position: absolute;
+	left: 16px;
+	right: 16px;
+	bottom: 16px;
+	background: rgba(61, 61, 61, 0.92);
+	color: var(--light);
+	border: none;
+	padding: 13px;
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.15em;
+	transform: translateY(14px);
+	opacity: 0;
+	transition:
+		transform 0.35s,
+		opacity 0.35s;
+}
+.prod:hover .quick-add {
+	transform: none;
+	opacity: 1;
+}
+.prod h3 {
+	font-size: 14px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	margin-bottom: 5px;
+}
+.prod .mat {
+	font-size: 14px;
+	font-style: italic;
+	color: rgba(61, 61, 61, 0.7);
+}
+
+/* ===== Payments ===== */
+.pay-band {
+	background: rgba(242, 238, 227, 0.5);
+}
+.pay-panel {
+	max-width: var(--maxw-narrow);
+	margin: 0 auto;
+	border: 1px solid rgba(61, 61, 61, 0.1);
+	background: #fff;
+	padding: clamp(32px, 5vw, 80px);
+}
+.pay-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: clamp(40px, 6vw, 80px);
+	align-items: center;
+}
+.pay-left h2.title {
+	font-size: clamp(30px, 4vw, 45px);
+	margin: 28px 0;
+	line-height: 1.1;
+}
+.pay-left p.copy {
+	color: rgba(61, 61, 61, 0.8);
+	font-size: clamp(15px, 1.6vw, 18px);
+	line-height: 1.6;
+	max-width: 26rem;
+}
+.pay-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 18px;
+	margin-top: 32px;
+	opacity: 0.7;
+}
+.chip {
+	width: 56px;
+	height: 34px;
+	background: rgba(61, 61, 61, 0.1);
+	border-radius: 5px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 10px;
+	font-weight: 700;
+}
+.pay-tiles {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--gap);
+}
+.tile {
+	padding: 30px;
+}
+.tile.r {
+	background: rgba(230, 213, 209, 0.35);
+}
+.tile.m {
+	background: rgba(231, 225, 236, 0.45);
+}
+.tile.c {
+	background: rgba(242, 238, 227, 0.55);
+}
+.tile.g {
+	background: rgba(75, 89, 77, 0.1);
+}
+.tile h4 {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	margin-bottom: 14px;
+}
+.tile p {
+	font-size: 14px;
+	color: rgba(61, 61, 61, 0.8);
+	line-height: 1.6;
+}
+
+/* ===== Membership ===== */
+.circle {
+	max-width: var(--maxw-narrow);
+	margin: 0 auto;
+	background: var(--green);
+	color: var(--light);
+	border-radius: 40px;
+	overflow: hidden;
+	display: flex;
+}
+.circle-left {
+	width: 50%;
+	padding: clamp(40px, 5vw, 80px);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 28px;
+}
+.circle-left .eyebrow {
+	color: rgba(255, 255, 255, 0.5);
+}
+.circle-left h2 {
+	font-size: clamp(36px, 5vw, 50px);
+	font-weight: 300;
+	letter-spacing: -0.02em;
+	line-height: 1;
+}
+.circle-left p {
+	color: rgba(255, 255, 255, 0.72);
+	font-size: clamp(16px, 1.6vw, 18px);
+	line-height: 1.6;
+	max-width: 26rem;
+}
+.btn-light {
+	align-self: flex-start;
+	background: var(--base);
+	color: var(--green);
+	border: none;
+	padding: 18px 48px;
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	transition: background 0.25s;
+}
+.btn-light:hover {
+	background: var(--cream);
+}
+.circle-right {
+	width: 50%;
+	position: relative;
+	min-height: 400px;
+}
+.circle-right img {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.circle-right::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: rgba(75, 89, 77, 0.2);
+}
+
+/* ===== Artisan ===== */
+.artisan {
+	background: var(--green);
+	color: var(--light);
+}
+.artisan .grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: clamp(40px, 6vw, 80px);
+	align-items: center;
+	max-width: var(--maxw-narrow);
+	margin: 0 auto;
+}
+.artisan .eyebrow {
+	color: rgba(255, 255, 255, 0.5);
+}
+.artisan h2 {
+	font-size: clamp(38px, 7vw, 80px);
+	font-weight: 300;
+	letter-spacing: -0.03em;
+	line-height: 1;
+	margin: 18px 0 32px;
+}
+.artisan p.copy {
+	color: rgba(255, 255, 255, 0.8);
+	font-size: clamp(18px, 1.8vw, 20px);
+	line-height: 1.6;
+	max-width: 480px;
+	font-weight: 300;
+	margin-bottom: 36px;
+}
+.artisan .ctas {
+	display: flex;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+.btn-ghost {
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	color: var(--light);
+	background: transparent;
+	padding: 17px 40px;
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	transition: all 0.25s;
+}
+.btn-ghost:hover {
+	background: var(--light);
+	color: var(--green);
+}
+.artisan-media {
+	position: relative;
+}
+.artisan-media .frame {
+	overflow: hidden;
+	border-radius: 40px;
+}
+.artisan-media img {
+	width: 100%;
+	height: auto;
+	filter: grayscale(0.1);
+	transition: filter 1s;
+}
+.artisan-media:hover img {
+	filter: grayscale(0);
+}
+.quote-card {
+	position: absolute;
+	bottom: -40px;
+	right: -40px;
+	max-width: 280px;
+	background: var(--cream);
+	color: var(--ink);
+	padding: 36px;
+	border-radius: 18px;
+	box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+}
+.quote-card p.q {
+	font-size: 14px;
+	font-style: italic;
+	line-height: 1.6;
+}
+.quote-card .by {
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	margin-top: 16px;
+}
+
+/* ===== Value props ===== */
+.vp-grid {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: var(--gap);
+}
+.vp {
+	padding: 48px;
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+}
+.vp.r {
+	background: var(--rose);
+}
+.vp.c {
+	background: var(--cream);
+}
+.vp.m {
+	background: var(--mauve);
+}
+.vp .ic {
+	width: 48px;
+	height: 48px;
+	border-radius: 50%;
+	background: rgba(61, 61, 61, 0.1);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.vp .ic svg {
+	width: 24px;
+	height: 24px;
+}
+.vp h4 {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.3em;
+}
+.vp p {
+	font-size: 16px;
+	color: rgba(61, 61, 61, 0.9);
+	line-height: 1.6;
+}
+
+/* ===== Footer ===== */
+.footer {
+	border-top: 1px solid rgba(61, 61, 61, 0.1);
+	padding: 80px clamp(24px, 5vw, 60px) 40px;
+}
+.footer-grid {
+	max-width: var(--maxw-narrow);
+	margin: 0 auto;
+	display: grid;
+	grid-template-columns: 1.4fr 1fr 1fr 1.2fr;
+	gap: 48px;
+	margin-bottom: 72px;
+}
+.footer h4.brand {
+	font-size: 20px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.3em;
+	margin-bottom: 22px;
+}
+.footer .blurb {
+	font-size: 15px;
+	color: rgba(61, 61, 61, 0.8);
+	line-height: 1.6;
+	max-width: 260px;
+}
+.footer .pay-row {
+	display: flex;
+	gap: 12px;
+	opacity: 0.4;
+	margin-top: 22px;
+}
+.footer .pay-row span {
+	width: 40px;
+	height: 24px;
+	background: var(--ink);
+	border-radius: 3px;
+}
+.footer h5 {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	margin-bottom: 20px;
+}
+.footer ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.footer ul a {
+	font-size: 14px;
+	color: rgba(61, 61, 61, 0.8);
+	transition: color 0.2s;
+}
+.footer ul a:hover {
+	color: var(--ink);
+}
+.footer .news p {
+	font-size: 14px;
+	color: rgba(61, 61, 61, 0.8);
+	margin-bottom: 18px;
+}
+.news-input {
+	display: flex;
+	border-bottom: 1px solid rgba(61, 61, 61, 0.3);
+	padding-bottom: 8px;
+}
+.news-input input {
+	flex: 1;
+	background: none;
+	border: none;
+	outline: none;
+	font-size: 14px;
+	font-family: inherit;
+	color: var(--ink);
+}
+.news-input input::placeholder {
+	color: rgba(61, 61, 61, 0.4);
+}
+.news-input button {
+	background: none;
+	border: none;
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	transition: color 0.2s;
+}
+.news-input button:hover {
+	color: var(--green);
+}
+.footer-bottom {
+	max-width: var(--maxw-narrow);
+	margin: 0 auto;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding-top: 32px;
+	border-top: 1px solid rgba(61, 61, 61, 0.06);
+	gap: 16px;
+	flex-wrap: wrap;
+}
+.footer-bottom p,
+.footer-bottom a {
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	color: rgba(61, 61, 61, 0.4);
+}
+.footer-bottom a:hover {
+	color: var(--ink);
+}
+.footer-bottom .legal {
+	display: flex;
+	gap: 24px;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 1024px) {
+	.nav,
+	.utils {
+		display: none;
+	}
+	.burger {
+		display: block;
+	}
+	.hero-grid {
+		grid-template-columns: 1fr;
+	}
+	.pay-grid,
+	.artisan .grid {
+		grid-template-columns: 1fr;
+	}
+	.circle {
+		flex-direction: column;
+	}
+	.circle-left,
+	.circle-right {
+		width: 100%;
+	}
+	.footer-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+	.quote-card {
+		position: static;
+		max-width: none;
+		margin-top: 18px;
+		right: 0;
+		bottom: 0;
+	}
+}
+@media (max-width: 768px) {
+	.hero-inner {
+		padding: 0;
+		gap: 0;
+	}
+	.hero-slider {
+		height: 460px;
+	}
+	.hero-grid {
+		gap: 0;
+	}
+	.cat-grid {
+		grid-template-columns: 1fr;
+	}
+	.prod-grid {
+		grid-template-columns: 1fr 1fr;
+		column-gap: 14px;
+		row-gap: 42px;
+	}
+	.pay-tiles {
+		grid-template-columns: 1fr;
+	}
+	.vp-grid {
+		grid-template-columns: 1fr;
+	}
+	.footer-grid {
+		grid-template-columns: 1fr;
+		gap: 40px;
+	}
+	.sec-head {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+	.footer-bottom {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600;700;800&family=Manrope:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- Top utility bar -->
+		<div class="utility">
+			<p>
+				Complimentary Shipping Across India on All Orders • Festive Returns
+				Extended to 30 Days
+			</p>
+		</div>
+
+		<!-- Header -->
+		<header class="header">
+			<div class="header-left">
+				<a href="#" class="wordmark">Dhara<span>.</span></a>
+				<nav class="nav" aria-label="Primary">
+					<a href="#shop">The Festive Edit</a>
+					<a href="#shop">Sarees</a>
+					<a href="#shop">Menswear</a>
+					<a href="#artisan">The Studio</a>
+				</nav>
+			</div>
+			<div class="header-right">
+				<div class="utils">
+					<a href="#">Search</a>
+					<a href="#">Bag (0)</a>
+				</div>
+				<button class="burger" id="burger" aria-label="Open menu">
+					<svg
+						width="26"
+						height="26"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-width="1.5"
+							d="M4 6h16M4 12h16m-7 6h7"
+						/>
+					</svg>
+				</button>
+			</div>
+		</header>
+
+		<!-- Mobile menu -->
+		<div class="mobile-menu" id="mobileMenu">
+			<div class="mm-top">
+				<a href="#" class="wordmark">Dhara<span>.</span></a>
+				<button id="mmClose" aria-label="Close menu">
+					<svg
+						width="26"
+						height="26"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-width="1.5"
+							d="M6 18L18 6M6 6l12 12"
+						/>
+					</svg>
+				</button>
+			</div>
+			<nav class="mm-nav">
+				<a href="#shop" class="big mm-link">The Festive Edit</a>
+				<a href="#shop" class="big mm-link">Sarees</a>
+				<a href="#shop" class="big mm-link">Menswear</a>
+				<a href="#artisan" class="big mm-link">The Studio</a>
+				<div class="mm-rule"></div>
+				<a href="#" class="small mm-link">Search</a>
+				<a href="#" class="small mm-link">My Account</a>
+				<a href="#" class="small mm-link">Bag (0)</a>
+			</nav>
+			<div class="mm-foot">
+				<p class="lbl">Support</p>
+				<p>Handcrafted Luxury. Worldwide Shipping.</p>
+			</div>
+		</div>
+
+		<main>
+			<!-- Hero -->
+			<section class="hero reveal">
+				<div class="hero-inner">
+					<div class="hero-slider" id="heroSlider">
+						<img
+							class="active"
+							src="assets/hero1.jpg"
+							alt="Luxury Indian heritage fashion"
+						>
+						<img src="assets/hero2.jpg" alt="Artisan craftsmanship">
+						<img src="assets/hero3.jpg" alt="Contemporary heritage drape">
+						<span class="hero-pill">Festive Edit '24 — Now Live</span>
+					</div>
+
+					<div class="hero-grid">
+						<div class="hb hb1">
+							<h1 class="display">Modern Silhouettes.<br>Ancient Roots.</h1>
+							<p class="sub">The Contemporary Collective</p>
+						</div>
+
+						<div class="hb hb2">
+							<div class="hb2-text">
+								<p>
+									Minimalist Indian wear designed for the discerning global
+									aesthetic. Handwoven by master artisans.
+								</p>
+							</div>
+							<a href="#shop" class="cta-bar">
+								<span>Shop The Edit</span>
+								<svg viewBox="0 0 200 200" fill="currentColor">
+									<path
+										d="M178.726,178.351h-17.157V38.579H21.796v-17.157h156.929v156.929Z"
+									/>
+									<path
+										d="M33.592,178.491l-12.146-12.144L158.655,30.024l12.146,12.144L33.592,178.491Z"
+									/>
+								</svg>
+							</a>
+						</div>
+
+						<div class="hb hb3">
+							<span class="stat display">400+</span>
+							<p>Generational artisans supported across weaving clusters.</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Category showcase -->
+			<section class="section reveal">
+				<div class="container">
+					<div class="sec-head">
+						<div>
+							<h2 class="eyebrow">Curated Categories</h2>
+							<p class="title display">Essential Collections</p>
+						</div>
+						<a href="#shop" class="viewall">View All</a>
+					</div>
+					<div class="cat-grid">
+						<a href="#shop" class="cat-card">
+							<img src="assets/cat1.jpg" alt="The Saree Room">
+							<div class="cat-overlay">
+								<h3>The Saree Room</h3>
+								<span class="sub">Explore Heritage</span>
+							</div>
+						</a>
+						<a href="#shop" class="cat-card">
+							<img src="assets/cat2.jpg" alt="Dhara Men">
+							<div class="cat-overlay">
+								<h3>Dhara Men</h3>
+								<span class="sub">The Modern Indian</span>
+							</div>
+						</a>
+						<a href="#shop" class="cat-card">
+							<img src="assets/cat3.jpg" alt="Adornments">
+							<div class="cat-overlay">
+								<h3>Adornments</h3>
+								<span class="sub">Shop Accessories</span>
+							</div>
+						</a>
+					</div>
+				</div>
+			</section>
+
+			<!-- Product grid -->
+			<section class="section reveal" id="shop">
+				<div class="container">
+					<div class="shop-head">
+						<div>
+							<h2 class="eyebrow">New Arrivals</h2>
+							<p
+								class="title display"
+								style="font-size:clamp(28px,4vw,40px);margin-top:12px;"
+							>
+								The Weekly Edit
+							</p>
+						</div>
+						<div class="pills">
+							<button class="pill">Filter</button>
+							<button class="pill">Sort</button>
+						</div>
+					</div>
+					<div class="prod-grid" id="prodGrid"></div>
+				</div>
+			</section>
+
+			<!-- Payments -->
+			<section class="section pay-band reveal">
+				<div class="pay-panel">
+					<div class="pay-grid">
+						<div class="pay-left">
+							<h2 class="eyebrow">Secure Transactions</h2>
+							<h2 class="title display">
+								Seamless Experience,<br>Global Standards.
+							</h2>
+							<p class="copy">
+								We offer a secure, encrypted checkout experience tailored for
+								the Indian landscape. Pay with ease using any of your preferred
+								methods.
+							</p>
+							<div class="pay-chips">
+								<div class="chip">UPI</div>
+								<div class="chip">VISA</div>
+								<div class="chip">RPay</div>
+								<div class="chip">EMI</div>
+							</div>
+						</div>
+						<div class="pay-tiles">
+							<div class="tile r">
+								<h4>Zero-Interest EMI</h4>
+								<p>
+									Split your luxury purchase into manageable monthly payments at
+									no extra cost.
+								</p>
+							</div>
+							<div class="tile m">
+								<h4>COD Available</h4>
+								<p>
+									Pay when you receive your order. Available across 25,000+ pin
+									codes in India.
+								</p>
+							</div>
+							<div class="tile c">
+								<h4>SSL Encrypted</h4>
+								<p>
+									Your payment data is fully encrypted with bank-grade security
+									protocols.
+								</p>
+							</div>
+							<div class="tile g">
+								<h4>Easy Returns</h4>
+								<p>
+									30-day complimentary return policy for a stress-free shopping
+									journey.
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Membership -->
+			<section class="section reveal">
+				<div class="circle">
+					<div class="circle-left">
+						<h2 class="eyebrow">Membership</h2>
+						<h2>The Dhara Circle</h2>
+						<p>
+							An invite-only membership for our patrons. Early access to limited
+							drops, complimentary artisanal tailoring, and private studio
+							viewings.
+						</p>
+						<button class="btn-light">Apply for Membership</button>
+					</div>
+					<div class="circle-right">
+						<img src="assets/member.jpg" alt="Artisan tailoring">
+					</div>
+				</div>
+			</section>
+
+			<!-- Artisan spotlight -->
+			<section class="section artisan reveal" id="artisan">
+				<div class="grid">
+					<div>
+						<h2 class="eyebrow">Artisan Spotlight</h2>
+						<h2 class="display">The Banaras Weave</h2>
+						<p class="copy">
+							A marriage of 14th-century weaving techniques and 21st-century
+							architectural lines. Each piece in this limited drop takes 120
+							hours to craft.
+						</p>
+						<div class="ctas">
+							<button class="btn-light">Discover the Collection</button>
+							<button class="btn-ghost">Our Process</button>
+						</div>
+					</div>
+					<div class="artisan-media">
+						<div class="frame">
+							<img src="assets/artisan.jpg" alt="Artisan weaving process">
+						</div>
+						<div class="quote-card">
+							<p class="q">
+								"The thread is the storyteller. We just guide the narrative."
+							</p>
+							<p class="by">— Master Weaver, Kabir Das</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Value props -->
+			<section class="section reveal">
+				<div class="vp-grid">
+					<div class="vp r">
+						<div class="ic">
+							<svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M5 13l4 4L19 7"
+								/>
+							</svg>
+						</div>
+						<h4>Quality Assured</h4>
+						<p>
+							Each textile is lab-tested for longevity and colour-fastness,
+							ensuring your heritage piece lasts generations.
+						</p>
+					</div>
+					<div class="vp c">
+						<div class="ic">
+							<svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M12 21a9 9 0 100-18 9 9 0 000 18z"
+								/>
+							</svg>
+						</div>
+						<h4>Ethical Sourcing</h4>
+						<p>
+							Direct-from-weaver partnerships ensure fair wages and reinvestment
+							into weaving clusters across India.
+						</p>
+					</div>
+					<div class="vp m">
+						<div class="ic">
+							<svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M21 12H3m18 0l-4-4m4 4l-4 4"
+								/>
+							</svg>
+						</div>
+						<h4>Global Reach</h4>
+						<p>
+							Bespoke international logistics connecting Indian craftsmanship
+							with over 40 countries worldwide.
+						</p>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<!-- Footer -->
+		<footer class="footer">
+			<div class="footer-grid">
+				<div>
+					<h4 class="brand">Dhara</h4>
+					<p class="blurb">
+						Redefining Indian luxury through minimalist design and heritage
+						craftsmanship. Made for the modern global citizen.
+					</p>
+					<div class="pay-row"><span></span><span></span><span></span></div>
+				</div>
+				<div>
+					<h5>Collections</h5>
+					<ul>
+						<li><a href="#shop">Heritage Sarees</a></li>
+						<li><a href="#shop">Contemporary Tunics</a></li>
+						<li><a href="#shop">Organic Menswear</a></li>
+						<li><a href="#shop">Dhara Bridal</a></li>
+					</ul>
+				</div>
+				<div>
+					<h5>The Brand</h5>
+					<ul>
+						<li><a href="#artisan">Our Story</a></li>
+						<li><a href="#artisan">Artisan Network</a></li>
+						<li><a href="#">Sustainability</a></li>
+						<li><a href="#">Contact</a></li>
+					</ul>
+				</div>
+				<div class="news">
+					<h5>Newsletter</h5>
+					<p>Join our inner circle for exclusive previews.</p>
+					<form class="news-input" onsubmit="return false;">
+						<input
+							type="email"
+							placeholder="Email Address"
+							aria-label="Email Address"
+						>
+						<button type="submit">Join</button>
+					</form>
+				</div>
+			</div>
+			<div class="footer-bottom">
+				<p>© 2024 Dhara. Handcrafted in India.</p>
+				<div class="legal">
+					<a href="#">Instagram</a>
+					<a href="#">Journal</a>
+					<a href="#">Privacy</a>
+				</div>
+			</div>
+		</footer>
+
+		<script>
+/* ===== DHARA — interactions ===== */
+(() => {
+	// ---- Product data (rendered client-side) ----
+	var PRODUCTS = [
+		{
+			img: "p1.jpg",
+			name: "Noorani Silk Tunic",
+			mat: "Hand-spun Mulberry Silk",
+			price: "14,500",
+		},
+		{
+			img: "p2.jpg",
+			name: "Ikat Drape Trousers",
+			mat: "Natural Indigo Dye",
+			price: "8,900",
+		},
+		{
+			img: "p3.jpg",
+			name: "Solaris Brass Cuff",
+			mat: "Antique Gold Finish",
+			price: "4,200",
+		},
+		{
+			img: "p4.jpg",
+			name: "Studio Khadi Shirt",
+			mat: "Hand-woven Bengal Khadi",
+			price: "6,500",
+		},
+		{
+			img: "p5.jpg",
+			name: "Dawn Mist Banaras Saree",
+			mat: "100% Pure Zari",
+			price: "42,000",
+		},
+		{
+			img: "p6.jpg",
+			name: "Slate Nehru Jacket",
+			mat: "Organic Linen Blend",
+			price: "18,500",
+		},
+		{
+			img: "p7.jpg",
+			name: "Lotus Kalamkari Tunic",
+			mat: "Vegetable Dyes",
+			price: "12,000",
+		},
+		{
+			img: "p8.jpg",
+			name: "Crescent Silver Drops",
+			mat: "925 Sterling Silver",
+			price: "3,500",
+		},
+	];
+
+	function renderProducts() {
+		var grid = document.getElementById("prodGrid");
+		if (!grid) return;
+		grid.innerHTML = PRODUCTS.map(
+			(p) =>
+				'<article class="prod">' +
+				'<div class="prod-img">' +
+				'<img src="./assets/' +
+				p.img +
+				'" alt="' +
+				p.name +
+				'" loading="lazy" />' +
+				'<button class="quick-add">Quick Add — ₹' +
+				p.price +
+				"</button>" +
+				"</div>" +
+				"<h3>" +
+				p.name +
+				"</h3>" +
+				'<p class="mat">' +
+				p.mat +
+				"</p>" +
+				"</article>",
+		).join("");
+	}
+
+	// ---- Hero slideshow ----
+	function initSlider() {
+		var slides = document.querySelectorAll("#heroSlider img");
+		if (slides.length < 2) return;
+		var i = 0;
+		setInterval(() => {
+			slides[i].classList.remove("active");
+			i = (i + 1) % slides.length;
+			slides[i].classList.add("active");
+		}, 5000);
+	}
+
+	// ---- Scroll reveal ----
+	function initReveal() {
+		var els = document.querySelectorAll(".reveal");
+		if (!("IntersectionObserver" in window)) {
+			els.forEach((el) => {
+				el.classList.add("in");
+			});
+			return;
+		}
+		var io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((e) => {
+					if (e.isIntersecting) {
+						e.target.classList.add("in");
+						io.unobserve(e.target);
+					}
+				});
+			},
+			{ threshold: 0.12 },
+		);
+		els.forEach((el) => {
+			io.observe(el);
+		});
+	}
+
+	// ---- Mobile menu ----
+	function initMenu() {
+		var burger = document.getElementById("burger");
+		var menu = document.getElementById("mobileMenu");
+		var close = document.getElementById("mmClose");
+		var links = document.querySelectorAll(".mm-link");
+		if (!burger || !menu) return;
+		function open() {
+			menu.classList.add("open");
+			document.body.style.overflow = "hidden";
+		}
+		function shut() {
+			menu.classList.remove("open");
+			document.body.style.overflow = "";
+		}
+		burger.addEventListener("click", open);
+		if (close) close.addEventListener("click", shut);
+		links.forEach((l) => {
+			l.addEventListener("click", shut);
+		});
+		document.addEventListener("keydown", (e) => {
+			if (e.key === "Escape") shut();
+		});
+	}
+
+	document.addEventListener("DOMContentLoaded", () => {
+		renderProducts();
+		initSlider();
+		initReveal();
+		initMenu();
+	});
+})();
+
+		</script>
+	</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "slug": "kairos-academy-h0",
+  "name": "Kairos Academy — Competitive Exam Coaching Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Inter Tight"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/kairos-academy-h0",
+  "source_license": "MIT"
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "atelier-noir-h7",
+  "name": "Atelier Noir — Luxury Fashion House Landing Page for Maison Éclisse",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Cormorant",
+    "Archivo"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/atelier-noir-h7",
+  "source_license": "MIT"
+}

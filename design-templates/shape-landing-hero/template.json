@@ -1,0 +1,14 @@
+{
+  "slug": "shape-landing-hero",
+  "name": "Shape Landing Hero — Animated Geometric Shapes Hero Component",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [
+    "Inter",
+    "Instrument Serif"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/shape-landing-hero",
+  "source_license": "MIT"
+}

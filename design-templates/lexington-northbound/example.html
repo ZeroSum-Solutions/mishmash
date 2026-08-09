@@ -1,0 +1,2674 @@
+<!DOCTYPE html><html lang="en" class="scroll-smooth"> <head><title>Your Page Title</title>
+<meta name="description" content="A detailed description of your page content.">
+<link rel="canonical" href="https://yourwebsite.com/current-page">
+<meta property="og:title" content="Your Page Title">
+<meta property="og:description" content="A detailed description of your page content.">
+<meta property="og:url" content="https://yourwebsite.com/current-page">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://yourwebsite.com/og-image.jpg">
+<meta property="og:image:alt" content="Open Graph Image Alt">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="Your Site Name">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@yourwebsite">
+<meta name="twitter:creator" content="@yourhandle"> <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="theme-color" content="#ffffff"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="robots" content="index, follow"><meta name="googlebot" content="index, follow"><meta name="robots" content="index, follow"><meta name="googlebot" content="index, follow"> <link rel="preconnect" href="https://rsms.me/"><link rel="stylesheet" href="https://rsms.me/inter/inter.css"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:ital,wght@0,100..900;1,100..900&family=Noto+Serif:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">   <script>
+/**
+ * Fuse.js v7.1.0 - Lightweight fuzzy-search (http://fusejs.io)
+ *
+ * Copyright (c) 2025 Kiro Risk (http://kiro.me)
+ * All Rights Reserved. Apache Software License 2.0
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ */
+var e, t;
+(e = this),
+	(t = function () {
+		"use strict";
+		function e(e, t) {
+			var n = Object.keys(e);
+			if (Object.getOwnPropertySymbols) {
+				var r = Object.getOwnPropertySymbols(e);
+				t &&
+					(r = r.filter(function (t) {
+						return Object.getOwnPropertyDescriptor(e, t).enumerable;
+					})),
+					n.push.apply(n, r);
+			}
+			return n;
+		}
+		function t(t) {
+			for (var n = 1; n < arguments.length; n++) {
+				var r = null != arguments[n] ? arguments[n] : {};
+				n % 2
+					? e(Object(r), !0).forEach(function (e) {
+							o(t, e, r[e]);
+						})
+					: Object.getOwnPropertyDescriptors
+						? Object.defineProperties(t, Object.getOwnPropertyDescriptors(r))
+						: e(Object(r)).forEach(function (e) {
+								Object.defineProperty(
+									t,
+									e,
+									Object.getOwnPropertyDescriptor(r, e),
+								);
+							});
+			}
+			return t;
+		}
+		function n(e) {
+			return (
+				(n =
+					"function" == typeof Symbol && "symbol" == typeof Symbol.iterator
+						? function (e) {
+								return typeof e;
+							}
+						: function (e) {
+								return e &&
+									"function" == typeof Symbol &&
+									e.constructor === Symbol &&
+									e !== Symbol.prototype
+									? "symbol"
+									: typeof e;
+							}),
+				n(e)
+			);
+		}
+		function r(e, t) {
+			if (!(e instanceof t))
+				throw new TypeError("Cannot call a class as a function");
+		}
+		function i(e, t) {
+			for (var n = 0; n < t.length; n++) {
+				var r = t[n];
+				(r.enumerable = r.enumerable || !1),
+					(r.configurable = !0),
+					"value" in r && (r.writable = !0),
+					Object.defineProperty(e, v(r.key), r);
+			}
+		}
+		function u(e, t, n) {
+			return (
+				t && i(e.prototype, t),
+				n && i(e, n),
+				Object.defineProperty(e, "prototype", { writable: !1 }),
+				e
+			);
+		}
+		function o(e, t, n) {
+			return (
+				(t = v(t)) in e
+					? Object.defineProperty(e, t, {
+							value: n,
+							enumerable: !0,
+							configurable: !0,
+							writable: !0,
+						})
+					: (e[t] = n),
+				e
+			);
+		}
+		function c(e, t) {
+			if ("function" != typeof t && null !== t)
+				throw new TypeError(
+					"Super expression must either be null or a function",
+				);
+			(e.prototype = Object.create(t && t.prototype, {
+				constructor: { value: e, writable: !0, configurable: !0 },
+			})),
+				Object.defineProperty(e, "prototype", { writable: !1 }),
+				t && s(e, t);
+		}
+		function a(e) {
+			return (
+				(a = Object.setPrototypeOf
+					? Object.getPrototypeOf.bind()
+					: function (e) {
+							return e.__proto__ || Object.getPrototypeOf(e);
+						}),
+				a(e)
+			);
+		}
+		function s(e, t) {
+			return (
+				(s = Object.setPrototypeOf
+					? Object.setPrototypeOf.bind()
+					: function (e, t) {
+							return (e.__proto__ = t), e;
+						}),
+				s(e, t)
+			);
+		}
+		function h(e, t) {
+			if (t && ("object" == typeof t || "function" == typeof t)) return t;
+			if (void 0 !== t)
+				throw new TypeError(
+					"Derived constructors may only return object or undefined",
+				);
+			return (function (e) {
+				if (void 0 === e)
+					throw new ReferenceError(
+						"this hasn't been initialised - super() hasn't been called",
+					);
+				return e;
+			})(e);
+		}
+		function l(e) {
+			var t = (function () {
+				if ("undefined" == typeof Reflect || !Reflect.construct) return !1;
+				if (Reflect.construct.sham) return !1;
+				if ("function" == typeof Proxy) return !0;
+				try {
+					return (
+						Boolean.prototype.valueOf.call(
+							Reflect.construct(Boolean, [], function () {}),
+						),
+						!0
+					);
+				} catch (e) {
+					return !1;
+				}
+			})();
+			return function () {
+				var n,
+					r = a(e);
+				if (t) {
+					var i = a(this).constructor;
+					n = Reflect.construct(r, arguments, i);
+				} else n = r.apply(this, arguments);
+				return h(this, n);
+			};
+		}
+		function f(e) {
+			return (
+				(function (e) {
+					if (Array.isArray(e)) return d(e);
+				})(e) ||
+				(function (e) {
+					if (
+						("undefined" != typeof Symbol && null != e[Symbol.iterator]) ||
+						null != e["@@iterator"]
+					)
+						return Array.from(e);
+				})(e) ||
+				(function (e, t) {
+					if (e) {
+						if ("string" == typeof e) return d(e, t);
+						var n = Object.prototype.toString.call(e).slice(8, -1);
+						return (
+							"Object" === n && e.constructor && (n = e.constructor.name),
+							"Map" === n || "Set" === n
+								? Array.from(e)
+								: "Arguments" === n ||
+										/^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)
+									? d(e, t)
+									: void 0
+						);
+					}
+				})(e) ||
+				(function () {
+					throw new TypeError(
+						"Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.",
+					);
+				})()
+			);
+		}
+		function d(e, t) {
+			(null == t || t > e.length) && (t = e.length);
+			for (var n = 0, r = new Array(t); n < t; n++) r[n] = e[n];
+			return r;
+		}
+		function v(e) {
+			var t = (function (e, t) {
+				if ("object" != typeof e || null === e) return e;
+				var n = e[Symbol.toPrimitive];
+				if (void 0 !== n) {
+					var r = n.call(e, t || "default");
+					if ("object" != typeof r) return r;
+					throw new TypeError("@@toPrimitive must return a primitive value.");
+				}
+				return ("string" === t ? String : Number)(e);
+			})(e, "string");
+			return "symbol" == typeof t ? t : String(t);
+		}
+		function g(e) {
+			return Array.isArray ? Array.isArray(e) : "[object Array]" === M(e);
+		}
+		var y = 1 / 0;
+		function p(e) {
+			return null == e
+				? ""
+				: (function (e) {
+						if ("string" == typeof e) return e;
+						var t = e + "";
+						return "0" == t && 1 / e == -y ? "-0" : t;
+					})(e);
+		}
+		function A(e) {
+			return "string" == typeof e;
+		}
+		function m(e) {
+			return "number" == typeof e;
+		}
+		function C(e) {
+			return (
+				!0 === e ||
+				!1 === e ||
+				((function (e) {
+					return k(e) && null !== e;
+				})(e) &&
+					"[object Boolean]" == M(e))
+			);
+		}
+		function k(e) {
+			return "object" === n(e);
+		}
+		function E(e) {
+			return null != e;
+		}
+		function F(e) {
+			return !e.trim().length;
+		}
+		function M(e) {
+			return null == e
+				? void 0 === e
+					? "[object Undefined]"
+					: "[object Null]"
+				: Object.prototype.toString.call(e);
+		}
+		var b = function (e) {
+				return "Missing ".concat(e, " property in key");
+			},
+			D = function (e) {
+				return "Property 'weight' in key '".concat(
+					e,
+					"' must be a positive integer",
+				);
+			},
+			B = Object.prototype.hasOwnProperty,
+			x = (function () {
+				function e(t) {
+					var n = this;
+					r(this, e), (this._keys = []), (this._keyMap = {});
+					var i = 0;
+					t.forEach(function (e) {
+						var t = w(e);
+						n._keys.push(t), (n._keyMap[t.id] = t), (i += t.weight);
+					}),
+						this._keys.forEach(function (e) {
+							e.weight /= i;
+						});
+				}
+				return (
+					u(e, [
+						{
+							key: "get",
+							value: function (e) {
+								return this._keyMap[e];
+							},
+						},
+						{
+							key: "keys",
+							value: function () {
+								return this._keys;
+							},
+						},
+						{
+							key: "toJSON",
+							value: function () {
+								return JSON.stringify(this._keys);
+							},
+						},
+					]),
+					e
+				);
+			})();
+		function w(e) {
+			var t = null,
+				n = null,
+				r = null,
+				i = 1,
+				u = null;
+			if (A(e) || g(e)) (r = e), (t = S(e)), (n = L(e));
+			else {
+				if (!B.call(e, "name")) throw new Error(b("name"));
+				var o = e.name;
+				if (((r = o), B.call(e, "weight") && (i = e.weight) <= 0))
+					throw new Error(D(o));
+				(t = S(o)), (n = L(o)), (u = e.getFn);
+			}
+			return { path: t, id: n, weight: i, src: r, getFn: u };
+		}
+		function S(e) {
+			return g(e) ? e : e.split(".");
+		}
+		function L(e) {
+			return g(e) ? e.join(".") : e;
+		}
+		var _ = {
+				useExtendedSearch: !1,
+				getFn: function (e, t) {
+					var n = [],
+						r = !1;
+					return (
+						(function e(t, i, u) {
+							if (E(t))
+								if (i[u]) {
+									var o = t[i[u]];
+									if (!E(o)) return;
+									if (u === i.length - 1 && (A(o) || m(o) || C(o)))
+										n.push(p(o));
+									else if (g(o)) {
+										r = !0;
+										for (var c = 0, a = o.length; c < a; c += 1)
+											e(o[c], i, u + 1);
+									} else i.length && e(o, i, u + 1);
+								} else n.push(t);
+						})(e, A(t) ? t.split(".") : t, 0),
+						r ? n : n[0]
+					);
+				},
+				ignoreLocation: !1,
+				ignoreFieldNorm: !1,
+				fieldNormWeight: 1,
+			},
+			O = t(
+				t(
+					t(
+						t(
+							{},
+							{
+								isCaseSensitive: !1,
+								ignoreDiacritics: !1,
+								includeScore: !1,
+								keys: [],
+								shouldSort: !0,
+								sortFn: function (e, t) {
+									return e.score === t.score
+										? e.idx < t.idx
+											? -1
+											: 1
+										: e.score < t.score
+											? -1
+											: 1;
+								},
+							},
+						),
+						{ includeMatches: !1, findAllMatches: !1, minMatchCharLength: 1 },
+					),
+					{ location: 0, threshold: 0.6, distance: 100 },
+				),
+				_,
+			),
+			j = /[^ ]+/g,
+			I = (function () {
+				function e() {
+					var t =
+							arguments.length > 0 && void 0 !== arguments[0]
+								? arguments[0]
+								: {},
+						n = t.getFn,
+						i = void 0 === n ? O.getFn : n,
+						u = t.fieldNormWeight,
+						o = void 0 === u ? O.fieldNormWeight : u;
+					r(this, e),
+						(this.norm = (function () {
+							var e =
+									arguments.length > 0 && void 0 !== arguments[0]
+										? arguments[0]
+										: 1,
+								t =
+									arguments.length > 1 && void 0 !== arguments[1]
+										? arguments[1]
+										: 3,
+								n = new Map(),
+								r = Math.pow(10, t);
+							return {
+								get: function (t) {
+									var i = t.match(j).length;
+									if (n.has(i)) return n.get(i);
+									var u = 1 / Math.pow(i, 0.5 * e),
+										o = parseFloat(Math.round(u * r) / r);
+									return n.set(i, o), o;
+								},
+								clear: function () {
+									n.clear();
+								},
+							};
+						})(o, 3)),
+						(this.getFn = i),
+						(this.isCreated = !1),
+						this.setIndexRecords();
+				}
+				return (
+					u(e, [
+						{
+							key: "setSources",
+							value: function () {
+								var e =
+									arguments.length > 0 && void 0 !== arguments[0]
+										? arguments[0]
+										: [];
+								this.docs = e;
+							},
+						},
+						{
+							key: "setIndexRecords",
+							value: function () {
+								var e =
+									arguments.length > 0 && void 0 !== arguments[0]
+										? arguments[0]
+										: [];
+								this.records = e;
+							},
+						},
+						{
+							key: "setKeys",
+							value: function () {
+								var e = this,
+									t =
+										arguments.length > 0 && void 0 !== arguments[0]
+											? arguments[0]
+											: [];
+								(this.keys = t),
+									(this._keysMap = {}),
+									t.forEach(function (t, n) {
+										e._keysMap[t.id] = n;
+									});
+							},
+						},
+						{
+							key: "create",
+							value: function () {
+								var e = this;
+								!this.isCreated &&
+									this.docs.length &&
+									((this.isCreated = !0),
+									A(this.docs[0])
+										? this.docs.forEach(function (t, n) {
+												e._addString(t, n);
+											})
+										: this.docs.forEach(function (t, n) {
+												e._addObject(t, n);
+											}),
+									this.norm.clear());
+							},
+						},
+						{
+							key: "add",
+							value: function (e) {
+								var t = this.size();
+								A(e) ? this._addString(e, t) : this._addObject(e, t);
+							},
+						},
+						{
+							key: "removeAt",
+							value: function (e) {
+								this.records.splice(e, 1);
+								for (var t = e, n = this.size(); t < n; t += 1)
+									this.records[t].i -= 1;
+							},
+						},
+						{
+							key: "getValueForItemAtKeyId",
+							value: function (e, t) {
+								return e[this._keysMap[t]];
+							},
+						},
+						{
+							key: "size",
+							value: function () {
+								return this.records.length;
+							},
+						},
+						{
+							key: "_addString",
+							value: function (e, t) {
+								if (E(e) && !F(e)) {
+									var n = { v: e, i: t, n: this.norm.get(e) };
+									this.records.push(n);
+								}
+							},
+						},
+						{
+							key: "_addObject",
+							value: function (e, t) {
+								var n = this,
+									r = { i: t, $: {} };
+								this.keys.forEach(function (t, i) {
+									var u = t.getFn ? t.getFn(e) : n.getFn(e, t.path);
+									if (E(u))
+										if (g(u)) {
+											for (
+												var o = [], c = [{ nestedArrIndex: -1, value: u }];
+												c.length;
+											) {
+												var a = c.pop(),
+													s = a.nestedArrIndex,
+													h = a.value;
+												if (E(h))
+													if (A(h) && !F(h)) {
+														var l = { v: h, i: s, n: n.norm.get(h) };
+														o.push(l);
+													} else
+														g(h) &&
+															h.forEach(function (e, t) {
+																c.push({ nestedArrIndex: t, value: e });
+															});
+											}
+											r.$[i] = o;
+										} else if (A(u) && !F(u)) {
+											var f = { v: u, n: n.norm.get(u) };
+											r.$[i] = f;
+										}
+								}),
+									this.records.push(r);
+							},
+						},
+						{
+							key: "toJSON",
+							value: function () {
+								return { keys: this.keys, records: this.records };
+							},
+						},
+					]),
+					e
+				);
+			})();
+		function $(e, t) {
+			var n =
+					arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : {},
+				r = n.getFn,
+				i = void 0 === r ? O.getFn : r,
+				u = n.fieldNormWeight,
+				o = void 0 === u ? O.fieldNormWeight : u,
+				c = new I({ getFn: i, fieldNormWeight: o });
+			return c.setKeys(e.map(w)), c.setSources(t), c.create(), c;
+		}
+		function R(e) {
+			var t =
+					arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : {},
+				n = t.errors,
+				r = void 0 === n ? 0 : n,
+				i = t.currentLocation,
+				u = void 0 === i ? 0 : i,
+				o = t.expectedLocation,
+				c = void 0 === o ? 0 : o,
+				a = t.distance,
+				s = void 0 === a ? O.distance : a,
+				h = t.ignoreLocation,
+				l = void 0 === h ? O.ignoreLocation : h,
+				f = r / e.length;
+			if (l) return f;
+			var d = Math.abs(c - u);
+			return s ? f + d / s : d ? 1 : f;
+		}
+		var N = 32;
+		function P(e, t, n) {
+			var r =
+					arguments.length > 3 && void 0 !== arguments[3] ? arguments[3] : {},
+				i = r.location,
+				u = void 0 === i ? O.location : i,
+				o = r.distance,
+				c = void 0 === o ? O.distance : o,
+				a = r.threshold,
+				s = void 0 === a ? O.threshold : a,
+				h = r.findAllMatches,
+				l = void 0 === h ? O.findAllMatches : h,
+				f = r.minMatchCharLength,
+				d = void 0 === f ? O.minMatchCharLength : f,
+				v = r.includeMatches,
+				g = void 0 === v ? O.includeMatches : v,
+				y = r.ignoreLocation,
+				p = void 0 === y ? O.ignoreLocation : y;
+			if (t.length > N)
+				throw new Error("Pattern length exceeds max of ".concat(N, "."));
+			for (
+				var A,
+					m = t.length,
+					C = e.length,
+					k = Math.max(0, Math.min(u, C)),
+					E = s,
+					F = k,
+					M = d > 1 || g,
+					b = M ? Array(C) : [];
+				(A = e.indexOf(t, F)) > -1;
+			) {
+				var D = R(t, {
+					currentLocation: A,
+					expectedLocation: k,
+					distance: c,
+					ignoreLocation: p,
+				});
+				if (((E = Math.min(D, E)), (F = A + m), M))
+					for (var B = 0; B < m; ) (b[A + B] = 1), (B += 1);
+			}
+			F = -1;
+			for (
+				var x = [], w = 1, S = m + C, L = 1 << (m - 1), _ = 0;
+				_ < m;
+				_ += 1
+			) {
+				for (var j = 0, I = S; j < I; )
+					R(t, {
+						errors: _,
+						currentLocation: k + I,
+						expectedLocation: k,
+						distance: c,
+						ignoreLocation: p,
+					}) <= E
+						? (j = I)
+						: (S = I),
+						(I = Math.floor((S - j) / 2 + j));
+				S = I;
+				var $ = Math.max(1, k - I + 1),
+					P = l ? C : Math.min(k + I, C) + m,
+					W = Array(P + 2);
+				W[P + 1] = (1 << _) - 1;
+				for (var z = P; z >= $; z -= 1) {
+					var T = z - 1,
+						K = n[e.charAt(T)];
+					if (
+						(M && (b[T] = +!!K),
+						(W[z] = ((W[z + 1] << 1) | 1) & K),
+						_ && (W[z] |= ((x[z + 1] | x[z]) << 1) | 1 | x[z + 1]),
+						W[z] & L &&
+							(w = R(t, {
+								errors: _,
+								currentLocation: T,
+								expectedLocation: k,
+								distance: c,
+								ignoreLocation: p,
+							})) <= E)
+					) {
+						if (((E = w), (F = T) <= k)) break;
+						$ = Math.max(1, 2 * k - F);
+					}
+				}
+				if (
+					R(t, {
+						errors: _ + 1,
+						currentLocation: k,
+						expectedLocation: k,
+						distance: c,
+						ignoreLocation: p,
+					}) > E
+				)
+					break;
+				x = W;
+			}
+			var q = { isMatch: F >= 0, score: Math.max(0.001, w) };
+			if (M) {
+				var J = (function () {
+					for (
+						var e =
+								arguments.length > 0 && void 0 !== arguments[0]
+									? arguments[0]
+									: [],
+							t =
+								arguments.length > 1 && void 0 !== arguments[1]
+									? arguments[1]
+									: O.minMatchCharLength,
+							n = [],
+							r = -1,
+							i = -1,
+							u = 0,
+							o = e.length;
+						u < o;
+						u += 1
+					) {
+						var c = e[u];
+						c && -1 === r
+							? (r = u)
+							: c ||
+								-1 === r ||
+								((i = u - 1) - r + 1 >= t && n.push([r, i]), (r = -1));
+					}
+					return e[u - 1] && u - r >= t && n.push([r, u - 1]), n;
+				})(b, d);
+				J.length ? g && (q.indices = J) : (q.isMatch = !1);
+			}
+			return q;
+		}
+		function W(e) {
+			for (var t = {}, n = 0, r = e.length; n < r; n += 1) {
+				var i = e.charAt(n);
+				t[i] = (t[i] || 0) | (1 << (r - n - 1));
+			}
+			return t;
+		}
+		var z = String.prototype.normalize
+				? function (e) {
+						return e
+							.normalize("NFD")
+							.replace(
+								/[\u0300-\u036F\u0483-\u0489\u0591-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED\u0711\u0730-\u074A\u07A6-\u07B0\u07EB-\u07F3\u07FD\u0816-\u0819\u081B-\u0823\u0825-\u0827\u0829-\u082D\u0859-\u085B\u08D3-\u08E1\u08E3-\u0903\u093A-\u093C\u093E-\u094F\u0951-\u0957\u0962\u0963\u0981-\u0983\u09BC\u09BE-\u09C4\u09C7\u09C8\u09CB-\u09CD\u09D7\u09E2\u09E3\u09FE\u0A01-\u0A03\u0A3C\u0A3E-\u0A42\u0A47\u0A48\u0A4B-\u0A4D\u0A51\u0A70\u0A71\u0A75\u0A81-\u0A83\u0ABC\u0ABE-\u0AC5\u0AC7-\u0AC9\u0ACB-\u0ACD\u0AE2\u0AE3\u0AFA-\u0AFF\u0B01-\u0B03\u0B3C\u0B3E-\u0B44\u0B47\u0B48\u0B4B-\u0B4D\u0B56\u0B57\u0B62\u0B63\u0B82\u0BBE-\u0BC2\u0BC6-\u0BC8\u0BCA-\u0BCD\u0BD7\u0C00-\u0C04\u0C3E-\u0C44\u0C46-\u0C48\u0C4A-\u0C4D\u0C55\u0C56\u0C62\u0C63\u0C81-\u0C83\u0CBC\u0CBE-\u0CC4\u0CC6-\u0CC8\u0CCA-\u0CCD\u0CD5\u0CD6\u0CE2\u0CE3\u0D00-\u0D03\u0D3B\u0D3C\u0D3E-\u0D44\u0D46-\u0D48\u0D4A-\u0D4D\u0D57\u0D62\u0D63\u0D82\u0D83\u0DCA\u0DCF-\u0DD4\u0DD6\u0DD8-\u0DDF\u0DF2\u0DF3\u0E31\u0E34-\u0E3A\u0E47-\u0E4E\u0EB1\u0EB4-\u0EB9\u0EBB\u0EBC\u0EC8-\u0ECD\u0F18\u0F19\u0F35\u0F37\u0F39\u0F3E\u0F3F\u0F71-\u0F84\u0F86\u0F87\u0F8D-\u0F97\u0F99-\u0FBC\u0FC6\u102B-\u103E\u1056-\u1059\u105E-\u1060\u1062-\u1064\u1067-\u106D\u1071-\u1074\u1082-\u108D\u108F\u109A-\u109D\u135D-\u135F\u1712-\u1714\u1732-\u1734\u1752\u1753\u1772\u1773\u17B4-\u17D3\u17DD\u180B-\u180D\u1885\u1886\u18A9\u1920-\u192B\u1930-\u193B\u1A17-\u1A1B\u1A55-\u1A5E\u1A60-\u1A7C\u1A7F\u1AB0-\u1ABE\u1B00-\u1B04\u1B34-\u1B44\u1B6B-\u1B73\u1B80-\u1B82\u1BA1-\u1BAD\u1BE6-\u1BF3\u1C24-\u1C37\u1CD0-\u1CD2\u1CD4-\u1CE8\u1CED\u1CF2-\u1CF4\u1CF7-\u1CF9\u1DC0-\u1DF9\u1DFB-\u1DFF\u20D0-\u20F0\u2CEF-\u2CF1\u2D7F\u2DE0-\u2DFF\u302A-\u302F\u3099\u309A\uA66F-\uA672\uA674-\uA67D\uA69E\uA69F\uA6F0\uA6F1\uA802\uA806\uA80B\uA823-\uA827\uA880\uA881\uA8B4-\uA8C5\uA8E0-\uA8F1\uA8FF\uA926-\uA92D\uA947-\uA953\uA980-\uA983\uA9B3-\uA9C0\uA9E5\uAA29-\uAA36\uAA43\uAA4C\uAA4D\uAA7B-\uAA7D\uAAB0\uAAB2-\uAAB4\uAAB7\uAAB8\uAABE\uAABF\uAAC1\uAAEB-\uAAEF\uAAF5\uAAF6\uABE3-\uABEA\uABEC\uABED\uFB1E\uFE00-\uFE0F\uFE20-\uFE2F]/g,
+								"",
+							);
+					}
+				: function (e) {
+						return e;
+					},
+			T = (function () {
+				function e(t) {
+					var n = this,
+						i =
+							arguments.length > 1 && void 0 !== arguments[1]
+								? arguments[1]
+								: {},
+						u = i.location,
+						o = void 0 === u ? O.location : u,
+						c = i.threshold,
+						a = void 0 === c ? O.threshold : c,
+						s = i.distance,
+						h = void 0 === s ? O.distance : s,
+						l = i.includeMatches,
+						f = void 0 === l ? O.includeMatches : l,
+						d = i.findAllMatches,
+						v = void 0 === d ? O.findAllMatches : d,
+						g = i.minMatchCharLength,
+						y = void 0 === g ? O.minMatchCharLength : g,
+						p = i.isCaseSensitive,
+						A = void 0 === p ? O.isCaseSensitive : p,
+						m = i.ignoreDiacritics,
+						C = void 0 === m ? O.ignoreDiacritics : m,
+						k = i.ignoreLocation,
+						E = void 0 === k ? O.ignoreLocation : k;
+					if (
+						(r(this, e),
+						(this.options = {
+							location: o,
+							threshold: a,
+							distance: h,
+							includeMatches: f,
+							findAllMatches: v,
+							minMatchCharLength: y,
+							isCaseSensitive: A,
+							ignoreDiacritics: C,
+							ignoreLocation: E,
+						}),
+						(t = A ? t : t.toLowerCase()),
+						(t = C ? z(t) : t),
+						(this.pattern = t),
+						(this.chunks = []),
+						this.pattern.length)
+					) {
+						var F = function (e, t) {
+								n.chunks.push({ pattern: e, alphabet: W(e), startIndex: t });
+							},
+							M = this.pattern.length;
+						if (M > N) {
+							for (var b = 0, D = M % N, B = M - D; b < B; )
+								F(this.pattern.substr(b, N), b), (b += N);
+							if (D) {
+								var x = M - N;
+								F(this.pattern.substr(x), x);
+							}
+						} else F(this.pattern, 0);
+					}
+				}
+				return (
+					u(e, [
+						{
+							key: "searchIn",
+							value: function (e) {
+								var t = this.options,
+									n = t.isCaseSensitive,
+									r = t.ignoreDiacritics,
+									i = t.includeMatches;
+								if (
+									((e = n ? e : e.toLowerCase()),
+									(e = r ? z(e) : e),
+									this.pattern === e)
+								) {
+									var u = { isMatch: !0, score: 0 };
+									return i && (u.indices = [[0, e.length - 1]]), u;
+								}
+								var o = this.options,
+									c = o.location,
+									a = o.distance,
+									s = o.threshold,
+									h = o.findAllMatches,
+									l = o.minMatchCharLength,
+									d = o.ignoreLocation,
+									v = [],
+									g = 0,
+									y = !1;
+								this.chunks.forEach(function (t) {
+									var n = t.pattern,
+										r = t.alphabet,
+										u = t.startIndex,
+										o = P(e, n, r, {
+											location: c + u,
+											distance: a,
+											threshold: s,
+											findAllMatches: h,
+											minMatchCharLength: l,
+											includeMatches: i,
+											ignoreLocation: d,
+										}),
+										p = o.isMatch,
+										A = o.score,
+										m = o.indices;
+									p && (y = !0),
+										(g += A),
+										p && m && (v = [].concat(f(v), f(m)));
+								});
+								var p = { isMatch: y, score: y ? g / this.chunks.length : 1 };
+								return y && i && (p.indices = v), p;
+							},
+						},
+					]),
+					e
+				);
+			})(),
+			K = (function () {
+				function e(t) {
+					r(this, e), (this.pattern = t);
+				}
+				return (
+					u(
+						e,
+						[{ key: "search", value: function () {} }],
+						[
+							{
+								key: "isMultiMatch",
+								value: function (e) {
+									return q(e, this.multiRegex);
+								},
+							},
+							{
+								key: "isSingleMatch",
+								value: function (e) {
+									return q(e, this.singleRegex);
+								},
+							},
+						],
+					),
+					e
+				);
+			})();
+		function q(e, t) {
+			var n = e.match(t);
+			return n ? n[1] : null;
+		}
+		var J = (function (e) {
+				c(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					u(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = e === this.pattern;
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, this.pattern.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^="(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^=(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			U = (function (e) {
+				c(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					u(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = -1 === e.indexOf(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "inverse-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^!"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^!(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			V = (function (e) {
+				c(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					u(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = e.startsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, this.pattern.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "prefix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^\^"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^\^(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			G = (function (e) {
+				c(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					u(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = !e.startsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "inverse-prefix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^!\^"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^!\^(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			H = (function (e) {
+				c(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					u(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = e.endsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [e.length - this.pattern.length, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "suffix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^"(.*)"\$$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^(.*)\$$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			Q = (function (e) {
+				c(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					u(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = !e.endsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "inverse-suffix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^!"(.*)"\$$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^!(.*)\$$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			X = (function (e) {
+				c(n, e);
+				var t = l(n);
+				function n(e) {
+					var i,
+						u =
+							arguments.length > 1 && void 0 !== arguments[1]
+								? arguments[1]
+								: {},
+						o = u.location,
+						c = void 0 === o ? O.location : o,
+						a = u.threshold,
+						s = void 0 === a ? O.threshold : a,
+						h = u.distance,
+						l = void 0 === h ? O.distance : h,
+						f = u.includeMatches,
+						d = void 0 === f ? O.includeMatches : f,
+						v = u.findAllMatches,
+						g = void 0 === v ? O.findAllMatches : v,
+						y = u.minMatchCharLength,
+						p = void 0 === y ? O.minMatchCharLength : y,
+						A = u.isCaseSensitive,
+						m = void 0 === A ? O.isCaseSensitive : A,
+						C = u.ignoreDiacritics,
+						k = void 0 === C ? O.ignoreDiacritics : C,
+						E = u.ignoreLocation,
+						F = void 0 === E ? O.ignoreLocation : E;
+					return (
+						r(this, n),
+						((i = t.call(this, e))._bitapSearch = new T(e, {
+							location: c,
+							threshold: s,
+							distance: l,
+							includeMatches: d,
+							findAllMatches: g,
+							minMatchCharLength: p,
+							isCaseSensitive: m,
+							ignoreDiacritics: k,
+							ignoreLocation: F,
+						})),
+						i
+					);
+				}
+				return (
+					u(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									return this._bitapSearch.searchIn(e);
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "fuzzy";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			Y = (function (e) {
+				c(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					u(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									for (
+										var t, n = 0, r = [], i = this.pattern.length;
+										(t = e.indexOf(this.pattern, n)) > -1;
+									)
+										(n = t + i), r.push([t, n - 1]);
+									var u = !!r.length;
+									return { isMatch: u, score: u ? 0 : 1, indices: r };
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "include";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^'"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^'(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			Z = [J, Y, V, G, Q, H, U, X],
+			ee = Z.length,
+			te = / +(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/,
+			ne = new Set([X.type, Y.type]),
+			re = (function () {
+				function e(t) {
+					var n =
+							arguments.length > 1 && void 0 !== arguments[1]
+								? arguments[1]
+								: {},
+						i = n.isCaseSensitive,
+						u = void 0 === i ? O.isCaseSensitive : i,
+						o = n.ignoreDiacritics,
+						c = void 0 === o ? O.ignoreDiacritics : o,
+						a = n.includeMatches,
+						s = void 0 === a ? O.includeMatches : a,
+						h = n.minMatchCharLength,
+						l = void 0 === h ? O.minMatchCharLength : h,
+						f = n.ignoreLocation,
+						d = void 0 === f ? O.ignoreLocation : f,
+						v = n.findAllMatches,
+						g = void 0 === v ? O.findAllMatches : v,
+						y = n.location,
+						p = void 0 === y ? O.location : y,
+						A = n.threshold,
+						m = void 0 === A ? O.threshold : A,
+						C = n.distance,
+						k = void 0 === C ? O.distance : C;
+					r(this, e),
+						(this.query = null),
+						(this.options = {
+							isCaseSensitive: u,
+							ignoreDiacritics: c,
+							includeMatches: s,
+							minMatchCharLength: l,
+							findAllMatches: g,
+							ignoreLocation: d,
+							location: p,
+							threshold: m,
+							distance: k,
+						}),
+						(t = u ? t : t.toLowerCase()),
+						(t = c ? z(t) : t),
+						(this.pattern = t),
+						(this.query = (function (e) {
+							var t =
+								arguments.length > 1 && void 0 !== arguments[1]
+									? arguments[1]
+									: {};
+							return e.split("|").map(function (e) {
+								for (
+									var n = e
+											.trim()
+											.split(te)
+											.filter(function (e) {
+												return e && !!e.trim();
+											}),
+										r = [],
+										i = 0,
+										u = n.length;
+									i < u;
+									i += 1
+								) {
+									for (var o = n[i], c = !1, a = -1; !c && ++a < ee; ) {
+										var s = Z[a],
+											h = s.isMultiMatch(o);
+										h && (r.push(new s(h, t)), (c = !0));
+									}
+									if (!c)
+										for (a = -1; ++a < ee; ) {
+											var l = Z[a],
+												f = l.isSingleMatch(o);
+											if (f) {
+												r.push(new l(f, t));
+												break;
+											}
+										}
+								}
+								return r;
+							});
+						})(this.pattern, this.options));
+				}
+				return (
+					u(
+						e,
+						[
+							{
+								key: "searchIn",
+								value: function (e) {
+									var t = this.query;
+									if (!t) return { isMatch: !1, score: 1 };
+									var n = this.options,
+										r = n.includeMatches,
+										i = n.isCaseSensitive,
+										u = n.ignoreDiacritics;
+									(e = i ? e : e.toLowerCase()), (e = u ? z(e) : e);
+									for (
+										var o = 0, c = [], a = 0, s = 0, h = t.length;
+										s < h;
+										s += 1
+									) {
+										var l = t[s];
+										(c.length = 0), (o = 0);
+										for (var d = 0, v = l.length; d < v; d += 1) {
+											var g = l[d],
+												y = g.search(e),
+												p = y.isMatch,
+												A = y.indices,
+												m = y.score;
+											if (!p) {
+												(a = 0), (o = 0), (c.length = 0);
+												break;
+											}
+											if (((o += 1), (a += m), r)) {
+												var C = g.constructor.type;
+												ne.has(C) ? (c = [].concat(f(c), f(A))) : c.push(A);
+											}
+										}
+										if (o) {
+											var k = { isMatch: !0, score: a / o };
+											return r && (k.indices = c), k;
+										}
+									}
+									return { isMatch: !1, score: 1 };
+								},
+							},
+						],
+						[
+							{
+								key: "condition",
+								value: function (e, t) {
+									return t.useExtendedSearch;
+								},
+							},
+						],
+					),
+					e
+				);
+			})(),
+			ie = [];
+		function ue(e, t) {
+			for (var n = 0, r = ie.length; n < r; n += 1) {
+				var i = ie[n];
+				if (i.condition(e, t)) return new i(e, t);
+			}
+			return new T(e, t);
+		}
+		var oe = "$and",
+			ce = "$or",
+			ae = "$path",
+			se = "$val",
+			he = function (e) {
+				return !(!e[oe] && !e[ce]);
+			},
+			le = function (e) {
+				return o(
+					{},
+					oe,
+					Object.keys(e).map(function (t) {
+						return o({}, t, e[t]);
+					}),
+				);
+			};
+		function fe(e, t) {
+			var n = (
+					arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : {}
+				).auto,
+				r = void 0 === n || n;
+			return (
+				he(e) || (e = le(e)),
+				(function e(n) {
+					var i = Object.keys(n),
+						u = (function (e) {
+							return !!e[ae];
+						})(n);
+					if (!u && i.length > 1 && !he(n)) return e(le(n));
+					if (
+						(function (e) {
+							return !g(e) && k(e) && !he(e);
+						})(n)
+					) {
+						var o = u ? n[ae] : i[0],
+							c = u ? n[se] : n[o];
+						if (!A(c))
+							throw new Error(
+								(function (e) {
+									return "Invalid value for key ".concat(e);
+								})(o),
+							);
+						var a = { keyId: L(o), pattern: c };
+						return r && (a.searcher = ue(c, t)), a;
+					}
+					var s = { children: [], operator: i[0] };
+					return (
+						i.forEach(function (t) {
+							var r = n[t];
+							g(r) &&
+								r.forEach(function (t) {
+									s.children.push(e(t));
+								});
+						}),
+						s
+					);
+				})(e)
+			);
+		}
+		function de(e, t) {
+			var n = e.matches;
+			(t.matches = []),
+				E(n) &&
+					n.forEach(function (e) {
+						if (E(e.indices) && e.indices.length) {
+							var n = { indices: e.indices, value: e.value };
+							e.key && (n.key = e.key.src),
+								e.idx > -1 && (n.refIndex = e.idx),
+								t.matches.push(n);
+						}
+					});
+		}
+		function ve(e, t) {
+			t.score = e.score;
+		}
+		var ge = (function () {
+			function e(n) {
+				var i =
+						arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : {},
+					u = arguments.length > 2 ? arguments[2] : void 0;
+				r(this, e),
+					(this.options = t(t({}, O), i)),
+					this.options.useExtendedSearch,
+					(this._keyStore = new x(this.options.keys)),
+					this.setCollection(n, u);
+			}
+			return (
+				u(e, [
+					{
+						key: "setCollection",
+						value: function (e, t) {
+							if (((this._docs = e), t && !(t instanceof I)))
+								throw new Error("Incorrect 'index' type");
+							this._myIndex =
+								t ||
+								$(this.options.keys, this._docs, {
+									getFn: this.options.getFn,
+									fieldNormWeight: this.options.fieldNormWeight,
+								});
+						},
+					},
+					{
+						key: "add",
+						value: function (e) {
+							E(e) && (this._docs.push(e), this._myIndex.add(e));
+						},
+					},
+					{
+						key: "remove",
+						value: function () {
+							for (
+								var e =
+										arguments.length > 0 && void 0 !== arguments[0]
+											? arguments[0]
+											: function () {
+													return !1;
+												},
+									t = [],
+									n = 0,
+									r = this._docs.length;
+								n < r;
+								n += 1
+							) {
+								var i = this._docs[n];
+								e(i, n) && (this.removeAt(n), (n -= 1), (r -= 1), t.push(i));
+							}
+							return t;
+						},
+					},
+					{
+						key: "removeAt",
+						value: function (e) {
+							this._docs.splice(e, 1), this._myIndex.removeAt(e);
+						},
+					},
+					{
+						key: "getIndex",
+						value: function () {
+							return this._myIndex;
+						},
+					},
+					{
+						key: "search",
+						value: function (e) {
+							var t = (
+									arguments.length > 1 && void 0 !== arguments[1]
+										? arguments[1]
+										: {}
+								).limit,
+								n = void 0 === t ? -1 : t,
+								r = this.options,
+								i = r.includeMatches,
+								u = r.includeScore,
+								o = r.shouldSort,
+								c = r.sortFn,
+								a = r.ignoreFieldNorm,
+								s = A(e)
+									? A(this._docs[0])
+										? this._searchStringList(e)
+										: this._searchObjectList(e)
+									: this._searchLogical(e);
+							return (
+								(function (e, t) {
+									var n = t.ignoreFieldNorm,
+										r = void 0 === n ? O.ignoreFieldNorm : n;
+									e.forEach(function (e) {
+										var t = 1;
+										e.matches.forEach(function (e) {
+											var n = e.key,
+												i = e.norm,
+												u = e.score,
+												o = n ? n.weight : null;
+											t *= Math.pow(
+												0 === u && o ? Number.EPSILON : u,
+												(o || 1) * (r ? 1 : i),
+											);
+										}),
+											(e.score = t);
+									});
+								})(s, { ignoreFieldNorm: a }),
+								o && s.sort(c),
+								m(n) && n > -1 && (s = s.slice(0, n)),
+								(function (e, t) {
+									var n =
+											arguments.length > 2 && void 0 !== arguments[2]
+												? arguments[2]
+												: {},
+										r = n.includeMatches,
+										i = void 0 === r ? O.includeMatches : r,
+										u = n.includeScore,
+										o = void 0 === u ? O.includeScore : u,
+										c = [];
+									return (
+										i && c.push(de),
+										o && c.push(ve),
+										e.map(function (e) {
+											var n = e.idx,
+												r = { item: t[n], refIndex: n };
+											return (
+												c.length &&
+													c.forEach(function (t) {
+														t(e, r);
+													}),
+												r
+											);
+										})
+									);
+								})(s, this._docs, { includeMatches: i, includeScore: u })
+							);
+						},
+					},
+					{
+						key: "_searchStringList",
+						value: function (e) {
+							var t = ue(e, this.options),
+								n = this._myIndex.records,
+								r = [];
+							return (
+								n.forEach(function (e) {
+									var n = e.v,
+										i = e.i,
+										u = e.n;
+									if (E(n)) {
+										var o = t.searchIn(n),
+											c = o.isMatch,
+											a = o.score,
+											s = o.indices;
+										c &&
+											r.push({
+												item: n,
+												idx: i,
+												matches: [{ score: a, value: n, norm: u, indices: s }],
+											});
+									}
+								}),
+								r
+							);
+						},
+					},
+					{
+						key: "_searchLogical",
+						value: function (e) {
+							var t = this,
+								n = fe(e, this.options),
+								r = function e(n, r, i) {
+									if (!n.children) {
+										var u = n.keyId,
+											o = n.searcher,
+											c = t._findMatches({
+												key: t._keyStore.get(u),
+												value: t._myIndex.getValueForItemAtKeyId(r, u),
+												searcher: o,
+											});
+										return c && c.length
+											? [{ idx: i, item: r, matches: c }]
+											: [];
+									}
+									for (
+										var a = [], s = 0, h = n.children.length;
+										s < h;
+										s += 1
+									) {
+										var l = e(n.children[s], r, i);
+										if (l.length) a.push.apply(a, f(l));
+										else if (n.operator === oe) return [];
+									}
+									return a;
+								},
+								i = this._myIndex.records,
+								u = {},
+								o = [];
+							return (
+								i.forEach(function (e) {
+									var t = e.$,
+										i = e.i;
+									if (E(t)) {
+										var c = r(n, t, i);
+										c.length &&
+											(u[i] ||
+												((u[i] = { idx: i, item: t, matches: [] }),
+												o.push(u[i])),
+											c.forEach(function (e) {
+												var t,
+													n = e.matches;
+												(t = u[i].matches).push.apply(t, f(n));
+											}));
+									}
+								}),
+								o
+							);
+						},
+					},
+					{
+						key: "_searchObjectList",
+						value: function (e) {
+							var t = this,
+								n = ue(e, this.options),
+								r = this._myIndex,
+								i = r.keys,
+								u = r.records,
+								o = [];
+							return (
+								u.forEach(function (e) {
+									var r = e.$,
+										u = e.i;
+									if (E(r)) {
+										var c = [];
+										i.forEach(function (e, i) {
+											c.push.apply(
+												c,
+												f(t._findMatches({ key: e, value: r[i], searcher: n })),
+											);
+										}),
+											c.length && o.push({ idx: u, item: r, matches: c });
+									}
+								}),
+								o
+							);
+						},
+					},
+					{
+						key: "_findMatches",
+						value: function (e) {
+							var t = e.key,
+								n = e.value,
+								r = e.searcher;
+							if (!E(n)) return [];
+							var i = [];
+							if (g(n))
+								n.forEach(function (e) {
+									var n = e.v,
+										u = e.i,
+										o = e.n;
+									if (E(n)) {
+										var c = r.searchIn(n),
+											a = c.isMatch,
+											s = c.score,
+											h = c.indices;
+										a &&
+											i.push({
+												score: s,
+												key: t,
+												value: n,
+												idx: u,
+												norm: o,
+												indices: h,
+											});
+									}
+								});
+							else {
+								var u = n.v,
+									o = n.n,
+									c = r.searchIn(u),
+									a = c.isMatch,
+									s = c.score,
+									h = c.indices;
+								a &&
+									i.push({ score: s, key: t, value: u, norm: o, indices: h });
+							}
+							return i;
+						},
+					},
+				]),
+				e
+			);
+		})();
+		return (
+			(ge.version = "7.1.0"),
+			(ge.createIndex = $),
+			(ge.parseIndex = function (e) {
+				var t =
+						arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : {},
+					n = t.getFn,
+					r = void 0 === n ? O.getFn : n,
+					i = t.fieldNormWeight,
+					u = void 0 === i ? O.fieldNormWeight : i,
+					o = e.keys,
+					c = e.records,
+					a = new I({ getFn: r, fieldNormWeight: u });
+				return a.setKeys(o), a.setIndexRecords(c), a;
+			}),
+			(ge.config = O),
+			(function () {
+				ie.push.apply(ie, arguments);
+			})(re),
+			ge
+		);
+	}),
+	"object" == typeof exports && "undefined" != typeof module
+		? (module.exports = t())
+		: "function" == typeof define && define.amd
+			? define(t)
+			: ((e = "undefined" != typeof globalThis ? globalThis : e || self).Fuse =
+					t());
+
+		</script> <style>
+.keen-slider:not([data-keen-slider-disabled]) {
+	-webkit-touch-callout: none;
+	-webkit-tap-highlight-color: transparent;
+	align-content: flex-start;
+	display: flex;
+	overflow: hidden;
+	position: relative;
+	touch-action: pan-y;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	-khtml-user-select: none;
+	width: 100%;
+}
+.keen-slider:not([data-keen-slider-disabled]) .keen-slider__slide {
+	min-height: 100%;
+	overflow: hidden;
+	position: relative;
+	width: 100%;
+}
+.keen-slider:not([data-keen-slider-disabled])[data-keen-slider-reverse] {
+	flex-direction: row-reverse;
+}
+.keen-slider:not([data-keen-slider-disabled])[data-keen-slider-v] {
+	flex-wrap: wrap;
+}
+
+		</style><style>
+@layer properties {
+  @supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))) {
+  *, ::before, ::after, ::backdrop { --tw-rotate-x: initial; --tw-rotate-y: initial; --tw-rotate-z: initial; --tw-skew-x: initial; --tw-skew-y: initial; --tw-space-y-reverse: 0; --tw-divide-y-reverse: 0; --tw-border-style: solid; --tw-gradient-position: initial; --tw-gradient-from: #0000; --tw-gradient-via: #0000; --tw-gradient-to: #0000; --tw-gradient-stops: initial; --tw-gradient-via-stops: initial; --tw-gradient-from-position: 0%; --tw-gradient-via-position: 50%; --tw-gradient-to-position: 100%; --tw-leading: initial; --tw-font-weight: initial; --tw-tracking: initial; --tw-shadow: 0 0 #0000; --tw-shadow-color: initial; --tw-shadow-alpha: 100%; --tw-inset-shadow: 0 0 #0000; --tw-inset-shadow-color: initial; --tw-inset-shadow-alpha: 100%; --tw-ring-color: initial; --tw-ring-shadow: 0 0 #0000; --tw-inset-ring-color: initial; --tw-inset-ring-shadow: 0 0 #0000; --tw-ring-inset: initial; --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-offset-shadow: 0 0 #0000; --tw-outline-style: solid; --tw-blur: initial; --tw-brightness: initial; --tw-contrast: initial; --tw-grayscale: initial; --tw-hue-rotate: initial; --tw-invert: initial; --tw-opacity: initial; --tw-saturate: initial; --tw-sepia: initial; --tw-drop-shadow: initial; --tw-drop-shadow-color: initial; --tw-drop-shadow-alpha: 100%; --tw-drop-shadow-size: initial; --tw-backdrop-blur: initial; --tw-backdrop-brightness: initial; --tw-backdrop-contrast: initial; --tw-backdrop-grayscale: initial; --tw-backdrop-hue-rotate: initial; --tw-backdrop-invert: initial; --tw-backdrop-opacity: initial; --tw-backdrop-saturate: initial; --tw-backdrop-sepia: initial; --tw-duration: initial; --tw-ease: initial; --tw-space-x-reverse: 0; }
+}
+}
+@layer theme {
+  :root, :host { --font-sans: "Inter",sans-serif; --font-serif: "Noto Serif",serif; --font-mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace; --color-black: #000; --color-white: #fff; --spacing: .25rem; --container-md: 28rem; --container-lg: 32rem; --container-xl: 36rem; --container-6xl: 72rem; --container-7xl: 80rem; --text-xs: .75rem; --text-xs--line-height: calc(1/.75); --text-sm: .875rem; --text-sm--line-height: calc(1.25/.875); --text-base: 1rem; --text-base--line-height: 1.5; --text-lg: 1.125rem; --text-lg--line-height: calc(1.75/1.125); --text-xl: 1.25rem; --text-xl--line-height: calc(1.75/1.25); --text-2xl: 1.5rem; --text-2xl--line-height: calc(2/1.5); --text-3xl: 1.875rem; --text-3xl--line-height: 1.2; --text-4xl: 2.25rem; --text-4xl--line-height: calc(2.5/2.25); --text-5xl: 3rem; --text-5xl--line-height: 1; --text-6xl: 3.75rem; --text-6xl--line-height: 1; --text-7xl: 4.5rem; --text-7xl--line-height: 1; --text-8xl: 6rem; --text-8xl--line-height: 1; --text-9xl: 8rem; --text-9xl--line-height: 1; --font-weight-light: 300; --font-weight-normal: 400; --font-weight-medium: 500; --font-weight-semibold: 600; --tracking-tight: -.025em; --tracking-wider: .05em; --leading-tight: 1.25; --leading-snug: 1.375; --leading-relaxed: 1.625; --radius-md: .375rem; --radius-lg: .5rem; --ease-in-out: cubic-bezier(.4,0,.2,1); --blur-sm: 8px; --default-transition-duration: .15s; --default-transition-timing-function: cubic-bezier(.4,0,.2,1); --default-font-family: var(--font-sans); --default-mono-font-family: var(--font-mono); --font-display: "Noto Serif Display",serif; --color-accent-50: oklch(96.1% .036 134.97); --color-accent-100: oklch(92.4% .082 135.49); --color-accent-200: oklch(84.5% .092 134.54); --color-accent-300: oklch(77.7% .085 134.44); --color-accent-400: oklch(69.9% .076 134.75); --color-accent-500: oklch(63.1% .068 134.65); --color-accent-600: oklch(55.4% .06 134.52); --color-accent-700: oklch(48.6% .052 134.33); --color-accent-800: oklch(41% .045 134.57); --color-accent-900: oklch(34.2% .038 134.9); --color-accent-950: oklch(30.5% .033 134.79); --color-base-50: oklch(95.8% .005 94.95); --color-base-100: oklch(91.3% .011 89.67); --color-base-200: oklch(82.7% .012 89.69); --color-base-300: oklch(74.1% .012 89.71); --color-base-400: oklch(65.4% .009 84.55); --color-base-500: oklch(56.9% .009 91.5); --color-base-600: oklch(48.2% .007 84.55); --color-base-700: oklch(39.8% .007 95.17); --color-base-800: oklch(30.9% .004 84.54); --color-base-900: oklch(22.3% .002 67.71); --color-base-950: oklch(17.7% .002 106.5); }
+}
+@layer base {
+  *, ::after, ::before, ::backdrop { box-sizing: border-box; border: 0px solid; margin: 0px; padding: 0px; }
+  ::file-selector-button { box-sizing: border-box; border: 0px solid; margin: 0px; padding: 0px; }
+  html, :host { text-size-adjust: 100%; tab-size: 4; line-height: 1.5; font-family: var(--default-font-family,ui-sans-serif,system-ui,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"); font-feature-settings: var(--default-font-feature-settings,normal); font-variation-settings: var(--default-font-variation-settings,normal); -webkit-tap-highlight-color: transparent; }
+  hr { height: 0px; color: inherit; border-top-width: 1px; }
+  abbr:where([title]) { text-decoration: underline dotted; }
+  h1, h2, h3, h4, h5, h6 { font-size: inherit; font-weight: inherit; }
+  a { color: inherit; text-decoration: inherit; }
+  b, strong { font-weight: bolder; }
+  code, kbd, samp, pre { font-family: var(--default-mono-font-family,ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace); font-feature-settings: var(--default-mono-font-feature-settings,normal); font-variation-settings: var(--default-mono-font-variation-settings,normal); font-size: 1em; }
+  small { font-size: 80%; }
+  sub, sup { vertical-align: baseline; font-size: 75%; line-height: 0; position: relative; }
+  sub { bottom: -0.25em; }
+  sup { top: -0.5em; }
+  table { text-indent: 0px; border-color: inherit; border-collapse: collapse; }
+  progress { vertical-align: baseline; }
+  summary { display: list-item; }
+  ol, ul, menu { list-style: none; }
+  img, svg, video, canvas, audio, iframe, embed, object { vertical-align: middle; display: block; }
+  img, video { max-width: 100%; height: auto; }
+  button, input, select, optgroup, textarea { font: inherit; letter-spacing: inherit; color: inherit; opacity: 1; background-color: rgba(0, 0, 0, 0); border-radius: 0px; }
+  ::file-selector-button { font: inherit; letter-spacing: inherit; color: inherit; opacity: 1; background-color: rgba(0, 0, 0, 0); border-radius: 0px; }
+  :where(select:is([multiple], [size])) optgroup { font-weight: bolder; }
+  :where(select:is([multiple], [size])) optgroup option { padding-inline-start: 20px; }
+  ::file-selector-button { margin-inline-end: 4px; }
+  ::placeholder { opacity: 1; }
+  @supports (not ((-webkit-appearance:-apple-pay-button))) or (contain-intrinsic-size:1px) {
+  ::placeholder { color: currentcolor; }
+  @supports (color:color-mix(in lab,red,red)) {
+  ::placeholder { color: color-mix(currentcolor, transparent); }
+}
+}
+  textarea { resize: vertical; }
+  ::-webkit-search-decoration { appearance: none; }
+  ::-webkit-date-and-time-value { min-height: 1lh; text-align: inherit; }
+  ::-webkit-datetime-edit { padding-block: 0px; }
+  ::-webkit-datetime-edit-year-field { padding-block: 0px; }
+  ::-webkit-datetime-edit-month-field { padding-block: 0px; }
+  ::-webkit-datetime-edit-day-field { padding-block: 0px; }
+  ::-webkit-datetime-edit-hour-field { padding-block: 0px; }
+  ::-webkit-datetime-edit-minute-field { padding-block: 0px; }
+  ::-webkit-datetime-edit-second-field { padding-block: 0px; }
+  ::-webkit-datetime-edit-millisecond-field { padding-block: 0px; }
+  ::-webkit-datetime-edit-meridiem-field { padding-block: 0px; }
+  ::-webkit-calendar-picker-indicator { line-height: 1; }
+  button, input:where([type="button"], [type="reset"], [type="submit"]) { appearance: button; }
+  ::file-selector-button { appearance: button; }
+  ::-webkit-inner-spin-button { height: auto; }
+  ::-webkit-outer-spin-button { height: auto; }
+  [hidden]:where(:not([hidden="until-found"])) { display: none !important; }
+  [type="text"], input:where(:not([type])), [type="email"], [type="url"], [type="password"], [type="number"], [type="date"], [type="datetime-local"], [type="month"], [type="search"], [type="tel"], [type="time"], [type="week"], [multiple], textarea, select { appearance: none; --tw-shadow: 0 0 #0000; background-color: rgb(255, 255, 255); border-width: 1px; border-color: rgb(106, 114, 130); border-radius: 0px; padding: 0.5rem 0.75rem; font-size: 1rem; line-height: 1.5rem; }
+  :is([type="text"], input:where(:not([type])), [type="email"], [type="url"], [type="password"], [type="number"], [type="date"], [type="datetime-local"], [type="month"], [type="search"], [type="tel"], [type="time"], [type="week"], [multiple], textarea, select):focus { outline-offset: 2px; --tw-ring-inset: var(--tw-empty, ); --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: oklch(54.6% .245 262.881); --tw-ring-offset-shadow: var(--tw-ring-inset)0 0 0 var(--tw-ring-offset-width)var(--tw-ring-offset-color); --tw-ring-shadow: var(--tw-ring-inset)0 0 0 calc(1px + var(--tw-ring-offset-width))var(--tw-ring-color); box-shadow: var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow); border-color: rgb(21, 93, 252); outline: rgba(0, 0, 0, 0) solid 2px; }
+  input::placeholder, textarea::placeholder { color: rgb(106, 114, 130); opacity: 1; }
+  ::-webkit-datetime-edit-fields-wrapper { padding: 0px; }
+  ::-webkit-date-and-time-value { min-height: 1.5em; }
+  ::-webkit-date-and-time-value { text-align: inherit; }
+  ::-webkit-datetime-edit { display: inline-flex; }
+  ::-webkit-datetime-edit { padding-top: 0px; padding-bottom: 0px; }
+  ::-webkit-datetime-edit-year-field { padding-top: 0px; padding-bottom: 0px; }
+  ::-webkit-datetime-edit-month-field { padding-top: 0px; padding-bottom: 0px; }
+  ::-webkit-datetime-edit-day-field { padding-top: 0px; padding-bottom: 0px; }
+  ::-webkit-datetime-edit-hour-field { padding-top: 0px; padding-bottom: 0px; }
+  ::-webkit-datetime-edit-minute-field { padding-top: 0px; padding-bottom: 0px; }
+  ::-webkit-datetime-edit-second-field { padding-top: 0px; padding-bottom: 0px; }
+  ::-webkit-datetime-edit-millisecond-field { padding-top: 0px; padding-bottom: 0px; }
+  ::-webkit-datetime-edit-meridiem-field { padding-top: 0px; padding-bottom: 0px; }
+  select { print-color-adjust: exact; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='oklch(55.1%25 0.027 264.364)' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; }
+  [multiple], [size]:where(select:not([size="1"])) { background-image: initial; background-position: initial; background-repeat: unset; background-size: initial; print-color-adjust: unset; padding-right: 0.75rem; }
+  [type="checkbox"], [type="radio"] { appearance: none; print-color-adjust: exact; vertical-align: middle; user-select: none; color: rgb(21, 93, 252); --tw-shadow: 0 0 #0000; background-color: rgb(255, 255, 255); background-origin: border-box; border-width: 1px; border-color: rgb(106, 114, 130); flex-shrink: 0; width: 1rem; height: 1rem; padding: 0px; display: inline-block; }
+  [type="checkbox"] { border-radius: 0px; }
+  [type="radio"] { border-radius: 100%; }
+  [type="checkbox"]:focus, [type="radio"]:focus { outline-offset: 2px; --tw-ring-inset: var(--tw-empty, ); --tw-ring-offset-width: 2px; --tw-ring-offset-color: #fff; --tw-ring-color: oklch(54.6% .245 262.881); --tw-ring-offset-shadow: var(--tw-ring-inset)0 0 0 var(--tw-ring-offset-width)var(--tw-ring-offset-color); --tw-ring-shadow: var(--tw-ring-inset)0 0 0 calc(2px + var(--tw-ring-offset-width))var(--tw-ring-color); box-shadow: var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow); outline: rgba(0, 0, 0, 0) solid 2px; }
+  [type="checkbox"]:checked, [type="radio"]:checked { background-color: currentcolor; background-position: 50% center; background-repeat: no-repeat; background-size: 100% 100%; border-color: rgba(0, 0, 0, 0); }
+  [type="checkbox"]:checked { background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e"); }
+  @media (forced-colors: active) {
+  [type="checkbox"]:checked { appearance: auto; }
+}
+  [type="radio"]:checked { background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='8' cy='8' r='3'/%3e%3c/svg%3e"); }
+  @media (forced-colors: active) {
+  [type="radio"]:checked { appearance: auto; }
+}
+  [type="checkbox"]:checked:hover, [type="checkbox"]:checked:focus, [type="radio"]:checked:hover, [type="radio"]:checked:focus { background-color: currentcolor; border-color: rgba(0, 0, 0, 0); }
+  [type="checkbox"]:indeterminate { background-color: currentcolor; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 16 16'%3e%3cpath stroke='white' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 8h8'/%3e%3c/svg%3e"); background-position: 50% center; background-repeat: no-repeat; background-size: 100% 100%; border-color: rgba(0, 0, 0, 0); }
+  @media (forced-colors: active) {
+  [type="checkbox"]:indeterminate { appearance: auto; }
+}
+  [type="checkbox"]:indeterminate:hover, [type="checkbox"]:indeterminate:focus { background-color: currentcolor; border-color: rgba(0, 0, 0, 0); }
+  [type="file"] { background: unset; border-color: inherit; font-size: unset; line-height: inherit; border-width: 0px; border-radius: 0px; padding: 0px; }
+  [type="file"]:focus { outline: -webkit-focus-ring-color auto 1px; }
+}
+@layer components;
+@layer utilities {
+  .pointer-events-none { pointer-events: none; }
+  .sr-only { clip-path: inset(50%); white-space: nowrap; border-width: 0px; width: 1px; height: 1px; margin: -1px; padding: 0px; position: absolute; overflow: hidden; }
+  .absolute { position: absolute; }
+  .fixed { position: fixed; }
+  .relative { position: relative; }
+  .static { position: static; }
+  .inset-0 { inset: calc(var(--spacing)*0); }
+  .inset-x-0 { inset-inline: calc(var(--spacing)*0); }
+  .top-0 { top: calc(var(--spacing)*0); }
+  .right-4 { right: calc(var(--spacing)*4); }
+  .right-6 { right: calc(var(--spacing)*6); }
+  .bottom-4 { bottom: calc(var(--spacing)*4); }
+  .bottom-6 { bottom: calc(var(--spacing)*6); }
+  .z-10 { z-index: 10; }
+  .z-40 { z-index: 40; }
+  .z-50 { z-index: 50; }
+  .order-first { order: -9999; }
+  .mx-2 { margin-inline: calc(var(--spacing)*2); }
+  .mx-auto { margin-inline: auto; }
+  .prose { color: var(--tw-prose-body); max-width: 65ch; }
+  .prose :where(p):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 1.25em; margin-bottom: 1.25em; }
+  .prose :where([class~="lead"]):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-lead); margin-top: 1.2em; margin-bottom: 1.2em; font-size: 1.25em; line-height: 1.6; }
+  .prose :where(a):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-links); font-weight: 500; text-decoration: underline; }
+  .prose :where(strong):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-bold); font-weight: 600; }
+  .prose :where(a strong):not(:where([class~="not-prose"], [class~="not-prose"] *)), .prose :where(blockquote strong):not(:where([class~="not-prose"], [class~="not-prose"] *)), .prose :where(thead th strong):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: inherit; }
+  .prose :where(ol):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 1.25em; margin-bottom: 1.25em; padding-inline-start: 1.625em; list-style-type: decimal; }
+  .prose :where(ol[type="A"]):not(:where([class~="not-prose"], [class~="not-prose"] *)) { list-style-type: upper-alpha; }
+  .prose :where(ol[type="a"]):not(:where([class~="not-prose"], [class~="not-prose"] *)) { list-style-type: lower-alpha; }
+  .prose :where():not(:where([class~="not-prose"], [class~="not-prose"] *)) { list-style-type: upper-alpha; }
+  .prose :where():not(:where([class~="not-prose"], [class~="not-prose"] *)) { list-style-type: lower-alpha; }
+  .prose :where(ol[type="I"]):not(:where([class~="not-prose"], [class~="not-prose"] *)) { list-style-type: upper-roman; }
+  .prose :where(ol[type="i"]):not(:where([class~="not-prose"], [class~="not-prose"] *)) { list-style-type: lower-roman; }
+  .prose :where():not(:where([class~="not-prose"], [class~="not-prose"] *)) { list-style-type: upper-roman; }
+  .prose :where():not(:where([class~="not-prose"], [class~="not-prose"] *)) { list-style-type: lower-roman; }
+  .prose :where(ol[type="1"]):not(:where([class~="not-prose"], [class~="not-prose"] *)) { list-style-type: decimal; }
+  .prose :where(ul):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 1.25em; margin-bottom: 1.25em; padding-inline-start: 1.625em; list-style-type: disc; }
+  .prose :where(ol > li):not(:where([class~="not-prose"], [class~="not-prose"] *))::marker { color: var(--tw-prose-counters); font-weight: 400; }
+  .prose :where(ul > li):not(:where([class~="not-prose"], [class~="not-prose"] *))::marker { color: var(--tw-prose-bullets); }
+  .prose :where(dt):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-headings); margin-top: 1.25em; font-weight: 600; }
+  .prose :where(hr):not(:where([class~="not-prose"], [class~="not-prose"] *)) { border-color: var(--tw-prose-hr); border-top-width: 1px; margin-top: 3em; margin-bottom: 3em; }
+  .prose :where(blockquote):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-quotes); border-inline-start-width: 0.25rem; border-inline-start-color: var(--tw-prose-quote-borders); quotes: "“" "”" "‘" "’"; margin-top: 1.6em; margin-bottom: 1.6em; padding-inline-start: 1em; font-style: italic; font-weight: 500; }
+  .prose :where(blockquote p:first-of-type):not(:where([class~="not-prose"], [class~="not-prose"] *))::before { content: open-quote; }
+  .prose :where(blockquote p:last-of-type):not(:where([class~="not-prose"], [class~="not-prose"] *))::after { content: close-quote; }
+  .prose :where(h1):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-headings); margin-top: 0px; margin-bottom: 0.888889em; font-size: 2.25em; font-weight: 800; line-height: 1.11111; }
+  .prose :where(h1 strong):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: inherit; font-weight: 900; }
+  .prose :where(h2):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-headings); margin-top: 2em; margin-bottom: 1em; font-size: 1.5em; font-weight: 700; line-height: 1.33333; }
+  .prose :where(h2 strong):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: inherit; font-weight: 800; }
+  .prose :where(h3):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-headings); margin-top: 1.6em; margin-bottom: 0.6em; font-size: 1.25em; font-weight: 600; line-height: 1.6; }
+  .prose :where(h3 strong):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: inherit; font-weight: 700; }
+  .prose :where(h4):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-headings); margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 600; line-height: 1.5; }
+  .prose :where(h4 strong):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: inherit; font-weight: 700; }
+  .prose :where(img):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 2em; margin-bottom: 2em; }
+  .prose :where(picture):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 2em; margin-bottom: 2em; display: block; }
+  .prose :where(video):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 2em; margin-bottom: 2em; }
+  .prose :where(kbd):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-kbd); box-shadow: 0 0 0 1px var(--tw-prose-kbd-shadows),0 3px 0 var(--tw-prose-kbd-shadows); padding-top: 0.1875em; padding-inline: 0.375em; padding-bottom: 0.1875em; border-radius: 0.3125rem; font-family: inherit; font-size: 0.875em; font-weight: 500; }
+  .prose :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-code); font-size: 0.875em; font-weight: 600; }
+  .prose :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *))::before, .prose :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *))::after { content: "`"; }
+  .prose :where(a code):not(:where([class~="not-prose"], [class~="not-prose"] *)), .prose :where(h1 code):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: inherit; }
+  .prose :where(h2 code):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: inherit; font-size: 0.875em; }
+  .prose :where(h3 code):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: inherit; font-size: 0.9em; }
+  .prose :where(h4 code):not(:where([class~="not-prose"], [class~="not-prose"] *)), .prose :where(blockquote code):not(:where([class~="not-prose"], [class~="not-prose"] *)), .prose :where(thead th code):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: inherit; }
+  .prose :where(pre):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-pre-code); background-color: var(--tw-prose-pre-bg); padding-top: 0.857143em; padding-inline: 1.14286em; padding-bottom: 0.857143em; border-radius: 0.375rem; margin-top: 1.71429em; margin-bottom: 1.71429em; font-size: 0.875em; font-weight: 400; line-height: 1.71429; overflow-x: auto; }
+  .prose :where(pre code):not(:where([class~="not-prose"], [class~="not-prose"] *)) { font-weight: inherit; color: inherit; font-size: inherit; font-family: inherit; line-height: inherit; background-color: rgba(0, 0, 0, 0); border-width: 0px; border-radius: 0px; padding: 0px; }
+  .prose :where(pre code):not(:where([class~="not-prose"], [class~="not-prose"] *))::before, .prose :where(pre code):not(:where([class~="not-prose"], [class~="not-prose"] *))::after { content: none; }
+  .prose :where(table):not(:where([class~="not-prose"], [class~="not-prose"] *)) { table-layout: auto; width: 100%; margin-top: 2em; margin-bottom: 2em; font-size: 0.875em; line-height: 1.71429; }
+  .prose :where(thead):not(:where([class~="not-prose"], [class~="not-prose"] *)) { border-bottom-width: 1px; border-bottom-color: var(--tw-prose-th-borders); }
+  .prose :where(thead th):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-headings); vertical-align: bottom; padding-inline: 0.571429em; padding-bottom: 0.571429em; font-weight: 600; }
+  .prose :where(tbody tr):not(:where([class~="not-prose"], [class~="not-prose"] *)) { border-bottom-width: 1px; border-bottom-color: var(--tw-prose-td-borders); }
+  .prose :where(tbody tr:last-child):not(:where([class~="not-prose"], [class~="not-prose"] *)) { border-bottom-width: 0px; }
+  .prose :where(tbody td):not(:where([class~="not-prose"], [class~="not-prose"] *)) { vertical-align: baseline; }
+  .prose :where(tfoot):not(:where([class~="not-prose"], [class~="not-prose"] *)) { border-top-width: 1px; border-top-color: var(--tw-prose-th-borders); }
+  .prose :where(tfoot td):not(:where([class~="not-prose"], [class~="not-prose"] *)) { vertical-align: top; }
+  .prose :where(th, td):not(:where([class~="not-prose"], [class~="not-prose"] *)) { text-align: start; }
+  .prose :where(figure > *):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 0px; margin-bottom: 0px; }
+  .prose :where(figcaption):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--tw-prose-captions); margin-top: 0.857143em; font-size: 0.875em; line-height: 1.42857; }
+  .prose { --tw-prose-body: oklch(37.3% .034 259.733); --tw-prose-headings: oklch(21% .034 264.665); --tw-prose-lead: oklch(44.6% .03 256.802); --tw-prose-links: oklch(21% .034 264.665); --tw-prose-bold: oklch(21% .034 264.665); --tw-prose-counters: oklch(55.1% .027 264.364); --tw-prose-bullets: oklch(87.2% .01 258.338); --tw-prose-hr: oklch(92.8% .006 264.531); --tw-prose-quotes: oklch(21% .034 264.665); --tw-prose-quote-borders: oklch(92.8% .006 264.531); --tw-prose-captions: oklch(55.1% .027 264.364); --tw-prose-kbd: oklch(21% .034 264.665); --tw-prose-kbd-shadows: oklab(21% -.00316127 -.0338527/.1); --tw-prose-code: oklch(21% .034 264.665); --tw-prose-pre-code: oklch(92.8% .006 264.531); --tw-prose-pre-bg: oklch(27.8% .033 256.848); --tw-prose-th-borders: oklch(87.2% .01 258.338); --tw-prose-td-borders: oklch(92.8% .006 264.531); --tw-prose-invert-body: oklch(87.2% .01 258.338); --tw-prose-invert-headings: #fff; --tw-prose-invert-lead: oklch(70.7% .022 261.325); --tw-prose-invert-links: #fff; --tw-prose-invert-bold: #fff; --tw-prose-invert-counters: oklch(70.7% .022 261.325); --tw-prose-invert-bullets: oklch(44.6% .03 256.802); --tw-prose-invert-hr: oklch(37.3% .034 259.733); --tw-prose-invert-quotes: oklch(96.7% .003 264.542); --tw-prose-invert-quote-borders: oklch(37.3% .034 259.733); --tw-prose-invert-captions: oklch(70.7% .022 261.325); --tw-prose-invert-kbd: #fff; --tw-prose-invert-kbd-shadows: #ffffff1a; --tw-prose-invert-code: #fff; --tw-prose-invert-pre-code: oklch(87.2% .01 258.338); --tw-prose-invert-pre-bg: #00000080; --tw-prose-invert-th-borders: oklch(44.6% .03 256.802); --tw-prose-invert-td-borders: oklch(37.3% .034 259.733); font-size: 1rem; line-height: 1.75; }
+  .prose :where(picture > img):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 0px; margin-bottom: 0px; }
+  .prose :where(li):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 0.5em; margin-bottom: 0.5em; }
+  .prose :where(ol > li):not(:where([class~="not-prose"], [class~="not-prose"] *)), .prose :where(ul > li):not(:where([class~="not-prose"], [class~="not-prose"] *)) { padding-inline-start: 0.375em; }
+  .prose :where(.prose > ul > li p):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 0.75em; margin-bottom: 0.75em; }
+  .prose :where(.prose > ul > li > p:first-child):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 1.25em; }
+  .prose :where(.prose > ul > li > p:last-child):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-bottom: 1.25em; }
+  .prose :where(.prose > ol > li > p:first-child):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 1.25em; }
+  .prose :where(.prose > ol > li > p:last-child):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-bottom: 1.25em; }
+  .prose :where(ul ul, ul ol, ol ul, ol ol):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 0.75em; margin-bottom: 0.75em; }
+  .prose :where(dl):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 1.25em; margin-bottom: 1.25em; }
+  .prose :where(dd):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 0.5em; padding-inline-start: 1.625em; }
+  .prose :where(hr + *):not(:where([class~="not-prose"], [class~="not-prose"] *)), .prose :where(h2 + *):not(:where([class~="not-prose"], [class~="not-prose"] *)), .prose :where(h3 + *):not(:where([class~="not-prose"], [class~="not-prose"] *)), .prose :where(h4 + *):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 0px; }
+  .prose :where(thead th:first-child):not(:where([class~="not-prose"], [class~="not-prose"] *)) { padding-inline-start: 0px; }
+  .prose :where(thead th:last-child):not(:where([class~="not-prose"], [class~="not-prose"] *)) { padding-inline-end: 0px; }
+  .prose :where(tbody td, tfoot td):not(:where([class~="not-prose"], [class~="not-prose"] *)) { padding-top: 0.571429em; padding-inline: 0.571429em; padding-bottom: 0.571429em; }
+  .prose :where(tbody td:first-child, tfoot td:first-child):not(:where([class~="not-prose"], [class~="not-prose"] *)) { padding-inline-start: 0px; }
+  .prose :where(tbody td:last-child, tfoot td:last-child):not(:where([class~="not-prose"], [class~="not-prose"] *)) { padding-inline-end: 0px; }
+  .prose :where(figure):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 2em; margin-bottom: 2em; }
+  .prose :where(.prose > :first-child):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-top: 0px; }
+  .prose :where(.prose > :last-child):not(:where([class~="not-prose"], [class~="not-prose"] *)) { margin-bottom: 0px; }
+  .mt-1 { margin-top: calc(var(--spacing)*1); }
+  .mt-2 { margin-top: calc(var(--spacing)*2); }
+  .mt-4 { margin-top: calc(var(--spacing)*4); }
+  .mt-6 { margin-top: calc(var(--spacing)*6); }
+  .mt-8 { margin-top: calc(var(--spacing)*8); }
+  .mt-10 { margin-top: calc(var(--spacing)*10); }
+  .mt-12 { margin-top: calc(var(--spacing)*12); }
+  .mt-24 { margin-top: calc(var(--spacing)*24); }
+  .mr-auto { margin-right: auto; }
+  .mb-1 { margin-bottom: calc(var(--spacing)*1); }
+  .mb-2 { margin-bottom: calc(var(--spacing)*2); }
+  .mb-3 { margin-bottom: calc(var(--spacing)*3); }
+  .mb-4 { margin-bottom: calc(var(--spacing)*4); }
+  .mb-8 { margin-bottom: calc(var(--spacing)*8); }
+  .ml-auto { margin-left: auto; }
+  .scrollbar-hide { scrollbar-width: none; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .block { display: block; }
+  .flex { display: flex; }
+  .grid { display: grid; }
+  .hidden { display: none; }
+  .inline { display: inline; }
+  .inline-block { display: inline-block; }
+  .inline-flex { display: inline-flex; }
+  .table { display: table; }
+  .aspect-square { aspect-ratio: 1 / 1; }
+  .size-3 { width: calc(var(--spacing)*3); height: calc(var(--spacing)*3); }
+  .size-4 { width: calc(var(--spacing)*4); height: calc(var(--spacing)*4); }
+  .size-5 { width: calc(var(--spacing)*5); height: calc(var(--spacing)*5); }
+  .size-6 { width: calc(var(--spacing)*6); height: calc(var(--spacing)*6); }
+  .size-7 { width: calc(var(--spacing)*7); height: calc(var(--spacing)*7); }
+  .size-7\.5 { width: calc(var(--spacing)*7.5); height: calc(var(--spacing)*7.5); }
+  .size-8 { width: calc(var(--spacing)*8); height: calc(var(--spacing)*8); }
+  .size-9 { width: calc(var(--spacing)*9); height: calc(var(--spacing)*9); }
+  .size-10 { width: calc(var(--spacing)*10); height: calc(var(--spacing)*10); }
+  .size-11 { width: calc(var(--spacing)*11); height: calc(var(--spacing)*11); }
+  .size-12 { width: calc(var(--spacing)*12); height: calc(var(--spacing)*12); }
+  .size-13 { width: calc(var(--spacing)*13); height: calc(var(--spacing)*13); }
+  .size-24 { width: calc(var(--spacing)*24); height: calc(var(--spacing)*24); }
+  .size-full { width: 100%; height: 100%; }
+  .h-1 { height: calc(var(--spacing)*1); }
+  .h-7\.5 { height: calc(var(--spacing)*7.5); }
+  .h-8 { height: calc(var(--spacing)*8); }
+  .h-9 { height: calc(var(--spacing)*9); }
+  .h-10 { height: calc(var(--spacing)*10); }
+  .h-11 { height: calc(var(--spacing)*11); }
+  .h-12 { height: calc(var(--spacing)*12); }
+  .h-13 { height: calc(var(--spacing)*13); }
+  .h-24 { height: calc(var(--spacing)*24); }
+  .h-\[calc\(100dvh-4rem\)\] { height: calc(-4rem + 100dvh); }
+  .h-\[calc\(100dvh-10rem\)\] { height: calc(-10rem + 100dvh); }
+  .h-full { height: 100%; }
+  .max-h-100 { max-height: calc(var(--spacing)*100); }
+  .min-h-screen { min-height: 100vh; }
+  .min-h-svh { min-height: 100svh; }
+  .w-fit { width: fit-content; }
+  .w-full { width: 100%; }
+  .max-w-6xl { max-width: var(--container-6xl); }
+  .max-w-24 { max-width: calc(var(--spacing)*24); }
+  .max-w-lg { max-width: var(--container-lg); }
+  .max-w-md { max-width: var(--container-md); }
+  .max-w-none { max-width: none; }
+  .max-w-screen { max-width: 100vw; }
+  .max-w-xl { max-width: var(--container-xl); }
+  .flex-1 { flex: 1 1 0%; }
+  .grow { flex-grow: 1; }
+  .transform { transform: var(--tw-rotate-x,)var(--tw-rotate-y,)var(--tw-rotate-z,)var(--tw-skew-x,)var(--tw-skew-y,); }
+  .cursor-pointer { cursor: pointer; }
+  .resize { resize: both; }
+  .list-disc { list-style-type: disc; }
+  .list-none { list-style-type: none; }
+  .columns-1 { columns: 1; }
+  .grid-cols-1 { grid-template-columns: repeat(1, minmax(0px, 1fr)); }
+  .grid-cols-2 { grid-template-columns: repeat(2, minmax(0px, 1fr)); }
+  .grid-cols-3 { grid-template-columns: repeat(3, minmax(0px, 1fr)); }
+  .flex-col { flex-direction: column; }
+  .items-baseline { align-items: baseline; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .justify-center { justify-content: center; }
+  .justify-end { justify-content: flex-end; }
+  .gap-1 { gap: calc(var(--spacing)*1); }
+  .gap-2 { gap: calc(var(--spacing)*2); }
+  .gap-3 { gap: calc(var(--spacing)*3); }
+  .gap-4 { gap: calc(var(--spacing)*4); }
+  .gap-8 { gap: calc(var(--spacing)*8); }
+  .gap-10 { gap: calc(var(--spacing)*10); }
+  .gap-12 { gap: calc(var(--spacing)*12); }
+  .gap-24 { gap: calc(var(--spacing)*24); }
+  :where(.space-y-1 > :not(:last-child)) { --tw-space-y-reverse: 0; margin-block-start: calc(calc(var(--spacing)*1)*var(--tw-space-y-reverse)); margin-block-end: calc(calc(var(--spacing)*1)*calc(1 - var(--tw-space-y-reverse))); }
+  :where(.space-y-2 > :not(:last-child)) { --tw-space-y-reverse: 0; margin-block-start: calc(calc(var(--spacing)*2)*var(--tw-space-y-reverse)); margin-block-end: calc(calc(var(--spacing)*2)*calc(1 - var(--tw-space-y-reverse))); }
+  :where(.space-y-3 > :not(:last-child)) { --tw-space-y-reverse: 0; margin-block-start: calc(calc(var(--spacing)*3)*var(--tw-space-y-reverse)); margin-block-end: calc(calc(var(--spacing)*3)*calc(1 - var(--tw-space-y-reverse))); }
+  :where(.space-y-4 > :not(:last-child)) { --tw-space-y-reverse: 0; margin-block-start: calc(calc(var(--spacing)*4)*var(--tw-space-y-reverse)); margin-block-end: calc(calc(var(--spacing)*4)*calc(1 - var(--tw-space-y-reverse))); }
+  :where(.space-y-6 > :not(:last-child)) { --tw-space-y-reverse: 0; margin-block-start: calc(calc(var(--spacing)*6)*var(--tw-space-y-reverse)); margin-block-end: calc(calc(var(--spacing)*6)*calc(1 - var(--tw-space-y-reverse))); }
+  :where(.space-y-8 > :not(:last-child)) { --tw-space-y-reverse: 0; margin-block-start: calc(calc(var(--spacing)*8)*var(--tw-space-y-reverse)); margin-block-end: calc(calc(var(--spacing)*8)*calc(1 - var(--tw-space-y-reverse))); }
+  :where(.space-y-10 > :not(:last-child)) { --tw-space-y-reverse: 0; margin-block-start: calc(calc(var(--spacing)*10)*var(--tw-space-y-reverse)); margin-block-end: calc(calc(var(--spacing)*10)*calc(1 - var(--tw-space-y-reverse))); }
+  :where(.space-y-12 > :not(:last-child)) { --tw-space-y-reverse: 0; margin-block-start: calc(calc(var(--spacing)*12)*var(--tw-space-y-reverse)); margin-block-end: calc(calc(var(--spacing)*12)*calc(1 - var(--tw-space-y-reverse))); }
+  :where(.space-y-24 > :not(:last-child)) { --tw-space-y-reverse: 0; margin-block-start: calc(calc(var(--spacing)*24)*var(--tw-space-y-reverse)); margin-block-end: calc(calc(var(--spacing)*24)*calc(1 - var(--tw-space-y-reverse))); }
+  .gap-x-8 { column-gap: calc(var(--spacing)*8); }
+  .gap-y-8 { row-gap: calc(var(--spacing)*8); }
+  .gap-y-12 { row-gap: calc(var(--spacing)*12); }
+  :where(.divide-y > :not(:last-child)) { --tw-divide-y-reverse: 0; border-bottom-style: var(--tw-border-style); border-top-style: var(--tw-border-style); border-top-width: calc(1px*var(--tw-divide-y-reverse)); border-bottom-width: calc(1px*calc(1 - var(--tw-divide-y-reverse))); }
+  :where(.divide-base-200 > :not(:last-child)) { border-color: var(--color-base-200); }
+  .overflow-hidden { overflow: hidden; }
+  .overflow-y-auto { overflow-y: auto; }
+  .scroll-smooth { scroll-behavior: smooth; }
+  .rounded-full { border-radius: 3.40282e+38px; }
+  .rounded-lg { border-radius: var(--radius-lg); }
+  .rounded-md { border-radius: var(--radius-md); }
+  .border { border-style: var(--tw-border-style); border-width: 1px; }
+  .border-t { border-top-style: var(--tw-border-style); border-top-width: 1px; }
+  .border-b { border-bottom-style: var(--tw-border-style); border-bottom-width: 1px; }
+  .border-accent-800 { border-color: var(--color-accent-800); }
+  .border-base-200 { border-color: var(--color-base-200); }
+  .border-transparent { border-color: rgba(0, 0, 0, 0); }
+  .border-b-accent-800 { border-bottom-color: var(--color-accent-800); }
+  .bg-accent-50 { background-color: var(--color-accent-50); }
+  .bg-accent-100 { background-color: var(--color-accent-100); }
+  .bg-accent-200 { background-color: var(--color-accent-200); }
+  .bg-accent-300 { background-color: var(--color-accent-300); }
+  .bg-accent-400 { background-color: var(--color-accent-400); }
+  .bg-accent-500 { background-color: var(--color-accent-500); }
+  .bg-accent-600 { background-color: var(--color-accent-600); }
+  .bg-accent-700 { background-color: var(--color-accent-700); }
+  .bg-accent-800 { background-color: var(--color-accent-800); }
+  .bg-accent-900 { background-color: var(--color-accent-900); }
+  .bg-accent-950 { background-color: var(--color-accent-950); }
+  .bg-base-50 { background-color: var(--color-base-50); }
+  .bg-base-100 { background-color: var(--color-base-100); }
+  .bg-base-200 { background-color: var(--color-base-200); }
+  .bg-base-300 { background-color: var(--color-base-300); }
+  .bg-base-400 { background-color: var(--color-base-400); }
+  .bg-base-500 { background-color: var(--color-base-500); }
+  .bg-base-600 { background-color: var(--color-base-600); }
+  .bg-base-700 { background-color: var(--color-base-700); }
+  .bg-base-800 { background-color: var(--color-base-800); }
+  .bg-base-900 { background-color: var(--color-base-900); }
+  .bg-base-950 { background-color: var(--color-base-950); }
+  .bg-black\/10 { background-color: rgba(0, 0, 0, 0.1); }
+  @supports (color:color-mix(in lab,red,red)) {
+  .bg-black\/10 { background-color: color-mix(in oklab,var(--color-black)10%,transparent); }
+}
+  .bg-black\/30 { background-color: rgba(0, 0, 0, 0.3); }
+  @supports (color:color-mix(in lab,red,red)) {
+  .bg-black\/30 { background-color: color-mix(in oklab,var(--color-black)30%,transparent); }
+}
+  .bg-transparent { background-color: rgba(0, 0, 0, 0); }
+  .bg-white { background-color: var(--color-white); }
+  .bg-white\/90 { background-color: rgba(255, 255, 255, 0.9); }
+  @supports (color:color-mix(in lab,red,red)) {
+  .bg-white\/90 { background-color: color-mix(in oklab,var(--color-white)90%,transparent); }
+}
+  .bg-linear-to-t { --tw-gradient-position: to top; }
+  @supports (background-image:linear-gradient(in lab,red,red)) {
+  .bg-linear-to-t { --tw-gradient-position: to top in oklab; }
+}
+  .bg-linear-to-t { background-image: linear-gradient(var(--tw-gradient-stops)); }
+  .from-base-900 { --tw-gradient-from: var(--color-base-900); --tw-gradient-stops: var(--tw-gradient-via-stops,var(--tw-gradient-position),var(--tw-gradient-from)var(--tw-gradient-from-position),var(--tw-gradient-to)var(--tw-gradient-to-position)); }
+  .to-base-800 { --tw-gradient-to: var(--color-base-800); --tw-gradient-stops: var(--tw-gradient-via-stops,var(--tw-gradient-position),var(--tw-gradient-from)var(--tw-gradient-from-position),var(--tw-gradient-to)var(--tw-gradient-to-position)); }
+  .object-cover { object-fit: cover; }
+  .object-center { object-position: center center; }
+  .object-top { object-position: center top; }
+  .p-4 { padding: calc(var(--spacing)*4); }
+  .p-8 { padding: calc(var(--spacing)*8); }
+  .px-2 { padding-inline: calc(var(--spacing)*2); }
+  .px-4 { padding-inline: calc(var(--spacing)*4); }
+  .px-5 { padding-inline: calc(var(--spacing)*5); }
+  .px-6 { padding-inline: calc(var(--spacing)*6); }
+  .px-8 { padding-inline: calc(var(--spacing)*8); }
+  .py-1 { padding-block: calc(var(--spacing)*1); }
+  .py-2 { padding-block: calc(var(--spacing)*2); }
+  .py-3 { padding-block: calc(var(--spacing)*3); }
+  .py-4 { padding-block: calc(var(--spacing)*4); }
+  .py-8 { padding-block: calc(var(--spacing)*8); }
+  .py-12 { padding-block: calc(var(--spacing)*12); }
+  .py-24 { padding-block: calc(var(--spacing)*24); }
+  .pt-8 { padding-top: calc(var(--spacing)*8); }
+  .pt-12 { padding-top: calc(var(--spacing)*12); }
+  .pt-24 { padding-top: calc(var(--spacing)*24); }
+  .pt-42 { padding-top: calc(var(--spacing)*42); }
+  .pb-2 { padding-bottom: calc(var(--spacing)*2); }
+  .pb-4 { padding-bottom: calc(var(--spacing)*4); }
+  .pb-6 { padding-bottom: calc(var(--spacing)*6); }
+  .pb-24 { padding-bottom: calc(var(--spacing)*24); }
+  .text-center { text-align: center; }
+  .text-left { text-align: left; }
+  .align-middle { vertical-align: middle; }
+  .font-display { font-family: var(--font-display); }
+  .font-serif { font-family: var(--font-serif); }
+  .text-2xl { font-size: var(--text-2xl); line-height: var(--tw-leading,var(--text-2xl--line-height)); }
+  .text-3xl { font-size: var(--text-3xl); line-height: var(--tw-leading,var(--text-3xl--line-height)); }
+  .text-4xl { font-size: var(--text-4xl); line-height: var(--tw-leading,var(--text-4xl--line-height)); }
+  .text-5xl { font-size: var(--text-5xl); line-height: var(--tw-leading,var(--text-5xl--line-height)); }
+  .text-6xl { font-size: var(--text-6xl); line-height: var(--tw-leading,var(--text-6xl--line-height)); }
+  .text-base { font-size: var(--text-base); line-height: var(--tw-leading,var(--text-base--line-height)); }
+  .text-lg { font-size: var(--text-lg); line-height: var(--tw-leading,var(--text-lg--line-height)); }
+  .text-sm { font-size: var(--text-sm); line-height: var(--tw-leading,var(--text-sm--line-height)); }
+  .text-xs { font-size: var(--text-xs); line-height: var(--tw-leading,var(--text-xs--line-height)); }
+  .leading-relaxed { --tw-leading: var(--leading-relaxed); line-height: var(--leading-relaxed); }
+  .leading-snug { --tw-leading: var(--leading-snug); line-height: var(--leading-snug); }
+  .leading-tight { --tw-leading: var(--leading-tight); line-height: var(--leading-tight); }
+  .font-light { --tw-font-weight: var(--font-weight-light); font-weight: var(--font-weight-light); }
+  .font-medium { --tw-font-weight: var(--font-weight-medium); font-weight: var(--font-weight-medium); }
+  .font-semibold { --tw-font-weight: var(--font-weight-semibold); font-weight: var(--font-weight-semibold); }
+  .tracking-tight { --tw-tracking: var(--tracking-tight); letter-spacing: var(--tracking-tight); }
+  .tracking-wider { --tw-tracking: var(--tracking-wider); letter-spacing: var(--tracking-wider); }
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+  .text-accent-500 { color: var(--color-accent-500); }
+  .text-accent-600 { color: var(--color-accent-600); }
+  .text-base-50 { color: var(--color-base-50); }
+  .text-base-200 { color: var(--color-base-200); }
+  .text-base-300 { color: var(--color-base-300); }
+  .text-base-400 { color: var(--color-base-400); }
+  .text-base-500 { color: var(--color-base-500); }
+  .text-base-600 { color: var(--color-base-600); }
+  .text-base-700 { color: var(--color-base-700); }
+  .text-base-900 { color: var(--color-base-900); }
+  .text-base-950 { color: var(--color-base-950); }
+  .text-black { color: var(--color-black); }
+  .text-white { color: var(--color-white); }
+  .capitalize { text-transform: capitalize; }
+  .uppercase { text-transform: uppercase; }
+  .italic { font-style: italic; }
+  .underline { text-decoration-line: underline; }
+  .placeholder-base-400::placeholder { color: var(--color-base-400); }
+  .shadow-sm { --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color,#0000001a),0 1px 2px -1px var(--tw-shadow-color,#0000001a); box-shadow: var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow); }
+  .ring, .ring-1 { --tw-ring-shadow: var(--tw-ring-inset,)0 0 0 calc(1px + var(--tw-ring-offset-width))var(--tw-ring-color,currentcolor); box-shadow: var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow); }
+  .ring-base-200 { --tw-ring-color: var(--color-base-200); }
+  .outline { outline-style: var(--tw-outline-style); outline-width: 1px; }
+  .outline-accent-900 { outline-color: var(--color-accent-900); }
+  .outline-base-900 { outline-color: var(--color-base-900); }
+  .saturate-50 { --tw-saturate: saturate(50%); filter: var(--tw-blur,)var(--tw-brightness,)var(--tw-contrast,)var(--tw-grayscale,)var(--tw-hue-rotate,)var(--tw-invert,)var(--tw-saturate,)var(--tw-sepia,)var(--tw-drop-shadow,); }
+  .filter { filter: var(--tw-blur,)var(--tw-brightness,)var(--tw-contrast,)var(--tw-grayscale,)var(--tw-hue-rotate,)var(--tw-invert,)var(--tw-saturate,)var(--tw-sepia,)var(--tw-drop-shadow,); }
+  .backdrop-blur { --tw-backdrop-blur: blur(8px); backdrop-filter: var(--tw-backdrop-blur,)var(--tw-backdrop-brightness,)var(--tw-backdrop-contrast,)var(--tw-backdrop-grayscale,)var(--tw-backdrop-hue-rotate,)var(--tw-backdrop-invert,)var(--tw-backdrop-opacity,)var(--tw-backdrop-saturate,)var(--tw-backdrop-sepia,); }
+  .backdrop-blur-sm { --tw-backdrop-blur: blur(var(--blur-sm)); backdrop-filter: var(--tw-backdrop-blur,)var(--tw-backdrop-brightness,)var(--tw-backdrop-contrast,)var(--tw-backdrop-grayscale,)var(--tw-backdrop-hue-rotate,)var(--tw-backdrop-invert,)var(--tw-backdrop-opacity,)var(--tw-backdrop-saturate,)var(--tw-backdrop-sepia,); }
+  .transition { transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events; transition-timing-function: var(--tw-ease,var(--default-transition-timing-function)); transition-duration: var(--tw-duration,var(--default-transition-duration)); }
+  .transition-all { transition-property: all; transition-timing-function: var(--tw-ease,var(--default-transition-timing-function)); transition-duration: var(--tw-duration,var(--default-transition-duration)); }
+  .transition-colors { transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to; transition-timing-function: var(--tw-ease,var(--default-transition-timing-function)); transition-duration: var(--tw-duration,var(--default-transition-duration)); }
+  .duration-300 { --tw-duration: .3s; transition-duration: 0.3s; }
+  .duration-500 { --tw-duration: .5s; transition-duration: 0.5s; }
+  .duration-600 { --tw-duration: .6s; transition-duration: 0.6s; }
+  .ease-in-out { --tw-ease: var(--ease-in-out); transition-timing-function: var(--ease-in-out); }
+  @media (hover: hover) {
+  .group-hover\:saturate-100:is(:where(.group):hover *) { --tw-saturate: saturate(100%); filter: var(--tw-blur,)var(--tw-brightness,)var(--tw-contrast,)var(--tw-grayscale,)var(--tw-hue-rotate,)var(--tw-invert,)var(--tw-saturate,)var(--tw-sepia,)var(--tw-drop-shadow,); }
+}
+  .first-letter\:text-7xl::first-letter { font-size: var(--text-7xl); line-height: var(--tw-leading,var(--text-7xl--line-height)); }
+  @media (hover: hover) {
+  .hover\:bg-accent-500:hover { background-color: var(--color-accent-500); }
+  .hover\:bg-base-200:hover { background-color: var(--color-base-200); }
+  .hover\:bg-white\/80:hover { background-color: rgba(255, 255, 255, 0.8); }
+  @supports (color:color-mix(in lab,red,red)) {
+  .hover\:bg-white\/80:hover { background-color: color-mix(in oklab,var(--color-white)80%,transparent); }
+}
+  .hover\:from-base-800:hover { --tw-gradient-from: var(--color-base-800); --tw-gradient-stops: var(--tw-gradient-via-stops,var(--tw-gradient-position),var(--tw-gradient-from)var(--tw-gradient-from-position),var(--tw-gradient-to)var(--tw-gradient-to-position)); }
+  .hover\:to-base-900:hover { --tw-gradient-to: var(--color-base-900); --tw-gradient-stops: var(--tw-gradient-via-stops,var(--tw-gradient-position),var(--tw-gradient-from)var(--tw-gradient-from-position),var(--tw-gradient-to)var(--tw-gradient-to-position)); }
+  .hover\:text-accent-600:hover { color: var(--color-accent-600); }
+  .hover\:text-accent-700:hover { color: var(--color-accent-700); }
+  .hover\:text-base-600:hover { color: var(--color-base-600); }
+  .hover\:text-base-900:hover { color: var(--color-base-900); }
+}
+  .focus\:z-10:focus { z-index: 10; }
+  .focus\:border-accent-50:focus { border-color: var(--color-accent-50); }
+  .focus\:border-accent-800:focus { border-color: var(--color-accent-800); }
+  .focus\:ring-0:focus { --tw-ring-shadow: var(--tw-ring-inset,)0 0 0 calc(0px + var(--tw-ring-offset-width))var(--tw-ring-color,currentcolor); box-shadow: var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow); }
+  .focus\:ring-2:focus { --tw-ring-shadow: var(--tw-ring-inset,)0 0 0 calc(2px + var(--tw-ring-offset-width))var(--tw-ring-color,currentcolor); box-shadow: var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow); }
+  .focus\:ring-accent-500:focus { --tw-ring-color: var(--color-accent-500); }
+  .focus\:outline-2:focus { outline-style: var(--tw-outline-style); outline-width: 2px; }
+  .focus\:outline-offset-4:focus { outline-offset: 4px; }
+  .focus\:outline-accent-600:focus { outline-color: var(--color-accent-600); }
+  .focus\:outline-base-300:focus { outline-color: var(--color-base-300); }
+  .focus\:outline-none:focus { --tw-outline-style: none; outline-style: none; }
+  @media (min-width: 40rem) {
+  .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0px, 1fr)); }
+  .sm\:flex-row { flex-direction: row; }
+  .sm\:text-2xl { font-size: var(--text-2xl); line-height: var(--tw-leading,var(--text-2xl--line-height)); }
+  .sm\:text-3xl { font-size: var(--text-3xl); line-height: var(--tw-leading,var(--text-3xl--line-height)); }
+  .sm\:text-4xl { font-size: var(--text-4xl); line-height: var(--tw-leading,var(--text-4xl--line-height)); }
+  .sm\:text-5xl { font-size: var(--text-5xl); line-height: var(--tw-leading,var(--text-5xl--line-height)); }
+  .sm\:text-6xl { font-size: var(--text-6xl); line-height: var(--tw-leading,var(--text-6xl--line-height)); }
+  .sm\:text-7xl { font-size: var(--text-7xl); line-height: var(--tw-leading,var(--text-7xl--line-height)); }
+  .sm\:text-8xl { font-size: var(--text-8xl); line-height: var(--tw-leading,var(--text-8xl--line-height)); }
+  .sm\:text-9xl { font-size: var(--text-9xl); line-height: var(--tw-leading,var(--text-9xl--line-height)); }
+  .sm\:text-lg { font-size: var(--text-lg); line-height: var(--tw-leading,var(--text-lg--line-height)); }
+  .sm\:text-xl { font-size: var(--text-xl); line-height: var(--tw-leading,var(--text-xl--line-height)); }
+}
+  @media (min-width: 48rem) {
+  .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0px, 1fr)); }
+  .md\:px-12 { padding-inline: calc(var(--spacing)*12); }
+  .md\:text-2xl { font-size: var(--text-2xl); line-height: var(--tw-leading,var(--text-2xl--line-height)); }
+  .md\:text-3xl { font-size: var(--text-3xl); line-height: var(--tw-leading,var(--text-3xl--line-height)); }
+  .md\:text-4xl { font-size: var(--text-4xl); line-height: var(--tw-leading,var(--text-4xl--line-height)); }
+  .md\:text-5xl { font-size: var(--text-5xl); line-height: var(--tw-leading,var(--text-5xl--line-height)); }
+  .md\:text-6xl { font-size: var(--text-6xl); line-height: var(--tw-leading,var(--text-6xl--line-height)); }
+  .md\:text-7xl { font-size: var(--text-7xl); line-height: var(--tw-leading,var(--text-7xl--line-height)); }
+  .md\:text-8xl { font-size: var(--text-8xl); line-height: var(--tw-leading,var(--text-8xl--line-height)); }
+  .md\:text-xl { font-size: var(--text-xl); line-height: var(--tw-leading,var(--text-xl--line-height)); }
+  .md\:text-\[12rem\] { font-size: 12rem; }
+}
+  @media (min-width: 64rem) {
+  .lg\:sticky { position: sticky; }
+  .lg\:top-32 { top: calc(var(--spacing)*32); }
+  .lg\:order-none { order: 0; }
+  .lg\:col-span-2 { grid-column: span 2 / span 2; }
+  .lg\:col-span-3 { grid-column: span 3 / span 3; }
+  .lg\:mt-8 { margin-top: calc(var(--spacing)*8); }
+  .lg\:mt-24 { margin-top: calc(var(--spacing)*24); }
+  .lg\:mt-32 { margin-top: calc(var(--spacing)*32); }
+  .lg\:mt-48 { margin-top: calc(var(--spacing)*48); }
+  .lg\:flex { display: flex; }
+  .lg\:hidden { display: none; }
+  .lg\:aspect-9\/12 { aspect-ratio: 9 / 12; }
+  .lg\:aspect-12\/7 { aspect-ratio: 12 / 7; }
+  .lg\:aspect-12\/8 { aspect-ratio: 12 / 8; }
+  .lg\:size-48 { width: calc(var(--spacing)*48); height: calc(var(--spacing)*48); }
+  .lg\:h-full { height: 100%; }
+  .lg\:columns-2 { columns: 2; }
+  .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0px, 1fr)); }
+  .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0px, 1fr)); }
+  .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0px, 1fr)); }
+  .lg\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0px, 1fr)); }
+  .lg\:grid-cols-11 { grid-template-columns: repeat(11, minmax(0px, 1fr)); }
+  .lg\:flex-row { flex-direction: row; }
+  .lg\:items-center { align-items: center; }
+  .lg\:justify-between { justify-content: space-between; }
+  .lg\:justify-center { justify-content: center; }
+  .lg\:gap-12 { gap: calc(var(--spacing)*12); }
+  .lg\:gap-24 { gap: calc(var(--spacing)*24); }
+  :where(.lg\:space-y-8 > :not(:last-child)) { --tw-space-y-reverse: 0; margin-block-start: calc(calc(var(--spacing)*8)*var(--tw-space-y-reverse)); margin-block-end: calc(calc(var(--spacing)*8)*calc(1 - var(--tw-space-y-reverse))); }
+  :where(.lg\:space-y-32 > :not(:last-child)) { --tw-space-y-reverse: 0; margin-block-start: calc(calc(var(--spacing)*32)*var(--tw-space-y-reverse)); margin-block-end: calc(calc(var(--spacing)*32)*calc(1 - var(--tw-space-y-reverse))); }
+  :where(.lg\:space-x-8 > :not(:last-child)) { --tw-space-x-reverse: 0; margin-inline-start: calc(calc(var(--spacing)*8)*var(--tw-space-x-reverse)); margin-inline-end: calc(calc(var(--spacing)*8)*calc(1 - var(--tw-space-x-reverse))); }
+  .lg\:p-12 { padding: calc(var(--spacing)*12); }
+  .lg\:py-8 { padding-block: calc(var(--spacing)*8); }
+  .lg\:py-24 { padding-block: calc(var(--spacing)*24); }
+  .lg\:py-32 { padding-block: calc(var(--spacing)*32); }
+  .lg\:pt-32 { padding-top: calc(var(--spacing)*32); }
+  .lg\:text-center { text-align: center; }
+  .lg\:text-2xl { font-size: var(--text-2xl); line-height: var(--tw-leading,var(--text-2xl--line-height)); }
+  .lg\:text-3xl { font-size: var(--text-3xl); line-height: var(--tw-leading,var(--text-3xl--line-height)); }
+  .lg\:text-4xl { font-size: var(--text-4xl); line-height: var(--tw-leading,var(--text-4xl--line-height)); }
+  .lg\:text-5xl { font-size: var(--text-5xl); line-height: var(--tw-leading,var(--text-5xl--line-height)); }
+  .lg\:text-6xl { font-size: var(--text-6xl); line-height: var(--tw-leading,var(--text-6xl--line-height)); }
+  .lg\:text-7xl { font-size: var(--text-7xl); line-height: var(--tw-leading,var(--text-7xl--line-height)); }
+  .lg\:text-8xl { font-size: var(--text-8xl); line-height: var(--tw-leading,var(--text-8xl--line-height)); }
+  .lg\:text-9xl { font-size: var(--text-9xl); line-height: var(--tw-leading,var(--text-9xl--line-height)); }
+  .lg\:text-lg { font-size: var(--text-lg); line-height: var(--tw-leading,var(--text-lg--line-height)); }
+  .lg\:text-\[10rem\] { font-size: 10rem; }
+  .lg\:text-\[14rem\] { font-size: 14rem; }
+  .lg\:text-balance { text-wrap: balance; }
+}
+  @media (min-width: 80rem) {
+  .xl\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0px, 1fr)); }
+}
+  @media (min-width: 96rem) {
+  .\32 xl\:max-w-7xl { max-width: var(--container-7xl); }
+  .\32 xl\:max-w-\[90rem\] { max-width: 90rem; }
+}
+  @media (prefers-color-scheme: dark) {
+  .dark\:text-white { color: var(--color-white); }
+}
+  .prose-headings\:font-serif :where(h1, h2, h3, h4, h5, h6, th):not(:where([class~="not-prose"], [class~="not-prose"] *)) { font-family: var(--font-serif); }
+  .prose-headings\:font-normal :where(h1, h2, h3, h4, h5, h6, th):not(:where([class~="not-prose"], [class~="not-prose"] *)) { --tw-font-weight: var(--font-weight-normal); font-weight: var(--font-weight-normal); }
+  .prose-headings\:text-base-900 :where(h1, h2, h3, h4, h5, h6, th):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--color-base-900); }
+  .prose-a\:border-b :where(a):not(:where([class~="not-prose"], [class~="not-prose"] *)) { border-bottom-style: var(--tw-border-style); border-bottom-width: 1px; }
+  .prose-a\:border-base-200 :where(a):not(:where([class~="not-prose"], [class~="not-prose"] *)) { border-color: var(--color-base-200); }
+  .prose-a\:text-base-900 :where(a):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--color-base-900); }
+  .prose-a\:no-underline :where(a):not(:where([class~="not-prose"], [class~="not-prose"] *)) { text-decoration-line: none; }
+  .prose-a\:duration-200 :where(a):not(:where([class~="not-prose"], [class~="not-prose"] *)) { --tw-duration: .2s; transition-duration: 0.2s; }
+  @media (hover: hover) {
+  .prose-a\:hover\:text-base-500 :where(a):not(:where([class~="not-prose"], [class~="not-prose"] *)):hover { color: var(--color-base-500); }
+}
+  .prose-blockquote\:text-base-500 :where(blockquote):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--color-base-500); }
+  .prose-strong\:text-base-900 :where(strong):not(:where([class~="not-prose"], [class~="not-prose"] *)) { color: var(--color-base-900); }
+  .prose-li\:marker\:text-base-500 :where(li):not(:where([class~="not-prose"], [class~="not-prose"] *)) ::marker { color: var(--color-base-500); }
+  .prose-li\:marker\:text-base-500 :where(li):not(:where([class~="not-prose"], [class~="not-prose"] *))::marker { color: var(--color-base-500); }
+  .prose-li\:marker\:text-base-500 :where(li):not(:where([class~="not-prose"], [class~="not-prose"] *)) ::-webkit-details-marker { color: var(--color-base-500); }
+  .prose-li\:marker\:text-base-500 :where(li):not(:where([class~="not-prose"], [class~="not-prose"] *))::-webkit-details-marker { color: var(--color-base-500); }
+  .prose-thead\:border-base-200 :where(thead):not(:where([class~="not-prose"], [class~="not-prose"] *)), .prose-tr\:border-base-200 :where(tr):not(:where([class~="not-prose"], [class~="not-prose"] *)) { border-color: var(--color-base-200); }
+}
+@property --tw-rotate-x { syntax: "*"; inherits: false; }
+@property --tw-rotate-y { syntax: "*"; inherits: false; }
+@property --tw-rotate-z { syntax: "*"; inherits: false; }
+@property --tw-skew-x { syntax: "*"; inherits: false; }
+@property --tw-skew-y { syntax: "*"; inherits: false; }
+@property --tw-space-y-reverse { syntax: "*"; inherits: false; initial-value: 0; }
+@property --tw-divide-y-reverse { syntax: "*"; inherits: false; initial-value: 0; }
+@property --tw-border-style { syntax: "*"; inherits: false; initial-value: solid; }
+@property --tw-gradient-position { syntax: "*"; inherits: false; }
+@property --tw-gradient-from { syntax: "<color>"; inherits: false; initial-value: #0000; }
+@property --tw-gradient-via { syntax: "<color>"; inherits: false; initial-value: #0000; }
+@property --tw-gradient-to { syntax: "<color>"; inherits: false; initial-value: #0000; }
+@property --tw-gradient-stops { syntax: "*"; inherits: false; }
+@property --tw-gradient-via-stops { syntax: "*"; inherits: false; }
+@property --tw-gradient-from-position { syntax: "<length-percentage>"; inherits: false; initial-value: 0%; }
+@property --tw-gradient-via-position { syntax: "<length-percentage>"; inherits: false; initial-value: 50%; }
+@property --tw-gradient-to-position { syntax: "<length-percentage>"; inherits: false; initial-value: 100%; }
+@property --tw-leading { syntax: "*"; inherits: false; }
+@property --tw-font-weight { syntax: "*"; inherits: false; }
+@property --tw-tracking { syntax: "*"; inherits: false; }
+@property --tw-shadow { syntax: "*"; inherits: false; initial-value: 0 0 #0000; }
+@property --tw-shadow-color { syntax: "*"; inherits: false; }
+@property --tw-shadow-alpha { syntax: "<percentage>"; inherits: false; initial-value: 100%; }
+@property --tw-inset-shadow { syntax: "*"; inherits: false; initial-value: 0 0 #0000; }
+@property --tw-inset-shadow-color { syntax: "*"; inherits: false; }
+@property --tw-inset-shadow-alpha { syntax: "<percentage>"; inherits: false; initial-value: 100%; }
+@property --tw-ring-color { syntax: "*"; inherits: false; }
+@property --tw-ring-shadow { syntax: "*"; inherits: false; initial-value: 0 0 #0000; }
+@property --tw-inset-ring-color { syntax: "*"; inherits: false; }
+@property --tw-inset-ring-shadow { syntax: "*"; inherits: false; initial-value: 0 0 #0000; }
+@property --tw-ring-inset { syntax: "*"; inherits: false; }
+@property --tw-ring-offset-width { syntax: "<length>"; inherits: false; initial-value: 0; }
+@property --tw-ring-offset-color { syntax: "*"; inherits: false; initial-value: #fff; }
+@property --tw-ring-offset-shadow { syntax: "*"; inherits: false; initial-value: 0 0 #0000; }
+@property --tw-outline-style { syntax: "*"; inherits: false; initial-value: solid; }
+@property --tw-blur { syntax: "*"; inherits: false; }
+@property --tw-brightness { syntax: "*"; inherits: false; }
+@property --tw-contrast { syntax: "*"; inherits: false; }
+@property --tw-grayscale { syntax: "*"; inherits: false; }
+@property --tw-hue-rotate { syntax: "*"; inherits: false; }
+@property --tw-invert { syntax: "*"; inherits: false; }
+@property --tw-opacity { syntax: "*"; inherits: false; }
+@property --tw-saturate { syntax: "*"; inherits: false; }
+@property --tw-sepia { syntax: "*"; inherits: false; }
+@property --tw-drop-shadow { syntax: "*"; inherits: false; }
+@property --tw-drop-shadow-color { syntax: "*"; inherits: false; }
+@property --tw-drop-shadow-alpha { syntax: "<percentage>"; inherits: false; initial-value: 100%; }
+@property --tw-drop-shadow-size { syntax: "*"; inherits: false; }
+@property --tw-backdrop-blur { syntax: "*"; inherits: false; }
+@property --tw-backdrop-brightness { syntax: "*"; inherits: false; }
+@property --tw-backdrop-contrast { syntax: "*"; inherits: false; }
+@property --tw-backdrop-grayscale { syntax: "*"; inherits: false; }
+@property --tw-backdrop-hue-rotate { syntax: "*"; inherits: false; }
+@property --tw-backdrop-invert { syntax: "*"; inherits: false; }
+@property --tw-backdrop-opacity { syntax: "*"; inherits: false; }
+@property --tw-backdrop-saturate { syntax: "*"; inherits: false; }
+@property --tw-backdrop-sepia { syntax: "*"; inherits: false; }
+@property --tw-duration { syntax: "*"; inherits: false; }
+@property --tw-ease { syntax: "*"; inherits: false; }
+@property --tw-space-x-reverse { syntax: "*"; inherits: false; initial-value: 0; }
+		</style></head> <body class="flex flex-col bg-base-50 min-h-svh"> <header class="fixed w-full top-0 z-50 bg-base-50 py-2 lg:py-8"> <div class="max-w-screen mx-auto px-4  md:px-12 w-full 2xl:max-w-[90rem]">   <nav class="grid grid-cols-2 lg:grid-cols-3 lg:col-span-3 text-black items-center"> <div class="hidden lg:flex items-center gap-4 mr-auto"> <a href="rsvp.html" class="text-center justify-center text-sm  transition-colors uppercase"> RSVP </a><a href="info.html" class="text-center justify-center text-sm  transition-colors uppercase"> Info </a><a href="gallery.html" class="text-center justify-center text-sm  transition-colors uppercase"> Gallery </a><a href="people.html" class="text-center justify-center text-sm  transition-colors uppercase"> People </a><a href="events.html" class="text-center justify-center text-sm  transition-colors uppercase"> Events </a> </div> <a href="index.html" class="lg:text-center lg:justify-center"> <span class="sr-only"> Go home</span> <span class="text-2xl lg:text-6xl font-medium tracking-tight font-display uppercase focus:outline-none text-black">Northbound</span> </a> <div class="hidden lg:flex items-center gap-4 ml-auto"> <a href="faq.html" class="text-center justify-center text-sm  transition-colors uppercase"> FAQ </a><a href="wishlist.html" class="text-center justify-center text-sm  transition-colors uppercase"> Wishlist </a><a href="blog.html" class="text-center justify-center text-sm  transition-colors uppercase"> Journal </a><a href="system/overview.html" class="text-center justify-center text-sm  transition-colors uppercase"> Overview </a><a href="https://lexingtonthemes.com/templates/northbound" class="text-center justify-center text-sm  transition-colors uppercase"> Buy </a> </div> <div class="lg:hidden ml-auto"> <button id="mobile-menu-toggle" class="text-2xl font-medium tracking-tight font-display uppercase focus:outline-none text-black" aria-label="Toggle menu">
+Menu
+</button> </div> </nav>  </div> </header>  <nav id="mobile-menu" class="hidden lg:hidden fixed inset-x-0 z-40" style="top: 0px"> <div class="max-w-6xl mx-auto px-4  md:px-12 w-full 2xl:max-w-7xl">  <div class="bg-base-50 h-full py-4 flex flex-col gap-4"> <a href="rsvp.html" class="text-3xl font-medium tracking-tight font-display uppercase focus:outline-none text-black"> RSVP </a><a href="info.html" class="text-3xl font-medium tracking-tight font-display uppercase focus:outline-none text-black"> Info </a><a href="gallery.html" class="text-3xl font-medium tracking-tight font-display uppercase focus:outline-none text-black"> Gallery </a><a href="people.html" class="text-3xl font-medium tracking-tight font-display uppercase focus:outline-none text-black"> People </a><a href="events.html" class="text-3xl font-medium tracking-tight font-display uppercase focus:outline-none text-black"> Events </a><a href="faq.html" class="text-3xl font-medium tracking-tight font-display uppercase focus:outline-none text-black"> FAQ </a><a href="wishlist.html" class="text-3xl font-medium tracking-tight font-display uppercase focus:outline-none text-black"> Wishlist </a><a href="blog.html" class="text-3xl font-medium tracking-tight font-display uppercase focus:outline-none text-black"> Journal </a><a href="system/overview.html" class="text-3xl font-medium tracking-tight font-display uppercase focus:outline-none text-black"> Overview </a><a href="https://lexingtonthemes.com/templates/northbound" class="text-3xl font-medium tracking-tight font-display uppercase focus:outline-none text-black"> Buy </a> </div>  </div> </nav> <script type="module">const i=document.getElementById("mobile-menu-toggle"),e=document.getElementById("mobile-menu"),t=document.querySelector("header");function n(){if(!e||!t)return;const o=t.getBoundingClientRect().height;e.style.top=`${o}px`}n();window.addEventListener("resize",n);i?.addEventListener("click",()=>{e?.classList.toggle("hidden")});</script> <main class="grow"> <section> <div class="max-w-screen mx-auto px-4  md:px-12 w-full 2xl:max-w-[90rem] py-24 lg:py-32">  <div class="relative overflow-hidden h-[calc(100dvh-4rem)]"> <img src="assets/heroimage.7QtPkUtt_Z1tiXu7.webp" alt="heroimage" loading="eager" decoding="async" fetchpriority="auto" width="1440" height="1193" class="size-full object-cover object-top saturate-50">  <div class="absolute inset-0 flex flex-col pt-42 items-center text-center justify-center bg-black/30"> <h1 class="text-5xl  sm:text-7xl md:text-8xl lg:text-9xl font-display text-white uppercase">  Aria & Daniel  </h1> </div> </div>  </div> </section> <section> <div class="max-w-6xl mx-auto px-4  md:px-12 w-full 2xl:max-w-7xl py-12 lg:py-24">  <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center"> <div> <svg aria-hidden="true" class="h-24" viewBox="0 0 899 899" viewBox="0 0 899 899" fill="none" xmlns="http://www.w3.org/2000/svg"> <g clip-path="url(#clip0_3828_66)"> <path d="M280.067 515.372C242.146 515.372 210.819 505.479 186.087 485.694C158.883 463.848 145.28 434.582 145.28 397.897C145.28 386.768 146.517 376.257 148.99 366.364C160.119 327.618 181.553 296.703 213.292 273.621C243.382 251.774 279.243 238.584 320.874 234.05C308.096 221.272 301.707 206.021 301.707 188.297C301.707 161.092 314.485 139.04 340.041 122.14C362.3 107.301 387.856 99.8812 416.709 99.8812C464.524 99.8812 488.431 116.163 488.431 148.726C488.431 161.916 483.485 173.458 473.592 183.35C463.699 193.243 452.158 198.189 438.968 198.189C432.373 198.189 426.19 196.747 420.419 193.861C413.824 190.151 410.526 185.205 410.526 179.022C410.526 176.549 410.939 174.694 411.763 173.458C411.763 170.984 412.587 169.748 414.236 169.748C415.473 169.748 416.091 170.572 416.091 172.221C416.091 173.458 415.885 174.488 415.473 175.313C414.648 177.786 414.236 179.228 414.236 179.641C414.236 187.472 418.152 191.388 425.984 191.388C439.174 191.388 450.509 187.472 459.99 179.641C470.707 171.397 476.065 161.298 476.065 149.344C476.065 135.742 470.501 125.025 459.371 117.193C449.066 110.186 437.113 106.682 423.511 106.682C395.894 106.682 372.399 115.132 353.026 132.032C332.828 149.344 322.729 171.809 322.729 199.426C322.729 212.616 325.821 223.951 332.004 233.432C334.889 233.02 337.568 232.813 340.041 232.813C342.515 232.813 344.988 232.813 347.461 232.813C393.214 232.813 416.091 238.996 416.091 251.362C416.091 260.018 408.672 264.346 393.833 264.346C370.338 264.346 349.522 257.545 331.385 243.943C251.832 258.369 203.193 299.383 185.469 366.982C182.584 376.875 181.141 388.004 181.141 400.37C181.141 432.521 191.24 458.077 211.437 477.038C231.222 496.411 257.397 506.097 289.96 506.097C329.943 506.097 366.01 493.319 398.161 467.763C432.373 440.559 449.479 407.583 449.479 368.837C449.479 334.625 434.846 317.519 405.58 317.519C394.451 317.519 384.764 320.611 376.521 326.793C367.452 333.389 362.918 342.251 362.918 353.38C362.918 360.387 362.3 363.891 361.063 363.891C357.766 363.891 356.117 360.387 356.117 353.38C356.117 351.731 356.323 349.876 356.735 347.815C357.147 345.342 357.972 342.663 359.208 339.778C367.452 319.992 385.177 310.1 412.381 310.1C430.93 310.1 445.769 315.87 456.898 327.412C467.203 338.953 472.355 354.41 472.355 373.783C472.355 416.239 450.303 451.482 406.198 479.511C367.04 503.418 324.996 515.372 280.067 515.372ZM384.558 258.163C397.336 258.163 403.725 255.484 403.725 250.126C403.725 243.118 394.451 239.615 375.902 239.615C370.132 239.615 364.155 239.821 357.972 240.233C352.201 240.645 346.43 241.263 340.66 242.088C353.438 252.805 368.071 258.163 384.558 258.163Z" fill="currentColor"></path> <path d="M378.066 789.785C341.793 789.785 323.656 779.687 323.656 759.489C323.656 750.009 328.808 742.795 339.113 737.849C347.357 733.727 356.838 731.666 367.555 731.666C382.394 731.666 411.041 740.322 453.497 757.634C465.45 748.154 476.992 736.406 488.121 722.392C499.25 708.377 509.761 691.889 519.654 672.929C527.898 656.853 535.935 640.571 543.767 624.084C551.599 607.596 559.43 591.108 567.262 574.621C600.238 506.609 637.953 456.939 680.409 425.613C644.548 409.949 608.069 402.118 570.972 402.118C526.867 402.118 488.327 409.125 455.352 423.14C415.369 440.04 385.897 465.389 366.936 499.189C355.395 519.799 349.624 541.233 349.624 563.491C349.624 585.338 355.807 603.474 368.173 617.901C381.363 632.74 398.881 640.159 420.727 640.159C447.52 640.159 471.839 631.091 493.686 612.954C517.181 594.406 528.928 571.735 528.928 544.943C528.928 530.928 523.364 518.356 512.234 507.227C501.105 496.51 488.121 491.151 473.282 491.151C460.092 491.151 448.138 495.479 437.421 504.136C426.704 513.616 421.346 524.745 421.346 537.523C421.346 547.828 426.704 552.98 437.421 552.98C441.131 552.98 442.986 553.599 442.986 554.835C442.986 556.896 440.925 557.927 436.803 557.927C421.964 557.927 414.545 551.126 414.545 537.523C414.545 521.86 420.521 509.288 432.475 499.808C444.429 489.915 457.825 484.969 472.664 484.969C491.625 484.969 507.288 491.77 519.654 505.372C532.02 518.15 538.203 533.813 538.203 552.362C538.203 580.391 526.043 603.68 501.723 622.229C479.877 639.129 454.527 647.579 425.674 647.579C397.645 647.579 373.944 639.129 354.571 622.229C334.373 604.505 324.274 581.834 324.274 554.217C324.274 547.21 324.893 539.996 326.129 532.577C327.778 525.157 329.839 517.738 332.312 510.318C347.975 468.275 377.859 437.36 421.964 417.575C458.649 401.499 502.136 393.462 552.423 393.462C601.062 393.462 647.228 401.912 690.92 418.812C718.949 399.851 746.36 390.37 773.153 390.37C777.274 390.37 779.541 391.195 779.954 392.843C779.954 392.843 778.511 393.256 775.626 394.08C764.084 396.141 754.81 397.79 747.803 399.026C741.208 400.263 736.879 401.293 734.819 402.118C728.223 403.767 721.628 406.24 715.033 409.537C708.85 412.835 702.874 416.751 697.103 421.285C779.129 455.909 820.142 507.639 820.142 576.475C820.142 583.07 819.73 589.666 818.906 596.261C818.082 602.444 816.845 608.833 815.196 615.428C801.594 673.135 770.473 716.621 721.834 745.887C678.966 771.443 625.793 784.221 562.316 784.221C523.157 784.221 490.182 779.068 463.389 768.763C437.009 782.778 408.568 789.785 378.066 789.785ZM552.423 779.274C616.313 779.274 670.31 762.168 714.415 727.956C762.229 691.271 786.137 641.602 786.137 578.949H786.755C786.755 511.349 753.779 461.474 687.829 429.323C659.799 455.703 633.625 502.075 609.306 568.438C573.857 665.715 527.692 731.048 470.809 764.435C497.601 774.328 524.806 779.274 552.423 779.274ZM379.92 784.839C403.415 784.839 425.674 777.419 446.696 762.581C411.659 748.978 385.691 742.177 368.791 742.177C346.121 742.177 334.785 749.596 334.785 764.435C334.785 778.038 349.83 784.839 379.92 784.839Z" fill="currentColor"></path> <path d="M53.6008 726.218H35.2682L36.1748 721.988C38.928 721.786 41.4127 721.518 43.6287 721.182C45.9118 720.846 47.96 720.208 49.7731 719.268C51.6534 718.328 53.3322 716.985 54.8095 715.239C56.2869 713.426 57.6299 711.008 58.8386 707.987H63.9758L48.8665 779H42.4199L53.6008 726.218ZM102.722 761.473H70.2878L71.4966 755.933L114.508 708.692H120.35L110.277 756.034H120.148L119.04 761.473H109.169L105.442 779H98.9954L102.722 761.473ZM77.7417 756.034H103.83L111.889 718.362L77.7417 756.034Z" fill="currentColor"></path> <path d="M64.9831 857.047C65.7889 853.22 66.3597 849.493 66.6954 845.866C67.0312 842.173 66.8633 838.883 66.1918 835.995C65.5203 833.108 64.2108 830.791 62.2634 829.045C60.316 827.299 57.462 826.426 53.7015 826.426C50.1424 826.426 47.0534 827.332 44.4345 829.146C41.8156 830.892 39.5324 833.242 37.585 836.197C35.7047 839.151 34.0931 842.509 32.75 846.269C31.4741 850.03 30.4333 853.858 29.6274 857.752C28.6873 862.319 28.0829 866.482 27.8143 870.243C27.6129 873.936 27.9151 877.092 28.7209 879.711C29.5267 882.33 30.9033 884.378 32.8507 885.856C34.7982 887.266 37.4842 887.971 40.909 887.971C44.7367 887.971 47.9936 887.031 50.6796 885.15C53.3657 883.27 55.6489 880.853 57.5292 877.898C59.4094 874.943 60.9204 871.619 62.0619 867.926C63.2707 864.233 64.2444 860.606 64.9831 857.047ZM55.1117 820.987C58.6036 820.987 61.4911 821.524 63.7743 822.598C66.1246 823.606 68.0049 825.016 69.4151 826.829C70.8253 828.642 71.799 830.757 72.3362 833.175C72.9406 835.592 73.2428 838.178 73.2428 840.931C73.3099 843.617 73.1421 846.404 72.7391 849.291C72.3362 852.179 71.8326 854.999 71.2282 857.752C70.2209 862.453 68.9115 866.952 67.2998 871.25C65.7553 875.548 63.7407 879.342 61.2561 882.632C58.8386 885.923 55.8504 888.542 52.2913 890.489C48.7994 892.436 44.6024 893.41 39.7003 893.41C34.7982 893.41 30.9705 892.436 28.2172 890.489C25.5312 888.542 23.6509 885.923 22.5765 882.632C21.502 879.275 21.0991 875.413 21.3677 871.049C21.6363 866.616 22.3079 861.949 23.3823 857.047C24.3224 852.548 25.5312 848.15 27.0085 843.852C28.553 839.554 30.534 835.726 32.9515 832.369C35.4361 828.944 38.458 826.191 42.017 824.109C45.6432 822.027 50.0081 820.987 55.1117 820.987ZM118.335 838.413C118.402 834.786 117.529 831.899 115.716 829.75C113.97 827.534 111.183 826.426 107.356 826.426C102.991 826.426 99.3311 827.467 96.3764 829.548C93.4217 831.63 90.9371 834.283 88.9225 837.506C86.908 840.662 85.2628 844.121 83.9869 847.881C82.711 851.642 81.603 855.201 80.6628 858.558C81.9387 857.215 83.2482 855.872 84.5912 854.529C86.0014 853.186 87.5124 852.011 89.124 851.004C90.8028 849.929 92.6495 849.09 94.6641 848.485C96.6786 847.814 98.9954 847.478 101.614 847.478C108.8 847.478 113.937 849.526 117.026 853.623C120.115 857.652 120.887 863.225 119.342 870.343C117.798 877.529 114.608 883.169 109.773 887.266C104.938 891.362 98.8946 893.41 91.6422 893.41C88.0831 893.41 84.8934 892.839 82.073 891.698C79.3198 890.489 77.1038 888.542 75.425 885.856C73.8133 883.169 72.8396 879.678 72.5038 875.38C72.1681 871.015 72.6717 865.71 74.0148 859.465C74.6191 856.644 75.3914 853.757 76.3315 850.802C77.2716 847.78 78.4132 844.859 79.7563 842.039C81.0993 839.151 82.6774 836.432 84.4905 833.88C86.3036 831.328 88.3518 829.112 90.6349 827.232C92.9853 825.284 95.5706 823.773 98.391 822.699C101.279 821.557 104.468 820.987 107.96 820.987C113.601 820.987 117.966 822.464 121.055 825.419C124.211 828.373 125.52 832.705 124.983 838.413H118.335ZM100.204 852.917C97.7195 852.917 95.3692 853.388 93.1531 854.328C91.0043 855.268 89.0569 856.544 87.3109 858.155C85.6321 859.767 84.1883 861.647 82.9796 863.796C81.7708 865.878 80.9314 868.127 80.4614 870.545C80.0585 872.559 79.9242 874.608 80.0585 876.689C80.1928 878.704 80.73 880.551 81.6701 882.229C82.6102 883.908 83.9869 885.285 85.8 886.359C87.6131 887.434 89.997 887.971 92.9517 887.971C95.9735 887.971 98.626 887.467 100.909 886.46C103.192 885.386 105.14 884.009 106.751 882.33C108.363 880.584 109.673 878.67 110.68 876.589C111.687 874.44 112.426 872.291 112.896 870.142C114.037 864.635 113.601 860.405 111.586 857.45C109.572 854.428 105.778 852.917 100.204 852.917Z" fill="currentColor"></path> <path d="M795.124 32.2548C795.862 28.7629 797.071 25.6067 798.75 22.7864C800.429 19.8988 802.477 17.4478 804.894 15.4332C807.379 13.3515 810.166 11.7734 813.255 10.699C816.344 9.55737 819.634 8.98658 823.126 8.98658C826.685 8.98658 829.707 9.5238 832.192 10.5982C834.744 11.6055 836.725 12.9821 838.135 14.7281C839.612 16.474 840.552 18.5558 840.955 20.9732C841.425 23.3907 841.358 25.9425 840.754 28.6286C840.082 31.7847 838.974 34.5716 837.43 36.989C835.885 39.4065 834.072 41.5554 831.99 43.4356C829.909 45.3159 827.592 46.9947 825.04 48.4721C822.555 49.9494 820.037 51.3596 817.485 52.7026C814.934 53.9785 812.415 55.2209 809.931 56.4296C807.446 57.6383 805.197 58.9142 803.182 60.2573C801.839 61.1302 800.496 62.0704 799.153 63.0777C797.877 64.0178 796.702 65.0586 795.627 66.2002C794.553 67.3418 793.579 68.6177 792.706 70.0279C791.9 71.3709 791.263 72.8819 790.792 74.5607H830.379L829.271 80H782.835C783.574 76.5752 784.581 73.4862 785.857 70.733C787.2 67.9798 789.282 65.2937 792.102 62.6747C795.191 59.8543 798.28 57.4369 801.369 55.4223C804.458 53.4077 807.413 51.6282 810.233 50.0837C813.121 48.4721 815.84 47.0283 818.392 45.7524C821.011 44.4094 823.328 42.9656 825.342 41.4211C827.424 39.8766 829.17 38.1306 830.58 36.1832C832.057 34.2358 833.098 31.8519 833.703 29.0315C834.173 26.7483 834.173 24.7002 833.703 22.8871C833.3 21.074 832.528 19.5295 831.386 18.2536C830.244 16.9777 828.801 16.0376 827.055 15.4332C825.309 14.7617 823.328 14.4259 821.112 14.4259C818.761 14.4259 816.512 14.9295 814.363 15.9368C812.281 16.877 810.367 18.1529 808.621 19.7645C806.943 21.3762 805.499 23.2564 804.29 25.4053C803.148 27.5542 802.376 29.8373 801.973 32.2548H795.124ZM881.918 45.0473C882.724 41.2196 883.294 37.4927 883.63 33.8665C883.966 30.1731 883.798 26.8826 883.126 23.9951C882.455 21.1075 881.145 18.7908 879.198 17.0448C877.251 15.2989 874.397 14.4259 870.636 14.4259C867.077 14.4259 863.988 15.3325 861.369 17.1456C858.75 18.8915 856.467 21.2419 854.52 24.1965C852.639 27.1512 851.028 30.5088 849.685 34.2694C848.409 38.0299 847.368 41.8576 846.562 45.7524C845.622 50.3187 845.018 54.4822 844.749 58.2427C844.548 61.9361 844.85 65.0922 845.656 67.7112C846.461 70.3301 847.838 72.3782 849.785 73.8556C851.733 75.2658 854.419 75.9709 857.844 75.9709C861.671 75.9709 864.928 75.0307 867.614 73.1505C870.3 71.2702 872.584 68.8527 874.464 65.898C876.344 62.9433 877.855 59.6193 878.997 55.9259C880.205 52.2326 881.179 48.6064 881.918 45.0473ZM872.046 8.98658C875.538 8.98658 878.426 9.5238 880.709 10.5982C883.059 11.6055 884.94 13.0157 886.35 14.8288C887.76 16.6419 888.734 18.7572 889.271 21.1747C889.875 23.5922 890.177 26.1775 890.177 28.9308C890.245 31.6169 890.077 34.4037 889.674 37.2912C889.271 40.1788 888.767 42.9992 888.163 45.7524C887.156 50.453 885.846 54.9522 884.234 59.25C882.69 63.5477 880.675 67.3418 878.191 70.6323C875.773 73.9227 872.785 76.5417 869.226 78.4891C865.734 80.4365 861.537 81.4102 856.635 81.4102C851.733 81.4102 847.905 80.4365 845.152 78.4891C842.466 76.5417 840.586 73.9227 839.511 70.6323C838.437 67.2747 838.034 63.4134 838.302 59.0485C838.571 54.6165 839.243 49.9494 840.317 45.0473C841.257 40.5481 842.466 36.1496 843.943 31.8519C845.488 27.5542 847.469 23.7265 849.886 20.3689C852.371 16.9441 855.393 14.1909 858.952 12.1092C862.578 10.0274 866.943 8.98658 872.046 8.98658Z" fill="currentColor"></path> <path d="M795.124 145.255C795.862 141.763 797.071 138.607 798.75 135.786C800.429 132.899 802.477 130.448 804.894 128.433C807.379 126.351 810.166 124.773 813.255 123.699C816.344 122.557 819.634 121.987 823.126 121.987C826.685 121.987 829.707 122.524 832.192 123.598C834.744 124.606 836.725 125.982 838.135 127.728C839.612 129.474 840.552 131.556 840.955 133.973C841.425 136.391 841.358 138.943 840.754 141.629C840.082 144.785 838.974 147.572 837.43 149.989C835.885 152.407 834.072 154.555 831.99 156.436C829.909 158.316 827.592 159.995 825.04 161.472C822.555 162.949 820.037 164.36 817.485 165.703C814.934 166.979 812.415 168.221 809.931 169.43C807.446 170.638 805.197 171.914 803.182 173.257C801.839 174.13 800.496 175.07 799.153 176.078C797.877 177.018 796.702 178.059 795.627 179.2C794.553 180.342 793.579 181.618 792.706 183.028C791.9 184.371 791.263 185.882 790.792 187.561H830.379L829.271 193H782.835C783.574 189.575 784.581 186.486 785.857 183.733C787.2 180.98 789.282 178.294 792.102 175.675C795.191 172.854 798.28 170.437 801.369 168.422C804.458 166.408 807.413 164.628 810.233 163.084C813.121 161.472 815.84 160.028 818.392 158.752C821.011 157.409 823.328 155.966 825.342 154.421C827.424 152.877 829.17 151.131 830.58 149.183C832.057 147.236 833.098 144.852 833.703 142.032C834.173 139.748 834.173 137.7 833.703 135.887C833.3 134.074 832.528 132.529 831.386 131.254C830.244 129.978 828.801 129.038 827.055 128.433C825.309 127.762 823.328 127.426 821.112 127.426C818.761 127.426 816.512 127.93 814.363 128.937C812.281 129.877 810.367 131.153 808.621 132.765C806.943 134.376 805.499 136.256 804.29 138.405C803.148 140.554 802.376 142.837 801.973 145.255H795.124ZM842.835 174.567C842.499 179.402 843.675 183.028 846.361 185.445C849.047 187.796 852.707 188.971 857.34 188.971C859.959 188.971 862.41 188.501 864.693 187.561C867.044 186.621 869.125 185.345 870.938 183.733C872.751 182.054 874.262 180.14 875.471 177.991C876.747 175.775 877.654 173.392 878.191 170.84C878.728 168.221 878.829 165.803 878.493 163.587C878.157 161.371 877.385 159.457 876.176 157.846C874.967 156.234 873.356 154.992 871.341 154.119C869.394 153.246 867.077 152.809 864.391 152.809C861.168 152.809 858.146 153.414 855.325 154.623C852.572 155.764 849.92 157.611 847.368 160.163L842.231 159.457L855.728 122.692H890.983L889.875 128.131H860.06L850.591 152.004C852.136 151.131 853.546 150.392 854.822 149.788C856.165 149.183 857.474 148.713 858.75 148.377C860.026 147.974 861.336 147.706 862.679 147.572C864.022 147.437 865.499 147.37 867.111 147.37C870.334 147.37 873.222 147.907 875.773 148.982C878.325 150.056 880.373 151.601 881.918 153.615C883.462 155.63 884.503 158.114 885.04 161.069C885.578 163.957 885.443 167.214 884.637 170.84C883.832 174.6 882.489 177.958 880.608 180.913C878.728 183.8 876.546 186.251 874.061 188.266C871.576 190.28 868.857 191.825 865.902 192.899C862.947 193.907 860.026 194.41 857.139 194.41C853.781 194.41 850.726 194.074 847.972 193.403C845.219 192.731 842.902 191.623 841.022 190.079C839.142 188.467 837.765 186.419 836.892 183.934C836.019 181.383 835.851 178.26 836.389 174.567H842.835Z" fill="currentColor"></path> <mask id="path-7-inside-1_3828_66" fill="white"> <path d="M0 0H100V100H0V0Z"></path> </mask> <path d="M0 0V-4H-4V0H0ZM0 0V4H100V0V-4H0V0ZM0 100H4V0H0H-4V100H0Z" fill="currentColor" mask="url(#path-7-inside-1_3828_66)"></path> <mask id="path-9-inside-2_3828_66" fill="white"> <path d="M799 799H899V899H799V799Z"></path> </mask> <path d="M899 899V903H903V899H899ZM899 799H895V899H899H903V799H899ZM899 899V895H799V899V903H899V899Z" fill="currentColor" mask="url(#path-9-inside-2_3828_66)"></path> </g> </svg> <h2 class="text-lg  sm:text-xl md:text-2xl lg:text-3xl text-base-900 font-serif font-light leading-snug mt-12 first-letter:text-7xl">
+We're gathering the people we love for one long day of
+<span class="italic font-display">laughter</span>,
+<span class="italic font-display">toasts</span>, and
+<span class="italic font-display">dancing</span>&#8212; and we'd be honoured
+          to have you there.
+  </h2> <h2 class="text-base text-base-600 leading-snug mt-8">
+It's more than a date on the calendar &#8212; it's a moment to slow down,
+          gather the people who shaped us, and celebrate the start of something
+          new.
+ </h2> <p class="text-base sm:text-lg md:text-xl  text-base-900 font-serif mt-4">   <time datetime="2025-11-15T00:00:00.000Z"> Saturday, November 15, 2025 </time>   </p> <p class="text-sm  text-base-500 mt-1">  Ceremony Venue, Hillside  </p> </div> <div class="relative"> <div id="keen-slider" class="keen-slider overflow-hidden"> <div class="keen-slider__slide" data-slide-index="0"> <img src="assets/intro.Bdmgv2H6_Z1Im00e.webp" alt="Couple sharing a quiet moment" loading="eager" decoding="async" fetchpriority="auto" width="1440" height="1193" class="aspect-square lg:aspect-9/12 object-cover object-top saturate-50"> </div><div class="keen-slider__slide" data-slide-index="1"> <img src="assets/intro2.DcJD9LYp_Z1RC2oq.webp" alt="Reception details" loading="eager" decoding="async" fetchpriority="auto" width="1440" height="1193" class="aspect-square lg:aspect-9/12 object-cover object-top saturate-50"> </div><div class="keen-slider__slide" data-slide-index="2"> <img src="assets/intro3.h_M_MuWh_Z29n8fh.webp" alt="Dance floor energy" loading="eager" decoding="async" fetchpriority="auto" width="1440" height="1193" class="aspect-square lg:aspect-9/12 object-cover object-top saturate-50"> </div> </div> <div class="absolute inset-x-0 bottom-4 flex justify-end right-4 gap-3 z-10"> <button aria-label="Previous slide" id="keen-slider-previous" class="text-base-50"> <span class="sr-only">Previous</span> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" class="icon size-8" slot="left-icon"> <path d="M224,128a8,8,0,0,1-8,8H59.31l58.35,58.34a8,8,0,0,1-11.32,11.32l-72-72a8,8,0,0,1,0-11.32l72-72a8,8,0,0,1,11.32,11.32L59.31,120H216A8,8,0,0,1,224,128Z"></path></svg> </button> <button aria-label="Next slide" id="keen-slider-next" class="text-base-50"> <span class="sr-only">Next</span> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" class="icon size-8" slot="left-icon"> <path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"></path></svg> </button> </div> </div> </div>  </div> </section> <script>
+/**
+ * Skipped minification because the original files appears to be already minified.
+ * Original file: /npm/keen-slider@6.8.6/keen-slider.js
+ *
+ * Do NOT use SRI with dynamically generated files! More information: https://www.jsdelivr.com/using-sri-with-dynamic-files
+ */
+!function(n,t){"object"==typeof exports&&"undefined"!=typeof module?module.exports=t():"function"==typeof define&&define.amd?define(t):(n="undefined"!=typeof globalThis?globalThis:n||self).KeenSlider=t()}(this,(function(){"use strict";var n=function(){return n=Object.assign||function(n){for(var t,i=1,e=arguments.length;i<e;i++)for(var r in t=arguments[i])Object.prototype.hasOwnProperty.call(t,r)&&(n[r]=t[r]);return n},n.apply(this,arguments)};function t(n,t,i){if(i||2===arguments.length)for(var e,r=0,a=t.length;r<a;r++)!e&&r in t||(e||(e=Array.prototype.slice.call(t,0,r)),e[r]=t[r]);return n.concat(e||Array.prototype.slice.call(t))}function i(n){return Array.prototype.slice.call(n)}function e(n,t){var i=Math.floor(n);return i===t||i+1===t?n:t}function r(){return Date.now()}function a(n,t,i){if(t="data-keen-slider-"+t,null===i)return n.removeAttribute(t);n.setAttribute(t,i||"")}function o(n,t){return t=t||document,"function"==typeof n&&(n=n(t)),Array.isArray(n)?n:"string"==typeof n?i(t.querySelectorAll(n)):n instanceof HTMLElement?[n]:n instanceof NodeList?i(n):[]}function u(n){n.raw&&(n=n.raw),n.cancelable&&!n.defaultPrevented&&n.preventDefault()}function s(n){n.raw&&(n=n.raw),n.stopPropagation&&n.stopPropagation()}function c(){var n=[];return{add:function(t,i,e,r){t.addListener?t.addListener(e):t.addEventListener(i,e,r),n.push([t,i,e,r])},input:function(n,t,i,e){this.add(n,t,function(n){return function(t){t.nativeEvent&&(t=t.nativeEvent);var i=t.changedTouches||[],e=t.targetTouches||[],r=t.detail&&t.detail.x?t.detail:null;return n({id:r?r.identifier?r.identifier:"i":e[0]?e[0]?e[0].identifier:"e":"d",idChanged:r?r.identifier?r.identifier:"i":i[0]?i[0]?i[0].identifier:"e":"d",raw:t,x:r&&r.x?r.x:e[0]?e[0].screenX:r?r.x:t.pageX,y:r&&r.y?r.y:e[0]?e[0].screenY:r?r.y:t.pageY})}}(i),e)},purge:function(){n.forEach((function(n){n[0].removeListener?n[0].removeListener(n[2]):n[0].removeEventListener(n[1],n[2],n[3])})),n=[]}}}function d(n,t,i){return Math.min(Math.max(n,t),i)}function l(n){return(n>0?1:0)-(n<0?1:0)||+n}function f(n){var t=n.getBoundingClientRect();return{height:e(t.height,n.offsetHeight),width:e(t.width,n.offsetWidth)}}function p(n,t,i,e){var r=n&&n[t];return null==r?i:e&&"function"==typeof r?r():r}function v(n){return Math.round(1e6*n)/1e6}function h(n){var t,i,e,r,a,o;function u(t){o||(o=t),s(!0);var a=t-o;a>e&&(a=e);var l=r[i];if(l[3]<a)return i++,u(t);var f=l[2],p=l[4],v=l[0],h=l[1]*(0,l[5])(0===p?1:(a-f)/p);if(h&&n.track.to(v+h),a<e)return d();o=null,s(!1),c(null),n.emit("animationEnded")}function s(n){t.active=n}function c(n){t.targetIdx=n}function d(){var n;n=u,a=window.requestAnimationFrame(n)}function l(){var t;t=a,window.cancelAnimationFrame(t),s(!1),c(null),o&&n.emit("animationStopped"),o=null}return t={active:!1,start:function(t){if(l(),n.track.details){var a=0,o=n.track.details.position;i=0,e=0,r=t.map((function(n){var t,i=Number(o),r=null!==(t=n.earlyExit)&&void 0!==t?t:n.duration,u=n.easing,s=n.distance*u(r/n.duration)||0;o+=s;var c=e;return e+=r,a+=s,[i,n.distance,c,e,n.duration,u]})),c(n.track.distToIdx(a)),d(),n.emit("animationStarted")}},stop:l,targetIdx:null}}function m(n){var i,e,a,o,u,s,c,f,h,m,g,b,x,y,k=1/0,w=[],M=null,T=0;function C(n){_(T+n)}function E(n){var t=z(T+n).abs;return D(t)?t:null}function z(n){var i=Math.floor(Math.abs(v(n/e))),r=v((n%e+e)%e);r===e&&(r=0);var a=l(n),o=c.indexOf(t([],c,!0).reduce((function(n,t){return Math.abs(t-r)<Math.abs(n-r)?t:n}))),u=o;return a<0&&i++,o===s&&(u=0,i+=a>0?1:-1),{abs:u+i*s*a,origin:o,rel:u}}function I(n,t,i){var e;if(t||!S())return A(n,i);if(!D(n))return null;var r=z(null!=i?i:T),a=r.abs,o=n-r.rel,u=a+o;e=A(u);var c=A(u-s*l(o));return(null!==c&&Math.abs(c)<Math.abs(e)||null===e)&&(e=c),v(e)}function A(n,t){if(null==t&&(t=v(T)),!D(n)||null===n)return null;n=Math.round(n);var i=z(t),r=i.abs,a=i.rel,o=i.origin,u=O(n),d=(t%e+e)%e,l=c[o],f=Math.floor((n-(r-a))/s)*e;return v(l-d-l+c[u]+f+(o===s?e:0))}function D(n){return L(n)===n}function L(n){return d(n,h,m)}function S(){return o.loop}function O(n){return(n%s+s)%s}function _(t){var i;i=t-T,w.push({distance:i,timestamp:r()}),w.length>6&&(w=w.slice(-6)),T=v(t);var e=H().abs;if(e!==M){var a=null!==M;M=e,a&&n.emit("slideChanged")}}function H(t){var r=t?null:function(){if(s){var n=S(),t=n?(T%e+e)%e:T,i=(n?T%e:T)-u[0][2],r=0-(i<0&&n?e-Math.abs(i):i),c=0,d=z(T),f=d.abs,p=d.rel,v=u[p][2],k=u.map((function(t,i){var a=r+c;(a<0-t[0]||a>1)&&(a+=(Math.abs(a)>e-1&&n?e:0)*l(-a));var u=i-p,d=l(u),h=u+f;n&&(-1===d&&a>v&&(h+=s),1===d&&a<v&&(h-=s),null!==g&&h<g&&(a+=e),null!==b&&h>b&&(a-=e));var m=a+t[0]+t[1],x=Math.max(a>=0&&m<=1?1:m<0||a>1?0:a<0?Math.min(1,(t[0]+a)/t[0]):(1-a)/t[0],0);return c+=t[0]+t[1],{abs:h,distance:o.rtl?-1*a+1-t[0]:a,portion:x,size:t[0]}}));return f=L(f),p=O(f),{abs:L(f),length:a,max:y,maxIdx:m,min:x,minIdx:h,position:T,progress:n?t/e:T/a,rel:p,slides:k,slidesLength:e}}}();return i.details=r,n.emit("detailsChanged"),r}return i={absToRel:O,add:C,details:null,distToIdx:E,idxToDist:I,init:function(t){if(function(){if(o=n.options,u=(o.trackConfig||[]).map((function(n){return[p(n,"size",1),p(n,"spacing",0),p(n,"origin",0)]})),s=u.length){e=v(u.reduce((function(n,t){return n+t[0]+t[1]}),0));var t,i=s-1;a=v(e+u[0][2]-u[i][0]-u[i][2]-u[i][1]),c=u.reduce((function(n,i){if(!n)return[0];var e=u[n.length-1],r=n[n.length-1]+(e[0]+e[2])+e[1];return r-=i[2],n[n.length-1]>r&&(r=n[n.length-1]),r=v(r),n.push(r),(!t||t<r)&&(f=n.length-1),t=r,n}),null),0===a&&(f=0),c.push(v(e))}}(),!s)return H(!0);var i;!function(){var t=n.options.range,i=n.options.loop;g=h=i?p(i,"min",-1/0):0,b=m=i?p(i,"max",k):f;var e=p(t,"min",null),r=p(t,"max",null);null!==e&&(h=e),null!==r&&(m=r),x=h===-1/0?h:n.track.idxToDist(h||0,!0,0),y=m===k?m:I(m,!0,0),null===r&&(b=m),p(t,"align",!1)&&m!==k&&0===u[O(m)][2]&&(y-=1-u[O(m)][0],m=E(y-T)),x=v(x),y=v(y)}(),i=t,Number(i)===i?C(A(L(t))):H()},to:_,velocity:function(){var n=r(),t=w.reduce((function(t,i){var e=i.distance,r=i.timestamp;return n-r>200||(l(e)!==l(t.distance)&&t.distance&&(t={distance:0,lastTimestamp:0,time:0}),t.time&&(t.distance+=e),t.lastTimestamp&&(t.time+=r-t.lastTimestamp),t.lastTimestamp=r),t}),{distance:0,lastTimestamp:0,time:0});return t.distance/t.time||0}}}function g(n){var t,i,e,r,a,o,u,s;function c(n){return 2*n}function f(n){return d(n,u,s)}function p(n){return 1-Math.pow(1-n,3)}function v(){return e?n.track.velocity():0}function h(){b();var t="free-snap"===n.options.mode,i=n.track,e=v();r=l(e);var u=n.track.details,s=[];if(e||!t){var d=m(e),h=d.dist,g=d.dur;if(g=c(g),h*=r,t){var x=i.idxToDist(i.distToIdx(h),!0);x&&(h=x)}s.push({distance:h,duration:g,easing:p});var y=u.position,k=y+h;if(k<a||k>o){var w=k<a?a-y:o-y,M=0,T=e;if(l(w)===r){var C=Math.min(Math.abs(w)/Math.abs(h),1),E=function(n){return 1-Math.pow(1-n,1/3)}(C)*g;s[0].earlyExit=E,T=e*(1-C)}else s[0].earlyExit=0,M+=w;var z=m(T,100),I=z.dist*r;n.options.rubberband&&(s.push({distance:I,duration:c(z.dur),easing:p}),s.push({distance:-I+M,duration:500,easing:p}))}n.animator.start(s)}else n.moveToIdx(f(u.abs),!0,{duration:500,easing:function(n){return 1+--n*n*n*n*n}})}function m(n,t){void 0===t&&(t=1e3);var i=147e-9+(n=Math.abs(n))/t;return{dist:Math.pow(n,2)/i,dur:n/i}}function g(){var t=n.track.details;t&&(a=t.min,o=t.max,u=t.minIdx,s=t.maxIdx)}function b(){n.animator.stop()}n.on("updated",g),n.on("optionsChanged",g),n.on("created",g),n.on("dragStarted",(function(){e=!1,b(),t=i=n.track.details.abs})),n.on("dragChecked",(function(){e=!0})),n.on("dragEnded",(function(){var e=n.options.mode;"snap"===e&&function(){var e=n.track,r=n.track.details,u=r.position,s=l(v());(u>o||u<a)&&(s=0);var c=t+s;0===r.slides[e.absToRel(c)].portion&&(c-=s),t!==i&&(c=i),l(e.idxToDist(c,!0))!==s&&(c+=s),c=f(c);var d=e.idxToDist(c,!0);n.animator.start([{distance:d,duration:500,easing:function(n){return 1+--n*n*n*n*n}}])}(),"free"!==e&&"free-snap"!==e||h()})),n.on("dragged",(function(){i=n.track.details.abs}))}function b(n){var t,i,e,r,a,f,p,v,h,m,g,b,x,y,k,w,M,T,C=c();function E(t){if(f&&v===t.id){var o=D(t);if(h){if(!A(t))return I(t);m=o,h=!1,n.emit("dragChecked")}if(w)return m=o;u(t);var c=function(t){if(M===-1/0&&T===1/0)return t;var e=n.track.details,o=e.length,u=e.position,s=d(t,M-u,T-u);if(0===o)return 0;if(!n.options.rubberband)return s;if(u<=T&&u>=M)return t;if(u<M&&i>0||u>T&&i<0)return t;var c=(u<M?u-M:u-T)/o,l=r*o,f=Math.abs(c*l),p=Math.max(0,1-f/a*2);return p*p*t}(p(m-o)/r*e);i=l(c);var x=n.track.details.position;(x>M&&x<T||x===M&&i>0||x===T&&i<0)&&s(t),g+=c,!b&&Math.abs(g*r)>5&&(b=!0),n.track.add(c),m=o,n.emit("dragged")}}function z(t){!f&&n.track.details&&n.track.details.length&&(g=0,f=!0,b=!1,h=!0,v=t.id,A(t),m=D(t),n.emit("dragStarted"))}function I(t){f&&v===t.idChanged&&(f=!1,n.emit("dragEnded"))}function A(n){var t=L(),i=t?n.y:n.x,e=t?n.x:n.y,r=void 0!==x&&void 0!==y&&Math.abs(y-e)<=Math.abs(x-i);return x=i,y=e,r}function D(n){return L()?n.y:n.x}function L(){return n.options.vertical}function S(){r=n.size,a=L()?window.innerHeight:window.innerWidth;var t=n.track.details;t&&(M=t.min,T=t.max)}function O(n){b&&(s(n),u(n))}function _(){if(C.purge(),n.options.drag&&!n.options.disabled){var i;i=n.options.dragSpeed||1,p="function"==typeof i?i:function(n){return n*i},e=n.options.rtl?-1:1,S(),t=n.container,function(){var n="data-keen-slider-clickable";o("[".concat(n,"]:not([").concat(n,"=false])"),t).map((function(n){C.add(n,"dragstart",s),C.add(n,"mousedown",s),C.add(n,"touchstart",s)}))}(),C.add(t,"dragstart",(function(n){u(n)})),C.add(t,"click",O,{capture:!0}),C.input(t,"ksDragStart",z),C.input(t,"ksDrag",E),C.input(t,"ksDragEnd",I),C.input(t,"mousedown",z),C.input(t,"mousemove",E),C.input(t,"mouseleave",I),C.input(t,"mouseup",I),C.input(t,"touchstart",z,{passive:!0}),C.input(t,"touchmove",E,{passive:!1}),C.input(t,"touchend",I),C.input(t,"touchcancel",I),C.add(window,"wheel",(function(n){f&&u(n)}));var r="data-keen-slider-scrollable";o("[".concat(r,"]:not([").concat(r,"=false])"),n.container).map((function(n){return function(n){var t;C.input(n,"touchstart",(function(n){t=D(n),w=!0,k=!0}),{passive:!0}),C.input(n,"touchmove",(function(i){var e=L(),r=e?n.scrollHeight-n.clientHeight:n.scrollWidth-n.clientWidth,a=t-D(i),o=e?n.scrollTop:n.scrollLeft,s=e&&"scroll"===n.style.overflowY||!e&&"scroll"===n.style.overflowX;if(t=D(i),(a<0&&o>0||a>0&&o<r)&&k&&s)return w=!0;k=!1,u(i),w=!1})),C.input(n,"touchend",(function(){w=!1}))}(n)}))}}n.on("updated",S),n.on("optionsChanged",_),n.on("created",_),n.on("destroyed",C.purge)}function x(n){var t,i,e=null;function r(t,i,e){n.animator.active?o(t,i,e):requestAnimationFrame((function(){return o(t,i,e)}))}function a(){r(!1,!1,i)}function o(i,r,a){var o=0,u=n.size,d=n.track.details;if(d&&t){var l=d.slides;t.forEach((function(n,t){if(i)!e&&r&&s(n,null,a),c(n,null,a);else{if(!l[t])return;var d=l[t].size*u;!e&&r&&s(n,d,a),c(n,l[t].distance*u-o,a),o+=d}}))}}function u(t){return"performance"===n.options.renderMode?Math.round(t):t}function s(n,t,i){var e=i?"height":"width";null!==t&&(t=u(t)+"px"),n.style["min-"+e]=t,n.style["max-"+e]=t}function c(n,t,i){if(null!==t){t=u(t);var e=i?t:0;t="translate3d(".concat(i?0:t,"px, ").concat(e,"px, 0)")}n.style.transform=t,n.style["-webkit-transform"]=t}function d(){t&&(o(!0,!0,i),t=null),n.on("detailsChanged",a,!0)}function l(){r(!1,!0,i)}function f(){d(),i=n.options.vertical,n.options.disabled||"custom"===n.options.renderMode||(e="auto"===p(n.options.slides,"perView",null),n.on("detailsChanged",a),(t=n.slides).length&&l())}n.on("created",f),n.on("optionsChanged",f),n.on("beforeOptionsChanged",(function(){d()})),n.on("updated",l),n.on("destroyed",d)}function y(t,i){return function(e){var r,u,s,d,l,v,h=c();function m(n){var t;a(e.container,"reverse","rtl"!==(t=e.container,window.getComputedStyle(t,null).getPropertyValue("direction"))||n?null:""),a(e.container,"v",e.options.vertical&&!n?"":null),a(e.container,"disabled",e.options.disabled&&!n?"":null)}function g(){b()&&M()}function b(){var t=null;if(d.forEach((function(n){n.matches&&(t=n.__media)})),t===r)return!1;r||e.emit("beforeOptionsChanged"),r=t;var i=t?s.breakpoints[t]:s;return e.options=n(n({},s),i),m(),I(),A(),C(),!0}function x(n){var t=f(n);return(e.options.vertical?t.height:t.width)/e.size||1}function y(){return e.options.trackConfig.length}function k(t){for(var a in r=!1,s=n(n({},i),t),h.purge(),u=e.size,d=[],s.breakpoints||[]){var o=window.matchMedia(a);o.__media=a,d.push(o),h.add(o,"change",g)}h.add(window,"orientationchange",z),h.add(window,"resize",E),b()}function w(n){e.animator.stop();var t=e.track.details;e.track.init(null!=n?n:t?t.abs:0)}function M(n){w(n),e.emit("optionsChanged")}function T(n,t){if(n)return k(n),void M(t);I(),A();var i=y();C(),y()!==i?M(t):w(t),e.emit("updated")}function C(){var n=e.options.slides;if("function"==typeof n)return e.options.trackConfig=n(e.size,e.slides);for(var t=e.slides,i=t.length,r="number"==typeof n?n:p(n,"number",i,!0),a=[],o=p(n,"perView",1,!0),u=p(n,"spacing",0,!0)/e.size||0,s="auto"===o?u:u/o,c=p(n,"origin","auto"),d=0,l=0;l<r;l++){var f="auto"===o?x(t[l]):1/o-u+s,v="center"===c?.5-f/2:"auto"===c?0:c;a.push({origin:v,size:f,spacing:u}),d+=f}if(d+=u*(r-1),"auto"===c&&!e.options.loop&&1!==o){var h=0;a.map((function(n){var t=d-h;return h+=n.size+u,t>=1||(n.origin=1-t-(d>1?0:1-d)),n}))}e.options.trackConfig=a}function E(){I();var n=e.size;e.options.disabled||n===u||(u=n,T())}function z(){E(),setTimeout(E,500),setTimeout(E,2e3)}function I(){var n=f(e.container);e.size=(e.options.vertical?n.height:n.width)||1}function A(){e.slides=o(e.options.selector,e.container)}e.container=(v=o(t,l||document)).length?v[0]:null,e.destroy=function(){h.purge(),e.emit("destroyed"),m(!0)},e.prev=function(){e.moveToIdx(e.track.details.abs-1,!0)},e.next=function(){e.moveToIdx(e.track.details.abs+1,!0)},e.update=T,k(e.options)}}return function(n,i,e){try{return function(n,t){var i,e={};return i={emit:function(n){e[n]&&e[n].forEach((function(n){n(i)}));var t=i.options&&i.options[n];t&&t(i)},moveToIdx:function(n,t,e){var r=i.track.idxToDist(n,t);if(r){var a=i.options.defaultAnimation;i.animator.start([{distance:r,duration:p(e||a,"duration",500),easing:p(e||a,"easing",(function(n){return 1+--n*n*n*n*n}))}])}},on:function(n,t,i){void 0===i&&(i=!1),e[n]||(e[n]=[]);var r=e[n].indexOf(t);r>-1?i&&delete e[n][r]:i||e[n].push(t)},options:n},function(){if(i.track=m(i),i.animator=h(i),t)for(var n=0,e=t;n<e.length;n++)(0,e[n])(i);i.track.init(i.options.initial||0),i.emit("created")}(),i}(i,t([y(n,{drag:!0,mode:"snap",renderMode:"precision",rubberband:!0,selector:".keen-slider__slide"}),x,b,g],e||[],!0))}catch(n){console.error(n)}}}));
+
+		</script> <script>
+
+  const sliderElement = document.getElementById("keen-slider");
+  if (sliderElement) {
+    const slider = new KeenSlider(
+      sliderElement,
+      {
+        loop: true,
+        slides: {
+          origin: "auto",
+          perView: 1,
+        },
+      },
+      []
+    );
+
+    const previousButton = document.getElementById("keen-slider-previous");
+    const nextButton = document.getElementById("keen-slider-next");
+
+    previousButton?.addEventListener("click", () => slider.prev());
+    nextButton?.addEventListener("click", () => slider.next());
+  }
+</script> <section> <div class="max-w-6xl mx-auto px-4  md:px-12 w-full 2xl:max-w-7xl py-12 lg:py-24">  <h2 class="text-3xl  sm:text-3xl md:text-4xl lg:text-5xl text-base-900 font-serif font-light leading-snug tracking-tight">
+Two people, one story &#8212; held together by coffee dates, late-night
+      playlists, and a shared love of turning quiet moments into loud memories.
+  </h2> <div class="mt-12  columns-1 space-y-4 lg:columns-2 lg:space-y-8 lg:space-x-8"> <p class="text-base text-base-700">  They met in 2018 when a rainstorm forced everyone at a neighborhood coffee shop to linger far longer than planned. Daniel cracked a joke about the playlist, Emily corrected his trivia, and the rest of the day disappeared into refills and unfolding stories. Since then they&#39;ve collected tiny rituals&#8212;Sunday pancakes, unplanned road trips, and voice notes that always end with &quot;call me when you&#39;re free&quot;&#8212;signposts that reminded them to keep building a life on purpose.  </p><p class="text-base text-base-700">  Their weeknights are a collage of shared calendars, half-finished books swapped on the sofa, and playlists they build in the Notes app because they never want to forget what song soundtracked a certain day. They fall asleep talking about the trips they still want to take, the people they want to host, and the kind of home that feels like a revolving door for friends who need a soft place to land.  </p><p class="text-base text-base-700">  The wedding isn&#39;t just a ceremony; it&#39;s the next chapter of something they&#39;ve been writing together for years. They want every guest to feel like they&#39;re part of the story, from first toast to last song. Bring your best advice, your wildest dance moves, and the willingness to stay late&#8212;the night is meant to feel like the moment you realize you&#39;re home.  </p><p class="text-base text-base-700">  After the vows they&#39;ll probably sneak away for five quiet minutes, just to take a breath and memorize the volume of the room. Then they&#39;ll be back on the dance floor, laughing at the off-beat claps, hugging every aunt, and soaking up the fact that their story is forever tied to the people who showed up ready to celebrate.  </p> </div>  </div> </section> <section> <div class="max-w-6xl mx-auto px-4  md:px-12 w-full 2xl:max-w-7xl py-12 lg:py-32">  <h2 class="text-3xl  sm:text-3xl md:text-4xl lg:text-5xl text-base-900 font-serif font-light leading-snug tracking-tight">
+Know where to be and when the party starts <br> &#8212; a short schedule for the day.
+  </h2> <ol class="relative space-y-12 lg:col-span-2 mt-12"> <li class="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-12" aria-label="Ceremony"> <p class="text-6xl  sm:text-9xl md:text-[12rem] lg:text-[14rem] font-display text-base-900 italic font-light">  01.&#8212;
+  </p> <div class="flex flex-col h-full justify-between gap-8 text-balance max-w-md"> <div> <h3 class="text-2xl  sm:text-2xl md:text-3xl lg:text-4xl font-serif text-base-900">  Ceremony  </h3> <p class="text-base text-base-600 mt-4">  The wedding ceremony will take place outdoors. Please arrive 10–15 minutes early.  </p> </div> <p class="text-sm  text-base-600 flex items-center gap-2">  14:00 – 14:30<span aria-hidden="true">·</span> Ceremony Venue · Hillside  </p> </div> </li><li class="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-12" aria-label="Cocktail Hour"> <p class="text-6xl  sm:text-9xl md:text-[12rem] lg:text-[14rem] font-display text-base-900 italic font-light">  02.&#8212;
+  </p> <div class="flex flex-col h-full justify-between gap-8 text-balance max-w-md"> <div> <h3 class="text-2xl  sm:text-2xl md:text-3xl lg:text-4xl font-serif text-base-900">  Cocktail Hour  </h3> <p class="text-base text-base-600 mt-4">  Join us for drinks and appetizers immediately following the ceremony.  </p> </div> <p class="text-sm  text-base-600 flex items-center gap-2">  14:30 – 15:30<span aria-hidden="true">·</span> Reception Terrace · Hillside  </p> </div> </li><li class="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-12" aria-label="Dinner"> <p class="text-6xl  sm:text-9xl md:text-[12rem] lg:text-[14rem] font-display text-base-900 italic font-light">  03.&#8212;
+  </p> <div class="flex flex-col h-full justify-between gap-8 text-balance max-w-md"> <div> <h3 class="text-2xl  sm:text-2xl md:text-3xl lg:text-4xl font-serif text-base-900">  Dinner  </h3> <p class="text-base text-base-600 mt-4">  A delicious three-course meal prepared by our chef.  </p> </div> <p class="text-sm  text-base-600 flex items-center gap-2">  15:30 – 17:30<span aria-hidden="true">·</span> Reception Hall · Hillside  </p> </div> </li><li class="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-12" aria-label="Party"> <p class="text-6xl  sm:text-9xl md:text-[12rem] lg:text-[14rem] font-display text-base-900 italic font-light">  04.&#8212;
+  </p> <div class="flex flex-col h-full justify-between gap-8 text-balance max-w-md"> <div> <h3 class="text-2xl  sm:text-2xl md:text-3xl lg:text-4xl font-serif text-base-900">  Party  </h3> <p class="text-base text-base-600 mt-4">  Open dance floor. Drinks, music, and celebration!  </p> </div> <p class="text-sm  text-base-600 flex items-center gap-2">  18:10 – 22:00<span aria-hidden="true">·</span> Dance Floor · Hillside  </p> </div> </li><li class="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-12" aria-label="Next-Day Brunch"> <p class="text-6xl  sm:text-9xl md:text-[12rem] lg:text-[14rem] font-display text-base-900 italic font-light">  05.&#8212;
+  </p> <div class="flex flex-col h-full justify-between gap-8 text-balance max-w-md"> <div> <h3 class="text-2xl  sm:text-2xl md:text-3xl lg:text-4xl font-serif text-base-900">  Next-Day Brunch  </h3> <p class="text-base text-base-600 mt-4">  Casual brunch for guests staying overnight.  </p> </div> <p class="text-sm  text-base-600 flex items-center gap-2">  10:00 – 12:00<span aria-hidden="true">·</span> Hotel Restaurant · Hillside  </p> </div> </li> </ol>  </div> </section> <section> <div class="max-w-6xl mx-auto px-4  md:px-12 w-full 2xl:max-w-7xl py-12 lg:py-24">  <div class="flex flex-col gap-8"> <article class="relative grid gird-cols-1 lg:grid-cols-2 "> <img src="assets/rsvp.Ut9xvps0_KDCqH.webp" alt="RSVP card with RSVP typography" loading="eager" decoding="async" fetchpriority="auto" width="1290" height="1290" class="aspect-square  object-cover object-top saturate-50"> <div class="p-8 bg-accent-950 flex flex-col h-full justify-between gap-4"> <div> <h3 class="text-3xl  sm:text-3xl md:text-4xl lg:text-5xl font-serif text-base-50 mt-4">  RSVP  </h3> <p class="text-base sm:text-lg md:text-xl  text-base-200 mt-4">  Let us know if you’ll be joining us for the ceremony, reception, or the brunch so we can save you a seat, a glass, and a slice of cake.  </p> </div> <a href="rsvp.html" class="inline-block text-base-50 text-2xl hover:text-base-600 duration-600"> Respond </a> </div> </article><article class="relative grid gird-cols-1 lg:grid-cols-2 "> <img src="assets/info.BSN-y8xV_2riu0B.webp" alt="Map with wedding info marker" loading="eager" decoding="async" fetchpriority="auto" width="1290" height="1290" class="aspect-square  object-cover object-top saturate-50"> <div class="p-8 bg-accent-950 flex flex-col h-full justify-between gap-4"> <div> <h3 class="text-3xl  sm:text-3xl md:text-4xl lg:text-5xl font-serif text-base-50 mt-4">  Info  </h3> <p class="text-base sm:text-lg md:text-xl  text-base-200 mt-4">  Directions, hotels, parking, dress code, and every practical detail in one place so you can focus on celebrating, not logistics.  </p> </div> <a href="info.html" class="inline-block text-base-50 text-2xl hover:text-base-600 duration-600"> Read Info </a> </div> </article><article class="relative grid gird-cols-1 lg:grid-cols-2 "> <img src="assets/wishlist.WgrijLMn_nPff9.webp" alt="Gift boxes illustration" loading="eager" decoding="async" fetchpriority="auto" width="1290" height="1290" class="aspect-square  object-cover object-top saturate-50"> <div class="p-8 bg-accent-950 flex flex-col h-full justify-between gap-4"> <div> <h3 class="text-3xl  sm:text-3xl md:text-4xl lg:text-5xl font-serif text-base-50 mt-4">  Wishlist  </h3> <p class="text-base sm:text-lg md:text-xl  text-base-200 mt-4">  A few things we’d love as we start this next chapter&#8212;only if you’d like to gift, no pressure and zero wrapping stress.  </p> </div> <a href="wishlist.html" class="inline-block text-base-50 text-2xl hover:text-base-600 duration-600"> View Wishlist </a> </div> </article> </div>  </div> </section> <section> <div class="max-w-6xl mx-auto px-4  md:px-12 w-full 2xl:max-w-7xl py-12 lg:py-24">  <h2 class="text-3xl  sm:text-3xl md:text-4xl lg:text-5xl text-base-900 font-serif font-light leading-snug tracking-tight">
+Little moments we can’t wait to share.
+  </h2> <div class="mt-12  grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3"> <article class="relative flex flex-col"> <a href="gallery/getting-ready.html" title="View gallery: Getting Ready" aria-label="View gallery: Getting Ready" class="absolute inset-0 z-10"></a> <img src="assets/cover.WSwi8BKP_24wJ4r.webp" alt="Getting Ready" loading="eager" decoding="async" fetchpriority="auto" width="800" height="800" class="aspect-square lg:aspect-9/12 object-cover object-top saturate-50"> <div class="mt-4"> <h3 class="text-lg sm:text-xl md:text-2xl font-medium text-base-900 font-serif">  Getting Ready  </h3> <p class="text-base text-base-600 mt-2">  A quiet morning filled with soft light, details, and anticipation.  </p> </div> </article><article class="relative flex flex-col"> <a href="gallery/ceremony.html" title="View gallery: Ceremony" aria-label="View gallery: Ceremony" class="absolute inset-0 z-10"></a> <img src="assets/cover.CVBzkzBH_zOWeU.webp" alt="Ceremony" loading="eager" decoding="async" fetchpriority="auto" width="800" height="800" class="aspect-square lg:aspect-9/12 object-cover object-top saturate-50"> <div class="mt-4"> <h3 class="text-lg sm:text-xl md:text-2xl font-medium text-base-900 font-serif">  Ceremony  </h3> <p class="text-base text-base-600 mt-2">  Moments from the ceremony &#8212; emotional, intimate, and historic.  </p> </div> </article><article class="relative flex flex-col"> <a href="gallery/reception.html" title="View gallery: Reception" aria-label="View gallery: Reception" class="absolute inset-0 z-10"></a> <img src="assets/cover.CRddxzws_Z5267K.webp" alt="Reception" loading="eager" decoding="async" fetchpriority="auto" width="800" height="800" class="aspect-square lg:aspect-9/12 object-cover object-top saturate-50"> <div class="mt-4"> <h3 class="text-lg sm:text-xl md:text-2xl font-medium text-base-900 font-serif">  Reception  </h3> <p class="text-base text-base-600 mt-2">  Dinner, speeches, and the warm glow of the evening celebration.  </p> </div> </article> </div>  </div> </section> </main> <footer> <div class="max-w-screen mx-auto px-4  md:px-12 w-full 2xl:max-w-[90rem] py-12">  <div class="relative overflow-hidden h-[calc(100dvh-4rem)]"> <img src="assets/intro5.C6O6qF47_Z1tiKx6.webp" alt="intro5" loading="eager" decoding="async" fetchpriority="auto" width="1440" height="1193" class="size-full object-cover object-top saturate-50">  <div class="absolute inset-0 flex flex-col pt-42 items-center text-center justify-center bg-black/30"> <svg aria-hidden="true" class="size-24 lg:size-48 text-white" viewBox="0 0 899 899" viewBox="0 0 899 899" fill="none" xmlns="http://www.w3.org/2000/svg"> <g clip-path="url(#clip0_3828_66)"> <path d="M280.067 515.372C242.146 515.372 210.819 505.479 186.087 485.694C158.883 463.848 145.28 434.582 145.28 397.897C145.28 386.768 146.517 376.257 148.99 366.364C160.119 327.618 181.553 296.703 213.292 273.621C243.382 251.774 279.243 238.584 320.874 234.05C308.096 221.272 301.707 206.021 301.707 188.297C301.707 161.092 314.485 139.04 340.041 122.14C362.3 107.301 387.856 99.8812 416.709 99.8812C464.524 99.8812 488.431 116.163 488.431 148.726C488.431 161.916 483.485 173.458 473.592 183.35C463.699 193.243 452.158 198.189 438.968 198.189C432.373 198.189 426.19 196.747 420.419 193.861C413.824 190.151 410.526 185.205 410.526 179.022C410.526 176.549 410.939 174.694 411.763 173.458C411.763 170.984 412.587 169.748 414.236 169.748C415.473 169.748 416.091 170.572 416.091 172.221C416.091 173.458 415.885 174.488 415.473 175.313C414.648 177.786 414.236 179.228 414.236 179.641C414.236 187.472 418.152 191.388 425.984 191.388C439.174 191.388 450.509 187.472 459.99 179.641C470.707 171.397 476.065 161.298 476.065 149.344C476.065 135.742 470.501 125.025 459.371 117.193C449.066 110.186 437.113 106.682 423.511 106.682C395.894 106.682 372.399 115.132 353.026 132.032C332.828 149.344 322.729 171.809 322.729 199.426C322.729 212.616 325.821 223.951 332.004 233.432C334.889 233.02 337.568 232.813 340.041 232.813C342.515 232.813 344.988 232.813 347.461 232.813C393.214 232.813 416.091 238.996 416.091 251.362C416.091 260.018 408.672 264.346 393.833 264.346C370.338 264.346 349.522 257.545 331.385 243.943C251.832 258.369 203.193 299.383 185.469 366.982C182.584 376.875 181.141 388.004 181.141 400.37C181.141 432.521 191.24 458.077 211.437 477.038C231.222 496.411 257.397 506.097 289.96 506.097C329.943 506.097 366.01 493.319 398.161 467.763C432.373 440.559 449.479 407.583 449.479 368.837C449.479 334.625 434.846 317.519 405.58 317.519C394.451 317.519 384.764 320.611 376.521 326.793C367.452 333.389 362.918 342.251 362.918 353.38C362.918 360.387 362.3 363.891 361.063 363.891C357.766 363.891 356.117 360.387 356.117 353.38C356.117 351.731 356.323 349.876 356.735 347.815C357.147 345.342 357.972 342.663 359.208 339.778C367.452 319.992 385.177 310.1 412.381 310.1C430.93 310.1 445.769 315.87 456.898 327.412C467.203 338.953 472.355 354.41 472.355 373.783C472.355 416.239 450.303 451.482 406.198 479.511C367.04 503.418 324.996 515.372 280.067 515.372ZM384.558 258.163C397.336 258.163 403.725 255.484 403.725 250.126C403.725 243.118 394.451 239.615 375.902 239.615C370.132 239.615 364.155 239.821 357.972 240.233C352.201 240.645 346.43 241.263 340.66 242.088C353.438 252.805 368.071 258.163 384.558 258.163Z" fill="currentColor"></path> <path d="M378.066 789.785C341.793 789.785 323.656 779.687 323.656 759.489C323.656 750.009 328.808 742.795 339.113 737.849C347.357 733.727 356.838 731.666 367.555 731.666C382.394 731.666 411.041 740.322 453.497 757.634C465.45 748.154 476.992 736.406 488.121 722.392C499.25 708.377 509.761 691.889 519.654 672.929C527.898 656.853 535.935 640.571 543.767 624.084C551.599 607.596 559.43 591.108 567.262 574.621C600.238 506.609 637.953 456.939 680.409 425.613C644.548 409.949 608.069 402.118 570.972 402.118C526.867 402.118 488.327 409.125 455.352 423.14C415.369 440.04 385.897 465.389 366.936 499.189C355.395 519.799 349.624 541.233 349.624 563.491C349.624 585.338 355.807 603.474 368.173 617.901C381.363 632.74 398.881 640.159 420.727 640.159C447.52 640.159 471.839 631.091 493.686 612.954C517.181 594.406 528.928 571.735 528.928 544.943C528.928 530.928 523.364 518.356 512.234 507.227C501.105 496.51 488.121 491.151 473.282 491.151C460.092 491.151 448.138 495.479 437.421 504.136C426.704 513.616 421.346 524.745 421.346 537.523C421.346 547.828 426.704 552.98 437.421 552.98C441.131 552.98 442.986 553.599 442.986 554.835C442.986 556.896 440.925 557.927 436.803 557.927C421.964 557.927 414.545 551.126 414.545 537.523C414.545 521.86 420.521 509.288 432.475 499.808C444.429 489.915 457.825 484.969 472.664 484.969C491.625 484.969 507.288 491.77 519.654 505.372C532.02 518.15 538.203 533.813 538.203 552.362C538.203 580.391 526.043 603.68 501.723 622.229C479.877 639.129 454.527 647.579 425.674 647.579C397.645 647.579 373.944 639.129 354.571 622.229C334.373 604.505 324.274 581.834 324.274 554.217C324.274 547.21 324.893 539.996 326.129 532.577C327.778 525.157 329.839 517.738 332.312 510.318C347.975 468.275 377.859 437.36 421.964 417.575C458.649 401.499 502.136 393.462 552.423 393.462C601.062 393.462 647.228 401.912 690.92 418.812C718.949 399.851 746.36 390.37 773.153 390.37C777.274 390.37 779.541 391.195 779.954 392.843C779.954 392.843 778.511 393.256 775.626 394.08C764.084 396.141 754.81 397.79 747.803 399.026C741.208 400.263 736.879 401.293 734.819 402.118C728.223 403.767 721.628 406.24 715.033 409.537C708.85 412.835 702.874 416.751 697.103 421.285C779.129 455.909 820.142 507.639 820.142 576.475C820.142 583.07 819.73 589.666 818.906 596.261C818.082 602.444 816.845 608.833 815.196 615.428C801.594 673.135 770.473 716.621 721.834 745.887C678.966 771.443 625.793 784.221 562.316 784.221C523.157 784.221 490.182 779.068 463.389 768.763C437.009 782.778 408.568 789.785 378.066 789.785ZM552.423 779.274C616.313 779.274 670.31 762.168 714.415 727.956C762.229 691.271 786.137 641.602 786.137 578.949H786.755C786.755 511.349 753.779 461.474 687.829 429.323C659.799 455.703 633.625 502.075 609.306 568.438C573.857 665.715 527.692 731.048 470.809 764.435C497.601 774.328 524.806 779.274 552.423 779.274ZM379.92 784.839C403.415 784.839 425.674 777.419 446.696 762.581C411.659 748.978 385.691 742.177 368.791 742.177C346.121 742.177 334.785 749.596 334.785 764.435C334.785 778.038 349.83 784.839 379.92 784.839Z" fill="currentColor"></path> <path d="M53.6008 726.218H35.2682L36.1748 721.988C38.928 721.786 41.4127 721.518 43.6287 721.182C45.9118 720.846 47.96 720.208 49.7731 719.268C51.6534 718.328 53.3322 716.985 54.8095 715.239C56.2869 713.426 57.6299 711.008 58.8386 707.987H63.9758L48.8665 779H42.4199L53.6008 726.218ZM102.722 761.473H70.2878L71.4966 755.933L114.508 708.692H120.35L110.277 756.034H120.148L119.04 761.473H109.169L105.442 779H98.9954L102.722 761.473ZM77.7417 756.034H103.83L111.889 718.362L77.7417 756.034Z" fill="currentColor"></path> <path d="M64.9831 857.047C65.7889 853.22 66.3597 849.493 66.6954 845.866C67.0312 842.173 66.8633 838.883 66.1918 835.995C65.5203 833.108 64.2108 830.791 62.2634 829.045C60.316 827.299 57.462 826.426 53.7015 826.426C50.1424 826.426 47.0534 827.332 44.4345 829.146C41.8156 830.892 39.5324 833.242 37.585 836.197C35.7047 839.151 34.0931 842.509 32.75 846.269C31.4741 850.03 30.4333 853.858 29.6274 857.752C28.6873 862.319 28.0829 866.482 27.8143 870.243C27.6129 873.936 27.9151 877.092 28.7209 879.711C29.5267 882.33 30.9033 884.378 32.8507 885.856C34.7982 887.266 37.4842 887.971 40.909 887.971C44.7367 887.971 47.9936 887.031 50.6796 885.15C53.3657 883.27 55.6489 880.853 57.5292 877.898C59.4094 874.943 60.9204 871.619 62.0619 867.926C63.2707 864.233 64.2444 860.606 64.9831 857.047ZM55.1117 820.987C58.6036 820.987 61.4911 821.524 63.7743 822.598C66.1246 823.606 68.0049 825.016 69.4151 826.829C70.8253 828.642 71.799 830.757 72.3362 833.175C72.9406 835.592 73.2428 838.178 73.2428 840.931C73.3099 843.617 73.1421 846.404 72.7391 849.291C72.3362 852.179 71.8326 854.999 71.2282 857.752C70.2209 862.453 68.9115 866.952 67.2998 871.25C65.7553 875.548 63.7407 879.342 61.2561 882.632C58.8386 885.923 55.8504 888.542 52.2913 890.489C48.7994 892.436 44.6024 893.41 39.7003 893.41C34.7982 893.41 30.9705 892.436 28.2172 890.489C25.5312 888.542 23.6509 885.923 22.5765 882.632C21.502 879.275 21.0991 875.413 21.3677 871.049C21.6363 866.616 22.3079 861.949 23.3823 857.047C24.3224 852.548 25.5312 848.15 27.0085 843.852C28.553 839.554 30.534 835.726 32.9515 832.369C35.4361 828.944 38.458 826.191 42.017 824.109C45.6432 822.027 50.0081 820.987 55.1117 820.987ZM118.335 838.413C118.402 834.786 117.529 831.899 115.716 829.75C113.97 827.534 111.183 826.426 107.356 826.426C102.991 826.426 99.3311 827.467 96.3764 829.548C93.4217 831.63 90.9371 834.283 88.9225 837.506C86.908 840.662 85.2628 844.121 83.9869 847.881C82.711 851.642 81.603 855.201 80.6628 858.558C81.9387 857.215 83.2482 855.872 84.5912 854.529C86.0014 853.186 87.5124 852.011 89.124 851.004C90.8028 849.929 92.6495 849.09 94.6641 848.485C96.6786 847.814 98.9954 847.478 101.614 847.478C108.8 847.478 113.937 849.526 117.026 853.623C120.115 857.652 120.887 863.225 119.342 870.343C117.798 877.529 114.608 883.169 109.773 887.266C104.938 891.362 98.8946 893.41 91.6422 893.41C88.0831 893.41 84.8934 892.839 82.073 891.698C79.3198 890.489 77.1038 888.542 75.425 885.856C73.8133 883.169 72.8396 879.678 72.5038 875.38C72.1681 871.015 72.6717 865.71 74.0148 859.465C74.6191 856.644 75.3914 853.757 76.3315 850.802C77.2716 847.78 78.4132 844.859 79.7563 842.039C81.0993 839.151 82.6774 836.432 84.4905 833.88C86.3036 831.328 88.3518 829.112 90.6349 827.232C92.9853 825.284 95.5706 823.773 98.391 822.699C101.279 821.557 104.468 820.987 107.96 820.987C113.601 820.987 117.966 822.464 121.055 825.419C124.211 828.373 125.52 832.705 124.983 838.413H118.335ZM100.204 852.917C97.7195 852.917 95.3692 853.388 93.1531 854.328C91.0043 855.268 89.0569 856.544 87.3109 858.155C85.6321 859.767 84.1883 861.647 82.9796 863.796C81.7708 865.878 80.9314 868.127 80.4614 870.545C80.0585 872.559 79.9242 874.608 80.0585 876.689C80.1928 878.704 80.73 880.551 81.6701 882.229C82.6102 883.908 83.9869 885.285 85.8 886.359C87.6131 887.434 89.997 887.971 92.9517 887.971C95.9735 887.971 98.626 887.467 100.909 886.46C103.192 885.386 105.14 884.009 106.751 882.33C108.363 880.584 109.673 878.67 110.68 876.589C111.687 874.44 112.426 872.291 112.896 870.142C114.037 864.635 113.601 860.405 111.586 857.45C109.572 854.428 105.778 852.917 100.204 852.917Z" fill="currentColor"></path> <path d="M795.124 32.2548C795.862 28.7629 797.071 25.6067 798.75 22.7864C800.429 19.8988 802.477 17.4478 804.894 15.4332C807.379 13.3515 810.166 11.7734 813.255 10.699C816.344 9.55737 819.634 8.98658 823.126 8.98658C826.685 8.98658 829.707 9.5238 832.192 10.5982C834.744 11.6055 836.725 12.9821 838.135 14.7281C839.612 16.474 840.552 18.5558 840.955 20.9732C841.425 23.3907 841.358 25.9425 840.754 28.6286C840.082 31.7847 838.974 34.5716 837.43 36.989C835.885 39.4065 834.072 41.5554 831.99 43.4356C829.909 45.3159 827.592 46.9947 825.04 48.4721C822.555 49.9494 820.037 51.3596 817.485 52.7026C814.934 53.9785 812.415 55.2209 809.931 56.4296C807.446 57.6383 805.197 58.9142 803.182 60.2573C801.839 61.1302 800.496 62.0704 799.153 63.0777C797.877 64.0178 796.702 65.0586 795.627 66.2002C794.553 67.3418 793.579 68.6177 792.706 70.0279C791.9 71.3709 791.263 72.8819 790.792 74.5607H830.379L829.271 80H782.835C783.574 76.5752 784.581 73.4862 785.857 70.733C787.2 67.9798 789.282 65.2937 792.102 62.6747C795.191 59.8543 798.28 57.4369 801.369 55.4223C804.458 53.4077 807.413 51.6282 810.233 50.0837C813.121 48.4721 815.84 47.0283 818.392 45.7524C821.011 44.4094 823.328 42.9656 825.342 41.4211C827.424 39.8766 829.17 38.1306 830.58 36.1832C832.057 34.2358 833.098 31.8519 833.703 29.0315C834.173 26.7483 834.173 24.7002 833.703 22.8871C833.3 21.074 832.528 19.5295 831.386 18.2536C830.244 16.9777 828.801 16.0376 827.055 15.4332C825.309 14.7617 823.328 14.4259 821.112 14.4259C818.761 14.4259 816.512 14.9295 814.363 15.9368C812.281 16.877 810.367 18.1529 808.621 19.7645C806.943 21.3762 805.499 23.2564 804.29 25.4053C803.148 27.5542 802.376 29.8373 801.973 32.2548H795.124ZM881.918 45.0473C882.724 41.2196 883.294 37.4927 883.63 33.8665C883.966 30.1731 883.798 26.8826 883.126 23.9951C882.455 21.1075 881.145 18.7908 879.198 17.0448C877.251 15.2989 874.397 14.4259 870.636 14.4259C867.077 14.4259 863.988 15.3325 861.369 17.1456C858.75 18.8915 856.467 21.2419 854.52 24.1965C852.639 27.1512 851.028 30.5088 849.685 34.2694C848.409 38.0299 847.368 41.8576 846.562 45.7524C845.622 50.3187 845.018 54.4822 844.749 58.2427C844.548 61.9361 844.85 65.0922 845.656 67.7112C846.461 70.3301 847.838 72.3782 849.785 73.8556C851.733 75.2658 854.419 75.9709 857.844 75.9709C861.671 75.9709 864.928 75.0307 867.614 73.1505C870.3 71.2702 872.584 68.8527 874.464 65.898C876.344 62.9433 877.855 59.6193 878.997 55.9259C880.205 52.2326 881.179 48.6064 881.918 45.0473ZM872.046 8.98658C875.538 8.98658 878.426 9.5238 880.709 10.5982C883.059 11.6055 884.94 13.0157 886.35 14.8288C887.76 16.6419 888.734 18.7572 889.271 21.1747C889.875 23.5922 890.177 26.1775 890.177 28.9308C890.245 31.6169 890.077 34.4037 889.674 37.2912C889.271 40.1788 888.767 42.9992 888.163 45.7524C887.156 50.453 885.846 54.9522 884.234 59.25C882.69 63.5477 880.675 67.3418 878.191 70.6323C875.773 73.9227 872.785 76.5417 869.226 78.4891C865.734 80.4365 861.537 81.4102 856.635 81.4102C851.733 81.4102 847.905 80.4365 845.152 78.4891C842.466 76.5417 840.586 73.9227 839.511 70.6323C838.437 67.2747 838.034 63.4134 838.302 59.0485C838.571 54.6165 839.243 49.9494 840.317 45.0473C841.257 40.5481 842.466 36.1496 843.943 31.8519C845.488 27.5542 847.469 23.7265 849.886 20.3689C852.371 16.9441 855.393 14.1909 858.952 12.1092C862.578 10.0274 866.943 8.98658 872.046 8.98658Z" fill="currentColor"></path> <path d="M795.124 145.255C795.862 141.763 797.071 138.607 798.75 135.786C800.429 132.899 802.477 130.448 804.894 128.433C807.379 126.351 810.166 124.773 813.255 123.699C816.344 122.557 819.634 121.987 823.126 121.987C826.685 121.987 829.707 122.524 832.192 123.598C834.744 124.606 836.725 125.982 838.135 127.728C839.612 129.474 840.552 131.556 840.955 133.973C841.425 136.391 841.358 138.943 840.754 141.629C840.082 144.785 838.974 147.572 837.43 149.989C835.885 152.407 834.072 154.555 831.99 156.436C829.909 158.316 827.592 159.995 825.04 161.472C822.555 162.949 820.037 164.36 817.485 165.703C814.934 166.979 812.415 168.221 809.931 169.43C807.446 170.638 805.197 171.914 803.182 173.257C801.839 174.13 800.496 175.07 799.153 176.078C797.877 177.018 796.702 178.059 795.627 179.2C794.553 180.342 793.579 181.618 792.706 183.028C791.9 184.371 791.263 185.882 790.792 187.561H830.379L829.271 193H782.835C783.574 189.575 784.581 186.486 785.857 183.733C787.2 180.98 789.282 178.294 792.102 175.675C795.191 172.854 798.28 170.437 801.369 168.422C804.458 166.408 807.413 164.628 810.233 163.084C813.121 161.472 815.84 160.028 818.392 158.752C821.011 157.409 823.328 155.966 825.342 154.421C827.424 152.877 829.17 151.131 830.58 149.183C832.057 147.236 833.098 144.852 833.703 142.032C834.173 139.748 834.173 137.7 833.703 135.887C833.3 134.074 832.528 132.529 831.386 131.254C830.244 129.978 828.801 129.038 827.055 128.433C825.309 127.762 823.328 127.426 821.112 127.426C818.761 127.426 816.512 127.93 814.363 128.937C812.281 129.877 810.367 131.153 808.621 132.765C806.943 134.376 805.499 136.256 804.29 138.405C803.148 140.554 802.376 142.837 801.973 145.255H795.124ZM842.835 174.567C842.499 179.402 843.675 183.028 846.361 185.445C849.047 187.796 852.707 188.971 857.34 188.971C859.959 188.971 862.41 188.501 864.693 187.561C867.044 186.621 869.125 185.345 870.938 183.733C872.751 182.054 874.262 180.14 875.471 177.991C876.747 175.775 877.654 173.392 878.191 170.84C878.728 168.221 878.829 165.803 878.493 163.587C878.157 161.371 877.385 159.457 876.176 157.846C874.967 156.234 873.356 154.992 871.341 154.119C869.394 153.246 867.077 152.809 864.391 152.809C861.168 152.809 858.146 153.414 855.325 154.623C852.572 155.764 849.92 157.611 847.368 160.163L842.231 159.457L855.728 122.692H890.983L889.875 128.131H860.06L850.591 152.004C852.136 151.131 853.546 150.392 854.822 149.788C856.165 149.183 857.474 148.713 858.75 148.377C860.026 147.974 861.336 147.706 862.679 147.572C864.022 147.437 865.499 147.37 867.111 147.37C870.334 147.37 873.222 147.907 875.773 148.982C878.325 150.056 880.373 151.601 881.918 153.615C883.462 155.63 884.503 158.114 885.04 161.069C885.578 163.957 885.443 167.214 884.637 170.84C883.832 174.6 882.489 177.958 880.608 180.913C878.728 183.8 876.546 186.251 874.061 188.266C871.576 190.28 868.857 191.825 865.902 192.899C862.947 193.907 860.026 194.41 857.139 194.41C853.781 194.41 850.726 194.074 847.972 193.403C845.219 192.731 842.902 191.623 841.022 190.079C839.142 188.467 837.765 186.419 836.892 183.934C836.019 181.383 835.851 178.26 836.389 174.567H842.835Z" fill="currentColor"></path> <mask id="path-7-inside-1_3828_66" fill="white"> <path d="M0 0H100V100H0V0Z"></path> </mask> <path d="M0 0V-4H-4V0H0ZM0 0V4H100V0V-4H0V0ZM0 100H4V0H0H-4V100H0Z" fill="currentColor" mask="url(#path-7-inside-1_3828_66)"></path> <mask id="path-9-inside-2_3828_66" fill="white"> <path d="M799 799H899V899H799V799Z"></path> </mask> <path d="M899 899V903H903V899H899ZM899 799H895V899H899H903V799H899ZM899 899V895H799V899V903H899V899Z" fill="currentColor" mask="url(#path-9-inside-2_3828_66)"></path> </g> </svg> <h1 class="text-5xl  sm:text-7xl md:text-8xl lg:text-9xl font-display text-white uppercase mt-12">  Aria & Daniel  </h1> </div> </div>  </div> </footer> <div class="relative"> <button class="flex justify-center text-center font-medium items-center duration-500 ease-in-out transition-all focus:outline-2 focus:outline-offset-4 text-base-950 bg-base-100 hover:bg-base-200 focus:outline-base-300 size-9 text-sm fixed right-6 bottom-6 z-50" type="button" id="searchButton" aria-label="Search posts"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" class="icon size-5" slot="icon"> <path d="M237.2,151.87v0a47.1,47.1,0,0,0-2.35-5.45L193.26,51.8a7.82,7.82,0,0,0-1.66-2.44,32,32,0,0,0-45.26,0A8,8,0,0,0,144,55V80H112V55a8,8,0,0,0-2.34-5.66,32,32,0,0,0-45.26,0,7.82,7.82,0,0,0-1.66,2.44L21.15,146.4a47.1,47.1,0,0,0-2.35,5.45v0A48,48,0,1,0,112,168V96h32v72a48,48,0,1,0,93.2-16.13ZM76.71,59.75a16,16,0,0,1,19.29-1v73.51a47.9,47.9,0,0,0-46.79-9.92ZM64,200a32,32,0,1,1,32-32A32,32,0,0,1,64,200ZM160,58.74a16,16,0,0,1,19.29,1l27.5,62.58A47.9,47.9,0,0,0,160,132.25ZM192,200a32,32,0,1,1,32-32A32,32,0,0,1,192,200Z"></path></svg></button> <div id="searchModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-black/10 backdrop-blur-sm" role="dialog" aria-modal="true"> <div class="min-h-screen px-4 text-center"> <div class="relative inline-block w-full max-w-xl mt-12 mb-8 text-left align-middle lg:mt-48 transition-all transform"> <div class="hidden"> <button type="button" id="closeSearch" class="cursor-pointer text-base-400 hover:text-base-600" aria-label="Close search">
+×
+</button> </div> <input type="text" id="searchInput" placeholder="Search wedding content..." class="block w-full h-10 px-4 py-2 text-xs leading-tight align-middle bg-white border border-transparent rounded-full transition duration-300 ease-in-out focus:z-10 text-base-500 ring-1 ring-base-200 placeholder-base-400 focus:border-accent-50 focus:ring-accent-500 focus:ring-2 focus:outline-none shadow-sm"> <div id="searchResults" class="w-full mt-2 overflow-hidden overflow-y-auto rounded-lg max-h-100 divide-y divide-base-200 scrollbar-hide"></div> </div> </div> </div> </div> <script>(function(){const searchData = [{"title":"Capturing Wedding Magic","description":"Tips and ideas for getting the most beautiful photos on your wedding day, from ceremony to celebration.","type":"Blog Post","url":"blog/posts/1.html","date":"2025-11-04T00:00:00.000Z"},{"title":"Wedding Planning Timeline","description":"A month-by-month guide to planning your perfect wedding day without the stress.","type":"Blog Post","url":"blog/posts/2.html","date":"2025-10-15T00:00:00.000Z"},{"title":"Choosing Your Perfect Venue","description":"Key factors to consider when selecting the ideal location for your wedding celebration.","type":"Blog Post","url":"blog/posts/3.html","date":"2025-09-22T00:00:00.000Z"},{"title":"Wedding Dress Shopping Guide","description":"Everything you need to know about finding the perfect wedding dress for your special day.","type":"Blog Post","url":"blog/posts/4.html","date":"2025-08-10T00:00:00.000Z"},{"title":"Wedding Flower Guide","description":"How to choose the perfect flowers that complement your wedding style and budget.","type":"Blog Post","url":"blog/posts/5.html","date":"2025-07-18T00:00:00.000Z"},{"title":"Wedding Music Planning","description":"Creating the perfect soundtrack for your wedding day, from ceremony to reception.","type":"Blog Post","url":"blog/posts/6.html","date":"2025-06-25T00:00:00.000Z"},{"title":"Perfect Wedding Day Timeline","description":"How to structure your wedding day for smooth transitions and stress-free celebrations.","type":"Blog Post","url":"blog/posts/7.html","date":"2025-05-12T00:00:00.000Z"},{"title":"Wedding Details That Matter","description":"Small touches and personal details that make your wedding uniquely yours.","type":"Blog Post","url":"blog/posts/8.html","date":"2025-04-08T00:00:00.000Z"},{"title":"Marcus Johnson","description":"Daniel's brother and lifelong supporter.","type":"Wedding Party","url":"people.html#best-man","date":null},{"title":"Aria Chen","description":"Emma's college roommate and creative collaborator.","type":"Wedding Party","url":"people.html#bridesmaid","date":null},{"title":"Daniel Carter","description":"Tech enthusiast, amateur cook, and always making everyone laugh.","type":"Wedding Party","url":"people.html#groom","date":null},{"title":"Emma Johnson","description":"Loves design, travel, and good coffee. Couldn't be more excited for this day.","type":"Wedding Party","url":"people.html#bride","date":null},{"title":"Carlo Pescara","description":"Met Daniel during their first tech job.","type":"Wedding Party","url":"people.html#groomsman","date":null},{"title":"Sofia Martinez","description":"Emily's closest friend since childhood.","type":"Wedding Party","url":"people.html#maid-of-honor","date":null},{"title":"Ceremony","description":"The wedding ceremony will take place outdoors. Please arrive 10–15 minutes early.","type":"Event","url":"events/ceremony.html","date":"2025-11-15T00:00:00.000Z"},{"title":"Dinner","description":"A delicious three-course meal prepared by our chef.","type":"Event","url":"events/dinner.html","date":"2025-11-15T00:00:00.000Z"},{"title":"First Dance","description":"The newlyweds' first dance as a married couple.","type":"Event","url":"events/first-dance.html","date":"2025-11-15T00:00:00.000Z"},{"title":"Cocktail Hour","description":"Join us for drinks and appetizers immediately following the ceremony.","type":"Event","url":"events/cocktail-hour.html","date":"2025-11-15T00:00:00.000Z"},{"title":"Party","description":"Open dance floor. Drinks, music, and celebration!","type":"Event","url":"events/party.html","date":"2025-11-15T00:00:00.000Z"},{"title":"Next-Day Brunch","description":"Casual brunch for guests staying overnight.","type":"Event","url":"events/next-day-brunch.html","date":"2025-06-15T00:00:00.000Z"},{"title":"Speeches","description":"A few words from family and close friends.","type":"Event","url":"events/speeches.html","date":"2025-11-15T00:00:00.000Z"},{"title":"Ceremony Venue","description":"Rose Garden Park, 12 Bloom Street, Hillside","type":"Location","url":"locations.html","date":null},{"title":"Dance Floor","description":"The Grand Ballroom – Dance Area, Hillside","type":"Location","url":"locations.html","date":null},{"title":"Reception Terrace","description":"The Grand Terrace, 45 Sunview Drive, Hillside","type":"Location","url":"locations.html","date":null},{"title":"Hotel Restaurant","description":"Hillside Hotel, 88 Lakeview Avenue, Hillside","type":"Location","url":"locations.html","date":null},{"title":"Reception Hall","description":"The Grand Ballroom, 45 Sunview Drive, Hillside","type":"Location","url":"locations.html","date":null},{"title":"Next-Day Brunch","description":"A relaxed morning gathering to wrap up the celebration.","type":"Photo Album","url":"gallery/brunch.html","date":null},{"title":"Getting Ready","description":"A quiet morning filled with soft light, details, and anticipation.","type":"Photo Album","url":"gallery/getting-ready.html","date":null},{"title":"Ceremony","description":"Moments from the ceremony \u2014 emotional, intimate, and historic.","type":"Photo Album","url":"gallery/ceremony.html","date":null},{"title":"Party","description":"Dancing, music, and the energy of the night.","type":"Photo Album","url":"gallery/party.html","date":null},{"title":"Reception","description":"Dinner, speeches, and the warm glow of the evening celebration.","type":"Photo Album","url":"gallery/reception.html","date":null},{"title":"Cast Iron Skillet","description":"A classic kitchen staple that lasts a lifetime.","type":"Wishlist Item","url":"wishlist.html#cast-iron-pan","date":null},{"title":"Cookware Set","description":"A durable nonstick set for everyday cooking.","type":"Wishlist Item","url":"wishlist.html#cookware-set","date":null},{"title":"Stoneware Dinner Set","description":"A full 16-piece stoneware dinner collection in a neutral palette.","type":"Wishlist Item","url":"wishlist.html#dinner-set","date":null},{"title":"Espresso Machine","description":"Our dream morning setup \u2014 perfect for weekend slow coffee.","type":"Wishlist Item","url":"wishlist.html#espresso-machine","date":null},{"title":"Gift Card","description":"A simple way to help with honeymoon costs or home setup.","type":"Wishlist Item","url":"wishlist.html#gift-card","date":null},{"title":"Honeymoon Fund","description":"Help us create unforgettable memories on our honeymoon trip.","type":"Wishlist Item","url":"wishlist.html#honeymoon-fund","date":null},{"title":"Linen Bedding Set","description":"Soft, breathable linen sheets for all-season comfort.","type":"Wishlist Item","url":"wishlist.html#line-bedding","date":null},{"title":"Picnic Blanket","description":"A lightweight, water-resistant picnic blanket for impromptu dates.","type":"Wishlist Item","url":"wishlist.html#picnic-blanket","date":null},{"title":"Outdoor Grill","description":"A compact gas grill for backyard barbecues.","type":"Wishlist Item","url":"wishlist.html#outdoor-grill","date":null}];
+
+    const searchButton = document.getElementById("searchButton");
+    const searchModal = document.getElementById("searchModal");
+    const searchInput = document.getElementById("searchInput");
+    const searchResults = document.getElementById("searchResults");
+    const closeSearch = document.getElementById("closeSearch");
+    const fuse = new Fuse(searchData, {
+      keys: ["title", "description", "type"],
+      threshold: 0.3,
+      includeMatches: true,
+    });
+    searchResults.classList.add("hidden");
+    function openSearch(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      searchModal.classList.remove("hidden");
+      document.body.style.overflow = "hidden";
+      setTimeout(() => searchInput.focus(), 100);
+    }
+    function closeSearchModal(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      searchModal.classList.add("hidden");
+      document.body.style.overflow = "";
+      searchInput.value = "";
+      searchResults.innerHTML = "";
+      searchResults.classList.add("hidden");
+    }
+    function renderResults(results) {
+      if (!searchInput.value.trim()) {
+        searchResults.innerHTML = "";
+        searchResults.classList.add("hidden");
+        return;
+      }
+      if (results.length === 0) {
+        searchResults.innerHTML = `
+          <div>
+            <h3 class="p-4 duration-300 hover:bg-white/80 backdrop-blur bg-white/90">
+              There's nothing here.
+            </h3>
+          </div>
+        `;
+        searchResults.classList.remove("hidden");
+        return;
+      }
+      searchResults.innerHTML = results
+        .map(
+          (result) => `
+          <div class="relative block p-4 duration-300 hover:bg-white/80 backdrop-blur bg-white/90">
+            <a href="${result.item.url}" class="absolute inset-0 z-10"></a>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-base-100 text-base-600 border border-base-200">
+                ${result.item.type}
+              </span>
+              ${
+                result.item.date
+                  ? `
+                <span class="text-xs text-base-500">
+                  ${new Date(result.item.date).toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "long",
+                    day: "2-digit",
+                  })}
+                </span>
+              `
+                  : ""
+              }
+            </div>
+            <h3 class="block mt-1 text-sm font-medium text-base-900">
+              ${result.item.title}
+            </h3>
+            ${
+              result.item.description
+                ? `
+              <p class="block text-xs text-base-600 mt-1">
+                ${result.item.description}
+              </p>
+            `
+                : ""
+            }
+          </div>
+        `
+        )
+        .join("");
+      searchResults.classList.remove("hidden");
+    }
+    searchButton.addEventListener("click", openSearch);
+    searchButton.addEventListener("touchend", openSearch);
+    closeSearch.addEventListener("click", closeSearchModal);
+    closeSearch.addEventListener("touchend", closeSearchModal);
+    searchInput.addEventListener("input", (e) => {
+      const value = e.target.value.trim();
+      const results = value ? fuse.search(value) : [];
+      renderResults(results);
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !searchModal.classList.contains("hidden")) {
+        closeSearchModal();
+      }
+    });
+
+    searchModal.addEventListener("click", (e) => {
+      const modalContent = e.target.closest(".inline-block");
+      if (!modalContent) {
+        closeSearchModal(e);
+      }
+    });
+})();</script> </body></html>

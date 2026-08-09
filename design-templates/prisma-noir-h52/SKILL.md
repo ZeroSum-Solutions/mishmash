@@ -1,0 +1,170 @@
+---
+name: prisma-noir-h52
+description: |
+  A full-viewport above-the-fold hero for fictional creative director Marlowe König, built in the "Spectral Darkroom" aesthetic: a near-black `#060606` canvas lit from within by slow-drifting, soft-focus spectral color blobs (amber, magenta, electric blue, tangerine, violet) blended in screen mode, overlaid with a faint technical grid, film grain, and a deep inset vignette. The mood is cinematic and gallery-grade — everything is type, light, and motion. Dependency-free, hand-written HTML/CSS/JS with locally vendored Manrope and Titillium Web fonts for full offline use. This hero section suits high-end creative portfolio landing pages and editorial design showcases.
+tags:
+  - "hero-section"
+  - "hero-sections"
+  - "claude-directory"
+triggers:
+  - "prisma noir"
+  - "prisma"
+  - "noir"
+  - "spectral"
+  - "darkroom"
+  - "creative"
+  - "director"
+  - "hero"
+  - "section"
+  - "hero-section"
+od:
+  mode: prototype
+  platform: desktop
+  upstream: "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/prisma-noir-h52"
+  upstream_license: MIT
+  preview:
+    type: html
+    entry: example.html
+  design_system:
+    requires: false
+  category: "hero-section"
+  scenario: "marketing"
+  example_prompt: "Build Prisma Noir — Spectral Darkroom Creative Director Hero Section as a self-contained responsive page in this template's own visual system. Follow the build spec in this skill exactly — palette, typography, section order, and motion are part of the identity. Ask only for the missing essentials first: brand name, real copy, and any imagery to swap in."
+---
+
+# Prisma Noir — Spectral Darkroom Creative Director Hero Section
+
+> Hero section vendored from the MIT-licensed `pulkitxm/claude-directory` gallery.
+
+A full-viewport above-the-fold hero for fictional creative director Marlowe König, built in the "Spectral Darkroom" aesthetic: a near-black `#060606` canvas lit from within by slow-drifting, soft-focus spectral color blobs (amber, magenta, electric blue, tangerine, violet) blended in screen mode, overlaid with a faint technical grid, film grain, and a deep inset vignette. The mood is cinematic and gallery-grade — everything is type, light, and motion. Dependency-free, hand-written HTML/CSS/JS with locally vendored Manrope and Titillium Web fonts for full offline use. This hero section suits high-end creative portfolio landing pages and editorial design showcases.
+
+## Workflow
+
+1. **Clone `example.html`** into the user's workspace as the working file.
+2. **Replace placeholder content** with the user's real brand name, headlines,
+   body copy, numbers, and imagery. Match existing image dimensions when
+   swapping assets.
+3. **Preserve the design system.** The palette, type scale, spacing rhythm, and
+   motion in the build spec below are the identity — do not substitute fonts,
+   recolour the palette, or strip decorative elements.
+4. **Extend by duplicating sections**, never by importing a layout from another
+   template. If a section is missing, design it from scratch in this template's
+   own vocabulary.
+5. **Keep motion accessible.** Every animation must stay behind
+   `prefers-reduced-motion`, as the build spec requires.
+
+## Output contract
+
+Emit between `<artifact>` tags:
+
+```
+<artifact identifier="prisma-noir-h52" type="text/html" title="Prisma Noir — Spectral Darkroom Creative Director Hero Section">
+<!doctype html>
+<html>...</html>
+</artifact>
+```
+
+## Build spec
+
+The upstream prompt that produced this design, verbatim.
+
+# PRISMA NOIR — CREATIVE DIRECTOR HERO IN "SPECTRAL DARKROOM" AESTHETIC
+
+## NAMED AESTHETIC IDENTITY
+
+BUILD A SINGLE, FULL-VIEWPORT ABOVE-THE-FOLD HERO SECTION FOR A FICTIONAL
+CREATIVE DIRECTOR NAMED **MARLOWE KÖNIG**, OPERATING UNDER THE PERSONAL MARK
+**PRISMA NOIR™**. THE NAMED AESTHETIC IS **"SPECTRAL DARKROOM"**: A NEAR-BLACK
+CANVAS LIT FROM WITHIN BY SLOW-DRIFTING, SOFT-FOCUS SPECTRAL COLOR BLOBS
+(AMBER, MAGENTA, ELECTRIC BLUE, TANGERINE, VIOLET) BLENDED IN SCREEN MODE,
+OVERLAID WITH A FAINT TECHNICAL GRID, FILM GRAIN, AND A DEEP INSET VIGNETTE.
+THE MOOD IS CONFIDENT, CINEMATIC, GALLERY-GRADE — A HIGH-END CREATIVE WHO
+WORKS AT THE EDGE OF LIGHT AND DARK. AVOID GENERIC SAAS GRADIENTS, GLASSY
+CARDS, AND AI-SLOP STOCK HERO IMAGERY. EVERYTHING IS TYPE, LIGHT, AND MOTION.
+
+## COLOR SYSTEM
+
+- BASE / CANVAS: NEAR-BLACK `#060606`.
+- FOREGROUND INK: PURE WHITE `#FFFFFF`; DIMMED WHITE `RGBA(255,255,255,0.5)`.
+- HAIRLINE BORDERS: `RGBA(255,255,255,0.10)` RESTING, `RGBA(255,255,255,0.40)` HOVER.
+- SPECTRAL BLOB PALETTE (SCREEN-BLENDED, HEAVILY BLURRED, LOW OPACITY 0.35–0.45):
+  AMBER `#FBBF24`, MAGENTA/PINK `#EC4899`, ELECTRIC BLUE `#3B82F6`,
+  TANGERINE `#F97316`, VIOLET `#8B5CF6`.
+- GRID LINES: `RGBA(255,255,255,0.12)` AT A 60PX × 60PX CELL.
+- GRAIN: AN SVG FRACTAL-NOISE TILE AT ~5% OPACITY, OVERLAY BLEND MODE.
+
+## TYPOGRAPHY
+
+- PRIMARY DISPLAY / UI: **MANROPE** (WEIGHTS 200 EXTRALIGHT, 400 REGULAR,
+  600 SEMIBOLD). SELF-HOST / VENDOR THE FONT FILES LOCALLY.
+- SECONDARY / MICRO LABELS: **TITILLIUM WEB** (400), USED FOR TINY UPPERCASE,
+  WIDE-TRACKED LABELS, SOCIAL GLYPHS, AND MENU INDEX NUMBERS.
+- HEADLINE: A MASSIVE CLAMPED DISPLAY SIZE (~CLAMP 56PX → 120PX), LINE-HEIGHT
+  EQUAL TO FONT SIZE, NEGATIVE LETTER-SPACING (~-0.03EM TO -3.6PX). MIX
+  REGULAR-WEIGHT WHITE WORDS WITH EXTRALIGHT 50%-WHITE WORDS IN THE SAME LINE.
+
+## LAYOUT & COMPOSITION
+
+A SINGLE `100VH` (MIN-HEIGHT ~825PX) HERO, CONTENT ANCHORED TO THE **BOTTOM**
+WITH GENEROUS SIDE PADDING (~32PX) AND ~60PX BOTTOM PADDING. LAYERED Z-STACK:
+
+1. **BACKGROUND (Z-0):** FULL-BLEED `#060606`. A SLOWLY ZOOMING/ROTATING LAYER
+   (SCALE 1 → 1.15, ±2DEG OVER ~20S) CONTAINING THE FIVE SPECTRAL BLOBS,
+   ALL `BLUR(100PX)` AND `MIX-BLEND-SCREEN`. ON TOP: THE 60PX GRID OVERLAY,
+   A BOTTOM-WEIGHTED DARK GRADIENT TO SETTLE THE GRID, THE GRAIN LAYER, AND A
+   DEEP INSET VIGNETTE (`INSET 0 0 150PX RGBA(0,0,0,0.6)`).
+2. **HEADER (Z-20, ABSOLUTE TOP):** WORDMARK ON THE LEFT — "MARLOWE KÖNIG"
+   WITH A SMALL OUTLINED-CIRCLE GLYPH; ON THE RIGHT A "DISCOVER" BUTTON STYLED
+   WITH THIN TOP+BOTTOM RULES THAT TRIGGERS A FULLSCREEN MENU.
+3. **HERO CONTENT (Z-10, BOTTOM):** LEFT CLUSTER = A VERTICAL COLUMN OF THREE
+   CIRCULAR SOCIAL CHIPS (DR, BE, LI) + THE HEADLINE. HEADLINE READS:
+   "CRAFTING" / "BEYOND ‹ROTATING WORD›" WHERE THE ROTATING WORD CYCLES
+   THROUGH **BOUNDARIES → EXPECTATIONS → CONVENTIONS → REALITY** INSIDE A
+   CLIPPED VERTICAL MASK. RIGHT CLUSTER (≥LG ONLY) = A SINGLE WHITE 4-POINT
+   STAR / SPARKLE GLYPH.
+4. **DISCOVER OVERLAY (Z-100, FIXED):** A FULLSCREEN, BACKDROP-BLURRED PANEL
+   THAT SLIDES UP FROM THE BOTTOM (CUBIC-BEZIER EASE, ~700MS). IT LISTS FOUR
+   FULL-WIDTH ROWS — 01 HOME, 02 PROJECTS, 03 BLOG, 04 CONTACT — EACH A
+   LOWERCASE 48PX LABEL WITH AN INDEX NUMBER, SEPARATED BY HAIRLINES. ON HOVER
+   A ROW FLIPS TO A SOLID WHITE BAR WITH DARK TEXT AND A HORIZONTALLY SCROLLING
+   TICKER OF THE LABEL + THUMBNAIL IMAGES. CLOSE BUTTON TOP-RIGHT + ESC KEY.
+
+## MOTION / ANIMATION / INTERACTION SPEC
+
+- **BLOB DRIFT:** 20S INFINITE EASE-IN-OUT ZOOM+ROTATE ON THE BLOB LAYER.
+- **HEADLINE WORD LOOP:** A VERTICAL `TRANSLATEY` KEYFRAME LOOP THROUGH THE 4
+  WORDS (PLUS A DUPLICATED FIRST FOR A SEAMLESS WRAP), ~10–12S, HOLD-THEN-SNAP
+  EASING `CUBIC-BEZIER(0.76,0,0.24,1)`. EACH WORD OCCUPIES A FIXED ROW HEIGHT
+  AND IS CLIPPED BY `OVERFLOW: HIDDEN`.
+- **MENU TICKERS:** EACH HOVERED ROW RUNS A LINEAR `TRANSLATEX(0 → -50%)`
+  MARQUEE OF DUPLICATED CONTENT, ~20S INFINITE.
+- **ENTRANCE:** ON LOAD, FADE+RISE THE HEADLINE, SOCIAL CHIPS, WORDMARK, AND
+  STAR WITH STAGGERED DELAYS.
+- **POINTER PARALLAX:** THE BLOB LAYER AND STAR DRIFT SUBTLY TOWARD THE CURSOR.
+- **HOVER STATES:** SOCIAL CHIPS AND THE DISCOVER BUTTON BRIGHTEN THEIR
+  HAIRLINE + TEXT ON HOVER. RESPECT `PREFERS-REDUCED-MOTION`.
+
+## RESPONSIVE BEHAVIOR
+
+- HEADLINE SIZE CLAMPS DOWN ON SMALL SCREENS; THE RIGHT-HAND STAR HIDES BELOW
+  THE LG BREAKPOINT; SOCIAL COLUMN MAY COLLAPSE TO A ROW. CONTENT STAYS
+  BOTTOM-ANCHORED AND READABLE DOWN TO ~360PX WIDTH. THE DISCOVER OVERLAY
+  SCALES ITS ROW LABELS DOWN ON MOBILE.
+
+## DELIVERABLE
+
+A SELF-CONTAINED, DEPENDENCY-FREE STATIC BUILD (HAND-WRITTEN HTML + CSS + VANILLA
+JS — NO TAILWIND CDN, NO FRAMEWORK). VENDOR ALL FONTS AND ANY THUMBNAIL IMAGES
+LOCALLY SO THE PROJECT RUNS FULLY OFFLINE. SHIP DISTINCTIVE, POLISHED, NON-GENERIC
+UI THAT MATCHES THE "SPECTRAL DARKROOM" IDENTITY.
+
+## Source & license
+
+Vendored from MIT-licensed
+[`pulkitxm/claude-directory`](https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/prisma-noir-h52).
+The upstream MIT licence text ships in this template at [`LICENSE`](./LICENSE) and
+must be redistributed alongside any copy of `example.html` or `assets/`.
+
+Webfonts and full-resolution imagery are **not** vendored: local `@font-face`
+rules are served from the Google Fonts CDN and referenced images are
+downscaled. Fetch the upstream folder for the original assets.

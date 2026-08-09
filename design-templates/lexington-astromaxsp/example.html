@@ -1,0 +1,4864 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Home: AstroMax SP</title>
+		<meta
+			name="description"
+			content="AstroMax SP, creative agency building bold digital experiences."
+		>
+		<style>
+.keen-slider:not([data-keen-slider-disabled]) {
+	-webkit-touch-callout: none;
+	-webkit-tap-highlight-color: transparent;
+	align-content: flex-start;
+	display: flex;
+	overflow: hidden;
+	position: relative;
+	touch-action: pan-y;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	-khtml-user-select: none;
+	width: 100%;
+}
+.keen-slider:not([data-keen-slider-disabled]) .keen-slider__slide {
+	min-height: 100%;
+	overflow: hidden;
+	position: relative;
+	width: 100%;
+}
+.keen-slider:not([data-keen-slider-disabled])[data-keen-slider-reverse] {
+	flex-direction: row-reverse;
+}
+.keen-slider:not([data-keen-slider-disabled])[data-keen-slider-v] {
+	flex-wrap: wrap;
+}
+
+		</style>
+		<style>
+
+
+
+
+/* AstroMax SP Design Tokens & Shared Styles */
+
+/* ===== TOKENS ===== */
+:root {
+	--font-sans: "Geist", sans-serif;
+	--font-mono: "Geist Mono", ui-monospace, monospace;
+
+	/* Colors: dark palette */
+	--color-base-950: oklch(23.5% 0 0);
+	--color-base-900: oklch(27.7% 0 0);
+	--color-base-800: oklch(35.2% 0 0);
+	--color-base-700: oklch(43.9% 0 0);
+	--color-base-500: oklch(59.6% 0 0);
+	--color-base-400: oklch(68% 0 0);
+	--color-base-300: oklch(75.7% 0 0);
+	--color-base-200: oklch(83.6% 0 0);
+	--color-base-100: oklch(92.2% 0 0);
+	--color-base-50: oklch(95.8% 0 0);
+
+	--color-secondary-400: oklch(74.1% 0.032 101.01);
+	--color-secondary-500: oklch(63.7% 0.028 99.72);
+
+	--color-accent-400: oklch(70.1% 0.174 27.73);
+	--color-accent-500: oklch(62.2% 0.21 32.02);
+	--color-accent-600: oklch(52.8% 0.178 31.83);
+
+	--color-white: #e7e7d8;
+
+	--border-subtle: rgba(255, 255, 255, 0.2);
+	--bg-main: var(--color-base-950);
+}
+
+/* ===== RESET & BASE ===== */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+html {
+	scroll-behavior: smooth;
+	font-family: var(--font-sans);
+	background-color: var(--bg-main);
+	color: var(--color-white);
+}
+
+body {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+	background-color: var(--bg-main);
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+main {
+	flex: 1 1 auto;
+}
+
+img {
+	display: block;
+	max-width: 100%;
+	height: auto;
+}
+
+a {
+	text-decoration: none;
+	color: inherit;
+}
+
+ul,
+ol {
+	list-style: none;
+}
+
+/* ===== CONTAINER ===== */
+.container {
+	max-width: 80rem; /* 1280px = 7xl */
+	margin-left: auto;
+	margin-right: auto;
+	border-left: 1px solid var(--border-subtle);
+	border-right: 1px solid var(--border-subtle);
+	width: 100%;
+}
+
+/* ===== BG GRID PATTERN ===== */
+.bg-grid {
+	background-image:
+		repeating-linear-gradient(
+			to right,
+			rgba(205, 205, 205, 0.2) 0px,
+			rgba(205, 205, 205, 0.2) 1px,
+			transparent 1px,
+			transparent 6px
+		),
+		repeating-linear-gradient(
+			to bottom,
+			rgba(205, 205, 205, 0.2) 0px,
+			rgba(205, 205, 205, 0.2) 1px,
+			transparent 1px,
+			transparent 6px
+		);
+	position: relative;
+}
+
+/* ===== TYPOGRAPHY ===== */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	line-height: 1.1;
+}
+
+/* ===== HEADER ===== */
+.site-header {
+	position: sticky;
+	top: 0;
+	z-index: 50;
+	background-color: var(--bg-main);
+}
+
+.header-inner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 1rem 2rem;
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.logo {
+	font-weight: 900;
+	font-size: 1rem;
+	text-transform: uppercase;
+	letter-spacing: -0.025em;
+	color: var(--color-white);
+	transition: color 200ms ease-in-out;
+}
+.logo:hover {
+	color: var(--color-accent-500);
+}
+
+.main-nav ul {
+	display: flex;
+	align-items: center;
+	gap: 2rem;
+}
+
+.main-nav a {
+	font-size: 1.125rem;
+	font-weight: 500;
+	text-transform: uppercase;
+	color: var(--color-white);
+	transition: color 200ms ease-in-out;
+}
+.main-nav a:hover {
+	color: var(--color-accent-400);
+}
+
+/* Button styles */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-weight: 700;
+	font-size: 0.75rem;
+	text-transform: uppercase;
+	letter-spacing: 0;
+	border-radius: 9999px;
+	transition: all 500ms ease-in-out;
+	cursor: pointer;
+	border: none;
+	outline: none;
+	white-space: nowrap;
+	text-decoration: none;
+}
+.btn:focus-visible {
+	outline: 2px solid var(--color-base-300);
+	outline-offset: 4px;
+}
+
+.btn-light {
+	background-color: var(--color-base-50);
+	color: var(--color-base-950);
+}
+.btn-light:hover {
+	background-color: var(--color-base-100);
+}
+
+.btn-dark {
+	background-color: var(--color-base-900);
+	color: var(--color-white);
+}
+.btn-dark:hover {
+	background-color: var(--color-base-800);
+}
+
+.btn-sm {
+	height: 2.75rem;
+	padding: 0.75rem 1.5rem;
+	line-height: 1rem;
+}
+.btn-md {
+	height: 2.75rem;
+	padding: 0.75rem 1.5rem;
+}
+.btn-lg {
+	height: 3.5rem;
+	padding: 1rem 2rem;
+	font-size: 1rem;
+}
+
+/* Mobile menu button */
+.menu-toggle {
+	display: none;
+	background: none;
+	border: none;
+	color: var(--color-white);
+	font-size: 0.875rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	cursor: pointer;
+	transition: color 200ms;
+}
+.menu-toggle:hover {
+	color: var(--color-accent-500);
+}
+
+/* Mobile nav overlay */
+.mobile-menu {
+	display: none;
+	position: absolute;
+	left: -1px;
+	right: -1px;
+	top: 100%;
+	height: 100vh;
+	border-top: 1px solid var(--border-subtle);
+	border-left: 1px solid var(--border-subtle);
+	border-right: 1px solid var(--border-subtle);
+	background-color: var(--bg-main);
+	z-index: 40;
+}
+.mobile-menu.open {
+	display: block;
+}
+.mobile-menu nav {
+	display: flex;
+	flex-direction: column;
+	padding: 2rem;
+	gap: 1.5rem;
+	align-items: center;
+	text-align: center;
+}
+.mobile-menu nav a {
+	font-size: 1.25rem;
+	font-weight: 900;
+	text-transform: uppercase;
+	letter-spacing: -0.05em;
+	color: var(--color-white);
+	transition: color 200ms;
+}
+.mobile-menu nav a:hover {
+	color: var(--color-accent-500);
+}
+
+@media (max-width: 767px) {
+	.main-nav,
+	.header-cta {
+		display: none !important;
+	}
+	.menu-toggle {
+		display: block;
+	}
+}
+@media (min-width: 768px) {
+	.mobile-menu {
+		display: none !important;
+	}
+}
+
+/* ===== FOOTER ===== */
+.site-footer {
+}
+
+.footer-inner {
+	border-top: 1px solid var(--border-subtle);
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.footer-top {
+	padding: 2rem;
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.footer-top-inner {
+	display: flex;
+	flex-direction: column;
+	gap: 3rem;
+}
+
+@media (min-width: 1024px) {
+	.footer-top-inner {
+		flex-direction: row;
+		justify-content: space-between;
+	}
+}
+
+.footer-brand {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+.footer-brand a {
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: -0.025em;
+	color: var(--color-white);
+	width: fit-content;
+}
+.footer-brand p {
+	font-size: 0.875rem;
+	color: rgba(231, 231, 216, 0.6);
+	max-width: 24rem;
+}
+
+.footer-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 3rem;
+}
+@media (min-width: 1024px) {
+	.footer-links {
+		gap: 6rem;
+	}
+}
+
+.footer-links-col h3 {
+	font-size: 1rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: -0.025em;
+	color: var(--color-white);
+}
+.footer-links-col ul {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-top: 1rem;
+}
+.footer-links-col a {
+	font-size: 0.875rem;
+	font-weight: 500;
+	text-transform: uppercase;
+	color: rgba(231, 231, 216, 0.6);
+	transition: color 200ms;
+}
+.footer-links-col a:hover {
+	color: var(--color-accent-500);
+}
+
+.footer-bottom {
+	padding: 2rem;
+}
+.footer-bottom p {
+	font-size: 0.875rem;
+	color: var(--color-secondary-400);
+	text-transform: uppercase;
+	font-weight: 500;
+}
+
+/* ===== SEARCH BUTTON & MODAL ===== */
+.search-fab {
+	position: fixed;
+	right: 1.5rem;
+	bottom: 1.5rem;
+	z-index: 50;
+	width: 3.25rem;
+	height: 3.25rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 9999px;
+	background-color: var(--color-base-900);
+	color: var(--color-white);
+	border: none;
+	cursor: pointer;
+	transition: all 500ms ease-in-out;
+}
+.search-fab:hover {
+	background-color: var(--color-base-800);
+}
+
+.search-modal {
+	display: none;
+	position: fixed;
+	inset: 0;
+	z-index: 50;
+	overflow-y: auto;
+	background: rgba(0, 0, 0, 0.1);
+	backdrop-filter: blur(4px);
+}
+.search-modal.open {
+	display: block;
+}
+
+.search-modal-inner {
+	min-height: 100vh;
+	padding: 0 1rem;
+	text-align: center;
+}
+.search-modal-box {
+	display: inline-block;
+	width: 100%;
+	max-width: 36rem;
+	margin: 3rem 0 2rem;
+	text-align: left;
+	padding: 2rem;
+	background-color: var(--color-base-950);
+	position: relative;
+}
+@media (min-width: 1024px) {
+	.search-modal-box {
+		margin-top: 12rem;
+		padding: 3rem;
+	}
+}
+.search-input {
+	display: block;
+	width: 100%;
+	height: 2.5rem;
+	padding: 0.5rem 1rem;
+	font-size: 0.75rem;
+	background-color: white;
+	border: 1px solid transparent;
+	color: var(--color-base-500);
+	font-family: var(--font-sans);
+	outline: none;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+	ring-offset: 0;
+}
+.search-input:focus {
+	outline: 2px solid var(--color-accent-500);
+	outline-offset: -2px;
+}
+.search-results {
+	display: none;
+	width: 100%;
+	margin-top: 0.5rem;
+	overflow-y: auto;
+	max-height: 25rem;
+	border-top: 1px solid var(--border-subtle);
+}
+.search-results.visible {
+	display: block;
+}
+.search-result-item {
+	position: relative;
+	padding: 1rem;
+	background-color: var(--color-base-950);
+	border-bottom: 1px solid var(--border-subtle);
+	cursor: pointer;
+	transition: background 300ms;
+}
+.search-result-item:hover {
+	background-color: var(--color-base-900);
+}
+.search-result-item a {
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+}
+.search-result-meta {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+}
+.search-result-category {
+	font-size: 0.75rem;
+	color: var(--color-white);
+	font-weight: 700;
+}
+.search-result-date {
+	font-size: 0.75rem;
+	color: var(--color-base-400);
+}
+.search-result-title {
+	display: block;
+	margin-top: 0.5rem;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--color-white);
+}
+.search-result-desc {
+	display: block;
+	font-size: 0.75rem;
+	color: var(--color-secondary-500);
+}
+
+/* ===== MARQUEE ===== */
+@keyframes marquee {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
+}
+.marquee-track {
+	display: flex;
+	width: max-content;
+	animation: marquee 20s linear infinite;
+	gap: 1.5rem;
+	white-space: nowrap;
+	font-weight: 900;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
+.marquee-container {
+	overflow: hidden;
+	padding: 0.5rem 0;
+	position: relative;
+	color: var(--color-white);
+}
+.marquee-edge-left {
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 6rem;
+	background: linear-gradient(to right, var(--color-base-950), transparent);
+	pointer-events: none;
+	z-index: 10;
+}
+.marquee-edge-right {
+	position: absolute;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	width: 6rem;
+	background: linear-gradient(to left, var(--color-base-950), transparent);
+	pointer-events: none;
+	z-index: 10;
+}
+
+/* ===== SECTIONS ===== */
+.section-border-b {
+	border-bottom: 1px solid var(--border-subtle);
+}
+.section-border-t {
+	border-top: 1px solid var(--border-subtle);
+}
+.section-border-y {
+	border-top: 1px solid var(--border-subtle);
+	border-bottom: 1px solid var(--border-subtle);
+}
+.divide-y > * + * {
+	border-top: 1px solid var(--border-subtle);
+}
+
+.p-8 {
+	padding: 2rem;
+}
+.p-4 {
+	padding: 1rem;
+}
+.px-8 {
+	padding-left: 2rem;
+	padding-right: 2rem;
+}
+.py-6 {
+	padding-top: 1.5rem;
+	padding-bottom: 1.5rem;
+}
+
+/* ===== HERO SECTIONS ===== */
+.page-hero {
+	padding: 2rem;
+}
+
+.hero-h1 {
+	font-weight: 900;
+	text-transform: uppercase;
+	letter-spacing: -0.05em;
+	color: var(--color-white);
+	position: relative;
+	font-size: clamp(3rem, 8vw, 6rem);
+	line-height: 1;
+}
+
+/* ===== GRID CARDS ===== */
+.card-grid-2 {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+	padding: 2rem;
+}
+@media (min-width: 768px) {
+	.card-grid-2 {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+
+.card-grid-3 {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+	padding: 2rem;
+}
+@media (min-width: 768px) {
+	.card-grid-3 {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+@media (min-width: 1024px) {
+	.card-grid-3 {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+
+.card-grid-4 {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 3rem;
+	gap-row: 3rem;
+	padding: 2rem;
+}
+@media (min-width: 768px) {
+	.card-grid-4 {
+		grid-template-columns: repeat(4, 1fr);
+	}
+}
+
+/* ===== ARTICLE CARD ===== */
+.article-card {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+.article-card a.card-link {
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+}
+.article-card img {
+	width: 100%;
+	object-fit: cover;
+	object-position: center;
+	aspect-ratio: 4 / 3;
+}
+.article-card img.aspect-square {
+	aspect-ratio: 1 / 1;
+}
+.article-card .card-body {
+	margin-top: 1rem;
+}
+.article-card .card-title {
+	font-size: 1rem;
+	font-weight: 500;
+	text-transform: uppercase;
+	color: var(--color-white);
+}
+.article-card .card-desc {
+	font-size: 0.875rem;
+	color: var(--color-base-500);
+	margin-top: 0.5rem;
+}
+.article-card .card-price {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-top: 1rem;
+}
+.card-price-current {
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--color-white);
+}
+.card-price-original {
+	font-size: 0.75rem;
+	color: var(--color-base-500);
+	text-decoration: line-through;
+}
+
+/* Store label badge */
+.product-badge {
+	position: absolute;
+	top: 0.75rem;
+	left: 0.75rem;
+	z-index: 10;
+	padding: 0.25rem 0.75rem;
+	font-size: 0.75rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	background-color: var(--color-base-950);
+	color: var(--color-white);
+}
+
+.product-img-wrap {
+	position: relative;
+}
+
+/* ===== CTA BIG BUTTON ===== */
+.cta-section {
+	background-color: transparent;
+	transition: background-color 200ms;
+}
+.cta-section:hover {
+	background-color: var(--color-accent-500);
+}
+
+.cta-link {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	text-align: center;
+	text-transform: uppercase;
+	font-weight: 900;
+	color: var(--color-white);
+	background-color: var(--color-accent-500);
+	padding: 1.5rem 1rem;
+	font-size: 2.25rem;
+	line-height: 1;
+	border-radius: 12.5rem;
+	transition: all 500ms ease-in-out;
+}
+.cta-link:hover {
+	border-radius: 0;
+}
+@media (min-width: 1024px) {
+	.cta-link {
+		padding: 6rem 1rem;
+		font-size: 4.5rem;
+	}
+}
+
+/* ===== KEEN SLIDER ===== */
+.slider-wrapper {
+	position: relative;
+}
+.slider-nav {
+	position: absolute;
+	inset-block: 0;
+	left: 0;
+	right: 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 0.5rem;
+	pointer-events: none;
+	z-index: 10;
+}
+.slider-btn {
+	pointer-events: auto;
+	width: 2.75rem;
+	height: 2.75rem;
+	border-radius: 9999px;
+	background-color: var(--color-base-50);
+	color: var(--color-base-950);
+	border: none;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 500ms ease-in-out;
+}
+.slider-btn:hover {
+	background-color: var(--color-base-100);
+}
+
+/* ===== TESTIMONIALS ===== */
+.testimonials-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 3rem;
+	padding: 2rem;
+}
+@media (min-width: 640px) {
+	.testimonials-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+@media (min-width: 768px) {
+	.testimonials-grid {
+		grid-template-columns: repeat(4, 1fr);
+	}
+}
+.testimonial blockquote p {
+	font-size: 0.875rem;
+	line-height: 1.25rem;
+	font-weight: 400;
+	color: var(--color-secondary-400);
+}
+.testimonial {
+	display: flex;
+	min-height: 12.75rem;
+	flex-direction: column;
+	justify-content: space-between;
+}
+.testimonial figcaption {
+	margin-top: 0.75rem;
+}
+.testimonial figcaption h3 {
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--color-white);
+	margin-top: 0.75rem;
+}
+.testimonial figcaption p {
+	font-size: 0.875rem;
+	color: var(--color-secondary-400);
+}
+
+/* ===== SERVICES GRID ===== */
+.services-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 0;
+	color: var(--color-white);
+	font-size: 0.75rem;
+}
+@media (min-width: 768px) {
+	.services-grid {
+		min-height: 14.5rem;
+	}
+}
+
+@media (min-width: 1024px) {
+	main > section:nth-of-type(3) > .container {
+		height: 28.375rem;
+	}
+
+	main > section:nth-of-type(4) > .container {
+		height: 19.0625rem;
+	}
+
+	.site-footer {
+		min-height: 19.4375rem;
+	}
+}
+@media (min-width: 768px) {
+	.services-grid {
+		grid-template-columns: repeat(4, 1fr);
+	}
+}
+.service-item {
+	padding: 2rem;
+}
+.service-item h3 {
+	font-size: clamp(1rem, 1.5vw, 1.25rem);
+	font-weight: 500;
+	text-transform: uppercase;
+	color: var(--color-white);
+}
+.service-item p {
+	font-size: 0.875rem;
+	color: var(--color-secondary-400);
+	margin-top: 0.75rem;
+}
+
+/* ===== ABOUT SECTION ===== */
+.about-text {
+	padding: 2rem;
+}
+.about-text h2 {
+	font-weight: 900;
+	text-transform: uppercase;
+	letter-spacing: -0.025em;
+	color: var(--color-white);
+	font-size: clamp(1.5rem, 4vw, 2.25rem);
+}
+
+/* ===== DETAIL PAGES (work, blog, store) ===== */
+.detail-meta-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+	padding: 2rem;
+	border-top: 1px solid var(--border-subtle);
+}
+@media (min-width: 768px) {
+	.detail-meta-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+@media (min-width: 1024px) {
+	.detail-meta-grid {
+		grid-template-columns: repeat(4, 1fr);
+	}
+}
+
+.meta-col h3 {
+	font-size: 1rem;
+	font-weight: 500;
+	text-transform: uppercase;
+	color: var(--color-white);
+}
+.meta-col .meta-list {
+	margin-top: 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+.meta-col .meta-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--color-white);
+	padding-bottom: 0.5rem;
+	border-bottom: 1px solid var(--border-subtle);
+}
+.meta-col .meta-row span:first-child {
+	text-transform: uppercase;
+}
+.meta-row span:last-child {
+	color: var(--color-secondary-400);
+}
+
+.meta-services {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-top: 1rem;
+}
+.meta-services p {
+	font-size: 0.875rem;
+	color: var(--color-secondary-400);
+}
+
+.meta-industries ul {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-top: 1rem;
+}
+.meta-industries li {
+	font-size: 0.875rem;
+	color: var(--color-secondary-400);
+}
+
+.detail-cover {
+	width: 100%;
+	object-fit: cover;
+	aspect-ratio: 4 / 2;
+}
+
+/* ===== PROSE ===== */
+.prose-container {
+	max-width: 48rem;
+	width: 100%;
+	padding: 2rem;
+	margin: 0 auto;
+}
+
+.prose {
+	color: var(--color-base-400);
+	line-height: 1.75;
+	font-size: 1rem;
+}
+.prose h2 {
+	font-size: 1.5rem;
+	font-weight: 500;
+	color: var(--color-white);
+	line-height: 2rem;
+	margin-top: 3rem;
+	margin-bottom: 1.5rem;
+}
+.prose h3 {
+	font-size: 1.25rem;
+	font-weight: 500;
+	color: var(--color-white);
+	line-height: 2rem;
+	margin-top: 2rem;
+	margin-bottom: 0.75rem;
+}
+.prose h2 + h3 {
+	margin-top: 0;
+}
+.prose > :last-child {
+	margin-bottom: 0;
+}
+.prose p {
+	margin-bottom: 1.25rem;
+}
+.prose ul,
+.prose ol {
+	padding-left: 1.625rem;
+	margin-bottom: 1.25rem;
+}
+.prose ul {
+	list-style-type: "- ";
+}
+.prose ol {
+	list-style: decimal;
+}
+.prose li {
+	margin: 0.5rem 0;
+	padding-left: 0.375rem;
+}
+.prose li::marker {
+	color: var(--color-accent-500);
+}
+.prose strong {
+	color: var(--color-white);
+}
+.prose a {
+	color: var(--color-white);
+	border-bottom: 1px solid var(--color-white);
+	transition:
+		color 200ms,
+		border-color 200ms;
+}
+.prose a:hover {
+	color: var(--color-accent-500);
+	border-bottom-style: solid;
+}
+.prose blockquote {
+	border-left: 3px solid var(--color-accent-500);
+	padding-left: 1rem;
+	color: var(--color-base-500);
+	margin: 1.5rem 0;
+}
+.prose pre {
+	border: 1px solid var(--color-base-300);
+	border-radius: 0.75rem;
+	padding: 1rem;
+	overflow-x: auto;
+}
+.prose table {
+	width: 100%;
+	border-collapse: collapse;
+}
+.prose th,
+.prose td {
+	padding: 0.5rem;
+	border-bottom: 1px solid var(--color-base-800);
+	text-align: left;
+}
+.prose thead {
+	border-bottom: 1px solid var(--color-base-800);
+}
+
+/* ===== BLOG POST HEADER ===== */
+.post-header {
+	padding: 2rem;
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.post-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin-bottom: 3rem;
+}
+
+.post-meta-row {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 1rem;
+	align-items: start;
+	padding: 2rem;
+	border-top: 1px solid var(--border-subtle);
+}
+@media (min-width: 1024px) {
+	.post-meta-row {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+
+.post-author {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-size: 0.875rem;
+	font-weight: 500;
+	text-transform: uppercase;
+	color: var(--color-white);
+}
+.post-author img {
+	width: 2rem;
+	height: 2rem;
+	border-radius: 9999px;
+	object-fit: cover;
+	border: 1px solid var(--border-subtle);
+}
+.post-author a {
+	transition: color 200ms;
+}
+.post-author a:hover {
+	color: var(--color-accent-500);
+}
+
+.post-description {
+	font-size: clamp(1rem, 1.5vw, 1.25rem);
+	font-weight: 500;
+	color: var(--color-white);
+}
+@media (min-width: 1024px) {
+	.post-description {
+		grid-column: span 2;
+	}
+}
+
+/* ===== TEAM DETAIL ===== */
+.team-detail-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+	padding: 2rem;
+	border-top: 1px solid var(--border-subtle);
+	align-items: start;
+}
+@media (min-width: 768px) {
+	.team-detail-grid {
+		grid-template-columns: 1fr 2fr;
+	}
+}
+
+.team-member-img {
+	width: 100%;
+	object-fit: cover;
+	aspect-ratio: 1 / 1;
+}
+
+/* ===== SYSTEM OVERVIEW ===== */
+.system-section {
+	padding: 2rem;
+}
+.system-section h2 {
+	font-size: clamp(1.5rem, 3vw, 2.25rem);
+	font-weight: 900;
+	text-transform: uppercase;
+	color: var(--color-white);
+	letter-spacing: -0.025em;
+	margin-bottom: 1.5rem;
+}
+
+.color-swatch-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
+	gap: 0.5rem;
+}
+.color-swatch {
+	height: 4rem;
+	border-radius: 0.375rem;
+	border: 1px solid var(--border-subtle);
+}
+
+/* ===== WORK DETAIL HERO ===== */
+.work-detail-hero {
+	padding: 2rem;
+	position: relative;
+}
+
+/* ===== "You might also like" / Related ===== */
+.related-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 2rem;
+}
+.related-header h2 {
+	font-size: clamp(1.5rem, 3vw, 2.25rem);
+	font-weight: 900;
+	text-transform: uppercase;
+	color: var(--color-white);
+	letter-spacing: -0.05em;
+}
+.social-link {
+	width: fit-content;
+	color: var(--color-white);
+	transition: color 0.2s;
+}
+.social-link:hover {
+	color: var(--color-accent-500);
+}
+
+/* ===== BLOG FEATURED SECTION ===== */
+.blog-featured {
+	padding: 0 2rem 2rem;
+}
+.blog-featured-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+	border-top: 1px solid var(--border-subtle);
+	padding-top: 2rem;
+}
+@media (min-width: 768px) {
+	.blog-featured-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+
+/* ===== STORE DETAIL ===== */
+.store-detail-header {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+	padding: 2rem;
+	border-top: 1px solid var(--border-subtle);
+	align-items: start;
+}
+@media (min-width: 1024px) {
+	.store-detail-header {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+.store-detail-main {
+}
+@media (min-width: 1024px) {
+	.store-detail-main {
+		grid-column: span 2;
+	}
+}
+
+.store-price {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+.price-current {
+	font-size: 1.25rem;
+	font-weight: 600;
+	color: var(--color-white);
+}
+.price-original {
+	font-size: 1.25rem;
+	color: var(--color-base-300);
+	text-decoration: line-through;
+}
+
+.store-detail-desc {
+	font-size: 1rem;
+	font-weight: 500;
+	color: var(--color-white);
+	margin-top: 2rem;
+}
+
+.store-detail-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin-left: auto;
+	margin-top: auto;
+	align-self: end;
+}
+@media (min-width: 1024px) {
+	.store-detail-actions {
+		align-self: end;
+	}
+}
+
+.store-gallery {
+	display: grid;
+	grid-template-columns: repeat(1, 1fr);
+	gap: 1rem;
+	padding: 2rem;
+	border-top: 1px solid var(--border-subtle);
+}
+@media (min-width: 768px) {
+	.store-gallery {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+.store-gallery img {
+	width: 100%;
+	object-fit: cover;
+	aspect-ratio: 4 / 3;
+}
+
+/* ===== LEGAL ===== */
+.legal-content {
+	max-width: 48rem;
+	margin: 0 auto;
+	padding: 2rem;
+	color: var(--color-base-400);
+	line-height: 1.7;
+}
+.legal-content h2 {
+	color: var(--color-white);
+	font-size: 1.25rem;
+	font-weight: 600;
+	margin: 2rem 0 0.75rem;
+}
+.legal-content p {
+	margin-bottom: 1rem;
+}
+.legal-content ul {
+	padding-left: 1.5rem;
+	list-style: disc;
+	margin-bottom: 1rem;
+}
+.legal-content li {
+	margin-bottom: 0.5rem;
+}
+
+/* ===== UTILITIES ===== */
+.text-sm {
+	font-size: 0.875rem;
+}
+.text-xs {
+	font-size: 0.75rem;
+}
+.text-base {
+	font-size: 1rem;
+}
+.uppercase {
+	text-transform: uppercase;
+}
+.font-black {
+	font-weight: 900;
+}
+.font-bold {
+	font-weight: 700;
+}
+.font-medium {
+	font-weight: 500;
+}
+.tracking-tight {
+	letter-spacing: -0.025em;
+}
+.tracking-tighter {
+	letter-spacing: -0.05em;
+}
+
+.border-t {
+	border-top: 1px solid var(--border-subtle);
+}
+.border-b {
+	border-bottom: 1px solid var(--border-subtle);
+}
+.w-full {
+	width: 100%;
+}
+
+/* aspect ratios */
+.aspect-4-3 {
+	aspect-ratio: 4 / 3;
+}
+.aspect-4-2 {
+	aspect-ratio: 4 / 2;
+}
+.aspect-sq {
+	aspect-ratio: 1 / 1;
+}
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+@media (min-width: 1024px) {
+	.newsletter-grid {
+		grid-template-columns: 1fr 1fr !important;
+	}
+	.newsletter-form {
+		flex-direction: row !important;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<header class="site-header">
+			<div class="container" style="position:relative">
+				<div class="header-inner">
+					<a href="index.html" class="logo">AstroMax SP</a>
+					<nav class="main-nav">
+						<ul>
+							<li><a href="work/index.html">Work</a></li>
+							<li><a href="blog/index.html">Blog</a></li>
+							<li><a href="store/index.html">Store</a></li>
+							<li><a href="team/index.html">Team</a></li>
+							<li><a href="system/overview.html">Overview</a></li>
+						</ul>
+					</nav>
+					<div class="header-cta">
+						<a href="#_" class="btn btn-light btn-sm">Buy AstroMax SP</a>
+					</div>
+					<button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">
+						Menu
+					</button>
+				</div>
+				<div class="mobile-menu" id="mobile-menu">
+					<nav>
+						<a href="work/index.html">Work</a>
+						<a href="blog/index.html">Blog</a>
+						<a href="store/index.html">Store</a>
+						<a href="team/index.html">Team</a>
+						<a href="system/overview.html">Overview</a>
+						<div style="padding-top:1rem;width:100%;max-width:20rem">
+							<a
+								href="system/overview.html"
+								class="btn btn-light btn-lg"
+								style="width:100%;justify-content:center"
+								>System</a
+							>
+						</div>
+					</nav>
+				</div>
+			</div>
+		</header>
+		<script>
+		var t = document.getElementById("menu-toggle");
+		var m = document.getElementById("mobile-menu");
+		t &&
+			t.addEventListener("click", function () {
+				m && m.classList.toggle("open");
+			});
+		</script>
+		<main>
+			<!-- Hero -->
+			<section>
+				<div class="container">
+					<div class="page-hero bg-grid">
+						<h1 class="hero-h1">
+							Maximize your online presence with a unique and engaging one-page
+							website that delivers outstanding results.
+						</h1>
+					</div>
+					<!-- Marquee -->
+					<section class="section-border-y" style="overflow:hidden">
+						<div class="marquee-container">
+							<div class="marquee-edge-left"></div>
+							<div class="marquee-edge-right"></div>
+							<div class="marquee-track">
+								<span>spots open</span><span aria-hidden="true">✺</span>
+								<span>now booking</span><span aria-hidden="true">✺</span>
+								<span>limited space</span><span aria-hidden="true">✺</span>
+								<span>get in touch</span><span aria-hidden="true">✺</span>
+								<span>new project?</span><span aria-hidden="true">✺</span>
+								<span>join the queue</span><span aria-hidden="true">✺</span>
+								<span>let's build</span><span aria-hidden="true">✺</span>
+								<span>design magic</span><span aria-hidden="true">✺</span>
+								<span>front-end love</span><span aria-hidden="true">✺</span>
+								<span>available</span><span aria-hidden="true">✺</span>
+								<span>spots open</span><span aria-hidden="true">✺</span>
+								<span>now booking</span><span aria-hidden="true">✺</span>
+								<span>limited space</span><span aria-hidden="true">✺</span>
+								<span>get in touch</span><span aria-hidden="true">✺</span>
+								<span>new project?</span><span aria-hidden="true">✺</span>
+								<span>join the queue</span><span aria-hidden="true">✺</span>
+								<span>let's build</span><span aria-hidden="true">✺</span>
+								<span>design magic</span><span aria-hidden="true">✺</span>
+								<span>front-end love</span><span aria-hidden="true">✺</span>
+								<span>available</span><span aria-hidden="true">✺</span>
+							</div>
+						</div>
+					</section>
+				</div>
+			</section>
+
+			<!-- Testimonials -->
+			<section>
+				<div class="container section-border-b">
+					<div class="testimonials-grid">
+						<figure class="testimonial">
+							<blockquote>
+								<p>
+									John seamlessly merges design and coding, creating polished
+									designs that strike a perfect balance between trends and
+									originality. His approach of crafting designs directly in code
+									yields exceptional results, surpassing expectations.
+								</p>
+							</blockquote>
+							<figcaption>
+								<h3>Emily Reynolds</h3>
+								<p>CEO of Swift Designworks</p>
+							</figcaption>
+						</figure>
+						<figure class="testimonial">
+							<blockquote>
+								<p>
+									Mark has an exceptional eye for design, and collaborating with
+									him has been an absolute delight. I am looking forward to
+									partnering with him on upcoming projects. I wholeheartedly
+									endorse him to anyone in search of exceptional, top-notch
+									work.
+								</p>
+							</blockquote>
+							<figcaption>
+								<h3>Lindsay Chen</h3>
+								<p>Founder of CodeCraft Studios</p>
+							</figcaption>
+						</figure>
+						<figure class="testimonial">
+							<blockquote>
+								<p>
+									Ethan has been an invaluable asset in the realm of design, and
+									I struggled to keep pace with his work speed during our
+									collaboration. His designs are sleek, and he consistently
+									delivers substantial value; he continuously refines his
+									designs and introduces enhancements.
+								</p>
+							</blockquote>
+							<figcaption>
+								<h3>Gabriel Martinez</h3>
+								<p>Innovator at PixelPerfect Creations</p>
+							</figcaption>
+						</figure>
+						<figure class="testimonial">
+							<blockquote>
+								<p>
+									Andrew stands out as a distinctive blend of designer and
+									developer who comprehends business requirements. He utilized
+									his prior experience to swiftly create multiple landing pages
+									for SparkLynx.
+								</p>
+							</blockquote>
+							<figcaption>
+								<h3>Jessica Carter</h3>
+								<p>Co-Founder of SparkLynx Technologies</p>
+							</figcaption>
+						</figure>
+					</div>
+				</div>
+			</section>
+
+			<!-- Work Carousel -->
+			<section>
+				<div class="container section-border-b divide-y">
+					<div class="px-8 py-6 relative">
+						<div
+							aria-hidden="true"
+							class="bg-grid"
+							style="position:absolute;inset:0;pointer-events:none"
+						></div>
+						<h2
+							style="font-size:clamp(1.5rem,4vw,2.25rem);font-weight:900;text-transform:uppercase;color:var(--color-white);letter-spacing:-0.025em;position:relative"
+						>
+							Designed and developed websites at AstroMax
+						</h2>
+					</div>
+					<div class="slider-wrapper">
+						<div class="slider-nav">
+							<button
+								class="slider-btn"
+								id="keen-slider-previous"
+								aria-label="Previous slide"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 256 256"
+									fill="currentColor"
+									width="16"
+									height="16"
+								>
+									<path
+										d="M168.49,199.51a12,12,0,0,1-17,17l-80-80a12,12,0,0,1,0-17l80-80a12,12,0,0,1,17,17L97,128Z"
+									></path>
+								</svg>
+							</button>
+							<button
+								class="slider-btn"
+								id="keen-slider-next"
+								aria-label="Next slide"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 256 256"
+									fill="currentColor"
+									width="16"
+									height="16"
+								>
+									<path
+										d="M184.49,136.49l-80,80a12,12,0,0,1-17-17L159,128,87.51,56.49a12,12,0,1,1,17-17l80,80A12,12,0,0,1,184.49,136.49Z"
+									></path>
+								</svg>
+							</button>
+						</div>
+						<div
+							id="keen-slider"
+							class="keen-slider"
+							style="border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle)"
+						>
+							<div class="keen-slider__slide">
+								<img
+									src="assets/aelen.Ca2CT_xa_Z28ygBs.webp"
+									alt="Aelen"
+									width="800"
+									height="800"
+									style="aspect-ratio:1;width:100%;object-fit:cover"
+								>
+							</div>
+							<div class="keen-slider__slide">
+								<img
+									src="assets/author.A2hVPb0__Z1g5UQM.webp"
+									alt="Author"
+									width="800"
+									height="800"
+									style="aspect-ratio:1;width:100%;object-fit:cover"
+								>
+							</div>
+							<div class="keen-slider__slide">
+								<img
+									src="assets/dusk.kw6sVFDp_Z20SOdU.webp"
+									alt="Dusk"
+									width="800"
+									height="800"
+									style="aspect-ratio:1;width:100%;object-fit:cover"
+								>
+							</div>
+							<div class="keen-slider__slide">
+								<img
+									src="assets/ellamae.DRz6Vmml_1qy6bG.webp"
+									alt="Ellamae"
+									width="800"
+									height="800"
+									style="aspect-ratio:1;width:100%;object-fit:cover"
+								>
+							</div>
+							<div class="keen-slider__slide">
+								<img
+									src="assets/molle.DtJ0lMXP_aLuE6.webp"
+									alt="Molle"
+									width="800"
+									height="800"
+									style="aspect-ratio:1;width:100%;object-fit:cover"
+								>
+							</div>
+							<div class="keen-slider__slide">
+								<img
+									src="assets/semplice.B-rafytV_Z10NjJS.webp"
+									alt="Semplice"
+									width="800"
+									height="800"
+									style="aspect-ratio:1;width:100%;object-fit:cover"
+								>
+							</div>
+							<div class="keen-slider__slide">
+								<img
+									src="assets/streamer.a06aTJxz_1SwcQX.webp"
+									alt="Streamer"
+									width="800"
+									height="800"
+									style="aspect-ratio:1;width:100%;object-fit:cover"
+								>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+			<script>
+/*!
+ * Skipped minification because the original files appears to be already minified.
+ * Original file: /npm/keen-slider@6.8.6/keen-slider.js
+ *
+ * Do NOT use SRI with dynamically generated files! More information: https://www.jsdelivr.com/using-sri-with-dynamic-files
+ */
+!(function (n, t) {
+	"object" == typeof exports && "undefined" != typeof module
+		? (module.exports = t())
+		: "function" == typeof define && define.amd
+			? define(t)
+			: ((n =
+					"undefined" != typeof globalThis
+						? globalThis
+						: n || self).KeenSlider = t());
+})(this, function () {
+	"use strict";
+	var n = function () {
+		return (
+			(n =
+				Object.assign ||
+				function (n) {
+					for (var t, i = 1, e = arguments.length; i < e; i++)
+						for (var r in (t = arguments[i]))
+							Object.prototype.hasOwnProperty.call(t, r) && (n[r] = t[r]);
+					return n;
+				}),
+			n.apply(this, arguments)
+		);
+	};
+	function t(n, t, i) {
+		if (i || 2 === arguments.length)
+			for (var e, r = 0, a = t.length; r < a; r++)
+				(!e && r in t) ||
+					(e || (e = Array.prototype.slice.call(t, 0, r)), (e[r] = t[r]));
+		return n.concat(e || Array.prototype.slice.call(t));
+	}
+	function i(n) {
+		return Array.prototype.slice.call(n);
+	}
+	function e(n, t) {
+		var i = Math.floor(n);
+		return i === t || i + 1 === t ? n : t;
+	}
+	function r() {
+		return Date.now();
+	}
+	function a(n, t, i) {
+		if (((t = "data-keen-slider-" + t), null === i))
+			return n.removeAttribute(t);
+		n.setAttribute(t, i || "");
+	}
+	function o(n, t) {
+		return (
+			(t = t || document),
+			"function" == typeof n && (n = n(t)),
+			Array.isArray(n)
+				? n
+				: "string" == typeof n
+					? i(t.querySelectorAll(n))
+					: n instanceof HTMLElement
+						? [n]
+						: n instanceof NodeList
+							? i(n)
+							: []
+		);
+	}
+	function u(n) {
+		n.raw && (n = n.raw),
+			n.cancelable && !n.defaultPrevented && n.preventDefault();
+	}
+	function s(n) {
+		n.raw && (n = n.raw), n.stopPropagation && n.stopPropagation();
+	}
+	function c() {
+		var n = [];
+		return {
+			add: function (t, i, e, r) {
+				t.addListener ? t.addListener(e) : t.addEventListener(i, e, r),
+					n.push([t, i, e, r]);
+			},
+			input: function (n, t, i, e) {
+				this.add(
+					n,
+					t,
+					(function (n) {
+						return function (t) {
+							t.nativeEvent && (t = t.nativeEvent);
+							var i = t.changedTouches || [],
+								e = t.targetTouches || [],
+								r = t.detail && t.detail.x ? t.detail : null;
+							return n({
+								id: r
+									? r.identifier
+										? r.identifier
+										: "i"
+									: e[0]
+										? e[0]
+											? e[0].identifier
+											: "e"
+										: "d",
+								idChanged: r
+									? r.identifier
+										? r.identifier
+										: "i"
+									: i[0]
+										? i[0]
+											? i[0].identifier
+											: "e"
+										: "d",
+								raw: t,
+								x: r && r.x ? r.x : e[0] ? e[0].screenX : r ? r.x : t.pageX,
+								y: r && r.y ? r.y : e[0] ? e[0].screenY : r ? r.y : t.pageY,
+							});
+						};
+					})(i),
+					e,
+				);
+			},
+			purge: function () {
+				n.forEach(function (n) {
+					n[0].removeListener
+						? n[0].removeListener(n[2])
+						: n[0].removeEventListener(n[1], n[2], n[3]);
+				}),
+					(n = []);
+			},
+		};
+	}
+	function d(n, t, i) {
+		return Math.min(Math.max(n, t), i);
+	}
+	function l(n) {
+		return (n > 0 ? 1 : 0) - (n < 0 ? 1 : 0) || +n;
+	}
+	function f(n) {
+		var t = n.getBoundingClientRect();
+		return {
+			height: e(t.height, n.offsetHeight),
+			width: e(t.width, n.offsetWidth),
+		};
+	}
+	function p(n, t, i, e) {
+		var r = n && n[t];
+		return null == r ? i : e && "function" == typeof r ? r() : r;
+	}
+	function v(n) {
+		return Math.round(1e6 * n) / 1e6;
+	}
+	function h(n) {
+		var t, i, e, r, a, o;
+		function u(t) {
+			o || (o = t), s(!0);
+			var a = t - o;
+			a > e && (a = e);
+			var l = r[i];
+			if (l[3] < a) return i++, u(t);
+			var f = l[2],
+				p = l[4],
+				v = l[0],
+				h = l[1] * (0, l[5])(0 === p ? 1 : (a - f) / p);
+			if ((h && n.track.to(v + h), a < e)) return d();
+			(o = null), s(!1), c(null), n.emit("animationEnded");
+		}
+		function s(n) {
+			t.active = n;
+		}
+		function c(n) {
+			t.targetIdx = n;
+		}
+		function d() {
+			var n;
+			(n = u), (a = window.requestAnimationFrame(n));
+		}
+		function l() {
+			var t;
+			(t = a),
+				window.cancelAnimationFrame(t),
+				s(!1),
+				c(null),
+				o && n.emit("animationStopped"),
+				(o = null);
+		}
+		return (t = {
+			active: !1,
+			start: function (t) {
+				if ((l(), n.track.details)) {
+					var a = 0,
+						o = n.track.details.position;
+					(i = 0),
+						(e = 0),
+						(r = t.map(function (n) {
+							var t,
+								i = Number(o),
+								r = null !== (t = n.earlyExit) && void 0 !== t ? t : n.duration,
+								u = n.easing,
+								s = n.distance * u(r / n.duration) || 0;
+							o += s;
+							var c = e;
+							return (e += r), (a += s), [i, n.distance, c, e, n.duration, u];
+						})),
+						c(n.track.distToIdx(a)),
+						d(),
+						n.emit("animationStarted");
+				}
+			},
+			stop: l,
+			targetIdx: null,
+		});
+	}
+	function m(n) {
+		var i,
+			e,
+			a,
+			o,
+			u,
+			s,
+			c,
+			f,
+			h,
+			m,
+			g,
+			b,
+			x,
+			y,
+			k = 1 / 0,
+			w = [],
+			M = null,
+			T = 0;
+		function C(n) {
+			_(T + n);
+		}
+		function E(n) {
+			var t = z(T + n).abs;
+			return D(t) ? t : null;
+		}
+		function z(n) {
+			var i = Math.floor(Math.abs(v(n / e))),
+				r = v(((n % e) + e) % e);
+			r === e && (r = 0);
+			var a = l(n),
+				o = c.indexOf(
+					t([], c, !0).reduce(function (n, t) {
+						return Math.abs(t - r) < Math.abs(n - r) ? t : n;
+					}),
+				),
+				u = o;
+			return (
+				a < 0 && i++,
+				o === s && ((u = 0), (i += a > 0 ? 1 : -1)),
+				{ abs: u + i * s * a, origin: o, rel: u }
+			);
+		}
+		function I(n, t, i) {
+			var e;
+			if (t || !S()) return A(n, i);
+			if (!D(n)) return null;
+			var r = z(null != i ? i : T),
+				a = r.abs,
+				o = n - r.rel,
+				u = a + o;
+			e = A(u);
+			var c = A(u - s * l(o));
+			return (
+				((null !== c && Math.abs(c) < Math.abs(e)) || null === e) && (e = c),
+				v(e)
+			);
+		}
+		function A(n, t) {
+			if ((null == t && (t = v(T)), !D(n) || null === n)) return null;
+			n = Math.round(n);
+			var i = z(t),
+				r = i.abs,
+				a = i.rel,
+				o = i.origin,
+				u = O(n),
+				d = ((t % e) + e) % e,
+				l = c[o],
+				f = Math.floor((n - (r - a)) / s) * e;
+			return v(l - d - l + c[u] + f + (o === s ? e : 0));
+		}
+		function D(n) {
+			return L(n) === n;
+		}
+		function L(n) {
+			return d(n, h, m);
+		}
+		function S() {
+			return o.loop;
+		}
+		function O(n) {
+			return ((n % s) + s) % s;
+		}
+		function _(t) {
+			var i;
+			(i = t - T),
+				w.push({ distance: i, timestamp: r() }),
+				w.length > 6 && (w = w.slice(-6)),
+				(T = v(t));
+			var e = H().abs;
+			if (e !== M) {
+				var a = null !== M;
+				(M = e), a && n.emit("slideChanged");
+			}
+		}
+		function H(t) {
+			var r = t
+				? null
+				: (function () {
+						if (s) {
+							var n = S(),
+								t = n ? ((T % e) + e) % e : T,
+								i = (n ? T % e : T) - u[0][2],
+								r = 0 - (i < 0 && n ? e - Math.abs(i) : i),
+								c = 0,
+								d = z(T),
+								f = d.abs,
+								p = d.rel,
+								v = u[p][2],
+								k = u.map(function (t, i) {
+									var a = r + c;
+									(a < 0 - t[0] || a > 1) &&
+										(a += (Math.abs(a) > e - 1 && n ? e : 0) * l(-a));
+									var u = i - p,
+										d = l(u),
+										h = u + f;
+									n &&
+										(-1 === d && a > v && (h += s),
+										1 === d && a < v && (h -= s),
+										null !== g && h < g && (a += e),
+										null !== b && h > b && (a -= e));
+									var m = a + t[0] + t[1],
+										x = Math.max(
+											a >= 0 && m <= 1
+												? 1
+												: m < 0 || a > 1
+													? 0
+													: a < 0
+														? Math.min(1, (t[0] + a) / t[0])
+														: (1 - a) / t[0],
+											0,
+										);
+									return (
+										(c += t[0] + t[1]),
+										{
+											abs: h,
+											distance: o.rtl ? -1 * a + 1 - t[0] : a,
+											portion: x,
+											size: t[0],
+										}
+									);
+								});
+							return (
+								(f = L(f)),
+								(p = O(f)),
+								{
+									abs: L(f),
+									length: a,
+									max: y,
+									maxIdx: m,
+									min: x,
+									minIdx: h,
+									position: T,
+									progress: n ? t / e : T / a,
+									rel: p,
+									slides: k,
+									slidesLength: e,
+								}
+							);
+						}
+					})();
+			return (i.details = r), n.emit("detailsChanged"), r;
+		}
+		return (i = {
+			absToRel: O,
+			add: C,
+			details: null,
+			distToIdx: E,
+			idxToDist: I,
+			init: function (t) {
+				if (
+					((function () {
+						if (
+							((o = n.options),
+							(u = (o.trackConfig || []).map(function (n) {
+								return [p(n, "size", 1), p(n, "spacing", 0), p(n, "origin", 0)];
+							})),
+							(s = u.length))
+						) {
+							e = v(
+								u.reduce(function (n, t) {
+									return n + t[0] + t[1];
+								}, 0),
+							);
+							var t,
+								i = s - 1;
+							(a = v(e + u[0][2] - u[i][0] - u[i][2] - u[i][1])),
+								(c = u.reduce(function (n, i) {
+									if (!n) return [0];
+									var e = u[n.length - 1],
+										r = n[n.length - 1] + (e[0] + e[2]) + e[1];
+									return (
+										(r -= i[2]),
+										n[n.length - 1] > r && (r = n[n.length - 1]),
+										(r = v(r)),
+										n.push(r),
+										(!t || t < r) && (f = n.length - 1),
+										(t = r),
+										n
+									);
+								}, null)),
+								0 === a && (f = 0),
+								c.push(v(e));
+						}
+					})(),
+					!s)
+				)
+					return H(!0);
+				var i;
+				!(function () {
+					var t = n.options.range,
+						i = n.options.loop;
+					(g = h = i ? p(i, "min", -1 / 0) : 0),
+						(b = m = i ? p(i, "max", k) : f);
+					var e = p(t, "min", null),
+						r = p(t, "max", null);
+					null !== e && (h = e),
+						null !== r && (m = r),
+						(x = h === -1 / 0 ? h : n.track.idxToDist(h || 0, !0, 0)),
+						(y = m === k ? m : I(m, !0, 0)),
+						null === r && (b = m),
+						p(t, "align", !1) &&
+							m !== k &&
+							0 === u[O(m)][2] &&
+							((y -= 1 - u[O(m)][0]), (m = E(y - T))),
+						(x = v(x)),
+						(y = v(y));
+				})(),
+					(i = t),
+					Number(i) === i ? C(A(L(t))) : H();
+			},
+			to: _,
+			velocity: function () {
+				var n = r(),
+					t = w.reduce(
+						function (t, i) {
+							var e = i.distance,
+								r = i.timestamp;
+							return (
+								n - r > 200 ||
+									(l(e) !== l(t.distance) &&
+										t.distance &&
+										(t = { distance: 0, lastTimestamp: 0, time: 0 }),
+									t.time && (t.distance += e),
+									t.lastTimestamp && (t.time += r - t.lastTimestamp),
+									(t.lastTimestamp = r)),
+								t
+							);
+						},
+						{ distance: 0, lastTimestamp: 0, time: 0 },
+					);
+				return t.distance / t.time || 0;
+			},
+		});
+	}
+	function g(n) {
+		var t, i, e, r, a, o, u, s;
+		function c(n) {
+			return 2 * n;
+		}
+		function f(n) {
+			return d(n, u, s);
+		}
+		function p(n) {
+			return 1 - Math.pow(1 - n, 3);
+		}
+		function v() {
+			return e ? n.track.velocity() : 0;
+		}
+		function h() {
+			b();
+			var t = "free-snap" === n.options.mode,
+				i = n.track,
+				e = v();
+			r = l(e);
+			var u = n.track.details,
+				s = [];
+			if (e || !t) {
+				var d = m(e),
+					h = d.dist,
+					g = d.dur;
+				if (((g = c(g)), (h *= r), t)) {
+					var x = i.idxToDist(i.distToIdx(h), !0);
+					x && (h = x);
+				}
+				s.push({ distance: h, duration: g, easing: p });
+				var y = u.position,
+					k = y + h;
+				if (k < a || k > o) {
+					var w = k < a ? a - y : o - y,
+						M = 0,
+						T = e;
+					if (l(w) === r) {
+						var C = Math.min(Math.abs(w) / Math.abs(h), 1),
+							E =
+								(function (n) {
+									return 1 - Math.pow(1 - n, 1 / 3);
+								})(C) * g;
+						(s[0].earlyExit = E), (T = e * (1 - C));
+					} else (s[0].earlyExit = 0), (M += w);
+					var z = m(T, 100),
+						I = z.dist * r;
+					n.options.rubberband &&
+						(s.push({ distance: I, duration: c(z.dur), easing: p }),
+						s.push({ distance: -I + M, duration: 500, easing: p }));
+				}
+				n.animator.start(s);
+			} else
+				n.moveToIdx(f(u.abs), !0, {
+					duration: 500,
+					easing: function (n) {
+						return 1 + --n * n * n * n * n;
+					},
+				});
+		}
+		function m(n, t) {
+			void 0 === t && (t = 1e3);
+			var i = 147e-9 + (n = Math.abs(n)) / t;
+			return { dist: Math.pow(n, 2) / i, dur: n / i };
+		}
+		function g() {
+			var t = n.track.details;
+			t && ((a = t.min), (o = t.max), (u = t.minIdx), (s = t.maxIdx));
+		}
+		function b() {
+			n.animator.stop();
+		}
+		n.on("updated", g),
+			n.on("optionsChanged", g),
+			n.on("created", g),
+			n.on("dragStarted", function () {
+				(e = !1), b(), (t = i = n.track.details.abs);
+			}),
+			n.on("dragChecked", function () {
+				e = !0;
+			}),
+			n.on("dragEnded", function () {
+				var e = n.options.mode;
+				"snap" === e &&
+					(function () {
+						var e = n.track,
+							r = n.track.details,
+							u = r.position,
+							s = l(v());
+						(u > o || u < a) && (s = 0);
+						var c = t + s;
+						0 === r.slides[e.absToRel(c)].portion && (c -= s),
+							t !== i && (c = i),
+							l(e.idxToDist(c, !0)) !== s && (c += s),
+							(c = f(c));
+						var d = e.idxToDist(c, !0);
+						n.animator.start([
+							{
+								distance: d,
+								duration: 500,
+								easing: function (n) {
+									return 1 + --n * n * n * n * n;
+								},
+							},
+						]);
+					})(),
+					("free" !== e && "free-snap" !== e) || h();
+			}),
+			n.on("dragged", function () {
+				i = n.track.details.abs;
+			});
+	}
+	function b(n) {
+		var t,
+			i,
+			e,
+			r,
+			a,
+			f,
+			p,
+			v,
+			h,
+			m,
+			g,
+			b,
+			x,
+			y,
+			k,
+			w,
+			M,
+			T,
+			C = c();
+		function E(t) {
+			if (f && v === t.id) {
+				var o = D(t);
+				if (h) {
+					if (!A(t)) return I(t);
+					(m = o), (h = !1), n.emit("dragChecked");
+				}
+				if (w) return (m = o);
+				u(t);
+				var c = (function (t) {
+					if (M === -1 / 0 && T === 1 / 0) return t;
+					var e = n.track.details,
+						o = e.length,
+						u = e.position,
+						s = d(t, M - u, T - u);
+					if (0 === o) return 0;
+					if (!n.options.rubberband) return s;
+					if (u <= T && u >= M) return t;
+					if ((u < M && i > 0) || (u > T && i < 0)) return t;
+					var c = (u < M ? u - M : u - T) / o,
+						l = r * o,
+						f = Math.abs(c * l),
+						p = Math.max(0, 1 - (f / a) * 2);
+					return p * p * t;
+				})((p(m - o) / r) * e);
+				i = l(c);
+				var x = n.track.details.position;
+				((x > M && x < T) || (x === M && i > 0) || (x === T && i < 0)) && s(t),
+					(g += c),
+					!b && Math.abs(g * r) > 5 && (b = !0),
+					n.track.add(c),
+					(m = o),
+					n.emit("dragged");
+			}
+		}
+		function z(t) {
+			!f &&
+				n.track.details &&
+				n.track.details.length &&
+				((g = 0),
+				(f = !0),
+				(b = !1),
+				(h = !0),
+				(v = t.id),
+				A(t),
+				(m = D(t)),
+				n.emit("dragStarted"));
+		}
+		function I(t) {
+			f && v === t.idChanged && ((f = !1), n.emit("dragEnded"));
+		}
+		function A(n) {
+			var t = L(),
+				i = t ? n.y : n.x,
+				e = t ? n.x : n.y,
+				r = void 0 !== x && void 0 !== y && Math.abs(y - e) <= Math.abs(x - i);
+			return (x = i), (y = e), r;
+		}
+		function D(n) {
+			return L() ? n.y : n.x;
+		}
+		function L() {
+			return n.options.vertical;
+		}
+		function S() {
+			(r = n.size), (a = L() ? window.innerHeight : window.innerWidth);
+			var t = n.track.details;
+			t && ((M = t.min), (T = t.max));
+		}
+		function O(n) {
+			b && (s(n), u(n));
+		}
+		function _() {
+			if ((C.purge(), n.options.drag && !n.options.disabled)) {
+				var i;
+				(i = n.options.dragSpeed || 1),
+					(p =
+						"function" == typeof i
+							? i
+							: function (n) {
+									return n * i;
+								}),
+					(e = n.options.rtl ? -1 : 1),
+					S(),
+					(t = n.container),
+					(function () {
+						var n = "data-keen-slider-clickable";
+						o("[".concat(n, "]:not([").concat(n, "=false])"), t).map(
+							function (n) {
+								C.add(n, "dragstart", s),
+									C.add(n, "mousedown", s),
+									C.add(n, "touchstart", s);
+							},
+						);
+					})(),
+					C.add(t, "dragstart", function (n) {
+						u(n);
+					}),
+					C.add(t, "click", O, { capture: !0 }),
+					C.input(t, "ksDragStart", z),
+					C.input(t, "ksDrag", E),
+					C.input(t, "ksDragEnd", I),
+					C.input(t, "mousedown", z),
+					C.input(t, "mousemove", E),
+					C.input(t, "mouseleave", I),
+					C.input(t, "mouseup", I),
+					C.input(t, "touchstart", z, { passive: !0 }),
+					C.input(t, "touchmove", E, { passive: !1 }),
+					C.input(t, "touchend", I),
+					C.input(t, "touchcancel", I),
+					C.add(window, "wheel", function (n) {
+						f && u(n);
+					});
+				var r = "data-keen-slider-scrollable";
+				o("[".concat(r, "]:not([").concat(r, "=false])"), n.container).map(
+					function (n) {
+						return (function (n) {
+							var t;
+							C.input(
+								n,
+								"touchstart",
+								function (n) {
+									(t = D(n)), (w = !0), (k = !0);
+								},
+								{ passive: !0 },
+							),
+								C.input(n, "touchmove", function (i) {
+									var e = L(),
+										r = e
+											? n.scrollHeight - n.clientHeight
+											: n.scrollWidth - n.clientWidth,
+										a = t - D(i),
+										o = e ? n.scrollTop : n.scrollLeft,
+										s =
+											(e && "scroll" === n.style.overflowY) ||
+											(!e && "scroll" === n.style.overflowX);
+									if (
+										((t = D(i)),
+										((a < 0 && o > 0) || (a > 0 && o < r)) && k && s)
+									)
+										return (w = !0);
+									(k = !1), u(i), (w = !1);
+								}),
+								C.input(n, "touchend", function () {
+									w = !1;
+								});
+						})(n);
+					},
+				);
+			}
+		}
+		n.on("updated", S),
+			n.on("optionsChanged", _),
+			n.on("created", _),
+			n.on("destroyed", C.purge);
+	}
+	function x(n) {
+		var t,
+			i,
+			e = null;
+		function r(t, i, e) {
+			n.animator.active
+				? o(t, i, e)
+				: requestAnimationFrame(function () {
+						return o(t, i, e);
+					});
+		}
+		function a() {
+			r(!1, !1, i);
+		}
+		function o(i, r, a) {
+			var o = 0,
+				u = n.size,
+				d = n.track.details;
+			if (d && t) {
+				var l = d.slides;
+				t.forEach(function (n, t) {
+					if (i) !e && r && s(n, null, a), c(n, null, a);
+					else {
+						if (!l[t]) return;
+						var d = l[t].size * u;
+						!e && r && s(n, d, a), c(n, l[t].distance * u - o, a), (o += d);
+					}
+				});
+			}
+		}
+		function u(t) {
+			return "performance" === n.options.renderMode ? Math.round(t) : t;
+		}
+		function s(n, t, i) {
+			var e = i ? "height" : "width";
+			null !== t && (t = u(t) + "px"),
+				(n.style["min-" + e] = t),
+				(n.style["max-" + e] = t);
+		}
+		function c(n, t, i) {
+			if (null !== t) {
+				t = u(t);
+				var e = i ? t : 0;
+				t = "translate3d(".concat(i ? 0 : t, "px, ").concat(e, "px, 0)");
+			}
+			(n.style.transform = t), (n.style["-webkit-transform"] = t);
+		}
+		function d() {
+			t && (o(!0, !0, i), (t = null)), n.on("detailsChanged", a, !0);
+		}
+		function l() {
+			r(!1, !0, i);
+		}
+		function f() {
+			d(),
+				(i = n.options.vertical),
+				n.options.disabled ||
+					"custom" === n.options.renderMode ||
+					((e = "auto" === p(n.options.slides, "perView", null)),
+					n.on("detailsChanged", a),
+					(t = n.slides).length && l());
+		}
+		n.on("created", f),
+			n.on("optionsChanged", f),
+			n.on("beforeOptionsChanged", function () {
+				d();
+			}),
+			n.on("updated", l),
+			n.on("destroyed", d);
+	}
+	function y(t, i) {
+		return function (e) {
+			var r,
+				u,
+				s,
+				d,
+				l,
+				v,
+				h = c();
+			function m(n) {
+				var t;
+				a(
+					e.container,
+					"reverse",
+					"rtl" !==
+						((t = e.container),
+						window.getComputedStyle(t, null).getPropertyValue("direction")) || n
+						? null
+						: "",
+				),
+					a(e.container, "v", e.options.vertical && !n ? "" : null),
+					a(e.container, "disabled", e.options.disabled && !n ? "" : null);
+			}
+			function g() {
+				b() && M();
+			}
+			function b() {
+				var t = null;
+				if (
+					(d.forEach(function (n) {
+						n.matches && (t = n.__media);
+					}),
+					t === r)
+				)
+					return !1;
+				r || e.emit("beforeOptionsChanged"), (r = t);
+				var i = t ? s.breakpoints[t] : s;
+				return (e.options = n(n({}, s), i)), m(), I(), A(), C(), !0;
+			}
+			function x(n) {
+				var t = f(n);
+				return (e.options.vertical ? t.height : t.width) / e.size || 1;
+			}
+			function y() {
+				return e.options.trackConfig.length;
+			}
+			function k(t) {
+				for (var a in ((r = !1),
+				(s = n(n({}, i), t)),
+				h.purge(),
+				(u = e.size),
+				(d = []),
+				s.breakpoints || [])) {
+					var o = window.matchMedia(a);
+					(o.__media = a), d.push(o), h.add(o, "change", g);
+				}
+				h.add(window, "orientationchange", z), h.add(window, "resize", E), b();
+			}
+			function w(n) {
+				e.animator.stop();
+				var t = e.track.details;
+				e.track.init(null != n ? n : t ? t.abs : 0);
+			}
+			function M(n) {
+				w(n), e.emit("optionsChanged");
+			}
+			function T(n, t) {
+				if (n) return k(n), void M(t);
+				I(), A();
+				var i = y();
+				C(), y() !== i ? M(t) : w(t), e.emit("updated");
+			}
+			function C() {
+				var n = e.options.slides;
+				if ("function" == typeof n)
+					return (e.options.trackConfig = n(e.size, e.slides));
+				for (
+					var t = e.slides,
+						i = t.length,
+						r = "number" == typeof n ? n : p(n, "number", i, !0),
+						a = [],
+						o = p(n, "perView", 1, !0),
+						u = p(n, "spacing", 0, !0) / e.size || 0,
+						s = "auto" === o ? u : u / o,
+						c = p(n, "origin", "auto"),
+						d = 0,
+						l = 0;
+					l < r;
+					l++
+				) {
+					var f = "auto" === o ? x(t[l]) : 1 / o - u + s,
+						v = "center" === c ? 0.5 - f / 2 : "auto" === c ? 0 : c;
+					a.push({ origin: v, size: f, spacing: u }), (d += f);
+				}
+				if (((d += u * (r - 1)), "auto" === c && !e.options.loop && 1 !== o)) {
+					var h = 0;
+					a.map(function (n) {
+						var t = d - h;
+						return (
+							(h += n.size + u),
+							t >= 1 || (n.origin = 1 - t - (d > 1 ? 0 : 1 - d)),
+							n
+						);
+					});
+				}
+				e.options.trackConfig = a;
+			}
+			function E() {
+				I();
+				var n = e.size;
+				e.options.disabled || n === u || ((u = n), T());
+			}
+			function z() {
+				E(), setTimeout(E, 500), setTimeout(E, 2e3);
+			}
+			function I() {
+				var n = f(e.container);
+				e.size = (e.options.vertical ? n.height : n.width) || 1;
+			}
+			function A() {
+				e.slides = o(e.options.selector, e.container);
+			}
+			(e.container = (v = o(t, l || document)).length ? v[0] : null),
+				(e.destroy = function () {
+					h.purge(), e.emit("destroyed"), m(!0);
+				}),
+				(e.prev = function () {
+					e.moveToIdx(e.track.details.abs - 1, !0);
+				}),
+				(e.next = function () {
+					e.moveToIdx(e.track.details.abs + 1, !0);
+				}),
+				(e.update = T),
+				k(e.options);
+		};
+	}
+	return function (n, i, e) {
+		try {
+			return (function (n, t) {
+				var i,
+					e = {};
+				return (
+					(i = {
+						emit: function (n) {
+							e[n] &&
+								e[n].forEach(function (n) {
+									n(i);
+								});
+							var t = i.options && i.options[n];
+							t && t(i);
+						},
+						moveToIdx: function (n, t, e) {
+							var r = i.track.idxToDist(n, t);
+							if (r) {
+								var a = i.options.defaultAnimation;
+								i.animator.start([
+									{
+										distance: r,
+										duration: p(e || a, "duration", 500),
+										easing: p(e || a, "easing", function (n) {
+											return 1 + --n * n * n * n * n;
+										}),
+									},
+								]);
+							}
+						},
+						on: function (n, t, i) {
+							void 0 === i && (i = !1), e[n] || (e[n] = []);
+							var r = e[n].indexOf(t);
+							r > -1 ? i && delete e[n][r] : i || e[n].push(t);
+						},
+						options: n,
+					}),
+					(function () {
+						if (((i.track = m(i)), (i.animator = h(i)), t))
+							for (var n = 0, e = t; n < e.length; n++) (0, e[n])(i);
+						i.track.init(i.options.initial || 0), i.emit("created");
+					})(),
+					i
+				);
+			})(
+				i,
+				t(
+					[
+						y(n, {
+							drag: !0,
+							mode: "snap",
+							renderMode: "precision",
+							rubberband: !0,
+							selector: ".keen-slider__slide",
+						}),
+						x,
+						b,
+						g,
+					],
+					e || [],
+					!0,
+				),
+			);
+		} catch (n) {
+			console.error(n);
+		}
+	};
+});
+
+		</script>
+			<script>
+			window.addEventListener("load", function () {
+				var slider = new KeenSlider("#keen-slider", {
+					loop: true,
+					slides: { perView: 3.5 },
+					breakpoints: {
+						"(max-width: 640px)": { slides: { perView: 1.2 } },
+						"(min-width: 641px) and (max-width: 1024px)": {
+							slides: { perView: 1.8 },
+						},
+					},
+				});
+				document
+					.getElementById("keen-slider-previous")
+					.addEventListener("click", function () {
+						slider.prev();
+					});
+				document
+					.getElementById("keen-slider-next")
+					.addEventListener("click", function () {
+						slider.next();
+					});
+			});
+			</script>
+
+			<!-- About -->
+			<section>
+				<div class="container section-border-b divide-y">
+					<div class="p-8 relative">
+						<div
+							aria-hidden="true"
+							class="bg-grid"
+							style="position:absolute;inset:0;pointer-events:none"
+						></div>
+						<h2
+							style="font-size:clamp(1.5rem,4vw,2.25rem);font-weight:900;text-transform:uppercase;color:var(--color-white);letter-spacing:-0.025em;position:relative"
+						>
+							AstroMax crafts bold, high-impact one-page websites, designed,
+							refined, and built to captivate.<br><br>Built with Astro and
+							Tailwind CSS, each site is fast, sharp, and tailored to tell your
+							story and make your brand stand out. Simple, effective,
+							unforgettable.
+						</h2>
+					</div>
+				</div>
+			</section>
+
+			<!-- Services -->
+			<div class="container section-border-b">
+				<div
+					class="services-grid"
+					style="border-top:1px solid var(--border-subtle)"
+				>
+					<div
+						class="service-item"
+						style="border-right:1px solid var(--border-subtle)"
+					>
+						<h3>Design in Figma or the Browser</h3>
+						<p>
+							Whether designing in Figma or directly in the browser, I craft
+							interfaces that are both clean and user-friendly. Every layout is
+							tailored to fit your unique goals and audience.
+						</p>
+					</div>
+					<div
+						class="service-item"
+						style="border-right:1px solid var(--border-subtle)"
+					>
+						<h3>Redesign Existing Websites</h3>
+						<p>
+							Got a website that needs a refresh? I'll review your current
+							design and rework it into something modern, intuitive, and more
+							engaging, both visually and functionally.
+						</p>
+					</div>
+					<div
+						class="service-item"
+						style="border-right:1px solid var(--border-subtle)"
+					>
+						<h3>Convert to Tailwind &amp; Astro</h3>
+						<p>
+							I can help upgrade your current project by converting it to use
+							Tailwind CSS and Astro, improving performance, reducing
+							complexity, and boosting maintainability.
+						</p>
+					</div>
+					<div class="service-item">
+						<h3>Full Website Development</h3>
+						<p>
+							I build fast, responsive websites using Tailwind CSS and Astro.
+							The result: polished, lightweight pages that elevate your brand
+							and support your business goals.
+						</p>
+					</div>
+				</div>
+			</div>
+
+			<!-- CTA -->
+			<div class="container">
+				<div class="cta-section">
+					<a href="mailto:michael@andreuzza.com" class="cta-link"
+						>Get a quote</a
+					>
+				</div>
+			</div>
+		</main>
+
+		<footer class="site-footer">
+			<div class="container footer-inner">
+				<div class="footer-top">
+					<div class="footer-top-inner">
+						<div class="footer-brand">
+							<a href="index.html">AstroMax SP</a>
+							<p>
+								AstroMax is a creative agency building digital experiences that
+								matter.
+							</p>
+						</div>
+						<div class="footer-links">
+							<div class="footer-links-col">
+								<h3>Explore</h3>
+								<ul>
+									<li><a href="work/index.html">Work</a></li>
+									<li><a href="blog/index.html">Blog</a></li>
+									<li><a href="store/index.html">Store</a></li>
+									<li><a href="team/index.html">Team</a></li>
+								</ul>
+							</div>
+							<div class="footer-links-col">
+								<h3>Legal</h3>
+								<ul>
+									<li><a href="legal/privacy.html">Privacy Policy</a></li>
+									<li><a href="legal/terms.html">Terms of Use</a></li>
+								</ul>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="footer-bottom">
+					<p>&copy; 2026 AstroMax. All rights reserved.</p>
+				</div>
+			</div>
+		</footer>
+		<div class="relative">
+			<button class="search-fab" id="searchButton" aria-label="Search site">
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					viewBox="0 0 256 256"
+					fill="currentColor"
+					width="16"
+					height="16"
+				>
+					<path
+						d="M232.49,215.51,185,168a92.12,92.12,0,1,0-17,17l47.53,47.54a12,12,0,0,0,17-17ZM44,112a68,68,0,1,1,68,68A68.07,68.07,0,0,1,44,112Z"
+					></path>
+				</svg>
+			</button>
+			<div
+				id="searchModal"
+				class="search-modal"
+				role="dialog"
+				aria-modal="true"
+			>
+				<div class="search-modal-inner">
+					<div class="search-modal-box bg-grid">
+						<input
+							type="text"
+							id="searchInput"
+							placeholder="Search..."
+							class="search-input"
+						>
+						<div id="searchResults" class="search-results"></div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script>
+/*!
+ * Fuse.js v7.0.0 - Lightweight fuzzy-search (http://fusejs.io)
+ *
+ * Copyright (c) 2023 Kiro Risk (http://kiro.me)
+ * All Rights Reserved. Apache Software License 2.0
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ */
+var e, t;
+(e = this),
+	(t = function () {
+		"use strict";
+		function e(e, t) {
+			var n = Object.keys(e);
+			if (Object.getOwnPropertySymbols) {
+				var r = Object.getOwnPropertySymbols(e);
+				t &&
+					(r = r.filter(function (t) {
+						return Object.getOwnPropertyDescriptor(e, t).enumerable;
+					})),
+					n.push.apply(n, r);
+			}
+			return n;
+		}
+		function t(t) {
+			for (var n = 1; n < arguments.length; n++) {
+				var r = null != arguments[n] ? arguments[n] : {};
+				n % 2
+					? e(Object(r), !0).forEach(function (e) {
+							c(t, e, r[e]);
+						})
+					: Object.getOwnPropertyDescriptors
+						? Object.defineProperties(t, Object.getOwnPropertyDescriptors(r))
+						: e(Object(r)).forEach(function (e) {
+								Object.defineProperty(
+									t,
+									e,
+									Object.getOwnPropertyDescriptor(r, e),
+								);
+							});
+			}
+			return t;
+		}
+		function n(e) {
+			return (
+				(n =
+					"function" == typeof Symbol && "symbol" == typeof Symbol.iterator
+						? function (e) {
+								return typeof e;
+							}
+						: function (e) {
+								return e &&
+									"function" == typeof Symbol &&
+									e.constructor === Symbol &&
+									e !== Symbol.prototype
+									? "symbol"
+									: typeof e;
+							}),
+				n(e)
+			);
+		}
+		function r(e, t) {
+			if (!(e instanceof t))
+				throw new TypeError("Cannot call a class as a function");
+		}
+		function i(e, t) {
+			for (var n = 0; n < t.length; n++) {
+				var r = t[n];
+				(r.enumerable = r.enumerable || !1),
+					(r.configurable = !0),
+					"value" in r && (r.writable = !0),
+					Object.defineProperty(e, v(r.key), r);
+			}
+		}
+		function o(e, t, n) {
+			return (
+				t && i(e.prototype, t),
+				n && i(e, n),
+				Object.defineProperty(e, "prototype", { writable: !1 }),
+				e
+			);
+		}
+		function c(e, t, n) {
+			return (
+				(t = v(t)) in e
+					? Object.defineProperty(e, t, {
+							value: n,
+							enumerable: !0,
+							configurable: !0,
+							writable: !0,
+						})
+					: (e[t] = n),
+				e
+			);
+		}
+		function a(e, t) {
+			if ("function" != typeof t && null !== t)
+				throw new TypeError(
+					"Super expression must either be null or a function",
+				);
+			(e.prototype = Object.create(t && t.prototype, {
+				constructor: { value: e, writable: !0, configurable: !0 },
+			})),
+				Object.defineProperty(e, "prototype", { writable: !1 }),
+				t && u(e, t);
+		}
+		function s(e) {
+			return (
+				(s = Object.setPrototypeOf
+					? Object.getPrototypeOf.bind()
+					: function (e) {
+							return e.__proto__ || Object.getPrototypeOf(e);
+						}),
+				s(e)
+			);
+		}
+		function u(e, t) {
+			return (
+				(u = Object.setPrototypeOf
+					? Object.setPrototypeOf.bind()
+					: function (e, t) {
+							return (e.__proto__ = t), e;
+						}),
+				u(e, t)
+			);
+		}
+		function h(e, t) {
+			if (t && ("object" == typeof t || "function" == typeof t)) return t;
+			if (void 0 !== t)
+				throw new TypeError(
+					"Derived constructors may only return object or undefined",
+				);
+			return (function (e) {
+				if (void 0 === e)
+					throw new ReferenceError(
+						"this hasn't been initialised - super() hasn't been called",
+					);
+				return e;
+			})(e);
+		}
+		function l(e) {
+			var t = (function () {
+				if ("undefined" == typeof Reflect || !Reflect.construct) return !1;
+				if (Reflect.construct.sham) return !1;
+				if ("function" == typeof Proxy) return !0;
+				try {
+					return (
+						Boolean.prototype.valueOf.call(
+							Reflect.construct(Boolean, [], function () {}),
+						),
+						!0
+					);
+				} catch (e) {
+					return !1;
+				}
+			})();
+			return function () {
+				var n,
+					r = s(e);
+				if (t) {
+					var i = s(this).constructor;
+					n = Reflect.construct(r, arguments, i);
+				} else n = r.apply(this, arguments);
+				return h(this, n);
+			};
+		}
+		function f(e) {
+			return (
+				(function (e) {
+					if (Array.isArray(e)) return d(e);
+				})(e) ||
+				(function (e) {
+					if (
+						("undefined" != typeof Symbol && null != e[Symbol.iterator]) ||
+						null != e["@@iterator"]
+					)
+						return Array.from(e);
+				})(e) ||
+				(function (e, t) {
+					if (e) {
+						if ("string" == typeof e) return d(e, t);
+						var n = Object.prototype.toString.call(e).slice(8, -1);
+						return (
+							"Object" === n && e.constructor && (n = e.constructor.name),
+							"Map" === n || "Set" === n
+								? Array.from(e)
+								: "Arguments" === n ||
+										/^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)
+									? d(e, t)
+									: void 0
+						);
+					}
+				})(e) ||
+				(function () {
+					throw new TypeError(
+						"Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.",
+					);
+				})()
+			);
+		}
+		function d(e, t) {
+			(null == t || t > e.length) && (t = e.length);
+			for (var n = 0, r = new Array(t); n < t; n++) r[n] = e[n];
+			return r;
+		}
+		function v(e) {
+			var t = (function (e, t) {
+				if ("object" != typeof e || null === e) return e;
+				var n = e[Symbol.toPrimitive];
+				if (void 0 !== n) {
+					var r = n.call(e, t || "default");
+					if ("object" != typeof r) return r;
+					throw new TypeError("@@toPrimitive must return a primitive value.");
+				}
+				return ("string" === t ? String : Number)(e);
+			})(e, "string");
+			return "symbol" == typeof t ? t : String(t);
+		}
+		function g(e) {
+			return Array.isArray ? Array.isArray(e) : "[object Array]" === S(e);
+		}
+		var y = 1 / 0;
+		function p(e) {
+			return null == e
+				? ""
+				: (function (e) {
+						if ("string" == typeof e) return e;
+						var t = e + "";
+						return "0" == t && 1 / e == -y ? "-0" : t;
+					})(e);
+		}
+		function m(e) {
+			return "string" == typeof e;
+		}
+		function k(e) {
+			return "number" == typeof e;
+		}
+		function M(e) {
+			return (
+				!0 === e ||
+				!1 === e ||
+				((function (e) {
+					return b(e) && null !== e;
+				})(e) &&
+					"[object Boolean]" == S(e))
+			);
+		}
+		function b(e) {
+			return "object" === n(e);
+		}
+		function x(e) {
+			return null != e;
+		}
+		function w(e) {
+			return !e.trim().length;
+		}
+		function S(e) {
+			return null == e
+				? void 0 === e
+					? "[object Undefined]"
+					: "[object Null]"
+				: Object.prototype.toString.call(e);
+		}
+		var L = function (e) {
+				return "Missing ".concat(e, " property in key");
+			},
+			_ = function (e) {
+				return "Property 'weight' in key '".concat(
+					e,
+					"' must be a positive integer",
+				);
+			},
+			O = Object.prototype.hasOwnProperty,
+			j = (function () {
+				function e(t) {
+					var n = this;
+					r(this, e), (this._keys = []), (this._keyMap = {});
+					var i = 0;
+					t.forEach(function (e) {
+						var t = A(e);
+						n._keys.push(t), (n._keyMap[t.id] = t), (i += t.weight);
+					}),
+						this._keys.forEach(function (e) {
+							e.weight /= i;
+						});
+				}
+				return (
+					o(e, [
+						{
+							key: "get",
+							value: function (e) {
+								return this._keyMap[e];
+							},
+						},
+						{
+							key: "keys",
+							value: function () {
+								return this._keys;
+							},
+						},
+						{
+							key: "toJSON",
+							value: function () {
+								return JSON.stringify(this._keys);
+							},
+						},
+					]),
+					e
+				);
+			})();
+		function A(e) {
+			var t = null,
+				n = null,
+				r = null,
+				i = 1,
+				o = null;
+			if (m(e) || g(e)) (r = e), (t = I(e)), (n = C(e));
+			else {
+				if (!O.call(e, "name")) throw new Error(L("name"));
+				var c = e.name;
+				if (((r = c), O.call(e, "weight") && (i = e.weight) <= 0))
+					throw new Error(_(c));
+				(t = I(c)), (n = C(c)), (o = e.getFn);
+			}
+			return { path: t, id: n, weight: i, src: r, getFn: o };
+		}
+		function I(e) {
+			return g(e) ? e : e.split(".");
+		}
+		function C(e) {
+			return g(e) ? e.join(".") : e;
+		}
+		var E = {
+				useExtendedSearch: !1,
+				getFn: function (e, t) {
+					var n = [],
+						r = !1;
+					return (
+						(function e(t, i, o) {
+							if (x(t))
+								if (i[o]) {
+									var c = t[i[o]];
+									if (!x(c)) return;
+									if (o === i.length - 1 && (m(c) || k(c) || M(c)))
+										n.push(p(c));
+									else if (g(c)) {
+										r = !0;
+										for (var a = 0, s = c.length; a < s; a += 1)
+											e(c[a], i, o + 1);
+									} else i.length && e(c, i, o + 1);
+								} else n.push(t);
+						})(e, m(t) ? t.split(".") : t, 0),
+						r ? n : n[0]
+					);
+				},
+				ignoreLocation: !1,
+				ignoreFieldNorm: !1,
+				fieldNormWeight: 1,
+			},
+			$ = t(
+				t(
+					t(
+						t(
+							{},
+							{
+								isCaseSensitive: !1,
+								includeScore: !1,
+								keys: [],
+								shouldSort: !0,
+								sortFn: function (e, t) {
+									return e.score === t.score
+										? e.idx < t.idx
+											? -1
+											: 1
+										: e.score < t.score
+											? -1
+											: 1;
+								},
+							},
+						),
+						{ includeMatches: !1, findAllMatches: !1, minMatchCharLength: 1 },
+					),
+					{ location: 0, threshold: 0.6, distance: 100 },
+				),
+				E,
+			),
+			F = /[^ ]+/g,
+			R = (function () {
+				function e() {
+					var t =
+							arguments.length > 0 && void 0 !== arguments[0]
+								? arguments[0]
+								: {},
+						n = t.getFn,
+						i = void 0 === n ? $.getFn : n,
+						o = t.fieldNormWeight,
+						c = void 0 === o ? $.fieldNormWeight : o;
+					r(this, e),
+						(this.norm = (function () {
+							var e =
+									arguments.length > 0 && void 0 !== arguments[0]
+										? arguments[0]
+										: 1,
+								t =
+									arguments.length > 1 && void 0 !== arguments[1]
+										? arguments[1]
+										: 3,
+								n = new Map(),
+								r = Math.pow(10, t);
+							return {
+								get: function (t) {
+									var i = t.match(F).length;
+									if (n.has(i)) return n.get(i);
+									var o = 1 / Math.pow(i, 0.5 * e),
+										c = parseFloat(Math.round(o * r) / r);
+									return n.set(i, c), c;
+								},
+								clear: function () {
+									n.clear();
+								},
+							};
+						})(c, 3)),
+						(this.getFn = i),
+						(this.isCreated = !1),
+						this.setIndexRecords();
+				}
+				return (
+					o(e, [
+						{
+							key: "setSources",
+							value: function () {
+								var e =
+									arguments.length > 0 && void 0 !== arguments[0]
+										? arguments[0]
+										: [];
+								this.docs = e;
+							},
+						},
+						{
+							key: "setIndexRecords",
+							value: function () {
+								var e =
+									arguments.length > 0 && void 0 !== arguments[0]
+										? arguments[0]
+										: [];
+								this.records = e;
+							},
+						},
+						{
+							key: "setKeys",
+							value: function () {
+								var e = this,
+									t =
+										arguments.length > 0 && void 0 !== arguments[0]
+											? arguments[0]
+											: [];
+								(this.keys = t),
+									(this._keysMap = {}),
+									t.forEach(function (t, n) {
+										e._keysMap[t.id] = n;
+									});
+							},
+						},
+						{
+							key: "create",
+							value: function () {
+								var e = this;
+								!this.isCreated &&
+									this.docs.length &&
+									((this.isCreated = !0),
+									m(this.docs[0])
+										? this.docs.forEach(function (t, n) {
+												e._addString(t, n);
+											})
+										: this.docs.forEach(function (t, n) {
+												e._addObject(t, n);
+											}),
+									this.norm.clear());
+							},
+						},
+						{
+							key: "add",
+							value: function (e) {
+								var t = this.size();
+								m(e) ? this._addString(e, t) : this._addObject(e, t);
+							},
+						},
+						{
+							key: "removeAt",
+							value: function (e) {
+								this.records.splice(e, 1);
+								for (var t = e, n = this.size(); t < n; t += 1)
+									this.records[t].i -= 1;
+							},
+						},
+						{
+							key: "getValueForItemAtKeyId",
+							value: function (e, t) {
+								return e[this._keysMap[t]];
+							},
+						},
+						{
+							key: "size",
+							value: function () {
+								return this.records.length;
+							},
+						},
+						{
+							key: "_addString",
+							value: function (e, t) {
+								if (x(e) && !w(e)) {
+									var n = { v: e, i: t, n: this.norm.get(e) };
+									this.records.push(n);
+								}
+							},
+						},
+						{
+							key: "_addObject",
+							value: function (e, t) {
+								var n = this,
+									r = { i: t, $: {} };
+								this.keys.forEach(function (t, i) {
+									var o = t.getFn ? t.getFn(e) : n.getFn(e, t.path);
+									if (x(o))
+										if (g(o)) {
+											for (
+												var c = [], a = [{ nestedArrIndex: -1, value: o }];
+												a.length;
+											) {
+												var s = a.pop(),
+													u = s.nestedArrIndex,
+													h = s.value;
+												if (x(h))
+													if (m(h) && !w(h)) {
+														var l = { v: h, i: u, n: n.norm.get(h) };
+														c.push(l);
+													} else
+														g(h) &&
+															h.forEach(function (e, t) {
+																a.push({ nestedArrIndex: t, value: e });
+															});
+											}
+											r.$[i] = c;
+										} else if (m(o) && !w(o)) {
+											var f = { v: o, n: n.norm.get(o) };
+											r.$[i] = f;
+										}
+								}),
+									this.records.push(r);
+							},
+						},
+						{
+							key: "toJSON",
+							value: function () {
+								return { keys: this.keys, records: this.records };
+							},
+						},
+					]),
+					e
+				);
+			})();
+		function P(e, t) {
+			var n =
+					arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : {},
+				r = n.getFn,
+				i = void 0 === r ? $.getFn : r,
+				o = n.fieldNormWeight,
+				c = void 0 === o ? $.fieldNormWeight : o,
+				a = new R({ getFn: i, fieldNormWeight: c });
+			return a.setKeys(e.map(A)), a.setSources(t), a.create(), a;
+		}
+		function N(e) {
+			var t =
+					arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : {},
+				n = t.errors,
+				r = void 0 === n ? 0 : n,
+				i = t.currentLocation,
+				o = void 0 === i ? 0 : i,
+				c = t.expectedLocation,
+				a = void 0 === c ? 0 : c,
+				s = t.distance,
+				u = void 0 === s ? $.distance : s,
+				h = t.ignoreLocation,
+				l = void 0 === h ? $.ignoreLocation : h,
+				f = r / e.length;
+			if (l) return f;
+			var d = Math.abs(a - o);
+			return u ? f + d / u : d ? 1 : f;
+		}
+		var W = 32;
+		function T(e, t, n) {
+			var r =
+					arguments.length > 3 && void 0 !== arguments[3] ? arguments[3] : {},
+				i = r.location,
+				o = void 0 === i ? $.location : i,
+				c = r.distance,
+				a = void 0 === c ? $.distance : c,
+				s = r.threshold,
+				u = void 0 === s ? $.threshold : s,
+				h = r.findAllMatches,
+				l = void 0 === h ? $.findAllMatches : h,
+				f = r.minMatchCharLength,
+				d = void 0 === f ? $.minMatchCharLength : f,
+				v = r.includeMatches,
+				g = void 0 === v ? $.includeMatches : v,
+				y = r.ignoreLocation,
+				p = void 0 === y ? $.ignoreLocation : y;
+			if (t.length > W)
+				throw new Error("Pattern length exceeds max of ".concat(W, "."));
+			for (
+				var m,
+					k = t.length,
+					M = e.length,
+					b = Math.max(0, Math.min(o, M)),
+					x = u,
+					w = b,
+					S = d > 1 || g,
+					L = S ? Array(M) : [];
+				(m = e.indexOf(t, w)) > -1;
+			) {
+				var _ = N(t, {
+					currentLocation: m,
+					expectedLocation: b,
+					distance: a,
+					ignoreLocation: p,
+				});
+				if (((x = Math.min(_, x)), (w = m + k), S))
+					for (var O = 0; O < k; ) (L[m + O] = 1), (O += 1);
+			}
+			w = -1;
+			for (
+				var j = [], A = 1, I = k + M, C = 1 << (k - 1), E = 0;
+				E < k;
+				E += 1
+			) {
+				for (var F = 0, R = I; F < R; )
+					N(t, {
+						errors: E,
+						currentLocation: b + R,
+						expectedLocation: b,
+						distance: a,
+						ignoreLocation: p,
+					}) <= x
+						? (F = R)
+						: (I = R),
+						(R = Math.floor((I - F) / 2 + F));
+				I = R;
+				var P = Math.max(1, b - R + 1),
+					T = l ? M : Math.min(b + R, M) + k,
+					z = Array(T + 2);
+				z[T + 1] = (1 << E) - 1;
+				for (var D = T; D >= P; D -= 1) {
+					var K = D - 1,
+						q = n[e.charAt(K)];
+					if (
+						(S && (L[K] = +!!q),
+						(z[D] = ((z[D + 1] << 1) | 1) & q),
+						E && (z[D] |= ((j[D + 1] | j[D]) << 1) | 1 | j[D + 1]),
+						z[D] & C &&
+							(A = N(t, {
+								errors: E,
+								currentLocation: K,
+								expectedLocation: b,
+								distance: a,
+								ignoreLocation: p,
+							})) <= x)
+					) {
+						if (((x = A), (w = K) <= b)) break;
+						P = Math.max(1, 2 * b - w);
+					}
+				}
+				if (
+					N(t, {
+						errors: E + 1,
+						currentLocation: b,
+						expectedLocation: b,
+						distance: a,
+						ignoreLocation: p,
+					}) > x
+				)
+					break;
+				j = z;
+			}
+			var B = { isMatch: w >= 0, score: Math.max(0.001, A) };
+			if (S) {
+				var J = (function () {
+					for (
+						var e =
+								arguments.length > 0 && void 0 !== arguments[0]
+									? arguments[0]
+									: [],
+							t =
+								arguments.length > 1 && void 0 !== arguments[1]
+									? arguments[1]
+									: $.minMatchCharLength,
+							n = [],
+							r = -1,
+							i = -1,
+							o = 0,
+							c = e.length;
+						o < c;
+						o += 1
+					) {
+						var a = e[o];
+						a && -1 === r
+							? (r = o)
+							: a ||
+								-1 === r ||
+								((i = o - 1) - r + 1 >= t && n.push([r, i]), (r = -1));
+					}
+					return e[o - 1] && o - r >= t && n.push([r, o - 1]), n;
+				})(L, d);
+				J.length ? g && (B.indices = J) : (B.isMatch = !1);
+			}
+			return B;
+		}
+		function z(e) {
+			for (var t = {}, n = 0, r = e.length; n < r; n += 1) {
+				var i = e.charAt(n);
+				t[i] = (t[i] || 0) | (1 << (r - n - 1));
+			}
+			return t;
+		}
+		var D = (function () {
+				function e(t) {
+					var n = this,
+						i =
+							arguments.length > 1 && void 0 !== arguments[1]
+								? arguments[1]
+								: {},
+						o = i.location,
+						c = void 0 === o ? $.location : o,
+						a = i.threshold,
+						s = void 0 === a ? $.threshold : a,
+						u = i.distance,
+						h = void 0 === u ? $.distance : u,
+						l = i.includeMatches,
+						f = void 0 === l ? $.includeMatches : l,
+						d = i.findAllMatches,
+						v = void 0 === d ? $.findAllMatches : d,
+						g = i.minMatchCharLength,
+						y = void 0 === g ? $.minMatchCharLength : g,
+						p = i.isCaseSensitive,
+						m = void 0 === p ? $.isCaseSensitive : p,
+						k = i.ignoreLocation,
+						M = void 0 === k ? $.ignoreLocation : k;
+					if (
+						(r(this, e),
+						(this.options = {
+							location: c,
+							threshold: s,
+							distance: h,
+							includeMatches: f,
+							findAllMatches: v,
+							minMatchCharLength: y,
+							isCaseSensitive: m,
+							ignoreLocation: M,
+						}),
+						(this.pattern = m ? t : t.toLowerCase()),
+						(this.chunks = []),
+						this.pattern.length)
+					) {
+						var b = function (e, t) {
+								n.chunks.push({ pattern: e, alphabet: z(e), startIndex: t });
+							},
+							x = this.pattern.length;
+						if (x > W) {
+							for (var w = 0, S = x % W, L = x - S; w < L; )
+								b(this.pattern.substr(w, W), w), (w += W);
+							if (S) {
+								var _ = x - W;
+								b(this.pattern.substr(_), _);
+							}
+						} else b(this.pattern, 0);
+					}
+				}
+				return (
+					o(e, [
+						{
+							key: "searchIn",
+							value: function (e) {
+								var t = this.options,
+									n = t.isCaseSensitive,
+									r = t.includeMatches;
+								if ((n || (e = e.toLowerCase()), this.pattern === e)) {
+									var i = { isMatch: !0, score: 0 };
+									return r && (i.indices = [[0, e.length - 1]]), i;
+								}
+								var o = this.options,
+									c = o.location,
+									a = o.distance,
+									s = o.threshold,
+									u = o.findAllMatches,
+									h = o.minMatchCharLength,
+									l = o.ignoreLocation,
+									d = [],
+									v = 0,
+									g = !1;
+								this.chunks.forEach(function (t) {
+									var n = t.pattern,
+										i = t.alphabet,
+										o = t.startIndex,
+										y = T(e, n, i, {
+											location: c + o,
+											distance: a,
+											threshold: s,
+											findAllMatches: u,
+											minMatchCharLength: h,
+											includeMatches: r,
+											ignoreLocation: l,
+										}),
+										p = y.isMatch,
+										m = y.score,
+										k = y.indices;
+									p && (g = !0),
+										(v += m),
+										p && k && (d = [].concat(f(d), f(k)));
+								});
+								var y = { isMatch: g, score: g ? v / this.chunks.length : 1 };
+								return g && r && (y.indices = d), y;
+							},
+						},
+					]),
+					e
+				);
+			})(),
+			K = (function () {
+				function e(t) {
+					r(this, e), (this.pattern = t);
+				}
+				return (
+					o(
+						e,
+						[{ key: "search", value: function () {} }],
+						[
+							{
+								key: "isMultiMatch",
+								value: function (e) {
+									return q(e, this.multiRegex);
+								},
+							},
+							{
+								key: "isSingleMatch",
+								value: function (e) {
+									return q(e, this.singleRegex);
+								},
+							},
+						],
+					),
+					e
+				);
+			})();
+		function q(e, t) {
+			var n = e.match(t);
+			return n ? n[1] : null;
+		}
+		var B = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = e === this.pattern;
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, this.pattern.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^="(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^=(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			J = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = -1 === e.indexOf(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "inverse-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^!"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^!(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			U = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = e.startsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, this.pattern.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "prefix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^\^"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^\^(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			V = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = !e.startsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "inverse-prefix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^!\^"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^!\^(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			G = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = e.endsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [e.length - this.pattern.length, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "suffix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^"(.*)"\$$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^(.*)\$$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			H = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = !e.endsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "inverse-suffix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^!"(.*)"\$$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^!(.*)\$$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			Q = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					var i,
+						o =
+							arguments.length > 1 && void 0 !== arguments[1]
+								? arguments[1]
+								: {},
+						c = o.location,
+						a = void 0 === c ? $.location : c,
+						s = o.threshold,
+						u = void 0 === s ? $.threshold : s,
+						h = o.distance,
+						l = void 0 === h ? $.distance : h,
+						f = o.includeMatches,
+						d = void 0 === f ? $.includeMatches : f,
+						v = o.findAllMatches,
+						g = void 0 === v ? $.findAllMatches : v,
+						y = o.minMatchCharLength,
+						p = void 0 === y ? $.minMatchCharLength : y,
+						m = o.isCaseSensitive,
+						k = void 0 === m ? $.isCaseSensitive : m,
+						M = o.ignoreLocation,
+						b = void 0 === M ? $.ignoreLocation : M;
+					return (
+						r(this, n),
+						((i = t.call(this, e))._bitapSearch = new D(e, {
+							location: a,
+							threshold: u,
+							distance: l,
+							includeMatches: d,
+							findAllMatches: g,
+							minMatchCharLength: p,
+							isCaseSensitive: k,
+							ignoreLocation: b,
+						})),
+						i
+					);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									return this._bitapSearch.searchIn(e);
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "fuzzy";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			X = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									for (
+										var t, n = 0, r = [], i = this.pattern.length;
+										(t = e.indexOf(this.pattern, n)) > -1;
+									)
+										(n = t + i), r.push([t, n - 1]);
+									var o = !!r.length;
+									return { isMatch: o, score: o ? 0 : 1, indices: r };
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "include";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^'"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^'(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			Y = [B, X, U, V, H, G, J, Q],
+			Z = Y.length,
+			ee = / +(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/,
+			te = new Set([Q.type, X.type]),
+			ne = (function () {
+				function e(t) {
+					var n =
+							arguments.length > 1 && void 0 !== arguments[1]
+								? arguments[1]
+								: {},
+						i = n.isCaseSensitive,
+						o = void 0 === i ? $.isCaseSensitive : i,
+						c = n.includeMatches,
+						a = void 0 === c ? $.includeMatches : c,
+						s = n.minMatchCharLength,
+						u = void 0 === s ? $.minMatchCharLength : s,
+						h = n.ignoreLocation,
+						l = void 0 === h ? $.ignoreLocation : h,
+						f = n.findAllMatches,
+						d = void 0 === f ? $.findAllMatches : f,
+						v = n.location,
+						g = void 0 === v ? $.location : v,
+						y = n.threshold,
+						p = void 0 === y ? $.threshold : y,
+						m = n.distance,
+						k = void 0 === m ? $.distance : m;
+					r(this, e),
+						(this.query = null),
+						(this.options = {
+							isCaseSensitive: o,
+							includeMatches: a,
+							minMatchCharLength: u,
+							findAllMatches: d,
+							ignoreLocation: l,
+							location: g,
+							threshold: p,
+							distance: k,
+						}),
+						(this.pattern = o ? t : t.toLowerCase()),
+						(this.query = (function (e) {
+							var t =
+								arguments.length > 1 && void 0 !== arguments[1]
+									? arguments[1]
+									: {};
+							return e.split("|").map(function (e) {
+								for (
+									var n = e
+											.trim()
+											.split(ee)
+											.filter(function (e) {
+												return e && !!e.trim();
+											}),
+										r = [],
+										i = 0,
+										o = n.length;
+									i < o;
+									i += 1
+								) {
+									for (var c = n[i], a = !1, s = -1; !a && ++s < Z; ) {
+										var u = Y[s],
+											h = u.isMultiMatch(c);
+										h && (r.push(new u(h, t)), (a = !0));
+									}
+									if (!a)
+										for (s = -1; ++s < Z; ) {
+											var l = Y[s],
+												f = l.isSingleMatch(c);
+											if (f) {
+												r.push(new l(f, t));
+												break;
+											}
+										}
+								}
+								return r;
+							});
+						})(this.pattern, this.options));
+				}
+				return (
+					o(
+						e,
+						[
+							{
+								key: "searchIn",
+								value: function (e) {
+									var t = this.query;
+									if (!t) return { isMatch: !1, score: 1 };
+									var n = this.options,
+										r = n.includeMatches;
+									e = n.isCaseSensitive ? e : e.toLowerCase();
+									for (
+										var i = 0, o = [], c = 0, a = 0, s = t.length;
+										a < s;
+										a += 1
+									) {
+										var u = t[a];
+										(o.length = 0), (i = 0);
+										for (var h = 0, l = u.length; h < l; h += 1) {
+											var d = u[h],
+												v = d.search(e),
+												g = v.isMatch,
+												y = v.indices,
+												p = v.score;
+											if (!g) {
+												(c = 0), (i = 0), (o.length = 0);
+												break;
+											}
+											if (((i += 1), (c += p), r)) {
+												var m = d.constructor.type;
+												te.has(m) ? (o = [].concat(f(o), f(y))) : o.push(y);
+											}
+										}
+										if (i) {
+											var k = { isMatch: !0, score: c / i };
+											return r && (k.indices = o), k;
+										}
+									}
+									return { isMatch: !1, score: 1 };
+								},
+							},
+						],
+						[
+							{
+								key: "condition",
+								value: function (e, t) {
+									return t.useExtendedSearch;
+								},
+							},
+						],
+					),
+					e
+				);
+			})(),
+			re = [];
+		function ie(e, t) {
+			for (var n = 0, r = re.length; n < r; n += 1) {
+				var i = re[n];
+				if (i.condition(e, t)) return new i(e, t);
+			}
+			return new D(e, t);
+		}
+		var oe = "$and",
+			ce = "$or",
+			ae = "$path",
+			se = "$val",
+			ue = function (e) {
+				return !(!e[oe] && !e[ce]);
+			},
+			he = function (e) {
+				return c(
+					{},
+					oe,
+					Object.keys(e).map(function (t) {
+						return c({}, t, e[t]);
+					}),
+				);
+			};
+		function le(e, t) {
+			var n = (
+					arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : {}
+				).auto,
+				r = void 0 === n || n;
+			return (
+				ue(e) || (e = he(e)),
+				(function e(n) {
+					var i = Object.keys(n),
+						o = (function (e) {
+							return !!e[ae];
+						})(n);
+					if (!o && i.length > 1 && !ue(n)) return e(he(n));
+					if (
+						(function (e) {
+							return !g(e) && b(e) && !ue(e);
+						})(n)
+					) {
+						var c = o ? n[ae] : i[0],
+							a = o ? n[se] : n[c];
+						if (!m(a))
+							throw new Error(
+								(function (e) {
+									return "Invalid value for key ".concat(e);
+								})(c),
+							);
+						var s = { keyId: C(c), pattern: a };
+						return r && (s.searcher = ie(a, t)), s;
+					}
+					var u = { children: [], operator: i[0] };
+					return (
+						i.forEach(function (t) {
+							var r = n[t];
+							g(r) &&
+								r.forEach(function (t) {
+									u.children.push(e(t));
+								});
+						}),
+						u
+					);
+				})(e)
+			);
+		}
+		function fe(e, t) {
+			var n = e.matches;
+			(t.matches = []),
+				x(n) &&
+					n.forEach(function (e) {
+						if (x(e.indices) && e.indices.length) {
+							var n = { indices: e.indices, value: e.value };
+							e.key && (n.key = e.key.src),
+								e.idx > -1 && (n.refIndex = e.idx),
+								t.matches.push(n);
+						}
+					});
+		}
+		function de(e, t) {
+			t.score = e.score;
+		}
+		var ve = (function () {
+			function e(n) {
+				var i =
+						arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : {},
+					o = arguments.length > 2 ? arguments[2] : void 0;
+				r(this, e),
+					(this.options = t(t({}, $), i)),
+					this.options.useExtendedSearch,
+					(this._keyStore = new j(this.options.keys)),
+					this.setCollection(n, o);
+			}
+			return (
+				o(e, [
+					{
+						key: "setCollection",
+						value: function (e, t) {
+							if (((this._docs = e), t && !(t instanceof R)))
+								throw new Error("Incorrect 'index' type");
+							this._myIndex =
+								t ||
+								P(this.options.keys, this._docs, {
+									getFn: this.options.getFn,
+									fieldNormWeight: this.options.fieldNormWeight,
+								});
+						},
+					},
+					{
+						key: "add",
+						value: function (e) {
+							x(e) && (this._docs.push(e), this._myIndex.add(e));
+						},
+					},
+					{
+						key: "remove",
+						value: function () {
+							for (
+								var e =
+										arguments.length > 0 && void 0 !== arguments[0]
+											? arguments[0]
+											: function () {
+													return !1;
+												},
+									t = [],
+									n = 0,
+									r = this._docs.length;
+								n < r;
+								n += 1
+							) {
+								var i = this._docs[n];
+								e(i, n) && (this.removeAt(n), (n -= 1), (r -= 1), t.push(i));
+							}
+							return t;
+						},
+					},
+					{
+						key: "removeAt",
+						value: function (e) {
+							this._docs.splice(e, 1), this._myIndex.removeAt(e);
+						},
+					},
+					{
+						key: "getIndex",
+						value: function () {
+							return this._myIndex;
+						},
+					},
+					{
+						key: "search",
+						value: function (e) {
+							var t = (
+									arguments.length > 1 && void 0 !== arguments[1]
+										? arguments[1]
+										: {}
+								).limit,
+								n = void 0 === t ? -1 : t,
+								r = this.options,
+								i = r.includeMatches,
+								o = r.includeScore,
+								c = r.shouldSort,
+								a = r.sortFn,
+								s = r.ignoreFieldNorm,
+								u = m(e)
+									? m(this._docs[0])
+										? this._searchStringList(e)
+										: this._searchObjectList(e)
+									: this._searchLogical(e);
+							return (
+								(function (e, t) {
+									var n = t.ignoreFieldNorm,
+										r = void 0 === n ? $.ignoreFieldNorm : n;
+									e.forEach(function (e) {
+										var t = 1;
+										e.matches.forEach(function (e) {
+											var n = e.key,
+												i = e.norm,
+												o = e.score,
+												c = n ? n.weight : null;
+											t *= Math.pow(
+												0 === o && c ? Number.EPSILON : o,
+												(c || 1) * (r ? 1 : i),
+											);
+										}),
+											(e.score = t);
+									});
+								})(u, { ignoreFieldNorm: s }),
+								c && u.sort(a),
+								k(n) && n > -1 && (u = u.slice(0, n)),
+								(function (e, t) {
+									var n =
+											arguments.length > 2 && void 0 !== arguments[2]
+												? arguments[2]
+												: {},
+										r = n.includeMatches,
+										i = void 0 === r ? $.includeMatches : r,
+										o = n.includeScore,
+										c = void 0 === o ? $.includeScore : o,
+										a = [];
+									return (
+										i && a.push(fe),
+										c && a.push(de),
+										e.map(function (e) {
+											var n = e.idx,
+												r = { item: t[n], refIndex: n };
+											return (
+												a.length &&
+													a.forEach(function (t) {
+														t(e, r);
+													}),
+												r
+											);
+										})
+									);
+								})(u, this._docs, { includeMatches: i, includeScore: o })
+							);
+						},
+					},
+					{
+						key: "_searchStringList",
+						value: function (e) {
+							var t = ie(e, this.options),
+								n = this._myIndex.records,
+								r = [];
+							return (
+								n.forEach(function (e) {
+									var n = e.v,
+										i = e.i,
+										o = e.n;
+									if (x(n)) {
+										var c = t.searchIn(n),
+											a = c.isMatch,
+											s = c.score,
+											u = c.indices;
+										a &&
+											r.push({
+												item: n,
+												idx: i,
+												matches: [{ score: s, value: n, norm: o, indices: u }],
+											});
+									}
+								}),
+								r
+							);
+						},
+					},
+					{
+						key: "_searchLogical",
+						value: function (e) {
+							var t = this,
+								n = le(e, this.options),
+								r = function e(n, r, i) {
+									if (!n.children) {
+										var o = n.keyId,
+											c = n.searcher,
+											a = t._findMatches({
+												key: t._keyStore.get(o),
+												value: t._myIndex.getValueForItemAtKeyId(r, o),
+												searcher: c,
+											});
+										return a && a.length
+											? [{ idx: i, item: r, matches: a }]
+											: [];
+									}
+									for (
+										var s = [], u = 0, h = n.children.length;
+										u < h;
+										u += 1
+									) {
+										var l = e(n.children[u], r, i);
+										if (l.length) s.push.apply(s, f(l));
+										else if (n.operator === oe) return [];
+									}
+									return s;
+								},
+								i = this._myIndex.records,
+								o = {},
+								c = [];
+							return (
+								i.forEach(function (e) {
+									var t = e.$,
+										i = e.i;
+									if (x(t)) {
+										var a = r(n, t, i);
+										a.length &&
+											(o[i] ||
+												((o[i] = { idx: i, item: t, matches: [] }),
+												c.push(o[i])),
+											a.forEach(function (e) {
+												var t,
+													n = e.matches;
+												(t = o[i].matches).push.apply(t, f(n));
+											}));
+									}
+								}),
+								c
+							);
+						},
+					},
+					{
+						key: "_searchObjectList",
+						value: function (e) {
+							var t = this,
+								n = ie(e, this.options),
+								r = this._myIndex,
+								i = r.keys,
+								o = r.records,
+								c = [];
+							return (
+								o.forEach(function (e) {
+									var r = e.$,
+										o = e.i;
+									if (x(r)) {
+										var a = [];
+										i.forEach(function (e, i) {
+											a.push.apply(
+												a,
+												f(t._findMatches({ key: e, value: r[i], searcher: n })),
+											);
+										}),
+											a.length && c.push({ idx: o, item: r, matches: a });
+									}
+								}),
+								c
+							);
+						},
+					},
+					{
+						key: "_findMatches",
+						value: function (e) {
+							var t = e.key,
+								n = e.value,
+								r = e.searcher;
+							if (!x(n)) return [];
+							var i = [];
+							if (g(n))
+								n.forEach(function (e) {
+									var n = e.v,
+										o = e.i,
+										c = e.n;
+									if (x(n)) {
+										var a = r.searchIn(n),
+											s = a.isMatch,
+											u = a.score,
+											h = a.indices;
+										s &&
+											i.push({
+												score: u,
+												key: t,
+												value: n,
+												idx: o,
+												norm: c,
+												indices: h,
+											});
+									}
+								});
+							else {
+								var o = n.v,
+									c = n.n,
+									a = r.searchIn(o),
+									s = a.isMatch,
+									u = a.score,
+									h = a.indices;
+								s &&
+									i.push({ score: u, key: t, value: o, norm: c, indices: h });
+							}
+							return i;
+						},
+					},
+				]),
+				e
+			);
+		})();
+		return (
+			(ve.version = "7.0.0"),
+			(ve.createIndex = P),
+			(ve.parseIndex = function (e) {
+				var t =
+						arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : {},
+					n = t.getFn,
+					r = void 0 === n ? $.getFn : n,
+					i = t.fieldNormWeight,
+					o = void 0 === i ? $.fieldNormWeight : i,
+					c = e.keys,
+					a = e.records,
+					s = new R({ getFn: r, fieldNormWeight: o });
+				return s.setKeys(c), s.setIndexRecords(a), s;
+			}),
+			(ve.config = $),
+			(function () {
+				re.push.apply(re, arguments);
+			})(ne),
+			ve
+		);
+	}),
+	"object" == typeof exports && "undefined" != typeof module
+		? (module.exports = t())
+		: "function" == typeof define && define.amd
+			? define(t)
+			: ((e = "undefined" != typeof globalThis ? globalThis : e || self).Fuse =
+					t());
+
+		</script>
+		<script>
+		(function () {
+			var allContent = [
+				{
+					title: "Mastering composition in web design",
+					description:
+						"Explore how composition principles can transform your web designs into captivating, user-friendly interfaces at AstroMax.",
+					pubDate: "2025-12-01T00:00:00.000Z",
+					slug: "blog/posts/1.html",
+					category: "Blog",
+				},
+				{
+					title: "Responsive grids that stay consistent",
+					description:
+						"Build grids that adapt to any screen without breaking rhythm or readability.",
+					pubDate: "2025-10-15T00:00:00.000Z",
+					slug: "blog/posts/2.html",
+					category: "Blog",
+				},
+				{
+					title: "Microcopy that actually guides action",
+					description:
+						"Write UI copy that reduces hesitation and nudges users toward confident clicks.",
+					pubDate: "2025-09-20T00:00:00.000Z",
+					slug: "blog/posts/3.html",
+					category: "Blog",
+				},
+				{
+					title: "Color systems that stay on brand",
+					description:
+						"Structure your palette so new pages feel cohesive without endless approvals.",
+					pubDate: "2025-08-05T00:00:00.000Z",
+					slug: "blog/posts/4.html",
+					category: "Blog",
+				},
+				{
+					title: "Motion that respects the user",
+					description:
+						"Use animation to clarify flow, not to decorate\u2014and keep motion accessible.",
+					pubDate: "2025-06-28T00:00:00.000Z",
+					slug: "blog/posts/5.html",
+					category: "Blog",
+				},
+				{
+					title: "Accessibility quick wins before launch",
+					description:
+						"Ship fast while covering the essentials: focus, contrast, and keyboard flow.",
+					pubDate: "2025-05-12T00:00:00.000Z",
+					slug: "blog/posts/6.html",
+					category: "Blog",
+				},
+				{
+					title: "Helio Grid \u2014 Distributed Energy Marketplace",
+					description:
+						"Brand, narrative, and web experience for a marketplace trading distributed solar.",
+					slug: "work/helio-grid.html",
+					category: "Work",
+				},
+				{
+					title: "Reverie \u2014 Brand Refresh & Web Experience",
+					description:
+						"A complete identity refresh and a new high-velocity marketing site for a fast-growing wellness brand.",
+					slug: "work/reverie.html",
+					category: "Work",
+				},
+				{
+					title: "Mesa Health \u2014 Patient Engagement Suite",
+					description:
+						"Rebuilt the patient portal and provider dashboard for a multi-clinic network.",
+					slug: "work/mesa-health.html",
+					category: "Work",
+				},
+				{
+					title: "Signal North \u2014 Logistics Visibility Platform",
+					description:
+						"Built a modular product marketing site and interactive demo for a logistics visibility startup.",
+					slug: "work/signal-north.html",
+					category: "Work",
+				},
+			];
+			window.addEventListener("load", function () {
+				var btn = document.getElementById("searchButton");
+				var modal = document.getElementById("searchModal");
+				var input = document.getElementById("searchInput");
+				var results = document.getElementById("searchResults");
+				var fuse = new Fuse(allContent, {
+					keys: ["title", "description", "category"],
+					threshold: 0.3,
+					includeMatches: true,
+				});
+				function open(e) {
+					e && e.preventDefault();
+					modal.classList.add("open");
+					document.body.style.overflow = "hidden";
+					setTimeout(function () {
+						input.focus();
+					}, 100);
+				}
+				function close() {
+					modal.classList.remove("open");
+					document.body.style.overflow = "";
+					input.value = "";
+					results.innerHTML = "";
+					results.classList.remove("visible");
+				}
+				function render(r) {
+					if (!input.value.trim()) {
+						results.innerHTML = "";
+						results.classList.remove("visible");
+						return;
+					}
+					if (!r.length) {
+						results.innerHTML =
+							'<div class="search-result-item"><h3>Nothing found.</h3></div>';
+						results.classList.add("visible");
+						return;
+					}
+					results.innerHTML = r
+						.map(function (x) {
+							var d = x.item;
+							return (
+								'<div class="search-result-item"><a href="' +
+								d.slug +
+								'" class="absolute inset-0 z-10"></a><div class="search-result-meta"><span class="search-result-category">' +
+								d.category +
+								"</span>" +
+								(d.pubDate
+									? '<span class="search-result-date">' +
+										new Date(d.pubDate).toLocaleDateString("en-US", {
+											year: "numeric",
+											month: "long",
+											day: "2-digit",
+										}) +
+										"</span>"
+									: "") +
+								'</div><div class="search-result-title">' +
+								d.title +
+								'</div><div class="search-result-desc">' +
+								d.description +
+								"</div></div>"
+							);
+						})
+						.join("");
+					results.classList.add("visible");
+				}
+				btn.addEventListener("click", open);
+				input.addEventListener("input", function (e) {
+					render(e.target.value ? fuse.search(e.target.value) : []);
+				});
+				modal.addEventListener("click", function (e) {
+					if (!e.target.closest(".search-modal-box")) close();
+				});
+				document.addEventListener("keydown", function (e) {
+					if (e.key === "Escape") close();
+				});
+			});
+		})();
+		</script>
+	</body>
+</html>

@@ -1,0 +1,193 @@
+---
+name: wayfare-expedition-journal-h86
+description: |
+  A full, multi-section marketing landing page for **Wayfare**, a boutique expedition-travel company. The aesthetic identity is "Expedition Journal" — a warm, editorial, field-notebook mood that feels like a leather-bound travel diary crossed with a modern outdoor brand. It reads as deliberate and hand-curated, with generous whitespace, confident typography, and small analog details: dotted rules, coordinate tags, stamp-like badges, and hairline dividers. The palette is aged paper (`#F4EFE6`) and espresso ink with clay/terracotta, moss/pine, and ochre/brass accents; dark sections invert to espresso with paper text. Typography pairs the high-contrast editorial serif **Fraunces** (optical sizing, italic for select words) with **Inter Tight** for body and UI, plus wide-tracked uppercase eyebrows.
+tags:
+  - "landing-page"
+  - "landing-pages"
+  - "claude-directory"
+triggers:
+  - "wayfare"
+  - "expedition"
+  - "journal"
+  - "boutique"
+  - "travel"
+  - "landing"
+  - "landing-page"
+od:
+  mode: prototype
+  platform: desktop
+  upstream: "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/wayfare-expedition-journal-h86"
+  upstream_license: MIT
+  preview:
+    type: html
+    entry: example.html
+  design_system:
+    requires: false
+  category: "landing-page"
+  scenario: "marketing"
+  example_prompt: "Build Wayfare — Expedition Journal Boutique Travel Landing Page as a self-contained responsive page in this template's own visual system. Follow the build spec in this skill exactly — palette, typography, section order, and motion are part of the identity. Ask only for the missing essentials first: brand name, real copy, and any imagery to swap in."
+---
+
+# Wayfare — Expedition Journal Boutique Travel Landing Page
+
+> Landing page vendored from the MIT-licensed `pulkitxm/claude-directory` gallery.
+
+A full, multi-section marketing landing page for **Wayfare**, a boutique expedition-travel company. The aesthetic identity is "Expedition Journal" — a warm, editorial, field-notebook mood that feels like a leather-bound travel diary crossed with a modern outdoor brand. It reads as deliberate and hand-curated, with generous whitespace, confident typography, and small analog details: dotted rules, coordinate tags, stamp-like badges, and hairline dividers. The palette is aged paper (`#F4EFE6`) and espresso ink with clay/terracotta, moss/pine, and ochre/brass accents; dark sections invert to espresso with paper text. Typography pairs the high-contrast editorial serif **Fraunces** (optical sizing, italic for select words) with **Inter Tight** for body and UI, plus wide-tracked uppercase eyebrows.
+
+## Workflow
+
+1. **Clone `example.html`** into the user's workspace as the working file.
+2. **Replace placeholder content** with the user's real brand name, headlines,
+   body copy, numbers, and imagery. Match existing image dimensions when
+   swapping assets.
+3. **Preserve the design system.** The palette, type scale, spacing rhythm, and
+   motion in the build spec below are the identity — do not substitute fonts,
+   recolour the palette, or strip decorative elements.
+4. **Extend by duplicating sections**, never by importing a layout from another
+   template. If a section is missing, design it from scratch in this template's
+   own vocabulary.
+5. **Keep motion accessible.** Every animation must stay behind
+   `prefers-reduced-motion`, as the build spec requires.
+
+## Output contract
+
+Emit between `<artifact>` tags:
+
+```
+<artifact identifier="wayfare-expedition-journal-h86" type="text/html" title="Wayfare — Expedition Journal Boutique Travel Landing Page">
+<!doctype html>
+<html>...</html>
+</artifact>
+```
+
+## Build spec
+
+The upstream prompt that produced this design, verbatim.
+
+# WAYFARE — EXPEDITION JOURNAL LANDING PAGE
+
+## AESTHETIC IDENTITY
+
+BUILD A FULL, MULTI-SECTION MARKETING LANDING PAGE FOR **"WAYFARE"**, A BOUTIQUE
+EXPEDITION-TRAVEL COMPANY. THE NAMED AESTHETIC IS **"EXPEDITION JOURNAL"** — A
+WARM, EDITORIAL, FIELD-NOTEBOOK MOOD THAT FEELS LIKE A LEATHER-BOUND TRAVEL
+DIARY CROSSED WITH A MODERN OUTDOOR BRAND. IT MUST READ AS DELIBERATE, PREMIUM,
+AND HAND-CURATED — NEVER GENERIC SAAS, NEVER STOCK-PHOTO SLOP. EVERY SECTION
+SHOULD FEEL COMPOSED, WITH GENEROUS WHITESPACE, CONFIDENT TYPOGRAPHY, AND SMALL
+ANALOG DETAILS (DOTTED RULES, COORDINATE TAGS, STAMP-LIKE BADGES, HAIRLINE
+DIVIDERS).
+
+## COLOR PALETTE
+
+- **PAPER / BASE:** WARM OFF-WHITE `#F4EFE6` (PRIMARY BACKGROUND, "AGED PAPER").
+- **INK:** NEAR-BLACK ESPRESSO `#1E1B16` (PRIMARY TEXT AND DARK SECTIONS).
+- **CLAY / TERRACOTTA ACCENT:** `#C2603A` (PRIMARY ACCENT — BADGES, KEY WORDS,
+  HOVER FILLS, ARROWS).
+- **MOSS / PINE SECONDARY:** `#3F5141` (SECONDARY ACCENT — TAGS, ICONS,
+  SUPPORTING STROKES).
+- **OCHRE / BRASS:** `#C9A24B` (TERTIARY HIGHLIGHT — STARS, SMALL FLOURISHES).
+- **MUTED INK / SUBTEXT:** `#6F665A`.
+- **HAIRLINE:** `rgba(30,27,22,0.14)`.
+- DARK SECTIONS INVERT: ESPRESSO BACKGROUND, PAPER TEXT, CLAY + OCHRE ACCENTS.
+
+## TYPOGRAPHY
+
+- **DISPLAY / HEADINGS:** A HIGH-CONTRAST EDITORIAL SERIF (USE **"Fraunces"**,
+  OPTICAL SIZING ON, WEIGHTS 400–900, WITH ITALIC AVAILABLE). HEADLINES ARE
+  LARGE, TIGHT LEADING (~1.02), WITH SELECT WORDS SET IN CLAY OR IN ITALIC.
+- **BODY / UI:** A NEUTRAL GROTESQUE (USE **"Inter Tight"**, 300–700).
+- **EYEBROWS / TAGS / META:** SMALL UPPERCASE, WIDE LETTER-SPACING (~0.22em),
+  OFTEN PREFIXED WITH A DOT OR A "—". MONO NUMERALS WHERE IT READS AS A
+  COORDINATE OR A FIELD LABEL.
+- ALL FONTS MUST BE **VENDORED LOCALLY** (SELF-HOSTED WOFF2), NOT HOTLINKED.
+
+## LAYOUT & SECTION BREAKDOWN (TOP TO BOTTOM)
+
+1. **STICKY NAV** — TRANSPARENT OVER THE HERO, TURNS TO A FROSTED PAPER BAR WITH
+   A HAIRLINE BORDER ONCE SCROLLED. LEFT: WORDMARK "WAYFARE" WITH A SMALL
+   COMPASS/STAR GLYPH. CENTER: NAV LINKS (EXPEDITIONS, FIELD GUIDES, JOURNAL,
+   ABOUT). RIGHT: A GHOST "SIGN IN" + A SOLID CLAY PILL "PLAN A TRIP". MOBILE:
+   HAMBURGER OPENING A FULL-SHEET MENU.
+
+2. **HERO** — FULL-VIEWPORT. A LARGE EDITORIAL HEADLINE LIKE "GO WHERE THE MAP
+   RUNS OUT." WITH A KEY WORD IN CLAY AND ANOTHER IN SERIF ITALIC. AN EYEBROW
+   ("— FIELD-TESTED EXPEDITIONS SINCE 2009"), A SHORT SUBPARAGRAPH, AND A DUAL
+   CTA (SOLID "PLAN A TRIP" + GHOST "WATCH THE FILM" WITH A PLAY GLYPH). A
+   COMPACT "TRIP FINDER" CARD (DESTINATION + WHEN + TRAVELERS, WITH A CLAY
+   SEARCH BUTTON) FLOATS ON PAPER. A FRAMED HERO PHOTOGRAPH (MOUNTAIN / FJORD /
+   DESERT) WITH A POLAROID-STYLE COORDINATE CAPTION TAG AND A SMALL "NOW
+   BOARDING" STAMP. SUBTLE PARALLAX ON THE PHOTO AS YOU SCROLL.
+
+3. **TRUST MARQUEE** — A LOW STRIP: "AS FEATURED IN" / PARTNER WORDMARKS IN A
+   SLOW INFINITE HORIZONTAL MARQUEE, GRAYSCALE, FADING AT BOTH EDGES VIA A MASK.
+
+4. **MANIFESTO / INTRO** — A TWO-COLUMN EDITORIAL BLOCK: LEFT A LARGE STATEMENT
+   HEADLINE ("WE DON'T SELL TRIPS. WE SET YOU LOOSE."), RIGHT A FRAMED IMAGE
+   WITH A DOTTED BORDER. BELOW, A FOUR-UP COUNT-UP STATS BAND (E.G. 64 COUNTRIES,
+   12,400 TRAVELERS, 98% RETURN, 31 GUIDES) WITH NUMBERS THAT ANIMATE ON SCROLL.
+
+5. **EXPEDITIONS GRID** — "FEATURED EXPEDITIONS". A FILTER ROW OF PILL CHIPS
+   (ALL / MOUNTAINS / COAST / DESERT / POLAR) THAT ACTUALLY FILTER A GRID OF
+   4–8 TRIP CARDS. EACH CARD: FRAMED PHOTO THAT ZOOMS ON HOVER, A REGION BADGE,
+   A SERIF TITLE, A ROUTE LINE (ORIGIN → DESTINATION), A DURATION + DIFFICULTY
+   META ROW, A PRICE, AND A "VIEW ROUTE →" LINK. ANALOG CORNER TICKS ON FRAMES.
+
+6. **HOW IT WORKS** — THREE NUMBERED STEPS (01 / 02 / 03) AS FIELD-NOTE CARDS
+   WITH ICONS: "CHOOSE YOUR LATITUDE", "WE PLOT THE ROUTE", "YOU JUST SHOW UP".
+
+7. **GUIDES** — "LED BY PEOPLE WHO LIVE THERE". FOUR PORTRAIT CARDS WITH A DARK
+   BOTTOM GRADIENT, NAME + SPECIALTY, AND A HOVER ZOOM. PREV/NEXT ARROW BUTTONS.
+
+8. **TESTIMONIAL** — A DARK ESPRESSO SECTION WITH A LARGE PULL-QUOTE IN SERIF,
+   OCHRE STARS, AND AN AVATAR + ATTRIBUTION. OPTIONAL ROTATION THROUGH 2–3
+   QUOTES VIA DOTS.
+
+9. **FINAL CTA** — A DARK ROUNDED PANEL WITH A FAINT PHOTO BACKGROUND, A BIG
+   SERIF HEADLINE ("READY WHEN YOU ARE."), AND A CLAY CTA + GHOST CTA.
+
+10. **FOOTER** — ESPRESSO, FOUR COLUMNS (BRAND BLURB + NEWSLETTER INPUT, EXPLORE,
+    COMPANY, FOLLOW), A HAIRLINE DIVIDER, COPYRIGHT, AND A LARGE GHOSTED "WAYFARE"
+    WORDMARK WATERMARK BEHIND THE COLUMNS.
+
+## MOTION / ANIMATION / INTERACTION SPEC
+
+- **SCROLL REVEALS:** ELEMENTS FADE + RISE (`opacity 0→1`, `translateY 24px→0`)
+  VIA INTERSECTIONOBSERVER, WITH STAGGERED DELAYS WITHIN A GROUP.
+- **HERO PARALLAX:** THE HERO PHOTOGRAPH AND ITS CAPTION TAG DRIFT SLOWLY ON
+  SCROLL (TRANSFORM ONLY, RAF-THROTTLED).
+- **COUNT-UP STATS:** NUMBERS TICK FROM 0 TO TARGET WHEN THE STATS BAND ENTERS.
+- **FILTERABLE GRID:** CLICKING A CHIP FILTERS CARDS WITH A SMOOTH FADE/SCALE
+  TRANSITION; ACTIVE CHIP FILLS CLAY.
+- **MARQUEE:** CONTINUOUS, PAUSES ON HOVER.
+- **NAV:** BACKGROUND + SHADOW APPEAR AFTER ~40px SCROLL.
+- **HOVERS:** PHOTO ZOOMS, LINK ARROWS SLIDE, BUTTONS LIFT. RESPECT
+  `prefers-reduced-motion` BY DISABLING NON-ESSENTIAL MOTION.
+
+## RESPONSIVE BEHAVIOR
+
+- DESKTOP: MULTI-COLUMN GRIDS (HERO SPLIT, 4-UP CARD GRIDS, 4-UP STATS).
+- TABLET: COLLAPSE TO 2 COLUMNS.
+- MOBILE: SINGLE COLUMN, STACKED HERO WITH THE TRIP-FINDER CARD BELOW THE COPY,
+  HAMBURGER MENU, AND COMFORTABLE TAP TARGETS. NO HORIZONTAL OVERFLOW.
+
+## TECH & ASSETS
+
+- PURE **HTML + CSS + VANILLA JS** (NO BUILD STEP REQUIRED), RUNNABLE AS A
+  STATIC SITE.
+- **ALL ASSETS VENDORED LOCALLY**: SELF-HOSTED WOFF2 FONTS AND ALL PHOTOGRAPHY
+  DOWNLOADED INTO AN `assets/` FOLDER AND REFERENCED BY RELATIVE PATH. NO CDN
+  HOTLINKS. THE PROJECT MUST RUN FULLY OFFLINE.
+- ACCESSIBLE: SEMANTIC LANDMARKS, ALT TEXT, KEYBOARD-FOCUSABLE CONTROLS, VISIBLE
+  FOCUS RINGS.
+
+## Source & license
+
+Vendored from MIT-licensed
+[`pulkitxm/claude-directory`](https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/wayfare-expedition-journal-h86).
+The upstream MIT licence text ships in this template at [`LICENSE`](./LICENSE) and
+must be redistributed alongside any copy of `example.html` or `assets/`.
+
+Webfonts and full-resolution imagery are **not** vendored: local `@font-face`
+rules are served from the Google Fonts CDN and referenced images are
+downscaled. Fetch the upstream folder for the original assets.

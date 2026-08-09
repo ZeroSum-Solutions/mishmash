@@ -1,0 +1,16 @@
+{
+  "slug": "almond-hours-h65",
+  "name": "Almond Hours — Warm Clinical Editorial Senior-Living Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Jakarta",
+    "Inter",
+    "InterTight",
+    "Instrument"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/almond-hours-h65",
+  "source_license": "MIT"
+}

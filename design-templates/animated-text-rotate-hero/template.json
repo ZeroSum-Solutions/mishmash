@@ -1,0 +1,15 @@
+{
+  "slug": "animated-text-rotate-hero",
+  "name": "Animated Text Rotate Hero — shadcn/ui Rotating Headline Component",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [
+    "Space Grotesk",
+    "Inter",
+    "JetBrains Mono"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/animated-text-rotate-hero",
+  "source_license": "MIT"
+}

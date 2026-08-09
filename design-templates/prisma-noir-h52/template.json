@@ -1,0 +1,14 @@
+{
+  "slug": "prisma-noir-h52",
+  "name": "Prisma Noir — Spectral Darkroom Creative Director Hero Section",
+  "family": "hero-sections",
+  "kind": "static",
+  "cdn_fonts": [
+    "Manrope",
+    "Titillium Web"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/prisma-noir-h52",
+  "source_license": "MIT"
+}

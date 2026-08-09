@@ -1,0 +1,16 @@
+{
+  "slug": "azimuth-realty-engine-h36",
+  "name": "Azimuth — Real Estate Marketing Agency Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Bricolage Grotesque",
+    "Inter Tight",
+    "JetBrains Mono",
+    "Playfair Display"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/azimuth-realty-engine-h36",
+  "source_license": "MIT"
+}

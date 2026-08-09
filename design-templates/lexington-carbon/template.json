@@ -1,0 +1,14 @@
+{
+  "slug": "carbon",
+  "name": "Carbon: Design Directory & Website Showcase Template Clone",
+  "family": "lexingtonthemes",
+  "kind": "multipage",
+  "cdn_fonts": [
+    "InterVariable",
+    "Hedvig Letters Serif"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/templates/premium/lexingtonthemes/carbon",
+  "source_license": "MIT"
+}

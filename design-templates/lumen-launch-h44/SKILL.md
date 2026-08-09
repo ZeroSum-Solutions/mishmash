@@ -1,0 +1,220 @@
+---
+name: lumen-launch-h44
+description: |
+  A full, multi-section, responsive landing page for Lumen Launch, a fictional AI SaaS product that turns one screen recording into a full product launch. The page uses the "Periwinkle Aurora" design language — a bright, optimistic modern-SaaS aesthetic built on crisp white paper washed with soft lavender-and-periwinkle aurora gradients, oversized display type, and a single dark "product theatre" section for dramatic contrast. The recurring motif is a large, soft, blurred aurora blob floating behind the hero product mockup — a CSS/SVG browser-chrome dashboard with a video preview card, AI-processing pulse badge, progress bar, language chips, and a 3-step pipeline timeline, all built from HTML + CSS + inline SVG. Sections continue through a logo marquee, a three-step "how it works" row with animated illustrated step cards, alternating feature rows, a dark infinite-scrolling testimonial theatre, a pricing section with a working monthly/yearly toggle, an FAQ accordion, and a CTA band + footer. Motion is vanilla JS respecting `prefers-reduced-motion`. Typography pairs Outfit (display) with DM Sans (body), both vendored locally.
+tags:
+  - "landing-page"
+  - "landing-pages"
+  - "claude-directory"
+triggers:
+  - "lumen launch"
+  - "lumen"
+  - "launch"
+  - "saas"
+  - "product"
+  - "landing"
+  - "landing-page"
+od:
+  mode: prototype
+  platform: desktop
+  upstream: "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/lumen-launch-h44"
+  upstream_license: MIT
+  preview:
+    type: html
+    entry: example.html
+  design_system:
+    requires: false
+  category: "landing-page"
+  scenario: "marketing"
+  example_prompt: "Build Lumen Launch — AI SaaS Product Launch Landing Page as a self-contained responsive page in this template's own visual system. Follow the build spec in this skill exactly — palette, typography, section order, and motion are part of the identity. Ask only for the missing essentials first: brand name, real copy, and any imagery to swap in."
+---
+
+# Lumen Launch — AI SaaS Product Launch Landing Page
+
+> Landing page vendored from the MIT-licensed `pulkitxm/claude-directory` gallery.
+
+A full, multi-section, responsive landing page for Lumen Launch, a fictional AI SaaS product that turns one screen recording into a full product launch. The page uses the "Periwinkle Aurora" design language — a bright, optimistic modern-SaaS aesthetic built on crisp white paper washed with soft lavender-and-periwinkle aurora gradients, oversized display type, and a single dark "product theatre" section for dramatic contrast. The recurring motif is a large, soft, blurred aurora blob floating behind the hero product mockup — a CSS/SVG browser-chrome dashboard with a video preview card, AI-processing pulse badge, progress bar, language chips, and a 3-step pipeline timeline, all built from HTML + CSS + inline SVG. Sections continue through a logo marquee, a three-step "how it works" row with animated illustrated step cards, alternating feature rows, a dark infinite-scrolling testimonial theatre, a pricing section with a working monthly/yearly toggle, an FAQ accordion, and a CTA band + footer. Motion is vanilla JS respecting `prefers-reduced-motion`. Typography pairs Outfit (display) with DM Sans (body), both vendored locally.
+
+## Workflow
+
+1. **Clone `example.html`** into the user's workspace as the working file.
+2. **Replace placeholder content** with the user's real brand name, headlines,
+   body copy, numbers, and imagery. Match existing image dimensions when
+   swapping assets.
+3. **Preserve the design system.** The palette, type scale, spacing rhythm, and
+   motion in the build spec below are the identity — do not substitute fonts,
+   recolour the palette, or strip decorative elements.
+4. **Extend by duplicating sections**, never by importing a layout from another
+   template. If a section is missing, design it from scratch in this template's
+   own vocabulary.
+5. **Keep motion accessible.** Every animation must stay behind
+   `prefers-reduced-motion`, as the build spec requires.
+
+## Output contract
+
+Emit between `<artifact>` tags:
+
+```
+<artifact identifier="lumen-launch-h44" type="text/html" title="Lumen Launch — AI SaaS Product Launch Landing Page">
+<!doctype html>
+<html>...</html>
+</artifact>
+```
+
+## Build spec
+
+The upstream prompt that produced this design, verbatim.
+
+# LUMEN LAUNCH — "PERIWINKLE AURORA" AI PRODUCT-LAUNCH PLATFORM LANDING PAGE
+
+## NAMED AESTHETIC IDENTITY
+
+BUILD A FULL, MULTI-SECTION, FULLY RESPONSIVE MARKETING LANDING PAGE FOR A
+FICTIONAL AI SAAS PRODUCT NAMED **LUMEN LAUNCH** — "TURN ONE SCREEN RECORDING
+INTO A FULL PRODUCT LAUNCH." THE NAMED DESIGN LANGUAGE IS **"PERIWINKLE
+AURORA"**: A BRIGHT, OPTIMISTIC, MODERN-SAAS AESTHETIC THAT FEELS LIKE A
+PRODUCT-LED STARTUP AT ITS SERIES-A MOMENT — CRISP WHITE PAPER WASHED WITH SOFT
+LAVENDER-AND-PERIWINKLE AURORA GRADIENTS, CONFIDENT OVERSIZED DISPLAY
+TYPOGRAPHY, AND A SINGLE DARK "PRODUCT THEATRE" SECTION FOR DRAMATIC CONTRAST.
+THE MOOD IS POLISHED, FRIENDLY, AND TRUSTWORTHY — NOT GENERIC AI-SLOP. EVERY
+SECTION SHOULD LOOK INTENTIONALLY ART-DIRECTED, WITH GENEROUS WHITESPACE,
+HAIRLINE BORDERS, ROUNDED CARDS, AND ONE RECURRING AURORA-BLUR MOTIF THAT TIES
+THE WHOLE PAGE TOGETHER.
+
+## COLOR PALETTE (EXACT)
+
+- BACKGROUND BASE WHITE: `#FFFFFF`
+- WARM PAPER TINT (HERO BOTTOM FADE): `#FFFBF3` BLENDING INTO `#FCEFEF`
+- SURFACE (ALTERNATING SECTIONS): `#FBFAF9`
+- BRAND PRIMARY (PERIWINKLE): `#92A0E1`
+- BRAND SECONDARY (LAVENDER): `#C2A0E1`
+- AURORA GRADIENT STOPS: `#C2A0E1`, `#92A0E1`, `#A8B5F0`, `#D4C5F0`
+- INK / NEAR-BLACK FOR DARK SECTION + PRIMARY TEXT: `#111111` / TRUE BLACK `#000000`
+- BODY TEXT: `#525252`; MUTED TEXT: `#4F5465`
+- HAIRLINE BORDER LIGHT: `#EBEBEB`; BORDER DARK: `#454545`
+- SUCCESS GREEN ACCENT (DASHBOARD MOCK): `#4ADE80`
+
+THE SIGNATURE MOTIF IS A LARGE, SOFT, BLURRED AURORA BLOB:
+`LINEAR-GRADIENT(-78deg, #C2A0E1CC, #92A0E1CC, #A8B5F0CC, #D4C5F0CC)` WITH
+`FILTER: BLUR(100PX)`, ROTATED ~-12deg, SITTING BEHIND THE HERO PRODUCT IMAGE.
+
+## TYPOGRAPHY
+
+- DISPLAY / HEADINGS: **OUTFIT** (WEIGHTS 300–800), USED AT LARGE SIZES WITH
+  VERY TIGHT LETTER-SPACING (`-0.05em` ON THE HERO H1). HEADLINES SET IN NORMAL
+  WEIGHT, NOT BOLD, WITH ONE ITALIC PERIWINKLE-COLORED PHRASE FOR EMPHASIS.
+- BODY: **DM SANS** (300–600), RELAXED LINE-HEIGHT, ANTIALIASED.
+- LABELS / EYEBROWS / DASHBOARD CHROME: A MONOSPACE STACK (GEIST MONO /
+  MONOSPACE), UPPERCASE, WIDE TRACKING, SMALL.
+- HERO H1 SCALES `text-6xl → md:text-7xl → lg:text-8xl`, LEADING NONE.
+
+## LAYOUT & SECTION BREAKDOWN (TOP TO BOTTOM)
+
+1. **FIXED HEADER** — TRANSLUCENT FROSTED BAR (`rgba(247,249,252,0.64)` +
+   `backdrop-blur(10px)`, HAIRLINE BOTTOM BORDER). LEFT: ROCKET WORDMARK
+   "LUMEN LAUNCH". CENTER (DESKTOP): TEXT NAV — FEATURES, HOW IT WORKS, STORIES,
+   PRICING. RIGHT: A SOLID INK "GET STARTED" PILL. MOBILE: AN ANIMATED
+   HAMBURGER THAT MORPHS INTO AN X AND SLIDES A FULL-WIDTH MENU DOWN.
+
+2. **HERO** — TOP PADDING CLEARS THE FIXED HEADER. CENTERED COMPOSITION:
+   - A SMALL PILL ANNOUNCEMENT BADGE ("🎉 ANNOUNCING OUR $4M SEED ROUND →")
+     ON A 20%-OPACITY PERIWINKLE FILL, HOVER-SCALES.
+   - A HUGE H1: "TURN SCREEN RECORDINGS INTO *VIRAL LAUNCHES*" WITH THE LAST
+     TWO WORDS IN ITALIC PERIWINKLE.
+   - A ONE-PARAGRAPH SUBHEAD, MAX-WIDTH ~640PX, CENTERED.
+   - TWO CTAS SIDE BY SIDE: SOLID INK "GET STARTED FOR FREE" + GHOST "TALK TO
+     US →".
+   - A LARGE PRODUCT MOCKUP: A BROWSER-CHROME FRAME (TRAFFIC-LIGHT DOTS + A
+     FAKE URL BAR) WRAPPING A DARK DASHBOARD UI MADE PURELY OF DIVS — A VIDEO
+     PREVIEW CARD WITH A "AI PROCESSING" PULSE BADGE AND A 75% PROGRESS BAR,
+     SIDEBAR STAT TILES ("47 GENERATED CONTENT +12 TODAY", LANGUAGE CHIPS
+     EN/ES/FR/+47), AND A 3-STEP PIPELINE TIMELINE (SCRIPT GENERATION COMPLETE,
+     VOICEOVER SYNTHESIS IN PROGRESS, VIDEO RENDERING PENDING). THE WHOLE
+     MOCKUP SITS ON A GLASSY WHITE TRAY WITH A SOFT MEDIUM SHADOW, FLOATING
+     ABOVE THE BLURRED AURORA BLOB.
+
+3. **LOGO MARQUEE** — AN INFINITE LEFT-SCROLLING ROW OF RECOGNIZABLE BRAND
+   MARKS (MICROSOFT, GOOGLE, AMAZON, SALESFORCE, ADOBE, SHOPIFY, STRIPE)
+   RENDERED AS INLINE SVG, EDGE-MASKED WITH A TRANSPARENT-TO-OPAQUE LINEAR MASK
+   ON BOTH SIDES. DUPLICATE THE TRACK FOR A SEAMLESS LOOP.
+
+4. **HOW IT WORKS** — MONO EYEBROW + LARGE OUTFIT H2 ("GO FROM ROUGH RECORDING
+   TO PROFESSIONAL VIDEO IN MINUTES"). THREE STEP CARDS IN A RESPONSIVE GRID,
+   EACH WITH A SQUARE AURORA-GRADIENT TILE CONTAINING A MINIATURE ANIMATED
+   ILLUSTRATION BUILT FROM DIVS/SVG (STEP 1: A BROWSER WINDOW WITH A LIVE "REC"
+   BADGE + FLOATING CURSOR/CLICK RIPPLE; STEP 2: AN "AI PROCESSING" CARD WITH A
+   CHECKLIST OF PIPELINE STEPS + FLOATING SPARKLES; STEP 3: A "SHARE / EXPORT"
+   CARD WITH MULTI-PLATFORM CHIPS). BELOW EACH TILE: A "STEP N" MONO LABEL, A
+   MONO H3, AND A SHORT DESCRIPTION.
+
+5. **FEATURES** — ON THE `#FBFAF9` SURFACE. ALTERNATING TWO-COLUMN ROWS (TEXT
+   LEFT / VISUAL RIGHT, THEN MIRRORED) FOR FOUR CAPABILITIES: AI VIDEO
+   GENERATION, 50+ LANGUAGE LOCALIZATION, ONE-CLICK MARKETING COPY, AND
+   ANALYTICS. EACH VISUAL IS AN ABSTRACT DIV/SVG COMPOSITION ON AN AURORA TILE
+   WITH A FROSTED CARD FLOATING OVER IT. HEADINGS ARE LARGE OUTFIT, NORMAL
+   WEIGHT, TIGHT TRACKING.
+
+6. **TESTIMONIALS / PRODUCT THEATRE** — THE ONE DARK SECTION:
+   NEAR-BLACK BACKGROUND, WHITE TEXT, FOR DRAMATIC CONTRAST. A LARGE CENTERED
+   STATEMENT HEADLINE, THEN AN INFINITE-SCROLLING ROW (OR TWO OFFSET ROWS) OF
+   QUOTE CARDS WITH SUBTLE BORDERS, EACH WITH AN AVATAR MONOGRAM, NAME, ROLE,
+   AND A SHORT TESTIMONIAL. AURORA GLOW SHOULD BLEED SUBTLY INTO THE DARKNESS.
+
+7. **PRICING** — BACK ON LIGHT SURFACE. MONO EYEBROW + H2 + A MONTHLY/YEARLY
+   TOGGLE. THREE PLAN CARDS (STARTER, PRO [HIGHLIGHTED WITH AN AURORA BORDER +
+   "MOST POPULAR" BADGE], SCALE), EACH WITH PRICE, FEATURE CHECKLIST (CHECK
+   ICONS), AND A CTA. THE TOGGLE ACTUALLY SWAPS THE DISPLAYED PRICES.
+
+8. **FAQ** — ACCORDION OF 5–6 QUESTIONS THAT EXPAND/COLLAPSE WITH A SMOOTH
+   HEIGHT TRANSITION AND A ROTATING CHEVRON.
+
+9. **CTA BAND + FOOTER** — A FINAL FULL-WIDTH AURORA-GRADIENT CTA CARD
+   ("READY TO LAUNCH 10× FASTER?"), THEN A MULTI-COLUMN FOOTER (PRODUCT,
+   COMPANY, RESOURCES, LEGAL) WITH THE WORDMARK, A SHORT BLURB, SOCIAL ICONS,
+   AND A COPYRIGHT LINE.
+
+## MOTION / ANIMATION / INTERACTION SPEC
+
+- **SCROLL REVEALS**: SECTIONS AND CARDS FADE-UP (OPACITY 0→1, TRANSLATEY
+  30PX→0) VIA AN INTERSECTIONOBSERVER WHEN THEY ENTER THE VIEWPORT, WITH SMALL
+  STAGGERS.
+- **MARQUEES**: LOGO ROW AND TESTIMONIAL ROW SCROLL INFINITELY VIA A CSS
+  `translateX(0 → -50%)` KEYFRAME ON A DUPLICATED TRACK; PAUSE ON HOVER.
+- **FLOAT**: SPARKLES, CURSORS, AND BADGES IN THE ILLUSTRATIONS GENTLY BOB WITH
+  A `translateY` FLOAT KEYFRAME AT VARIED DURATIONS/DELAYS.
+- **PULSE**: "AI PROCESSING" BADGES, REC DOTS, AND ACTIVE TIMELINE DOTS PULSE.
+- **PRICING TOGGLE**: SWITCHING MONTHLY/YEARLY ANIMATES THE KNOB AND UPDATES
+  PRICES (YEARLY ~20% CHEAPER, WITH A "SAVE 20%" HINT).
+- **FAQ ACCORDION**: SMOOTH MAX-HEIGHT TRANSITION + CHEVRON ROTATE.
+- **HOVER**: BUTTONS LIFT (`-translate-y-0.5`) AND GAIN A SOFT SHADOW; PILLS
+  SCALE 1.05.
+- RESPECT `prefers-reduced-motion` BY DISABLING NON-ESSENTIAL MOTION.
+
+## RESPONSIVE BEHAVIOR
+
+- MOBILE-FIRST. HERO TYPE STEPS DOWN GRACEFULLY; CTAS STACK FULL-WIDTH.
+- GRIDS COLLAPSE: 3-UP → 1-UP (HOW IT WORKS), 2-COL FEATURE ROWS → STACKED,
+  3-UP PRICING → 1-UP.
+- DESKTOP NAV HIDES BEHIND THE ANIMATED HAMBURGER + SLIDE-DOWN MENU UNDER ~768PX.
+- NOTHING OVERFLOWS HORIZONTALLY; THE AURORA BLOB AND MARQUEES ARE CLIPPED.
+
+## TECH & DELIVERY CONSTRAINTS
+
+- SHIP A SINGLE SELF-CONTAINED, RUNNABLE PROJECT (STATIC HTML/CSS/JS IS FINE).
+- VENDOR ALL ASSETS LOCALLY — SELF-HOST THE OUTFIT AND DM SANS FONT FILES AND
+  REFERENCE THEM WITH RELATIVE PATHS; DO NOT HOTLINK GOOGLE FONTS OR ANY CDN AT
+  RUNTIME. BRAND LOGOS ARE INLINE SVG. NO EXTERNAL IMAGE HOTLINKS.
+- ALL DEVICE/DASHBOARD/ILLUSTRATION VISUALS ARE BUILT FROM HTML + CSS + INLINE
+  SVG — NO SCREENSHOTS OR STOCK IMAGERY.
+- THE PAGE MUST RUN FULLY OFFLINE AFTER CLONE.
+
+## Source & license
+
+Vendored from MIT-licensed
+[`pulkitxm/claude-directory`](https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/lumen-launch-h44).
+The upstream MIT licence text ships in this template at [`LICENSE`](./LICENSE) and
+must be redistributed alongside any copy of `example.html` or `assets/`.
+
+Webfonts and full-resolution imagery are **not** vendored: local `@font-face`
+rules are served from the Google Fonts CDN and referenced images are
+downscaled. Fetch the upstream folder for the original assets.

@@ -1,0 +1,134 @@
+---
+name: snip-and-snout-grooming-h18
+description: |
+  A multi-section landing page for Snip & Snout, a fictional premium pet-grooming studio. The named design language is "Brutalist Kennel Club" — a loud, confident neo-brutalist poster aesthetic crossed with a high-end barbershop: thick ink-black outlines, hard zero-blur offset "brutal" shadows, and crisp 90-degree corners, with one signature playful twist — an oversized rounded "quarter-pipe" corner on the hero photo panel.
+tags:
+  - "landing-page"
+  - "landing-pages"
+  - "claude-directory"
+triggers:
+  - "snip & snout"
+  - "snip"
+  - "snout"
+  - "neo-brutalist"
+  - "pet"
+  - "grooming"
+  - "studio"
+  - "landing"
+  - "landing-page"
+od:
+  mode: prototype
+  platform: desktop
+  upstream: "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/snip-and-snout-grooming-h18"
+  upstream_license: MIT
+  preview:
+    type: html
+    entry: example.html
+  design_system:
+    requires: false
+  category: "landing-page"
+  scenario: "marketing"
+  example_prompt: "Build Snip & Snout — Neo-Brutalist Pet Grooming Studio Landing Page as a self-contained responsive page in this template's own visual system. Follow the build spec in this skill exactly — palette, typography, section order, and motion are part of the identity. Ask only for the missing essentials first: brand name, real copy, and any imagery to swap in."
+---
+
+# Snip & Snout — Neo-Brutalist Pet Grooming Studio Landing Page
+
+> Landing page vendored from the MIT-licensed `pulkitxm/claude-directory` gallery.
+
+A multi-section landing page for Snip & Snout, a fictional premium pet-grooming studio. The named design language is "Brutalist Kennel Club" — a loud, confident neo-brutalist poster aesthetic crossed with a high-end barbershop: thick ink-black outlines, hard zero-blur offset "brutal" shadows, and crisp 90-degree corners, with one signature playful twist — an oversized rounded "quarter-pipe" corner on the hero photo panel.
+
+## Workflow
+
+1. **Clone `example.html`** into the user's workspace as the working file.
+2. **Replace placeholder content** with the user's real brand name, headlines,
+   body copy, numbers, and imagery. Match existing image dimensions when
+   swapping assets.
+3. **Preserve the design system.** The palette, type scale, spacing rhythm, and
+   motion in the build spec below are the identity — do not substitute fonts,
+   recolour the palette, or strip decorative elements.
+4. **Extend by duplicating sections**, never by importing a layout from another
+   template. If a section is missing, design it from scratch in this template's
+   own vocabulary.
+5. **Keep motion accessible.** Every animation must stay behind
+   `prefers-reduced-motion`, as the build spec requires.
+
+## Output contract
+
+Emit between `<artifact>` tags:
+
+```
+<artifact identifier="snip-and-snout-grooming-h18" type="text/html" title="Snip & Snout — Neo-Brutalist Pet Grooming Studio Landing Page">
+<!doctype html>
+<html>...</html>
+</artifact>
+```
+
+## Build spec
+
+The upstream prompt that produced this design, verbatim.
+
+# SNIP & SNOUT — NEO-BRUTALIST PET GROOMING STUDIO LANDING PAGE
+
+BUILD A FULL, MULTI-SECTION, FULLY RESPONSIVE MARKETING LANDING PAGE FOR A FICTIONAL PREMIUM PET-GROOMING STUDIO NAMED **SNIP & SNOUT** — "THE SHARPEST CUTS FOR THE BEST GOOD BOYS AND GIRLS." THE NAMED DESIGN LANGUAGE IS **"BRUTALIST KENNEL CLUB"**: A LOUD, CONFIDENT, NEO-BRUTALIST POSTER AESTHETIC THAT FEELS LIKE A RISOGRAPH PET-SHOW NOTICE BOARD CROSSED WITH A HIGH-END BARBERSHOP. EVERYTHING IS HARD-EDGED AND UNAPOLOGETICALLY TYPOGRAPHIC, BUT WITH ONE SIGNATURE PLAYFUL TWIST: A SINGLE OVERSIZED ROUNDED "QUARTER-PIPE" CORNER ON THE HERO IMAGE PANEL. THE MOOD IS FRIENDLY, PROFESSIONAL, AND A LITTLE BIT PUNK.
+
+## DESIGN LANGUAGE & MOOD
+
+- NEO-BRUTALISM DONE WARMLY: THICK INK-BLACK OUTLINES (1.5PX–3PX) ON EVERY CARD, BUTTON, INPUT, AND IMAGE; HARD OFFSET "BRUTAL" DROP SHADOWS WITH SOLID INK FILL AND ZERO BLUR (DEFAULT 8PX 8PX); ALMOST EVERY CORNER IS A CRISP 90-DEGREE ANGLE.
+- THE ONE EXCEPTION — A SIGNATURE OVERSIZED ROUNDED CORNER (BOTTOM-LEFT, RADIUS ~340PX) ON THE HERO PHOTO PANEL, READING LIKE A FRIENDLY SCOOP CARVED OUT OF AN OTHERWISE RIGID GRID.
+- INTERACTIONS PUSH/PULL THE BRUTAL SHADOW: ON HOVER, BUTTONS AND CARDS TRANSLATE TOWARD THE SHADOW (+2PX, +2PX) AND THE SHADOW COLLAPSES TO ZERO, GIVING A SATISFYING "PRESS" FEEL.
+- NO GENERIC-AI-SLOP: NO PURPLE GRADIENTS, NO GLASSMORPHISM, NO SOFT BLURRED SHADOWS, NO PURE-WHITE FLOATING CARDS WITHOUT BORDERS.
+
+## COLOR PALETTE
+
+- INK / CHARCOAL: `#211E1B` (PRIMARY TEXT, BORDERS, SHADOWS, DARK PANELS).
+- PAPER / BACKGROUND: `#F6F1E7` (WARM OFF-WHITE PAGE BACKGROUND).
+- SURFACE WHITE: `#FFFFFF` (CARD FILL).
+- TEAL ACCENT: `#15B5A6` (PRIMARY POP — PRICES, HIGHLIGHTS, ACTIVE CARD).
+- CORAL ACCENT: `#FF6B5E` (SECONDARY POP — BADGES, ACCENTS, HOVER STATES).
+- MUSTARD ACCENT: `#F2B705` (TERTIARY POP — STARS, DETAILS, STAT TILES).
+- SECONDARY TEXT: `#6F6A60` (MUTED COPY ON PAPER).
+
+## TYPOGRAPHY
+
+- DISPLAY: A HEAVY, WIDE, CONDENSED-FREE GROTESQUE FOR ALL HEADLINES, LABELS, BUTTONS, AND PRICES — USE **ARCHIVO** (WEIGHTS 700/800/900) WITH TIGHT TRACKING AND UPPERCASE; HEADLINES SET IN BLACK 900 WITH LINE-HEIGHT NEAR 0.92.
+- BODY: A FRIENDLY HUMANIST SANS — USE **PLUS JAKARTA SANS** (WEIGHTS 400/500/600/700) FOR PARAGRAPHS AND TESTIMONIAL COPY, WITH OCCASIONAL ITALIC FOR PERSONALITY.
+- HERO HEADLINE IS HUGE (CLAMP UP TO ~92PX ON DESKTOP), UPPERCASE, WITH KEY WORDS HIGHLIGHTED IN TEAL AND CORAL.
+
+## LAYOUT & SECTION BREAKDOWN (TOP TO BOTTOM)
+
+1. **STICKY HEADER**: PAPER BACKGROUND WITH A BOTTOM INK BORDER. LEFT: WORDMARK "SNIP & SNOUT" IN ARCHIVO BLACK WITH A SMALL CORAL SCISSORS GLYPH. CENTER (DESKTOP): NAV LINKS (SERVICES, REVIEWS, BOOK). RIGHT: A BRUTAL "BOOK NOW" PILL/BLOCK BUTTON (INK FILL, WHITE TEXT, BRUTAL SHADOW). MOBILE: HAMBURGER OPENS A FULL-SCREEN INK OVERLAY MENU.
+2. **HERO**: A SINGLE BIG OUTLINED CONTAINER (THICK INK BORDER + BRUTAL SHADOW) SPLIT INTO TWO COLUMNS. LEFT COLUMN (CENTERED, ON WHITE): A SMALL TEAL "PILL BADGE" READING "PROFESSIONAL PET STYLING", THEN THE HUGE UPPERCASE HEADLINE ("THE SHARPEST **CUTS** FOR THE BEST **PETS**."), A SHORT SUPPORTING PARAGRAPH, AND TWO CTAS (PRIMARY INK "BOOK APPOINTMENT", SECONDARY OUTLINE "SEE SERVICES"). RIGHT COLUMN: AN INK PANEL HOLDING A FULL-BLEED GROOMING PHOTO WITH THE SIGNATURE OVERSIZED ROUNDED BOTTOM-LEFT CORNER; A SMALL FLOATING "RATING" STICKER CARD OVERLAPS THE PHOTO (CORAL, ROTATED A FEW DEGREES, BRUTAL SHADOW).
+3. **MARQUEE STRIP**: A THIN INK BAR THAT SCROLLS A REPEATING LINE OF SERVICE WORDS / EMOJI ("FULL GROOM ✦ NAIL TRIM ✦ DESHED ✦ BLOWOUT ✦ SPA DAY ✦") IN PAPER-COLORED ARCHIVO, LOOPING INFINITELY.
+4. **STATS ROW**: 3–4 BRUTAL STAT TILES IN ALTERNATING ACCENT COLORS (E.G. 12K HAPPY PETS, 4.9 RATING, 8 MASTER GROOMERS, 100% TAIL WAGS) — BIG NUMBER IN ARCHIVO BLACK, SMALL LABEL BELOW.
+5. **SERVICES "CARD DECK"**: SECTION TITLE "OUR CORE SERVICES" WITH A SHORT ITALIC SUBTITLE. THREE SERVICE CARDS LAID OUT LIKE A FANNED DECK ON DESKTOP — EACH CARD SLIGHTLY ROTATED AND OVERLAPPING; THE CENTER CARD IS THE INK "HERO" CARD (DARK FILL, WHITE TEXT). EACH CARD: A BORDERED PHOTO, AN UPPERCASE TITLE, A SHORT DESCRIPTION, A TEAL "FROM $XX" PRICE, AND A "DETAILS" UNDERLINE LINK. ON HOVER A CARD STRAIGHTENS (ROTATE 0), LIFTS, RAISES Z-INDEX, AND SCALES SLIGHTLY. ON MOBILE THE DECK STACKS VERTICALLY WITH NO ROTATION.
+6. **TESTIMONIALS — TWO INFINITE ROWS**: SECTION TITLE "THE PACK SPEAKS". TWO HORIZONTAL ROWS OF REVIEW CARDS THAT AUTO-SCROLL IN OPPOSITE DIRECTIONS (ROW 1 LEFT, ROW 2 RIGHT), PAUSING ON HOVER. EACH CARD IS A BRUTAL OUTLINED TILE (ALTERNATING WHITE / TEAL-TINT FILL) WITH MUSTARD STAR ICONS, AN ITALIC QUOTE, AND AN ARCHIVO "NAME & PET" ATTRIBUTION.
+7. **BOOKING CTA**: A FULL-WIDTH INK SECTION WITH A GIANT HEADLINE ("READY FOR A **GLOW UP?**") AND A BRUTAL WHITE FORM CARD (OUTLINED, TEAL BORDER) CONTAINING OWNER NAME, PET BREED, SERVICE TYPE SELECT, PREFERRED DATE, AND A FULL-WIDTH INK SUBMIT BUTTON. THE FORM SUBMITS LOCALLY (PREVENT DEFAULT) AND ANIMATES THE BUTTON THROUGH "SENDING…" → "REQUEST SENT!" (GREEN) → RESET.
+8. **FOOTER**: PAPER BACKGROUND, TOP INK BORDER. LEFT: WORDMARK, A SHORT NEWSLETTER BLURB, AND A BRUTAL EMAIL-CAPTURE FORM (INPUT + CORAL "SUBSCRIBE" BUTTON WITH PRESS ANIMATION) PLUS COPYRIGHT. RIGHT: A BIG UPPERCASE TAGLINE, TWO CTA PILLS (BOOK VISIT / CALL STUDIO), AND A LINK GRID (SERVICES / STUDIO / HELP / SOCIAL ICONS IN OUTLINED CIRCLE BUTTONS).
+
+## MOTION / ANIMATION / INTERACTION SPEC
+
+- SCROLL-REVEAL: ELEMENTS WITH A `data-reveal` ATTRIBUTE START HIDDEN (OPACITY 0, TRANSLATEY 40PX) AND ANIMATE IN WITH A BOUNCY CUBIC-BEZIER(0.34, 1.56, 0.64, 1) WHEN THEY ENTER THE VIEWPORT VIA INTERSECTIONOBSERVER; CONTAINERS WITH `data-stagger` STAGGER THEIR DIRECT CHILDREN BY ~0.1S EACH.
+- BRUTAL PRESS: EVERY BUTTON AND INTERACTIVE CARD TRANSLATES +2,+2 AND DROPS ITS SHADOW ON HOVER/FOCUS.
+- MARQUEE AND TESTIMONIAL ROWS USE CSS KEYFRAME LINEAR INFINITE SCROLL, DUPLICATING CONTENT FOR SEAMLESS LOOPING, AND PAUSE ON HOVER.
+- HERO PHOTO HAS A SUBTLE SLOW SCALE ON HOVER. RESPECT `prefers-reduced-motion` BY DISABLING NON-ESSENTIAL MOTION.
+
+## RESPONSIVE BEHAVIOR
+
+- DESKTOP (≥1024PX): TWO-COLUMN HERO, FANNED SERVICE DECK, FULL NAV, MULTI-COLUMN FOOTER.
+- TABLET (≥640PX): HERO STACKS BUT KEEPS THE SIGNATURE CORNER; SERVICES SHOW 1–2 PER ROW WITHOUT ROTATION; STATS WRAP.
+- MOBILE (<640PX): EVERYTHING STACKS SINGLE-COLUMN; NAV COLLAPSES TO A HAMBURGER + FULL-SCREEN OVERLAY; SERVICE CARDS STRAIGHTEN; TESTIMONIAL ROWS SPEED UP SLIGHTLY.
+
+## TECH & DELIVERY
+
+- SELF-CONTAINED STATIC SITE (PLAIN HTML + CSS + VANILLA JS). VENDOR ALL FONTS (ARCHIVO, PLUS JAKARTA SANS) AND ALL IMAGES LOCALLY INTO AN `assets/` FOLDER; NO REMOTE CDN OR HOTLINKED MEDIA AT RUNTIME. ALL FORMS WORK CLIENT-SIDE ONLY. THE PAGE MUST RUN OFFLINE FROM A SIMPLE STATIC SERVER.
+
+## Source & license
+
+Vendored from MIT-licensed
+[`pulkitxm/claude-directory`](https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/snip-and-snout-grooming-h18).
+The upstream MIT licence text ships in this template at [`LICENSE`](./LICENSE) and
+must be redistributed alongside any copy of `example.html` or `assets/`.
+
+Webfonts and full-resolution imagery are **not** vendored: local `@font-face`
+rules are served from the Google Fonts CDN and referenced images are
+downscaled. Fetch the upstream folder for the original assets.

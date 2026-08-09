@@ -1,0 +1,2682 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Axis Quotient — Quantitative Strategy Group</title>
+		<meta
+			name="description"
+			content="Axis Quotient — a quantitative strategy consultancy. Decisions, reduced to evidence."
+		>
+		<style>
+/* ===========================================================
+   AXIS QUOTIENT — "Quant Brutalist Editorial"
+   =========================================================== */
+
+
+
+
+
+:root {
+	--ink: #111114;
+	--ivory: #f3f1ea;
+	--paper: #fbfaf6;
+	--cobalt: #1f44ff;
+	--muted: #6b6a66;
+	--faint: #a9a7a0;
+	--line: rgba(17, 17, 20, 0.14);
+	--line-dark: rgba(255, 255, 255, 0.16);
+	--maxw: 1320px;
+	--grotesk: "Space Grotesk", sans-serif;
+	--sans: "Inter", sans-serif;
+	--mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+html {
+	scroll-behavior: smooth;
+	-webkit-text-size-adjust: 100%;
+	overflow-x: hidden;
+}
+
+body {
+	font-family: var(--sans);
+	background: var(--ivory);
+	color: var(--ink);
+	overflow-x: hidden;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+	line-height: 1.5;
+}
+
+::selection {
+	background: var(--cobalt);
+	color: var(--ivory);
+}
+
+img,
+svg,
+canvas {
+	display: block;
+	max-width: 100%;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+button {
+	font-family: inherit;
+	cursor: pointer;
+	border: none;
+	background: none;
+	color: inherit;
+}
+
+.wrap {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 0 24px;
+	width: 100%;
+}
+
+.mono {
+	font-family: var(--mono);
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	font-weight: 500;
+}
+
+.idx {
+	font-family: var(--mono);
+	font-size: 12px;
+	letter-spacing: 0.14em;
+	color: var(--cobalt);
+}
+
+.eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.eyebrow b {
+	color: var(--ink);
+	font-weight: 500;
+}
+.eyebrow.on-dark {
+	color: var(--faint);
+}
+.eyebrow.on-dark b {
+	color: #fff;
+}
+
+.section {
+	padding: 120px 0;
+	position: relative;
+}
+@media (max-width: 720px) {
+	.section {
+		padding: 80px 0;
+	}
+}
+
+.headline {
+	font-family: var(--grotesk);
+	font-weight: 500;
+	letter-spacing: -0.03em;
+	line-height: 1.08;
+}
+
+/* ---------- reveal animations ---------- */
+.reveal {
+	opacity: 0;
+	transform: translateY(48px);
+	transition:
+		opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1),
+		transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.in {
+	opacity: 1;
+	transform: none;
+}
+.d1 {
+	transition-delay: 0.08s;
+}
+.d2 {
+	transition-delay: 0.16s;
+}
+.d3 {
+	transition-delay: 0.24s;
+}
+.d4 {
+	transition-delay: 0.32s;
+}
+.d5 {
+	transition-delay: 0.4s;
+}
+
+.mask {
+	overflow: hidden;
+	display: block;
+}
+.mask > span {
+	display: block;
+	transform: translateY(110%);
+	transition: transform 1.1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.in .mask > span,
+.mask.in > span {
+	transform: none;
+}
+
+.uline {
+	position: relative;
+	display: inline-block;
+}
+.uline::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	bottom: -2px;
+	height: 1px;
+	width: 100%;
+	background: currentColor;
+	transform: scaleX(0);
+	transform-origin: right;
+	transition: transform 0.4s cubic-bezier(0.86, 0, 0.07, 1);
+}
+.uline:hover::after {
+	transform: scaleX(1);
+	transform-origin: left;
+}
+
+/* =================== HEADER =================== */
+.header {
+	position: fixed;
+	inset: 0 0 auto 0;
+	z-index: 100;
+	padding: 20px 0;
+	transition:
+		padding 0.3s,
+		background 0.3s,
+		box-shadow 0.3s;
+}
+.header.scrolled {
+	padding: 12px 0;
+	background: rgba(243, 241, 234, 0.85);
+	backdrop-filter: blur(14px);
+	border-bottom: 1px solid var(--line);
+}
+.header-inner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 24px;
+}
+.logo {
+	font-family: var(--grotesk);
+	font-weight: 700;
+	font-size: 18px;
+	letter-spacing: -0.02em;
+	color: #fff;
+	transition: color 0.3s;
+	white-space: nowrap;
+}
+.logo .sep {
+	color: var(--cobalt);
+}
+.header.scrolled .logo {
+	color: var(--ink);
+}
+
+.clock {
+	display: none;
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.12em;
+	color: #fff;
+	transition: color 0.3s;
+	text-align: center;
+	line-height: 1.5;
+}
+.clock .lbl {
+	opacity: 0.55;
+}
+.header.scrolled .clock {
+	color: var(--ink);
+}
+@media (min-width: 900px) {
+	.clock {
+		display: block;
+	}
+}
+
+.menu-wrap {
+	position: relative;
+}
+.menu-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 12px;
+	background: var(--paper);
+	border: 1px solid var(--line);
+	padding: 9px 16px;
+	border-radius: 3px;
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	transition: background 0.25s;
+}
+.menu-btn:hover {
+	background: #fff;
+}
+.menu-btn svg {
+	transition: transform 0.3s;
+}
+.menu-btn.open svg {
+	transform: rotate(90deg);
+}
+.dropdown {
+	position: absolute;
+	right: 0;
+	top: calc(100% + 12px);
+	width: 256px;
+	background: var(--paper);
+	border: 1px solid var(--line);
+	border-radius: 4px;
+	padding: 8px 0;
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(8px);
+	transition:
+		opacity 0.25s,
+		transform 0.25s,
+		visibility 0.25s;
+	box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.3);
+}
+.dropdown.open {
+	opacity: 1;
+	visibility: visible;
+	transform: none;
+}
+.dropdown a {
+	display: block;
+	padding: 11px 20px;
+	font-size: 14px;
+	font-weight: 500;
+	transition:
+		background 0.2s,
+		color 0.2s;
+}
+.dropdown a:hover {
+	background: var(--ivory);
+	color: var(--cobalt);
+}
+.dropdown hr {
+	border: none;
+	border-top: 1px solid var(--line);
+	margin: 6px 0;
+}
+
+/* =================== HERO =================== */
+.hero {
+	position: relative;
+	min-height: 92vh;
+	background: var(--ink);
+	color: var(--ivory);
+	display: flex;
+	align-items: flex-end;
+	overflow: hidden;
+	padding: 150px 0 56px;
+}
+#hero-canvas {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	opacity: 0.5;
+}
+.hero .wrap {
+	position: relative;
+	z-index: 2;
+}
+.hero-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 40px;
+	margin-bottom: 64px;
+	flex-wrap: wrap;
+}
+.hero-lead {
+	max-width: 440px;
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+.hero-lead p {
+	font-size: clamp(17px, 1.5vw, 21px);
+	line-height: 1.5;
+	font-weight: 400;
+	color: rgba(243, 241, 234, 0.92);
+}
+
+.ticker-card {
+	width: 300px;
+	max-width: 100%;
+	background: var(--paper);
+	color: var(--ink);
+	border: 1px solid rgba(0, 0, 0, 0.08);
+	border-radius: 4px;
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	transform: rotate(1.5deg);
+	transform-origin: bottom right;
+	transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+	box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.6);
+}
+.ticker-card:hover {
+	transform: rotate(0deg);
+}
+.tc-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+.tc-tag {
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.tc-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--cobalt);
+}
+.tc-chart {
+	height: 88px;
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	background: #fff;
+	position: relative;
+	overflow: hidden;
+}
+.tc-chart svg {
+	width: 100%;
+	height: 100%;
+}
+.tc-metric {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+.tc-metric .val {
+	font-family: var(--grotesk);
+	font-weight: 700;
+	font-size: 26px;
+	letter-spacing: -0.03em;
+}
+.tc-metric .val em {
+	color: var(--cobalt);
+	font-style: normal;
+}
+.tc-metric .lab {
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.tc-cta {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	position: relative;
+	width: fit-content;
+	padding-bottom: 4px;
+}
+.tc-cta::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	height: 1px;
+	width: 100%;
+	background: var(--ink);
+	transform: scaleX(1);
+	transform-origin: left;
+	transition: transform 0.35s;
+}
+.tc-cta:hover::after {
+	transform: scaleX(0);
+	transform-origin: right;
+}
+
+.hero-word {
+	font-family: var(--grotesk);
+	font-weight: 700;
+	font-size: clamp(58px, 16vw, 248px);
+	line-height: 0.86;
+	letter-spacing: -0.05em;
+	color: var(--ivory);
+	user-select: none;
+}
+
+/* =================== MARQUEE =================== */
+.marquee-strip {
+	background: var(--ink);
+	color: var(--ivory);
+	border-top: 1px solid var(--line-dark);
+	border-bottom: 1px solid var(--line-dark);
+	overflow: hidden;
+}
+.marquee {
+	display: flex;
+	width: max-content;
+	animation: marquee 32s linear infinite;
+}
+.marquee:hover {
+	animation-play-state: paused;
+}
+@keyframes marquee {
+	to {
+		transform: translateX(-50%);
+	}
+}
+.tick {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	padding: 14px 28px;
+	font-family: var(--mono);
+	font-size: 12px;
+	letter-spacing: 0.08em;
+	white-space: nowrap;
+	border-right: 1px solid var(--line-dark);
+}
+.tick .up {
+	color: #5cff9d;
+}
+.tick .neu {
+	color: var(--cobalt);
+}
+.tick .dn {
+	color: #ff6b6b;
+}
+
+/* =================== THESIS =================== */
+#thesis {
+	background: var(--ivory);
+}
+.thesis-head {
+	display: flex;
+	gap: 40px;
+	align-items: flex-start;
+}
+.thesis-head .idx {
+	padding-top: 14px;
+	flex-shrink: 0;
+}
+.thesis-statement {
+	font-family: var(--grotesk);
+	font-weight: 500;
+	letter-spacing: -0.03em;
+	font-size: clamp(26px, 4vw, 48px);
+	line-height: 1.12;
+	max-width: 920px;
+}
+.thesis-statement em {
+	color: var(--cobalt);
+	font-style: normal;
+}
+
+.thesis-split {
+	display: grid;
+	grid-template-columns: 1.1fr 0.9fr;
+	gap: 64px;
+	margin-top: 88px;
+	align-items: start;
+}
+@media (max-width: 900px) {
+	.thesis-split {
+		grid-template-columns: 1fr;
+		gap: 48px;
+	}
+	.thesis-head {
+		flex-direction: column;
+		gap: 18px;
+	}
+}
+
+.method-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0;
+	border: 1px solid var(--line);
+}
+.method-cell {
+	padding: 26px 24px;
+	border-right: 1px solid var(--line);
+	border-bottom: 1px solid var(--line);
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 168px;
+	justify-content: space-between;
+	transition: background 0.3s;
+}
+.method-cell:nth-child(2n) {
+	border-right: none;
+}
+.method-cell:nth-child(n + 3) {
+	border-bottom: none;
+}
+.method-cell:hover {
+	background: var(--paper);
+}
+.method-cell .step {
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.14em;
+	color: var(--cobalt);
+}
+.method-cell h4 {
+	font-family: var(--grotesk);
+	font-weight: 700;
+	font-size: 20px;
+	letter-spacing: -0.02em;
+}
+.method-cell p {
+	font-size: 13.5px;
+	color: var(--muted);
+	line-height: 1.45;
+}
+
+.thesis-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+}
+.thesis-copy h3 {
+	font-family: var(--grotesk);
+	font-weight: 500;
+	font-size: 22px;
+	letter-spacing: -0.02em;
+	line-height: 1.25;
+}
+.thesis-copy p {
+	color: var(--muted);
+	font-size: 15px;
+	line-height: 1.65;
+}
+.linkrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 12px;
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	margin-top: 6px;
+	width: fit-content;
+}
+.linkrow .dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--cobalt);
+	transition: transform 0.3s;
+}
+.linkrow:hover .dot {
+	transform: scale(1.6);
+}
+
+/* =================== CAPABILITIES =================== */
+#capabilities {
+	background: var(--ink);
+	color: var(--ivory);
+}
+.cap-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	gap: 32px;
+	flex-wrap: wrap;
+	margin-bottom: 64px;
+}
+.cap-head h2 {
+	font-family: var(--grotesk);
+	font-weight: 500;
+	font-size: clamp(24px, 3vw, 34px);
+	letter-spacing: -0.03em;
+	max-width: 460px;
+	line-height: 1.15;
+}
+.cap-pill {
+	border: 1px solid var(--line-dark);
+	border-radius: 3px;
+	padding: 12px 22px;
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	transition:
+		background 0.3s,
+		color 0.3s;
+}
+.cap-pill:hover {
+	background: #fff;
+	color: var(--ink);
+}
+
+.acc {
+	border-top: 1px solid var(--line-dark);
+}
+.acc-item {
+	border-bottom: 1px solid var(--line-dark);
+}
+.acc-btn {
+	width: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 24px;
+	padding: 30px 8px;
+	text-align: left;
+}
+.acc-btn .left {
+	display: flex;
+	align-items: baseline;
+	gap: clamp(20px, 6vw, 96px);
+}
+.acc-btn .num {
+	font-family: var(--mono);
+	font-size: 13px;
+	color: var(--faint);
+}
+.acc-btn h3 {
+	font-family: var(--grotesk);
+	font-weight: 500;
+	font-size: clamp(22px, 3.4vw, 40px);
+	letter-spacing: -0.04em;
+	transition: color 0.3s;
+}
+.acc-item:hover .acc-btn h3 {
+	color: var(--cobalt);
+}
+.acc-ico {
+	width: 46px;
+	height: 46px;
+	flex-shrink: 0;
+	border: 1px solid var(--line-dark);
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition:
+		background 0.3s,
+		color 0.3s,
+		transform 0.4s;
+}
+.acc-item.open .acc-ico {
+	transform: rotate(135deg);
+	background: #fff;
+	color: var(--ink);
+}
+.acc-content {
+	max-height: 0;
+	overflow: hidden;
+	opacity: 0;
+	transition:
+		max-height 0.45s ease,
+		opacity 0.45s ease;
+}
+.acc-item.open .acc-content {
+	opacity: 1;
+}
+.acc-inner {
+	padding: 4px 8px 36px;
+	display: flex;
+	gap: clamp(24px, 8vw, 128px);
+}
+.acc-inner .spacer {
+	width: 96px;
+	flex-shrink: 0;
+}
+@media (max-width: 760px) {
+	.acc-inner .spacer {
+		display: none;
+	}
+}
+.acc-body {
+	max-width: 640px;
+}
+.acc-body p {
+	color: var(--faint);
+	font-size: clamp(15px, 1.6vw, 18px);
+	line-height: 1.55;
+	margin-bottom: 24px;
+}
+.acc-body ul {
+	list-style: none;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+}
+@media (max-width: 540px) {
+	.acc-body ul {
+		grid-template-columns: 1fr;
+	}
+}
+.acc-body li {
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--ivory);
+}
+.acc-body li::before {
+	content: "/ ";
+	color: var(--cobalt);
+}
+
+/* =================== METRICS =================== */
+#metrics {
+	background: var(--ivory);
+	border-top: 1px solid var(--line);
+}
+.metrics-grid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 32px;
+}
+@media (max-width: 860px) {
+	.metrics-grid {
+		grid-template-columns: 1fr 1fr;
+		gap: 40px 24px;
+	}
+}
+@media (max-width: 460px) {
+	.metrics-grid {
+		grid-template-columns: 1fr;
+	}
+}
+.metric {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.metric .fig {
+	font-family: var(--grotesk);
+	font-weight: 500;
+	font-size: clamp(44px, 6vw, 76px);
+	letter-spacing: -0.04em;
+	line-height: 0.95;
+}
+.metric .fig em {
+	color: var(--cobalt);
+	font-style: normal;
+}
+.metric .lab {
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+/* =================== ENGAGEMENTS / PRICING =================== */
+#engagements {
+	background: var(--paper);
+	border-top: 1px solid var(--line);
+}
+.eng-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	gap: 32px;
+	flex-wrap: wrap;
+	margin-bottom: 56px;
+}
+.eng-head h2 {
+	font-family: var(--grotesk);
+	font-weight: 500;
+	font-size: clamp(22px, 2.6vw, 30px);
+	letter-spacing: -0.03em;
+	max-width: 440px;
+	line-height: 1.2;
+}
+.eng-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 16px;
+}
+@media (max-width: 940px) {
+	.eng-grid {
+		grid-template-columns: 1fr;
+		max-width: 460px;
+		margin: 0 auto;
+	}
+}
+
+.plan {
+	border: 1px solid var(--line);
+	border-radius: 5px;
+	padding: 30px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 40px;
+	background: var(--ivory);
+}
+.plan.dark {
+	background: var(--ink);
+	color: var(--ivory);
+	border-color: var(--ink);
+}
+.plan.cobalt {
+	border-color: var(--cobalt);
+}
+.plan-top {
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+}
+.plan-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+.plan-badge {
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	padding: 5px 11px;
+	border-radius: 999px;
+	border: 1px solid var(--line);
+	background: var(--paper);
+}
+.plan.dark .plan-badge {
+	background: #fff;
+	color: var(--ink);
+	border: none;
+}
+.plan.cobalt .plan-badge {
+	background: rgba(31, 68, 255, 0.08);
+	color: var(--cobalt);
+	border-color: rgba(31, 68, 255, 0.3);
+}
+
+.toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+.toggle .t-off {
+	color: var(--faint);
+}
+.toggle .t-on {
+	color: inherit;
+}
+.plan.dark .toggle .t-on {
+	color: #fff;
+}
+.knob {
+	width: 34px;
+	height: 18px;
+	border-radius: 999px;
+	padding: 2px;
+	display: inline-flex;
+	align-items: center;
+	background: var(--ink);
+	transition: background 0.3s;
+}
+.plan.dark .knob {
+	background: #fff;
+}
+.plan.cobalt .knob {
+	background: var(--cobalt);
+}
+.knob .dot {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: var(--ivory);
+	transition: transform 0.3s;
+}
+.plan.dark .knob .dot {
+	background: var(--ink);
+}
+.plan.cobalt .knob .dot {
+	background: #fff;
+}
+.knob.on .dot {
+	transform: translateX(16px);
+}
+
+.plan-price {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.plan-price .cap {
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.plan.dark .plan-price .cap {
+	color: var(--faint);
+}
+.plan-price .amt {
+	display: flex;
+	align-items: flex-end;
+	gap: 6px;
+}
+.plan-price .amt strong {
+	font-family: var(--grotesk);
+	font-weight: 700;
+	font-size: 34px;
+	letter-spacing: -0.03em;
+	line-height: 1;
+}
+.plan-price .amt span {
+	font-size: 12px;
+	color: var(--muted);
+	padding-bottom: 3px;
+}
+.plan.dark .plan-price .amt span {
+	color: var(--faint);
+}
+
+.plan-bottom {
+	display: flex;
+	flex-direction: column;
+	gap: 26px;
+}
+.plan-bottom h4 {
+	font-family: var(--grotesk);
+	font-weight: 700;
+	font-size: 19px;
+	letter-spacing: -0.02em;
+}
+.plan ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 11px;
+}
+.plan li {
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	font-size: 13px;
+	color: var(--muted);
+}
+.plan.dark li {
+	color: rgba(243, 241, 234, 0.78);
+}
+.plan li::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--faint);
+	flex-shrink: 0;
+}
+.plan.cobalt li::before {
+	background: var(--cobalt);
+}
+.plan-cta {
+	display: block;
+	text-align: center;
+	padding: 13px;
+	border-radius: 3px;
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	transition:
+		opacity 0.25s,
+		background 0.25s,
+		color 0.25s;
+}
+.plan.dark .plan-cta {
+	background: #fff;
+	color: var(--ink);
+}
+.plan .plan-cta {
+	background: var(--ink);
+	color: var(--ivory);
+}
+.plan.cobalt .plan-cta {
+	background: var(--cobalt);
+	color: #fff;
+}
+.plan-cta:hover {
+	opacity: 0.85;
+}
+
+/* =================== CASES =================== */
+#cases {
+	background: var(--ivory);
+	border-top: 1px solid var(--line);
+}
+.cases-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 48px;
+	max-width: 1000px;
+	margin: 0 auto;
+}
+@media (max-width: 800px) {
+	.cases-grid {
+		grid-template-columns: 1fr;
+		gap: 56px;
+	}
+}
+.case {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+.case:nth-child(2) {
+	margin-top: 56px;
+}
+@media (max-width: 800px) {
+	.case:nth-child(2) {
+		margin-top: 0;
+	}
+}
+.case-thumb {
+	position: relative;
+	aspect-ratio: 16 / 10;
+	border: 1px solid var(--line);
+	border-radius: 4px;
+	overflow: hidden;
+	background: var(--paper);
+}
+.case-thumb svg {
+	width: 100%;
+	height: 100%;
+	transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.case:hover .case-thumb svg {
+	transform: scale(1.06);
+}
+.case-tag {
+	position: absolute;
+	top: 12px;
+	left: 12px;
+	background: var(--ivory);
+	border: 1px solid var(--line);
+	font-family: var(--mono);
+	font-size: 9px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	padding: 5px 10px;
+	border-radius: 999px;
+}
+.case h3 {
+	font-family: var(--grotesk);
+	font-weight: 700;
+	font-size: clamp(20px, 2.4vw, 26px);
+	letter-spacing: -0.03em;
+}
+.case p {
+	color: var(--muted);
+	font-size: 14px;
+	line-height: 1.55;
+	max-width: 380px;
+}
+.case-foot {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	border-top: 1px solid var(--line);
+	padding-top: 18px;
+	margin-top: 4px;
+}
+.case-foot .meta {
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.case-foot .out {
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+
+/* =================== FAQ =================== */
+#faq {
+	background: var(--ivory);
+	border-top: 1px solid var(--line);
+}
+.faq-split {
+	display: grid;
+	grid-template-columns: 1fr 1.4fr;
+	gap: 64px;
+	align-items: start;
+}
+@media (max-width: 900px) {
+	.faq-split {
+		grid-template-columns: 1fr;
+		gap: 40px;
+	}
+}
+.faq-cta {
+	position: sticky;
+	top: 110px;
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+}
+.faq-cta h3 {
+	font-family: var(--grotesk);
+	font-weight: 500;
+	font-size: 26px;
+	letter-spacing: -0.03em;
+	line-height: 1.15;
+}
+.faq-cta p {
+	color: var(--muted);
+	font-size: 15px;
+	line-height: 1.6;
+}
+.faq-cta a {
+	width: fit-content;
+	background: var(--ink);
+	color: var(--ivory);
+	padding: 14px 26px;
+	border-radius: 3px;
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	transition: background 0.3s;
+}
+.faq-cta a:hover {
+	background: var(--cobalt);
+}
+.faq-list {
+	border-top: 1px solid var(--line);
+}
+.faq-q {
+	border-bottom: 1px solid var(--line);
+}
+.faq-qbtn {
+	width: 100%;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 20px;
+	text-align: left;
+	padding: 26px 0;
+}
+.faq-qbtn h4 {
+	font-family: var(--grotesk);
+	font-weight: 500;
+	font-size: clamp(17px, 2vw, 22px);
+	letter-spacing: -0.02em;
+	transition: color 0.3s;
+}
+.faq-q:hover .faq-qbtn h4 {
+	color: var(--cobalt);
+}
+.faq-ico {
+	width: 28px;
+	height: 28px;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: transform 0.4s;
+}
+.faq-q.open .faq-ico {
+	transform: rotate(135deg);
+}
+.faq-ans {
+	max-height: 0;
+	overflow: hidden;
+	opacity: 0;
+	transition:
+		max-height 0.4s ease,
+		opacity 0.4s ease;
+}
+.faq-ans p {
+	color: var(--muted);
+	font-size: 15px;
+	line-height: 1.65;
+	padding-bottom: 26px;
+	max-width: 560px;
+}
+
+/* =================== BIG CTA =================== */
+#contact {
+	background: var(--ivory);
+	border-top: 1px solid var(--line);
+	text-align: center;
+}
+.bigcta {
+	position: relative;
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	width: 100%;
+}
+.bigcta h2 {
+	font-family: var(--grotesk);
+	font-weight: 700;
+	font-size: clamp(44px, 11vw, 150px);
+	letter-spacing: -0.05em;
+	line-height: 0.92;
+	transition: color 0.5s;
+	white-space: nowrap;
+}
+.bigcta:hover h2 {
+	color: var(--cobalt);
+}
+.bigcta .badge {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%) scale(0.4);
+	width: clamp(80px, 12vw, 124px);
+	height: clamp(80px, 12vw, 124px);
+	border-radius: 50%;
+	background: var(--cobalt);
+	color: #fff;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	transition:
+		opacity 0.5s,
+		transform 0.5s;
+	pointer-events: none;
+}
+.bigcta:hover .badge {
+	opacity: 1;
+	transform: translate(-50%, -50%) scale(1);
+}
+
+/* =================== FOOTER =================== */
+.footer {
+	background: var(--ink);
+	color: var(--ivory);
+	padding: 110px 0 40px;
+}
+.footer-top {
+	display: flex;
+	justify-content: space-between;
+	gap: 56px;
+	flex-wrap: wrap;
+	border-bottom: 1px solid var(--line-dark);
+	padding-bottom: 64px;
+	margin-bottom: 48px;
+}
+.footer-quote {
+	max-width: 320px;
+	display: flex;
+	flex-direction: column;
+	gap: 26px;
+}
+.footer-mark {
+	font-family: var(--grotesk);
+	font-weight: 700;
+	font-size: 22px;
+	letter-spacing: -0.02em;
+}
+.footer-mark .sep {
+	color: var(--cobalt);
+}
+.footer-quote h5 {
+	font-family: var(--grotesk);
+	font-weight: 500;
+	font-size: 18px;
+	letter-spacing: -0.02em;
+	line-height: 1.4;
+}
+.footer-news {
+	max-width: 460px;
+	flex: 1 1 320px;
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+}
+.footer-news h5 {
+	font-family: var(--grotesk);
+	font-weight: 500;
+	font-size: 18px;
+	letter-spacing: -0.02em;
+}
+.news-form {
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+}
+.news-field {
+	border-bottom: 1px solid var(--line-dark);
+	padding-bottom: 12px;
+}
+.news-field input {
+	width: 100%;
+	background: none;
+	border: none;
+	color: #fff;
+	font-family: var(--sans);
+	font-size: 15px;
+	outline: none;
+}
+.news-field input::placeholder {
+	color: var(--faint);
+}
+.news-form button {
+	align-self: flex-start;
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	margin-top: 6px;
+	position: relative;
+	padding-bottom: 4px;
+}
+.news-form button::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	height: 1px;
+	width: 100%;
+	background: #fff;
+	transform: scaleX(0);
+	transform-origin: right;
+	transition: transform 0.4s;
+}
+.news-form button:hover::after {
+	transform: scaleX(1);
+	transform-origin: left;
+}
+.news-msg {
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	min-height: 14px;
+}
+.news-msg.ok {
+	color: #5cff9d;
+}
+.news-msg.err {
+	color: #ff6b6b;
+}
+
+.footer-cols {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 40px;
+}
+@media (max-width: 720px) {
+	.footer-cols {
+		grid-template-columns: 1fr 1fr;
+		gap: 32px;
+	}
+}
+.fcol h6 {
+	font-family: var(--grotesk);
+	font-weight: 500;
+	font-size: 17px;
+	letter-spacing: -0.02em;
+	margin-bottom: 18px;
+}
+.fcol a {
+	display: block;
+	color: var(--faint);
+	font-size: 14px;
+	padding: 5px 0;
+	transition: color 0.25s;
+}
+.fcol a:hover {
+	color: #fff;
+}
+.fcol .big-mail {
+	font-family: var(--grotesk);
+	font-weight: 500;
+	font-size: clamp(20px, 2.4vw, 26px);
+	letter-spacing: -0.03em;
+	color: #fff;
+	margin-top: 14px;
+}
+.footer-bottom {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 16px;
+	flex-wrap: wrap;
+	margin-top: 56px;
+	padding-top: 28px;
+	border-top: 1px solid var(--line-dark);
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--faint);
+}
+.footer-bottom .legal {
+	display: flex;
+	gap: 14px;
+}
+.footer-bottom .legal a:hover {
+	color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms;
+		animation-iteration-count: 1;
+		transition-duration: 0.001ms;
+		scroll-behavior: auto;
+	}
+	.reveal {
+		opacity: 1;
+		transform: none;
+	}
+	.mask > span {
+		transform: none;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- ================= HEADER ================= -->
+		<header class="header" id="header">
+			<div class="wrap header-inner">
+				<a href="#top" class="logo">AXIS<span class="sep">//</span>QUOTIENT</a>
+				<div class="clock">
+					<div class="lbl">LONDON · LOCAL TIME</div>
+					<div id="clock-time">00:00:00</div>
+				</div>
+				<div class="menu-wrap">
+					<button
+						class="menu-btn"
+						id="menu-btn"
+						aria-haspopup="true"
+						aria-expanded="false"
+					>
+						<span>Solutions</span>
+						<svg
+							width="18"
+							height="18"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+						>
+							<path d="M4 8h16M4 16h16" />
+						</svg>
+					</button>
+					<nav class="dropdown" id="dropdown" aria-label="Solutions">
+						<a href="#capabilities">Capital Strategy</a>
+						<a href="#capabilities">Risk &amp; Quant Modeling</a>
+						<a href="#capabilities">Market Structure</a>
+						<a href="#capabilities">Operating Alpha</a>
+						<hr>
+						<a href="#engagements">Engagement Models</a>
+						<a href="#cases">Case Files</a>
+					</nav>
+				</div>
+			</div>
+		</header>
+
+		<main>
+			<!-- ================= HERO ================= -->
+			<section class="hero" id="top">
+				<canvas id="hero-canvas"></canvas>
+				<div class="wrap">
+					<div class="hero-top">
+						<div class="hero-lead reveal d1">
+							<span class="idx">(01) — THE FIRM</span>
+							<p>
+								A quantitative strategy group that turns market noise into
+								measurable conviction. We model the variables your board cannot
+								afford to guess.
+							</p>
+						</div>
+
+						<aside class="ticker-card reveal d2" aria-label="Live desk preview">
+							<div class="tc-head">
+								<span class="tc-tag">DESK · LIVE</span>
+								<span class="tc-dot"></span>
+							</div>
+							<div class="tc-chart">
+								<svg
+									id="spark"
+									viewBox="0 0 280 88"
+									preserveAspectRatio="none"
+									aria-hidden="true"
+								></svg>
+							</div>
+							<div class="tc-metric">
+								<span class="val" id="tc-val">+31.4<em>%</em></span>
+								<span class="lab" id="tc-lab">Median Alpha · TTM</span>
+							</div>
+							<a href="#capabilities" class="tc-cta"
+								>Open The Model <span>→</span></a
+							>
+						</aside>
+					</div>
+
+					<h1 class="hero-word mask in"><span>QUOTIENT</span></h1>
+				</div>
+			</section>
+
+			<!-- ================= MARQUEE ================= -->
+			<div class="marquee-strip" aria-hidden="true">
+				<div class="marquee" id="marquee"></div>
+			</div>
+
+			<!-- ================= THESIS ================= -->
+			<section class="section" id="thesis">
+				<div class="wrap">
+					<div class="thesis-head reveal">
+						<span class="idx">(02)</span>
+						<h2 class="thesis-statement mask">
+							<span
+								>We sit between the spreadsheet and the boardroom — translating
+								<em>evidence</em>
+								into the decisions that move the enterprise.</span
+							>
+						</h2>
+					</div>
+
+					<div class="thesis-split">
+						<div class="reveal d1">
+							<div class="eyebrow" style="margin-bottom:22px;">
+								<b>Our</b>
+								Method
+							</div>
+							<div class="method-grid">
+								<div class="method-cell">
+									<span class="step">STEP 01</span>
+									<h4>Discover</h4>
+									<p>
+										We map the question, the constraints, and the data that
+										actually exists.
+									</p>
+								</div>
+								<div class="method-cell">
+									<span class="step">STEP 02</span>
+									<h4>Model</h4>
+									<p>
+										Quantitative frameworks, scenario trees, and probabilistic
+										forecasts.
+									</p>
+								</div>
+								<div class="method-cell">
+									<span class="step">STEP 03</span>
+									<h4>Stress-Test</h4>
+									<p>
+										Monte-Carlo runs against the tail outcomes that break naive
+										plans.
+									</p>
+								</div>
+								<div class="method-cell">
+									<span class="step">STEP 04</span>
+									<h4>Deploy</h4>
+									<p>
+										Embedded execution until the recommendation is operating
+										reality.
+									</p>
+								</div>
+							</div>
+						</div>
+
+						<div class="thesis-copy reveal d2">
+							<h3>Where market intelligence meets disciplined execution.</h3>
+							<p>
+								Axis Quotient is a multi-disciplinary advisory built around
+								evidence. Former desk heads, quants, and operators work a single
+								question at a time, instrumented end to end.
+							</p>
+							<p>
+								Headquartered in London with desks in Singapore and New York, we
+								partner with leadership teams navigating capital, risk, and
+								structural change — and we stay until the model holds.
+							</p>
+							<a href="#capabilities" class="linkrow"
+								><span>See The Capabilities</span><span class="dot"></span></a
+							>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ================= CAPABILITIES ================= -->
+			<section class="section" id="capabilities">
+				<div class="wrap">
+					<div class="cap-head reveal">
+						<div>
+							<span class="idx" style="display:block;margin-bottom:18px;"
+								>(03) — EXPERTISE</span
+							>
+							<h2>
+								Guiding capital-intensive organizations through the math of
+								uncertainty.
+							</h2>
+						</div>
+						<a href="#engagements" class="cap-pill">All Advisory Areas</a>
+					</div>
+
+					<div class="acc" id="acc">
+						<div class="acc-item">
+							<button class="acc-btn">
+								<span class="left"
+									><span class="num">01</span>
+									<h3>Capital Strategy</h3></span
+								>
+								<span class="acc-ico"
+									><svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path d="M12 5v14M5 12h14" />
+									</svg></span
+								>
+							</button>
+							<div class="acc-content">
+								<div class="acc-inner">
+									<div class="spacer"></div>
+									<div class="acc-body">
+										<p>
+											We pressure-test allocation under uncertainty — building
+											the capital frameworks, M&amp;A theses, and funding paths
+											that survive contact with the market.
+										</p>
+										<ul>
+											<li>Allocation Modeling</li>
+											<li>M&amp;A &amp; Diligence</li>
+											<li>Capital Structure</li>
+											<li>Scenario Planning</li>
+										</ul>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="acc-item">
+							<button class="acc-btn">
+								<span class="left"
+									><span class="num">02</span>
+									<h3>Risk &amp; Quant Modeling</h3></span
+								>
+								<span class="acc-ico"
+									><svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path d="M12 5v14M5 12h14" />
+									</svg></span
+								>
+							</button>
+							<div class="acc-content">
+								<div class="acc-inner">
+									<div class="spacer"></div>
+									<div class="acc-body">
+										<p>
+											Quantitative engines for the risks that don't show up on a
+											dashboard — built, validated, and handed over with the
+											math fully documented.
+										</p>
+										<ul>
+											<li>Monte-Carlo Engines</li>
+											<li>VaR &amp; Tail Risk</li>
+											<li>Factor Decomposition</li>
+											<li>Model Validation</li>
+										</ul>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="acc-item">
+							<button class="acc-btn">
+								<span class="left"
+									><span class="num">03</span>
+									<h3>Market Structure</h3></span
+								>
+								<span class="acc-ico"
+									><svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path d="M12 5v14M5 12h14" />
+									</svg></span
+								>
+							</button>
+							<div class="acc-content">
+								<div class="acc-inner">
+									<div class="spacer"></div>
+									<div class="acc-body">
+										<p>
+											Reading the plumbing of a market — liquidity,
+											microstructure, and regulatory drift — to position before
+											the structural shift, not after.
+										</p>
+										<ul>
+											<li>Liquidity Mapping</li>
+											<li>Microstructure</li>
+											<li>Regulatory Drift</li>
+											<li>Entry Sequencing</li>
+										</ul>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="acc-item">
+							<button class="acc-btn">
+								<span class="left"
+									><span class="num">04</span>
+									<h3>Operating Alpha</h3></span
+								>
+								<span class="acc-ico"
+									><svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path d="M12 5v14M5 12h14" />
+									</svg></span
+								>
+							</button>
+							<div class="acc-content">
+								<div class="acc-inner">
+									<div class="spacer"></div>
+									<div class="acc-body">
+										<p>
+											Margin found in the operating model. We instrument the
+											business, find the latent alpha, and embed the changes
+											that compound.
+										</p>
+										<ul>
+											<li>Process Instrumentation</li>
+											<li>Margin Recovery</li>
+											<li>Org Design</li>
+											<li>Execution Cadence</li>
+										</ul>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ================= METRICS ================= -->
+			<section class="section" id="metrics">
+				<div class="wrap">
+					<div class="eyebrow reveal" style="margin-bottom:48px;">
+						<span class="idx">(04)</span>
+						&nbsp; <b>By</b> The Numbers
+					</div>
+					<div class="metrics-grid">
+						<div class="metric reveal d1">
+							<span class="fig"
+								><em>$</em><span data-count="6.4" data-dec="1">0</span
+								><em>B</em></span
+							><span class="lab">AUM Advised</span>
+						</div>
+						<div class="metric reveal d2">
+							<span class="fig"><span data-count="31">0</span><em>%</em></span
+							><span class="lab">Median Alpha</span>
+						</div>
+						<div class="metric reveal d3">
+							<span class="fig"><span data-count="120">0</span><em>+</em></span
+							><span class="lab">Mandates Closed</span>
+						</div>
+						<div class="metric reveal d4">
+							<span class="fig"><span data-count="24">0</span><em>/7</em></span
+							><span class="lab">Global Desk</span>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ================= ENGAGEMENTS ================= -->
+			<section class="section" id="engagements">
+				<div class="wrap">
+					<div class="eng-head reveal">
+						<div>
+							<span class="idx" style="display:block;margin-bottom:18px;"
+								>(05) — ENGAGEMENT</span
+							>
+							<h2>Investment structures built for high-conviction outcomes.</h2>
+						</div>
+						<span class="mono" style="color:var(--faint);font-size:13px;"
+							>Advisory Plans</span
+						>
+					</div>
+
+					<div class="eng-grid">
+						<!-- Retainer -->
+						<div class="plan dark reveal d1">
+							<div class="plan-top">
+								<div class="plan-row">
+									<span class="plan-badge">Retainer</span>
+									<span class="toggle"
+										><span class="t-on" data-on="retainer">MO</span>
+										<button
+											class="knob"
+											data-toggle="retainer"
+											aria-label="Toggle billing period"
+										>
+											<span class="dot"></span>
+										</button>
+										<span class="t-off" data-off="retainer">QTR</span></span
+									>
+								</div>
+								<div class="plan-price">
+									<span class="cap">Starting From</span>
+									<span class="amt"
+										><strong id="retainer-amt">$14k</strong
+										><span id="retainer-per">/ month</span></span
+									>
+								</div>
+							</div>
+							<div class="plan-bottom">
+								<h4>Continuous Partnership</h4>
+								<ul>
+									<li>Standing quant desk access</li>
+									<li>Quarterly market outlooks</li>
+									<li>Executive briefings on demand</li>
+								</ul>
+								<a href="#contact" class="plan-cta">Request Proposal</a>
+							</div>
+						</div>
+
+						<!-- Sprint -->
+						<div class="plan reveal d2">
+							<div class="plan-top">
+								<div class="plan-row">
+									<span class="plan-badge">Sprint</span>
+									<span class="toggle"
+										><span class="t-on" data-on="sprint">ACTIVE</span>
+										<button
+											class="knob"
+											data-toggle="sprint"
+											aria-label="Toggle sprint mode"
+										>
+											<span class="dot"></span>
+										</button>
+										<span class="t-off" data-off="sprint">STANDBY</span></span
+									>
+								</div>
+								<div class="plan-price">
+									<span class="cap" id="sprint-cap">Fixed Engagement</span>
+									<span class="amt"
+										><strong id="sprint-amt">$52k</strong
+										><span id="sprint-per">/ sprint</span></span
+									>
+								</div>
+							</div>
+							<div class="plan-bottom">
+								<h4>Discrete Six-Week Build</h4>
+								<ul>
+									<li>Intensive quantitative analysis</li>
+									<li>Full model handover</li>
+									<li>Board-ready final readout</li>
+								</ul>
+								<a href="#contact" class="plan-cta">Start A Sprint</a>
+							</div>
+						</div>
+
+						<!-- Mandate -->
+						<div class="plan cobalt reveal d3">
+							<div class="plan-top">
+								<div class="plan-row">
+									<span class="plan-badge">Mandate</span>
+									<span class="toggle"
+										><span class="t-on" data-on="mandate">BUY</span>
+										<button
+											class="knob"
+											data-toggle="mandate"
+											aria-label="Toggle mandate side"
+										>
+											<span class="dot"></span>
+										</button>
+										<span class="t-off" data-off="mandate">SELL</span></span
+									>
+								</div>
+								<div class="plan-price">
+									<span class="cap" id="mandate-cap">Buy-side Advisory</span>
+									<span class="amt"
+										><strong id="mandate-amt">1.2%</strong
+										><span>of deal</span></span
+									>
+								</div>
+							</div>
+							<div class="plan-bottom">
+								<h4>Transaction Mandates</h4>
+								<ul>
+									<li>Target identification &amp; diligence</li>
+									<li>Valuation &amp; negotiation</li>
+									<li>Post-close integration</li>
+								</ul>
+								<a href="#contact" class="plan-cta">Initiate Mandate</a>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ================= CASES ================= -->
+			<section class="section" id="cases">
+				<div class="wrap">
+					<div class="eng-head reveal" style="margin-bottom:64px;">
+						<div>
+							<span class="idx" style="display:block;margin-bottom:18px;"
+								>(06) — CASE FILES</span
+							>
+							<h2>Real impact, traced to the model.</h2>
+						</div>
+						<span class="mono" style="color:var(--faint);font-size:13px;"
+							>Selected Work</span
+						>
+					</div>
+
+					<div class="cases-grid">
+						<article class="case reveal d1">
+							<div class="case-thumb">
+								<span class="case-tag">Scale Mandate</span
+								><svg
+									id="viz1"
+									viewBox="0 0 400 250"
+									preserveAspectRatio="none"
+									aria-hidden="true"
+								></svg>
+							</div>
+							<h3>HELIX. Capital Reallocation</h3>
+							<p>
+								Rebuilt the allocation model for a multi-strategy fund, lifting
+								risk-adjusted return by 14% across one cycle.
+							</p>
+							<div class="case-foot">
+								<span class="meta">Capital, Risk</span
+								><a href="#contact" class="out uline">View Outcome →</a>
+							</div>
+						</article>
+
+						<article class="case reveal d2">
+							<div class="case-thumb">
+								<span class="case-tag">Entry Mandate</span
+								><svg
+									id="viz2"
+									viewBox="0 0 400 250"
+									preserveAspectRatio="none"
+									aria-hidden="true"
+								></svg>
+							</div>
+							<h3>VECTOR. Market Entry</h3>
+							<p>
+								Sequenced a regulated-market entry for a fintech, compressing
+								time-to-license from 18 to 9 months.
+							</p>
+							<div class="case-foot">
+								<span class="meta">Structure, Strategy</span
+								><a href="#contact" class="out uline">View Outcome →</a>
+							</div>
+						</article>
+					</div>
+				</div>
+			</section>
+
+			<!-- ================= FAQ ================= -->
+			<section class="section" id="faq">
+				<div class="wrap">
+					<div class="eng-head reveal" style="margin-bottom:56px;">
+						<div>
+							<span class="idx" style="display:block;margin-bottom:18px;"
+								>(07) — INQUIRIES</span
+							>
+							<h2>Clarity on how we engage.</h2>
+						</div>
+						<span class="mono" style="color:var(--faint);font-size:13px;"
+							>Firm FAQ</span
+						>
+					</div>
+
+					<div class="faq-split">
+						<div class="faq-cta reveal">
+							<h3>Seeking an advisory partnership?</h3>
+							<p>
+								If you have a specific question on capital, risk, or a pending
+								transaction, our senior partners are available for a
+								confidential briefing.
+							</p>
+							<a href="#contact">Contact Advisory</a>
+						</div>
+
+						<div class="faq-list reveal d1" id="faq-list">
+							<div class="faq-q">
+								<button class="faq-qbtn">
+									<h4>What is your typical engagement lifecycle?</h4>
+									<span class="faq-ico"
+										><svg
+											width="18"
+											height="18"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<path d="M12 5v14M5 12h14" />
+										</svg></span
+									>
+								</button>
+								<div class="faq-ans">
+									<p>
+										Engagements range from a six-week intensive sprint to
+										multi-year advisory partnerships. We scope duration to the
+										complexity of the question, never to a template.
+									</p>
+								</div>
+							</div>
+							<div class="faq-q">
+								<button class="faq-qbtn">
+									<h4>How do you measure success?</h4>
+									<span class="faq-ico"
+										><svg
+											width="18"
+											height="18"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<path d="M12 5v14M5 12h14" />
+										</svg></span
+									>
+								</button>
+								<div class="faq-ans">
+									<p>
+										KPIs are defined before work begins — typically
+										risk-adjusted return, margin recovery, or risk reduction —
+										and we instrument every recommendation against them.
+									</p>
+								</div>
+							</div>
+							<div class="faq-q">
+								<button class="faq-qbtn">
+									<h4>Do you support implementation?</h4>
+									<span class="faq-ico"
+										><svg
+											width="18"
+											height="18"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<path d="M12 5v14M5 12h14" />
+										</svg></span
+									>
+								</button>
+								<div class="faq-ans">
+									<p>
+										Yes. Unlike pure-strategy firms, we embed alongside your
+										team until the model is operating reality, not a slide deck.
+									</p>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ================= BIG CTA ================= -->
+			<section class="section" id="contact">
+				<div class="wrap">
+					<a class="bigcta reveal" href="mailto:advisory@axisquotient.com">
+						<h2>Start A Mandate</h2>
+						<span class="badge"
+							><svg
+								width="34"
+								height="34"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path d="M5 12h14M12 5l7 7-7 7" />
+							</svg></span
+						>
+					</a>
+				</div>
+			</section>
+		</main>
+
+		<!-- ================= FOOTER ================= -->
+		<footer class="footer">
+			<div class="wrap">
+				<div class="footer-top">
+					<div class="footer-quote">
+						<span class="footer-mark"
+							>AXIS<span class="sep">//</span>QUOTIENT</span
+						>
+						<h5>
+							“We operate where rigorous analysis meets operating reality —
+							partnering with leaders to navigate uncertainty with evidence.”
+						</h5>
+					</div>
+					<div class="footer-news">
+						<h5>The Quotient Brief — for decision-makers</h5>
+						<form class="news-form" id="news-form" novalidate>
+							<div class="news-field">
+								<input
+									type="text"
+									id="nf-name"
+									placeholder="Your Name"
+									autocomplete="name"
+								>
+							</div>
+							<div class="news-field">
+								<input
+									type="email"
+									id="nf-email"
+									placeholder="Professional Email"
+									autocomplete="email"
+								>
+							</div>
+							<button type="submit">Subscribe to Brief</button>
+							<span class="news-msg" id="news-msg" aria-live="polite"></span>
+						</form>
+					</div>
+				</div>
+
+				<div class="footer-cols">
+					<div class="fcol">
+						<h6>Firm</h6>
+						<a href="#thesis">Thesis</a><a href="#capabilities">Capabilities</a
+						><a href="#cases">Case Files</a
+						><a href="#metrics">By The Numbers</a>
+					</div>
+					<div class="fcol">
+						<h6>Resources</h6>
+						<a href="#faq">Advisory Request</a
+						><a href="#engagements">Engagement Models</a
+						><a href="#top">Annual Outlook</a>
+					</div>
+					<div class="fcol">
+						<h6>Network</h6>
+						<a href="#top">LinkedIn</a><a href="#top">Financial Times</a
+						><a href="#top">X (Twitter)</a>
+						<span
+							class="mono"
+							style="display:block;margin-top:22px;color:var(--faint);font-size:10px;"
+							>Engagement Inquiry</span
+						>
+						<a class="big-mail uline" href="mailto:advisory@axisquotient.com"
+							>advisory@axisquotient.com</a
+						>
+					</div>
+				</div>
+
+				<div class="footer-bottom">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M12 3L2 21h20L12 3z" fill-opacity="0.35" />
+					</svg>
+					<div class="legal">
+						<a href="#top">Compliance</a><span>/</span
+						><a href="#top">Data Privacy</a>
+					</div>
+					<span>© 2025 Axis Quotient Group · All rights reserved</span>
+				</div>
+			</div>
+		</footer>
+
+		<script>
+/* AXIS QUOTIENT — interactions */
+(() => {
+	const reduceMotion = window.matchMedia(
+		"(prefers-reduced-motion: reduce)",
+	).matches;
+	const $ = (s, c = document) => c.querySelector(s);
+	const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
+
+	/* ---------- Header scroll state ---------- */
+	const header = $("#header");
+	const onScroll = () =>
+		header.classList.toggle("scrolled", window.scrollY > 40);
+	onScroll();
+	window.addEventListener("scroll", onScroll, { passive: true });
+
+	/* ---------- Live clock (London) ---------- */
+	const clockEl = $("#clock-time");
+	function tick() {
+		try {
+			clockEl.textContent = new Intl.DateTimeFormat("en-GB", {
+				timeZone: "Europe/London",
+				hour: "2-digit",
+				minute: "2-digit",
+				second: "2-digit",
+				hour12: false,
+			}).format(new Date());
+		} catch (_e) {
+			clockEl.textContent = new Date().toTimeString().slice(0, 8);
+		}
+	}
+	tick();
+	setInterval(tick, 1000);
+
+	/* ---------- Solutions dropdown ---------- */
+	const menuBtn = $("#menu-btn"),
+		dropdown = $("#dropdown");
+	function closeMenu() {
+		dropdown.classList.remove("open");
+		menuBtn.classList.remove("open");
+		menuBtn.setAttribute("aria-expanded", "false");
+	}
+	menuBtn.addEventListener("click", (e) => {
+		e.stopPropagation();
+		const open = dropdown.classList.toggle("open");
+		menuBtn.classList.toggle("open", open);
+		menuBtn.setAttribute("aria-expanded", String(open));
+	});
+	document.addEventListener("click", (e) => {
+		if (!dropdown.contains(e.target) && !menuBtn.contains(e.target))
+			closeMenu();
+	});
+	document.addEventListener("keydown", (e) => {
+		if (e.key === "Escape") closeMenu();
+	});
+	$$("#dropdown a").forEach((a) => a.addEventListener("click", closeMenu));
+
+	/* ---------- Scroll reveal ---------- */
+	const io = new IntersectionObserver(
+		(entries) => {
+			entries.forEach((en) => {
+				if (en.isIntersecting) {
+					en.target.classList.add("in");
+					const m = en.target.querySelector(".mask");
+					if (m) m.classList.add("in");
+					io.unobserve(en.target);
+				}
+			});
+		},
+		{ threshold: 0.14, rootMargin: "0px 0px -40px 0px" },
+	);
+	$$(".reveal").forEach((el) => io.observe(el));
+
+	/* ---------- Count-up metrics ---------- */
+	const counters = $$("[data-count]");
+	const cio = new IntersectionObserver(
+		(entries) => {
+			entries.forEach((en) => {
+				if (!en.isIntersecting) return;
+				const el = en.target;
+				cio.unobserve(el);
+				const target = parseFloat(el.dataset.count);
+				const dec = parseInt(el.dataset.dec || "0", 10);
+				if (reduceMotion) {
+					el.textContent = target.toFixed(dec);
+					return;
+				}
+				const dur = 1300,
+					t0 = performance.now();
+				function step(now) {
+					const p = Math.min((now - t0) / dur, 1);
+					const eased = 1 - (1 - p) ** 3;
+					el.textContent = (target * eased).toFixed(dec);
+					if (p < 1) requestAnimationFrame(step);
+					else el.textContent = target.toFixed(dec);
+				}
+				requestAnimationFrame(step);
+			});
+		},
+		{ threshold: 0.5 },
+	);
+	counters.forEach((c) => cio.observe(c));
+
+	/* ---------- Accordion (capabilities) ---------- */
+	function wireAccordion(rootSel, itemSel, contentSel) {
+		const items = $$(itemSel, $(rootSel));
+		items.forEach((item) => {
+			const btn = item.querySelector("button");
+			btn.addEventListener("click", () => {
+				const content = item.querySelector(contentSel);
+				const isOpen = item.classList.contains("open");
+				items.forEach((o) => {
+					o.classList.remove("open");
+					o.querySelector(contentSel).style.maxHeight = null;
+				});
+				if (!isOpen) {
+					item.classList.add("open");
+					content.style.maxHeight = `${content.scrollHeight}px`;
+				}
+			});
+		});
+	}
+	wireAccordion("#acc", ".acc-item", ".acc-content");
+	wireAccordion("#faq-list", ".faq-q", ".faq-ans");
+
+	/* ---------- Pricing toggles ---------- */
+	const pricing = {
+		retainer: {
+			off: false,
+			on: { amt: "$14k", per: "/ month" },
+			alt: { amt: "$36k", per: "/ quarter" },
+		},
+		sprint: {
+			off: false,
+			on: { amt: "$52k", per: "/ sprint", cap: "Fixed Engagement" },
+			alt: { amt: "$9k", per: "/ month", cap: "Standby Retainer" },
+		},
+		mandate: {
+			off: false,
+			on: { amt: "1.2%", cap: "Buy-side Advisory" },
+			alt: { amt: "1.6%", cap: "Sell-side Mandate" },
+		},
+	};
+	$$(".knob[data-toggle]").forEach((knob) => {
+		const key = knob.dataset.toggle;
+		knob.addEventListener("click", () => {
+			const cfg = pricing[key];
+			cfg.off = !cfg.off;
+			knob.classList.toggle("on", cfg.off);
+			const data = cfg.off ? cfg.alt : cfg.on;
+			const amtEl = $(`#${key}-amt`);
+			if (amtEl) amtEl.textContent = data.amt;
+			const perEl = $(`#${key}-per`);
+			if (perEl && data.per) perEl.textContent = data.per;
+			const capEl = $(`#${key}-cap`);
+			if (capEl && data.cap) capEl.textContent = data.cap;
+			// emphasize active label
+			const onLbl = $(`[data-on="${key}"]`),
+				offLbl = $(`[data-off="${key}"]`);
+			if (onLbl && offLbl) {
+				onLbl.classList.toggle("t-off", cfg.off);
+				onLbl.classList.toggle("t-on", !cfg.off);
+				offLbl.classList.toggle("t-on", cfg.off);
+				offLbl.classList.toggle("t-off", !cfg.off);
+			}
+		});
+	});
+
+	/* ---------- Marquee build ---------- */
+	const ticks = [
+		["NIFTY 50", "+1.24%", "up"],
+		["S&P 500", "+0.62%", "up"],
+		["EVIDENCE", "▲", "neu"],
+		["GILT 10Y", "−0.18%", "dn"],
+		["SIGNAL / NOISE", "4.8 : 1", "neu"],
+		["VIX", "−2.1%", "dn"],
+		["SHARPE", "2.34", "neu"],
+		["HANG SENG", "+0.91%", "up"],
+		["CONVICTION", "▲", "neu"],
+		["BRENT", "+0.44%", "up"],
+		["ALPHA · TTM", "+31.4%", "up"],
+		["DXY", "−0.07%", "dn"],
+	];
+	const marquee = $("#marquee");
+	if (marquee) {
+		const build = () =>
+			ticks
+				.map(
+					([a, b, c]) =>
+						`<span class="tick"><span>${a}</span><span class="${c}">${b}</span></span>`,
+				)
+				.join("");
+		marquee.innerHTML = build() + build(); // duplicate for seamless loop
+	}
+
+	/* ---------- Sparkline (hero ticker card) ---------- */
+	const spark = $("#spark");
+	function genPath(w, h, n, jitter) {
+		const pts = [];
+		let v = h * 0.6;
+		for (let i = 0; i < n; i++) {
+			v += (Math.random() - 0.46) * jitter;
+			v = Math.max(h * 0.18, Math.min(h * 0.82, v));
+			pts.push([(i / (n - 1)) * w, v]);
+		}
+		return pts;
+	}
+	function drawSpark() {
+		if (!spark) return;
+		const w = 280,
+			h = 88,
+			n = 30;
+		const pts = genPath(w, h, n, 9);
+		const line = pts
+			.map((p, i) => `${(i ? "L" : "M") + p[0].toFixed(1)} ${p[1].toFixed(1)}`)
+			.join(" ");
+		const area = `${line} L${w} ${h} L0 ${h} Z`;
+		spark.innerHTML =
+			`<path d="${area}" fill="rgba(31,68,255,0.08)"/>` +
+			`<path d="${line}" fill="none" stroke="#1f44ff" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>` +
+			`<circle cx="${w}" cy="${pts[n - 1][1].toFixed(1)}" r="3" fill="#1f44ff"/>`;
+	}
+	drawSpark();
+
+	/* ---------- Rotating ticker metric ---------- */
+	const metrics = [
+		["+31.4<em>%</em>", "Median Alpha · TTM"],
+		["2.34", "Portfolio Sharpe"],
+		["4.8 : 1", "Signal / Noise"],
+		["−42<em>%</em>", "Tail Drawdown"],
+	];
+	const tcVal = $("#tc-val"),
+		tcLab = $("#tc-lab");
+	let mi = 0;
+	if (!reduceMotion && tcVal && tcLab) {
+		setInterval(() => {
+			mi = (mi + 1) % metrics.length;
+			tcVal.style.opacity = "0";
+			tcLab.style.opacity = "0";
+			setTimeout(() => {
+				tcVal.innerHTML = metrics[mi][0];
+				tcLab.textContent = metrics[mi][1];
+				drawSpark();
+				tcVal.style.opacity = "1";
+				tcLab.style.opacity = "1";
+			}, 320);
+		}, 3800);
+		[tcVal, tcLab].forEach((e) => {
+			e.style.transition = "opacity 0.3s";
+		});
+	}
+
+	/* ---------- Case-file data-viz (SVG) ---------- */
+	function drawViz(id, seed) {
+		const svg = $(`#${id}`);
+		if (!svg) return;
+		const W = 400,
+			H = 250,
+			cols = 24;
+		let bars = "";
+		let rnd = seed;
+		const rand = () => {
+			rnd = (rnd * 9301 + 49297) % 233280;
+			return rnd / 233280;
+		};
+		for (let i = 0; i < cols; i++) {
+			const bh = 30 + rand() * 170;
+			const x = 16 + i * ((W - 32) / cols);
+			const bw = (W - 32) / cols - 4;
+			const accent = i % 5 === 0;
+			bars += `<rect x="${x.toFixed(1)}" y="${(H - 16 - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${accent ? "#1f44ff" : "rgba(17,17,20,0.16)"}"/>`;
+		}
+		// trend line over bars
+		let lp = "";
+		for (let i = 0; i < cols; i++) {
+			const x = 16 + i * ((W - 32) / cols) + (W - 32) / cols / 2;
+			const y = 40 + rand() * 120;
+			lp += `${(i ? "L" : "M") + x.toFixed(1)} ${y.toFixed(1)} `;
+		}
+		svg.innerHTML = `<rect width="${W}" height="${H}" fill="#fbfaf6"/>${bars}<path d="${lp}" fill="none" stroke="#111114" stroke-width="1.5" stroke-dasharray="3 3"/>`;
+	}
+	drawViz("viz1", 1771);
+	drawViz("viz2", 9043);
+
+	/* ---------- Hero canvas: drifting point grid ---------- */
+	const canvas = $("#hero-canvas");
+	if (canvas && !reduceMotion) {
+		const ctx = canvas.getContext("2d");
+		let W,
+			H,
+			dpr,
+			pts = [],
+			_raf;
+		function resize() {
+			dpr = Math.min(window.devicePixelRatio || 1, 2);
+			W = canvas.clientWidth;
+			H = canvas.clientHeight;
+			canvas.width = W * dpr;
+			canvas.height = H * dpr;
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+			const count = Math.min(70, Math.floor((W * H) / 22000));
+			pts = [];
+			for (let i = 0; i < count; i++) {
+				pts.push({
+					x: Math.random() * W,
+					y: Math.random() * H,
+					vx: (Math.random() - 0.5) * 0.25,
+					vy: (Math.random() - 0.5) * 0.25,
+					c: Math.random() > 0.8,
+				});
+			}
+		}
+		function frame() {
+			ctx.clearRect(0, 0, W, H);
+			// faint grid
+			ctx.strokeStyle = "rgba(255,255,255,0.04)";
+			ctx.lineWidth = 1;
+			const g = 64;
+			ctx.beginPath();
+			for (let x = 0; x < W; x += g) {
+				ctx.moveTo(x, 0);
+				ctx.lineTo(x, H);
+			}
+			for (let y = 0; y < H; y += g) {
+				ctx.moveTo(0, y);
+				ctx.lineTo(W, y);
+			}
+			ctx.stroke();
+			// connections
+			for (let i = 0; i < pts.length; i++) {
+				const a = pts[i];
+				a.x += a.vx;
+				a.y += a.vy;
+				if (a.x < 0 || a.x > W) a.vx *= -1;
+				if (a.y < 0 || a.y > H) a.vy *= -1;
+				for (let j = i + 1; j < pts.length; j++) {
+					const b = pts[j];
+					const dx = a.x - b.x,
+						dy = a.y - b.y,
+						d = Math.hypot(dx, dy);
+					if (d < 120) {
+						ctx.strokeStyle = `rgba(243,241,234,${(1 - d / 120) * 0.1})`;
+						ctx.beginPath();
+						ctx.moveTo(a.x, a.y);
+						ctx.lineTo(b.x, b.y);
+						ctx.stroke();
+					}
+				}
+			}
+			// points
+			for (const p of pts) {
+				ctx.fillStyle = p.c ? "rgba(31,68,255,0.85)" : "rgba(243,241,234,0.45)";
+				ctx.beginPath();
+				ctx.arc(p.x, p.y, p.c ? 1.8 : 1.2, 0, Math.PI * 2);
+				ctx.fill();
+			}
+			_raf = requestAnimationFrame(frame);
+		}
+		resize();
+		frame();
+		let rt;
+		window.addEventListener("resize", () => {
+			clearTimeout(rt);
+			rt = setTimeout(resize, 200);
+		});
+	}
+
+	/* ---------- Newsletter form ---------- */
+	const form = $("#news-form"),
+		msg = $("#news-msg");
+	if (form) {
+		form.addEventListener("submit", (e) => {
+			e.preventDefault();
+			const name = $("#nf-name").value.trim();
+			const email = $("#nf-email").value.trim();
+			const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+			if (!name) {
+				msg.textContent = "Please enter your name.";
+				msg.className = "news-msg err";
+				return;
+			}
+			if (!valid) {
+				msg.textContent = "Please enter a valid email.";
+				msg.className = "news-msg err";
+				return;
+			}
+			msg.textContent = "Subscribed — the brief is on its way.";
+			msg.className = "news-msg ok";
+			form.reset();
+		});
+	}
+})();
+
+		</script>
+	</body>
+</html>

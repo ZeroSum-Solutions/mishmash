@@ -1,0 +1,15 @@
+{
+  "slug": "paper-circuit-agentic-saas-h16",
+  "name": "Paper Circuit — Agentic Outbound SaaS Landing Page (DRIFT)",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Bricolage",
+    "InterTight",
+    "JetMono"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/paper-circuit-agentic-saas-h16",
+  "source_license": "MIT"
+}

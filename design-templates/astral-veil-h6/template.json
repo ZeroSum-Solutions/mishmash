@@ -1,0 +1,14 @@
+{
+  "slug": "astral-veil-h6",
+  "name": "Astral Veil — Cosmic Nocturne SaaS Landing Page for Novela",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Inter",
+    "Playfair Display"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/astral-veil-h6",
+  "source_license": "MIT"
+}

@@ -1,0 +1,5774 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Carrington Law | Strategic Legal Counsel</title>
+		<meta
+			name="description"
+			content="Carrington Law provides comprehensive legal services with a commitment to excellence, integrity, and client success. Serving businesses and individuals nationwide."
+		>
+		<meta name="theme-color" content="#ffffff">
+
+		<!-- Fuse.js for search -->
+		<script>
+/*!
+ * Fuse.js v7.0.0 - Lightweight fuzzy-search (http://fusejs.io)
+ *
+ * Copyright (c) 2023 Kiro Risk (http://kiro.me)
+ * All Rights Reserved. Apache Software License 2.0
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ */
+var e, t;
+(e = this),
+	(t = function () {
+		"use strict";
+		function e(e, t) {
+			var n = Object.keys(e);
+			if (Object.getOwnPropertySymbols) {
+				var r = Object.getOwnPropertySymbols(e);
+				t &&
+					(r = r.filter(function (t) {
+						return Object.getOwnPropertyDescriptor(e, t).enumerable;
+					})),
+					n.push.apply(n, r);
+			}
+			return n;
+		}
+		function t(t) {
+			for (var n = 1; n < arguments.length; n++) {
+				var r = null != arguments[n] ? arguments[n] : {};
+				n % 2
+					? e(Object(r), !0).forEach(function (e) {
+							c(t, e, r[e]);
+						})
+					: Object.getOwnPropertyDescriptors
+						? Object.defineProperties(t, Object.getOwnPropertyDescriptors(r))
+						: e(Object(r)).forEach(function (e) {
+								Object.defineProperty(
+									t,
+									e,
+									Object.getOwnPropertyDescriptor(r, e),
+								);
+							});
+			}
+			return t;
+		}
+		function n(e) {
+			return (
+				(n =
+					"function" == typeof Symbol && "symbol" == typeof Symbol.iterator
+						? function (e) {
+								return typeof e;
+							}
+						: function (e) {
+								return e &&
+									"function" == typeof Symbol &&
+									e.constructor === Symbol &&
+									e !== Symbol.prototype
+									? "symbol"
+									: typeof e;
+							}),
+				n(e)
+			);
+		}
+		function r(e, t) {
+			if (!(e instanceof t))
+				throw new TypeError("Cannot call a class as a function");
+		}
+		function i(e, t) {
+			for (var n = 0; n < t.length; n++) {
+				var r = t[n];
+				(r.enumerable = r.enumerable || !1),
+					(r.configurable = !0),
+					"value" in r && (r.writable = !0),
+					Object.defineProperty(e, v(r.key), r);
+			}
+		}
+		function o(e, t, n) {
+			return (
+				t && i(e.prototype, t),
+				n && i(e, n),
+				Object.defineProperty(e, "prototype", { writable: !1 }),
+				e
+			);
+		}
+		function c(e, t, n) {
+			return (
+				(t = v(t)) in e
+					? Object.defineProperty(e, t, {
+							value: n,
+							enumerable: !0,
+							configurable: !0,
+							writable: !0,
+						})
+					: (e[t] = n),
+				e
+			);
+		}
+		function a(e, t) {
+			if ("function" != typeof t && null !== t)
+				throw new TypeError(
+					"Super expression must either be null or a function",
+				);
+			(e.prototype = Object.create(t && t.prototype, {
+				constructor: { value: e, writable: !0, configurable: !0 },
+			})),
+				Object.defineProperty(e, "prototype", { writable: !1 }),
+				t && u(e, t);
+		}
+		function s(e) {
+			return (
+				(s = Object.setPrototypeOf
+					? Object.getPrototypeOf.bind()
+					: function (e) {
+							return e.__proto__ || Object.getPrototypeOf(e);
+						}),
+				s(e)
+			);
+		}
+		function u(e, t) {
+			return (
+				(u = Object.setPrototypeOf
+					? Object.setPrototypeOf.bind()
+					: function (e, t) {
+							return (e.__proto__ = t), e;
+						}),
+				u(e, t)
+			);
+		}
+		function h(e, t) {
+			if (t && ("object" == typeof t || "function" == typeof t)) return t;
+			if (void 0 !== t)
+				throw new TypeError(
+					"Derived constructors may only return object or undefined",
+				);
+			return (function (e) {
+				if (void 0 === e)
+					throw new ReferenceError(
+						"this hasn't been initialised - super() hasn't been called",
+					);
+				return e;
+			})(e);
+		}
+		function l(e) {
+			var t = (function () {
+				if ("undefined" == typeof Reflect || !Reflect.construct) return !1;
+				if (Reflect.construct.sham) return !1;
+				if ("function" == typeof Proxy) return !0;
+				try {
+					return (
+						Boolean.prototype.valueOf.call(
+							Reflect.construct(Boolean, [], function () {}),
+						),
+						!0
+					);
+				} catch (e) {
+					return !1;
+				}
+			})();
+			return function () {
+				var n,
+					r = s(e);
+				if (t) {
+					var i = s(this).constructor;
+					n = Reflect.construct(r, arguments, i);
+				} else n = r.apply(this, arguments);
+				return h(this, n);
+			};
+		}
+		function f(e) {
+			return (
+				(function (e) {
+					if (Array.isArray(e)) return d(e);
+				})(e) ||
+				(function (e) {
+					if (
+						("undefined" != typeof Symbol && null != e[Symbol.iterator]) ||
+						null != e["@@iterator"]
+					)
+						return Array.from(e);
+				})(e) ||
+				(function (e, t) {
+					if (e) {
+						if ("string" == typeof e) return d(e, t);
+						var n = Object.prototype.toString.call(e).slice(8, -1);
+						return (
+							"Object" === n && e.constructor && (n = e.constructor.name),
+							"Map" === n || "Set" === n
+								? Array.from(e)
+								: "Arguments" === n ||
+										/^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)
+									? d(e, t)
+									: void 0
+						);
+					}
+				})(e) ||
+				(function () {
+					throw new TypeError(
+						"Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.",
+					);
+				})()
+			);
+		}
+		function d(e, t) {
+			(null == t || t > e.length) && (t = e.length);
+			for (var n = 0, r = new Array(t); n < t; n++) r[n] = e[n];
+			return r;
+		}
+		function v(e) {
+			var t = (function (e, t) {
+				if ("object" != typeof e || null === e) return e;
+				var n = e[Symbol.toPrimitive];
+				if (void 0 !== n) {
+					var r = n.call(e, t || "default");
+					if ("object" != typeof r) return r;
+					throw new TypeError("@@toPrimitive must return a primitive value.");
+				}
+				return ("string" === t ? String : Number)(e);
+			})(e, "string");
+			return "symbol" == typeof t ? t : String(t);
+		}
+		function g(e) {
+			return Array.isArray ? Array.isArray(e) : "[object Array]" === S(e);
+		}
+		var y = 1 / 0;
+		function p(e) {
+			return null == e
+				? ""
+				: (function (e) {
+						if ("string" == typeof e) return e;
+						var t = e + "";
+						return "0" == t && 1 / e == -y ? "-0" : t;
+					})(e);
+		}
+		function m(e) {
+			return "string" == typeof e;
+		}
+		function k(e) {
+			return "number" == typeof e;
+		}
+		function M(e) {
+			return (
+				!0 === e ||
+				!1 === e ||
+				((function (e) {
+					return b(e) && null !== e;
+				})(e) &&
+					"[object Boolean]" == S(e))
+			);
+		}
+		function b(e) {
+			return "object" === n(e);
+		}
+		function x(e) {
+			return null != e;
+		}
+		function w(e) {
+			return !e.trim().length;
+		}
+		function S(e) {
+			return null == e
+				? void 0 === e
+					? "[object Undefined]"
+					: "[object Null]"
+				: Object.prototype.toString.call(e);
+		}
+		var L = function (e) {
+				return "Missing ".concat(e, " property in key");
+			},
+			_ = function (e) {
+				return "Property 'weight' in key '".concat(
+					e,
+					"' must be a positive integer",
+				);
+			},
+			O = Object.prototype.hasOwnProperty,
+			j = (function () {
+				function e(t) {
+					var n = this;
+					r(this, e), (this._keys = []), (this._keyMap = {});
+					var i = 0;
+					t.forEach(function (e) {
+						var t = A(e);
+						n._keys.push(t), (n._keyMap[t.id] = t), (i += t.weight);
+					}),
+						this._keys.forEach(function (e) {
+							e.weight /= i;
+						});
+				}
+				return (
+					o(e, [
+						{
+							key: "get",
+							value: function (e) {
+								return this._keyMap[e];
+							},
+						},
+						{
+							key: "keys",
+							value: function () {
+								return this._keys;
+							},
+						},
+						{
+							key: "toJSON",
+							value: function () {
+								return JSON.stringify(this._keys);
+							},
+						},
+					]),
+					e
+				);
+			})();
+		function A(e) {
+			var t = null,
+				n = null,
+				r = null,
+				i = 1,
+				o = null;
+			if (m(e) || g(e)) (r = e), (t = I(e)), (n = C(e));
+			else {
+				if (!O.call(e, "name")) throw new Error(L("name"));
+				var c = e.name;
+				if (((r = c), O.call(e, "weight") && (i = e.weight) <= 0))
+					throw new Error(_(c));
+				(t = I(c)), (n = C(c)), (o = e.getFn);
+			}
+			return { path: t, id: n, weight: i, src: r, getFn: o };
+		}
+		function I(e) {
+			return g(e) ? e : e.split(".");
+		}
+		function C(e) {
+			return g(e) ? e.join(".") : e;
+		}
+		var E = {
+				useExtendedSearch: !1,
+				getFn: function (e, t) {
+					var n = [],
+						r = !1;
+					return (
+						(function e(t, i, o) {
+							if (x(t))
+								if (i[o]) {
+									var c = t[i[o]];
+									if (!x(c)) return;
+									if (o === i.length - 1 && (m(c) || k(c) || M(c)))
+										n.push(p(c));
+									else if (g(c)) {
+										r = !0;
+										for (var a = 0, s = c.length; a < s; a += 1)
+											e(c[a], i, o + 1);
+									} else i.length && e(c, i, o + 1);
+								} else n.push(t);
+						})(e, m(t) ? t.split(".") : t, 0),
+						r ? n : n[0]
+					);
+				},
+				ignoreLocation: !1,
+				ignoreFieldNorm: !1,
+				fieldNormWeight: 1,
+			},
+			$ = t(
+				t(
+					t(
+						t(
+							{},
+							{
+								isCaseSensitive: !1,
+								includeScore: !1,
+								keys: [],
+								shouldSort: !0,
+								sortFn: function (e, t) {
+									return e.score === t.score
+										? e.idx < t.idx
+											? -1
+											: 1
+										: e.score < t.score
+											? -1
+											: 1;
+								},
+							},
+						),
+						{ includeMatches: !1, findAllMatches: !1, minMatchCharLength: 1 },
+					),
+					{ location: 0, threshold: 0.6, distance: 100 },
+				),
+				E,
+			),
+			F = /[^ ]+/g,
+			R = (function () {
+				function e() {
+					var t =
+							arguments.length > 0 && void 0 !== arguments[0]
+								? arguments[0]
+								: {},
+						n = t.getFn,
+						i = void 0 === n ? $.getFn : n,
+						o = t.fieldNormWeight,
+						c = void 0 === o ? $.fieldNormWeight : o;
+					r(this, e),
+						(this.norm = (function () {
+							var e =
+									arguments.length > 0 && void 0 !== arguments[0]
+										? arguments[0]
+										: 1,
+								t =
+									arguments.length > 1 && void 0 !== arguments[1]
+										? arguments[1]
+										: 3,
+								n = new Map(),
+								r = Math.pow(10, t);
+							return {
+								get: function (t) {
+									var i = t.match(F).length;
+									if (n.has(i)) return n.get(i);
+									var o = 1 / Math.pow(i, 0.5 * e),
+										c = parseFloat(Math.round(o * r) / r);
+									return n.set(i, c), c;
+								},
+								clear: function () {
+									n.clear();
+								},
+							};
+						})(c, 3)),
+						(this.getFn = i),
+						(this.isCreated = !1),
+						this.setIndexRecords();
+				}
+				return (
+					o(e, [
+						{
+							key: "setSources",
+							value: function () {
+								var e =
+									arguments.length > 0 && void 0 !== arguments[0]
+										? arguments[0]
+										: [];
+								this.docs = e;
+							},
+						},
+						{
+							key: "setIndexRecords",
+							value: function () {
+								var e =
+									arguments.length > 0 && void 0 !== arguments[0]
+										? arguments[0]
+										: [];
+								this.records = e;
+							},
+						},
+						{
+							key: "setKeys",
+							value: function () {
+								var e = this,
+									t =
+										arguments.length > 0 && void 0 !== arguments[0]
+											? arguments[0]
+											: [];
+								(this.keys = t),
+									(this._keysMap = {}),
+									t.forEach(function (t, n) {
+										e._keysMap[t.id] = n;
+									});
+							},
+						},
+						{
+							key: "create",
+							value: function () {
+								var e = this;
+								!this.isCreated &&
+									this.docs.length &&
+									((this.isCreated = !0),
+									m(this.docs[0])
+										? this.docs.forEach(function (t, n) {
+												e._addString(t, n);
+											})
+										: this.docs.forEach(function (t, n) {
+												e._addObject(t, n);
+											}),
+									this.norm.clear());
+							},
+						},
+						{
+							key: "add",
+							value: function (e) {
+								var t = this.size();
+								m(e) ? this._addString(e, t) : this._addObject(e, t);
+							},
+						},
+						{
+							key: "removeAt",
+							value: function (e) {
+								this.records.splice(e, 1);
+								for (var t = e, n = this.size(); t < n; t += 1)
+									this.records[t].i -= 1;
+							},
+						},
+						{
+							key: "getValueForItemAtKeyId",
+							value: function (e, t) {
+								return e[this._keysMap[t]];
+							},
+						},
+						{
+							key: "size",
+							value: function () {
+								return this.records.length;
+							},
+						},
+						{
+							key: "_addString",
+							value: function (e, t) {
+								if (x(e) && !w(e)) {
+									var n = { v: e, i: t, n: this.norm.get(e) };
+									this.records.push(n);
+								}
+							},
+						},
+						{
+							key: "_addObject",
+							value: function (e, t) {
+								var n = this,
+									r = { i: t, $: {} };
+								this.keys.forEach(function (t, i) {
+									var o = t.getFn ? t.getFn(e) : n.getFn(e, t.path);
+									if (x(o))
+										if (g(o)) {
+											for (
+												var c = [], a = [{ nestedArrIndex: -1, value: o }];
+												a.length;
+											) {
+												var s = a.pop(),
+													u = s.nestedArrIndex,
+													h = s.value;
+												if (x(h))
+													if (m(h) && !w(h)) {
+														var l = { v: h, i: u, n: n.norm.get(h) };
+														c.push(l);
+													} else
+														g(h) &&
+															h.forEach(function (e, t) {
+																a.push({ nestedArrIndex: t, value: e });
+															});
+											}
+											r.$[i] = c;
+										} else if (m(o) && !w(o)) {
+											var f = { v: o, n: n.norm.get(o) };
+											r.$[i] = f;
+										}
+								}),
+									this.records.push(r);
+							},
+						},
+						{
+							key: "toJSON",
+							value: function () {
+								return { keys: this.keys, records: this.records };
+							},
+						},
+					]),
+					e
+				);
+			})();
+		function P(e, t) {
+			var n =
+					arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : {},
+				r = n.getFn,
+				i = void 0 === r ? $.getFn : r,
+				o = n.fieldNormWeight,
+				c = void 0 === o ? $.fieldNormWeight : o,
+				a = new R({ getFn: i, fieldNormWeight: c });
+			return a.setKeys(e.map(A)), a.setSources(t), a.create(), a;
+		}
+		function N(e) {
+			var t =
+					arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : {},
+				n = t.errors,
+				r = void 0 === n ? 0 : n,
+				i = t.currentLocation,
+				o = void 0 === i ? 0 : i,
+				c = t.expectedLocation,
+				a = void 0 === c ? 0 : c,
+				s = t.distance,
+				u = void 0 === s ? $.distance : s,
+				h = t.ignoreLocation,
+				l = void 0 === h ? $.ignoreLocation : h,
+				f = r / e.length;
+			if (l) return f;
+			var d = Math.abs(a - o);
+			return u ? f + d / u : d ? 1 : f;
+		}
+		var W = 32;
+		function T(e, t, n) {
+			var r =
+					arguments.length > 3 && void 0 !== arguments[3] ? arguments[3] : {},
+				i = r.location,
+				o = void 0 === i ? $.location : i,
+				c = r.distance,
+				a = void 0 === c ? $.distance : c,
+				s = r.threshold,
+				u = void 0 === s ? $.threshold : s,
+				h = r.findAllMatches,
+				l = void 0 === h ? $.findAllMatches : h,
+				f = r.minMatchCharLength,
+				d = void 0 === f ? $.minMatchCharLength : f,
+				v = r.includeMatches,
+				g = void 0 === v ? $.includeMatches : v,
+				y = r.ignoreLocation,
+				p = void 0 === y ? $.ignoreLocation : y;
+			if (t.length > W)
+				throw new Error("Pattern length exceeds max of ".concat(W, "."));
+			for (
+				var m,
+					k = t.length,
+					M = e.length,
+					b = Math.max(0, Math.min(o, M)),
+					x = u,
+					w = b,
+					S = d > 1 || g,
+					L = S ? Array(M) : [];
+				(m = e.indexOf(t, w)) > -1;
+			) {
+				var _ = N(t, {
+					currentLocation: m,
+					expectedLocation: b,
+					distance: a,
+					ignoreLocation: p,
+				});
+				if (((x = Math.min(_, x)), (w = m + k), S))
+					for (var O = 0; O < k; ) (L[m + O] = 1), (O += 1);
+			}
+			w = -1;
+			for (
+				var j = [], A = 1, I = k + M, C = 1 << (k - 1), E = 0;
+				E < k;
+				E += 1
+			) {
+				for (var F = 0, R = I; F < R; )
+					N(t, {
+						errors: E,
+						currentLocation: b + R,
+						expectedLocation: b,
+						distance: a,
+						ignoreLocation: p,
+					}) <= x
+						? (F = R)
+						: (I = R),
+						(R = Math.floor((I - F) / 2 + F));
+				I = R;
+				var P = Math.max(1, b - R + 1),
+					T = l ? M : Math.min(b + R, M) + k,
+					z = Array(T + 2);
+				z[T + 1] = (1 << E) - 1;
+				for (var D = T; D >= P; D -= 1) {
+					var K = D - 1,
+						q = n[e.charAt(K)];
+					if (
+						(S && (L[K] = +!!q),
+						(z[D] = ((z[D + 1] << 1) | 1) & q),
+						E && (z[D] |= ((j[D + 1] | j[D]) << 1) | 1 | j[D + 1]),
+						z[D] & C &&
+							(A = N(t, {
+								errors: E,
+								currentLocation: K,
+								expectedLocation: b,
+								distance: a,
+								ignoreLocation: p,
+							})) <= x)
+					) {
+						if (((x = A), (w = K) <= b)) break;
+						P = Math.max(1, 2 * b - w);
+					}
+				}
+				if (
+					N(t, {
+						errors: E + 1,
+						currentLocation: b,
+						expectedLocation: b,
+						distance: a,
+						ignoreLocation: p,
+					}) > x
+				)
+					break;
+				j = z;
+			}
+			var B = { isMatch: w >= 0, score: Math.max(0.001, A) };
+			if (S) {
+				var J = (function () {
+					for (
+						var e =
+								arguments.length > 0 && void 0 !== arguments[0]
+									? arguments[0]
+									: [],
+							t =
+								arguments.length > 1 && void 0 !== arguments[1]
+									? arguments[1]
+									: $.minMatchCharLength,
+							n = [],
+							r = -1,
+							i = -1,
+							o = 0,
+							c = e.length;
+						o < c;
+						o += 1
+					) {
+						var a = e[o];
+						a && -1 === r
+							? (r = o)
+							: a ||
+								-1 === r ||
+								((i = o - 1) - r + 1 >= t && n.push([r, i]), (r = -1));
+					}
+					return e[o - 1] && o - r >= t && n.push([r, o - 1]), n;
+				})(L, d);
+				J.length ? g && (B.indices = J) : (B.isMatch = !1);
+			}
+			return B;
+		}
+		function z(e) {
+			for (var t = {}, n = 0, r = e.length; n < r; n += 1) {
+				var i = e.charAt(n);
+				t[i] = (t[i] || 0) | (1 << (r - n - 1));
+			}
+			return t;
+		}
+		var D = (function () {
+				function e(t) {
+					var n = this,
+						i =
+							arguments.length > 1 && void 0 !== arguments[1]
+								? arguments[1]
+								: {},
+						o = i.location,
+						c = void 0 === o ? $.location : o,
+						a = i.threshold,
+						s = void 0 === a ? $.threshold : a,
+						u = i.distance,
+						h = void 0 === u ? $.distance : u,
+						l = i.includeMatches,
+						f = void 0 === l ? $.includeMatches : l,
+						d = i.findAllMatches,
+						v = void 0 === d ? $.findAllMatches : d,
+						g = i.minMatchCharLength,
+						y = void 0 === g ? $.minMatchCharLength : g,
+						p = i.isCaseSensitive,
+						m = void 0 === p ? $.isCaseSensitive : p,
+						k = i.ignoreLocation,
+						M = void 0 === k ? $.ignoreLocation : k;
+					if (
+						(r(this, e),
+						(this.options = {
+							location: c,
+							threshold: s,
+							distance: h,
+							includeMatches: f,
+							findAllMatches: v,
+							minMatchCharLength: y,
+							isCaseSensitive: m,
+							ignoreLocation: M,
+						}),
+						(this.pattern = m ? t : t.toLowerCase()),
+						(this.chunks = []),
+						this.pattern.length)
+					) {
+						var b = function (e, t) {
+								n.chunks.push({ pattern: e, alphabet: z(e), startIndex: t });
+							},
+							x = this.pattern.length;
+						if (x > W) {
+							for (var w = 0, S = x % W, L = x - S; w < L; )
+								b(this.pattern.substr(w, W), w), (w += W);
+							if (S) {
+								var _ = x - W;
+								b(this.pattern.substr(_), _);
+							}
+						} else b(this.pattern, 0);
+					}
+				}
+				return (
+					o(e, [
+						{
+							key: "searchIn",
+							value: function (e) {
+								var t = this.options,
+									n = t.isCaseSensitive,
+									r = t.includeMatches;
+								if ((n || (e = e.toLowerCase()), this.pattern === e)) {
+									var i = { isMatch: !0, score: 0 };
+									return r && (i.indices = [[0, e.length - 1]]), i;
+								}
+								var o = this.options,
+									c = o.location,
+									a = o.distance,
+									s = o.threshold,
+									u = o.findAllMatches,
+									h = o.minMatchCharLength,
+									l = o.ignoreLocation,
+									d = [],
+									v = 0,
+									g = !1;
+								this.chunks.forEach(function (t) {
+									var n = t.pattern,
+										i = t.alphabet,
+										o = t.startIndex,
+										y = T(e, n, i, {
+											location: c + o,
+											distance: a,
+											threshold: s,
+											findAllMatches: u,
+											minMatchCharLength: h,
+											includeMatches: r,
+											ignoreLocation: l,
+										}),
+										p = y.isMatch,
+										m = y.score,
+										k = y.indices;
+									p && (g = !0),
+										(v += m),
+										p && k && (d = [].concat(f(d), f(k)));
+								});
+								var y = { isMatch: g, score: g ? v / this.chunks.length : 1 };
+								return g && r && (y.indices = d), y;
+							},
+						},
+					]),
+					e
+				);
+			})(),
+			K = (function () {
+				function e(t) {
+					r(this, e), (this.pattern = t);
+				}
+				return (
+					o(
+						e,
+						[{ key: "search", value: function () {} }],
+						[
+							{
+								key: "isMultiMatch",
+								value: function (e) {
+									return q(e, this.multiRegex);
+								},
+							},
+							{
+								key: "isSingleMatch",
+								value: function (e) {
+									return q(e, this.singleRegex);
+								},
+							},
+						],
+					),
+					e
+				);
+			})();
+		function q(e, t) {
+			var n = e.match(t);
+			return n ? n[1] : null;
+		}
+		var B = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = e === this.pattern;
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, this.pattern.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^="(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^=(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			J = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = -1 === e.indexOf(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "inverse-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^!"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^!(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			U = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = e.startsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, this.pattern.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "prefix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^\^"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^\^(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			V = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = !e.startsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "inverse-prefix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^!\^"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^!\^(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			G = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = e.endsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [e.length - this.pattern.length, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "suffix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^"(.*)"\$$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^(.*)\$$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			H = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = !e.endsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "inverse-suffix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^!"(.*)"\$$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^!(.*)\$$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			Q = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					var i,
+						o =
+							arguments.length > 1 && void 0 !== arguments[1]
+								? arguments[1]
+								: {},
+						c = o.location,
+						a = void 0 === c ? $.location : c,
+						s = o.threshold,
+						u = void 0 === s ? $.threshold : s,
+						h = o.distance,
+						l = void 0 === h ? $.distance : h,
+						f = o.includeMatches,
+						d = void 0 === f ? $.includeMatches : f,
+						v = o.findAllMatches,
+						g = void 0 === v ? $.findAllMatches : v,
+						y = o.minMatchCharLength,
+						p = void 0 === y ? $.minMatchCharLength : y,
+						m = o.isCaseSensitive,
+						k = void 0 === m ? $.isCaseSensitive : m,
+						M = o.ignoreLocation,
+						b = void 0 === M ? $.ignoreLocation : M;
+					return (
+						r(this, n),
+						((i = t.call(this, e))._bitapSearch = new D(e, {
+							location: a,
+							threshold: u,
+							distance: l,
+							includeMatches: d,
+							findAllMatches: g,
+							minMatchCharLength: p,
+							isCaseSensitive: k,
+							ignoreLocation: b,
+						})),
+						i
+					);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									return this._bitapSearch.searchIn(e);
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "fuzzy";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			X = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									for (
+										var t, n = 0, r = [], i = this.pattern.length;
+										(t = e.indexOf(this.pattern, n)) > -1;
+									)
+										(n = t + i), r.push([t, n - 1]);
+									var o = !!r.length;
+									return { isMatch: o, score: o ? 0 : 1, indices: r };
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "include";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^'"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^'(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			Y = [B, X, U, V, H, G, J, Q],
+			Z = Y.length,
+			ee = / +(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/,
+			te = new Set([Q.type, X.type]),
+			ne = (function () {
+				function e(t) {
+					var n =
+							arguments.length > 1 && void 0 !== arguments[1]
+								? arguments[1]
+								: {},
+						i = n.isCaseSensitive,
+						o = void 0 === i ? $.isCaseSensitive : i,
+						c = n.includeMatches,
+						a = void 0 === c ? $.includeMatches : c,
+						s = n.minMatchCharLength,
+						u = void 0 === s ? $.minMatchCharLength : s,
+						h = n.ignoreLocation,
+						l = void 0 === h ? $.ignoreLocation : h,
+						f = n.findAllMatches,
+						d = void 0 === f ? $.findAllMatches : f,
+						v = n.location,
+						g = void 0 === v ? $.location : v,
+						y = n.threshold,
+						p = void 0 === y ? $.threshold : y,
+						m = n.distance,
+						k = void 0 === m ? $.distance : m;
+					r(this, e),
+						(this.query = null),
+						(this.options = {
+							isCaseSensitive: o,
+							includeMatches: a,
+							minMatchCharLength: u,
+							findAllMatches: d,
+							ignoreLocation: l,
+							location: g,
+							threshold: p,
+							distance: k,
+						}),
+						(this.pattern = o ? t : t.toLowerCase()),
+						(this.query = (function (e) {
+							var t =
+								arguments.length > 1 && void 0 !== arguments[1]
+									? arguments[1]
+									: {};
+							return e.split("|").map(function (e) {
+								for (
+									var n = e
+											.trim()
+											.split(ee)
+											.filter(function (e) {
+												return e && !!e.trim();
+											}),
+										r = [],
+										i = 0,
+										o = n.length;
+									i < o;
+									i += 1
+								) {
+									for (var c = n[i], a = !1, s = -1; !a && ++s < Z; ) {
+										var u = Y[s],
+											h = u.isMultiMatch(c);
+										h && (r.push(new u(h, t)), (a = !0));
+									}
+									if (!a)
+										for (s = -1; ++s < Z; ) {
+											var l = Y[s],
+												f = l.isSingleMatch(c);
+											if (f) {
+												r.push(new l(f, t));
+												break;
+											}
+										}
+								}
+								return r;
+							});
+						})(this.pattern, this.options));
+				}
+				return (
+					o(
+						e,
+						[
+							{
+								key: "searchIn",
+								value: function (e) {
+									var t = this.query;
+									if (!t) return { isMatch: !1, score: 1 };
+									var n = this.options,
+										r = n.includeMatches;
+									e = n.isCaseSensitive ? e : e.toLowerCase();
+									for (
+										var i = 0, o = [], c = 0, a = 0, s = t.length;
+										a < s;
+										a += 1
+									) {
+										var u = t[a];
+										(o.length = 0), (i = 0);
+										for (var h = 0, l = u.length; h < l; h += 1) {
+											var d = u[h],
+												v = d.search(e),
+												g = v.isMatch,
+												y = v.indices,
+												p = v.score;
+											if (!g) {
+												(c = 0), (i = 0), (o.length = 0);
+												break;
+											}
+											if (((i += 1), (c += p), r)) {
+												var m = d.constructor.type;
+												te.has(m) ? (o = [].concat(f(o), f(y))) : o.push(y);
+											}
+										}
+										if (i) {
+											var k = { isMatch: !0, score: c / i };
+											return r && (k.indices = o), k;
+										}
+									}
+									return { isMatch: !1, score: 1 };
+								},
+							},
+						],
+						[
+							{
+								key: "condition",
+								value: function (e, t) {
+									return t.useExtendedSearch;
+								},
+							},
+						],
+					),
+					e
+				);
+			})(),
+			re = [];
+		function ie(e, t) {
+			for (var n = 0, r = re.length; n < r; n += 1) {
+				var i = re[n];
+				if (i.condition(e, t)) return new i(e, t);
+			}
+			return new D(e, t);
+		}
+		var oe = "$and",
+			ce = "$or",
+			ae = "$path",
+			se = "$val",
+			ue = function (e) {
+				return !(!e[oe] && !e[ce]);
+			},
+			he = function (e) {
+				return c(
+					{},
+					oe,
+					Object.keys(e).map(function (t) {
+						return c({}, t, e[t]);
+					}),
+				);
+			};
+		function le(e, t) {
+			var n = (
+					arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : {}
+				).auto,
+				r = void 0 === n || n;
+			return (
+				ue(e) || (e = he(e)),
+				(function e(n) {
+					var i = Object.keys(n),
+						o = (function (e) {
+							return !!e[ae];
+						})(n);
+					if (!o && i.length > 1 && !ue(n)) return e(he(n));
+					if (
+						(function (e) {
+							return !g(e) && b(e) && !ue(e);
+						})(n)
+					) {
+						var c = o ? n[ae] : i[0],
+							a = o ? n[se] : n[c];
+						if (!m(a))
+							throw new Error(
+								(function (e) {
+									return "Invalid value for key ".concat(e);
+								})(c),
+							);
+						var s = { keyId: C(c), pattern: a };
+						return r && (s.searcher = ie(a, t)), s;
+					}
+					var u = { children: [], operator: i[0] };
+					return (
+						i.forEach(function (t) {
+							var r = n[t];
+							g(r) &&
+								r.forEach(function (t) {
+									u.children.push(e(t));
+								});
+						}),
+						u
+					);
+				})(e)
+			);
+		}
+		function fe(e, t) {
+			var n = e.matches;
+			(t.matches = []),
+				x(n) &&
+					n.forEach(function (e) {
+						if (x(e.indices) && e.indices.length) {
+							var n = { indices: e.indices, value: e.value };
+							e.key && (n.key = e.key.src),
+								e.idx > -1 && (n.refIndex = e.idx),
+								t.matches.push(n);
+						}
+					});
+		}
+		function de(e, t) {
+			t.score = e.score;
+		}
+		var ve = (function () {
+			function e(n) {
+				var i =
+						arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : {},
+					o = arguments.length > 2 ? arguments[2] : void 0;
+				r(this, e),
+					(this.options = t(t({}, $), i)),
+					this.options.useExtendedSearch,
+					(this._keyStore = new j(this.options.keys)),
+					this.setCollection(n, o);
+			}
+			return (
+				o(e, [
+					{
+						key: "setCollection",
+						value: function (e, t) {
+							if (((this._docs = e), t && !(t instanceof R)))
+								throw new Error("Incorrect 'index' type");
+							this._myIndex =
+								t ||
+								P(this.options.keys, this._docs, {
+									getFn: this.options.getFn,
+									fieldNormWeight: this.options.fieldNormWeight,
+								});
+						},
+					},
+					{
+						key: "add",
+						value: function (e) {
+							x(e) && (this._docs.push(e), this._myIndex.add(e));
+						},
+					},
+					{
+						key: "remove",
+						value: function () {
+							for (
+								var e =
+										arguments.length > 0 && void 0 !== arguments[0]
+											? arguments[0]
+											: function () {
+													return !1;
+												},
+									t = [],
+									n = 0,
+									r = this._docs.length;
+								n < r;
+								n += 1
+							) {
+								var i = this._docs[n];
+								e(i, n) && (this.removeAt(n), (n -= 1), (r -= 1), t.push(i));
+							}
+							return t;
+						},
+					},
+					{
+						key: "removeAt",
+						value: function (e) {
+							this._docs.splice(e, 1), this._myIndex.removeAt(e);
+						},
+					},
+					{
+						key: "getIndex",
+						value: function () {
+							return this._myIndex;
+						},
+					},
+					{
+						key: "search",
+						value: function (e) {
+							var t = (
+									arguments.length > 1 && void 0 !== arguments[1]
+										? arguments[1]
+										: {}
+								).limit,
+								n = void 0 === t ? -1 : t,
+								r = this.options,
+								i = r.includeMatches,
+								o = r.includeScore,
+								c = r.shouldSort,
+								a = r.sortFn,
+								s = r.ignoreFieldNorm,
+								u = m(e)
+									? m(this._docs[0])
+										? this._searchStringList(e)
+										: this._searchObjectList(e)
+									: this._searchLogical(e);
+							return (
+								(function (e, t) {
+									var n = t.ignoreFieldNorm,
+										r = void 0 === n ? $.ignoreFieldNorm : n;
+									e.forEach(function (e) {
+										var t = 1;
+										e.matches.forEach(function (e) {
+											var n = e.key,
+												i = e.norm,
+												o = e.score,
+												c = n ? n.weight : null;
+											t *= Math.pow(
+												0 === o && c ? Number.EPSILON : o,
+												(c || 1) * (r ? 1 : i),
+											);
+										}),
+											(e.score = t);
+									});
+								})(u, { ignoreFieldNorm: s }),
+								c && u.sort(a),
+								k(n) && n > -1 && (u = u.slice(0, n)),
+								(function (e, t) {
+									var n =
+											arguments.length > 2 && void 0 !== arguments[2]
+												? arguments[2]
+												: {},
+										r = n.includeMatches,
+										i = void 0 === r ? $.includeMatches : r,
+										o = n.includeScore,
+										c = void 0 === o ? $.includeScore : o,
+										a = [];
+									return (
+										i && a.push(fe),
+										c && a.push(de),
+										e.map(function (e) {
+											var n = e.idx,
+												r = { item: t[n], refIndex: n };
+											return (
+												a.length &&
+													a.forEach(function (t) {
+														t(e, r);
+													}),
+												r
+											);
+										})
+									);
+								})(u, this._docs, { includeMatches: i, includeScore: o })
+							);
+						},
+					},
+					{
+						key: "_searchStringList",
+						value: function (e) {
+							var t = ie(e, this.options),
+								n = this._myIndex.records,
+								r = [];
+							return (
+								n.forEach(function (e) {
+									var n = e.v,
+										i = e.i,
+										o = e.n;
+									if (x(n)) {
+										var c = t.searchIn(n),
+											a = c.isMatch,
+											s = c.score,
+											u = c.indices;
+										a &&
+											r.push({
+												item: n,
+												idx: i,
+												matches: [{ score: s, value: n, norm: o, indices: u }],
+											});
+									}
+								}),
+								r
+							);
+						},
+					},
+					{
+						key: "_searchLogical",
+						value: function (e) {
+							var t = this,
+								n = le(e, this.options),
+								r = function e(n, r, i) {
+									if (!n.children) {
+										var o = n.keyId,
+											c = n.searcher,
+											a = t._findMatches({
+												key: t._keyStore.get(o),
+												value: t._myIndex.getValueForItemAtKeyId(r, o),
+												searcher: c,
+											});
+										return a && a.length
+											? [{ idx: i, item: r, matches: a }]
+											: [];
+									}
+									for (
+										var s = [], u = 0, h = n.children.length;
+										u < h;
+										u += 1
+									) {
+										var l = e(n.children[u], r, i);
+										if (l.length) s.push.apply(s, f(l));
+										else if (n.operator === oe) return [];
+									}
+									return s;
+								},
+								i = this._myIndex.records,
+								o = {},
+								c = [];
+							return (
+								i.forEach(function (e) {
+									var t = e.$,
+										i = e.i;
+									if (x(t)) {
+										var a = r(n, t, i);
+										a.length &&
+											(o[i] ||
+												((o[i] = { idx: i, item: t, matches: [] }),
+												c.push(o[i])),
+											a.forEach(function (e) {
+												var t,
+													n = e.matches;
+												(t = o[i].matches).push.apply(t, f(n));
+											}));
+									}
+								}),
+								c
+							);
+						},
+					},
+					{
+						key: "_searchObjectList",
+						value: function (e) {
+							var t = this,
+								n = ie(e, this.options),
+								r = this._myIndex,
+								i = r.keys,
+								o = r.records,
+								c = [];
+							return (
+								o.forEach(function (e) {
+									var r = e.$,
+										o = e.i;
+									if (x(r)) {
+										var a = [];
+										i.forEach(function (e, i) {
+											a.push.apply(
+												a,
+												f(t._findMatches({ key: e, value: r[i], searcher: n })),
+											);
+										}),
+											a.length && c.push({ idx: o, item: r, matches: a });
+									}
+								}),
+								c
+							);
+						},
+					},
+					{
+						key: "_findMatches",
+						value: function (e) {
+							var t = e.key,
+								n = e.value,
+								r = e.searcher;
+							if (!x(n)) return [];
+							var i = [];
+							if (g(n))
+								n.forEach(function (e) {
+									var n = e.v,
+										o = e.i,
+										c = e.n;
+									if (x(n)) {
+										var a = r.searchIn(n),
+											s = a.isMatch,
+											u = a.score,
+											h = a.indices;
+										s &&
+											i.push({
+												score: u,
+												key: t,
+												value: n,
+												idx: o,
+												norm: c,
+												indices: h,
+											});
+									}
+								});
+							else {
+								var o = n.v,
+									c = n.n,
+									a = r.searchIn(o),
+									s = a.isMatch,
+									u = a.score,
+									h = a.indices;
+								s &&
+									i.push({ score: u, key: t, value: o, norm: c, indices: h });
+							}
+							return i;
+						},
+					},
+				]),
+				e
+			);
+		})();
+		return (
+			(ve.version = "7.0.0"),
+			(ve.createIndex = P),
+			(ve.parseIndex = function (e) {
+				var t =
+						arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : {},
+					n = t.getFn,
+					r = void 0 === n ? $.getFn : n,
+					i = t.fieldNormWeight,
+					o = void 0 === i ? $.fieldNormWeight : i,
+					c = e.keys,
+					a = e.records,
+					s = new R({ getFn: r, fieldNormWeight: o });
+				return s.setKeys(c), s.setIndexRecords(a), s;
+			}),
+			(ve.config = $),
+			(function () {
+				re.push.apply(re, arguments);
+			})(ne),
+			ve
+		);
+	}),
+	"object" == typeof exports && "undefined" != typeof module
+		? (module.exports = t())
+		: "function" == typeof define && define.amd
+			? define(t)
+			: ((e = "undefined" != typeof globalThis ? globalThis : e || self).Fuse =
+					t());
+
+		</script>
+
+		<style>
+/* ============================================================
+   Carrington Law styles.css
+   Pixel-faithful clone of lexingtonthemes/carrington
+   ============================================================ */
+
+
+
+
+
+
+
+
+
+/* ---------- CSS custom properties ---------- */
+:root {
+	/* Fonts */
+	--font-sans: "Inter", sans-serif;
+	--font-display: "Newsreader", serif;
+	--font-mono:
+		ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+		"Courier New", monospace;
+
+	/* Color: accent (warm dark teal/stone) */
+	--color-accent-50: #f0f4f4;
+	--color-accent-100: #dce8e9;
+	--color-accent-200: #b8d1d3;
+	--color-accent-300: #91b9bc;
+	--color-accent-400: #699fa4;
+	--color-accent-500: #45858a;
+	--color-accent-600: #2e6166;
+	--color-accent-700: #1e4347;
+	--color-accent-800: #0f292c; /* darkest usable */
+	--color-accent-900: #0a1a1c;
+	--color-accent-950: #060f10;
+
+	/* Color: secondary (gold/amber) */
+	--color-secondary-50: #fffbeb;
+	--color-secondary-100: #fef3c7;
+	--color-secondary-200: #fde68a;
+	--color-secondary-300: #fcd34d;
+	--color-secondary-400: #fbbf24; /* gold highlight */
+	--color-secondary-500: #f59e0b;
+	--color-secondary-600: #d97706;
+	--color-secondary-700: #b45309;
+	--color-secondary-800: #92400e;
+	--color-secondary-900: #78350f;
+	--color-secondary-950: #451a03;
+
+	/* Color: base (neutral stone/warm gray) */
+	--color-base-50: #fafaf9;
+	--color-base-100: #f5f5f4;
+	--color-base-200: #e7e5e4;
+	--color-base-300: #d6d3d1;
+	--color-base-400: #a8a29e;
+	--color-base-500: #78716c;
+	--color-base-600: #57534e;
+	--color-base-700: #44403c;
+	--color-base-800: #292524;
+	--color-base-900: #1c1917;
+	--color-base-950: #0c0a09;
+
+	/* Whites/blacks */
+	--color-white: #ffffff;
+	--color-black: #000000;
+
+	/* Spacing base (0.25rem = 4px) */
+	--spacing: 0.25rem;
+
+	/* Type scale */
+	--text-xs: 0.75rem;
+	--text-sm: 0.875rem;
+	--text-base: 1rem;
+	--text-lg: 1.125rem;
+	--text-xl: 1.25rem;
+	--text-2xl: 1.5rem;
+	--text-3xl: 1.875rem;
+	--text-4xl: 2.25rem;
+	--text-5xl: 3rem;
+	--text-6xl: 3.75rem;
+	--text-7xl: 4.5rem;
+
+	/* Radii */
+	--radius-lg: 0.5rem;
+
+	/* Transitions */
+	--transition-duration: 0.15s;
+	--transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+
+	/* Blur */
+	--blur-sm: 8px;
+}
+
+/* ---------- Base reset ---------- */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+	border: 0 solid;
+	margin: 0;
+	padding: 0;
+}
+
+html {
+	scroll-behavior: smooth;
+	text-size-adjust: 100%;
+	line-height: 1.5;
+	font-family: var(--font-sans);
+	-webkit-tap-highlight-color: transparent;
+}
+
+body {
+	display: flex;
+	flex-direction: column;
+	background: var(--color-white);
+	min-height: 100svh;
+	color: var(--color-base-800);
+	-webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	font-size: inherit;
+	font-weight: inherit;
+}
+a {
+	color: inherit;
+	text-decoration: inherit;
+}
+b,
+strong {
+	font-weight: bolder;
+}
+img,
+svg,
+video {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	vertical-align: middle;
+}
+button,
+input,
+select,
+textarea {
+	font: inherit;
+	letter-spacing: inherit;
+	color: inherit;
+	background: transparent;
+	border-radius: 0;
+	opacity: 1;
+}
+ol,
+ul {
+	list-style: none;
+}
+[hidden] {
+	display: none !important;
+}
+
+/* ---------- Utility: sr-only ---------- */
+.sr-only {
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border-width: 0;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	position: absolute;
+	overflow: hidden;
+}
+
+/* ============================================================
+   LAYOUT CONTAINER
+   ============================================================ */
+.container {
+	max-width: 100vw;
+	width: 100%;
+	margin-inline: auto;
+	padding-inline: 2rem; /* px-8 */
+}
+
+@media (min-width: 48rem) {
+	.container {
+		padding-inline: 3rem;
+	} /* px-12 */
+}
+@media (min-width: 64rem) {
+	.container {
+		padding-inline: 6rem;
+	} /* px-24 */
+}
+@media (min-width: 120rem) {
+	.container {
+		max-width: 120rem;
+	}
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+.site-nav {
+	position: fixed;
+	top: 0;
+	width: 100%;
+	z-index: 50;
+	transition:
+		background-color 0.3s var(--transition-timing),
+		border-color 0.3s var(--transition-timing),
+		color 0.3s var(--transition-timing);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.site-nav.scrolled {
+	background: var(--color-white);
+	border-bottom-color: var(--color-base-200);
+}
+
+.nav-inner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-block: 0.75rem;
+	position: relative;
+}
+
+/* Logo */
+.nav-logo svg {
+	height: 1rem;
+	color: var(--color-white);
+	transition: color 0.3s;
+}
+.site-nav.scrolled .nav-logo svg {
+	color: var(--color-base-800);
+}
+
+/* Desktop left nav */
+.nav-left {
+	display: none;
+	align-items: center;
+	gap: 1.5rem;
+}
+@media (min-width: 64rem) {
+	.nav-left {
+		display: flex;
+	}
+}
+
+.nav-explore-btn {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	font-size: var(--text-sm);
+	color: var(--color-white);
+	background: none;
+	cursor: pointer;
+	transition: color 0.3s;
+	padding: 0;
+	border: none;
+	outline: none;
+}
+.site-nav.scrolled .nav-explore-btn {
+	color: var(--color-base-800);
+}
+
+.nav-explore-btn .chevron {
+	width: 1rem;
+	height: 1rem;
+	transition: transform 0.2s;
+}
+.nav-explore-btn[aria-expanded="true"] .chevron {
+	transform: rotate(180deg);
+}
+
+/* Desktop right links */
+.nav-right {
+	display: none;
+	align-items: center;
+	gap: 1.5rem;
+}
+@media (min-width: 64rem) {
+	.nav-right {
+		display: flex;
+	}
+}
+
+.nav-right a {
+	font-size: var(--text-sm);
+	color: var(--color-white);
+	transition: color 0.3s;
+	white-space: nowrap;
+}
+.site-nav.scrolled .nav-right a {
+	color: var(--color-base-800);
+}
+
+/* Nav actions (search + buy) */
+.nav-actions {
+	display: none;
+	gap: 0.5rem;
+	align-items: center;
+}
+@media (min-width: 64rem) {
+	.nav-actions {
+		display: flex;
+	}
+}
+
+/* Buttons shared */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-weight: 600;
+	transition:
+		background-color 0.3s,
+		color 0.3s;
+	cursor: pointer;
+	user-select: none;
+	white-space: nowrap;
+	border: none;
+	outline: none;
+	text-decoration: none;
+}
+.btn:focus-visible {
+	outline: 2px solid currentcolor;
+	outline-offset: 2px;
+}
+
+.btn-dark {
+	color: var(--color-white);
+	background: var(--color-accent-800);
+	font-size: var(--text-xs);
+	height: 2.5rem;
+	padding-inline: 0.875rem;
+}
+.btn-dark:hover {
+	background: var(--color-accent-900);
+}
+
+.btn-light {
+	color: var(--color-accent-800);
+	background: var(--color-base-100);
+	font-size: var(--text-xs);
+	height: 2.5rem;
+	padding-inline: 0.875rem;
+}
+.btn-light:hover {
+	background: var(--color-base-100);
+}
+
+.btn-icon {
+	color: var(--color-white);
+	background: var(--color-accent-800);
+	width: 2.5rem;
+	height: 2.5rem;
+	padding: 0.75rem;
+	font-size: var(--text-base);
+}
+.btn-icon:hover {
+	background: var(--color-accent-900);
+}
+.btn-icon svg {
+	width: 1.25rem;
+	height: 1.25rem;
+}
+
+/* Mobile hamburger */
+.nav-burger {
+	display: flex;
+	position: relative;
+	color: var(--color-white);
+	background: none;
+	border: none;
+	cursor: pointer;
+	transition: color 0.3s;
+}
+@media (min-width: 64rem) {
+	.nav-burger {
+		display: none;
+	}
+}
+.site-nav.scrolled .nav-burger {
+	color: var(--color-base-800);
+}
+
+.nav-burger svg {
+	width: 2rem;
+	height: 2rem;
+}
+.nav-burger .icon-close {
+	display: none;
+}
+.nav-burger[aria-expanded="true"] .icon-burger {
+	display: none;
+}
+.nav-burger[aria-expanded="true"] .icon-close {
+	display: block;
+}
+
+/* ============================================================
+   MEGA MENU
+   ============================================================ */
+#mega-desktop {
+	position: absolute;
+	inset-inline: 0;
+	top: 100%;
+	margin-top: 0.5rem;
+	z-index: 50;
+	visibility: hidden;
+	opacity: 0;
+	pointer-events: none;
+	transition:
+		opacity 0.15s,
+		visibility 0.15s;
+}
+#mega-desktop.visible {
+	visibility: visible;
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.mega-panel {
+	background: var(--color-accent-900);
+	border: 1px solid rgba(255, 255, 255, 0.05);
+	box-shadow:
+		0 20px 25px -5px rgba(0, 0, 0, 0.1),
+		0 8px 10px -6px rgba(0, 0, 0, 0.1);
+	overflow: hidden;
+}
+
+.mega-grid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	align-items: start;
+	/* divide-x divide-white/10 */
+}
+.mega-grid > * + * {
+	border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mega-col {
+	padding: 1.5rem;
+	height: 100%;
+}
+
+.mega-label {
+	font-size: var(--text-xs);
+	color: var(--color-secondary-400);
+	letter-spacing: 0.025em;
+	display: block;
+}
+
+.mega-divider {
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	margin-top: 0.5rem;
+	padding-top: 0.5rem;
+}
+
+.mega-links {
+	list-style: none;
+}
+.mega-links li {
+	margin-top: 0.5rem;
+}
+.mega-links a {
+	font-size: var(--text-sm);
+	color: var(--color-base-200);
+	display: block;
+	transition: color 0.15s;
+}
+.mega-links a:hover {
+	color: var(--color-secondary-500);
+}
+
+.mega-insight-title {
+	font-size: var(--text-sm);
+	font-weight: 500;
+	color: var(--color-base-200);
+}
+.mega-insight-desc {
+	font-size: var(--text-xs);
+	color: var(--color-base-600);
+	margin-top: 0.25rem;
+}
+
+.mega-col-about img {
+	object-fit: cover;
+	object-position: top;
+	width: 100%;
+	height: 10rem;
+	border-radius: var(--radius-lg);
+}
+.mega-about-title {
+	font-family: var(--font-display);
+	font-size: var(--text-2xl);
+	color: var(--color-white);
+	margin-top: 1rem;
+}
+.mega-about-desc {
+	font-size: var(--text-sm);
+	color: var(--color-base-600);
+	margin-top: 0.5rem;
+}
+.mega-contact-links {
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+.mega-contact-links a {
+	font-size: var(--text-xs);
+	color: var(--color-base-300);
+	transition: color 0.15s;
+}
+.mega-contact-links a:hover {
+	color: var(--color-white);
+}
+.mega-contact-links a.cta {
+	color: var(--color-white);
+}
+.mega-contact-links a.cta:hover {
+	color: var(--color-secondary-400);
+}
+
+.mega-explore-all {
+	display: flex;
+	font-size: var(--text-sm);
+	color: var(--color-white);
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	transition: color 0.15s;
+}
+.mega-explore-all:hover {
+	color: var(--color-secondary-400);
+}
+
+.mega-insight-item {
+	padding-block: 0.5rem;
+}
+
+/* ============================================================
+   MOBILE MENU
+   ============================================================ */
+#mobile-menu {
+	position: absolute;
+	inset-inline: 0;
+	top: 100%;
+	padding: 2rem;
+	overflow: hidden;
+	transition:
+		max-height 0.3s ease-out,
+		opacity 0.3s ease-out,
+		transform 0.3s ease-out;
+	max-height: 0;
+	opacity: 0;
+	transform: translateY(-0.5rem);
+	pointer-events: none;
+	z-index: 40;
+}
+#mobile-menu.open {
+	max-height: 100vh;
+	opacity: 1;
+	transform: translateY(0);
+	pointer-events: auto;
+}
+
+.mobile-menu-inner {
+	background: var(--color-accent-900);
+	backdrop-filter: blur(8px);
+	padding: 2rem;
+}
+
+.mobile-menu-links {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	text-align: right;
+}
+.mobile-menu-links a {
+	color: var(--color-white);
+	font-size: var(--text-sm);
+	transition: color 0.15s;
+}
+
+.mobile-menu-actions {
+	margin-top: 3rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.btn-mobile-primary {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-weight: 600;
+	color: var(--color-white);
+	background: var(--color-accent-600);
+	height: 3rem;
+	font-size: var(--text-sm);
+	width: 100%;
+	text-decoration: none;
+}
+.btn-mobile-secondary {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-weight: 600;
+	color: var(--color-accent-800);
+	background: var(--color-base-100);
+	height: 3rem;
+	font-size: var(--text-sm);
+	width: 100%;
+	text-decoration: none;
+}
+
+.mobile-menu-contact {
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+.mobile-menu-contact a {
+	font-size: var(--text-xs);
+	color: var(--color-base-300);
+	transition: color 0.15s;
+}
+.mobile-menu-contact a:hover {
+	color: var(--color-white);
+}
+
+/* ============================================================
+   HERO / VIDEO SECTION
+   ============================================================ */
+.hero-video-wrap {
+	position: relative;
+	overflow: hidden;
+}
+
+.hero-video {
+	object-fit: cover;
+	object-position: center;
+	width: 100%;
+	height: 60dvh;
+	background: var(--color-base-50);
+	display: block;
+}
+@media (min-width: 64rem) {
+	.hero-video {
+		height: 72dvh;
+	}
+}
+
+.hero-overlay {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background: rgba(6, 15, 16, 0.7);
+}
+
+.hero-text {
+	padding-block: 3rem;
+}
+
+.hero-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	align-items: end;
+	gap: 1rem;
+}
+@media (min-width: 64rem) {
+	.hero-grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+
+.hero-heading {
+	font-family: var(--font-display);
+	font-size: var(--text-4xl);
+	color: var(--color-accent-800);
+	text-wrap: balance;
+	line-height: 1.1;
+}
+@media (min-width: 48rem) {
+	.hero-heading {
+		font-size: var(--text-5xl);
+	}
+}
+@media (min-width: 64rem) {
+	.hero-heading {
+		font-size: var(--text-6xl);
+		grid-column: span 2;
+	}
+}
+
+.hero-sub {
+	font-size: var(--text-sm);
+	color: var(--color-base-600);
+	line-height: 1.625;
+}
+
+/* ============================================================
+   PROVEN RESULTS / STATS
+   ============================================================ */
+.section-bg-light {
+	background: var(--color-base-50);
+}
+
+.section-header {
+	display: grid;
+	grid-template-columns: 1fr;
+	align-items: start;
+	gap: 2rem;
+}
+@media (min-width: 64rem) {
+	.section-header {
+		grid-template-columns: 1fr 3fr;
+	}
+}
+
+.section-label {
+	font-size: var(--text-xs);
+	font-weight: 600;
+	letter-spacing: 0.025em;
+	text-transform: uppercase;
+}
+
+.section-label-accent {
+	color: var(--color-accent-700);
+}
+.section-label-secondary {
+	color: var(--color-secondary-500);
+}
+
+.section-heading {
+	font-family: var(--font-display);
+	color: var(--color-accent-800);
+	text-wrap: balance;
+	font-size: var(--text-3xl);
+}
+@media (min-width: 48rem) {
+	.section-heading {
+		font-size: var(--text-4xl);
+	}
+}
+@media (min-width: 64rem) {
+	.section-heading {
+		font-size: var(--text-5xl);
+	}
+}
+
+.section-desc {
+	color: var(--color-base-700);
+	font-size: var(--text-base);
+	margin-top: 0.5rem;
+}
+.section-desc-muted {
+	color: var(--color-base-600);
+	font-size: var(--text-base);
+	margin-top: 1rem;
+}
+
+.stats-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 2rem;
+	margin-top: 3rem;
+}
+@media (min-width: 40rem) {
+	.stats-grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+@media (min-width: 64rem) {
+	.stats-grid {
+		grid-template-columns: repeat(6, 1fr);
+		margin-top: 6rem;
+		border-left: 1px solid var(--color-base-200);
+		border-right: 1px solid var(--color-base-200);
+	}
+	.stats-grid > li + li {
+		border-left: 1px solid var(--color-base-200);
+	}
+}
+
+.stat-item {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+@media (min-width: 64rem) {
+	.stat-item {
+		gap: 12rem;
+		padding-inline: 1rem;
+	}
+}
+
+.stat-label {
+	font-size: var(--text-base);
+	color: var(--color-base-700);
+	font-weight: 500;
+	text-transform: uppercase;
+}
+
+.stat-value {
+	font-family: var(--font-display);
+	font-style: italic;
+	font-weight: 500;
+	color: var(--color-accent-800);
+	font-size: var(--text-3xl);
+}
+@media (min-width: 48rem) {
+	.stat-value {
+		font-size: var(--text-4xl);
+	}
+}
+@media (min-width: 64rem) {
+	.stat-value {
+		font-size: var(--text-5xl);
+	}
+}
+
+/* ============================================================
+   PHILOSOPHY / VALUES
+   ============================================================ */
+.values-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+	margin-top: 3rem;
+}
+@media (min-width: 64rem) {
+	.values-grid {
+		grid-template-columns: repeat(3, 1fr);
+		margin-top: 6rem;
+	}
+}
+
+.value-card {
+	background: var(--color-base-50);
+	padding: 2rem;
+	display: flex;
+	flex-direction: column;
+}
+
+.value-icon {
+	width: 2rem;
+	height: 2rem;
+	color: var(--color-secondary-400);
+}
+
+.value-title {
+	font-family: var(--font-display);
+	color: var(--color-accent-800);
+	margin-top: 3rem;
+	font-size: var(--text-lg);
+}
+@media (min-width: 48rem) {
+	.value-title {
+		font-size: var(--text-2xl);
+	}
+}
+@media (min-width: 64rem) {
+	.value-title {
+		font-size: var(--text-3xl);
+	}
+}
+
+.value-desc {
+	font-size: var(--text-sm);
+	color: var(--color-base-600);
+	font-weight: 500;
+	margin-top: 0.5rem;
+}
+
+/* ============================================================
+   OUR APPROACH (sticky scroll)
+   ============================================================ */
+.approach-section {
+	padding-block: 6rem;
+}
+
+.approach-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+}
+@media (min-width: 64rem) {
+	.approach-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+.approach-left {
+	position: relative;
+	width: 100%;
+}
+@media (min-width: 64rem) {
+	.approach-left-sticky {
+		position: sticky;
+		top: 4rem;
+		height: 100vh;
+	}
+}
+
+.approach-img {
+	object-fit: cover;
+	object-position: center;
+	width: 100%;
+	height: 100%;
+	background: var(--color-base-50);
+}
+
+.approach-overlay {
+	background: var(--color-accent-900);
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	justify-content: flex-start;
+	padding: 6rem 2rem;
+	z-index: 10;
+}
+@media (min-width: 48rem) {
+	.approach-overlay {
+		padding-inline: 3rem;
+	}
+}
+@media (min-width: 64rem) {
+	.approach-overlay {
+		position: absolute;
+		inset: 0;
+		background: rgba(10, 26, 28, 0.9);
+		padding-inline: 6rem;
+	}
+}
+
+.approach-label {
+	font-size: var(--text-xs);
+	color: var(--color-secondary-400);
+	letter-spacing: 0.025em;
+	text-transform: uppercase;
+}
+
+.approach-heading {
+	font-family: var(--font-display);
+	color: var(--color-white);
+	font-size: var(--text-3xl);
+	margin-top: 3rem;
+	text-wrap: balance;
+}
+@media (min-width: 48rem) {
+	.approach-heading {
+		font-size: var(--text-4xl);
+	}
+}
+@media (min-width: 64rem) {
+	.approach-heading {
+		font-size: var(--text-5xl);
+	}
+}
+
+.approach-desc {
+	font-size: var(--text-sm);
+	color: var(--color-base-300);
+	margin-top: 0.5rem;
+}
+
+.approach-testimonial {
+	margin-top: 3rem;
+	display: grid;
+	grid-template-columns: 1fr;
+	background: rgba(255, 255, 255, 0.05);
+	backdrop-filter: blur(8px);
+	overflow: hidden;
+}
+@media (min-width: 64rem) {
+	.approach-testimonial {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+.approach-testimonial img {
+	object-fit: cover;
+	object-position: top;
+	height: 15rem;
+	width: 100%;
+}
+
+.approach-testimonial-body {
+	padding: 1rem;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	height: 100%;
+}
+
+.approach-testimonial blockquote p {
+	font-size: var(--text-sm);
+	color: var(--color-base-300);
+	font-style: italic;
+}
+
+.approach-testimonial figcaption {
+	margin-top: 0.75rem;
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.approach-testimonial figcaption p {
+	font-size: var(--text-xs);
+	color: var(--color-secondary-300);
+	font-weight: 500;
+}
+
+/* Right: sticky process cards */
+.approach-right {
+	padding: 2rem;
+	background: var(--color-base-50);
+}
+@media (min-width: 64rem) {
+	.approach-right {
+		padding: 5rem;
+	}
+}
+
+.process-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+}
+
+.process-card {
+	background: var(--color-white);
+	padding: 2rem;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+}
+@media (min-width: 64rem) {
+	.process-card {
+		position: sticky;
+		top: 5rem;
+	}
+}
+
+.process-number {
+	font-family: var(--font-display);
+	font-style: italic;
+	font-weight: 500;
+	color: var(--color-accent-800);
+	font-size: var(--text-4xl);
+}
+@media (min-width: 64rem) {
+	.process-number {
+		font-size: var(--text-6xl);
+	}
+}
+
+.process-title {
+	font-family: var(--font-display);
+	color: var(--color-base-800);
+	margin-top: 3rem;
+	font-size: var(--text-xl);
+}
+@media (min-width: 64rem) {
+	.process-title {
+		font-size: var(--text-3xl);
+	}
+}
+
+.process-desc {
+	font-size: var(--text-sm);
+	color: var(--color-base-600);
+	text-wrap: balance;
+}
+
+.process-list-items {
+	list-style: disc;
+	padding-left: 1.2rem;
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--color-base-100);
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+.process-list-items li {
+	font-size: var(--text-sm);
+	color: var(--color-base-600);
+}
+
+.approach-cta {
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--color-base-200);
+}
+
+.approach-cta p {
+	font-size: var(--text-sm);
+	color: var(--color-base-700);
+}
+@media (min-width: 64rem) {
+	.approach-cta p {
+		width: 50%;
+	}
+}
+
+.approach-cta-btns {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-direction: column;
+	margin-top: 1rem;
+}
+@media (min-width: 64rem) {
+	.approach-cta-btns {
+		flex-direction: row;
+	}
+}
+
+.btn-md {
+	height: 2.5rem;
+	padding-inline: 0.875rem;
+	font-size: var(--text-xs);
+	width: 100%;
+}
+@media (min-width: 64rem) {
+	.btn-md {
+		width: fit-content;
+	}
+}
+
+/* ============================================================
+   PRACTICE AREAS
+   ============================================================ */
+.practice-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 0.25rem;
+	margin-top: 3rem;
+}
+@media (min-width: 40rem) {
+	.practice-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+@media (min-width: 64rem) {
+	.practice-grid {
+		gap: 2rem;
+		margin-top: 6rem;
+	}
+}
+
+.practice-card {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.practice-card a.card-link {
+	position: absolute;
+	inset: 0;
+	z-index: 20;
+}
+
+.practice-card img {
+	object-fit: cover;
+	object-position: center;
+	width: 100%;
+	aspect-ratio: 1;
+	transition: transform 0.3s;
+}
+.practice-card:hover img {
+	transform: scale(1.02);
+}
+
+.practice-card-overlay {
+	position: absolute;
+	inset: 0;
+	background: rgba(10, 26, 28, 0.7);
+	transition: background 0.3s;
+}
+.practice-card:hover .practice-card-overlay {
+	background: rgba(10, 26, 28, 0.9);
+}
+
+.practice-card-content {
+	position: absolute;
+	inset: 0;
+	padding: 1rem 1.25rem;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+}
+
+.practice-card-title {
+	font-family: var(--font-display);
+	color: var(--color-white);
+	font-size: var(--text-lg);
+}
+@media (min-width: 48rem) {
+	.practice-card-title {
+		font-size: var(--text-2xl);
+	}
+}
+@media (min-width: 64rem) {
+	.practice-card-title {
+		font-size: var(--text-3xl);
+	}
+}
+
+.practice-card-desc {
+	font-size: var(--text-base);
+	color: var(--color-base-200);
+	margin-top: 0.25rem;
+}
+
+/* CTA block below grid */
+.cta-block {
+	background: var(--color-base-50);
+	padding: 2rem;
+	margin-top: 2rem;
+}
+@media (min-width: 64rem) {
+	.cta-block {
+		padding: 3rem;
+	}
+}
+
+.cta-block-inner {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1.5rem;
+}
+@media (min-width: 64rem) {
+	.cta-block-inner {
+		flex-direction: row;
+		align-items: center;
+	}
+}
+
+.cta-block-title {
+	font-family: var(--font-display);
+	color: var(--color-accent-800);
+	font-size: var(--text-xl);
+}
+@media (min-width: 64rem) {
+	.cta-block-title {
+		font-size: var(--text-3xl);
+	}
+}
+
+.cta-block-sub {
+	font-size: var(--text-sm);
+	color: var(--color-base-600);
+	margin-top: 0.25rem;
+}
+
+.cta-block-btns {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.5rem;
+	width: 100%;
+}
+@media (min-width: 64rem) {
+	.cta-block-btns {
+		flex-direction: row;
+		width: fit-content;
+	}
+}
+
+.btn-lg {
+	height: 3rem;
+	padding-inline: 0.875rem;
+	font-size: var(--text-sm);
+	width: 100%;
+}
+@media (min-width: 64rem) {
+	.btn-lg {
+		width: fit-content;
+	}
+}
+
+/* ============================================================
+   TEAM SECTION
+   ============================================================ */
+.team-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+	margin-top: 3rem;
+}
+@media (min-width: 64rem) {
+	.team-grid {
+		grid-template-columns: repeat(2, 1fr);
+		margin-top: 6rem;
+	}
+}
+
+.team-card {
+	position: relative;
+	overflow: hidden;
+	display: grid;
+	grid-template-columns: 1fr;
+}
+@media (min-width: 64rem) {
+	.team-card {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+.team-card a.card-link {
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+}
+
+.team-card img {
+	object-fit: cover;
+	object-position: top;
+	width: 100%;
+	aspect-ratio: 1;
+	transition: transform 0.3s;
+}
+.team-card:hover img {
+	transform: scale(1.02);
+}
+
+.team-card-body {
+	padding: 2rem;
+	background: var(--color-base-50);
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 1rem;
+	height: 100%;
+}
+
+.team-card-name {
+	font-family: var(--font-display);
+	color: var(--color-accent-800);
+	font-size: var(--text-xl);
+}
+@media (min-width: 64rem) {
+	.team-card-name {
+		font-size: var(--text-3xl);
+	}
+}
+
+.team-card-role {
+	font-size: var(--text-sm);
+	color: var(--color-base-700);
+	margin-top: 0.25rem;
+}
+
+.team-card-contact {
+	margin-top: 0.75rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	font-size: var(--text-xs);
+	color: var(--color-accent-800);
+}
+.team-card-contact a:hover {
+	color: var(--color-secondary-500);
+}
+
+.team-card-social {
+	margin-top: 1rem;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	color: var(--color-secondary-500);
+}
+.team-card-social a {
+	transition: color 0.15s;
+}
+.team-card-social a:hover {
+	color: var(--color-accent-800);
+}
+.team-card-social svg {
+	width: 1.5rem;
+	height: 1.5rem;
+}
+
+/* ============================================================
+   CASE STUDIES
+   ============================================================ */
+.cases-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+	margin-top: 3rem;
+}
+@media (min-width: 64rem) {
+	.cases-grid {
+		grid-template-columns: repeat(2, 1fr);
+		margin-top: 6rem;
+	}
+}
+
+.case-card {
+	position: relative;
+	overflow: hidden;
+}
+
+.case-card a.card-link {
+	position: absolute;
+	inset: 0;
+	z-index: 20;
+}
+
+.case-card img {
+	object-fit: cover;
+	object-position: center;
+	width: 100%;
+	aspect-ratio: 1;
+	transition: transform 0.3s;
+}
+.case-card:hover img {
+	transform: scale(1.02);
+}
+
+.case-card-overlay {
+	position: absolute;
+	inset: 0;
+	background: rgba(10, 26, 28, 0.7);
+}
+
+.case-card-content {
+	position: absolute;
+	inset: 0;
+	padding: 1rem 1.25rem;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+}
+
+.case-card-title {
+	font-family: var(--font-display);
+	color: var(--color-white);
+	font-size: var(--text-lg);
+}
+@media (min-width: 64rem) {
+	.case-card-title {
+		font-size: var(--text-3xl);
+	}
+}
+
+.case-card-sub {
+	font-size: var(--text-base);
+	color: var(--color-base-200);
+	margin-top: 0.25rem;
+}
+
+.cases-cta-block {
+	background: var(--color-white);
+	padding: 2rem;
+	margin-top: 2rem;
+}
+@media (min-width: 64rem) {
+	.cases-cta-block {
+		padding: 3rem;
+	}
+}
+
+/* ============================================================
+   FREE CONSULTATION CTA SECTION
+   ============================================================ */
+.consult-block {
+	overflow: hidden;
+	display: grid;
+	grid-template-columns: 1fr;
+	background: var(--color-base-50);
+}
+@media (min-width: 64rem) {
+	.consult-block {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+.consult-text {
+	max-width: 36rem;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 4rem;
+	position: relative;
+	padding: 2rem;
+}
+@media (min-width: 64rem) {
+	.consult-text {
+		padding: 3rem;
+	}
+}
+
+.consult-heading {
+	font-family: var(--font-display);
+	color: var(--color-accent-800);
+	font-size: var(--text-2xl);
+}
+@media (min-width: 64rem) {
+	.consult-heading {
+		font-size: var(--text-4xl);
+	}
+}
+
+.consult-sub {
+	font-size: var(--text-sm);
+	color: var(--color-base-700);
+	line-height: 1.625;
+	margin-top: 1rem;
+}
+
+.consult-btns {
+	display: flex;
+	gap: 0.5rem;
+	align-items: center;
+	flex-direction: column;
+	margin-top: 3rem;
+}
+@media (min-width: 40rem) {
+	.consult-btns {
+		flex-direction: row;
+	}
+}
+
+.consult-note {
+	font-size: var(--text-xs);
+	color: var(--color-base-700);
+	margin-top: 1rem;
+}
+
+.consult-phone {
+	font-size: var(--text-xs);
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--color-base-200);
+}
+.consult-phone a {
+	color: var(--color-accent-700);
+	font-weight: 600;
+	transition: color 0.15s;
+}
+.consult-phone a:hover {
+	color: var(--color-accent-900);
+}
+
+.consult-img {
+	object-fit: cover;
+	object-position: center;
+	width: 100%;
+	height: 100%;
+	min-height: 20rem;
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.site-footer {
+	background: var(--color-base-50);
+	padding-block: 4rem;
+}
+
+.carrington-home main {
+	margin-bottom: -361px;
+}
+
+.carrington-cases main {
+	margin-bottom: -141px;
+}
+
+.carrington-team main {
+	margin-bottom: -168px;
+}
+
+.carrington-contact main {
+	margin-bottom: -243px;
+}
+
+.footer-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 2rem;
+	margin-bottom: 2rem;
+}
+@media (min-width: 48rem) {
+	.footer-grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+@media (min-width: 64rem) {
+	.footer-grid {
+		grid-template-columns: repeat(4, 1fr);
+	}
+	.footer-grid > .footer-col:last-child {
+		grid-column: span 1 !important;
+	}
+}
+
+.footer-brand {
+	grid-column: span 2;
+}
+@media (min-width: 48rem) {
+	.footer-brand {
+		grid-column: span 1;
+	}
+}
+
+.footer-logo {
+	height: 1rem;
+	color: var(--color-accent-800);
+}
+
+.footer-tagline {
+	font-size: var(--text-xs);
+	color: var(--color-base-600);
+	margin-top: 1.25rem;
+	line-height: 1.625;
+}
+
+.footer-social {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	font-size: var(--text-xs);
+	margin-top: 2rem;
+}
+.footer-social a {
+	color: var(--color-base-600);
+	transition: color 0.15s;
+}
+.footer-social a:hover {
+	color: var(--color-accent-800);
+}
+
+.footer-col h3 {
+	font-size: var(--text-xs);
+	color: var(--color-secondary-500);
+}
+
+.footer-col ul {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	margin-top: 1rem;
+}
+.footer-col ul a {
+	font-size: var(--text-xs);
+	color: var(--color-base-600);
+	transition: color 0.15s;
+}
+.footer-col ul a:hover {
+	color: var(--color-accent-800);
+}
+
+.footer-offices {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 3rem;
+	margin-top: 1rem;
+}
+@media (min-width: 48rem) {
+	.footer-offices {
+		grid-template-columns: 1fr;
+	}
+}
+
+.footer-office p {
+	font-size: var(--text-xs);
+	color: var(--color-base-600);
+}
+.footer-office .office-name {
+	font-weight: 500;
+	color: var(--color-accent-800);
+}
+.footer-office a {
+	font-size: var(--text-xs);
+	color: var(--color-base-600);
+	display: flex;
+	margin-top: 1rem;
+	transition: color 0.15s;
+}
+.footer-office a:hover {
+	color: var(--color-accent-800);
+}
+
+.footer-email {
+	color: var(--color-accent-800);
+	font-size: var(--text-sm);
+	transition: color 0.15s;
+	display: flex;
+	margin-top: 3rem;
+}
+.footer-email:hover {
+	color: var(--color-secondary-300);
+}
+
+.footer-bottom {
+	border-top: 1px solid var(--color-base-100);
+	padding-top: 2rem;
+}
+
+.footer-bottom-row {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 1rem;
+}
+@media (min-width: 48rem) {
+	.footer-bottom-row {
+		flex-direction: row;
+		align-items: center;
+	}
+}
+
+.footer-copyright {
+	font-size: var(--text-xs);
+	color: var(--color-base-600);
+}
+
+.footer-legal-links {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	font-size: var(--text-xs);
+	color: var(--color-base-600);
+}
+@media (min-width: 48rem) {
+	.footer-legal-links {
+		flex-direction: row;
+	}
+}
+.footer-legal-links a {
+	transition: color 0.15s;
+}
+.footer-legal-links a:hover {
+	color: var(--color-accent-800);
+}
+
+.footer-disclaimer {
+	margin-top: 1.5rem;
+	padding-top: 1.5rem;
+	border-top: 1px solid var(--color-base-100);
+}
+.footer-disclaimer p {
+	font-size: var(--text-xs);
+	color: var(--color-base-600);
+	line-height: 1.625;
+}
+
+/* ============================================================
+   SEARCH MODAL
+   ============================================================ */
+#searchModal {
+	position: fixed;
+	inset: 0;
+	z-index: 50;
+	overflow-y: auto;
+	background: rgba(0, 0, 0, 0.1);
+	backdrop-filter: blur(var(--blur-sm));
+	display: none;
+}
+#searchModal.open {
+	display: block;
+}
+
+.search-modal-wrap {
+	min-height: 100vh;
+	padding: 1rem;
+	text-align: center;
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+}
+
+.search-modal-panel {
+	position: relative;
+	display: inline-block;
+	width: 100%;
+	max-width: 36rem;
+	margin-top: 3rem;
+	margin-bottom: 2rem;
+	text-align: left;
+	padding: 2rem;
+	background: var(--color-accent-900);
+}
+@media (min-width: 64rem) {
+	.search-modal-panel {
+		margin-top: 12rem;
+	}
+}
+
+.search-input-wrap {
+	position: relative;
+}
+
+#searchInput {
+	width: 100%;
+	padding: 0.5rem 0.75rem;
+	border-bottom: 1px solid transparent;
+	height: 3rem;
+	background: rgba(255, 255, 255, 0.05);
+	color: var(--color-white);
+	font-size: var(--text-xs);
+	border-radius: 0;
+	outline: none;
+	border-width: 0;
+	border-bottom: 1px solid transparent;
+}
+#searchInput:focus {
+	background: rgba(255, 255, 255, 0.08);
+	box-shadow: none;
+	outline: none;
+}
+#searchInput::placeholder {
+	color: var(--color-base-400);
+	opacity: 1;
+}
+
+#clearSearch {
+	position: absolute;
+	right: 0.75rem;
+	top: 50%;
+	transform: translateY(-50%);
+	border-radius: 9999px;
+	padding: 0.25rem;
+	color: var(--color-base-400);
+	background: none;
+	border: none;
+	cursor: pointer;
+	transition: color 0.15s;
+}
+#clearSearch:hover {
+	color: var(--color-base-600);
+}
+
+#searchResults {
+	width: 100%;
+	margin-top: 0.5rem;
+	overflow-y: auto;
+	max-height: 25rem;
+	scrollbar-width: none;
+}
+#searchResults::-webkit-scrollbar {
+	display: none;
+}
+
+.search-result-item {
+	position: relative;
+	display: block;
+	padding: 1rem;
+	transition: background 0.3s;
+	background: rgba(255, 255, 255, 0.01);
+	border-top: 1px solid var(--color-accent-800);
+}
+.search-result-item:hover {
+	background: rgba(255, 255, 255, 0.03);
+}
+.search-result-item a.abs-link {
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+}
+.search-result-section {
+	display: block;
+	font-size: var(--text-xs);
+	color: var(--color-secondary-400);
+}
+.search-result-title {
+	display: block;
+	margin-top: 0.5rem;
+	font-size: var(--text-sm);
+	font-weight: 500;
+	color: var(--color-white);
+}
+.search-result-desc {
+	display: block;
+	font-size: var(--text-xs);
+	color: var(--color-base-400);
+}
+.search-empty {
+	padding: 0.5rem;
+	color: var(--color-base-400);
+	background: var(--color-accent-800);
+	font-size: var(--text-sm);
+}
+
+/* ============================================================
+   SECTION SPACING
+   ============================================================ */
+.py-section {
+	padding-block: 4rem;
+}
+.py-section-lg {
+	padding-block: 6rem;
+}
+
+@media (min-width: 64rem) {
+	.py-section {
+		padding-block: 6rem;
+	}
+	.py-section-lg {
+		padding-block: 6rem;
+	}
+}
+
+/* ============================================================
+   MISC UTILITIES
+   ============================================================ */
+.grow {
+	flex-grow: 1;
+}
+.text-balance {
+	text-wrap: balance;
+}
+.italic {
+	font-style: italic;
+}
+.font-medium {
+	font-weight: 500;
+}
+.font-semibold {
+	font-weight: 600;
+}
+.uppercase {
+	text-transform: uppercase;
+}
+.tracking-wide {
+	letter-spacing: 0.025em;
+}
+.hidden {
+	display: none;
+}
+.block {
+	display: block;
+}
+.truncate {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+/* Divider bullet */
+.sep {
+	display: none;
+}
+@media (min-width: 48rem) {
+	.sep {
+		display: inline;
+	}
+}
+
+/* ============================================================
+   ABS-LINK OVERLAY (clickable card pattern)
+   ============================================================ */
+.relative {
+	position: relative;
+}
+.abs-link {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+}
+.relative > *:not(.abs-link) {
+	position: relative;
+	z-index: 2;
+}
+
+/* ============================================================
+   BLOG GRID
+   ============================================================ */
+.blog-posts-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+}
+@media (min-width: 40rem) {
+	.blog-posts-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+@media (min-width: 64rem) {
+	.blog-posts-grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+
+/* Featured post 2-col on large screens */
+.blog-featured-inner {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+}
+@media (min-width: 64rem) {
+	.blog-featured-inner {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Newsreader:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body class="carrington-home">
+		<!-- ============================================================
+     NAVIGATION
+     ============================================================ -->
+		<nav class="site-nav" data-nav data-swap="true">
+			<div class="container">
+				<div class="nav-inner">
+					<!-- Logo -->
+					<a href="index.html" aria-label="Home" class="nav-logo focus:outline-none">
+						<span class="sr-only">Home</span>
+						<svg
+							class="h-4"
+							data-logo
+							viewBox="0 0 652 93"
+							fill="none"
+							xmlns="http://www.w3.org/2000/svg"
+							style="height:1rem;color:var(--color-white);transition:color .3s"
+						>
+							<path
+								d="M49.5015 24.6135C48.7695 19.3065 46.97 15.2805 44.103 12.5355C41.236 9.72948 37.515 8.32648 32.94 8.32648C29.707 8.32648 26.8095 9.05848 24.2475 10.5225C21.7465 11.9255 19.6115 13.8775 17.8425 16.3785C16.1345 18.8185 14.823 21.6855 13.908 24.9795C12.993 28.2125 12.5355 31.6895 12.5355 35.4105C12.5355 40.8395 13.3895 45.628 15.0975 49.776C16.8665 53.924 19.3065 57.1875 22.4175 59.5665C25.5895 61.9455 29.28 63.135 33.489 63.135C37.393 63.135 41.236 62.1895 45.018 60.2985C48.861 58.3465 52.033 55.6015 54.534 52.0635L58.2855 55.449C55.4185 59.353 52.3685 62.342 49.1355 64.416C45.9025 66.429 42.7305 67.8015 39.6195 68.5335C36.5695 69.2655 33.794 69.6315 31.293 69.6315C26.596 69.6315 22.326 68.808 18.483 67.161C14.701 65.453 11.407 63.135 8.60102 60.207C5.85602 57.218 3.72102 53.7715 2.19602 49.8675C0.732019 45.9025 1.86283e-05 41.6325 1.86283e-05 37.0575C1.86283e-05 32.8485 0.640519 28.7005 1.92152 24.6135C3.26352 20.5265 5.24602 16.836 7.86902 13.542C10.553 10.248 13.908 7.62498 17.934 5.67298C21.96 3.65998 26.6265 2.65348 31.9335 2.65348C34.6175 2.65348 37.4235 3.08048 40.3515 3.93448C43.2795 4.72748 46.0245 5.91698 48.5865 7.50298L48.2205 3.29398H54.534V24.6135H49.5015ZM89.888 68.1675C89.705 67.2525 89.583 66.49 89.522 65.88C89.522 65.209 89.4915 64.4465 89.4305 63.5925C87.3565 65.6665 85.13 67.1915 82.751 68.1675C80.433 69.1435 78.0235 69.6315 75.5225 69.6315C71.3745 69.6315 68.172 68.503 65.915 66.246C63.719 63.989 62.621 61.2135 62.621 57.9195C62.621 54.9915 63.414 52.521 65 50.508C66.586 48.434 68.66 46.7565 71.222 45.4755C73.784 44.1335 76.6205 43.127 79.7315 42.456C82.8425 41.724 85.923 41.3275 88.973 41.2665V36.234C88.973 34.465 88.7595 32.8485 88.3325 31.3845C87.9665 29.8595 87.265 28.67 86.228 27.816C85.191 26.901 83.666 26.4435 81.653 26.4435C80.311 26.5045 78.9385 26.8095 77.5355 27.3585C76.1935 27.8465 75.126 28.6395 74.333 29.7375C74.821 30.2865 75.126 30.8965 75.248 31.5675C75.37 32.1775 75.431 32.7265 75.431 33.2145C75.431 34.3125 75.004 35.4715 74.15 36.6915C73.296 37.8505 71.9235 38.3995 70.0325 38.3385C68.3855 38.2775 67.1045 37.698 66.1895 36.6C65.3355 35.502 64.9085 34.1905 64.9085 32.6655C64.9085 30.3475 65.732 28.3345 67.379 26.6265C69.087 24.8575 71.3745 23.485 74.2415 22.509C77.1085 21.472 80.311 20.9535 83.849 20.9535C89.095 20.9535 93.121 22.326 95.927 25.071C98.733 27.816 100.106 32.208 100.045 38.247C100.045 40.382 100.045 42.334 100.045 44.103C100.045 45.811 100.014 47.5495 99.953 49.3185C99.953 51.0265 99.953 52.948 99.953 55.083C99.953 55.998 99.9225 57.157 99.8615 58.56C99.8005 59.902 99.709 61.244 99.587 62.586C100.685 62.464 101.783 62.403 102.881 62.403C104.04 62.342 104.986 62.281 105.718 62.22V68.1675H89.888ZM88.8815 46.665C87.0515 46.787 85.252 47.092 83.483 47.58C81.714 48.007 80.128 48.617 78.725 49.41C77.322 50.203 76.1935 51.2095 75.3395 52.4295C74.5465 53.5885 74.1805 54.9305 74.2415 56.4555C74.3025 58.3465 74.9125 59.7495 76.0715 60.6645C77.2305 61.5185 78.5725 61.9455 80.0975 61.9455C81.8665 61.9455 83.4525 61.5795 84.8555 60.8475C86.3195 60.1155 87.6615 59.1395 88.8815 57.9195C88.8815 57.3095 88.8815 56.669 88.8815 55.998C88.8815 55.327 88.8815 54.656 88.8815 53.985C88.8815 53.131 88.8815 52.0635 88.8815 50.7825C88.8815 49.5015 88.8815 48.129 88.8815 46.665ZM393.698 69.6315C389.367 69.6315 385.433 68.686 381.895 66.795C378.357 64.843 375.551 62.1285 373.477 58.6515C371.464 55.1135 370.457 50.996 370.457 46.299C370.457 41.358 371.494 36.966 373.568 33.123C375.642 29.28 378.418 26.291 381.895 24.156C385.433 22.021 389.306 20.9535 393.515 20.9535C397.846 20.9535 401.75 21.9295 405.227 23.8815C408.704 25.8335 411.449 28.548 413.462 32.025C415.536 35.502 416.573 39.6195 416.573 44.3775C416.573 49.3795 415.567 53.802 413.554 57.645C411.602 61.427 408.887 64.3855 405.41 66.5205C401.994 68.5945 398.09 69.6315 393.698 69.6315ZM628.882 69.6315C624.551 69.6315 620.616 68.686 617.078 66.795C613.54 64.843 610.734 62.1285 608.66 58.6515C606.647 55.1135 605.641 50.996 605.641 46.299C605.641 41.358 606.678 36.966 608.752 33.123C610.826 29.28 613.601 26.291 617.078 24.156C620.616 22.021 624.49 20.9535 628.699 20.9535C633.03 20.9535 636.934 21.9295 640.411 23.8815C643.888 25.8335 646.633 28.548 648.646 32.025C650.72 35.502 651.757 39.6195 651.757 44.3775C651.757 49.3795 650.75 53.802 648.737 57.645C646.785 61.427 644.071 64.3855 640.594 66.5205C637.178 68.5945 633.274 69.6315 628.882 69.6315Z"
+								fill="currentColor"
+							/>
+						</svg>
+					</a>
+
+					<!-- Desktop left: Explore + Mega Menu -->
+					<div class="nav-left">
+						<div style="position:relative" id="mega-wrap">
+							<button
+								type="button"
+								class="nav-explore-btn"
+								aria-expanded="false"
+								aria-controls="mega-desktop"
+								id="exploreBtn"
+								data-explore-trigger
+							>
+								<span>Explore</span>
+								<svg
+									class="chevron"
+									viewBox="0 0 24 24"
+									fill="none"
+									xmlns="http://www.w3.org/2000/svg"
+								>
+									<path
+										d="M6 9l6 6 6-6"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+							</button>
+
+							<!-- Mega Menu Panel -->
+							<div
+								id="mega-desktop"
+								style="position:absolute;left:-6rem;right:-6rem;top:calc(100% + 0.5rem);width:calc(100vw - 4rem);max-width:80rem;"
+							>
+								<div class="mega-panel">
+									<div class="mega-grid">
+										<!-- Col 1: About -->
+										<div class="mega-col mega-col-about">
+											<div
+												style="display:flex;flex-direction:column;height:100%;align-items:flex-start"
+											>
+												<img
+													src="assets/heroImage.webp"
+													alt="Carrington Law - Professional Legal Services"
+													loading="eager"
+													width="600"
+													height="600"
+												>
+												<h2 class="mega-about-title">About Carrington Law</h2>
+												<p class="mega-about-desc">
+													Carrington Law is dedicated to providing strategic
+													legal counsel and unwavering advocacy for our clients.
+													With decades of experience, our team delivers
+													results-driven solutions for businesses and
+													individuals facing complex legal challenges.
+												</p>
+												<div class="mega-contact-links">
+													<a href="mailto:carrington@example.com"
+														>carrington@example.com</a
+													>
+													<a href="tel:+15551234567">(555) 123-4567</a>
+													<a href="contact.html" class="cta">Contact us</a>
+												</div>
+											</div>
+										</div>
+
+										<!-- Col 2: Explore Links -->
+										<div class="mega-col">
+											<span class="mega-label">Explore</span>
+											<ul class="mega-links mega-divider">
+												<li>
+													<a href="practice-areas.html"
+														><h4
+															style="font-size:var(--text-sm);color:var(--color-base-200)"
+														>
+															Practice Areas
+														</h4></a
+													>
+												</li>
+												<li>
+													<a href="cases.html"
+														><h4
+															style="font-size:var(--text-sm);color:var(--color-base-200)"
+														>
+															Cases
+														</h4></a
+													>
+												</li>
+												<li>
+													<a href="team.html"
+														><h4
+															style="font-size:var(--text-sm);color:var(--color-base-200)"
+														>
+															Our Attorneys
+														</h4></a
+													>
+												</li>
+												<li>
+													<a href="blog.html"
+														><h4
+															style="font-size:var(--text-sm);color:var(--color-base-200)"
+														>
+															Journal
+														</h4></a
+													>
+												</li>
+												<li>
+													<a href="careers.html"
+														><h4
+															style="font-size:var(--text-sm);color:var(--color-base-200)"
+														>
+															Careers
+														</h4></a
+													>
+												</li>
+												<li>
+													<a href="press-and-media.html"
+														><h4
+															style="font-size:var(--text-sm);color:var(--color-base-200)"
+														>
+															Press &amp; Media
+														</h4></a
+													>
+												</li>
+												<li>
+													<a href="offices.html"
+														><h4
+															style="font-size:var(--text-sm);color:var(--color-base-200)"
+														>
+															Offices
+														</h4></a
+													>
+												</li>
+												<li>
+													<a href="contact.html"
+														><h4
+															style="font-size:var(--text-sm);color:var(--color-base-200)"
+														>
+															Contact
+														</h4></a
+													>
+												</li>
+											</ul>
+										</div>
+
+										<!-- Col 3: Insights -->
+										<div
+											class="mega-col"
+											style="display:flex;flex-direction:column;justify-content:space-between"
+										>
+											<div>
+												<span class="mega-label">Insights</span>
+												<ul class="mega-divider" style="list-style:none">
+													<li class="mega-insight-item">
+														<a
+															href="blog/posts/1.html"
+															aria-label="Read: Latest Blog Post"
+														>
+															<h4 class="mega-insight-title">
+																Latest Blog Post
+															</h4>
+															<p class="mega-insight-desc">
+																Insights and updates from our team.
+															</p>
+														</a>
+													</li>
+													<li class="mega-insight-item">
+														<a
+															href="blog/posts/2.html"
+															aria-label="Read: Second Blog Post"
+														>
+															<h4 class="mega-insight-title">
+																Second Blog Post
+															</h4>
+															<p class="mega-insight-desc">
+																More news and legal commentary.
+															</p>
+														</a>
+													</li>
+												</ul>
+											</div>
+											<a href="blog.html" class="mega-explore-all"
+												>Explore all insights</a
+											>
+										</div>
+
+										<!-- Col 4: Featured Case -->
+										<div
+											class="mega-col"
+											style="display:flex;flex-direction:column;justify-content:space-between"
+										>
+											<div>
+												<span class="mega-label">Featured Case</span>
+												<ul class="mega-divider" style="list-style:none">
+													<li class="mega-insight-item">
+														<a
+															href="cases/acme-acquires-beta.html"
+															aria-label="View case: Acme Acquires Beta"
+														>
+															<h4 class="mega-insight-title">
+																Acme Acquires Beta
+															</h4>
+															<p class="mega-insight-desc">
+																A major acquisition handled by our firm.
+															</p>
+															<p class="mega-insight-desc">Corporate Law</p>
+														</a>
+													</li>
+												</ul>
+											</div>
+											<a href="cases.html" class="mega-explore-all"
+												>View all cases</a
+											>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Right nav links -->
+						<div class="nav-right">
+							<a
+								href="index.html"
+								data-primary-link
+								style="font-size:var(--text-sm);color:var(--color-white);transition:color .3s;white-space:nowrap"
+								>Overview</a
+							>
+							<a
+								href="cases.html"
+								data-primary-link
+								style="font-size:var(--text-sm);color:var(--color-white);transition:color .3s;white-space:nowrap"
+								>Results</a
+							>
+							<a
+								href="team.html"
+								data-primary-link
+								style="font-size:var(--text-sm);color:var(--color-white);transition:color .3s;white-space:nowrap"
+								>Our Attorneys</a
+							>
+							<a
+								href="practice-areas.html"
+								data-primary-link
+								style="font-size:var(--text-sm);color:var(--color-white);transition:color .3s;white-space:nowrap"
+								>Practice Areas</a
+							>
+							<a
+								href="offices.html"
+								data-primary-link
+								style="font-size:var(--text-sm);color:var(--color-white);transition:color .3s;white-space:nowrap"
+								>Offices</a
+							>
+							<a
+								href="contact.html"
+								data-primary-link
+								style="font-size:var(--text-sm);color:var(--color-white);transition:color .3s;white-space:nowrap"
+								>Contact</a
+							>
+						</div>
+					</div>
+
+					<!-- Nav Actions -->
+					<div class="nav-actions">
+						<button
+							class="btn btn-icon"
+							type="button"
+							id="searchButton"
+							aria-label="Search site"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+								<path d="M10 10m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" />
+								<path d="M21 21l-6 -6" />
+							</svg>
+						</button>
+						<a
+							href="https://lexingtonthemes.com/templates/carrington"
+							class="btn btn-dark"
+							style="height:2.5rem;padding-inline:.875rem;font-size:var(--text-xs)"
+							>Buy Carrington</a
+						>
+					</div>
+
+					<!-- Mobile Hamburger -->
+					<button
+						class="nav-burger"
+						aria-controls="mobile-menu"
+						aria-expanded="false"
+						id="menuButton"
+					>
+						<span class="sr-only">Open main menu</span>
+						<span class="icon-burger">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+								<path d="M4 8l16 0" />
+								<path d="M4 16l16 0" />
+							</svg>
+						</span>
+						<span class="icon-close">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+								<path d="M18 6l-12 12" />
+								<path d="M6 6l12 12" />
+							</svg>
+						</span>
+					</button>
+				</div>
+				<!-- /nav-inner -->
+
+				<!-- Mobile Menu -->
+				<div id="mobile-menu">
+					<div class="mobile-menu-inner">
+						<div class="mobile-menu-links">
+							<a href="cases.html">Cases</a>
+							<a href="team.html">Team</a>
+							<a href="blog.html">Blog</a>
+							<a href="careers.html">Careers</a>
+							<a href="practice-areas.html">Practice Areas</a>
+							<a href="press-and-media.html">Press &amp; Media</a>
+							<a href="contact.html">Contact</a>
+							<a href="index.html">Overview</a>
+						</div>
+						<div class="mobile-menu-actions">
+							<a href="free-consultation.html" class="btn-mobile-primary"
+								>Free Consultation</a
+							>
+							<a
+								href="https://lexingtonthemes.com/templates/carrington"
+								class="btn-mobile-secondary"
+								>Buy Carrington</a
+							>
+						</div>
+						<div class="mobile-menu-contact">
+							<a href="mailto:carrington@example.com">carrington@example.com</a>
+							<a href="tel:+15551234567">(555) 123-4567</a>
+							<a href="contact.html" style="color:var(--color-white)">Contact us</a>
+						</div>
+					</div>
+				</div>
+			</div>
+			<!-- /container -->
+		</nav>
+
+		<!-- ============================================================
+     SEARCH MODAL
+     ============================================================ -->
+		<div id="searchModal" role="dialog" aria-modal="true">
+			<div class="search-modal-wrap">
+				<div class="search-modal-panel" id="searchPanel">
+					<div class="hidden">
+						<button type="button" id="closeSearch" aria-label="Close search">
+							close
+						</button>
+					</div>
+					<div class="search-input-wrap">
+						<input
+							type="text"
+							id="searchInput"
+							placeholder="Search the site..."
+							autocomplete="off"
+						>
+						<button
+							type="button"
+							id="clearSearch"
+							class="hidden"
+							aria-label="Clear search"
+						>
+							×
+						</button>
+					</div>
+					<div id="searchResults" class="hidden"></div>
+				</div>
+			</div>
+		</div>
+
+		<!-- ============================================================
+     MAIN
+     ============================================================ -->
+		<main class="grow">
+			<!-- HERO: Video + Text -->
+			<section>
+				<div style="max-width:100vw;width:100%;margin-inline:auto">
+					<div class="hero-video-wrap">
+						<video
+							autoplay
+							muted
+							loop
+							playsinline
+							poster="assets/heroImage.webp"
+							class="hero-video"
+							style="background:var(--color-base-50)"
+						>
+						</video>
+						<!-- Fallback bg image in case video doesn't load -->
+						<div
+							style="position:absolute;inset:0;background-image:url("assets/heroImage.webp");background-size:cover;background-position:center;z-index:-1"
+						></div>
+						<div aria-hidden="true" class="hero-overlay"></div>
+					</div>
+				</div>
+
+				<div class="container">
+					<div class="hero-text">
+						<div class="hero-grid">
+							<h1 class="hero-heading" style="grid-column:1 / span 2">
+								Experienced legal counsel you can trust.
+							</h1>
+							<p class="hero-sub">
+								For over two decades, Carrington Law has been the trusted
+								partner for businesses and individuals facing complex legal
+								challenges. We deliver strategic solutions with unwavering
+								commitment to your success.
+							</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- PROVEN RESULTS / STATS -->
+			<section class="section-bg-light">
+				<div class="container py-section-lg">
+					<div class="section-header">
+						<p class="section-label section-label-accent">Proven Results</p>
+						<div>
+							<h2 class="section-heading">Results that speak for themselves</h2>
+							<p class="section-desc">
+								We've built a track record of winning difficult cases and
+								delivering meaningful outcomes for our clients. Here are a few
+								numbers behind our work.
+							</p>
+						</div>
+					</div>
+
+					<ul class="stats-grid">
+						<li class="stat-item">
+							<p class="stat-label">Years Experience</p>
+							<p class="stat-value">
+								<span
+									class="countup"
+									data-target="20"
+									data-suffix="+"
+									data-decimals="0"
+									aria-label="20+ Years Experience"
+									>20+</span
+								>
+							</p>
+						</li>
+						<li class="stat-item">
+							<p class="stat-label">Cases Won</p>
+							<p class="stat-value">
+								<span
+									class="countup"
+									data-target="500"
+									data-suffix="+"
+									data-decimals="0"
+									aria-label="500+ Cases Won"
+									>500+</span
+								>
+							</p>
+						</li>
+						<li class="stat-item">
+							<p class="stat-label">Success Rate</p>
+							<p class="stat-value">
+								<span
+									class="countup"
+									data-target="98"
+									data-suffix="%"
+									data-decimals="0"
+									aria-label="98% Success Rate"
+									>98%</span
+								>
+							</p>
+						</li>
+						<li class="stat-item">
+							<p class="stat-label">In Recoveries</p>
+							<p class="stat-value">
+								<span
+									class="countup"
+									data-target="50"
+									data-suffix="M+"
+									data-decimals="0"
+									aria-label="50M+ In Recoveries"
+									>50M+</span
+								>
+							</p>
+						</li>
+						<li class="stat-item">
+							<p class="stat-label">Avg. Rating</p>
+							<p class="stat-value">
+								<span
+									class="countup"
+									data-target="4.9"
+									data-suffix="/5"
+									data-decimals="1"
+									aria-label="4.9/5 Avg. Rating"
+									>4.9/5</span
+								>
+							</p>
+						</li>
+						<li class="stat-item">
+							<p class="stat-label">5-Star Reviews</p>
+							<p class="stat-value">
+								<span
+									class="countup"
+									data-target="100"
+									data-suffix="+"
+									data-decimals="0"
+									aria-label="100+ 5-Star Reviews"
+									>100+</span
+								>
+							</p>
+						</li>
+					</ul>
+				</div>
+			</section>
+
+			<!-- FIRM PHILOSOPHY / VALUES -->
+			<section>
+				<div class="container py-section-lg">
+					<div class="section-header">
+						<p class="section-label section-label-secondary">Firm Values</p>
+						<div>
+							<h2 class="section-heading">Our Philosophy</h2>
+							<p class="section-desc-muted" style="font-size:1.125rem">
+								At Carrington Law, we believe that exceptional legal
+								representation begins with genuine partnership. We don't just
+								practice law. We build lasting relationships founded on trust,
+								transparency, and an unwavering commitment to our clients'
+								success.
+							</p>
+							<p class="section-desc" style="margin-top:.5rem">
+								We pair meticulous preparation with clear communication and
+								practical strategy. From the first conversation to final
+								resolution, you can expect proactive updates, straightforward
+								advice, and solutions aligned with your goals, whether that means
+								a negotiated settlement or assertive courtroom advocacy.
+							</p>
+						</div>
+					</div>
+
+					<div class="values-grid">
+						<!-- Integrity First -->
+						<div class="value-card">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="value-icon"
+							>
+								<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+								<path
+									d="M21 16.008v-8.018a1.98 1.98 0 0 0 -1 -1.717l-7 -4.008a2.016 2.016 0 0 0 -2 0l-7 4.008c-.619 .355 -1 1.01 -1 1.718v8.018c0 .709 .381 1.363 1 1.717l7 4.008a2.016 2.016 0 0 0 2 0l7 -4.008c.619 -.355 1 -1.01 1 -1.718z"
+								/>
+								<path d="M12 22v-10" />
+								<path d="M12 12l8.73 -5.04" />
+								<path d="M3.27 6.96l8.73 5.04" />
+							</svg>
+							<h3 class="value-title">Integrity First</h3>
+							<p class="value-desc">
+								We uphold the highest ethical standards in every case, ensuring
+								honest communication and principled advocacy that serves justice
+								and our clients' best interests.
+							</p>
+						</div>
+
+						<!-- Excellence in Action -->
+						<div class="value-card">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="value-icon"
+							>
+								<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+								<path d="M12 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" />
+								<path d="M6.5 17m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" />
+								<path d="M17.5 17m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" />
+							</svg>
+							<h3 class="value-title">Excellence in Action</h3>
+							<p class="value-desc">
+								Our commitment to excellence drives us to continuously innovate,
+								learn, and deliver superior results through meticulous
+								preparation and strategic thinking.
+							</p>
+						</div>
+
+						<!-- True Partnership -->
+						<div class="value-card">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="value-icon"
+							>
+								<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+								<path d="M12 3l-4 7h8z" />
+								<path d="M17 17m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
+								<path
+									d="M4 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z"
+								/>
+							</svg>
+							<h3 class="value-title">True Partnership</h3>
+							<p class="value-desc">
+								We work alongside our clients as trusted advisors, understanding
+								their unique challenges and collaborating to achieve outcomes
+								that align with their goals and values.
+							</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- OUR APPROACH (sticky scroll) -->
+			<section class="approach-section">
+				<div style="max-width:100vw;width:100%;margin-inline:auto">
+					<div class="approach-grid">
+						<!-- Left: sticky image + overlay -->
+						<div class="approach-left">
+							<div
+								class="approach-left-sticky"
+								style="position:relative;width:100%"
+							>
+								<img
+									src="assets/customer1.webp"
+									alt="Carrington Law - Our Approach"
+									loading="eager"
+									class="approach-img"
+									style="min-height:400px"
+								>
+								<div class="approach-overlay">
+									<div style="width:100%">
+										<p class="approach-label">our way</p>
+										<h2 class="approach-heading">Our Approach</h2>
+										<p class="approach-desc">
+											Every case is unique, and so is our approach. We combine
+											deep legal expertise with innovative strategies,
+											cutting-edge technology, and a relentless focus on
+											results. Whether you're a business facing complex
+											challenges or an individual seeking justice, we provide
+											personalized attention and dedicated advocacy.
+										</p>
+
+										<div class="approach-testimonial" style="margin-top:3rem">
+											<img
+												src="assets/customer2.webp"
+												loading="eager"
+												alt="Customer testimonial from Alex Rivera"
+												style="object-fit:cover;height:15rem;width:100%;object-position:top"
+											>
+											<figure class="approach-testimonial-body">
+												<blockquote>
+													<p>
+														"Carrington guided us through a complex dispute with
+														clarity and confidence. We always knew our options
+														and felt genuinely supported."
+													</p>
+												</blockquote>
+												<figcaption>
+													<p>Alex Rivera, COO,<br>Northshore Holdings</p>
+												</figcaption>
+											</figure>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Right: process cards -->
+						<div class="approach-right">
+							<dl class="process-list">
+								<div class="process-card">
+									<dt>
+										<p class="process-number">1</p>
+										<h3 class="process-title">Strategic Case Planning</h3>
+									</dt>
+									<dd>
+										<p class="process-desc">
+											Align client objectives, develop innovative legal
+											strategies, and craft a clear roadmap for success with our
+											meticulous case planning process.
+										</p>
+										<ul class="process-list-items">
+											<li>Align legal strategy with client goals</li>
+											<li>Foster innovation in case approach</li>
+											<li>
+												Craft a detailed litigation or negotiation roadmap
+											</li>
+										</ul>
+									</dd>
+								</div>
+
+								<div class="process-card">
+									<dt>
+										<p class="process-number">2</p>
+										<h3 class="process-title">Consulting Excellence</h3>
+									</dt>
+									<dd>
+										<p class="process-desc">
+											Address legal challenges with personalized solutions. Our
+											consulting process delivers expertise, collaboration, and
+											client-centric strategies for success.
+										</p>
+										<ul class="process-list-items">
+											<li>Personalized solutions for legal challenges</li>
+											<li>Client-centric and collaborative approach</li>
+											<li>Expertise-driven legal consulting</li>
+										</ul>
+									</dd>
+								</div>
+
+								<div class="process-card">
+									<dt>
+										<p class="process-number">3</p>
+										<h3 class="process-title">Advocacy &amp; Representation</h3>
+									</dt>
+									<dd>
+										<p class="process-desc">
+											Advocate for clients, build strong cases, and capitalize
+											on opportunities with our dynamic representation process.
+										</p>
+										<ul class="process-list-items">
+											<li>Vigorous advocacy in negotiations and court</li>
+											<li>Build strong, evidence-based cases</li>
+											<li>Capitalize on legal opportunities</li>
+										</ul>
+									</dd>
+								</div>
+
+								<div class="process-card">
+									<dt>
+										<p class="process-number">4</p>
+										<h3 class="process-title">Precision Monitoring</h3>
+									</dt>
+									<dd>
+										<p class="process-desc">
+											Utilize real-time case analytics, continuous improvement
+											initiatives, and ensure operational excellence with our
+											precision monitoring process.
+										</p>
+										<ul class="process-list-items">
+											<li>Real-time analytics for case insights</li>
+											<li>Continuous improvement in legal processes</li>
+											<li>Ensure operational excellence for clients</li>
+										</ul>
+									</dd>
+								</div>
+							</dl>
+
+							<div class="approach-cta">
+								<p>
+									Ready to experience legal representation that puts your
+									interests first?
+								</p>
+								<div class="approach-cta-btns">
+									<button class="btn btn-dark btn-md">
+										Schedule Consultation
+									</button>
+									<button class="btn btn-light btn-md">
+										Learn more about us
+									</button>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- PRACTICE AREAS -->
+			<section style="background:var(--color-white)">
+				<div class="container py-section-lg">
+					<div class="section-header">
+						<p class="section-label section-label-secondary">
+							Areas of Expertise
+						</p>
+						<div>
+							<h2 class="section-heading">Practice Areas</h2>
+							<p class="section-desc-muted" style="font-size:1.125rem">
+								Our experienced attorneys provide comprehensive legal services
+								across a wide range of practice areas, delivering strategic
+								solutions tailored to your unique needs.
+							</p>
+						</div>
+					</div>
+
+					<div class="practice-grid">
+						<article class="practice-card">
+							<a
+								href="practice-areas.html"
+								class="card-link"
+								title="Learn more: Adoption and Guardianship"
+								aria-label="Learn more about Adoption and Guardianship"
+							></a>
+							<img
+								src="assets/adoption.webp"
+								alt="Adoption and Guardianship"
+								loading="lazy"
+								width="1000"
+								height="1000"
+							>
+							<div class="practice-card-overlay"></div>
+							<div class="practice-card-content">
+								<h3 class="practice-card-title">Adoption and Guardianship</h3>
+								<p class="practice-card-desc">
+									Assistance in navigating adoption and guardianship processes.
+								</p>
+							</div>
+						</article>
+
+						<article class="practice-card">
+							<a
+								href="practice-areas.html"
+								class="card-link"
+								title="Learn more: Assault and Violent Crimes"
+								aria-label="Learn more about Assault and Violent Crimes"
+							></a>
+							<img
+								src="assets/assault.webp"
+								alt="Assault and Violent Crimes"
+								loading="lazy"
+								width="1000"
+								height="1000"
+							>
+							<div class="practice-card-overlay"></div>
+							<div class="practice-card-content">
+								<h3 class="practice-card-title">Assault and Violent Crimes</h3>
+								<p class="practice-card-desc">
+									Defense for clients accused of assault or violent offenses.
+								</p>
+							</div>
+						</article>
+
+						<article class="practice-card">
+							<a
+								href="practice-areas.html"
+								class="card-link"
+								title="Learn more: Child Custody"
+								aria-label="Learn more about Child Custody"
+							></a>
+							<img
+								src="assets/custody.webp"
+								alt="Child Custody"
+								loading="lazy"
+								width="1000"
+								height="1000"
+							>
+							<div class="practice-card-overlay"></div>
+							<div class="practice-card-content">
+								<h3 class="practice-card-title">Child Custody</h3>
+								<p class="practice-card-desc">
+									Guiding families through custody decisions for stable
+									arrangements.
+								</p>
+							</div>
+						</article>
+
+						<article class="practice-card">
+							<a
+								href="practice-areas.html"
+								class="card-link"
+								title="Learn more: Corporate Law"
+								aria-label="Learn more about Corporate Law"
+							></a>
+							<img
+								src="assets/corporate.webp"
+								alt="Corporate Law"
+								loading="lazy"
+								width="1000"
+								height="1000"
+							>
+							<div class="practice-card-overlay"></div>
+							<div class="practice-card-content">
+								<h3 class="practice-card-title">Corporate Law</h3>
+								<p class="practice-card-desc">
+									Expert legal advice for companies of all sizes.
+								</p>
+							</div>
+						</article>
+					</div>
+
+					<div class="cta-block">
+						<div class="cta-block-inner">
+							<div>
+								<h3 class="cta-block-title">Explore all practice areas</h3>
+								<p class="cta-block-sub">
+									Browse our 10+ areas of expertise or talk with us to find the
+									right fit.
+								</p>
+							</div>
+							<div class="cta-block-btns">
+								<a href="practice-areas.html" class="btn btn-dark btn-lg"
+									>View all practice areas</a
+								>
+								<a href="free-consultation.html" class="btn btn-light btn-lg"
+									>Free Consultation</a
+								>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- TEAM -->
+			<section>
+				<div class="container py-section-lg">
+					<div class="section-header">
+						<p class="section-label section-label-secondary">The team</p>
+						<div>
+							<h2 class="section-heading">Our Team</h2>
+							<p class="section-desc-muted" style="font-size:1.125rem">
+								Meet our experienced attorneys who are dedicated to providing
+								exceptional legal representation and building lasting
+								relationships with our clients.
+							</p>
+						</div>
+					</div>
+
+					<div class="team-grid">
+						<!-- David Kim -->
+						<div class="team-card">
+							<a
+								href="team.html"
+								class="card-link"
+								title="View profile for David Kim"
+								aria-label="View profile for David Kim"
+							></a>
+							<img
+								src="assets/david-kim.webp"
+								alt="David Kim portrait"
+								loading="lazy"
+								width="1000"
+								height="1000"
+							>
+							<div class="team-card-body">
+								<div>
+									<h3 class="team-card-name">David Kim</h3>
+									<p class="team-card-role">Senior Paralegal</p>
+									<div class="team-card-contact">
+										<a href="mailto:david@lexfordlaw.com"
+											>david@lexfordlaw.com</a
+										>
+										<a href="tel:+12025550321">+1 (202) 555-0321</a>
+										<p style="font-size:var(--text-xs)">
+											Washington, DC Office
+										</p>
+									</div>
+								</div>
+								<div class="team-card-social">
+									<a
+										href="#"
+										target="_blank"
+										rel="noopener noreferrer"
+										aria-label="LinkedIn"
+									>
+										<span class="sr-only">LinkedIn</span>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+											<path d="M8 11v5" />
+											<path d="M8 8v.01" />
+											<path d="M12 16v-5" />
+											<path d="M16 16v-3a2 2 0 1 0 -4 0" />
+											<path
+												d="M3 7a4 4 0 0 1 4 -4h10a4 4 0 0 1 4 4v10a4 4 0 0 1 -4 4h-10a4 4 0 0 1 -4 -4z"
+											/>
+										</svg>
+									</a>
+									<a
+										href="#"
+										target="_blank"
+										rel="noopener noreferrer"
+										aria-label="Website"
+									>
+										<span class="sr-only">Website</span>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+											<path d="M9 15l6 -6" />
+											<path
+												d="M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464"
+											/>
+											<path
+												d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463"
+											/>
+										</svg>
+									</a>
+									<a
+										href="#"
+										target="_blank"
+										rel="noopener noreferrer"
+										aria-label="Twitter"
+									>
+										<span class="sr-only">Twitter</span>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+											<path d="M4 4l11.733 16h4.267l-11.733 -16z" />
+											<path d="M4 20l6.768 -6.768m2.46 -2.46l6.772 -6.772" />
+										</svg>
+									</a>
+								</div>
+							</div>
+						</div>
+
+						<!-- Emily Johnson -->
+						<div class="team-card">
+							<a
+								href="team.html"
+								class="card-link"
+								title="View profile for Emily Johnson"
+								aria-label="View profile for Emily Johnson"
+							></a>
+							<img
+								src="assets/emily-johnson.webp"
+								alt="Emily Johnson portrait"
+								loading="lazy"
+								width="1000"
+								height="1000"
+							>
+							<div class="team-card-body">
+								<div>
+									<h3 class="team-card-name">Emily Johnson</h3>
+									<p class="team-card-role">Family Law Associate</p>
+									<div class="team-card-contact">
+										<a href="mailto:emily@lexfordlaw.com"
+											>emily@lexfordlaw.com</a
+										>
+										<a href="tel:+12025550789">+1 (202) 555-0789</a>
+										<p style="font-size:var(--text-xs)">
+											Washington, DC Office
+										</p>
+									</div>
+								</div>
+								<div class="team-card-social">
+									<a
+										href="#"
+										target="_blank"
+										rel="noopener noreferrer"
+										aria-label="LinkedIn"
+									>
+										<span class="sr-only">LinkedIn</span>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+											<path d="M8 11v5" />
+											<path d="M8 8v.01" />
+											<path d="M12 16v-5" />
+											<path d="M16 16v-3a2 2 0 1 0 -4 0" />
+											<path
+												d="M3 7a4 4 0 0 1 4 -4h10a4 4 0 0 1 4 4v10a4 4 0 0 1 -4 4h-10a4 4 0 0 1 -4 -4z"
+											/>
+										</svg>
+									</a>
+									<a
+										href="#"
+										target="_blank"
+										rel="noopener noreferrer"
+										aria-label="Website"
+									>
+										<span class="sr-only">Website</span>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+											<path d="M9 15l6 -6" />
+											<path
+												d="M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464"
+											/>
+											<path
+												d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463"
+											/>
+										</svg>
+									</a>
+									<a
+										href="#"
+										target="_blank"
+										rel="noopener noreferrer"
+										aria-label="Twitter"
+									>
+										<span class="sr-only">Twitter</span>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+											<path d="M4 4l11.733 16h4.267l-11.733 -16z" />
+											<path d="M4 20l6.768 -6.768m2.46 -2.46l6.772 -6.772" />
+										</svg>
+									</a>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="cta-block">
+						<div class="cta-block-inner">
+							<div>
+								<h3 class="cta-block-title">Meet the full team</h3>
+								<p class="cta-block-sub">
+									Get to know our 6+ attorneys and their areas of focus.
+								</p>
+							</div>
+							<div class="cta-block-btns">
+								<a href="team.html" class="btn btn-dark btn-lg"
+									>Meet all attorneys</a
+								>
+								<a href="careers.html" class="btn btn-light btn-lg">Careers</a>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- CASE STUDIES -->
+			<section class="section-bg-light">
+				<div class="container py-section-lg">
+					<div class="section-header">
+						<p class="section-label section-label-secondary">stories</p>
+						<div>
+							<h2 class="section-heading">Case Studies</h2>
+							<p class="section-desc-muted" style="font-size:1.125rem">
+								Explore our successful case outcomes and see how we've helped
+								clients achieve their legal objectives across various practice
+								areas and industries.
+							</p>
+						</div>
+					</div>
+
+					<div class="cases-grid">
+						<article class="case-card">
+							<a
+								href="cases/acme-acquires-beta.html"
+								class="card-link"
+								title="Read case study: Acme Corp acquires Beta Ltd."
+								aria-label="Read case study for Acme Corp acquires Beta Ltd."
+							></a>
+							<img
+								src="assets/acme.webp"
+								alt="Acme Corp acquires Beta Ltd."
+								loading="lazy"
+								width="1000"
+								height="1000"
+							>
+							<div class="case-card-overlay"></div>
+							<div class="case-card-content">
+								<h3 class="case-card-title">Acme Corp acquires Beta Ltd.</h3>
+								<p class="case-card-sub">Acme Corp</p>
+							</div>
+						</article>
+
+						<article class="case-card">
+							<a
+								href="cases/garcia-wrongful-termination.html"
+								class="card-link"
+								title="Read case study: Garcia v. TechStart Inc."
+								aria-label="Read case study for Garcia v. TechStart Inc."
+							></a>
+							<img
+								src="assets/garcia.webp"
+								alt="Garcia v. TechStart Inc. - Wrongful Termination Settlement"
+								loading="lazy"
+								width="1000"
+								height="1000"
+							>
+							<div class="case-card-overlay"></div>
+							<div class="case-card-content">
+								<h3 class="case-card-title">
+									Garcia v. TechStart Inc.: Wrongful Termination Settlement
+								</h3>
+								<p class="case-card-sub">Maria Garcia (Plaintiff)</p>
+							</div>
+						</article>
+					</div>
+
+					<div class="cases-cta-block">
+						<div class="cta-block-inner">
+							<div>
+								<h3 class="cta-block-title">Explore all case studies</h3>
+								<p class="cta-block-sub">
+									Dive into 4+ detailed results and outcomes.
+								</p>
+							</div>
+							<a href="cases.html" class="btn btn-light btn-lg">View all cases</a>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- FREE CONSULTATION CTA -->
+			<section>
+				<div class="container py-section-lg">
+					<div class="consult-block">
+						<div class="consult-text">
+							<div>
+								<h2 class="consult-heading">
+									Take the first step toward trusted legal solutions
+								</h2>
+								<p class="consult-sub">
+									Don't let legal challenges hold you back. Our experienced
+									attorneys are here to provide the guidance and representation
+									you need. Schedule your free consultation today.
+								</p>
+								<div class="consult-btns">
+									<a
+										href="free-consultation.html"
+										class="btn btn-dark"
+										style="height:2.5rem;padding-inline:.875rem;font-size:var(--text-xs);width:100%"
+										>Schedule free consultation</a
+									>
+									<a
+										href="contact.html"
+										class="btn btn-light"
+										style="height:2.5rem;padding-inline:.875rem;font-size:var(--text-xs);width:100%"
+										>Contact us</a
+									>
+								</div>
+								<p class="consult-note">
+									No obligation &bull; Confidential &bull; Professional guidance
+								</p>
+								<div class="consult-phone">
+									<a href="tel:5551234567">Call (555) 123-4567</a>
+									or
+									<a href="mailto:info@carringtonlaw.com"
+										>info@carringtonlaw.com</a
+									>
+								</div>
+							</div>
+						</div>
+						<img
+							src="assets/heroImage.webp"
+							alt="Carrington Law - Professional Legal Services"
+							loading="eager"
+							class="consult-img"
+						>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<!-- ============================================================
+     FOOTER
+     ============================================================ -->
+		<footer class="site-footer">
+			<div class="container">
+				<div class="footer-grid">
+					<!-- Brand -->
+					<div class="footer-brand">
+						<svg
+							class="footer-logo"
+							viewBox="0 0 652 93"
+							fill="none"
+							xmlns="http://www.w3.org/2000/svg"
+						>
+							<path
+								d="M49.5015 24.6135C48.7695 19.3065 46.97 15.2805 44.103 12.5355C41.236 9.72948 37.515 8.32648 32.94 8.32648C29.707 8.32648 26.8095 9.05848 24.2475 10.5225C21.7465 11.9255 19.6115 13.8775 17.8425 16.3785C16.1345 18.8185 14.823 21.6855 13.908 24.9795C12.993 28.2125 12.5355 31.6895 12.5355 35.4105C12.5355 40.8395 13.3895 45.628 15.0975 49.776C16.8665 53.924 19.3065 57.1875 22.4175 59.5665C25.5895 61.9455 29.28 63.135 33.489 63.135C37.393 63.135 41.236 62.1895 45.018 60.2985C48.861 58.3465 52.033 55.6015 54.534 52.0635L58.2855 55.449C55.4185 59.353 52.3685 62.342 49.1355 64.416C45.9025 66.429 42.7305 67.8015 39.6195 68.5335C36.5695 69.2655 33.794 69.6315 31.293 69.6315C26.596 69.6315 22.326 68.808 18.483 67.161C14.701 65.453 11.407 63.135 8.60102 60.207C5.85602 57.218 3.72102 53.7715 2.19602 49.8675C0.732019 45.9025 1.86283e-05 41.6325 1.86283e-05 37.0575C1.86283e-05 32.8485 0.640519 28.7005 1.92152 24.6135C3.26352 20.5265 5.24602 16.836 7.86902 13.542C10.553 10.248 13.908 7.62498 17.934 5.67298C21.96 3.65998 26.6265 2.65348 31.9335 2.65348C34.6175 2.65348 37.4235 3.08048 40.3515 3.93448C43.2795 4.72748 46.0245 5.91698 48.5865 7.50298L48.2205 3.29398H54.534V24.6135H49.5015ZM393.698 69.6315C389.367 69.6315 385.433 68.686 381.895 66.795C378.357 64.843 375.551 62.1285 373.477 58.6515C371.464 55.1135 370.457 50.996 370.457 46.299C370.457 41.358 371.494 36.966 373.568 33.123C375.642 29.28 378.418 26.291 381.895 24.156C385.433 22.021 389.306 20.9535 393.515 20.9535C397.846 20.9535 401.75 21.9295 405.227 23.8815C408.704 25.8335 411.449 28.548 413.462 32.025C415.536 35.502 416.573 39.6195 416.573 44.3775C416.573 49.3795 415.567 53.802 413.554 57.645C411.602 61.427 408.887 64.3855 405.41 66.5205C401.994 68.5945 398.09 69.6315 393.698 69.6315ZM628.882 69.6315C624.551 69.6315 620.616 68.686 617.078 66.795C613.54 64.843 610.734 62.1285 608.66 58.6515C606.647 55.1135 605.641 50.996 605.641 46.299C605.641 41.358 606.678 36.966 608.752 33.123C610.826 29.28 613.601 26.291 617.078 24.156C620.616 22.021 624.49 20.9535 628.699 20.9535C633.03 20.9535 636.934 21.9295 640.411 23.8815C643.888 25.8335 646.633 28.548 648.646 32.025C650.72 35.502 651.757 39.6195 651.757 44.3775C651.757 49.3795 650.75 53.802 648.737 57.645C646.785 61.427 644.071 64.3855 640.594 66.5205C637.178 68.5945 633.274 69.6315 628.882 69.6315Z"
+								fill="currentColor"
+							/>
+						</svg>
+						<p class="footer-tagline">
+							Carrington Law provides comprehensive legal services with a
+							commitment to excellence, integrity, and client success. Serving
+							businesses and individuals nationwide.
+						</p>
+						<div class="footer-social">
+							<a href="#" aria-label="LinkedIn">LinkedIn</a>
+							<a href="#" aria-label="Twitter">Twitter</a>
+							<a href="#" aria-label="Facebook">Facebook</a>
+						</div>
+					</div>
+
+					<!-- Quick Links -->
+					<div class="footer-col">
+						<h3>Quick Links</h3>
+						<ul>
+							<li><a href="team.html">About Us</a></li>
+							<li><a href="practice-areas.html">Practice Areas</a></li>
+							<li><a href="cases.html">Cases</a></li>
+							<li><a href="careers.html">Careers</a></li>
+							<li><a href="press-and-media.html">Press &amp; Media</a></li>
+							<li><a href="contact.html">Contact</a></li>
+							<li><a href="free-consultation.html">Free Consultation</a></li>
+						</ul>
+					</div>
+
+					<!-- Practice Areas -->
+					<div class="footer-col">
+						<h3>Practice Areas</h3>
+						<ul>
+							<li>
+								<a href="practice-areas.html"
+									>Adoption and Guardianship</a
+								>
+							</li>
+							<li>
+								<a href="practice-areas.html"
+									>Assault and Violent Crimes</a
+								>
+							</li>
+							<li><a href="practice-areas.html">Child Custody</a></li>
+							<li><a href="practice-areas.html">Corporate Law</a></li>
+							<li>
+								<a href="practice-areas.html"
+									>Divorce and Separation</a
+								>
+							</li>
+							<li>
+								<a href="practice-areas.html"
+									>DUI and Traffic Violations</a
+								>
+							</li>
+						</ul>
+					</div>
+
+					<!-- Contact -->
+					<div class="footer-col" style="grid-column:span 2">
+						<h3>Contact Us</h3>
+						<div class="footer-offices">
+							<div class="footer-office">
+								<p class="office-name">New York Office</p>
+								<p>123 Legal Avenue, Suite 400</p>
+								<p>New York, NY 10001</p>
+								<a href="tel:5551234567">(555) 123-4567</a>
+							</div>
+							<div class="footer-office">
+								<p class="office-name">Los Angeles Office</p>
+								<p>456 Justice Boulevard, Floor 12</p>
+								<p>Los Angeles, CA 90210</p>
+								<a href="tel:5559876543">(555) 987-6543</a>
+							</div>
+						</div>
+						<a href="mailto:carrington@example.com" class="footer-email"
+							>carrington@example.com</a
+						>
+					</div>
+				</div>
+				<!-- /footer-grid -->
+
+				<div class="footer-bottom">
+					<div class="footer-bottom-row">
+						<div class="footer-copyright">
+							<p>&copy; 2026 Carrington Law. All rights reserved.</p>
+						</div>
+						<div class="footer-legal-links">
+							<a href="index.html">Privacy Policy</a>
+							<span class="sep">&bull;</span>
+							<a href="index.html">Terms of Service</a>
+						</div>
+					</div>
+
+					<div class="footer-disclaimer">
+						<p>
+							The information provided on this website is for general
+							informational purposes only and does not constitute legal advice,
+							nor does it create an attorney-client relationship. You should not
+							act or rely on any information on this site without seeking the
+							advice of a qualified attorney who is familiar with your specific
+							circumstances. Communications through this website do not
+							establish an attorney-client relationship and are not privileged
+							or confidential. Any testimonials or past results described on
+							this site are not a guarantee of future outcomes, and each case is
+							unique. Carrington Law makes no representations or warranties
+							regarding the accuracy, completeness, or adequacy of the
+							information contained herein. For legal advice tailored to your
+							situation, please contact a licensed attorney directly. By using
+							this site, you acknowledge and accept these terms.
+						</p>
+					</div>
+				</div>
+			</div>
+			<!-- /container -->
+		</footer>
+
+		<!-- ============================================================
+     SCRIPTS
+     ============================================================ -->
+		<script>
+		(function () {
+			"use strict";
+
+			// ---- Search data ----
+			const searchItems = [
+				{
+					title:
+						"Carrington law firm secures landmark victory in corporate litigation",
+					description:
+						"Carrington Law Firm wins a precedent-setting corporate litigation case, strengthening business law standards in New York.",
+					date: "2025-11-01T00:00:00.000Z",
+					url: "/blog/posts/1",
+					section: "Blog",
+				},
+				{
+					title: "Carrington Attorneys Featured in National Law Review",
+					description:
+						"Carrington Law Firm's attorneys are recognized for their expertise in the National Law Review's annual spotlight.",
+					date: "2025-10-15T00:00:00.000Z",
+					url: "/blog/posts/2",
+					section: "Blog",
+				},
+				{
+					title: "Carrington Law Expands Practice Areas",
+					description:
+						"Carrington Law Firm announces the expansion of its practice areas to better serve clients in emerging legal fields.",
+					date: "2025-09-28T00:00:00.000Z",
+					url: "/blog/posts/3",
+					section: "Blog",
+				},
+				{
+					title: "Acme Corp acquires Beta Ltd.",
+					description:
+						"Led counsel for Acme in a $250M cross-border acquisition.",
+					date: "2025-06-15T00:00:00.000Z",
+					url: "/cases/acme-acquires-beta",
+					section: "Case",
+				},
+				{
+					title: "Garcia v. TechStart Inc. - Wrongful Termination Settlement",
+					description:
+						"Secured $2.8M settlement for executive wrongfully terminated after whistleblower complaint.",
+					date: "2025-07-15T00:00:00.000Z",
+					url: "/cases/garcia-wrongful-termination",
+					section: "Case",
+				},
+				{
+					title: "GlobalTech Merger Clearance",
+					description:
+						"Successfully obtained antitrust clearance for $1.2B merger.",
+					date: "2025-06-30T00:00:00.000Z",
+					url: "/cases/globaltech-merger-clearance",
+					section: "Case",
+				},
+				{
+					title: "David Kim",
+					description:
+						"Experienced legal professional providing comprehensive support across multiple practice areas.",
+					date: null,
+					url: "/team/david-kim",
+					section: "Team",
+				},
+				{
+					title: "Emily Johnson",
+					description:
+						"Compassionate family law attorney dedicated to helping families navigate difficult transitions with dignity.",
+					date: null,
+					url: "/team/emily-johnson",
+					section: "Team",
+				},
+				{
+					title: "John Sullivan",
+					description:
+						"Seasoned corporate attorney specializing in mergers and acquisitions.",
+					date: null,
+					url: "/team/jon-sullivan",
+					section: "Team",
+				},
+				{
+					title: "Sarah Chen",
+					description:
+						"Leading expert in intellectual property law with 20+ years of experience protecting innovative companies.",
+					date: null,
+					url: "/team/sarah-chen",
+					section: "Team",
+				},
+				{
+					title: "Corporate Law",
+					description: "Expert legal advice for companies of all sizes.",
+					date: null,
+					url: "/practice-areas/corporate-law",
+					section: "Practice Area",
+				},
+				{
+					title: "Adoption and Guardianship",
+					description:
+						"Assistance in navigating adoption and guardianship processes.",
+					date: null,
+					url: "/practice-areas/adoption-and-guardianship",
+					section: "Practice Area",
+				},
+				{
+					title: "Child Custody",
+					description:
+						"Guiding families through custody decisions for stable arrangements.",
+					date: null,
+					url: "/practice-areas/child-custody",
+					section: "Practice Area",
+				},
+				{
+					title: "Litigation",
+					description:
+						"Aggressive representation in civil and commercial disputes.",
+					date: null,
+					url: "/practice-areas/litigation",
+					section: "Practice Area",
+				},
+			];
+
+			// ---- DOM Ready ----
+			document.addEventListener("DOMContentLoaded", function () {
+				// ---- NAV SCROLL BEHAVIOR ----
+				const navEl = document.querySelector("[data-nav]");
+				const logoEl = document.querySelector("[data-logo]");
+				const exploreEl = document.querySelector("[data-explore-trigger]");
+				const primaryLinks = document.querySelectorAll("[data-primary-link]");
+				const menuButton = document.getElementById("menuButton");
+
+				const enableScrollSwap = navEl && navEl.dataset.swap === "true";
+
+				function swapColor(el, scrolled) {
+					if (!el) return;
+					el.style.color = scrolled
+						? "var(--color-base-800)"
+						: "var(--color-white)";
+				}
+
+				function handleScroll() {
+					if (!enableScrollSwap) return;
+					const scrolled = window.scrollY > 0;
+					if (navEl) navEl.classList.toggle("scrolled", scrolled);
+					swapColor(logoEl, scrolled);
+					if (exploreEl)
+						exploreEl.style.color = scrolled
+							? "var(--color-base-800)"
+							: "var(--color-white)";
+					primaryLinks.forEach(function (el) {
+						el.style.color = scrolled
+							? "var(--color-base-800)"
+							: "var(--color-white)";
+					});
+					if (menuButton)
+						menuButton.style.color = scrolled
+							? "var(--color-base-800)"
+							: "var(--color-white)";
+				}
+
+				if (enableScrollSwap) {
+					window.addEventListener("scroll", handleScroll);
+					handleScroll();
+				}
+
+				// ---- MOBILE MENU ----
+				const mobileMenu = document.getElementById("mobile-menu");
+
+				function openMenu() {
+					if (!menuButton || !mobileMenu) return;
+					menuButton.setAttribute("aria-expanded", "true");
+					mobileMenu.classList.add("open");
+				}
+				function closeMenu() {
+					if (!menuButton || !mobileMenu) return;
+					menuButton.setAttribute("aria-expanded", "false");
+					mobileMenu.classList.remove("open");
+				}
+				function toggleMenu() {
+					menuButton.getAttribute("aria-expanded") === "true"
+						? closeMenu()
+						: openMenu();
+				}
+
+				if (menuButton) menuButton.addEventListener("click", toggleMenu);
+
+				document.addEventListener("click", function (e) {
+					if (!mobileMenu || !menuButton) return;
+					if (
+						!mobileMenu.contains(e.target) &&
+						!menuButton.contains(e.target)
+					) {
+						if (menuButton.getAttribute("aria-expanded") === "true")
+							closeMenu();
+					}
+				});
+				document.addEventListener("keydown", function (e) {
+					if (
+						e.key === "Escape" &&
+						menuButton &&
+						menuButton.getAttribute("aria-expanded") === "true"
+					)
+						closeMenu();
+				});
+
+				// ---- MEGA MENU ----
+				const megaTrigger = document.getElementById("exploreBtn");
+				const megaPanel = document.getElementById("mega-desktop");
+
+				if (megaTrigger && megaPanel) {
+					let closeTimer;
+
+					function showMega() {
+						clearTimeout(closeTimer);
+						megaTrigger.setAttribute("aria-expanded", "true");
+						megaPanel.classList.add("visible");
+					}
+					function schedulHideMega() {
+						clearTimeout(closeTimer);
+						closeTimer = setTimeout(function () {
+							megaTrigger.setAttribute("aria-expanded", "false");
+							megaPanel.classList.remove("visible");
+						}, 80);
+					}
+
+					megaTrigger.addEventListener("mouseenter", showMega);
+					megaTrigger.addEventListener("mouseleave", schedulHideMega);
+					megaPanel.addEventListener("mouseenter", showMega);
+					megaPanel.addEventListener("mouseleave", schedulHideMega);
+					megaTrigger.addEventListener("focusin", showMega);
+					megaPanel.addEventListener("focusin", showMega);
+					megaTrigger.addEventListener("focusout", function (e) {
+						var next = e.relatedTarget;
+						if (!next || (next instanceof Node && !megaPanel.contains(next)))
+							schedulHideMega();
+					});
+					megaPanel.addEventListener("focusout", function (e) {
+						var next = e.relatedTarget;
+						if (
+							!next ||
+							(next instanceof Node &&
+								!megaPanel.contains(next) &&
+								!megaTrigger.contains(next))
+						)
+							schedulHideMega();
+					});
+					document.addEventListener("keydown", function (e) {
+						if (e.key === "Escape") schedulHideMega();
+					});
+					document.addEventListener("click", function (e) {
+						if (
+							!megaPanel.contains(e.target) &&
+							!megaTrigger.contains(e.target)
+						)
+							schedulHideMega();
+					});
+				}
+
+				// ---- SEARCH MODAL ----
+				const searchModal = document.getElementById("searchModal");
+				const searchPanel = document.getElementById("searchPanel");
+				const searchButton = document.getElementById("searchButton");
+				const searchInput = document.getElementById("searchInput");
+				const searchResults = document.getElementById("searchResults");
+				const closeSearch = document.getElementById("closeSearch");
+				const clearSearch = document.getElementById("clearSearch");
+
+				var fuse = null;
+				if (typeof Fuse !== "undefined") {
+					fuse = new Fuse(searchItems, {
+						keys: ["title", "description", "section"],
+						threshold: 0.3,
+						includeMatches: true,
+					});
+				}
+
+				function openSearch(e) {
+					if (e) {
+						e.preventDefault();
+						e.stopPropagation();
+					}
+					searchModal.classList.add("open");
+					document.body.style.overflow = "hidden";
+					setTimeout(function () {
+						if (searchInput) searchInput.focus();
+					}, 100);
+				}
+
+				function closeSearchModal(e) {
+					if (e) {
+						e.preventDefault();
+						e.stopPropagation();
+					}
+					searchModal.classList.remove("open");
+					document.body.style.overflow = "";
+					if (searchInput) searchInput.value = "";
+					if (searchResults) {
+						searchResults.innerHTML = "";
+						searchResults.classList.add("hidden");
+					}
+					if (clearSearch) clearSearch.classList.add("hidden");
+				}
+
+				function renderResults(results) {
+					if (!searchInput || !searchInput.value.trim()) {
+						if (searchResults) {
+							searchResults.innerHTML = "";
+							searchResults.classList.add("hidden");
+						}
+						return;
+					}
+					if (results.length === 0) {
+						searchResults.innerHTML =
+							'<div class="search-empty"><h3>There\'s nothing here.</h3></div>';
+						searchResults.classList.remove("hidden");
+						return;
+					}
+					searchResults.innerHTML = results
+						.map(function (result) {
+							var item = result.item;
+							var dateStr = "";
+							if (item.date) {
+								var d = new Date(item.date);
+								if (!isNaN(d)) {
+									dateStr = d.toLocaleDateString("en-US", {
+										year: "numeric",
+										month: "long",
+										day: "2-digit",
+									});
+								}
+							}
+							return (
+								'<div class="search-result-item">' +
+								'<a href="' +
+								item.url +
+								'" class="abs-link"></a>' +
+								'<p class="search-result-section">' +
+								item.section +
+								(dateStr ? " · " + dateStr : "") +
+								"</p>" +
+								'<h3 class="search-result-title">' +
+								item.title +
+								"</h3>" +
+								(item.description
+									? '<p class="search-result-desc">' + item.description + "</p>"
+									: "") +
+								"</div>"
+							);
+						})
+						.join("");
+					searchResults.classList.remove("hidden");
+				}
+
+				if (searchButton) {
+					searchButton.addEventListener("click", openSearch);
+					searchButton.addEventListener("touchend", openSearch);
+				}
+				if (closeSearch) {
+					closeSearch.addEventListener("click", closeSearchModal);
+				}
+				if (searchInput) {
+					searchInput.addEventListener("input", function (e) {
+						var value = e.target.value.trim();
+						var results = value && fuse ? fuse.search(value) : [];
+						renderResults(results);
+						if (clearSearch)
+							clearSearch.classList.toggle("hidden", value.length === 0);
+					});
+				}
+				if (clearSearch) {
+					clearSearch.addEventListener("click", function (e) {
+						e.preventDefault();
+						if (searchInput) {
+							searchInput.value = "";
+							searchInput.focus();
+						}
+						if (searchResults) {
+							searchResults.innerHTML = "";
+							searchResults.classList.add("hidden");
+						}
+						clearSearch.classList.add("hidden");
+					});
+				}
+
+				// Close on Escape
+				document.addEventListener("keydown", function (e) {
+					if (
+						e.key === "Escape" &&
+						searchModal &&
+						!searchModal.classList.contains("hidden") &&
+						searchModal.classList.contains("open")
+					) {
+						closeSearchModal();
+					}
+				});
+
+				// Click outside panel
+				if (searchModal) {
+					searchModal.addEventListener("click", function (e) {
+						if (searchPanel && !searchPanel.contains(e.target))
+							closeSearchModal(e);
+					});
+				}
+
+				// Keyboard shortcuts to open: Cmd+K, Ctrl+K, /
+				document.addEventListener("keydown", function (e) {
+					var tag = (e.target && e.target.tagName) || "";
+					var isTyping =
+						/INPUT|TEXTAREA|SELECT/.test(tag) ||
+						(e.target && e.target.isContentEditable);
+					if (
+						!isTyping &&
+						(e.key === "k" || e.key === "K") &&
+						(e.metaKey || e.ctrlKey)
+					) {
+						e.preventDefault();
+						openSearch(e);
+					}
+					if (!isTyping && e.key === "/") {
+						e.preventDefault();
+						openSearch(e);
+					}
+				});
+
+				// ---- COUNT UP ANIMATION ----
+				var countupItems = document.querySelectorAll(".countup");
+				if ("IntersectionObserver" in window && countupItems.length > 0) {
+					function easeOutCubic(t) {
+						return 1 - Math.pow(1 - t, 3);
+					}
+					function animateCount(el) {
+						var target = Number(el.dataset.target || "0");
+						var suffix = el.dataset.suffix || "";
+						var decimals = Number(el.dataset.decimals || "0");
+						var duration = 1000;
+						var startTime = performance.now();
+						el.textContent =
+							(0).toLocaleString(undefined, {
+								minimumFractionDigits: decimals,
+								maximumFractionDigits: decimals,
+							}) + suffix;
+						function step(now) {
+							var t = Math.min((now - startTime) / duration, 1);
+							var raw = target * easeOutCubic(t);
+							var value = decimals
+								? Number(raw.toFixed(decimals))
+								: Math.round(raw);
+							el.textContent =
+								value.toLocaleString(undefined, {
+									minimumFractionDigits: decimals,
+									maximumFractionDigits: decimals,
+								}) + suffix;
+							if (t < 1) requestAnimationFrame(step);
+						}
+						requestAnimationFrame(step);
+					}
+					var io = new IntersectionObserver(
+						function (entries) {
+							entries.forEach(function (e) {
+								if (e.isIntersecting && !e.target.dataset.animated) {
+									e.target.dataset.animated = "true";
+									io.unobserve(e.target);
+									animateCount(e.target);
+								}
+							});
+						},
+						{ threshold: 0.35 },
+					);
+					countupItems.forEach(function (el) {
+						io.observe(el);
+					});
+				}
+			}); // end DOMContentLoaded
+		})();
+		</script>
+	</body>
+</html>

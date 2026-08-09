@@ -1,0 +1,11 @@
+{
+  "slug": "flaco",
+  "name": "Flaco: Minimal Personal Portfolio and Blog Template",
+  "family": "lexingtonthemes",
+  "kind": "multipage",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/templates/premium/lexingtonthemes/flaco",
+  "source_license": "MIT"
+}

@@ -1,0 +1,13 @@
+{
+  "slug": "ironclad-password-hero",
+  "name": "Ironclad — Password Manager Hero Section",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [
+    "Helvetica Now Display Bold"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/ironclad-password-hero",
+  "source_license": "MIT"
+}

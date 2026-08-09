@@ -1,0 +1,25 @@
+{
+  "slug": "viktor-oddy-landing",
+  "name": "Viktor Oddy — Creative Studio Landing Page",
+  "family": "landing-pages",
+  "kind": "vite",
+  "cdn_fonts": [
+    "PP Mondwest"
+  ],
+  "dropped_assets": [
+    "hero-aethera-preview-DknSlcTa.gif",
+    "hero-asme-preview-B_nGDnTP.gif",
+    "hero-automation-machines-preview-DlTveRIN.gif",
+    "hero-evr-ventures-preview-DZxeVFEX.gif",
+    "hero-nexora-preview-cx5HmUgo.gif",
+    "hero-orbit-web3-preview-BXt4OttD.gif",
+    "hero-portfolio-cosmic-preview-BpvWJ3Nc.gif",
+    "hero-space-voyage-preview-eECLH3Yc.gif",
+    "hero-transform-data-preview-Cx5OU29N.gif",
+    "hero-velorah-preview-CJNTtbpd.gif",
+    "hero-xportfolio-preview-D4A8maiC.gif"
+  ],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/viktor-oddy-landing",
+  "source_license": "MIT"
+}

@@ -1,0 +1,13 @@
+{
+  "slug": "obsidian-meridian-h85",
+  "name": "Obsidian Meridian — Luxury Real-Estate & Architecture Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Oswald"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/obsidian-meridian-h85",
+  "source_license": "MIT"
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "meridian-precision-clinic-h35",
+  "name": "Meridian Precision Clinic — Architectural Clinical Editorial Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Fraunces",
+    "Inter"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/meridian-precision-clinic-h35",
+  "source_license": "MIT"
+}

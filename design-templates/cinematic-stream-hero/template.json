@@ -1,0 +1,11 @@
+{
+  "slug": "cinematic-stream-hero",
+  "name": "LUMIÈRE — Cinematic Streaming Hero Section",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/cinematic-stream-hero",
+  "source_license": "MIT"
+}

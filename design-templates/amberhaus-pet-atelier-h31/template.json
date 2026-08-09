@@ -1,0 +1,15 @@
+{
+  "slug": "amberhaus-pet-atelier-h31",
+  "name": "Amberhaus — Luxury Pet Boutique & Care Atelier Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Bricolage",
+    "Inter",
+    "Playfair"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/amberhaus-pet-atelier-h31",
+  "source_license": "MIT"
+}

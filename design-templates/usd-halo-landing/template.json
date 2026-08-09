@@ -1,0 +1,13 @@
+{
+  "slug": "usd-halo-landing",
+  "name": "USD Halo — Reward-Earning Stablecoin Landing Page",
+  "family": "landing-pages",
+  "kind": "vite",
+  "cdn_fonts": [
+    "TT Norms Pro"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/usd-halo-landing",
+  "source_license": "MIT"
+}

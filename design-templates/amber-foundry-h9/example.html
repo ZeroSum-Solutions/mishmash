@@ -1,0 +1,3071 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>
+			Amber Foundry — Operational Excellence, Forged from Intelligence
+		</title>
+		<meta
+			name="description"
+			content="Amber Foundry designs bespoke neural workflows that integrate directly with your stack to eliminate operational friction."
+		>
+		<style>
+/* Vendored fonts — Amber Foundry */
+
+
+
+
+
+
+
+
+
+
+
+:root {
+	--cream: #f6f0e9;
+	--brown: #2b180a;
+	--gold: #dab697;
+	--taupe: #94877c;
+	--btn: #efe7dd;
+	--white: #ffffff;
+	--gold-10: rgba(218, 182, 151, 0.1);
+	--gold-20: rgba(218, 182, 151, 0.2);
+	--gold-30: rgba(218, 182, 151, 0.3);
+	--ease: cubic-bezier(0.16, 1, 0.3, 1);
+	--shadow-soft: 0 10px 30px -10px rgba(43, 24, 10, 0.06);
+	--shadow-elev: 0 20px 50px -12px rgba(43, 24, 10, 0.12);
+	--maxw: 1392px;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+html {
+	scroll-behavior: smooth;
+	-webkit-text-size-adjust: 100%;
+}
+body {
+	font-family: "Inter", sans-serif;
+	background: var(--cream);
+	color: var(--brown);
+	overflow-x: hidden;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+button {
+	font-family: inherit;
+	cursor: pointer;
+	border: none;
+	background: none;
+}
+img,
+svg,
+canvas {
+	display: block;
+	max-width: 100%;
+}
+.serif,
+.display {
+	font-family: "Host Grotesk", "Halant", serif;
+}
+.wrap {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 0 24px;
+}
+@media (min-width: 768px) {
+	.wrap {
+		padding: 0 64px;
+	}
+}
+
+.eyebrow {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.28em;
+	color: var(--gold);
+}
+
+/* ---------- buttons ---------- */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	font-weight: 500;
+	border-radius: 12px;
+	transition:
+		transform 0.25s var(--ease),
+		opacity 0.25s,
+		background 0.25s,
+		color 0.25s;
+	padding: 16px 38px;
+	font-size: 15px;
+}
+.btn-dark {
+	background: var(--brown);
+	color: #fff;
+	box-shadow: var(--shadow-elev);
+}
+.btn-dark:hover {
+	opacity: 0.9;
+	transform: translateY(-2px);
+}
+.btn-ghost {
+	background: #fff;
+	border: 1px solid var(--gold-20);
+	color: var(--brown);
+}
+.btn-ghost:hover {
+	background: var(--btn);
+}
+.pill-cta {
+	background: var(--brown);
+	color: #fff;
+	padding: 10px 24px;
+	border-radius: 10px;
+	font-size: 14px;
+	font-weight: 500;
+	transition: opacity 0.2s;
+}
+.pill-cta:hover {
+	opacity: 0.9;
+}
+
+/* ---------- header ---------- */
+header {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 50;
+	background: rgba(246, 240, 233, 0.82);
+	backdrop-filter: blur(14px);
+	border-bottom: 1px solid var(--gold-10);
+}
+header nav {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	height: 80px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 24px;
+}
+@media (min-width: 768px) {
+	header nav {
+		padding: 0 64px;
+	}
+}
+.logo {
+	font-family: "Host Grotesk", serif;
+	font-size: 23px;
+	font-weight: 600;
+	letter-spacing: -0.04em;
+	display: flex;
+	align-items: center;
+	gap: 9px;
+}
+.logo .mark {
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+	background: var(--brown);
+	position: relative;
+	flex: none;
+}
+.logo .mark::after {
+	content: "";
+	position: absolute;
+	inset: 6px;
+	border-radius: 3px;
+	background: var(--gold);
+}
+.nav-links {
+	display: none;
+	gap: 38px;
+}
+@media (min-width: 900px) {
+	.nav-links {
+		display: flex;
+	}
+}
+.nav-links a {
+	font-size: 14px;
+	font-weight: 500;
+	color: var(--taupe);
+	transition: color 0.2s;
+}
+.nav-links a:hover {
+	color: var(--brown);
+}
+
+/* ---------- reveal anim ---------- */
+.reveal {
+	opacity: 0;
+	transition:
+		opacity 1.2s var(--ease),
+		transform 1.2s var(--ease);
+	will-change: transform, opacity;
+}
+.reveal.from-bottom {
+	transform: translateY(40px);
+}
+.reveal.from-left {
+	transform: translateX(-40px);
+}
+.reveal.show {
+	opacity: 1;
+	transform: none;
+}
+@keyframes headBounce {
+	0% {
+		transform: translateY(60px) scale(0.96);
+		opacity: 0;
+	}
+	45% {
+		transform: translateY(-16px) scale(1.02);
+		opacity: 1;
+	}
+	65% {
+		transform: translateY(8px) scale(0.99);
+	}
+	82% {
+		transform: translateY(-3px) scale(1.01);
+	}
+	100% {
+		transform: translateY(0) scale(1);
+		opacity: 1;
+	}
+}
+.head-bounce {
+	opacity: 0;
+}
+.head-bounce.show {
+	animation: headBounce 1.7s var(--ease) both;
+}
+@keyframes pulseDot {
+	0%,
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.4;
+		transform: scale(0.7);
+	}
+}
+
+/* ---------- hero ---------- */
+.hero {
+	position: relative;
+	padding: 160px 0 80px;
+	text-align: center;
+	overflow: hidden;
+}
+.hero .badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 9px;
+	padding: 7px 18px;
+	border-radius: 999px;
+	background: var(--gold-20);
+	border: 1px solid var(--gold-30);
+}
+.hero .badge .dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--gold);
+	animation: pulseDot 2s infinite;
+}
+.hero .badge span:last-child {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	color: var(--brown);
+}
+.hero h1 {
+	font-family: "Host Grotesk", serif;
+	font-weight: 600;
+	font-size: clamp(44px, 8vw, 80px);
+	line-height: 1.04;
+	letter-spacing: -0.05em;
+	max-width: 950px;
+	margin: 26px auto 0;
+}
+.hero h1 .muted {
+	color: var(--taupe);
+	display: block;
+}
+.hero p.sub {
+	font-size: clamp(17px, 2.2vw, 21px);
+	color: var(--taupe);
+	max-width: 640px;
+	margin: 26px auto 0;
+	letter-spacing: -0.01em;
+}
+.hero .cta-row {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	align-items: center;
+	margin-top: 40px;
+}
+@media (min-width: 600px) {
+	.hero .cta-row {
+		flex-direction: row;
+		justify-content: center;
+	}
+}
+.hero-visual {
+	position: relative;
+	width: 100%;
+	margin-top: 56px;
+	border-radius: 40px;
+	overflow: hidden;
+	box-shadow: var(--shadow-elev);
+	aspect-ratio: 21 / 9;
+	background: linear-gradient(135deg, #fbf6ef, #f0e6d8);
+	border: 1px solid var(--gold-20);
+}
+@media (max-width: 700px) {
+	.hero-visual {
+		aspect-ratio: 16 / 10;
+		border-radius: 24px;
+	}
+}
+.hero-visual canvas {
+	width: 100%;
+	height: 100%;
+}
+.hero-visual .vlabel {
+	position: absolute;
+	left: 24px;
+	bottom: 22px;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	color: var(--brown);
+	background: rgba(255, 255, 255, 0.7);
+	backdrop-filter: blur(6px);
+	padding: 8px 16px;
+	border-radius: 999px;
+	border: 1px solid var(--gold-20);
+}
+.hero-visual .vlabel .lv {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: #3fa66a;
+	animation: pulseDot 1.6s infinite;
+}
+.hero-visual .vstat {
+	position: absolute;
+	right: 24px;
+	top: 22px;
+	background: rgba(255, 255, 255, 0.78);
+	backdrop-filter: blur(6px);
+	border: 1px solid var(--gold-20);
+	border-radius: 14px;
+	padding: 12px 16px;
+	text-align: left;
+}
+.hero-visual .vstat .n {
+	font-family: "Host Grotesk", serif;
+	font-size: 22px;
+	font-weight: 700;
+	color: var(--brown);
+	line-height: 1;
+}
+.hero-visual .vstat .l {
+	font-size: 9px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	color: var(--taupe);
+	margin-top: 5px;
+}
+@media (max-width: 700px) {
+	.hero-visual .vstat {
+		display: none;
+	}
+}
+
+/* ---------- marquee ---------- */
+.marquee-sec {
+	padding: 90px 0;
+	border-top: 1px solid var(--gold-10);
+	border-bottom: 1px solid var(--gold-10);
+}
+.marquee-head {
+	display: flex;
+	align-items: center;
+	gap: 32px;
+	margin-bottom: 54px;
+}
+.marquee-head .txt h3 {
+	font-size: clamp(15px, 2vw, 20px);
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	white-space: nowrap;
+}
+.marquee-head .line {
+	height: 1px;
+	background: var(--gold-30);
+	width: 100%;
+}
+.mask-edges {
+	position: relative;
+	overflow: hidden;
+	-webkit-mask-image: linear-gradient(
+		to right,
+		transparent,
+		#000 14%,
+		#000 86%,
+		transparent
+	);
+	mask-image: linear-gradient(
+		to right,
+		transparent,
+		#000 14%,
+		#000 86%,
+		transparent
+	);
+}
+.marquee-track {
+	display: flex;
+	align-items: center;
+	gap: 90px;
+	width: max-content;
+	animation: scrollX 38s linear infinite;
+	padding: 18px 0;
+}
+@keyframes scrollX {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
+}
+.marquee-track span {
+	font-family: "Host Grotesk", serif;
+	font-size: clamp(26px, 4vw, 40px);
+	font-weight: 600;
+	letter-spacing: -0.03em;
+	color: var(--brown);
+	opacity: 0.22;
+	transition:
+		transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+		opacity 0.3s;
+}
+.marquee-track span:hover {
+	opacity: 1;
+	transform: translateY(-10px) scale(1.08);
+}
+
+/* ---------- section heads ---------- */
+.sec-head {
+	text-align: center;
+	max-width: 680px;
+	margin: 0 auto 76px;
+}
+.sec-head h2 {
+	font-family: "Host Grotesk", serif;
+	font-weight: 600;
+	font-size: clamp(34px, 5.5vw, 60px);
+	letter-spacing: -0.04em;
+	line-height: 1.06;
+	margin-bottom: 18px;
+}
+.sec-head p {
+	font-size: clamp(17px, 2.2vw, 20px);
+	color: var(--taupe);
+}
+.pill-eyebrow {
+	display: inline-flex;
+	align-items: center;
+	padding: 7px 16px;
+	border-radius: 999px;
+	background: #fff;
+	border: 1px solid var(--gold-20);
+	box-shadow: var(--shadow-soft);
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--brown);
+	margin-bottom: 22px;
+}
+
+/* ---------- solutions ---------- */
+.solutions {
+	padding: 128px 0;
+	background: #fff;
+}
+.split {
+	display: none;
+	grid-template-columns: 1fr 1fr;
+	border: 1px solid var(--gold-20);
+	border-radius: 40px;
+	overflow: hidden;
+	height: 600px;
+	box-shadow: var(--shadow-soft);
+}
+@media (min-width: 1024px) {
+	.split {
+		display: grid;
+	}
+}
+.steps {
+	border-right: 1px solid var(--gold-10);
+	display: flex;
+	flex-direction: column;
+	background: #fff;
+}
+.step {
+	position: relative;
+	text-align: left;
+	padding: 34px 46px;
+	display: flex;
+	gap: 28px;
+	border-bottom: 1px solid var(--gold-10);
+	transition: background 0.3s;
+	flex: 1;
+}
+.step:last-child {
+	border-bottom: none;
+}
+.step.active {
+	background: rgba(246, 240, 233, 0.55);
+}
+.step .ico {
+	flex: none;
+	margin-top: 2px;
+	color: var(--gold);
+}
+.step h3 {
+	font-family: "Host Grotesk", serif;
+	font-size: 19px;
+	font-weight: 600;
+	color: var(--brown);
+}
+.step .desc {
+	max-height: 0;
+	opacity: 0;
+	overflow: hidden;
+	transition:
+		max-height 0.5s var(--ease),
+		opacity 0.4s;
+}
+.step.active .desc {
+	max-height: 160px;
+	opacity: 1;
+}
+.step .desc p {
+	font-size: 13.5px;
+	color: var(--taupe);
+	padding-top: 11px;
+	line-height: 1.6;
+}
+.step .prog {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	height: 3px;
+	width: 100%;
+	background: var(--gold-10);
+	overflow: hidden;
+}
+.step .prog i {
+	display: block;
+	height: 100%;
+	background: var(--gold);
+	width: 100%;
+	transform: scaleX(0);
+	transform-origin: left;
+}
+.step.active .prog i {
+	transform: scaleX(1);
+	transition: transform 5s linear;
+}
+.visuals {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 44px;
+	background: rgba(246, 240, 233, 0.35);
+	background-image:
+		linear-gradient(var(--gold-10) 1px, transparent 1px),
+		linear-gradient(90deg, var(--gold-10) 1px, transparent 1px);
+	background-size: 24px 24px;
+}
+.mock {
+	position: absolute;
+	width: 100%;
+	max-width: 430px;
+	opacity: 0;
+	transform: translateY(18px) scale(0.97);
+	transition:
+		opacity 0.6s var(--ease),
+		transform 0.6s var(--ease);
+	pointer-events: none;
+}
+.mock.show {
+	opacity: 1;
+	transform: none;
+	pointer-events: auto;
+	position: relative;
+}
+.card {
+	background: #fff;
+	border: 1px solid var(--gold-20);
+	border-radius: 22px;
+	box-shadow: var(--shadow-elev);
+	overflow: hidden;
+}
+.card-top {
+	height: 58px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 22px;
+	border-bottom: 1px solid var(--gold-10);
+	background: rgba(246, 240, 233, 0.5);
+}
+.card-top .ttl {
+	font-weight: 500;
+	font-size: 13.5px;
+}
+.dots {
+	display: flex;
+	gap: 6px;
+}
+.dots i {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--gold);
+}
+.dots i:nth-child(1) {
+	opacity: 0.4;
+}
+.dots i:nth-child(2) {
+	opacity: 0.6;
+}
+.row-tile {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding: 16px;
+	border: 1px solid var(--gold-10);
+	border-radius: 12px;
+	background: rgba(246, 240, 233, 0.25);
+}
+.sq {
+	width: 40px;
+	height: 40px;
+	border-radius: 10px;
+	background: var(--brown);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--gold);
+	flex: none;
+}
+.barfill {
+	flex: 1;
+	height: 8px;
+	background: var(--gold-20);
+	border-radius: 6px;
+}
+.toggle {
+	width: 46px;
+	height: 24px;
+	border-radius: 999px;
+	background: var(--gold);
+	flex: none;
+	position: relative;
+}
+.toggle::after {
+	content: "";
+	position: absolute;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: #fff;
+	top: 3px;
+	right: 3px;
+}
+.duo {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 14px;
+}
+.duo .opt {
+	padding: 15px;
+	border-radius: 12px;
+	text-align: center;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+}
+.duo .on {
+	border: 1px solid var(--gold);
+	background: var(--gold-10);
+	color: var(--brown);
+}
+.duo .off {
+	border: 1px solid var(--gold-10);
+	color: var(--taupe);
+}
+.metric {
+	padding-top: 16px;
+	border-top: 1px solid var(--gold-10);
+}
+.metric .lab {
+	display: flex;
+	justify-content: space-between;
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	color: var(--taupe);
+	margin-bottom: 9px;
+}
+.track {
+	height: 6px;
+	background: var(--gold-10);
+	border-radius: 999px;
+	overflow: hidden;
+}
+.track i {
+	display: block;
+	height: 100%;
+	background: var(--gold);
+}
+.card .pad {
+	padding: 26px;
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+}
+.darkhead {
+	padding: 24px 26px;
+	background: var(--brown);
+	color: var(--cream);
+}
+.darkhead h4 {
+	font-family: "Host Grotesk", serif;
+	font-size: 16px;
+	font-weight: 600;
+}
+.darkhead p {
+	font-size: 11.5px;
+	opacity: 0.6;
+	margin-top: 3px;
+}
+.srcgrid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 12px;
+}
+.src {
+	aspect-ratio: 1;
+	border: 1px solid var(--gold-10);
+	border-radius: 12px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	background: rgba(246, 240, 233, 0.2);
+	opacity: 0.45;
+}
+.src.act {
+	border: 2px solid var(--gold);
+	background: var(--gold-10);
+	opacity: 1;
+}
+.src .g {
+	font-size: 20px;
+}
+.src .n {
+	font-size: 9px;
+	font-weight: 700;
+	color: var(--taupe);
+}
+.src.act .n {
+	color: var(--brown);
+}
+.syncing {
+	display: flex;
+	align-items: center;
+	gap: 18px;
+	padding: 18px;
+	border: 1px dashed var(--gold-30);
+	border-radius: 12px;
+	background: rgba(246, 240, 233, 0.3);
+}
+.syncing .ic {
+	width: 40px;
+	height: 40px;
+	border-radius: 8px;
+	background: #fff;
+	border: 1px solid var(--gold-10);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 18px;
+	box-shadow: var(--shadow-soft);
+}
+.syncing .ll {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+}
+.syncing .ll b {
+	height: 8px;
+	border-radius: 4px;
+	background: var(--gold-30);
+	width: 70%;
+}
+.syncing .ll s {
+	height: 6px;
+	border-radius: 4px;
+	background: var(--gold-10);
+	width: 100%;
+}
+.syncing .tag {
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	color: var(--brown);
+	animation: pulseDot 1.5s infinite;
+}
+.streamhead {
+	height: 54px;
+	border-bottom: 1px solid var(--gold-10);
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	padding: 0 22px;
+	background: rgba(246, 240, 233, 0.25);
+}
+.streamhead .live {
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: #3fa66a;
+	animation: pulseDot 1.6s infinite;
+}
+.streamhead span {
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+}
+.bub {
+	max-width: 86%;
+	padding: 14px;
+	border-radius: 16px;
+	font-size: 12px;
+	line-height: 1.55;
+}
+.bub.you {
+	margin-left: auto;
+	background: var(--cream);
+	border: 1px solid var(--gold-10);
+	border-top-right-radius: 3px;
+}
+.bub.ai {
+	background: var(--brown);
+	color: var(--cream);
+	border-top-left-radius: 3px;
+}
+.airow {
+	display: flex;
+	gap: 13px;
+}
+.airow .av {
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	background: var(--brown);
+	color: var(--gold);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 10px;
+	font-weight: 700;
+	flex: none;
+}
+.flow {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 14px;
+	padding-top: 18px;
+	border-top: 1px solid var(--gold-10);
+}
+.flow .n {
+	padding: 7px 12px;
+	border-radius: 9px;
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	border: 1px solid var(--gold-20);
+	color: var(--taupe);
+}
+.flow .n.on {
+	border-color: var(--gold);
+	background: var(--gold-10);
+	color: var(--brown);
+}
+.flow .seg {
+	height: 1px;
+	width: 26px;
+	background: var(--gold-20);
+}
+.insight {
+	border: 1px solid var(--gold-20);
+	border-radius: 14px;
+	padding: 18px;
+	background: rgba(246, 240, 233, 0.2);
+	transition: transform 0.3s;
+}
+.insight:hover {
+	transform: scale(1.03);
+}
+.insight .t {
+	font-size: 12.5px;
+	font-weight: 700;
+	margin-bottom: 9px;
+}
+.insight p {
+	font-size: 10.5px;
+	color: var(--taupe);
+	margin-top: 9px;
+	line-height: 1.5;
+}
+.italicq {
+	font-size: 12px;
+	color: var(--taupe);
+	font-style: italic;
+	line-height: 1.7;
+}
+
+/* mobile step stack */
+.stack {
+	display: flex;
+	flex-direction: column;
+	gap: 46px;
+}
+@media (min-width: 1024px) {
+	.stack {
+		display: none;
+	}
+}
+.stack .panel {
+	height: 240px;
+	border-radius: 24px;
+	border: 1px solid var(--gold-10);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+	background: rgba(246, 240, 233, 0.35);
+	background-image:
+		linear-gradient(var(--gold-10) 1px, transparent 1px),
+		linear-gradient(90deg, var(--gold-10) 1px, transparent 1px);
+	background-size: 24px 24px;
+	margin-bottom: 24px;
+}
+.stack h3 {
+	font-family: "Host Grotesk", serif;
+	font-size: 23px;
+	font-weight: 600;
+	margin-bottom: 8px;
+}
+.stack p {
+	color: var(--taupe);
+}
+
+/* ---------- method bento ---------- */
+.method {
+	padding: 0 24px;
+	margin: 80px auto;
+	max-width: 1500px;
+}
+.method-inner {
+	background: #fff;
+	border-radius: 40px;
+	padding: 72px 24px;
+}
+@media (min-width: 768px) {
+	.method-inner {
+		padding: 80px 75px;
+	}
+}
+.bento {
+	display: grid;
+	grid-template-columns: repeat(12, 1fr);
+	gap: 16px;
+	max-width: 1060px;
+	margin: 0 auto;
+}
+.bcard {
+	grid-column: span 12;
+	background: rgba(246, 240, 233, 0.4);
+	border: 1px solid var(--gold-20);
+	border-radius: 40px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	box-shadow: var(--shadow-soft);
+	height: 420px;
+}
+@media (min-width: 768px) {
+	.bcard.c5 {
+		grid-column: span 5;
+	}
+	.bcard.c7 {
+		grid-column: span 7;
+	}
+}
+.bviz {
+	height: 250px;
+	position: relative;
+	overflow: hidden;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.btext {
+	padding: 32px;
+}
+.btext h3 {
+	font-family: "Host Grotesk", serif;
+	font-size: 23px;
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	margin-bottom: 6px;
+}
+.btext p {
+	font-size: 15px;
+	color: var(--taupe);
+	line-height: 1.4;
+}
+.glyphcol {
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+	width: 100%;
+	padding: 0 24px;
+	overflow: hidden;
+}
+.glyphrow {
+	display: flex;
+	gap: 16px;
+	width: max-content;
+}
+.glyphrow.l {
+	animation: scrollX 18s linear infinite;
+}
+.glyphrow.r {
+	animation: scrollXr 18s linear infinite;
+}
+@keyframes scrollXr {
+	from {
+		transform: translateX(-50%);
+	}
+	to {
+		transform: translateX(0);
+	}
+}
+.glyph {
+	width: 70px;
+	height: 70px;
+	background: #fff;
+	border-radius: 18px;
+	box-shadow: var(--shadow-soft);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 26px;
+	flex: none;
+}
+.tilt {
+	display: flex;
+	gap: 16px;
+	align-items: flex-end;
+}
+.tcard {
+	width: 170px;
+	border-radius: 14px;
+	box-shadow: var(--shadow-elev);
+	padding: 22px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+.tcard .cap {
+	width: 36px;
+	height: 4px;
+	border-radius: 3px;
+}
+.tcard .lns {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+}
+.tcard .lns b {
+	height: 4px;
+	border-radius: 3px;
+}
+.tcard .nm {
+	font-family: "Host Grotesk", serif;
+	font-size: 18px;
+	font-weight: 600;
+}
+.tcard.a {
+	height: 200px;
+	background: var(--brown);
+	transform: rotate(-3deg);
+}
+.tcard.a .cap,
+.tcard.a .lns b {
+	background: rgba(218, 182, 151, 0.3);
+}
+.tcard.a .nm {
+	color: var(--gold);
+}
+.tcard.b {
+	height: 220px;
+	background: var(--gold);
+	transform: rotate(2deg);
+}
+.tcard.b .cap,
+.tcard.b .lns b {
+	background: rgba(43, 24, 10, 0.25);
+}
+.tcard.b .nm {
+	color: var(--brown);
+}
+.tcard.c {
+	height: 190px;
+	background: #fff;
+	border: 1px solid var(--gold-10);
+	transform: rotate(-1deg);
+}
+.tcard.c .cap,
+.tcard.c .lns b {
+	background: rgba(148, 135, 124, 0.3);
+}
+.tcard.c .nm {
+	color: var(--brown);
+}
+.statcard {
+	position: absolute;
+	border-radius: 20px;
+	box-shadow: var(--shadow-elev);
+	padding: 22px;
+	width: 260px;
+}
+.statcard .h {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 14px;
+}
+.statcard .h .k {
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+}
+.statcard .h .v {
+	font-weight: 700;
+	font-size: 13px;
+}
+.statcard.one {
+	left: 0;
+	bottom: -30px;
+	background: #fff;
+	border: 1px solid var(--gold-10);
+}
+.statcard.one .k {
+	color: var(--taupe);
+}
+.statcard.one .v {
+	color: var(--brown);
+}
+.statcard.two {
+	right: 0;
+	top: -14px;
+	background: var(--brown);
+	color: var(--gold);
+}
+.loop {
+	width: 100%;
+	height: 100%;
+	padding: 24px;
+	display: flex;
+	justify-content: center;
+}
+.loopcard {
+	width: 100%;
+	max-width: 340px;
+	background: #fff;
+	border: 1px solid var(--gold-10);
+	border-radius: 20px;
+	box-shadow: var(--shadow-elev);
+	overflow: hidden;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+}
+.loopcard .lh {
+	padding: 16px;
+	border-bottom: 1px solid var(--gold-10);
+	background: rgba(246, 240, 233, 0.3);
+}
+.loopcard .lh b {
+	display: block;
+	width: 90px;
+	height: 11px;
+	border-radius: 999px;
+	background: var(--gold-30);
+}
+.loopscroll {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 14px;
+	animation: scrollY 12s linear infinite;
+}
+@keyframes scrollY {
+	from {
+		transform: translateY(0);
+	}
+	to {
+		transform: translateY(-50%);
+	}
+}
+.loopscroll i {
+	height: 52px;
+	border-radius: 12px;
+	background: rgba(246, 240, 233, 0.6);
+	border: 1px solid var(--gold-10);
+	flex: none;
+}
+.loopbtn {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 14px;
+	display: flex;
+	justify-content: center;
+}
+.loopbtn button {
+	background: var(--brown);
+	color: #fff;
+	border-radius: 999px;
+	padding: 10px 22px;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	box-shadow: var(--shadow-elev);
+	transition: transform 0.25s;
+}
+.loopbtn button:hover {
+	transform: scale(1.05);
+}
+
+/* ---------- pricing ---------- */
+.pricing {
+	padding: 128px 0;
+	background: var(--brown);
+	color: var(--cream);
+}
+.pricing .sec-head h2 {
+	color: var(--cream);
+}
+.pricing .sec-head p {
+	color: rgba(218, 182, 151, 0.6);
+}
+.tiers {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 30px;
+	max-width: 1080px;
+	margin: 0 auto;
+}
+@media (min-width: 880px) {
+	.tiers {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+.tier {
+	padding: 40px;
+	border-radius: 34px;
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--gold-20);
+	background: rgba(255, 255, 255, 0.05);
+	position: relative;
+}
+.tier.pop {
+	background: var(--gold);
+	color: var(--brown);
+	border: none;
+}
+.tier .lvl {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	color: var(--gold);
+	margin-bottom: 16px;
+}
+.tier.pop .lvl {
+	color: var(--brown);
+}
+.tier .price {
+	font-family: "Host Grotesk", serif;
+	font-size: 38px;
+	font-weight: 600;
+	margin-bottom: 10px;
+}
+.tier .price s {
+	font-size: 14px;
+	font-family: "Inter";
+	text-decoration: none;
+	color: rgba(218, 182, 151, 0.5);
+}
+.tier.pop .price s {
+	color: rgba(43, 24, 10, 0.55);
+}
+.tier .blurb {
+	font-size: 14px;
+	color: rgba(218, 182, 151, 0.65);
+	margin-bottom: 36px;
+	line-height: 1.55;
+}
+.tier.pop .blurb {
+	color: rgba(43, 24, 10, 0.7);
+}
+.tier ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 15px;
+	flex: 1;
+	margin-bottom: 36px;
+}
+.tier li {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 14px;
+}
+.tier li.no {
+	opacity: 0.4;
+}
+.tier li svg {
+	color: var(--gold);
+	flex: none;
+}
+.tier.pop li svg {
+	color: var(--brown);
+}
+.ribbon {
+	position: absolute;
+	top: -15px;
+	left: 50%;
+	transform: translateX(-50%);
+	background: #fff;
+	color: var(--brown);
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	padding: 6px 16px;
+	border-radius: 999px;
+}
+.tbtn {
+	width: 100%;
+	padding: 16px;
+	border-radius: 12px;
+	font-weight: 500;
+	font-size: 14px;
+	transition:
+		opacity 0.2s,
+		background 0.2s;
+}
+.tbtn.out {
+	border: 1px solid var(--gold-20);
+	color: var(--cream);
+}
+.tbtn.out:hover {
+	background: rgba(255, 255, 255, 0.08);
+}
+.tbtn.fill {
+	background: var(--brown);
+	color: #fff;
+}
+.tbtn.fill:hover {
+	opacity: 0.9;
+}
+
+/* ---------- faq ---------- */
+.faq {
+	padding: 128px 0;
+	background: #fff;
+}
+.faq-list {
+	max-width: 880px;
+	margin: 0 auto;
+}
+.fitem {
+	border-bottom: 1px solid var(--gold-10);
+}
+.fitem:last-child {
+	border-bottom: none;
+}
+.fq {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	text-align: left;
+	padding: 30px 0;
+	gap: 18px;
+}
+.fq .qt {
+	font-family: "Host Grotesk", serif;
+	font-size: clamp(18px, 2.4vw, 24px);
+	font-weight: 600;
+	color: var(--brown);
+	transition: color 0.2s;
+}
+.fq:hover .qt {
+	color: var(--gold);
+}
+.fq .ic {
+	flex: none;
+	width: 42px;
+	height: 42px;
+	border-radius: 50%;
+	border: 1px solid var(--gold-20);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--brown);
+	transition:
+		transform 0.35s var(--ease),
+		background 0.25s;
+}
+.fitem.open .fq .ic {
+	transform: rotate(45deg);
+	background: var(--gold-10);
+}
+.fa {
+	max-height: 0;
+	overflow: hidden;
+	opacity: 0;
+	transition:
+		max-height 0.5s var(--ease),
+		opacity 0.4s;
+}
+.fa p {
+	font-size: 17px;
+	color: var(--taupe);
+	line-height: 1.65;
+	padding-bottom: 30px;
+	max-width: 720px;
+}
+
+/* ---------- final cta ---------- */
+.final {
+	padding: 160px 0;
+	text-align: center;
+}
+.final h2 {
+	font-family: "Host Grotesk", serif;
+	font-weight: 600;
+	font-size: clamp(40px, 7vw, 72px);
+	letter-spacing: -0.04em;
+	line-height: 1.05;
+	margin-bottom: 26px;
+}
+.final p {
+	font-size: clamp(18px, 2.4vw, 21px);
+	color: var(--taupe);
+	margin-bottom: 44px;
+}
+.final .row {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	align-items: center;
+	justify-content: center;
+}
+@media (min-width: 600px) {
+	.final .row {
+		flex-direction: row;
+	}
+}
+.final .txtlink {
+	font-size: 13px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	color: var(--brown);
+}
+.final .txtlink:hover {
+	text-decoration: underline;
+}
+
+/* ---------- footer ---------- */
+footer {
+	background: var(--brown);
+	color: var(--cream);
+	padding: 120px 0;
+	position: relative;
+	overflow: hidden;
+}
+footer .grid-tex {
+	position: absolute;
+	inset: 0;
+	opacity: 0.04;
+	pointer-events: none;
+	background-image:
+		linear-gradient(var(--gold) 1px, transparent 1px),
+		linear-gradient(90deg, var(--gold) 1px, transparent 1px);
+	background-size: 30px 30px;
+}
+.fcols {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 56px;
+	margin-bottom: 90px;
+	position: relative;
+	z-index: 1;
+}
+@media (min-width: 1024px) {
+	.fcols {
+		grid-template-columns: 5fr 2fr 2fr 3fr;
+	}
+}
+.fbrand .logo {
+	color: var(--cream);
+	font-size: 30px;
+	margin-bottom: 22px;
+}
+.fbrand .logo .mark {
+	background: var(--gold);
+}
+.fbrand .logo .mark::after {
+	background: var(--brown);
+}
+.fbrand p {
+	color: rgba(218, 182, 151, 0.6);
+	font-size: 16px;
+	line-height: 1.65;
+	max-width: 380px;
+	margin-bottom: 28px;
+}
+.socials {
+	display: flex;
+	gap: 14px;
+}
+.socials a {
+	width: 46px;
+	height: 46px;
+	border-radius: 12px;
+	background: rgba(255, 255, 255, 0.05);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--cream);
+	transition: 0.3s;
+}
+.socials a:hover {
+	background: var(--gold);
+	color: var(--brown);
+}
+.fcol h4 {
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	color: var(--gold);
+	margin-bottom: 30px;
+}
+.fcol ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+.fcol a {
+	color: rgba(218, 182, 151, 0.5);
+	font-size: 14px;
+	font-weight: 500;
+	transition: color 0.2s;
+}
+.fcol a:hover {
+	color: var(--gold);
+}
+.dispatch p {
+	font-size: 12px;
+	color: rgba(218, 182, 151, 0.4);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	font-weight: 700;
+	line-height: 1.6;
+	margin-bottom: 18px;
+}
+.dispatch .inp {
+	position: relative;
+}
+.dispatch input {
+	width: 100%;
+	background: rgba(255, 255, 255, 0.05);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 16px;
+	padding: 16px 92px 16px 22px;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--cream);
+	font-family: inherit;
+	transition: 0.3s;
+}
+.dispatch input::placeholder {
+	color: rgba(218, 182, 151, 0.4);
+}
+.dispatch input:focus {
+	outline: none;
+	border-color: var(--gold-30);
+	background: rgba(255, 255, 255, 0.08);
+}
+.dispatch button {
+	position: absolute;
+	right: 7px;
+	top: 7px;
+	bottom: 7px;
+	background: var(--gold);
+	color: var(--brown);
+	padding: 0 22px;
+	border-radius: 11px;
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	transition: 0.2s;
+}
+.dispatch button:hover {
+	background: #fff;
+}
+.fbar {
+	position: relative;
+	z-index: 1;
+	border-top: 1px solid rgba(255, 255, 255, 0.06);
+	padding-top: 40px;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	align-items: center;
+	justify-content: space-between;
+}
+@media (min-width: 768px) {
+	.fbar {
+		flex-direction: row;
+	}
+}
+.fbar .left {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	align-items: center;
+}
+@media (min-width: 768px) {
+	.fbar .left {
+		flex-direction: row;
+		gap: 28px;
+	}
+}
+.fbar p,
+.fbar a {
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.22em;
+	color: rgba(218, 182, 151, 0.32);
+}
+.fbar a:hover {
+	color: var(--gold);
+}
+.fbar .links {
+	display: flex;
+	gap: 34px;
+}
+.fbar .sep {
+	width: 4px;
+	height: 4px;
+	border-radius: 50%;
+	background: rgba(218, 182, 151, 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.reveal,
+	.head-bounce {
+		opacity: 1;
+		transform: none;
+		animation: none;
+		transition: none;
+	}
+	.marquee-track,
+	.glyphrow,
+	.loopscroll {
+		animation: none;
+	}
+	.step.active .prog i {
+		transition: none;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Host+Grotesk:wght@300;400;500;600;700;800&family=Halant:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- HEADER -->
+		<header>
+			<nav>
+				<a class="logo" href="#top"><span class="mark"></span>Amber Foundry</a>
+				<div class="nav-links">
+					<a href="#solutions">Solutions</a>
+					<a href="#method">Method</a>
+					<a href="#pricing">Pricing</a>
+				</div>
+				<button class="pill-cta">Contact Us</button>
+			</nav>
+		</header>
+
+		<main id="top">
+			<!-- HERO -->
+			<section class="hero">
+				<div class="wrap">
+					<div class="badge reveal from-bottom" data-reveal>
+						<span class="dot"></span>
+						<span>The Future of Operations</span>
+					</div>
+					<h1 class="head-bounce" data-reveal>
+						Automate Complexity.<span class="muted">Unlock Potential.</span>
+					</h1>
+					<p class="sub reveal from-left" data-reveal>
+						Generic tools produce generic results. We forge bespoke neural
+						workflows that integrate directly with your tech stack to eliminate
+						bottlenecks — quietly, precisely, at scale.
+					</p>
+					<div class="cta-row reveal from-bottom" data-reveal>
+						<a href="#solutions" class="btn btn-dark">Explore Solutions</a>
+						<a href="#method" class="btn btn-ghost"
+							>Watch Our Method
+							<svg
+								width="18"
+								height="18"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<polygon points="5 3 19 12 5 21 5 3"></polygon>
+							</svg>
+						</a>
+					</div>
+					<div class="hero-visual reveal from-bottom" data-reveal>
+						<canvas id="neural" aria-hidden="true"></canvas>
+						<div class="vlabel">
+							<span class="lv"></span>Neural Foundry · Live
+						</div>
+						<div class="vstat">
+							<div class="n">428</div>
+							<div class="l">Variables · Synced</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- MARQUEE -->
+			<section class="marquee-sec">
+				<div class="wrap">
+					<div class="marquee-head reveal from-left" data-reveal>
+						<div class="txt">
+							<p class="eyebrow">Network Integrity</p>
+							<h3>Trusted by global innovators</h3>
+						</div>
+						<div class="line"></div>
+					</div>
+				</div>
+				<div class="mask-edges">
+					<div class="marquee-track">
+						<span>NORTHWIND</span><span>LUMINA</span><span>VERTEX&nbsp;AI</span
+						><span>COBALT</span><span>STRATOS</span><span>MERIDIAN</span>
+						<span>NORTHWIND</span><span>LUMINA</span><span>VERTEX&nbsp;AI</span
+						><span>COBALT</span><span>STRATOS</span><span>MERIDIAN</span>
+					</div>
+				</div>
+			</section>
+
+			<!-- SOLUTIONS -->
+			<section class="solutions" id="solutions">
+				<div class="wrap">
+					<div class="sec-head">
+						<h2 class="head-bounce" data-reveal>Our Core Solutions</h2>
+						<p class="reveal from-bottom" data-reveal>
+							We architect intelligence tailored to your unique operational
+							friction through a specialized four-stage deployment.
+						</p>
+					</div>
+
+					<!-- desktop split -->
+					<div class="split reveal from-bottom" data-reveal>
+						<div class="steps">
+							<button class="step" type="button">
+								<span class="ico"
+									><svg
+										width="26"
+										height="26"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"
+										/>
+									</svg></span
+								>
+								<div>
+									<h3>1. Autonomous Chain Architecture</h3>
+									<div class="desc">
+										<p>
+											Configure specialized agent workflows with granular
+											behavior protocols. We deploy self-healing chains that
+											adapt to data shifts in real time.
+										</p>
+									</div>
+								</div>
+								<div class="prog"><i></i></div>
+							</button>
+							<button class="step" type="button">
+								<span class="ico"
+									><svg
+										width="26"
+										height="26"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"
+										/>
+									</svg></span
+								>
+								<div>
+									<h3>2. Neural Data Synthesis</h3>
+									<div class="desc">
+										<p>
+											Instantly sync proprietary knowledge for precise recall.
+											Connect legacy databases and cloud storage into a single
+											unified intelligence layer.
+										</p>
+									</div>
+								</div>
+								<div class="prog"><i></i></div>
+							</button>
+							<button class="step" type="button">
+								<span class="ico"
+									><svg
+										width="26"
+										height="26"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M13 10V3L4 14h7v7l9-11h-7z"
+										/>
+									</svg></span
+								>
+								<div>
+									<h3>3. Cognitive Friction Elimination</h3>
+									<div class="desc">
+										<p>
+											Automate high-volume decision cycles. The foundry handles
+											operational inquiries and routes complex edge cases for
+											seamless human handover.
+										</p>
+									</div>
+								</div>
+								<div class="prog"><i></i></div>
+							</button>
+							<button class="step" type="button">
+								<span class="ico"
+									><svg
+										width="26"
+										height="26"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+										/>
+									</svg></span
+								>
+								<div>
+									<h3>4. Strategic Insights Matrix</h3>
+									<div class="desc">
+										<p>
+											Convert every operation into intelligence. Automatically
+											cluster feedback and patterns to surface hidden growth
+											opportunities.
+										</p>
+									</div>
+								</div>
+								<div class="prog"><i></i></div>
+							</button>
+						</div>
+
+						<div class="visuals">
+							<!-- mock 1 -->
+							<div class="mock">
+								<div class="card">
+									<div class="card-top">
+										<span class="ttl">Chain Configurator</span
+										><span class="dots"><i></i><i></i><i></i></span>
+									</div>
+									<div class="pad">
+										<div class="row-tile">
+											<span class="sq"
+												><svg
+													width="20"
+													height="20"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+													stroke-width="2"
+												>
+													<path
+														d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+													/>
+												</svg></span
+											>
+											<span class="barfill"></span>
+											<span class="toggle"></span>
+										</div>
+										<div class="duo">
+											<div class="opt on">Autonomous</div>
+											<div class="opt off">Manual</div>
+										</div>
+										<div class="metric">
+											<div class="lab">
+												<span>Optimization Load</span><span>92%</span>
+											</div>
+											<div class="track"><i style="width:92%"></i></div>
+										</div>
+									</div>
+								</div>
+							</div>
+							<!-- mock 2 -->
+							<div class="mock">
+								<div class="card">
+									<div class="darkhead">
+										<h4>Neural Fabric Sync</h4>
+										<p>Ingesting disparate system nodes…</p>
+									</div>
+									<div class="pad">
+										<div class="syncing">
+											<span class="ic">📂</span>
+											<span class="ll"><b></b><s></s></span>
+											<span class="tag">Syncing</span>
+										</div>
+										<div class="srcgrid">
+											<div class="src">
+												<span class="g">☁️</span><span class="n">AWS</span>
+											</div>
+											<div class="src act">
+												<span class="g">🗄️</span><span class="n">SQL Core</span>
+											</div>
+											<div class="src">
+												<span class="g">📔</span><span class="n">Notion</span>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+							<!-- mock 3 -->
+							<div class="mock">
+								<div class="card">
+									<div class="streamhead">
+										<span class="live"></span
+										><span>Active Intelligence Stream</span>
+									</div>
+									<div class="pad">
+										<div class="bub you">
+											Map supply-chain latency for the Q3 logistics node.
+										</div>
+										<div class="airow">
+											<span class="av">AF</span>
+											<div class="bub ai">
+												<strong>Decision Hub:</strong>
+												Analyzing 428 variables. Found a bottleneck in Tier-2
+												transit. Re-routing autonomously via Protocol&nbsp;04.
+											</div>
+										</div>
+										<div class="flow">
+											<span class="n">Input</span><span class="seg"></span>
+											<span class="n on">Synthesize</span
+											><span class="seg"></span>
+											<span class="n">Resolve</span>
+										</div>
+									</div>
+								</div>
+							</div>
+							<!-- mock 4 -->
+							<div class="mock">
+								<div class="card">
+									<div class="card-top">
+										<span class="ttl">Growth Matrix</span
+										><span class="dots"><i></i><i></i><i></i></span>
+									</div>
+									<div class="pad">
+										<p class="italicq">
+											Pattern recognition complete. Detected high-correlation
+											clusters in operational inefficiencies across three
+											departments…
+										</p>
+										<div class="insight">
+											<div class="t">⚡ Processing Latency</div>
+											<div class="track"><i style="width:75%"></i></div>
+											<p>
+												Optimizing these nodes could reduce operational costs by
+												18.4% next month.
+											</p>
+										</div>
+										<div class="insight">
+											<div class="t">📈 Scalability Potential</div>
+											<div class="track"><i style="width:50%"></i></div>
+											<p>
+												Autonomous chains ready for expansion to global regions.
+											</p>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<!-- mobile stack -->
+					<div class="stack">
+						<div class="reveal from-bottom" data-reveal>
+							<div class="panel">
+								<div class="card" style="max-width:280px;width:100%">
+									<div class="pad">
+										<div class="duo">
+											<div class="opt on">Autonomous</div>
+											<div class="opt off">Manual</div>
+										</div>
+										<div class="metric">
+											<div class="lab"><span>Load</span><span>92%</span></div>
+											<div class="track"><i style="width:92%"></i></div>
+										</div>
+									</div>
+								</div>
+							</div>
+							<h3>1. Autonomous Chain Architecture</h3>
+							<p>
+								Configure specialized agent workflows with granular behavior
+								protocols that adapt to your data in real time.
+							</p>
+						</div>
+						<div class="reveal from-bottom" data-reveal>
+							<div class="panel">
+								<div class="card" style="max-width:280px;width:100%">
+									<div class="darkhead"><h4>Neural Fabric Sync</h4></div>
+									<div class="pad">
+										<div class="srcgrid">
+											<div class="src">
+												<span class="g">☁️</span><span class="n">AWS</span>
+											</div>
+											<div class="src act">
+												<span class="g">🗄️</span><span class="n">SQL</span>
+											</div>
+											<div class="src">
+												<span class="g">📔</span><span class="n">Notion</span>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+							<h3>2. Neural Data Synthesis</h3>
+							<p>
+								Connect legacy systems into a unified intelligence layer for
+								precise, instant proprietary recall.
+							</p>
+						</div>
+						<div class="reveal from-bottom" data-reveal>
+							<div class="panel">
+								<div class="card" style="max-width:280px;width:100%">
+									<div class="streamhead">
+										<span class="live"></span><span>Stream</span>
+									</div>
+									<div class="pad">
+										<div class="bub you">Map Q3 latency.</div>
+										<div class="bub ai">Re-routing via Protocol 04.</div>
+									</div>
+								</div>
+							</div>
+							<h3>3. Cognitive Friction Elimination</h3>
+							<p>
+								Automate high-volume decision cycles and route complex edge
+								cases for seamless human handover.
+							</p>
+						</div>
+						<div class="reveal from-bottom" data-reveal>
+							<div class="panel">
+								<div class="card" style="max-width:280px;width:100%">
+									<div class="pad">
+										<div class="insight">
+											<div class="t">⚡ Latency</div>
+											<div class="track"><i style="width:75%"></i></div>
+										</div>
+									</div>
+								</div>
+							</div>
+							<h3>4. Strategic Insights Matrix</h3>
+							<p>
+								Cluster feedback and patterns automatically to surface hidden,
+								high-leverage growth opportunities.
+							</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- METHOD -->
+			<section class="method" id="method">
+				<div class="method-inner">
+					<div class="sec-head">
+						<span class="pill-eyebrow reveal from-bottom" data-reveal
+							>Our Methodology</span
+						>
+						<h2 class="head-bounce" data-reveal>
+							The Architecture of Efficiency.
+						</h2>
+						<p class="reveal from-bottom" data-reveal>
+							We bridge the gap between human intuition and machine scale,
+							designing bespoke intelligence that evolves with your business
+							logic.
+						</p>
+					</div>
+
+					<div class="bento">
+						<!-- 01 -->
+						<div class="bcard c5 reveal from-bottom" data-reveal>
+							<div class="bviz">
+								<div class="glyphcol">
+									<div class="glyphrow l">
+										<span class="glyph">⚡</span><span class="glyph">🔗</span
+										><span class="glyph">🧠</span><span class="glyph">⚙️</span>
+										<span class="glyph">⚡</span><span class="glyph">🔗</span
+										><span class="glyph">🧠</span><span class="glyph">⚙️</span>
+									</div>
+									<div class="glyphrow r">
+										<span class="glyph">💎</span><span class="glyph">🛰️</span
+										><span class="glyph">📊</span><span class="glyph">🔭</span>
+										<span class="glyph">💎</span><span class="glyph">🛰️</span
+										><span class="glyph">📊</span><span class="glyph">🔭</span>
+									</div>
+								</div>
+							</div>
+							<div class="btext">
+								<h3>Step 01 · Node Mapping</h3>
+								<p>
+									We identify high-latency human bottlenecks and map every
+									decision point in your operation.
+								</p>
+							</div>
+						</div>
+						<!-- 02 -->
+						<div class="bcard c7 reveal from-bottom" data-reveal>
+							<div class="bviz">
+								<div class="tilt">
+									<div class="tcard a">
+										<div class="cap"></div>
+										<div class="lns">
+											<b style="width:100%"></b><b style="width:75%"></b>
+										</div>
+										<div class="nm">Logic A</div>
+									</div>
+									<div class="tcard b">
+										<div class="cap"></div>
+										<div class="lns">
+											<b style="width:100%"></b><b style="width:75%"></b>
+										</div>
+										<div class="nm">Neural Hub</div>
+									</div>
+									<div class="tcard c">
+										<div class="cap"></div>
+										<div class="lns">
+											<b style="width:100%"></b><b style="width:75%"></b>
+										</div>
+										<div class="nm">Synthesis</div>
+									</div>
+								</div>
+							</div>
+							<div class="btext">
+								<h3>Step 02 · Neural Synthesis</h3>
+								<p>
+									Constructing bespoke agent chains that mimic your top
+									performers — at scale.
+								</p>
+							</div>
+						</div>
+						<!-- 03 -->
+						<div class="bcard c7 reveal from-bottom" data-reveal>
+							<div class="bviz" style="display:block">
+								<div style="position:relative;height:100%;padding:0 24px">
+									<div class="statcard one">
+										<div class="h">
+											<span class="k">Operational Load</span
+											><span class="v">−82%</span>
+										</div>
+										<div class="track">
+											<i style="width:80%;background:var(--brown)"></i>
+										</div>
+									</div>
+									<div class="statcard two">
+										<div class="h">
+											<span class="k">Growth Forecast</span
+											><span class="v">+140%</span>
+										</div>
+										<div class="track" style="background:rgba(218,182,151,.2)">
+											<i style="width:74%"></i>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div class="btext">
+								<h3>Step 03 · Friction Reduction</h3>
+								<p>
+									Automate high-volume decision cycles with a 94% reduction in
+									manual effort.
+								</p>
+							</div>
+						</div>
+						<!-- 04 -->
+						<div class="bcard c5 reveal from-bottom" data-reveal>
+							<div class="bviz">
+								<div class="loop">
+									<div class="loopcard">
+										<div class="lh"><b></b></div>
+										<div class="loopscroll">
+											<i></i><i></i><i></i><i></i><i></i><i></i>
+										</div>
+										<div class="loopbtn">
+											<button>
+												Sync Evolution
+												<svg
+													width="14"
+													height="14"
+													viewBox="0 0 20 20"
+													fill="none"
+												>
+													<path
+														d="M8 6l4 4-4 4"
+														stroke="currentColor"
+														stroke-width="2"
+														stroke-linecap="round"
+														stroke-linejoin="round"
+													/>
+												</svg>
+											</button>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div class="btext">
+								<h3>Step 04 · Closed-Loop Learning</h3>
+								<p>
+									The system evolves. Every completed task feeds back to refine
+									performance.
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- PRICING -->
+			<section class="pricing" id="pricing">
+				<div class="wrap">
+					<div class="sec-head">
+						<h2 class="head-bounce" data-reveal>Investment Models</h2>
+						<p class="reveal from-bottom" data-reveal>
+							Tailored engagement levels for organizations at different stages
+							of intelligence maturity.
+						</p>
+					</div>
+					<div class="tiers">
+						<div class="tier reveal from-bottom" data-reveal>
+							<div class="lvl">Pilot</div>
+							<div class="price">$15k <s>/project</s></div>
+							<p class="blurb">
+								Perfect for validating a single high-impact workflow.
+							</p>
+							<ul>
+								<li>
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>Single core workflow
+								</li>
+								<li>
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>3-week implementation
+								</li>
+								<li class="no">
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<line x1="18" y1="6" x2="6" y2="18"></line>
+										<line x1="6" y1="6" x2="18" y2="18"></line>
+									</svg>Continuous optimization
+								</li>
+							</ul>
+							<button class="tbtn out">Get Started</button>
+						</div>
+						<div class="tier pop reveal from-bottom" data-reveal>
+							<div class="ribbon">Most Popular</div>
+							<div class="lvl">Enterprise</div>
+							<div class="price">$45k+ <s>/quarter</s></div>
+							<p class="blurb">
+								Full operational overhaul with a dedicated intelligence squad.
+							</p>
+							<ul>
+								<li>
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>Unlimited workflows
+								</li>
+								<li>
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>Direct tech integration
+								</li>
+								<li>
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>Custom model fine-tuning
+								</li>
+							</ul>
+							<button class="tbtn fill">Contact Sales</button>
+						</div>
+						<div class="tier reveal from-bottom" data-reveal>
+							<div class="lvl">Elite</div>
+							<div class="price">Custom</div>
+							<p class="blurb">
+								Equity-based partnerships for deep core-tech transformation.
+							</p>
+							<ul>
+								<li>
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>Strategic AI board member
+								</li>
+								<li>
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>IP co-development
+								</li>
+								<li>
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>24/7 priority support
+								</li>
+							</ul>
+							<button class="tbtn out">Partner With Us</button>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- FAQ -->
+			<section class="faq" id="faq">
+				<div class="wrap">
+					<div class="sec-head">
+						<span class="pill-eyebrow reveal from-bottom" data-reveal
+							>Intel Library</span
+						>
+						<h2 class="head-bounce" data-reveal>Frequently Asked Questions</h2>
+						<p class="reveal from-left" data-reveal>
+							Everything you need to know about implementing bespoke neural
+							operations.
+						</p>
+					</div>
+					<div class="faq-list">
+						<div class="fitem reveal from-bottom" data-reveal>
+							<button class="fq" type="button">
+								<span class="qt"
+									>How does Amber Foundry integrate with my existing tech stack?</span
+								><span class="ic"
+									><svg
+										width="20"
+										height="20"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+									>
+										<line x1="12" y1="5" x2="12" y2="19" />
+										<line x1="5" y1="12" x2="19" y2="12" />
+									</svg></span
+								>
+							</button>
+							<div class="fa">
+								<p>
+									We connect via high-speed API endpoints, webhooks, or direct
+									database connectors (PostgreSQL, Snowflake, S3). Our
+									deployment team handles the middleware so data syncs in real
+									time with zero manual entry from your side.
+								</p>
+							</div>
+						</div>
+						<div class="fitem reveal from-bottom" data-reveal>
+							<button class="fq" type="button">
+								<span class="qt"
+									>Is my proprietary data secure when training your agents?</span
+								><span class="ic"
+									><svg
+										width="20"
+										height="20"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+									>
+										<line x1="12" y1="5" x2="12" y2="19" />
+										<line x1="5" y1="12" x2="19" y2="12" />
+									</svg></span
+								>
+							</button>
+							<div class="fa">
+								<p>
+									Absolutely. Security is architected into our core. We use
+									private VPC deployments and SOC2-compliant protocols. Your
+									data is never used to train global models — it stays siloed
+									and encrypted within your organization's ecosystem.
+								</p>
+							</div>
+						</div>
+						<div class="fitem reveal from-bottom" data-reveal>
+							<button class="fq" type="button">
+								<span class="qt"
+									>How long does a typical implementation take?</span
+								><span class="ic"
+									><svg
+										width="20"
+										height="20"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+									>
+										<line x1="12" y1="5" x2="12" y2="19" />
+										<line x1="5" y1="12" x2="19" y2="12" />
+									</svg></span
+								>
+							</button>
+							<div class="fa">
+								<p>
+									Pilot projects targeting a single high-impact bottleneck are
+									typically live in three weeks. Comprehensive enterprise
+									overhauls involving multiple interconnected neural chains
+									range from 8 to 12 weeks for full global deployment.
+								</p>
+							</div>
+						</div>
+						<div class="fitem reveal from-bottom" data-reveal>
+							<button class="fq" type="button">
+								<span class="qt"
+									>Do we need an in-house AI team to manage the system?</span
+								><span class="ic"
+									><svg
+										width="20"
+										height="20"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+									>
+										<line x1="12" y1="5" x2="12" y2="19" />
+										<line x1="5" y1="12" x2="19" y2="12" />
+									</svg></span
+								>
+							</button>
+							<div class="fa">
+								<p>
+									No. We design our agent interfaces to be low-logic,
+									high-impact. Your existing operations managers can oversee and
+									adjust system protocols through an intuitive dashboard that
+									requires no coding or advanced AI knowledge.
+								</p>
+							</div>
+						</div>
+						<div class="fitem reveal from-bottom" data-reveal>
+							<button class="fq" type="button">
+								<span class="qt"
+									>What makes your "Chain Architecture" different?</span
+								><span class="ic"
+									><svg
+										width="20"
+										height="20"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+									>
+										<line x1="12" y1="5" x2="12" y2="19" />
+										<line x1="5" y1="12" x2="19" y2="12" />
+									</svg></span
+								>
+							</button>
+							<div class="fa">
+								<p>
+									Standard AI tools are one-shot — a single answer to a single
+									prompt. Amber Foundry forges neural chains: multi-step,
+									self-correcting logic loops that cross-reference live internal
+									data before executing any business decision.
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- FINAL CTA -->
+			<section class="final">
+				<div class="wrap">
+					<h2 class="head-bounce" data-reveal>
+						Ready to forge your<br>neural competitive advantage?
+					</h2>
+					<p class="reveal from-bottom" data-reveal>
+						Join the world's most innovative teams in the pursuit of absolute
+						operational clarity.
+					</p>
+					<div class="row reveal from-bottom" data-reveal>
+						<button class="btn btn-dark">Start a Conversation</button>
+						<a href="#method" class="txtlink">View Our Method Documentation</a>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<!-- FOOTER -->
+		<footer>
+			<div class="grid-tex"></div>
+			<div class="wrap">
+				<div class="fcols">
+					<div class="fbrand reveal from-left" data-reveal>
+						<a href="#top" class="logo"
+							><span class="mark"></span>Amber Foundry</a
+						>
+						<p>
+							The architects of enterprise intelligence. We transform
+							operational friction into a neural competitive advantage through
+							bespoke autonomous workflows.
+						</p>
+						<div class="socials">
+							<a href="#" aria-label="LinkedIn"
+								><svg
+									width="20"
+									height="20"
+									fill="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"
+									/>
+								</svg></a
+							>
+							<a href="#" aria-label="X"
+								><svg
+									width="20"
+									height="20"
+									fill="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.045 4.126H5.078z"
+									/>
+								</svg></a
+							>
+						</div>
+					</div>
+					<div class="fcol reveal from-bottom" data-reveal>
+						<h4>Intelligence</h4>
+						<ul>
+							<li><a href="#solutions">Solutions</a></li>
+							<li><a href="#method">Methodology</a></li>
+							<li><a href="#pricing">Investment</a></li>
+							<li><a href="#faq">Library</a></li>
+						</ul>
+					</div>
+					<div class="fcol reveal from-bottom" data-reveal>
+						<h4>Group</h4>
+						<ul>
+							<li><a href="#">About Group</a></li>
+							<li><a href="#">Case Files</a></li>
+							<li><a href="#">Careers</a></li>
+							<li><a href="#">Press Node</a></li>
+						</ul>
+					</div>
+					<div class="dispatch reveal from-bottom" data-reveal>
+						<div class="fcol"><h4>Neural Dispatch</h4></div>
+						<p>Stay updated on operational efficiency protocols.</p>
+						<form class="inp" data-no-submit>
+							<input
+								type="email"
+								placeholder="Enter system email"
+								aria-label="Email"
+							>
+							<button type="submit">Join</button>
+						</form>
+					</div>
+				</div>
+				<div class="fbar">
+					<div class="left">
+						<p>© 2026 Amber Foundry Strategy Group</p>
+						<span class="sep"></span>
+						<p>Absolute operational clarity.</p>
+					</div>
+					<div class="links">
+						<a href="#">Privacy Node</a><a href="#">Terms of Sync</a
+						><a href="#">Cookies</a>
+					</div>
+				</div>
+			</div>
+		</footer>
+
+		<script>
+(() => {
+	var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	/* ---------- scroll reveal ---------- */
+	function initReveal() {
+		var els = document.querySelectorAll("[data-reveal]");
+		if (reduce || !("IntersectionObserver" in window)) {
+			els.forEach((e) => {
+				e.classList.add("show");
+			});
+			return;
+		}
+		var io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((en) => {
+					if (en.isIntersecting) {
+						en.target.classList.add("show");
+						io.unobserve(en.target);
+					}
+				});
+			},
+			{ threshold: 0.12 },
+		);
+		els.forEach((e) => {
+			io.observe(e);
+		});
+	}
+
+	/* ---------- solutions auto-advance ---------- */
+	function initSolutions() {
+		var steps = Array.prototype.slice.call(document.querySelectorAll(".step"));
+		var mocks = Array.prototype.slice.call(document.querySelectorAll(".mock"));
+		if (!steps.length) return;
+		var active = 0,
+			timer = null,
+			DURATION = 5200;
+
+		function set(i) {
+			active = i;
+			steps.forEach((s, k) => {
+				s.classList.toggle("active", k === i);
+			});
+			mocks.forEach((m, k) => {
+				m.classList.toggle("show", k === i);
+			});
+		}
+		function restartProgress() {
+			// force reflow so the progress bar transition replays
+			var bar = steps[active].querySelector(".prog i");
+			if (bar) {
+				bar.style.transition = "none";
+				bar.style.transform = "scaleX(0)";
+				void bar.offsetWidth;
+				bar.style.transition = "";
+				bar.style.transform = "";
+			}
+		}
+		function schedule() {
+			if (reduce) return;
+			clearTimeout(timer);
+			timer = setTimeout(() => {
+				go((active + 1) % steps.length);
+			}, DURATION);
+		}
+		function go(i) {
+			set(i);
+			restartProgress();
+			schedule();
+		}
+
+		steps.forEach((s, i) => {
+			s.addEventListener("click", () => {
+				go(i);
+			});
+		});
+		set(0);
+		schedule();
+	}
+
+	/* ---------- faq accordion ---------- */
+	function initFaq() {
+		var items = Array.prototype.slice.call(document.querySelectorAll(".fitem"));
+		items.forEach((item) => {
+			var btn = item.querySelector(".fq");
+			var body = item.querySelector(".fa");
+			btn.addEventListener("click", () => {
+				var open = item.classList.contains("open");
+				items.forEach((o) => {
+					o.classList.remove("open");
+					var b = o.querySelector(".fa");
+					b.style.maxHeight = "0px";
+					b.style.opacity = "0";
+				});
+				if (!open) {
+					item.classList.add("open");
+					body.style.maxHeight = `${body.scrollHeight}px`;
+					body.style.opacity = "1";
+				}
+			});
+		});
+	}
+
+	/* ---------- hero neural canvas ---------- */
+	function initNeural() {
+		var canvas = document.getElementById("neural");
+		if (!canvas) return;
+		var ctx = canvas.getContext("2d");
+		var dpr = Math.min(window.devicePixelRatio || 1, 2);
+		var W = 0,
+			H = 0,
+			nodes = [],
+			edges = [],
+			particles = [],
+			running = false,
+			raf = null;
+
+		function resize() {
+			var r = canvas.getBoundingClientRect();
+			W = r.width;
+			H = r.height;
+			canvas.width = Math.round(W * dpr);
+			canvas.height = Math.round(H * dpr);
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+			build();
+		}
+
+		function build() {
+			nodes = [];
+			edges = [];
+			particles = [];
+			var cols = Math.max(4, Math.round(W / 150));
+			var rows = Math.max(3, Math.round(H / 120));
+			for (var y = 0; y < rows; y++) {
+				for (var x = 0; x < cols; x++) {
+					var jx = (Math.random() - 0.5) * 60;
+					var jy = (Math.random() - 0.5) * 50;
+					nodes.push({
+						x: ((x + 0.5) / cols) * W + jx,
+						y: ((y + 0.5) / rows) * H + jy,
+						r: 1.6 + Math.random() * 2.6,
+						ph: Math.random() * Math.PI * 2,
+						sp: 0.6 + Math.random() * 0.8,
+					});
+				}
+			}
+			// connect each node to a couple of nearest neighbours
+			for (var i = 0; i < nodes.length; i++) {
+				var dlist = [];
+				for (var j = 0; j < nodes.length; j++) {
+					if (i === j) continue;
+					var dx = nodes[i].x - nodes[j].x,
+						dy = nodes[i].y - nodes[j].y;
+					dlist.push({ j: j, d: dx * dx + dy * dy });
+				}
+				dlist.sort((a, b) => a.d - b.d);
+				var k = 2 + (Math.random() < 0.3 ? 1 : 0);
+				for (var m = 0; m < k && m < dlist.length; m++) {
+					var jj = dlist[m].j;
+					if (jj > i) edges.push({ a: i, b: jj });
+				}
+			}
+			for (var p = 0; p < Math.min(edges.length, 40); p++) {
+				particles.push({
+					e: (Math.random() * edges.length) | 0,
+					t: Math.random(),
+					sp: 0.0025 + Math.random() * 0.004,
+				});
+			}
+		}
+
+		function draw(now) {
+			ctx.clearRect(0, 0, W, H);
+			// warm wash
+			var g = ctx.createRadialGradient(
+				W * 0.5,
+				H * 0.45,
+				10,
+				W * 0.5,
+				H * 0.45,
+				Math.max(W, H) * 0.7,
+			);
+			g.addColorStop(0, "rgba(218,182,151,0.16)");
+			g.addColorStop(1, "rgba(218,182,151,0)");
+			ctx.fillStyle = g;
+			ctx.fillRect(0, 0, W, H);
+
+			// edges
+			ctx.lineWidth = 1;
+			for (var i = 0; i < edges.length; i++) {
+				var a = nodes[edges[i].a],
+					b = nodes[edges[i].b];
+				ctx.strokeStyle = "rgba(43,24,10,0.10)";
+				ctx.beginPath();
+				ctx.moveTo(a.x, a.y);
+				ctx.lineTo(b.x, b.y);
+				ctx.stroke();
+			}
+			// flowing particles
+			for (var q = 0; q < particles.length; q++) {
+				var pt = particles[q];
+				pt.t += pt.sp;
+				if (pt.t > 1) {
+					pt.t = 0;
+					pt.e = (Math.random() * edges.length) | 0;
+				}
+				var e = edges[pt.e];
+				if (!e) continue;
+				var na = nodes[e.a],
+					nb = nodes[e.b];
+				var px = na.x + (nb.x - na.x) * pt.t;
+				var py = na.y + (nb.y - na.y) * pt.t;
+				ctx.fillStyle = "rgba(218,182,151,0.9)";
+				ctx.beginPath();
+				ctx.arc(px, py, 1.8, 0, Math.PI * 2);
+				ctx.fill();
+			}
+			// nodes
+			var t = now * 0.001;
+			for (var n = 0; n < nodes.length; n++) {
+				var nd = nodes[n];
+				var pulse = 0.55 + 0.45 * Math.sin(t * nd.sp + nd.ph);
+				ctx.fillStyle = `rgba(218,182,151,${0.25 + pulse * 0.55})`;
+				ctx.beginPath();
+				ctx.arc(nd.x, nd.y, nd.r + pulse * 1.4, 0, Math.PI * 2);
+				ctx.fill();
+				ctx.fillStyle = `rgba(43,24,10,${0.3 + pulse * 0.4})`;
+				ctx.beginPath();
+				ctx.arc(nd.x, nd.y, nd.r * 0.45, 0, Math.PI * 2);
+				ctx.fill();
+			}
+			if (running) raf = requestAnimationFrame(draw);
+		}
+
+		function start() {
+			if (!running && !reduce) {
+				running = true;
+				raf = requestAnimationFrame(draw);
+			}
+		}
+		function stop() {
+			running = false;
+			if (raf) cancelAnimationFrame(raf);
+		}
+
+		resize();
+		if (reduce) {
+			draw(0);
+			return;
+		}
+		window.addEventListener("resize", resize);
+		if ("IntersectionObserver" in window) {
+			new IntersectionObserver(
+				(e) => {
+					e[0].isIntersecting ? start() : stop();
+				},
+				{ threshold: 0.05 },
+			).observe(canvas);
+		} else {
+			start();
+		}
+	}
+
+	/* ---------- dispatch demo ---------- */
+	function initDispatch() {
+		document.querySelectorAll("[data-no-submit]").forEach((f) => {
+			f.addEventListener("submit", (e) => {
+				e.preventDefault();
+			});
+		});
+	}
+
+	document.addEventListener("DOMContentLoaded", () => {
+		initReveal();
+		initSolutions();
+		initFaq();
+		initNeural();
+		initDispatch();
+	});
+})();
+
+		</script>
+	</body>
+</html>

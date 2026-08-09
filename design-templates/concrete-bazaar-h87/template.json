@@ -1,0 +1,13 @@
+{
+  "slug": "concrete-bazaar-h87",
+  "name": "Concrete Bazaar — Indian Fashion & Lifestyle Storefront Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Poppins"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/concrete-bazaar-h87",
+  "source_license": "MIT"
+}

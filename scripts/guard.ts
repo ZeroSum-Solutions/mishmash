@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -194,9 +195,34 @@ const residualAllowedPathPatterns: RegExp[] = [
   /^plugins\/_official\/examples\/[^/]+\/(assets|references)\/.+$/,
 ];
 
+// Vendored claude-directory templates (pulkitxm/claude-directory, MIT) baked by
+// `scripts/import-claude-directory.ts`. Upstream builds these with Vite, and a
+// bundle resolves its lazy chunks and imported media against `import.meta.url`
+// — so the bake ships the build output as files rather than inlining it, which
+// would rebase every one of those URLs onto the host document. The chunks are
+// bundler output, never project-owned source.
+//
+// The exemption is keyed on the template's own provenance file rather than a
+// hand-kept id list, so a re-import cannot silently drift out of the list, and
+// a directory without that marker gets no exemption at all.
+const VENDORED_TEMPLATE_ASSET_PATTERN = /^design-templates\/([^/]+)\/.+$/;
+
+function isVendoredClaudeDirectoryAsset(repositoryPath: string): boolean {
+  const templateId = VENDORED_TEMPLATE_ASSET_PATTERN.exec(repositoryPath)?.[1];
+  if (templateId === undefined) return false;
+  const provenance = path.join(repoRoot, "design-templates", templateId, "template.json");
+  if (!existsSync(provenance)) return false;
+  try {
+    return JSON.parse(readFileSync(provenance, "utf8")).vendored_from === "pulkitxm/claude-directory";
+  } catch {
+    return false;
+  }
+}
+
 function isResidualAllowedPath(repositoryPath: string): boolean {
   if (residualAllowedExactPaths.has(repositoryPath)) return true;
   if (residualAllowedPathPrefixes.some((prefix) => repositoryPath.startsWith(prefix))) return true;
+  if (isVendoredClaudeDirectoryAsset(repositoryPath)) return true;
   return residualAllowedPathPatterns.some((pattern) => pattern.test(repositoryPath));
 }
 

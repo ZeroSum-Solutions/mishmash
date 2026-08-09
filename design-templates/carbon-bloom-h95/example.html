@@ -1,0 +1,1900 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Carbon Bloom — Independent Digital Agency</title>
+		<meta
+			name="description"
+			content="Carbon Bloom is an independent digital design-and-engineering agency. We grow brands out of raw material."
+		>
+		<style>
+/* ============================================================
+   CARBON BLOOM — "Molten Paper" creative agency landing page
+   ============================================================ */
+
+
+
+
+:root {
+	--beige: #eee9e3;
+	--orange: #f43c00;
+	--ink: #000000;
+	--card-dark: #141414;
+	--white: #ffffff;
+	--muted: rgba(0, 0, 0, 0.6);
+	--muted-light: rgba(255, 255, 255, 0.6);
+	--hairline: rgba(0, 0, 0, 0.08);
+	--hairline-light: rgba(255, 255, 255, 0.1);
+	--ease: cubic-bezier(0.16, 1, 0.3, 1);
+	--max: 1440px;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html {
+	scroll-behavior: smooth;
+	-webkit-font-smoothing: antialiased;
+	overflow-x: clip;
+}
+
+body {
+	font-family: "Inter Tight", system-ui, sans-serif;
+	background: var(--beige);
+	color: var(--ink);
+	min-height: 100vh;
+	overflow-x: hidden;
+	font-weight: 400;
+}
+
+img {
+	display: block;
+	max-width: 100%;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.display {
+	font-family: "Space Grotesk", sans-serif;
+}
+.wrap {
+	width: 100%;
+	max-width: var(--max);
+	margin: 0 auto;
+	padding: 0 1.5rem;
+}
+@media (min-width: 768px) {
+	.wrap {
+		padding: 0 2rem;
+	}
+}
+
+/* ---------- Reveal animations ---------- */
+.reveal {
+	opacity: 0;
+	transition:
+		opacity 1.2s var(--ease),
+		transform 1.2s var(--ease);
+	will-change: transform, opacity;
+}
+.reveal.left {
+	transform: translateX(-100px);
+}
+.reveal.right {
+	transform: translateX(100px);
+}
+.reveal.up {
+	transform: translateY(60px);
+}
+.reveal.is-visible {
+	opacity: 1;
+	transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.reveal {
+		opacity: 1;
+		transform: none;
+		transition: none;
+	}
+	html {
+		scroll-behavior: auto;
+	}
+}
+
+/* ---------- Eyebrow / dot label ---------- */
+.eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.65rem;
+	text-transform: uppercase;
+	letter-spacing: -0.01em;
+	font-weight: 600;
+	font-size: 0.8rem;
+}
+.eyebrow .dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: var(--orange);
+	flex: 0 0 auto;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.site-header {
+	position: fixed;
+	inset: 0 0 auto 0;
+	z-index: 100;
+	padding: 1.5rem;
+	transition: padding 0.35s var(--ease);
+}
+.site-header.scrolled {
+	padding: 0.75rem 1.5rem;
+}
+.header-inner {
+	max-width: var(--max);
+	margin: 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	background: rgba(255, 255, 255, 0.32);
+	backdrop-filter: blur(14px);
+	-webkit-backdrop-filter: blur(14px);
+	border: 1px solid rgba(0, 0, 0, 0.06);
+	border-radius: 999px;
+	padding: 0.75rem 0.75rem 0.75rem 1.5rem;
+}
+.wordmark {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: 1.4rem;
+	letter-spacing: -0.04em;
+}
+.wordmark .dot-o {
+	color: var(--orange);
+}
+.nav {
+	display: none;
+	gap: 2rem;
+}
+.nav a {
+	font-weight: 500;
+	transition: color 0.25s;
+}
+.nav a:hover {
+	color: var(--orange);
+}
+.btn-pill {
+	display: none;
+	align-items: center;
+	gap: 0.5rem;
+	border: 1px solid var(--ink);
+	border-radius: 999px;
+	padding: 0.7rem 1.4rem;
+	font-weight: 600;
+	font-size: 0.95rem;
+	transition:
+		background 0.3s var(--ease),
+		color 0.3s var(--ease);
+}
+.btn-pill:hover {
+	background: var(--ink);
+	color: var(--white);
+}
+@media (min-width: 880px) {
+	.nav {
+		display: flex;
+	}
+	.btn-pill {
+		display: inline-flex;
+	}
+}
+
+/* ============================================================
+   HERO (sticky-stack)
+   ============================================================ */
+.hero {
+	position: relative;
+}
+.hero-stack {
+	display: flex;
+	flex-direction: column;
+	position: relative;
+}
+
+.panel-text {
+	z-index: 1;
+	min-height: 70vh;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	padding: 8rem 0 4rem;
+}
+.panel-text .card {
+	display: flex;
+	flex-direction: column;
+	gap: 3rem;
+	align-items: flex-end;
+	justify-content: space-between;
+	background: rgba(238, 233, 227, 0.82);
+	backdrop-filter: blur(6px);
+	border: 1px solid rgba(0, 0, 0, 0.05);
+	border-radius: 3rem;
+	padding: 2.5rem;
+	box-shadow: 0 30px 80px -50px rgba(0, 0, 0, 0.4);
+}
+.hero-lead {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+	width: 100%;
+}
+.hero-call {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.75rem;
+	width: fit-content;
+	color: var(--orange);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: -0.01em;
+}
+.hero-call svg {
+	width: 1rem;
+	height: 1rem;
+	transition: transform 0.3s var(--ease);
+}
+.hero-call:hover svg {
+	transform: translateX(5px);
+}
+.hero-mission {
+	font-size: 1.25rem;
+	line-height: 1.55;
+	color: rgba(0, 0, 0, 0.78);
+	max-width: 26rem;
+}
+.hero-title {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: clamp(3.4rem, 13vw, 150px);
+	line-height: 0.88;
+	letter-spacing: -0.05em;
+	text-transform: uppercase;
+	text-align: left;
+	width: 100%;
+}
+.hero-title .dot-o {
+	color: var(--orange);
+}
+
+@media (min-width: 1024px) {
+	.panel-text {
+		position: sticky;
+		top: 6rem;
+		padding: 9rem 0 5rem;
+	}
+	.panel-text .card {
+		flex-direction: row;
+		padding: 3rem;
+	}
+	.hero-lead {
+		width: 33%;
+	}
+	.hero-headline {
+		width: 64%;
+		display: flex;
+		justify-content: flex-end;
+	}
+	.hero-title {
+		text-align: right;
+	}
+}
+
+.panel-image {
+	z-index: 2;
+	padding: 3rem 0 10vh;
+}
+.taglines {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 0.75rem;
+	padding: 0 1.5rem 2rem;
+}
+.taglines span {
+	color: var(--orange);
+	text-transform: uppercase;
+	font-weight: 600;
+	font-size: 1rem;
+	letter-spacing: -0.01em;
+}
+.hero-figure {
+	position: relative;
+	width: 100%;
+	height: clamp(420px, 60vh, 800px);
+	border-radius: 3rem;
+	overflow: hidden;
+	border: 4px solid rgba(255, 255, 255, 0.6);
+	box-shadow: 0 50px 100px -40px rgba(0, 0, 0, 0.5);
+}
+.hero-figure img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.float-card {
+	position: absolute;
+	bottom: 2rem;
+	right: 2rem;
+	max-width: 22rem;
+	background: rgba(238, 233, 227, 0.95);
+	backdrop-filter: blur(10px);
+	border: 1px solid rgba(255, 255, 255, 0.4);
+	border-radius: 1.25rem;
+	padding: 1.75rem;
+	box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.4);
+}
+.float-card .ic {
+	width: 2rem;
+	height: 2rem;
+	color: var(--orange);
+	margin-bottom: 1.25rem;
+}
+.float-card p {
+	font-size: 1.05rem;
+	line-height: 1.4;
+	margin-bottom: 1.75rem;
+}
+.showreel {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+.showreel .play {
+	width: 2rem;
+	height: 2rem;
+	border: 1px solid var(--ink);
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+}
+.showreel .play svg {
+	width: 0.9rem;
+	height: 0.9rem;
+}
+.showreel span {
+	color: var(--orange);
+	text-transform: uppercase;
+	font-weight: 700;
+	font-size: 0.85rem;
+	letter-spacing: -0.01em;
+}
+@media (min-width: 1024px) {
+	.panel-image {
+		position: sticky;
+		top: 6rem;
+		padding-bottom: 22vh;
+	}
+	.float-card {
+		bottom: 3.5rem;
+		right: 3.5rem;
+		padding: 2rem;
+	}
+}
+
+/* ============================================================
+   MARQUEE
+   ============================================================ */
+.marquee {
+	width: 100%;
+	overflow: hidden;
+	position: relative;
+	z-index: 30;
+	background: var(--beige);
+}
+.marquee.big {
+	padding: 4rem 0;
+}
+.marquee-track {
+	display: flex;
+	width: max-content;
+}
+.marquee-track.fast {
+	animation: marquee 22s linear infinite;
+}
+.marquee-track.slow {
+	animation: marquee 34s linear infinite;
+}
+@keyframes marquee {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.marquee-track {
+		animation: none;
+	}
+}
+
+.marquee-group {
+	display: flex;
+	align-items: center;
+}
+.marquee-word {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: clamp(3.5rem, 9vw, 110px);
+	line-height: 1;
+	letter-spacing: -0.045em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+.marquee-bullet {
+	width: clamp(2rem, 4vw, 3rem);
+	height: clamp(2rem, 4vw, 3rem);
+	background: var(--orange);
+	border-radius: 50%;
+	margin: 0 clamp(2rem, 5vw, 4rem);
+	flex: 0 0 auto;
+}
+
+/* logo marquee */
+.logo-marquee {
+	border-top: 1px solid var(--hairline);
+	padding: 3.5rem 0;
+	margin-top: 2rem;
+}
+.logo-track {
+	display: flex;
+	align-items: center;
+	gap: clamp(3rem, 6vw, 6rem);
+	opacity: 0.55;
+	filter: grayscale(1);
+	transition:
+		opacity 0.5s,
+		filter 0.5s;
+}
+.logo-marquee:hover .logo-track {
+	opacity: 0.85;
+	filter: grayscale(0);
+}
+.logo-track h3 {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: clamp(1.4rem, 2.2vw, 1.9rem);
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+.logo-div {
+	width: 1px;
+	height: 3rem;
+	background: rgba(244, 60, 0, 0.4);
+	flex: 0 0 auto;
+}
+
+/* ============================================================
+   ABOUT
+   ============================================================ */
+.about {
+	position: relative;
+	z-index: 30;
+	background: var(--beige);
+	padding: 6rem 0;
+}
+.about-inner {
+	display: flex;
+	flex-direction: column;
+	gap: 4rem;
+	align-items: flex-start;
+}
+.about-left {
+	display: flex;
+	flex-direction: column;
+	gap: 3rem;
+}
+.about-statement {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: clamp(2rem, 5vw, 3.75rem);
+	line-height: 1.08;
+	letter-spacing: -0.04em;
+}
+.about-statement .muted {
+	color: var(--muted);
+}
+.about-right {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+	flex: 0 0 auto;
+	width: 100%;
+}
+.about-figure {
+	position: relative;
+	height: 220px;
+	border-radius: 1.5rem;
+	overflow: hidden;
+	cursor: pointer;
+	box-shadow: 0 20px 40px -25px rgba(0, 0, 0, 0.5);
+}
+.about-figure img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.7s var(--ease);
+}
+.about-figure:hover img {
+	transform: scale(1.06);
+}
+.about-figure .ovl {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	background: rgba(0, 0, 0, 0.2);
+	transition: background 0.3s;
+}
+.about-figure:hover .ovl {
+	background: rgba(0, 0, 0, 0.08);
+}
+.about-figure .play2 {
+	width: 3rem;
+	height: 3rem;
+	background: rgba(255, 255, 255, 0.92);
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	box-shadow: 0 10px 25px -8px rgba(0, 0, 0, 0.5);
+}
+.about-figure .play2 svg {
+	width: 1.1rem;
+	height: 1.1rem;
+	margin-left: 3px;
+}
+.about-right p {
+	font-size: 1.1rem;
+	line-height: 1.55;
+	color: rgba(0, 0, 0, 0.78);
+}
+@media (min-width: 1024px) {
+	.about-inner {
+		flex-direction: row;
+		justify-content: space-between;
+	}
+	.about-left {
+		width: 64%;
+		gap: 8rem;
+	}
+	.about-right {
+		width: 320px;
+	}
+}
+
+/* ============================================================
+   TESTIMONIAL
+   ============================================================ */
+.testimonial {
+	position: relative;
+	z-index: 30;
+	background: var(--beige);
+	padding: 6rem 0 8rem;
+}
+.testimonial-inner {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	gap: 3.5rem;
+}
+.testimonial-quote {
+	max-width: 64rem;
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 500;
+	font-size: clamp(1.7rem, 4.5vw, 3.5rem);
+	line-height: 1.12;
+	letter-spacing: -0.04em;
+}
+.testimonial-quote .muted {
+	color: var(--muted);
+}
+.author {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 1.25rem;
+}
+.author img {
+	width: 7rem;
+	height: 7rem;
+	border-radius: 1.25rem;
+	object-fit: cover;
+	box-shadow: 0 15px 35px -18px rgba(0, 0, 0, 0.5);
+}
+.author span {
+	font-weight: 700;
+	font-size: 1.2rem;
+}
+
+/* ============================================================
+   BLACK BLOCK
+   ============================================================ */
+.block-dark {
+	background: var(--ink);
+	color: var(--white);
+	border-radius: 3rem 3rem 0 0;
+	position: relative;
+	z-index: 40;
+	padding: 6rem 0 8rem;
+}
+.block-dark .eyebrow {
+	color: var(--white);
+}
+
+.services-grid {
+	display: flex;
+	flex-direction: column;
+	gap: 4rem;
+}
+.services-left {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+}
+.services-left h2 {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: clamp(2.4rem, 5vw, 3.75rem);
+	line-height: 1.08;
+	letter-spacing: -0.04em;
+}
+.services-left h2 .faint {
+	color: rgba(255, 255, 255, 0.3);
+}
+.services-left p {
+	color: var(--muted-light);
+	font-size: 1.1rem;
+	line-height: 1.6;
+}
+.cards-col {
+	display: flex;
+	flex-direction: column;
+}
+.svc-card-wrap {
+	padding-bottom: 2.5rem;
+}
+.svc-card {
+	background: var(--card-dark);
+	border: 1px solid var(--hairline-light);
+	border-radius: 2.5rem;
+	padding: 2.5rem;
+	display: flex;
+	flex-direction: column;
+	gap: 2.5rem;
+	box-shadow: 0 40px 80px -40px rgba(0, 0, 0, 0.9);
+}
+.svc-icon {
+	width: 3.5rem;
+	height: 3.5rem;
+	background: rgba(255, 255, 255, 0.05);
+	border-radius: 1rem;
+	display: grid;
+	place-items: center;
+	color: var(--orange);
+}
+.svc-icon svg {
+	width: 1.75rem;
+	height: 1.75rem;
+}
+.svc-card h3 {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 600;
+	font-size: clamp(1.8rem, 3.5vw, 2.25rem);
+	letter-spacing: -0.02em;
+}
+.svc-card p {
+	color: var(--muted-light);
+	font-size: 1.2rem;
+	line-height: 1.55;
+}
+@media (min-width: 1024px) {
+	.services-grid {
+		flex-direction: row;
+		gap: 2rem;
+	}
+	.services-left {
+		width: 42%;
+	}
+	.services-left .sticky {
+		position: sticky;
+		top: 8rem;
+		display: flex;
+		flex-direction: column;
+		gap: 2rem;
+		padding-right: 3rem;
+	}
+	.cards-col {
+		width: 58%;
+	}
+	.svc-card-wrap {
+		position: sticky;
+		top: 8rem;
+		padding-bottom: 20vh;
+	}
+	.svc-card-wrap:nth-child(1) {
+		z-index: 1;
+	}
+	.svc-card-wrap:nth-child(2) {
+		z-index: 2;
+	}
+	.svc-card-wrap:nth-child(3) {
+		z-index: 3;
+		padding-bottom: 0;
+	}
+	.svc-card {
+		padding: 3rem;
+	}
+}
+
+/* FAQ */
+.faq {
+	border-top: 1px solid var(--hairline-light);
+	margin-top: 5rem;
+	padding-top: 6rem;
+}
+.faq-inner {
+	display: flex;
+	flex-direction: column;
+	gap: 4rem;
+}
+.faq-left {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+}
+.faq-left h2 {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: clamp(2.4rem, 5vw, 3.75rem);
+	letter-spacing: -0.04em;
+	line-height: 1.05;
+}
+.faq-left h2 .faint {
+	color: rgba(255, 255, 255, 0.3);
+}
+.faq-left p {
+	color: var(--muted-light);
+	font-size: 1.1rem;
+	max-width: 24rem;
+}
+.faq-img {
+	width: 100%;
+	max-width: 26rem;
+	aspect-ratio: 4 / 5;
+	border-radius: 1.5rem;
+	overflow: hidden;
+	border: 1px solid var(--hairline-light);
+	margin-top: 1rem;
+	display: none;
+}
+.faq-img img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.faq-right {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+.acc {
+	background: var(--card-dark);
+	border: 1px solid var(--hairline-light);
+	border-radius: 1.25rem;
+	overflow: hidden;
+}
+.acc-btn {
+	width: 100%;
+	background: none;
+	border: none;
+	color: inherit;
+	cursor: pointer;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1rem;
+	padding: 1.75rem;
+	text-align: left;
+}
+.acc-btn span {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 500;
+	font-size: clamp(1.1rem, 2.5vw, 1.4rem);
+	letter-spacing: -0.01em;
+}
+.acc-icon {
+	position: relative;
+	width: 1.4rem;
+	height: 1.4rem;
+	flex: 0 0 auto;
+}
+.acc-icon::before,
+.acc-icon::after {
+	content: "";
+	position: absolute;
+	background: var(--white);
+	transition: transform 0.3s var(--ease);
+}
+.acc-icon::before {
+	top: 50%;
+	left: 0;
+	width: 100%;
+	height: 2px;
+	transform: translateY(-50%);
+}
+.acc-icon::after {
+	left: 50%;
+	top: 0;
+	width: 2px;
+	height: 100%;
+	transform: translateX(-50%);
+}
+.acc.open .acc-icon::after {
+	transform: translateX(-50%) rotate(90deg);
+}
+.acc-body {
+	max-height: 0;
+	overflow: hidden;
+	transition: max-height 0.5s var(--ease);
+}
+.acc-body p {
+	color: var(--muted-light);
+	font-size: 1.1rem;
+	line-height: 1.55;
+	padding: 0 1.75rem 1.75rem;
+}
+@media (min-width: 1024px) {
+	.faq-inner {
+		flex-direction: row;
+		justify-content: space-between;
+	}
+	.faq-left {
+		width: 42%;
+	}
+	.faq-img {
+		display: block;
+	}
+	.faq-right {
+		width: 54%;
+	}
+}
+
+/* ============================================================
+   WHITE BLOCK
+   ============================================================ */
+.block-white {
+	background: var(--white);
+	color: var(--ink);
+	border-radius: 3rem 3rem 0 0;
+	position: relative;
+	z-index: 50;
+	margin-top: -2rem;
+	padding: 8rem 0 6rem;
+}
+.work-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 4rem;
+}
+.work-col {
+	display: flex;
+	flex-direction: column;
+	gap: 4rem;
+}
+.work-item {
+	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+}
+.work-item .img-wrap {
+	width: 100%;
+	aspect-ratio: 4 / 3;
+	border-radius: 1.25rem;
+	overflow: hidden;
+}
+.work-item img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.7s var(--ease);
+}
+.work-item:hover img {
+	transform: scale(1.05);
+}
+.work-meta {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	border-bottom: 1px solid var(--hairline);
+	padding-bottom: 1rem;
+}
+.work-meta h3 {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 500;
+	font-size: clamp(1.5rem, 3vw, 1.9rem);
+	letter-spacing: -0.01em;
+}
+.work-meta .yr {
+	text-align: right;
+}
+.work-meta .yr b {
+	display: block;
+	font-weight: 600;
+}
+.work-meta .yr span {
+	display: block;
+	color: var(--muted);
+}
+.work-header {
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+}
+.work-header h2 {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: clamp(2.4rem, 5vw, 3.75rem);
+	letter-spacing: -0.04em;
+	line-height: 1.05;
+}
+.work-header h2 .muted {
+	color: var(--muted);
+}
+.work-header p {
+	color: rgba(0, 0, 0, 0.7);
+	font-size: 1.1rem;
+	line-height: 1.55;
+	max-width: 28rem;
+}
+@media (min-width: 1024px) {
+	.work-grid {
+		grid-template-columns: 1fr 1fr;
+		gap: 4rem;
+	}
+	.work-col.offset {
+		padding-top: 8rem;
+	}
+	.work-header.sticky {
+		position: sticky;
+		top: 8rem;
+	}
+}
+
+/* articles */
+.articles {
+	padding-top: 8rem;
+}
+.articles-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+	margin-top: 3rem;
+}
+.article {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+	align-items: flex-start;
+	padding: 2.5rem;
+	border-radius: 1.75rem;
+	background: rgba(238, 233, 227, 0.5);
+	border: 1px solid rgba(0, 0, 0, 0.05);
+	transition: background 0.3s;
+}
+.article:hover {
+	background: var(--beige);
+}
+.article .a-head {
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+}
+.tag {
+	border: 1px solid rgba(0, 0, 0, 0.4);
+	border-radius: 999px;
+	padding: 0.45rem 1.2rem;
+	width: fit-content;
+	font-size: 0.85rem;
+	font-weight: 500;
+}
+.article h3 {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 500;
+	font-size: clamp(1.6rem, 3.5vw, 2.25rem);
+	letter-spacing: -0.01em;
+	line-height: 1.1;
+	transition: color 0.3s;
+}
+.article:hover h3 {
+	color: var(--orange);
+}
+.article .a-thumb {
+	width: 100%;
+	max-width: 250px;
+	aspect-ratio: 4 / 5;
+	border-radius: 1.25rem;
+	overflow: hidden;
+	flex: 0 0 auto;
+}
+.article .a-thumb img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.7s var(--ease);
+}
+.article:hover .a-thumb img {
+	transform: scale(1.05);
+}
+.article .a-text {
+	color: rgba(0, 0, 0, 0.7);
+	font-size: 1.05rem;
+	line-height: 1.55;
+}
+@media (min-width: 900px) {
+	.article {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		gap: 2rem;
+		padding: 3rem;
+	}
+	.article .a-head {
+		width: 40%;
+	}
+	.article .a-text {
+		width: 24%;
+	}
+}
+
+/* ============================================================
+   CTA + FOOTER
+   ============================================================ */
+.block-cta {
+	background: var(--ink);
+	color: var(--white);
+	border-radius: 3rem 3rem 0 0;
+	position: relative;
+	z-index: 60;
+	margin-top: -2rem;
+	padding: 8rem 0 2rem;
+}
+.cta-big {
+	text-align: center;
+	max-width: 56rem;
+	margin: 0 auto;
+	padding-bottom: 7rem;
+}
+.cta-big h2 {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: clamp(2.6rem, 7vw, 80px);
+	line-height: 1.08;
+	letter-spacing: -0.04em;
+}
+.cta-big h2 .faint {
+	color: rgba(255, 255, 255, 0.3);
+}
+
+.footer-card {
+	background: var(--orange);
+	color: var(--ink);
+	border-radius: 2rem;
+	padding: 2.5rem;
+	display: flex;
+	flex-direction: column;
+	gap: 4rem;
+}
+.footer-top {
+	display: flex;
+	flex-direction: column;
+	gap: 4rem;
+	justify-content: space-between;
+}
+.footer-brandcol {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+	justify-content: space-between;
+}
+.footer-brandcol .cpy {
+	font-weight: 500;
+	font-size: 1.25rem;
+}
+.lets-talk {
+	display: inline-flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	border: 1px solid var(--ink);
+	border-radius: 999px;
+	padding: 0.85rem 1.5rem;
+	width: fit-content;
+	font-weight: 500;
+	transition:
+		background 0.3s,
+		color 0.3s;
+}
+.lets-talk:hover {
+	background: var(--ink);
+	color: var(--white);
+}
+.lets-talk svg {
+	width: 1rem;
+	height: 1rem;
+	transition: transform 0.3s var(--ease);
+}
+.lets-talk:hover svg {
+	transform: translateX(4px);
+}
+.footer-links {
+	display: flex;
+	flex-direction: column;
+	gap: 3rem;
+}
+.footer-col {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	font-weight: 500;
+	font-size: 1.2rem;
+}
+.footer-col a:hover,
+.footer-col .l:hover {
+	opacity: 0.7;
+}
+.footer-col a,
+.footer-col .l {
+	transition: opacity 0.25s;
+	width: fit-content;
+}
+.footer-col .addr {
+	margin-top: 0.75rem;
+	line-height: 1.5;
+}
+.footer-div {
+	width: 100%;
+	height: 1px;
+	background: rgba(0, 0, 0, 0.2);
+}
+.footer-bottom {
+	display: flex;
+	flex-direction: column;
+	gap: 3rem;
+	align-items: flex-start;
+	justify-content: space-between;
+}
+.footer-bottom .big-mark {
+	font-family: "Space Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: clamp(3.5rem, 14vw, 160px);
+	line-height: 0.85;
+	letter-spacing: -0.05em;
+	text-transform: uppercase;
+}
+.footer-bottom .sub {
+	display: block;
+	text-transform: uppercase;
+	letter-spacing: 0.15em;
+	font-size: 0.8rem;
+	font-weight: 500;
+	opacity: 0.8;
+	padding-left: 0.4rem;
+	margin-top: 0.75rem;
+}
+.footer-meta {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+}
+.hours {
+	display: flex;
+	flex-direction: column;
+}
+.hours .h-lbl {
+	opacity: 0.6;
+	font-size: 0.95rem;
+}
+.hours .h-big {
+	font-size: 1.5rem;
+	font-weight: 600;
+}
+.socials {
+	display: flex;
+	gap: 0.75rem;
+}
+.socials a {
+	width: 2.6rem;
+	height: 2.6rem;
+	border: 1px solid var(--ink);
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	transition:
+		background 0.3s,
+		color 0.3s;
+}
+.socials a:hover {
+	background: var(--ink);
+	color: var(--orange);
+}
+.socials svg {
+	width: 1rem;
+	height: 1rem;
+}
+@media (min-width: 768px) {
+	.footer-card {
+		padding: 3.5rem;
+	}
+	.footer-links {
+		flex-direction: row;
+		gap: 4rem;
+	}
+}
+@media (min-width: 1024px) {
+	.footer-top {
+		flex-direction: row;
+	}
+	.footer-brandcol {
+		width: 24%;
+	}
+	.footer-linkside {
+		width: 72%;
+		display: flex;
+		justify-content: space-between;
+		gap: 3rem;
+	}
+	.footer-bottom {
+		flex-direction: row;
+		align-items: flex-end;
+	}
+	.footer-bottom .brandbig {
+		width: 72%;
+	}
+	.footer-meta {
+		width: 24%;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- HEADER -->
+		<header class="site-header">
+			<div class="header-inner">
+				<a href="#top" class="wordmark"
+					>Carbon Bloom<span class="dot-o">.</span></a
+				>
+				<nav class="nav">
+					<a href="#services">Services</a>
+					<a href="#work">Work</a>
+					<a href="#about">About</a>
+				</nav>
+				<a href="#contact" class="btn-pill">Start Project</a>
+			</div>
+		</header>
+
+		<main id="top">
+			<!-- HERO -->
+			<section class="hero wrap">
+				<div class="hero-stack">
+					<!-- Panel 1: text -->
+					<div class="panel-text">
+						<div class="card">
+							<div class="hero-lead" data-reveal="left">
+								<a href="#contact" class="hero-call">
+									Book a Strategy Call
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M5 12h14" />
+										<path d="m12 5 7 7-7 7" />
+									</svg>
+								</a>
+								<p class="hero-mission">
+									We empower forward-thinking brands to conquer digital
+									landscapes through strategic design and rigorous engineering.
+								</p>
+							</div>
+							<div class="hero-headline" data-reveal="right">
+								<h1 class="hero-title">
+									Market<br>Scale<span class="dot-o">.</span>
+								</h1>
+							</div>
+						</div>
+					</div>
+
+					<!-- Panel 2: image -->
+					<div class="panel-image">
+						<div class="taglines" data-reveal="up">
+							<span>Break Boundaries</span>
+							<span>Build Together</span>
+							<span>Shape the Future.</span>
+						</div>
+						<div class="hero-figure" data-reveal="up">
+							<img
+								src="assets/hero-team.jpg"
+								alt="Team collaborating in a bright studio"
+							>
+							<div class="float-card">
+								<svg
+									class="ic"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<circle cx="12" cy="12" r="10" />
+									<path d="M12 16v-4" />
+									<path d="M12 8h.01" />
+								</svg>
+								<p>
+									Delivering full-spectrum creative strategy to unlock your
+									brand's true potential.
+								</p>
+								<a href="#" class="showreel">
+									<span class="play"
+										><svg viewBox="0 0 24 24" fill="currentColor">
+											<path d="M8 5v14l11-7z" />
+										</svg></span
+									>
+									<span>View Showreel</span>
+								</a>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- BIG MARQUEE -->
+			<section class="marquee big" aria-hidden="true">
+				<div class="marquee-track fast">
+					<div class="marquee-group">
+						<h2 class="marquee-word">Brand Identity</h2>
+						<span class="marquee-bullet"></span>
+						<h2 class="marquee-word">Web Engineering</h2>
+						<span class="marquee-bullet"></span>
+						<h2 class="marquee-word">Digital Strategy</h2>
+						<span class="marquee-bullet"></span>
+					</div>
+					<div class="marquee-group">
+						<h2 class="marquee-word">Brand Identity</h2>
+						<span class="marquee-bullet"></span>
+						<h2 class="marquee-word">Web Engineering</h2>
+						<span class="marquee-bullet"></span>
+						<h2 class="marquee-word">Digital Strategy</h2>
+						<span class="marquee-bullet"></span>
+					</div>
+				</div>
+			</section>
+
+			<!-- ABOUT -->
+			<section id="about" class="about">
+				<div class="wrap about-inner">
+					<div class="about-left" data-reveal="left">
+						<span class="eyebrow"><span class="dot"></span>Our Philosophy</span>
+						<h2 class="about-statement">
+							Our studio holds a decisive edge because
+							<span class="muted"
+								>we fuse vibrant material with minimalist discipline to elevate
+								every brand we touch.</span
+							>
+						</h2>
+					</div>
+					<div class="about-right" data-reveal="right">
+						<div class="about-figure">
+							<img
+								src="assets/about-video.jpg"
+								alt="Designers reviewing work"
+							>
+							<div class="ovl">
+								<div class="play2">
+									<svg viewBox="0 0 24 24" fill="currentColor">
+										<path d="M8 5v14l11-7z" />
+									</svg>
+								</div>
+							</div>
+						</div>
+						<p>
+							Our specialists adapt continuously to evolving craft, architecting
+							digital strategies built uniquely for your ambitions.
+						</p>
+					</div>
+				</div>
+			</section>
+
+			<!-- CLIENT LOGOS -->
+			<section
+				class="logo-marquee marquee"
+				aria-label="Client logos"
+				data-reveal="up"
+			>
+				<div class="marquee-track slow">
+					<div class="logo-track">
+						<h3>Axiom Corp</h3>
+						<span class="logo-div"></span>
+						<h3>Vanguard</h3>
+						<span class="logo-div"></span>
+						<h3>Nexus Tech</h3>
+						<span class="logo-div"></span>
+						<h3>Lumina</h3>
+						<span class="logo-div"></span>
+						<h3>Omni Systems</h3>
+						<span class="logo-div"></span>
+					</div>
+					<div class="logo-track">
+						<h3>Axiom Corp</h3>
+						<span class="logo-div"></span>
+						<h3>Vanguard</h3>
+						<span class="logo-div"></span>
+						<h3>Nexus Tech</h3>
+						<span class="logo-div"></span>
+						<h3>Lumina</h3>
+						<span class="logo-div"></span>
+						<h3>Omni Systems</h3>
+						<span class="logo-div"></span>
+					</div>
+				</div>
+			</section>
+
+			<!-- TESTIMONIAL -->
+			<section class="testimonial">
+				<div class="wrap testimonial-inner" data-reveal="up">
+					<span class="eyebrow"
+						><span class="dot"></span>Voices of Success</span
+					>
+					<blockquote class="testimonial-quote">
+						"Carbon Bloom is a phenomenal crew who not only execute flawlessly,
+						but
+						<span class="muted"
+							>deeply understand our audience and translate it into stunning,
+							consistent visual narratives."</span
+						>
+					</blockquote>
+					<div class="author">
+						<img src="assets/author.jpg" alt="Sarah Jenkins">
+						<span>Sarah Jenkins</span>
+					</div>
+				</div>
+			</section>
+
+			<!-- BLACK BLOCK: SERVICES + FAQ -->
+			<section class="block-dark">
+				<div id="services" class="wrap services-grid">
+					<div class="services-left">
+						<div class="sticky" data-reveal="left">
+							<span class="eyebrow"
+								><span class="dot"></span>Why Partner With Us</span
+							>
+							<h2>
+								Ready to experience
+								<span class="faint">unhindered creative support?</span>
+							</h2>
+							<p>
+								At the heart of our methodology is a commitment to understand
+								your roadblocks, delivering scalable solutions without the
+								agency overhead.
+							</p>
+						</div>
+					</div>
+
+					<div class="cards-col" data-reveal="right">
+						<div class="svc-card-wrap">
+							<article class="svc-card">
+								<div class="svc-icon">
+									<svg
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+										stroke-width="2"
+									>
+										<rect x="3" y="4" width="18" height="18" rx="2" />
+										<line x1="16" y1="2" x2="16" y2="6" />
+										<line x1="8" y1="2" x2="8" y2="6" />
+										<line x1="3" y1="10" x2="21" y2="10" />
+									</svg>
+								</div>
+								<h3>Fixed Monthly Pricing</h3>
+								<p>
+									Enjoy unrestricted access to our strategy and design teams. No
+									surprise invoices — just continuous impact built around a flat
+									monthly rate.
+								</p>
+							</article>
+						</div>
+						<div class="svc-card-wrap">
+							<article class="svc-card">
+								<div class="svc-icon">
+									<svg
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+										stroke-width="2"
+									>
+										<path
+											d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+										/>
+										<polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+										<line x1="12" y1="22.08" x2="12" y2="12" />
+									</svg>
+								</div>
+								<h3>Unlimited Revisions</h3>
+								<p>
+									We iterate until perfection is achieved. Unlimited requests
+									guarantee outputs that align seamlessly with your vision.
+								</p>
+							</article>
+						</div>
+						<div class="svc-card-wrap">
+							<article class="svc-card">
+								<div class="svc-icon">
+									<svg
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+										stroke-width="2"
+									>
+										<circle cx="12" cy="12" r="10" />
+										<polyline points="12 6 12 12 16 14" />
+									</svg>
+								</div>
+								<h3>Lightning Turnarounds</h3>
+								<p>
+									Speed doesn't mean compromise. Our agile frameworks keep
+									momentum high, turning ideas into shipped assets in days.
+								</p>
+							</article>
+						</div>
+					</div>
+				</div>
+
+				<div class="faq wrap">
+					<div class="faq-inner">
+						<div class="faq-left" data-reveal="left">
+							<h2>Frequently asked <span class="faint">questions</span></h2>
+							<p>
+								Everything you need to know about how we work and what to expect
+								when partnering with us.
+							</p>
+							<div class="faq-img">
+								<img src="assets/faq.jpg" alt="Studio detail">
+							</div>
+						</div>
+						<div class="faq-right" data-reveal="right">
+							<div class="acc">
+								<button class="acc-btn">
+									<span>How do you define the right strategy?</span
+									><span class="acc-icon"></span>
+								</button>
+								<div class="acc-body">
+									<p>
+										We begin with a deep-dive discovery phase to analyze your
+										market position, audience behavior, and technical
+										infrastructure — then craft a blueprint tailored explicitly
+										to your goals.
+									</p>
+								</div>
+							</div>
+							<div class="acc">
+								<button class="acc-btn">
+									<span>What's included in the subscription?</span
+									><span class="acc-icon"></span>
+								</button>
+								<div class="acc-body">
+									<p>
+										Everything from UI/UX design and brand identity to motion
+										graphics and front-end development. You submit requests, and
+										we knock them out sequentially.
+									</p>
+								</div>
+							</div>
+							<div class="acc">
+								<button class="acc-btn">
+									<span>How quickly will I receive designs?</span
+									><span class="acc-icon"></span>
+								</button>
+								<div class="acc-body">
+									<p>
+										On average, most design requests are completed in two
+										business days or less. More complex requests like full
+										landing pages or animations may take a little longer.
+									</p>
+								</div>
+							</div>
+							<div class="acc">
+								<button class="acc-btn">
+									<span>Are there long-term contracts?</span
+									><span class="acc-icon"></span>
+								</button>
+								<div class="acc-body">
+									<p>
+										No. You can pause or cancel any time. We believe in earning
+										your business month over month through exceptional work.
+									</p>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- WHITE BLOCK: WORK + ARTICLES -->
+			<section class="block-white">
+				<div id="work" class="wrap">
+					<div class="work-grid">
+						<div class="work-col" data-reveal="left">
+							<div class="work-item">
+								<div class="img-wrap">
+									<img
+										src="assets/work-1.jpg"
+										alt="FinTech Solutions project"
+									>
+								</div>
+								<div class="work-meta">
+									<h3>FinTech Solutions</h3>
+									<div class="yr"><b>2024</b><span>UI/UX Design</span></div>
+								</div>
+							</div>
+							<div class="work-item">
+								<div class="img-wrap">
+									<img
+										src="assets/work-2.jpg"
+										alt="Aura E-Commerce project"
+									>
+								</div>
+								<div class="work-meta">
+									<h3>Aura E-Commerce</h3>
+									<div class="yr"><b>2023</b><span>App Development</span></div>
+								</div>
+							</div>
+						</div>
+						<div class="work-col offset" data-reveal="right">
+							<div class="work-header sticky">
+								<span class="eyebrow"
+									><span class="dot"></span>Featured Work</span
+								>
+								<h2>
+									We construct products that drive
+									<span class="muted">measurable impact.</span>
+								</h2>
+								<p>
+									Dive into a portfolio of digital transformations where design
+									strategy meets flawless engineering execution.
+								</p>
+							</div>
+							<div class="work-item">
+								<div class="img-wrap">
+									<img
+										src="assets/work-3.jpg"
+										alt="Kinesis Brand project"
+									>
+								</div>
+								<div class="work-meta">
+									<h3>Kinesis Brand</h3>
+									<div class="yr"><b>2024</b><span>Brand Identity</span></div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="articles wrap">
+					<div data-reveal="up">
+						<span class="eyebrow"
+							><span class="dot"></span>Articles &amp; Insights</span
+						>
+						<div class="articles-list">
+							<a href="#" class="article">
+								<div class="a-head">
+									<span class="tag">Strategy</span>
+									<h3>The new era of SEO: quality over keywords</h3>
+								</div>
+								<div class="a-thumb">
+									<img src="assets/article-1.jpg" alt="Article thumbnail">
+								</div>
+								<p class="a-text">
+									Search algorithms have shifted dramatically. Discover how
+									semantic understanding is replacing traditional optimization
+									metrics.
+								</p>
+							</a>
+							<a href="#" class="article">
+								<div class="a-head">
+									<span class="tag">Design</span>
+									<h3>Minimalism isn't dead, it's just evolving</h3>
+								</div>
+								<div class="a-thumb">
+									<img src="assets/article-2.jpg" alt="Article thumbnail">
+								</div>
+								<p class="a-text">
+									Explore how brutalist foundations merge with rich textures to
+									create the next generation of digital interfaces.
+								</p>
+							</a>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- CTA + FOOTER -->
+			<section id="contact" class="block-cta">
+				<div class="wrap">
+					<div class="cta-big" data-reveal="up">
+						<h2>
+							One step away from digital transformation.
+							<span class="faint">Connect with us below.</span>
+						</h2>
+					</div>
+
+					<footer class="footer-card">
+						<div class="footer-top">
+							<div class="footer-brandcol">
+								<span class="cpy">© Carbon Bloom 2025</span>
+								<a href="#contact" class="lets-talk">
+									<span>Let's Talk</span>
+									<svg
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+										stroke-width="2"
+									>
+										<path d="M5 12h14" />
+										<path d="m12 5 7 7-7 7" />
+									</svg>
+								</a>
+							</div>
+							<div class="footer-linkside">
+								<div class="footer-col">
+									<a href="tel:+18005550199">+1 (800) 555-0199</a>
+									<a href="mailto:hello@carbonbloom.studio"
+										>hello@carbonbloom.studio</a
+									>
+									<p class="addr">
+										742 Evergreen Terrace<br>Springfield, OR 97477
+									</p>
+								</div>
+								<div class="footer-col">
+									<a href="#top">Home</a>
+									<a href="#about">About</a>
+									<a href="#services">Services</a>
+									<a href="#work">Work</a>
+								</div>
+								<div class="footer-col">
+									<span class="l">Privacy</span>
+									<span class="l">Terms</span>
+									<span class="l">Styleguide</span>
+								</div>
+							</div>
+						</div>
+
+						<div class="footer-div"></div>
+
+						<div class="footer-bottom">
+							<div class="brandbig">
+								<h2 class="big-mark">Carbon Bloom.</h2>
+								<span class="sub">Independent Digital Agency</span>
+							</div>
+							<div class="footer-meta">
+								<div class="hours">
+									<span class="h-lbl">Working Hours</span>
+									<span>Mon — Fri</span>
+									<span class="h-big">9am — 6pm EST</span>
+								</div>
+								<div class="socials">
+									<a href="#" aria-label="X"
+										><svg fill="currentColor" viewBox="0 0 24 24">
+											<path
+												d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+											/>
+										</svg></a
+									>
+									<a href="#" aria-label="Instagram"
+										><svg fill="currentColor" viewBox="0 0 24 24">
+											<path
+												d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0 5.838a4.162 4.162 0 1 0 0 8.324 4.162 4.162 0 0 0 0-8.324zm0 6.864a2.702 2.702 0 1 1 0-5.404 2.702 2.702 0 0 1 0 5.404zm6.406-7.045a.972.972 0 1 1-1.944 0 .972.972 0 0 1 1.944 0z"
+											/>
+										</svg></a
+									>
+									<a href="#" aria-label="LinkedIn"
+										><svg fill="currentColor" viewBox="0 0 24 24">
+											<path
+												d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"
+											/>
+										</svg></a
+									>
+								</div>
+							</div>
+						</div>
+					</footer>
+				</div>
+			</section>
+		</main>
+
+		<script>
+// Carbon Bloom — interactions
+
+document.addEventListener("DOMContentLoaded", () => {
+	// ---- Directional scroll reveals ----
+	const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+	const els = document.querySelectorAll("[data-reveal]");
+
+	if (reduce) {
+		els.forEach((el) =>
+			el.classList.add("reveal", el.dataset.reveal || "up", "is-visible"),
+		);
+	} else {
+		const io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((entry) => {
+					if (entry.isIntersecting) {
+						entry.target.classList.add("is-visible");
+						io.unobserve(entry.target);
+					}
+				});
+			},
+			{ threshold: 0.15, rootMargin: "0px 0px -50px 0px" },
+		);
+		els.forEach((el) => {
+			el.classList.add("reveal", el.dataset.reveal || "up");
+			io.observe(el);
+		});
+	}
+
+	// ---- Header shrink on scroll ----
+	const header = document.querySelector(".site-header");
+	const onScroll = () =>
+		header.classList.toggle("scrolled", window.scrollY > 50);
+	onScroll();
+	window.addEventListener("scroll", onScroll, { passive: true });
+
+	// ---- Accordion (single open) ----
+	const accs = document.querySelectorAll(".acc");
+	accs.forEach((acc) => {
+		const btn = acc.querySelector(".acc-btn");
+		const body = acc.querySelector(".acc-body");
+		btn.addEventListener("click", () => {
+			const isOpen = acc.classList.contains("open");
+			accs.forEach((other) => {
+				other.classList.remove("open");
+				other.querySelector(".acc-body").style.maxHeight = null;
+			});
+			if (!isOpen) {
+				acc.classList.add("open");
+				body.style.maxHeight = `${body.scrollHeight}px`;
+			}
+		});
+	});
+});
+
+		</script>
+	</body>
+</html>

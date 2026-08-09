@@ -1,0 +1,15 @@
+{
+  "slug": "vellum-apothecary-archive-h32",
+  "name": "Vellum & Verdigris — Archival Apothecary Wellness Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Playfair Display",
+    "Instrument Serif",
+    "Courier Prime"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/vellum-apothecary-archive-h32",
+  "source_license": "MIT"
+}

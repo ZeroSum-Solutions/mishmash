@@ -190,6 +190,9 @@ templates cover `image`, `video`, `audio`, and utility surfaces. The
 | [`hr-onboarding`](design-templates/hr-onboarding/) | prototype | hr | Role onboarding plan |
 | [`guizang-ppt`](design-templates/guizang-ppt/) | deck | marketing | Magazine-style web PPT (deck default) |
 | [`html-ppt-*`](design-templates/) | deck | marketing | Deck template family, multiple themes (master template in [`design-templates/html-ppt/`](design-templates/html-ppt/)) |
+| [hero sections](design-templates/) | prototype | marketing | 40 single-viewport hero treatments, tagged `hero-section` |
+| [landing pages](design-templates/) | prototype | marketing | 96 full marketing pages, tagged `landing-page` |
+| [`lexington-*`](design-templates/) | prototype | marketing | 45 multi-page site themes, tagged `site-theme` |
 | [`hyperframes`](design-templates/hyperframes/) | video | marketing | HTML → MP4 motion graphics (HeyGen OSS framework) |
 | [`critique`](design-templates/critique/) | utility | design | Five-dimensional self-critique scoresheet |
 | [`tweaks`](design-templates/tweaks/) | utility | design | AI-emitted tweaks-panel manifest |

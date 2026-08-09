@@ -1,0 +1,14 @@
+{
+  "slug": "lumen-vector-h92",
+  "name": "Lumen Vector — Electric Brutalism Creative Agency Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Anton",
+    "Geist"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/lumen-vector-h92",
+  "source_license": "MIT"
+}
