@@ -9315,6 +9315,7 @@ function printDesignLibraryHelp() {
   od design-library catalog [--json]
   od design-library show <rel> [--json]
   od design-library start-project --rel <rel> [--name <name>] [--mode copy|reference] [--aspects hero,webgl] [--json]
+  od design-library live-preview <rel> [--json]
   od design-library promote --asset <id> --group app-captures|site-capture|site-clone [--note <text>] [--json]
   od design-library promotions [--status claimable|pending|claimed|succeeded|failed|all] [--json]
 
@@ -9331,6 +9332,10 @@ description, preview thumb URL) resolved by its rel path — the composable
 project from a private local reference over the same POST
 /api/design-library/start-project contract as the web actions. Reference
 mode never copies the source HTML/DESIGN files into the new project.
+
+\`live-preview\` opens the collection's entry HTML in the OS default browser
+as a file:// document — the full creation as authored, CDN scripts and all.
+Nothing is copied and no bytes are served over HTTP.
 
 Options:
   --rel <rel>          Catalog item's rel path (e.g. "01 UI8 Kits/dwell")
@@ -9364,6 +9369,9 @@ async function runDesignLibrary(args) {
   }
   if (sub === 'start-project') {
     return runDesignLibraryStartProject(subArgs);
+  }
+  if (sub === 'live-preview') {
+    return runDesignLibraryLivePreview(subArgs);
   }
   if (sub === 'promote') {
     return runDesignLibraryPromote(subArgs);
@@ -9494,6 +9502,40 @@ async function runDesignLibraryStartProject(rawArgs) {
   if (data.entryFile) console.log(`Entry file: ${data.entryFile}`);
   console.log(`Copied ${data.copiedFiles} file(s), skipped ${data.skippedFiles}.`);
   for (const warning of data.warnings ?? []) console.log(`Warning: ${warning}`);
+}
+
+// `od design-library live-preview <rel>` — open a collection's entry HTML in
+// the OS default browser, the headless twin of the card's "Open live preview".
+async function runDesignLibraryLivePreview(rawArgs) {
+  const stringFlags = new Set([...LIBRARY_STRING_FLAGS, 'rel']);
+  const flags = parseFlags(rawArgs, { string: stringFlags, boolean: LIBRARY_BOOLEAN_FLAGS });
+  if (flags.help || flags.h) {
+    printDesignLibraryHelp();
+    return;
+  }
+  const rel = typeof flags.rel === 'string' ? flags.rel : positionalArgs(rawArgs, stringFlags)[0];
+  if (!rel) {
+    console.error('Usage: od design-library live-preview <rel> [--json]');
+    process.exit(2);
+  }
+  const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/design-library/live-preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel }),
+    });
+  } catch (err) {
+    return exitWithStructuredError({
+      code: 'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+    });
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const data = await resp.json();
+  if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+  console.log(`Opened ${rel}/${data.entryFile} in the default browser.`);
 }
 
 async function runDesignLibraryPromote(rawArgs) {

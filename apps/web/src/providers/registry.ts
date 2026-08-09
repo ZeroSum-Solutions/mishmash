@@ -3164,6 +3164,29 @@ export async function openDesignLibraryPath(rel: string): Promise<boolean> {
   }
 }
 
+// Opens a collection's entry HTML in the OS default browser as a `file://`
+// document — the "Open live preview" card action. Only offered when the
+// catalog reports an `entry_html`; the daemon re-detects and re-authorizes,
+// so a stale catalog fails closed rather than opening the wrong file.
+export async function openDesignLibraryLivePreview(
+  rel: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const resp = await fetch('/api/design-library/live-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel }),
+    });
+    if (!resp.ok) {
+      const payload = (await resp.json().catch(() => null)) as { error?: string } | null;
+      return { ok: false, message: payload?.error || `Request failed (${resp.status})` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
 // Copies a licensed kit's files into a new managed project (only the
 // `licensed-source-review` / `own-code` allowed_use tiers reach a "Use as
 // template" affordance that calls this — see DesignLibrarySection.tsx).
