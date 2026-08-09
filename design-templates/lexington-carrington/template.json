@@ -1,0 +1,14 @@
+{
+  "slug": "carrington",
+  "name": "Carrington: Premium Law Firm Multi-Page Website Template",
+  "family": "lexingtonthemes",
+  "kind": "multipage",
+  "cdn_fonts": [
+    "Inter",
+    "Newsreader"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/templates/premium/lexingtonthemes/carrington",
+  "source_license": "MIT"
+}

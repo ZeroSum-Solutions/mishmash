@@ -1,0 +1,14 @@
+{
+  "slug": "freightleaf-clean-haul-h80",
+  "name": "Freightleaf — Clean Haul Sustainable Freight Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Instrument Sans",
+    "Inter"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/freightleaf-clean-haul-h80",
+  "source_license": "MIT"
+}

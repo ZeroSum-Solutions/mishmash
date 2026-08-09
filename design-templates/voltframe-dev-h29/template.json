@@ -1,0 +1,14 @@
+{
+  "slug": "voltframe-dev-h29",
+  "name": "Voltframe — Bracketed Voltage Developer Portfolio Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Onest",
+    "Inter"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/voltframe-dev-h29",
+  "source_license": "MIT"
+}

@@ -1,0 +1,15 @@
+{
+  "slug": "vellum-atelier-h33",
+  "name": "Vellum — Sculptural Serif Atelier Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Unbounded",
+    "Figtree",
+    "Sacramento"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/vellum-atelier-h33",
+  "source_license": "MIT"
+}

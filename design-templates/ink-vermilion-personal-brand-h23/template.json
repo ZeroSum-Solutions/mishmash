@@ -1,0 +1,14 @@
+{
+  "slug": "ink-vermilion-personal-brand-h23",
+  "name": "Ink & Vermilion — Editorial Personal-Brand Landing Page for a Marketing Consultant",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Playfair Display",
+    "Inter Tight"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/ink-vermilion-personal-brand-h23",
+  "source_license": "MIT"
+}

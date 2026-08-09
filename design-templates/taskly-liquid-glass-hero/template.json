@@ -1,0 +1,11 @@
+{
+  "slug": "taskly-liquid-glass-hero",
+  "name": "Taskly — Liquid Glass Hero Section",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/taskly-liquid-glass-hero",
+  "source_license": "MIT"
+}

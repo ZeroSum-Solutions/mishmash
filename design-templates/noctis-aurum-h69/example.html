@@ -1,0 +1,1735 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Noctis Aurum — Fine Jewelry Maison · Light, Made Eternal</title>
+		<meta
+			name="description"
+			content="Noctis Aurum — an Obsidian & Champagne fine jewelry maison. Hand-set stones, ethically sourced diamonds, and bespoke atelier craft since 1989."
+		>
+		<style>
+/* ============================================================
+   NOCTIS AURUM — Obsidian & Champagne fine jewelry maison
+   ============================================================ */
+
+/* ---------- Fonts (self-hosted) ---------- */
+
+
+
+
+
+
+
+
+/* ---------- Tokens ---------- */
+:root {
+	--obsidian: #0b0e13;
+	--obsidian-2: #11151d;
+	--gold: #c9a86a;
+	--gold-hi: #e3c892;
+	--pearl: #f4f1ea;
+	--mist: #fbfaf6;
+	--ink: #13161c;
+	--stone: #6b6e76;
+	--serif: "Cormorant", Georgia, serif;
+	--sans: "InterNA", system-ui, sans-serif;
+	--maxw: 1240px;
+	--ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+html {
+	scroll-behavior: smooth;
+}
+body {
+	font-family: var(--sans);
+	background: var(--pearl);
+	color: var(--ink);
+	-webkit-font-smoothing: antialiased;
+	overflow-x: hidden;
+}
+img {
+	display: block;
+	max-width: 100%;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+.wrap {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 0 28px;
+}
+
+/* ---------- Reveal ---------- */
+.reveal {
+	opacity: 0;
+	transform: translateY(26px);
+	transition:
+		opacity 0.9s var(--ease),
+		transform 0.9s var(--ease);
+}
+.reveal.in {
+	opacity: 1;
+	transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.reveal {
+		opacity: 1;
+		transform: none;
+		transition: none;
+	}
+}
+
+/* eyebrow */
+.eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 16px;
+	font-size: 11px;
+	letter-spacing: 0.3em;
+	text-transform: uppercase;
+	font-weight: 600;
+	color: var(--gold);
+}
+.eyebrow::before {
+	content: "";
+	width: 46px;
+	height: 1px;
+	background: var(--gold);
+	opacity: 0.8;
+}
+.eyebrow.center::after {
+	content: "";
+	width: 46px;
+	height: 1px;
+	background: var(--gold);
+	opacity: 0.8;
+}
+
+/* ---------- Announcement ---------- */
+.announce {
+	background: var(--obsidian);
+	color: var(--gold-hi);
+	text-align: center;
+	font-size: 11.5px;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	padding: 11px 16px;
+	font-weight: 500;
+}
+
+/* ---------- Header ---------- */
+.header {
+	position: sticky;
+	top: 0;
+	z-index: 60;
+	background: rgba(11, 14, 19, 0.72);
+	backdrop-filter: blur(14px);
+	border-bottom: 1px solid rgba(201, 168, 106, 0.14);
+	transition:
+		background 0.4s var(--ease),
+		box-shadow 0.4s var(--ease);
+}
+.header.scrolled {
+	background: rgba(11, 14, 19, 0.94);
+	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.nav {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 20px 28px;
+	max-width: var(--maxw);
+	margin: 0 auto;
+}
+.nav-side {
+	display: flex;
+	align-items: center;
+	gap: 30px;
+	flex: 1;
+}
+.nav-side.right {
+	justify-content: flex-end;
+}
+.nav-link {
+	color: rgba(244, 241, 234, 0.78);
+	font-size: 13px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	font-weight: 500;
+	transition: color 0.3s;
+}
+.nav-link:hover {
+	color: var(--gold);
+}
+.brand {
+	text-align: center;
+	line-height: 1;
+}
+.brand .word {
+	font-family: var(--serif);
+	font-size: 28px;
+	font-weight: 600;
+	letter-spacing: 0.22em;
+	color: var(--pearl);
+}
+.brand .sub {
+	display: block;
+	font-size: 9px;
+	letter-spacing: 0.42em;
+	text-transform: uppercase;
+	color: var(--gold);
+	margin-top: 6px;
+	font-weight: 600;
+}
+.enquire {
+	border: 1px solid var(--gold);
+	color: var(--gold);
+	padding: 10px 22px;
+	border-radius: 100px;
+	font-size: 12px;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	font-weight: 600;
+	transition: all 0.35s var(--ease);
+}
+.enquire:hover {
+	background: var(--gold);
+	color: var(--obsidian);
+}
+.cart-pip {
+	color: var(--gold);
+	font-size: 12px;
+	letter-spacing: 0.1em;
+	font-variant-numeric: tabular-nums;
+}
+.cart-pip b {
+	font-weight: 600;
+}
+.hamburger {
+	display: none;
+	background: none;
+	border: 0;
+	color: var(--pearl);
+	cursor: pointer;
+	padding: 6px;
+}
+.hamburger svg {
+	width: 26px;
+	height: 26px;
+}
+
+/* ---------- Hero ---------- */
+.hero {
+	position: relative;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	min-height: 88vh;
+	background: var(--obsidian);
+	overflow: hidden;
+}
+.hero::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	pointer-events: none;
+	background: radial-gradient(
+		120% 90% at 12% 30%,
+		rgba(201, 168, 106, 0.1),
+		transparent 60%
+	);
+}
+.hero-content {
+	position: relative;
+	z-index: 3;
+	display: flex;
+	align-items: center;
+	padding: 64px clamp(28px, 6vw, 96px);
+}
+.hero-inner {
+	max-width: 540px;
+}
+.hero h1 {
+	font-family: var(--serif);
+	color: var(--pearl);
+	font-size: clamp(54px, 7vw, 92px);
+	font-weight: 500;
+	line-height: 1.03;
+	letter-spacing: -0.01em;
+	margin: 26px 0 24px;
+}
+.hero h1 em {
+	font-style: normal;
+	font-weight: 400;
+	color: var(--gold);
+	display: block;
+}
+.hero p.lead {
+	color: rgba(244, 241, 234, 0.62);
+	font-size: 16px;
+	line-height: 1.7;
+	font-weight: 300;
+	max-width: 430px;
+}
+.hero-cta {
+	display: inline-flex;
+	align-items: center;
+	gap: 12px;
+	margin: 34px 0 0;
+	background: var(--gold);
+	color: var(--obsidian);
+	padding: 16px 36px;
+	border-radius: 100px;
+	font-size: 12.5px;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	font-weight: 600;
+	transition: all 0.45s var(--ease);
+}
+.hero-cta:hover {
+	background: var(--pearl);
+	transform: translateY(-2px);
+}
+.hero-cta svg {
+	width: 15px;
+	height: 15px;
+}
+.hero-stats {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 36px;
+	margin-top: 46px;
+	padding-top: 30px;
+	border-top: 1px solid rgba(244, 241, 234, 0.12);
+}
+.hero-stats .n {
+	font-family: var(--serif);
+	font-size: 34px;
+	color: var(--pearl);
+	font-weight: 500;
+	line-height: 1;
+}
+.hero-stats .l {
+	font-size: 10px;
+	letter-spacing: 0.24em;
+	text-transform: uppercase;
+	color: rgba(244, 241, 234, 0.42);
+	margin-top: 8px;
+	font-weight: 600;
+}
+
+.hero-media {
+	position: relative;
+	overflow: hidden;
+	background: var(--obsidian-2);
+}
+.hero-slide {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	opacity: 0;
+	transition: opacity 1.8s var(--ease);
+}
+.hero-slide.active {
+	opacity: 1;
+}
+.hero-media::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background:
+		linear-gradient(105deg, rgba(11, 14, 19, 0.55), transparent 38%),
+		linear-gradient(0deg, rgba(11, 14, 19, 0.35), transparent 50%);
+}
+.focus-card {
+	position: absolute;
+	bottom: 36px;
+	right: 36px;
+	z-index: 4;
+	background: rgba(11, 14, 19, 0.46);
+	backdrop-filter: blur(18px);
+	border: 1px solid rgba(201, 168, 106, 0.28);
+	padding: 24px 28px;
+	border-radius: 16px;
+	color: var(--pearl);
+	box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+	min-width: 220px;
+}
+.focus-card .fc-label {
+	font-size: 10px;
+	letter-spacing: 0.26em;
+	text-transform: uppercase;
+	color: var(--gold);
+	font-weight: 600;
+}
+.focus-card .fc-name {
+	font-family: var(--serif);
+	font-size: 24px;
+	margin-top: 8px;
+	font-weight: 500;
+}
+.focus-pips {
+	display: flex;
+	gap: 6px;
+	margin-top: 16px;
+}
+.focus-pips span {
+	height: 3px;
+	width: 8px;
+	border-radius: 4px;
+	background: rgba(244, 241, 234, 0.22);
+	transition: all 0.5s var(--ease);
+}
+.focus-pips span.on {
+	width: 30px;
+	background: var(--gold);
+}
+
+/* ---------- Category rail ---------- */
+.section {
+	padding: 100px 0;
+}
+.cats {
+	background: var(--pearl);
+	border-bottom: 1px solid rgba(19, 22, 28, 0.08);
+}
+.cat-grid {
+	display: grid;
+	grid-template-columns: repeat(5, 1fr);
+	gap: 28px;
+}
+.cat {
+	text-align: center;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 18px;
+	cursor: pointer;
+}
+.cat-ring {
+	width: 158px;
+	height: 158px;
+	max-width: 100%;
+	border-radius: 50%;
+	padding: 6px;
+	border: 1px solid rgba(201, 168, 106, 0.4);
+	overflow: hidden;
+	transition:
+		border-color 0.5s var(--ease),
+		box-shadow 0.5s var(--ease);
+	aspect-ratio: 1;
+}
+.cat-ring img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	border-radius: 50%;
+	transition: transform 0.9s var(--ease);
+}
+.cat:hover .cat-ring {
+	border-color: var(--gold);
+	box-shadow: 0 18px 40px rgba(201, 168, 106, 0.18);
+}
+.cat:hover .cat-ring img {
+	transform: scale(1.1);
+}
+.cat .name {
+	font-family: var(--serif);
+	font-size: 21px;
+	font-weight: 500;
+	color: var(--ink);
+}
+.cat .go {
+	font-size: 9.5px;
+	letter-spacing: 0.26em;
+	text-transform: uppercase;
+	color: var(--gold);
+	margin-top: 4px;
+	font-weight: 600;
+}
+
+/* ---------- Marquee ---------- */
+.marquee {
+	background: var(--obsidian);
+	padding: 26px 0;
+	overflow: hidden;
+	white-space: nowrap;
+}
+.marquee-track {
+	display: inline-flex;
+	gap: 0;
+	animation: scroll 32s linear infinite;
+}
+.marquee:hover .marquee-track {
+	animation-play-state: paused;
+}
+.marquee-track span {
+	font-family: var(--serif);
+	color: var(--pearl);
+	font-size: 22px;
+	font-weight: 500;
+	padding: 0 38px;
+	display: inline-flex;
+	align-items: center;
+	gap: 38px;
+}
+.marquee-track .dot {
+	color: var(--gold);
+	font-size: 12px;
+}
+@keyframes scroll {
+	to {
+		transform: translateX(-50%);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.marquee-track {
+		animation: none;
+	}
+}
+
+/* ---------- Section heads ---------- */
+.head-row {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 20px;
+	margin-bottom: 56px;
+	flex-wrap: wrap;
+}
+.head-row h2,
+.head-center h2 {
+	font-family: var(--serif);
+	font-size: clamp(38px, 5vw, 56px);
+	font-weight: 500;
+	color: var(--ink);
+	line-height: 1.05;
+}
+.head-row .sub {
+	color: var(--stone);
+	font-size: 13px;
+	margin-top: 10px;
+	letter-spacing: 0.04em;
+}
+.view-all {
+	font-size: 12px;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	font-weight: 600;
+	color: var(--ink);
+	border-bottom: 1px solid var(--gold);
+	padding-bottom: 4px;
+	transition: color 0.3s;
+}
+.view-all:hover {
+	color: var(--gold);
+}
+.head-center {
+	text-align: center;
+	margin-bottom: 64px;
+}
+.head-center .eyebrow {
+	justify-content: center;
+	margin-bottom: 18px;
+}
+.head-center .sub {
+	color: var(--stone);
+	font-size: 13px;
+	margin-top: 12px;
+	letter-spacing: 0.04em;
+}
+
+/* ---------- Product grid ---------- */
+.products {
+	background: var(--pearl);
+}
+.prod-grid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 18px 22px;
+}
+.card {
+	display: flex;
+	flex-direction: column;
+}
+.card-img {
+	position: relative;
+	aspect-ratio: 4 / 5;
+	overflow: hidden;
+	border-radius: 12px;
+	background: var(--mist);
+}
+.card-img img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 1s var(--ease);
+}
+.card:hover .card-img img {
+	transform: scale(1.08);
+}
+.qadd {
+	position: absolute;
+	bottom: 14px;
+	right: 14px;
+	width: 42px;
+	height: 42px;
+	border-radius: 50%;
+	border: 0;
+	cursor: pointer;
+	background: var(--gold);
+	color: var(--obsidian);
+	display: grid;
+	place-items: center;
+	font-size: 20px;
+	font-weight: 400;
+	opacity: 0;
+	transform: translateY(8px) scale(0.9);
+	transition: all 0.4s var(--ease);
+	box-shadow: 0 10px 26px rgba(11, 14, 19, 0.3);
+}
+.card:hover .qadd {
+	opacity: 1;
+	transform: none;
+}
+.qadd.done {
+	background: var(--obsidian);
+	color: var(--gold);
+}
+.qadd svg {
+	width: 18px;
+	height: 18px;
+}
+.card-body {
+	text-align: center;
+	padding: 18px 6px 0;
+}
+.card-body .pname {
+	font-family: var(--serif);
+	font-size: 20px;
+	font-weight: 500;
+	color: var(--ink);
+}
+.card-body .meta {
+	font-size: 10.5px;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--stone);
+	margin: 6px 0 8px;
+}
+.card-body .price {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--gold);
+	letter-spacing: 0.02em;
+}
+
+/* ---------- Heritage ---------- */
+.heritage {
+	background: var(--obsidian);
+	color: var(--pearl);
+	overflow: hidden;
+}
+.heritage .grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 72px;
+	align-items: center;
+}
+.heritage h2 {
+	font-family: var(--serif);
+	font-size: clamp(44px, 5.5vw, 68px);
+	font-weight: 500;
+	line-height: 1.05;
+	margin: 22px 0 26px;
+}
+.heritage h2 em {
+	font-style: normal;
+	font-weight: 400;
+	color: var(--gold);
+}
+.heritage p {
+	color: rgba(244, 241, 234, 0.62);
+	font-size: 16px;
+	line-height: 1.75;
+	font-weight: 300;
+	max-width: 460px;
+}
+.feat-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 26px;
+	margin: 34px 0;
+}
+.feat {
+	border-left: 1px solid var(--gold);
+	padding-left: 20px;
+}
+.feat h4 {
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	margin-bottom: 7px;
+	color: var(--pearl);
+}
+.feat p {
+	font-size: 13px;
+	color: rgba(244, 241, 234, 0.5);
+}
+.gold-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 12px;
+	background: var(--gold);
+	color: var(--obsidian);
+	padding: 15px 34px;
+	border-radius: 100px;
+	border: 0;
+	cursor: pointer;
+	font-size: 12px;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	font-weight: 600;
+	font-family: var(--sans);
+	transition: all 0.4s var(--ease);
+}
+.gold-btn:hover {
+	background: var(--pearl);
+	transform: translateY(-2px);
+}
+.heritage-img {
+	aspect-ratio: 4 / 5;
+	border-radius: 14px;
+	overflow: hidden;
+	box-shadow: 0 40px 90px rgba(0, 0, 0, 0.5);
+}
+.heritage-img img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+/* ---------- Homme ---------- */
+.homme {
+	background: var(--mist);
+}
+.homme-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 30px;
+}
+.hcard {
+	background: #fff;
+	border: 1px solid rgba(19, 22, 28, 0.06);
+	border-radius: 18px;
+	padding: 22px;
+	box-shadow: 0 18px 50px rgba(11, 14, 19, 0.05);
+	transition:
+		transform 0.5s var(--ease),
+		box-shadow 0.5s var(--ease);
+}
+.hcard:hover {
+	transform: translateY(-6px);
+	box-shadow: 0 30px 70px rgba(11, 14, 19, 0.1);
+}
+.hcard .ph {
+	aspect-ratio: 1;
+	border-radius: 12px;
+	overflow: hidden;
+	margin-bottom: 20px;
+}
+.hcard .ph img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.8s var(--ease);
+}
+.hcard:hover .ph img {
+	transform: scale(1.06);
+}
+.hcard .pname {
+	font-family: var(--serif);
+	font-size: 21px;
+	font-weight: 500;
+	text-align: center;
+	color: var(--ink);
+}
+.hcard .price {
+	text-align: center;
+	color: var(--gold);
+	font-weight: 600;
+	font-size: 14px;
+	margin-top: 6px;
+}
+
+/* ---------- Bespoke ---------- */
+.bespoke {
+	background: var(--pearl);
+	overflow: hidden;
+}
+.bespoke .grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 80px;
+	align-items: center;
+}
+.bespoke-imgs {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+}
+.bespoke-imgs img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	border-radius: 12px;
+	aspect-ratio: 4 / 5.4;
+}
+.bespoke-imgs img:first-child {
+	margin-top: 46px;
+}
+.bespoke-imgs img:last-child {
+	box-shadow: 0 30px 70px rgba(11, 14, 19, 0.16);
+}
+.bespoke h2 {
+	font-family: var(--serif);
+	font-size: clamp(44px, 5.5vw, 64px);
+	font-weight: 500;
+	line-height: 1.05;
+	margin: 22px 0 24px;
+	color: var(--ink);
+}
+.bespoke h2 em {
+	font-style: normal;
+	font-weight: 400;
+	color: var(--gold);
+}
+.bespoke p.lead {
+	color: var(--stone);
+	font-size: 16px;
+	line-height: 1.75;
+	max-width: 460px;
+}
+.contact-block {
+	border-left: 1px solid var(--gold);
+	padding-left: 24px;
+	margin: 34px 0;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+.contact-block h4 {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--ink);
+	margin-bottom: 5px;
+	letter-spacing: 0.04em;
+}
+.contact-block p {
+	font-size: 14px;
+	color: var(--stone);
+}
+.dark-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 12px;
+	background: var(--obsidian);
+	color: var(--gold-hi);
+	padding: 16px 36px;
+	border-radius: 100px;
+	font-size: 12px;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	font-weight: 600;
+	transition: all 0.4s var(--ease);
+}
+.dark-btn:hover {
+	background: var(--gold);
+	color: var(--obsidian);
+	transform: translateY(-2px);
+}
+
+/* ---------- Footer ---------- */
+.footer {
+	background: var(--obsidian);
+	color: var(--pearl);
+	padding: 84px 0 40px;
+}
+.foot-grid {
+	display: grid;
+	grid-template-columns: 1.4fr 1fr 1fr 1.2fr;
+	gap: 56px;
+	margin-bottom: 64px;
+}
+.footer h3 {
+	font-family: var(--serif);
+	font-size: 26px;
+	font-weight: 600;
+	letter-spacing: 0.14em;
+}
+.footer .blurb {
+	color: rgba(244, 241, 234, 0.55);
+	font-size: 13.5px;
+	line-height: 1.7;
+	margin: 18px 0 22px;
+	font-weight: 300;
+}
+.foot-social {
+	display: flex;
+	gap: 22px;
+}
+.foot-social a {
+	font-size: 12px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: rgba(244, 241, 234, 0.6);
+	font-weight: 600;
+	transition: color 0.3s;
+}
+.foot-social a:hover {
+	color: var(--gold);
+}
+.foot-col h4 {
+	font-size: 12px;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: var(--gold);
+	margin-bottom: 18px;
+	font-weight: 600;
+}
+.foot-col ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.foot-col a,
+.foot-col p {
+	font-size: 13.5px;
+	color: rgba(244, 241, 234, 0.62);
+	font-weight: 300;
+	transition: color 0.3s;
+}
+.foot-col a:hover {
+	color: var(--pearl);
+}
+.foot-col .place {
+	color: var(--pearl);
+	font-weight: 500;
+	font-size: 13.5px;
+}
+.foot-addr {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+.foot-bottom {
+	border-top: 1px solid rgba(201, 168, 106, 0.14);
+	padding-top: 26px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 18px;
+	flex-wrap: wrap;
+}
+.foot-bottom p,
+.foot-bottom a {
+	font-size: 11px;
+	color: rgba(244, 241, 234, 0.4);
+	letter-spacing: 0.04em;
+}
+.foot-bottom .links {
+	display: flex;
+	gap: 26px;
+}
+.foot-bottom a:hover {
+	color: var(--gold);
+}
+
+/* ---------- Mobile drawer ---------- */
+.drawer-wrap {
+	position: fixed;
+	inset: 0;
+	z-index: 100;
+	visibility: hidden;
+}
+.drawer-wrap.open {
+	visibility: visible;
+}
+.drawer-back {
+	position: absolute;
+	inset: 0;
+	background: rgba(11, 14, 19, 0.5);
+	backdrop-filter: blur(4px);
+	opacity: 0;
+	transition: opacity 0.35s var(--ease);
+}
+.drawer-wrap.open .drawer-back {
+	opacity: 1;
+}
+.drawer {
+	position: absolute;
+	top: 0;
+	left: 0;
+	bottom: 0;
+	width: 82%;
+	max-width: 360px;
+	background: var(--obsidian);
+	border-right: 1px solid rgba(201, 168, 106, 0.2);
+	transform: translateX(-100%);
+	transition: transform 0.4s var(--ease);
+	display: flex;
+	flex-direction: column;
+	padding: 28px;
+}
+.drawer-wrap.open .drawer {
+	transform: none;
+}
+.drawer-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding-bottom: 26px;
+	border-bottom: 1px solid rgba(201, 168, 106, 0.16);
+}
+.drawer-top .w {
+	font-family: var(--serif);
+	font-size: 22px;
+	letter-spacing: 0.2em;
+	color: var(--pearl);
+	font-weight: 600;
+}
+.drawer-top button {
+	background: none;
+	border: 0;
+	color: var(--pearl);
+	cursor: pointer;
+}
+.drawer-top svg {
+	width: 24px;
+	height: 24px;
+}
+.drawer nav {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	padding: 36px 0;
+}
+.drawer nav a {
+	font-family: var(--serif);
+	font-size: 26px;
+	color: var(--pearl);
+	font-weight: 500;
+}
+.drawer nav a:hover {
+	color: var(--gold);
+}
+.drawer .d-foot {
+	margin-top: auto;
+	padding-top: 24px;
+	border-top: 1px solid rgba(201, 168, 106, 0.16);
+}
+.drawer .d-foot p {
+	font-size: 10px;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: rgba(244, 241, 234, 0.4);
+	margin-bottom: 12px;
+}
+.drawer .d-foot a {
+	display: block;
+	font-size: 13px;
+	color: rgba(244, 241, 234, 0.7);
+	margin-bottom: 8px;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1023px) {
+	.section {
+		padding: 80px 0;
+	}
+	.hero {
+		grid-template-columns: 1fr;
+		min-height: auto;
+	}
+	.hero-content {
+		order: 1;
+		padding: 56px 28px 48px;
+	}
+	.hero-media {
+		order: 2;
+		height: 56vh;
+	}
+	.focus-card {
+		display: none;
+	}
+	.nav-side.left {
+		display: none;
+	}
+	.nav-side,
+	.nav-side.right {
+		flex: none;
+	}
+	.nav {
+		display: grid;
+		grid-template-columns: 1fr auto 1fr;
+	}
+	.nav .brand {
+		grid-column: 2;
+	}
+	.hamburger {
+		display: inline-flex;
+		justify-self: start;
+	}
+	.nav-side.right {
+		grid-column: 3;
+	}
+	.cat-grid {
+		grid-template-columns: repeat(3, 1fr);
+		gap: 30px;
+	}
+	.prod-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.heritage .grid,
+	.bespoke .grid {
+		grid-template-columns: 1fr;
+		gap: 44px;
+	}
+	.heritage-img {
+		max-width: 460px;
+	}
+	.homme-grid {
+		grid-template-columns: 1fr;
+		max-width: 420px;
+		margin: 0 auto;
+	}
+	.foot-grid {
+		grid-template-columns: 1fr 1fr;
+		gap: 40px;
+	}
+	.enquire {
+		padding: 9px 16px;
+	}
+}
+@media (max-width: 639px) {
+	.wrap {
+		padding: 0 20px;
+	}
+	.nav-link,
+	.nav-side.right .nav-link {
+		display: none;
+	}
+	.cat-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.cat-ring {
+		width: 130px;
+		height: 130px;
+	}
+	.hero h1 {
+		font-size: clamp(46px, 14vw, 64px);
+	}
+	.marquee-track span {
+		font-size: 18px;
+	}
+	.foot-grid {
+		grid-template-columns: 1fr;
+	}
+	.foot-bottom {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+	.brand .word {
+		font-size: 22px;
+	}
+	.qadd {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant:wght@300;400;500;600;700;800&family=InterNA:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- Announcement -->
+		<div class="announce">
+			Private Winter Viewing Now Open at Our Place Vendôme Salon
+		</div>
+
+		<!-- Header -->
+		<header class="header" id="header">
+			<div class="nav">
+				<button class="hamburger" id="open-drawer" aria-label="Open menu">
+					<svg
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.4"
+					>
+						<path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round" />
+					</svg>
+				</button>
+				<div class="nav-side left">
+					<a href="#coveted" class="nav-link">Collections</a>
+					<a href="#heritage" class="nav-link">Maison</a>
+					<a href="#bespoke" class="nav-link">Bespoke</a>
+				</div>
+				<a href="#" class="brand">
+					<span class="word">NOCTIS AURUM</span>
+					<span class="sub">Atelier de Luxe</span>
+				</a>
+				<div class="nav-side right">
+					<a href="#salons" class="nav-link">Salons</a>
+					<span class="cart-pip">Saved · <b id="cart-count">0</b></span>
+					<a href="#bespoke" class="enquire">Enquire</a>
+				</div>
+			</div>
+		</header>
+
+		<!-- Hero -->
+		<section class="hero">
+			<div class="hero-content">
+				<div class="hero-inner reveal">
+					<span class="eyebrow">Est. 1989 · Paris</span>
+					<h1>Light, made<em>eternal</em></h1>
+					<p class="lead">
+						A maison where the patience of the old masters meets a wholly modern
+						eye. Every stone is hand-selected, every setting finished by hand in
+						our Paris atelier.
+					</p>
+					<a href="#heritage" class="hero-cta">
+						Discover the Maison
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+						>
+							<path
+								d="M5 12h14M13 6l6 6-6 6"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					</a>
+					<div class="hero-stats">
+						<div>
+							<div class="n">2,400+</div>
+							<div class="l">Hand-set stones</div>
+						</div>
+						<div>
+							<div class="n">30+</div>
+							<div class="l">Maîtres Joailliers</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="hero-media" id="hero-media">
+				<img
+					class="hero-slide active"
+					src="assets/hero-1.jpg"
+					alt="Noctis Aurum high jewelry"
+				>
+				<img
+					class="hero-slide"
+					src="assets/hero-2.jpg"
+					alt="Champagne gold and diamonds"
+				>
+				<img
+					class="hero-slide"
+					src="assets/hero-3.jpg"
+					alt="Solitaire diamond ring"
+				>
+				<div class="focus-card">
+					<div class="fc-label">Current Focus</div>
+					<div class="fc-name" id="fc-name">Celestial Solitaire</div>
+					<div class="focus-pips" id="focus-pips">
+						<span class="on"></span><span></span><span></span>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- Category rail -->
+		<section class="section cats">
+			<div class="wrap">
+				<div class="cat-grid">
+					<a class="cat reveal" href="#coveted"
+						><div class="cat-ring">
+							<img src="assets/cat-rings.jpg" alt="Rings">
+						</div>
+						<div>
+							<div class="name">Signature Rings</div>
+							<div class="go">Explore</div>
+						</div></a
+					>
+					<a class="cat reveal" href="#coveted"
+						><div class="cat-ring">
+							<img src="assets/cat-earrings.jpg" alt="Earrings">
+						</div>
+						<div>
+							<div class="name">Earrings</div>
+							<div class="go">Explore</div>
+						</div></a
+					>
+					<a class="cat reveal" href="#coveted"
+						><div class="cat-ring">
+							<img src="assets/cat-necklaces.jpg" alt="Necklaces">
+						</div>
+						<div>
+							<div class="name">Necklaces</div>
+							<div class="go">Explore</div>
+						</div></a
+					>
+					<a class="cat reveal" href="#coveted"
+						><div class="cat-ring">
+							<img src="assets/cat-bracelets.jpg" alt="Bracelets">
+						</div>
+						<div>
+							<div class="name">Bracelets</div>
+							<div class="go">Explore</div>
+						</div></a
+					>
+					<a class="cat reveal" href="#coveted"
+						><div class="cat-ring">
+							<img src="assets/cat-bridal.jpg" alt="Bridal">
+						</div>
+						<div>
+							<div class="name">Bridal</div>
+							<div class="go">Explore</div>
+						</div></a
+					>
+				</div>
+			</div>
+		</section>
+
+		<!-- Marquee -->
+		<section class="marquee">
+			<div class="marquee-track" id="marquee-track">
+				<span
+					>Hallmarked 18k Gold <i class="dot">◆</i> Ethically Sourced Diamonds
+					<i class="dot">◆</i>
+					Bespoke Atelier <i class="dot">◆</i> Lifetime Care
+					<i class="dot">◆</i></span
+				>
+				<span aria-hidden="true"
+					>Hallmarked 18k Gold <i class="dot">◆</i> Ethically Sourced Diamonds
+					<i class="dot">◆</i>
+					Bespoke Atelier <i class="dot">◆</i> Lifetime Care
+					<i class="dot">◆</i></span
+				>
+			</div>
+		</section>
+
+		<!-- Most coveted -->
+		<section class="section products" id="coveted">
+			<div class="wrap">
+				<div class="head-row reveal">
+					<div>
+						<h2>The most coveted</h2>
+						<p class="sub">Chosen by the modern muse</p>
+					</div>
+					<a href="#" class="view-all">View all pieces</a>
+				</div>
+				<div class="prod-grid" id="prod-grid"></div>
+			</div>
+		</section>
+
+		<!-- Heritage -->
+		<section class="section heritage" id="heritage">
+			<div class="wrap">
+				<div class="grid">
+					<div class="reveal">
+						<span class="eyebrow">The Héritage Collection</span>
+						<h2>Maison <em>regalia</em></h2>
+						<p>
+							Drawn from the archives of European court jewelers, the Héritage
+							line reimagines historic settings with contemporary precision —
+							rare gems chosen for their depth, clarity, and quiet fire.
+						</p>
+						<div class="feat-row">
+							<div class="feat">
+								<h4>Vintage Setting</h4>
+								<p>Hand-finished 22k gold filigree work.</p>
+							</div>
+							<div class="feat">
+								<h4>Limited Edition</h4>
+								<p>Only ten bespoke pieces crafted annually.</p>
+							</div>
+						</div>
+						<button class="gold-btn">Explore Héritage</button>
+					</div>
+					<div class="reveal">
+						<div class="heritage-img">
+							<img src="assets/heritage.jpg" alt="Héritage regalia collection">
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- Homme -->
+		<section class="section homme">
+			<div class="wrap">
+				<div class="head-center reveal">
+					<span class="eyebrow center">Noctis Homme</span>
+					<h2>Understated, for him</h2>
+					<p class="sub">Architectural restraint in gold, onyx, and steel</p>
+				</div>
+				<div class="homme-grid">
+					<div class="hcard reveal">
+						<div class="ph">
+							<img src="assets/homme-1.jpg" alt="Onyx signet ring">
+						</div>
+						<div class="pname">Onyx Signet Ring</div>
+						<div class="price">$1,400</div>
+					</div>
+					<div class="hcard reveal">
+						<div class="ph">
+							<img src="assets/homme-2.jpg" alt="Architectural cufflinks">
+						</div>
+						<div class="pname">Architectural Cufflinks</div>
+						<div class="price">$950</div>
+					</div>
+					<div class="hcard reveal">
+						<div class="ph">
+							<img src="assets/homme-3.jpg" alt="Titan link bracelet">
+						</div>
+						<div class="pname">Titan Link Bracelet</div>
+						<div class="price">$2,800</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- Bespoke -->
+		<section class="section bespoke" id="bespoke">
+			<div class="wrap">
+				<div class="grid">
+					<div class="reveal">
+						<div class="bespoke-imgs">
+							<img src="assets/bespoke-1.jpg" alt="Designing a bespoke piece">
+							<img src="assets/bespoke-2.jpg" alt="The Noctis Aurum atelier">
+						</div>
+					</div>
+					<div class="reveal">
+						<span class="eyebrow">One of a Kind</span>
+						<h2>Your vision,<em>our hands</em></h2>
+						<p class="lead">
+							Sit with our master designers in Paris and shape a piece that
+							carries your own narrative — from hand-selecting rare diamonds to
+							the final polish, the journey is as luminous as the jewel.
+						</p>
+						<div class="contact-block">
+							<div>
+								<h4>Global Flagship</h4>
+								<p>Place Vendôme, 1er, Paris</p>
+							</div>
+							<div>
+								<h4>Private Concierge</h4>
+								<p>+33 (0)1 42 60 00 89</p>
+							</div>
+						</div>
+						<a href="#" class="dark-btn">Book a Private Appointment</a>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- Footer -->
+		<footer class="footer" id="salons">
+			<div class="wrap">
+				<div class="foot-grid">
+					<div>
+						<h3>NOCTIS AURUM</h3>
+						<p class="blurb">
+							Modern heirlooms, crafted for a lifetime. We pair timeless design
+							with responsible sourcing to make jewelry worthy of the stories it
+							will hold.
+						</p>
+						<div class="foot-social">
+							<a href="#">Instagram</a>
+							<a href="#">Pinterest</a>
+							<a href="#">Journal</a>
+						</div>
+					</div>
+					<div class="foot-col">
+						<h4>Shop</h4>
+						<ul>
+							<li><a href="#">Engagement Rings</a></li>
+							<li><a href="#">Fine Diamonds</a></li>
+							<li><a href="#">Eternity Bands</a></li>
+							<li><a href="#">Signature Gold</a></li>
+						</ul>
+					</div>
+					<div class="foot-col">
+						<h4>Services</h4>
+						<ul>
+							<li><a href="#">Private Consultation</a></li>
+							<li><a href="#">Bespoke Atelier</a></li>
+							<li><a href="#">Jewelry Insurance</a></li>
+							<li><a href="#">Lifetime Care Plan</a></li>
+						</ul>
+					</div>
+					<div class="foot-col">
+						<h4>The Salons</h4>
+						<div class="foot-addr">
+							<div>
+								<p class="place">Paris Flagship</p>
+								<p>12 Place Vendôme, 75001 Paris</p>
+							</div>
+							<div>
+								<p class="place">London Salon</p>
+								<p>9 New Bond Street, Mayfair W1S</p>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="foot-bottom">
+					<p>© 2024 Noctis Aurum Joaillerie. Hallmarked &amp; certified.</p>
+					<div class="links">
+						<a href="#">Maison Terms</a>
+						<a href="#">Authenticity</a>
+						<a href="#">Privacy</a>
+					</div>
+				</div>
+			</div>
+		</footer>
+
+		<!-- Mobile drawer -->
+		<div class="drawer-wrap" id="drawer">
+			<div class="drawer-back" id="drawer-back"></div>
+			<aside class="drawer">
+				<div class="drawer-top">
+					<span class="w">NOCTIS AURUM</span>
+					<button id="close-drawer" aria-label="Close menu">
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.4"
+						>
+							<path d="M6 6l12 12M18 6L6 18" stroke-linecap="round" />
+						</svg>
+					</button>
+				</div>
+				<nav>
+					<a href="#coveted" data-close>Collections</a>
+					<a href="#heritage" data-close>Maison</a>
+					<a href="#bespoke" data-close>Bespoke</a>
+					<a href="#salons" data-close>Salons</a>
+				</nav>
+				<div class="d-foot">
+					<p>Private Concierge</p>
+					<a href="tel:+33142600089">+33 (0)1 42 60 00 89</a>
+					<a href="mailto:concierge@noctisaurum.com"
+						>concierge@noctisaurum.com</a
+					>
+				</div>
+			</aside>
+		</div>
+
+		<script>
+(() => {
+	var reduceMotion = window.matchMedia(
+		"(prefers-reduced-motion: reduce)",
+	).matches;
+
+	/* ---------- Product grid ---------- */
+	var products = [
+		{
+			img: "prod-1.jpg",
+			name: "Éclat Diamond Pendant",
+			meta: "18k Yellow Gold",
+			price: "$1,850",
+		},
+		{
+			img: "prod-2.jpg",
+			name: "Atelier Solitaire",
+			meta: "Certified 2ct Diamond",
+			price: "$5,400",
+		},
+		{
+			img: "prod-3.jpg",
+			name: "Celestial Hoops",
+			meta: "14k Rose Gold",
+			price: "$1,250",
+		},
+		{
+			img: "prod-4.jpg",
+			name: "Infinite Link Bracelet",
+			meta: "White Gold Pavé",
+			price: "$2,100",
+		},
+		{
+			img: "prod-5.jpg",
+			name: "Marquise Halo Ring",
+			meta: "18k Yellow Gold",
+			price: "$3,200",
+		},
+		{
+			img: "prod-6.jpg",
+			name: "Riviera Diamond Choker",
+			meta: "White Gold Illusion",
+			price: "$7,800",
+		},
+		{
+			img: "prod-7.jpg",
+			name: "Empress Pearl Drops",
+			meta: "Natural South Sea",
+			price: "$1,950",
+		},
+		{
+			img: "prod-8.jpg",
+			name: "Aura Tennis Bracelet",
+			meta: "5ct TDW White Gold",
+			price: "$6,500",
+		},
+	];
+	var checkSvg =
+		'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12.5l4.5 4.5L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+	var grid = document.getElementById("prod-grid");
+	if (grid) {
+		products.forEach((p) => {
+			var card = document.createElement("article");
+			card.className = "card reveal";
+			card.innerHTML =
+				'<div class="card-img">' +
+				'<img src="assets/' +
+				p.img +
+				'" alt="' +
+				p.name +
+				'">' +
+				'<button class="qadd" aria-label="Save ' +
+				p.name +
+				'">+</button>' +
+				"</div>" +
+				'<div class="card-body">' +
+				'<div class="pname">' +
+				p.name +
+				"</div>" +
+				'<div class="meta">' +
+				p.meta +
+				"</div>" +
+				'<div class="price">' +
+				p.price +
+				"</div>" +
+				"</div>";
+			grid.appendChild(card);
+		});
+	}
+
+	/* ---------- Quick-add simulation ---------- */
+	var count = 0;
+	var counter = document.getElementById("cart-count");
+	document.addEventListener("click", (e) => {
+		var btn = e.target.closest(".qadd");
+		if (!btn || btn.classList.contains("done")) return;
+		btn.classList.add("done");
+		btn.innerHTML = checkSvg;
+		count += 1;
+		if (counter) counter.textContent = String(count);
+		setTimeout(() => {
+			btn.classList.remove("done");
+			btn.textContent = "+";
+		}, 1600);
+	});
+
+	/* ---------- Scroll reveals ---------- */
+	var reveals = document.querySelectorAll(".reveal");
+	if (reduceMotion || !("IntersectionObserver" in window)) {
+		reveals.forEach((el) => {
+			el.classList.add("in");
+		});
+	} else {
+		var io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((entry, i) => {
+					if (entry.isIntersecting) {
+						setTimeout(
+							() => {
+								entry.target.classList.add("in");
+							},
+							(i % 4) * 90,
+						);
+						io.unobserve(entry.target);
+					}
+				});
+			},
+			{ threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
+		);
+		reveals.forEach((el) => {
+			io.observe(el);
+		});
+	}
+
+	/* ---------- Hero slideshow ---------- */
+	var slides = document.querySelectorAll(".hero-slide");
+	var pips = document.querySelectorAll("#focus-pips span");
+	var fcName = document.getElementById("fc-name");
+	var names = [
+		"Celestial Solitaire",
+		"Lumière Pavé Suite",
+		"Nocturne Diamond Line",
+	];
+	if (slides.length && !reduceMotion) {
+		var idx = 0;
+		setInterval(() => {
+			slides[idx].classList.remove("active");
+			pips[idx]?.classList.remove("on");
+			idx = (idx + 1) % slides.length;
+			slides[idx].classList.add("active");
+			pips[idx]?.classList.add("on");
+			if (fcName) fcName.textContent = names[idx];
+		}, 5000);
+	}
+
+	/* ---------- Header shadow on scroll ---------- */
+	var header = document.getElementById("header");
+	function onScroll() {
+		if (window.scrollY > 80) header.classList.add("scrolled");
+		else header.classList.remove("scrolled");
+	}
+	window.addEventListener("scroll", onScroll, { passive: true });
+	onScroll();
+
+	/* ---------- Mobile drawer ---------- */
+	var drawer = document.getElementById("drawer");
+	var open = document.getElementById("open-drawer");
+	var close = document.getElementById("close-drawer");
+	var back = document.getElementById("drawer-back");
+	function openDrawer() {
+		drawer.classList.add("open");
+		document.body.style.overflow = "hidden";
+	}
+	function closeDrawer() {
+		drawer.classList.remove("open");
+		document.body.style.overflow = "";
+	}
+	open?.addEventListener("click", openDrawer);
+	close?.addEventListener("click", closeDrawer);
+	back?.addEventListener("click", closeDrawer);
+	document.querySelectorAll("[data-close]").forEach((a) => {
+		a.addEventListener("click", closeDrawer);
+	});
+})();
+
+		</script>
+	</body>
+</html>

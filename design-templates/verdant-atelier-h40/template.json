@@ -1,0 +1,14 @@
+{
+  "slug": "verdant-atelier-h40",
+  "name": "Verdant Atelier — Product-Photography Studio Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Playfair",
+    "Inter"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/verdant-atelier-h40",
+  "source_license": "MIT"
+}

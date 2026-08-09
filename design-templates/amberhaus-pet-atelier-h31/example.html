@@ -1,0 +1,2133 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Amberhaus — Luxury Pet Atelier &amp; Boutique</title>
+		<meta
+			name="description"
+			content="Amberhaus — the gold standard in boutique pet grooming, boarding, wellness and curated luxury accessories."
+		>
+		<style>
+/* ============ AMBERHAUS — Warm Amber Boutique ============ */
+
+
+
+
+
+
+
+:root {
+	--amber: #d97706;
+	--amber-deep: #b45309;
+	--cream: #fef3c7;
+	--cream-30: rgba(254, 243, 199, 0.35);
+	--cream-20: rgba(254, 243, 199, 0.22);
+	--white: #ffffff;
+	--ink: #1f2937;
+	--muted: #4b5563;
+	--near-black: #141415;
+	--hair: rgba(217, 119, 6, 0.12);
+	--hair-2: rgba(217, 119, 6, 0.2);
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+html {
+	scroll-behavior: smooth;
+}
+body {
+	font-family: "Inter", system-ui, sans-serif;
+	background: var(--white);
+	color: var(--ink);
+	-webkit-font-smoothing: antialiased;
+	overflow-x: hidden;
+	cursor:
+		url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='%23D97706'><path d='M12 14c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm-6.5-4c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5zm13 0c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5zm-11-5c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm9 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z'/></svg>")
+		16 16,
+		auto;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+img {
+	display: block;
+	max-width: 100%;
+}
+button {
+	font-family: inherit;
+	border: none;
+	background: none;
+}
+.disp {
+	font-family: "Bricolage", sans-serif;
+	font-weight: 800;
+	letter-spacing: -0.035em;
+}
+.italic {
+	font-family: "Playfair", serif;
+	font-style: italic;
+	font-weight: 400;
+}
+.eyebrow {
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	font-size: 0.72rem;
+	color: var(--amber);
+}
+
+::-webkit-scrollbar {
+	width: 10px;
+}
+::-webkit-scrollbar-track {
+	background: var(--cream-30);
+}
+::-webkit-scrollbar-thumb {
+	background: var(--amber);
+	border-radius: 10px;
+	border: 2px solid var(--white);
+}
+
+.tex {
+	background-image: url("assets/texture.svg");
+	background-size: 46px 46px;
+}
+
+/* ---------- scroll reveal ---------- */
+.reveal {
+	opacity: 0;
+	transform: translateY(30px);
+	transition:
+		opacity 0.8s ease-out,
+		transform 0.8s ease-out;
+}
+.reveal.in {
+	opacity: 1;
+	transform: none;
+}
+
+/* ================= HEADER ================= */
+.header {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 72px;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 18px;
+	pointer-events: none;
+}
+@media (min-width: 768px) {
+	.header {
+		height: 84px;
+		padding: 0 32px;
+	}
+}
+.pill {
+	pointer-events: auto;
+	background: var(--cream);
+	height: 46px;
+	padding: 0 20px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	border-radius: 999px;
+	box-shadow: 0 4px 18px rgba(180, 83, 9, 0.12);
+	transition:
+		box-shadow 0.3s,
+		transform 0.15s;
+	border: 1px solid var(--hair);
+}
+.pill:hover {
+	box-shadow: 0 8px 26px rgba(180, 83, 9, 0.2);
+}
+.pill:active {
+	transform: scale(0.95);
+}
+.burger {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	height: 9px;
+	width: 20px;
+}
+.burger span {
+	height: 2px;
+	width: 100%;
+	background: var(--amber);
+	transform-origin: center;
+	transition: transform 0.3s;
+}
+.swap {
+	overflow: hidden;
+	height: 1.1em;
+	line-height: 1.1em;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	font-size: 11px;
+	color: var(--amber);
+}
+.swap span {
+	display: block;
+	transition: transform 0.32s cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+.pill:hover .swap span {
+	transform: translateY(-1.1em);
+}
+.swap.hide-sm {
+	display: none;
+}
+@media (min-width: 768px) {
+	.swap.hide-sm {
+		display: block;
+	}
+}
+.wordmark {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	pointer-events: auto;
+	font-family: "Bricolage";
+	font-weight: 800;
+	letter-spacing: 0.14em;
+	color: var(--amber);
+	text-transform: uppercase;
+	font-size: 1.05rem;
+	white-space: nowrap;
+}
+@media (min-width: 768px) {
+	.wordmark {
+		font-size: 1.45rem;
+	}
+}
+.wm-full {
+	display: none;
+}
+.wm-short {
+	display: inline;
+}
+@media (min-width: 768px) {
+	.wm-full {
+		display: inline;
+	}
+	.wm-short {
+		display: none;
+	}
+}
+.icon-only {
+	display: flex;
+	color: var(--amber);
+}
+@media (min-width: 768px) {
+	.icon-only {
+		display: none;
+	}
+}
+
+/* nav menu box */
+.nav-box {
+	position: fixed;
+	bottom: 24px;
+	left: 18px;
+	width: 280px;
+	background: var(--cream);
+	border-radius: 32px;
+	box-shadow: 0 30px 70px rgba(20, 20, 21, 0.25);
+	opacity: 0;
+	transform: translateY(40px);
+	pointer-events: none;
+	transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+	overflow: hidden;
+	border: 1px solid var(--hair-2);
+	z-index: 55;
+}
+@media (min-width: 768px) {
+	.nav-box {
+		left: 32px;
+		width: 320px;
+	}
+}
+.nav-box.open {
+	opacity: 1;
+	transform: none;
+	pointer-events: auto;
+}
+.nav-inner {
+	padding: 32px;
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+}
+.nav-links {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.nav-links a {
+	font-family: "Bricolage";
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	font-size: 1.7rem;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	transition:
+		padding-left 0.25s,
+		color 0.25s;
+}
+.nav-links a:hover {
+	padding-left: 8px;
+	color: var(--amber-deep);
+}
+.nav-links a .arr {
+	opacity: 0;
+	color: var(--amber);
+	transition: opacity 0.25s;
+}
+.nav-links a:hover .arr {
+	opacity: 1;
+}
+.nav-socials {
+	padding-top: 22px;
+	border-top: 1px solid var(--hair);
+}
+.nav-socials p {
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	font-weight: 700;
+	opacity: 0.6;
+	margin-bottom: 8px;
+}
+.nav-socials div {
+	display: flex;
+	gap: 16px;
+}
+.nav-socials a {
+	font-size: 12px;
+	font-weight: 600;
+}
+.nav-socials a:hover {
+	color: var(--amber);
+}
+
+/* ================= HERO ================= */
+main {
+	padding-top: 84px;
+}
+.hero-wrap {
+	position: relative;
+}
+.hero {
+	max-width: 1505px;
+	margin: 0 auto;
+	padding: 48px 16px;
+}
+.hero-row {
+	display: flex;
+	flex-direction: column;
+	border-top: 1px solid var(--hair);
+	padding-top: 16px;
+}
+@media (min-width: 900px) {
+	.hero-row {
+		flex-direction: row;
+		min-height: 689px;
+	}
+}
+.slider {
+	position: relative;
+	height: 340px;
+	overflow: hidden;
+	border-radius: 24px;
+}
+@media (min-width: 900px) {
+	.slider {
+		height: 689px;
+		border-radius: 0;
+	}
+	.slider.left {
+		border-radius: 24px 0 0 24px;
+	}
+	.slider.right {
+		border-radius: 0 24px 24px 0;
+	}
+	.slider {
+		flex: 0 0 32%;
+	}
+}
+.slider img {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	opacity: 0;
+	transition: opacity 1s ease;
+}
+.slider img.active {
+	opacity: 1;
+}
+.hero-center {
+	background: var(--cream);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	padding: 48px 36px;
+	position: relative;
+	overflow: hidden;
+}
+@media (min-width: 900px) {
+	.hero-center {
+		flex: 0 0 36%;
+	}
+}
+.hero-center .inner {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 28px;
+	will-change: transform;
+}
+.hero-center h1 {
+	font-family: "Bricolage";
+	font-weight: 800;
+	color: var(--amber-deep);
+	font-size: 2rem;
+	line-height: 1.08;
+	letter-spacing: -0.03em;
+	max-width: 400px;
+}
+@media (min-width: 1100px) {
+	.hero-center h1 {
+		font-size: 2.5rem;
+	}
+}
+.hero-center p {
+	color: var(--muted);
+	font-size: 1.05rem;
+	max-width: 330px;
+}
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: 54px;
+	padding: 0 30px;
+	background: var(--amber);
+	color: #fff;
+	font-weight: 700;
+	border-radius: 999px;
+	border: 2px solid var(--amber);
+	box-shadow: 0 12px 26px rgba(180, 83, 9, 0.28);
+	transition: all 0.3s;
+	cursor: inherit;
+}
+.btn:hover {
+	background: #fff;
+	color: var(--amber);
+	transform: translateY(-2px);
+}
+
+/* ================= SERVICES + BOUTIQUE ================= */
+.services {
+	padding: 96px 24px;
+	position: relative;
+}
+.services .wrap {
+	max-width: 1200px;
+	margin: 0 auto;
+}
+.pill-bar {
+	background: var(--cream);
+	border-radius: 20px;
+	padding: 18px 32px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	justify-content: space-between;
+	color: var(--amber-deep);
+	font-family: "Bricolage";
+	font-weight: 700;
+	font-size: 0.78rem;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	margin-bottom: 24px;
+}
+@media (min-width: 768px) {
+	.pill-bar {
+		flex-direction: row;
+	}
+}
+.pill-bar a:hover {
+	text-decoration: underline;
+}
+.svc-grid {
+	display: grid;
+	gap: 24px;
+	grid-template-columns: 1fr;
+}
+@media (min-width: 1024px) {
+	.svc-grid {
+		grid-template-columns: 320px 1fr 340px;
+		align-items: stretch;
+	}
+}
+.feat-list {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: 1fr 1fr;
+}
+@media (min-width: 1024px) {
+	.feat-list {
+		grid-template-columns: 1fr;
+	}
+}
+.feat {
+	background: var(--cream-30);
+	border-radius: 24px;
+	padding: 24px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	min-height: 178px;
+	transition: background 0.3s;
+}
+.feat:hover {
+	background: var(--cream);
+}
+.feat svg {
+	width: 32px;
+	height: 32px;
+	color: var(--amber);
+	margin-bottom: 14px;
+	transition: transform 0.3s;
+}
+.feat:hover svg {
+	transform: scale(1.12);
+}
+.feat h4 {
+	font-family: "Bricolage";
+	font-weight: 700;
+	text-transform: uppercase;
+	font-size: 1rem;
+	line-height: 1.05;
+	margin-bottom: 8px;
+	letter-spacing: -0.01em;
+}
+.feat p {
+	font-size: 0.78rem;
+	color: var(--muted);
+	line-height: 1.55;
+}
+.feat-img {
+	background: var(--cream);
+	border-radius: 32px;
+	overflow: hidden;
+	position: relative;
+	min-height: 400px;
+}
+.feat-img img {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 1s ease;
+}
+.feat-img:hover img {
+	transform: scale(1.06);
+}
+.feat-img .grad {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(to top, rgba(180, 83, 9, 0.55), transparent 55%);
+}
+.feat-img .cap {
+	position: absolute;
+	left: 40px;
+	bottom: 40px;
+	color: #fff;
+}
+.feat-img .cap .italic {
+	font-size: 1.5rem;
+	display: block;
+	margin-bottom: 6px;
+}
+.feat-img .cap h3 {
+	font-family: "Bricolage";
+	font-weight: 800;
+	text-transform: uppercase;
+	font-size: 2rem;
+	line-height: 1;
+	letter-spacing: -0.03em;
+}
+.shop-list {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+.shop-card {
+	background: var(--cream-20);
+	border-radius: 24px;
+	padding: 22px;
+	display: flex;
+	align-items: center;
+	gap: 22px;
+	flex: 1;
+	transition: background 0.3s;
+}
+.shop-card:hover {
+	background: var(--cream-30);
+}
+.shop-thumb {
+	width: 76px;
+	height: 76px;
+	border-radius: 999px;
+	overflow: hidden;
+	background: #fff;
+	flex-shrink: 0;
+	box-shadow: 0 6px 16px rgba(180, 83, 9, 0.15);
+}
+.shop-thumb img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.4s;
+}
+.shop-card:hover .shop-thumb img {
+	transform: scale(1.1);
+}
+.shop-card h4 {
+	font-family: "Bricolage";
+	font-weight: 700;
+	font-size: 0.85rem;
+	text-transform: uppercase;
+}
+.shop-card .price {
+	font-size: 0.78rem;
+	color: var(--amber-deep);
+	font-weight: 700;
+	margin-top: 4px;
+}
+.shop-card .addc {
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	font-weight: 700;
+	margin-top: 8px;
+	cursor: inherit;
+	color: var(--ink);
+}
+.shop-card .addc:hover {
+	color: var(--amber);
+}
+
+/* ================= JOURNEY (horizontal scroll) ================= */
+.journey {
+	position: relative;
+	background: #fff;
+}
+.journey-container {
+	height: 300vh;
+	position: relative;
+}
+.journey-sticky {
+	position: sticky;
+	top: 0;
+	height: 100vh;
+	overflow: hidden;
+	display: flex;
+	align-items: center;
+}
+.journey-track {
+	display: flex;
+	align-items: center;
+	padding: 0 5vw;
+	gap: 9vw;
+	will-change: transform;
+	height: 100%;
+}
+.step {
+	flex-shrink: 0;
+}
+.step .space {
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+	max-width: 640px;
+	width: 78vw;
+}
+@media (min-width: 768px) {
+	.step .space {
+		width: 46vw;
+	}
+}
+.step .eyebrow {
+	display: block;
+}
+.step h2,
+.step h3 {
+	font-family: "Bricolage";
+	font-weight: 800;
+	color: var(--ink);
+	font-size: 2rem;
+	line-height: 1.1;
+	letter-spacing: -0.03em;
+}
+@media (min-width: 768px) {
+	.step h2,
+	.step h3 {
+		font-size: 2.4rem;
+	}
+}
+.step p {
+	color: var(--muted);
+	font-size: 1.1rem;
+	line-height: 1.6;
+}
+.year {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	color: var(--amber-deep);
+	font-weight: 700;
+}
+.year .num {
+	font-family: "Bricolage";
+	font-weight: 800;
+	font-size: 1.8rem;
+}
+.year .rule {
+	width: 90px;
+	height: 2px;
+	background: var(--amber);
+}
+.step-media {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 32px;
+	width: 80vw;
+}
+@media (min-width: 768px) {
+	.step-media {
+		flex-direction: row;
+		width: 56vw;
+	}
+}
+.step-media.rev {
+	flex-direction: column;
+}
+@media (min-width: 768px) {
+	.step-media.rev {
+		flex-direction: row-reverse;
+	}
+}
+.step-media .pic {
+	width: 100%;
+	aspect-ratio: 1;
+	border-radius: 32px;
+	overflow: hidden;
+	box-shadow: 0 30px 60px rgba(20, 20, 21, 0.18);
+}
+@media (min-width: 768px) {
+	.step-media .pic {
+		width: 50%;
+	}
+}
+.step-media .pic img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.step-media .txt {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+@media (min-width: 768px) {
+	.step-media .txt {
+		width: 50%;
+	}
+}
+.step-end {
+	width: 78vw;
+	max-width: 640px;
+}
+@media (min-width: 768px) {
+	.step-end {
+		width: 46vw;
+	}
+}
+.end-card {
+	background: var(--cream);
+	padding: 44px;
+	border-radius: 32px;
+	border: 1px solid var(--hair-2);
+	position: relative;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+}
+.end-card .orb {
+	position: absolute;
+	top: -40px;
+	right: -40px;
+	width: 160px;
+	height: 160px;
+	background: rgba(217, 119, 6, 0.18);
+	border-radius: 999px;
+	filter: blur(46px);
+}
+.end-card h3 {
+	color: var(--amber-deep);
+}
+.end-card .btn {
+	align-self: flex-start;
+}
+
+/* ================= TESTIMONIALS ================= */
+.testi {
+	padding: 96px 0;
+	background: var(--cream-30);
+	overflow: hidden;
+	position: relative;
+}
+.testi-head {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 28px;
+	max-width: 1200px;
+	margin: 0 auto 56px;
+	padding: 0 24px;
+	text-align: center;
+}
+.rate-pill {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 16px;
+	border-radius: 999px;
+	border: 1px solid var(--hair);
+	background: #fff;
+	box-shadow: 0 4px 14px rgba(180, 83, 9, 0.08);
+}
+.rate-pill .stars {
+	display: flex;
+	gap: 2px;
+}
+.rate-pill svg {
+	width: 14px;
+	height: 14px;
+	fill: var(--amber);
+}
+.rate-pill span {
+	font-family: "Bricolage";
+	font-weight: 700;
+	font-size: 0.8rem;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+}
+.testi-head h2 {
+	font-family: "Bricolage";
+	font-weight: 800;
+	font-size: 2.4rem;
+	line-height: 1.1;
+	letter-spacing: -0.035em;
+	max-width: 700px;
+}
+@media (min-width: 768px) {
+	.testi-head h2 {
+		font-size: 3rem;
+	}
+}
+.testi-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 16px;
+	max-width: 1200px;
+	margin: 0 auto;
+	height: 700px;
+	padding: 0 24px;
+	-webkit-mask-image: linear-gradient(
+		transparent,
+		#000 14%,
+		#000 86%,
+		transparent
+	);
+	mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent);
+}
+@media (min-width: 768px) {
+	.testi-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+@media (min-width: 1100px) {
+	.testi-grid {
+		grid-template-columns: repeat(4, 1fr);
+	}
+}
+.tcol {
+	position: relative;
+	overflow: hidden;
+	height: 100%;
+}
+.tcol.c3 {
+	display: none;
+}
+.tcol.c4 {
+	display: none;
+}
+@media (min-width: 1100px) {
+	.tcol.c3 {
+		display: block;
+	}
+	.tcol.c4 {
+		display: block;
+	}
+}
+.tstack {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+.tstack.up {
+	animation: scrollUp 46s linear infinite;
+}
+.tstack.down {
+	animation: scrollDown 46s linear infinite;
+}
+.tcol:hover .tstack {
+	animation-play-state: paused;
+}
+@keyframes scrollUp {
+	from {
+		transform: translateY(0);
+	}
+	to {
+		transform: translateY(-50%);
+	}
+}
+@keyframes scrollDown {
+	from {
+		transform: translateY(-50%);
+	}
+	to {
+		transform: translateY(0);
+	}
+}
+.tcard {
+	padding: 30px;
+	background: #fff;
+	border-radius: 24px;
+	height: 258px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	box-shadow: 0 4px 16px rgba(180, 83, 9, 0.06);
+	border: 1px solid rgba(217, 119, 6, 0.06);
+}
+.tcard.cream {
+	background: var(--cream);
+	border: 1px solid var(--hair-2);
+}
+.tcard.amber {
+	background: var(--amber);
+	color: #fff;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	gap: 14px;
+}
+.tcard.amber .em {
+	font-size: 1.8rem;
+}
+.tcard.amber p {
+	font-family: "Bricolage";
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	font-size: 0.85rem;
+}
+.tcard p.quote {
+	font-size: 0.86rem;
+	color: var(--muted);
+	line-height: 1.6;
+	font-style: italic;
+}
+.tcard.cream p.quote {
+	color: var(--ink);
+	font-style: normal;
+	font-weight: 700;
+}
+.tcard .who {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.tcard .who img {
+	width: 40px;
+	height: 40px;
+	border-radius: 999px;
+	object-fit: cover;
+}
+.tcard .who .nm {
+	font-weight: 700;
+	font-size: 0.85rem;
+}
+.tcard .who .rl {
+	font-size: 0.66rem;
+	color: var(--amber-deep);
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	font-weight: 700;
+}
+.timg {
+	position: relative;
+	border-radius: 24px;
+	height: 258px;
+	overflow: hidden;
+}
+.timg img {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.7s;
+}
+.timg:hover img {
+	transform: scale(1.1);
+}
+.timg .ov {
+	position: absolute;
+	inset: 0;
+	background: rgba(20, 20, 21, 0.28);
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	padding: 24px;
+}
+.timg .ov .italic {
+	position: absolute;
+	top: 18px;
+	right: 20px;
+	color: #fff;
+	font-size: 1.3rem;
+}
+.timg .ov .t {
+	color: #fff;
+	font-weight: 700;
+	font-size: 0.85rem;
+}
+.timg .ov .s {
+	color: rgba(255, 255, 255, 0.7);
+	font-size: 0.62rem;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	font-weight: 700;
+}
+
+/* ================= FOOTER ================= */
+.footer {
+	background: #fff;
+	padding: 120px 18px 64px;
+}
+@media (min-width: 768px) {
+	.footer {
+		padding: 140px 32px 72px;
+	}
+}
+.footer-inner {
+	max-width: 1200px;
+	margin: 0 auto;
+	position: relative;
+}
+.canvas {
+	position: relative;
+	background: var(--amber);
+	border-radius: 40px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	padding: 48px 32px 40px;
+	overflow: hidden;
+	box-shadow: 0 40px 90px rgba(180, 83, 9, 0.3);
+	min-height: 400px;
+	z-index: 1;
+}
+@media (min-width: 768px) {
+	.canvas {
+		border-radius: 48px;
+		padding: 64px;
+		min-height: 480px;
+	}
+}
+.canvas .tex-ov {
+	position: absolute;
+	inset: 0;
+	opacity: 0.12;
+	background-image: url("assets/texture.svg");
+	background-size: 46px 46px;
+}
+.brand-id {
+	position: relative;
+	z-index: 2;
+}
+.brand-id .nm {
+	font-family: "Bricolage";
+	font-weight: 800;
+	font-size: 2.4rem;
+	color: #fff;
+	line-height: 1;
+	letter-spacing: -0.04em;
+	text-transform: uppercase;
+}
+@media (min-width: 768px) {
+	.brand-id .nm {
+		font-size: 3rem;
+	}
+}
+.brand-id .since {
+	font-size: 10px;
+	font-weight: 700;
+	color: rgba(255, 255, 255, 0.7);
+	text-transform: uppercase;
+	letter-spacing: 0.3em;
+	margin-top: 12px;
+}
+.giant {
+	position: absolute;
+	inset-inline: 0;
+	bottom: 14px;
+	padding: 0 32px;
+	pointer-events: none;
+	z-index: 0;
+}
+@media (min-width: 768px) {
+	.giant {
+		padding: 0 64px;
+	}
+}
+.giant h2 {
+	font-family: "Bricolage";
+	font-weight: 800;
+	font-size: clamp(80px, 16vw, 180px);
+	color: rgba(255, 255, 255, 0.16);
+	line-height: 0.8;
+	letter-spacing: -0.04em;
+	display: flex;
+	gap: 0.02em;
+	user-select: none;
+}
+.giant h2 span {
+	display: inline-block;
+	animation: jump 2.5s ease-in-out infinite;
+}
+.giant h2 span:nth-child(2) {
+	animation-delay: 0.1s;
+}
+.giant h2 span:nth-child(3) {
+	animation-delay: 0.2s;
+}
+.giant h2 span:nth-child(4) {
+	animation-delay: 0.3s;
+}
+.giant h2 span:nth-child(5) {
+	animation-delay: 0.4s;
+}
+@keyframes jump {
+	0%,
+	20%,
+	50%,
+	80%,
+	100% {
+		transform: translateY(0);
+	}
+	40% {
+		transform: translateY(-20px);
+	}
+	60% {
+		transform: translateY(-10px);
+	}
+}
+.legal {
+	position: relative;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	justify-content: space-between;
+	align-items: flex-start;
+	margin-top: 36px;
+}
+@media (min-width: 768px) {
+	.legal {
+		flex-direction: row;
+		align-items: flex-end;
+	}
+}
+.legal p,
+.legal a {
+	color: rgba(255, 255, 255, 0.62);
+	font-size: 0.72rem;
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+}
+.legal .lk {
+	display: flex;
+	gap: 24px;
+}
+.legal a:hover {
+	color: #fff;
+}
+.contact-card {
+	position: absolute;
+	top: -44px;
+	right: 8px;
+	width: 92%;
+	background: var(--cream);
+	border-radius: 32px;
+	box-shadow: 0 40px 100px rgba(20, 20, 21, 0.18);
+	padding: 32px;
+	z-index: 5;
+	border: 1px solid var(--hair-2);
+}
+@media (min-width: 768px) {
+	.contact-card {
+		top: -64px;
+		right: 32px;
+		width: 480px;
+		padding: 48px;
+	}
+}
+.contact-card .cols {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 32px;
+}
+.contact-card h5 {
+	font-size: 10px;
+	font-weight: 700;
+	color: var(--amber-deep);
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	margin-bottom: 16px;
+}
+.contact-card ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.contact-card li a {
+	font-size: 0.86rem;
+	font-weight: 700;
+}
+.contact-card li a:hover {
+	color: var(--amber-deep);
+}
+.contact-cta {
+	margin-top: 36px;
+	border-top: 1px solid var(--hair);
+	padding-top: 28px;
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+}
+.contact-cta .row {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+@media (min-width: 560px) {
+	.contact-cta .row {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+}
+.contact-cta .row p {
+	font-family: "Bricolage";
+	font-weight: 800;
+	font-size: 1.2rem;
+	line-height: 1.15;
+	max-width: 210px;
+}
+.contact-cta .btn {
+	height: 48px;
+	padding: 0 26px;
+	font-size: 0.85rem;
+}
+
+/* ================= PROJECT OVERLAY ================= */
+.overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 60;
+	background: #fff;
+	transform: translateY(100%);
+	transition: transform 0.7s cubic-bezier(0.85, 0, 0.15, 1);
+	overflow-y: auto;
+}
+.overlay.open {
+	transform: none;
+}
+.overlay-top {
+	padding: 24px;
+	display: flex;
+	justify-content: flex-end;
+	position: sticky;
+	top: 0;
+	background: #fff;
+	z-index: 2;
+}
+@media (min-width: 768px) {
+	.overlay-top {
+		padding: 32px;
+	}
+}
+.close-btn {
+	width: 48px;
+	height: 48px;
+	border-radius: 999px;
+	border: 1px solid var(--amber);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--amber);
+	transition: all 0.25s;
+	cursor: inherit;
+}
+.close-btn:hover {
+	background: var(--amber);
+	color: #fff;
+}
+.overlay-body {
+	min-height: calc(100vh - 96px);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+}
+.overlay-grid {
+	max-width: 1200px;
+	width: 100%;
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 48px;
+	padding: 48px 0;
+}
+@media (min-width: 768px) {
+	.overlay-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+.ocard {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	padding: 32px;
+	border-radius: 40px;
+	border: 1.6px solid transparent;
+	transition: all 0.3s;
+}
+.ocard:hover {
+	background: var(--cream-30);
+	border-color: var(--hair-2);
+}
+.ocard .lab {
+	font-family: "Playfair";
+	font-style: italic;
+	font-size: 1.9rem;
+	color: var(--amber-deep);
+	line-height: 1;
+}
+.ocard h2 {
+	font-family: "Bricolage";
+	font-weight: 800;
+	font-size: 3rem;
+	line-height: 0.92;
+	letter-spacing: -0.035em;
+}
+@media (min-width: 768px) {
+	.ocard h2 {
+		font-size: 4.2rem;
+	}
+}
+.ocard p {
+	font-size: 1.15rem;
+	color: var(--muted);
+	max-width: 340px;
+	line-height: 1.4;
+}
+.ocard .arrow {
+	width: 48px;
+	height: 48px;
+	border-radius: 999px;
+	border: 1px solid var(--amber);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--amber);
+	transition: all 0.3s;
+}
+.ocard:hover .arrow {
+	background: var(--amber);
+	color: #fff;
+}
+.ocard .arrow svg {
+	transition: transform 0.3s;
+}
+.ocard:hover .arrow svg {
+	transform: rotate(45deg);
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Playfair:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- ========== HEADER ========== -->
+		<header class="header">
+			<button class="pill" id="menuBtn" aria-label="Open menu">
+				<span class="burger"
+					><span id="bar1"></span><span id="bar2"></span></span
+				>
+				<span class="swap hide-sm"
+					><span id="mtxt1">Menu</span><span id="mtxt2">Explore</span></span
+				>
+			</button>
+
+			<a href="#top" class="wordmark"
+				><span class="wm-full">Amberhaus.</span
+				><span class="wm-short">A.H.</span></a
+			>
+
+			<button class="pill" data-open-overlay aria-label="Book a visit">
+				<span class="swap hide-sm"
+					><span>Book a visit</span><span>Let's talk</span></span
+				>
+				<span class="icon-only"
+					><svg
+						width="20"
+						height="20"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+						/>
+					</svg></span
+				>
+			</button>
+		</header>
+
+		<!-- nav box -->
+		<div class="nav-box" id="navBox">
+			<div class="nav-inner">
+				<nav class="nav-links">
+					<a href="#services">Services <span class="arr">&rarr;</span></a>
+					<a href="#services">Shop <span class="arr">&rarr;</span></a>
+					<a href="#journey">Our Story <span class="arr">&rarr;</span></a>
+					<a href="#contact">Contact <span class="arr">&rarr;</span></a>
+				</nav>
+				<div class="nav-socials">
+					<p>Socials</p>
+					<div>
+						<a href="#">Instagram</a><a href="#">Facebook</a
+						><a href="#">Pinterest</a>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<main id="top">
+			<!-- ========== HERO ========== -->
+			<div class="hero-wrap tex">
+				<section class="hero">
+					<div class="hero-row">
+						<div class="slider left" data-slider>
+							<img
+								class="active"
+								src="assets/hero-l1.jpg"
+								alt="Happy dog being pampered"
+							>
+							<img src="assets/hero-l2.jpg" alt="Companion at the atelier">
+							<img src="assets/hero-l3.jpg" alt="Puppy portrait">
+						</div>
+
+						<div class="hero-center">
+							<div class="inner" id="heroText">
+								<span class="eyebrow">Treats &amp; Gear</span>
+								<h1>The Gold Standard For Your Beloved Companions</h1>
+								<p>
+									Curated organic treats, designer toys and heritage accessories
+									— pampering, perfected.
+								</p>
+								<a href="#services" class="btn">Shop Collection</a>
+							</div>
+						</div>
+
+						<div class="slider right" data-slider>
+							<img
+								class="active"
+								src="assets/hero-r1.jpg"
+								alt="Luxury cat accessories"
+							>
+							<img src="assets/hero-r2.jpg" alt="Designer pet furniture">
+							<img src="assets/hero-r3.jpg" alt="Premium pet treats">
+						</div>
+					</div>
+				</section>
+			</div>
+
+			<!-- ========== SERVICES + BOUTIQUE ========== -->
+			<section class="services" id="services">
+				<div class="wrap">
+					<div class="pill-bar reveal">
+						<span>Amberhaus Excellence</span>
+						<a href="#contact">Book Appointment</a>
+					</div>
+
+					<div class="svc-grid">
+						<!-- features -->
+						<div class="feat-list">
+							<div class="feat reveal">
+								<svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+									/>
+								</svg>
+								<div>
+									<h4>Master<br>Grooming</h4>
+									<p>
+										Expert styling using organic, pH-balanced apothecary blends.
+									</p>
+								</div>
+							</div>
+							<div class="feat reveal">
+								<svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+									/>
+								</svg>
+								<div>
+									<h4>Luxury<br>Boarding</h4>
+									<p>
+										Climate-controlled private suites with round-the-clock care.
+									</p>
+								</div>
+							</div>
+							<div class="feat reveal">
+								<svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+									/>
+								</svg>
+								<div>
+									<h4>Pet<br>Wellness</h4>
+									<p>
+										Therapeutic massage and holistic nutrition for vitality.
+									</p>
+								</div>
+							</div>
+							<div class="feat reveal">
+								<svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+									/>
+								</svg>
+								<div>
+									<h4>Elite<br>Concierge</h4>
+									<p>Custom orders for the most discerning pet parents.</p>
+								</div>
+							</div>
+						</div>
+
+						<!-- feature image -->
+						<div class="feat-img reveal">
+							<img src="assets/feature.jpg" alt="Pet spa day">
+							<div class="grad"></div>
+							<div class="cap">
+								<span class="italic">Treat them to gold.</span>
+								<h3>The Boutique Standard</h3>
+							</div>
+						</div>
+
+						<!-- shop -->
+						<div class="shop-list">
+							<div class="shop-card reveal">
+								<div class="shop-thumb">
+									<img src="assets/prod1.jpg" alt="Heritage leather collar">
+								</div>
+								<div>
+									<h4>Heritage Leather Collar</h4>
+									<p class="price">$125.00</p>
+									<button class="addc">Add to Cart +</button>
+								</div>
+							</div>
+							<div class="shop-card reveal">
+								<div class="shop-thumb">
+									<img src="assets/prod2.jpg" alt="Stone artisan bowl">
+								</div>
+								<div>
+									<h4>Stone Artisan Bowl</h4>
+									<p class="price">$45.00</p>
+									<button class="addc">Add to Cart +</button>
+								</div>
+							</div>
+							<div class="shop-card reveal">
+								<div class="shop-thumb">
+									<img src="assets/prod3.jpg" alt="Cloud nine velvet bed">
+								</div>
+								<div>
+									<h4>Cloud Nine Velvet Bed</h4>
+									<p class="price">$280.00</p>
+									<button class="addc">Add to Cart +</button>
+								</div>
+							</div>
+							<div class="shop-card reveal">
+								<div class="shop-thumb">
+									<img src="assets/prod4.jpg" alt="Amber gold treats">
+								</div>
+								<div>
+									<h4>Amber Gold Treats</h4>
+									<p class="price">$35.00</p>
+									<button class="addc">Add to Cart +</button>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ========== JOURNEY (horizontal) ========== -->
+			<section class="journey" id="journey">
+				<div class="journey-container">
+					<div class="journey-sticky">
+						<div class="journey-track" id="journeyTrack">
+							<div class="step">
+								<div class="space">
+									<span class="eyebrow">Chapter I</span>
+									<h2>The Vision of Eleanor Vance.</h2>
+									<p>
+										In 2012, Eleanor Vance noticed the missing touch of
+										accessible luxury in pet care. Amberhaus was born from a
+										simple promise: every companion is royalty.
+									</p>
+									<div class="year">
+										<span class="num">2012</span><span class="rule"></span>
+									</div>
+								</div>
+							</div>
+
+							<div class="step">
+								<div class="step-media">
+									<div class="pic">
+										<img src="assets/journey1.jpg" alt="Master grooming">
+									</div>
+									<div class="txt">
+										<span class="eyebrow">Chapter II</span>
+										<h3>Mastering the Art of Grooming.</h3>
+										<p>
+											By 2015 we pioneered our "Calm-First" method — open-air
+											suites and organic apothecary blends instead of cages and
+											harsh soaps.
+										</p>
+										<div class="year">
+											<span class="num">2015</span><span class="rule"></span>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<div class="step">
+								<div class="step-media rev">
+									<div class="pic">
+										<img
+											src="assets/journey2.jpg"
+											alt="Boutique collection"
+										>
+									</div>
+									<div class="txt">
+										<span class="eyebrow">Chapter III</span>
+										<h3>The Boutique Collection.</h3>
+										<p>
+											We travelled the globe for artisan bowl-makers and
+											heritage leather craftsmen — bringing the world's finest
+											to your doorstep.
+										</p>
+										<div class="year">
+											<span class="num">2019</span><span class="rule"></span>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<div class="step step-end">
+								<div class="end-card">
+									<div class="orb"></div>
+									<span class="eyebrow">The Present</span>
+									<h3>A Legacy Continued.</h3>
+									<p>
+										Today Amberhaus serves thousands of families, dedicated to
+										the idea that care should be beautiful, intentional, and
+										forever boutique.
+									</p>
+									<a href="#contact" class="btn"
+										>Join the Circle
+										<svg
+											width="18"
+											height="18"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M14 5l7 7m0 0l-7 7m7-7H3"
+											/>
+										</svg></a
+									>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ========== TESTIMONIALS ========== -->
+			<section class="testi">
+				<div class="testi-head reveal">
+					<div class="rate-pill">
+						<span class="stars">
+							<svg viewBox="0 0 256 256">
+								<path
+									d="M234.5,114.38l-45.1,39.36,13.51,58.6a16,16,0,0,1-23.84,17.34l-51.11-31-51,31a16,16,0,0,1-23.84-17.34L66.61,153.8,21.5,114.38a16,16,0,0,1,9.11-28.06l59.46-5.15,23.21-55.36a15.95,15.95,0,0,1,29.44,0L166,81.17l59.44,5.15a16,16,0,0,1,9.11,28.06Z"
+								/>
+							</svg>
+							<svg viewBox="0 0 256 256">
+								<path
+									d="M234.5,114.38l-45.1,39.36,13.51,58.6a16,16,0,0,1-23.84,17.34l-51.11-31-51,31a16,16,0,0,1-23.84-17.34L66.61,153.8,21.5,114.38a16,16,0,0,1,9.11-28.06l59.46-5.15,23.21-55.36a15.95,15.95,0,0,1,29.44,0L166,81.17l59.44,5.15a16,16,0,0,1,9.11,28.06Z"
+								/>
+							</svg>
+							<svg viewBox="0 0 256 256">
+								<path
+									d="M234.5,114.38l-45.1,39.36,13.51,58.6a16,16,0,0,1-23.84,17.34l-51.11-31-51,31a16,16,0,0,1-23.84-17.34L66.61,153.8,21.5,114.38a16,16,0,0,1,9.11-28.06l59.46-5.15,23.21-55.36a15.95,15.95,0,0,1,29.44,0L166,81.17l59.44,5.15a16,16,0,0,1,9.11,28.06Z"
+								/>
+							</svg>
+							<svg viewBox="0 0 256 256">
+								<path
+									d="M234.5,114.38l-45.1,39.36,13.51,58.6a16,16,0,0,1-23.84,17.34l-51.11-31-51,31a16,16,0,0,1-23.84-17.34L66.61,153.8,21.5,114.38a16,16,0,0,1,9.11-28.06l59.46-5.15,23.21-55.36a15.95,15.95,0,0,1,29.44,0L166,81.17l59.44,5.15a16,16,0,0,1,9.11,28.06Z"
+								/>
+							</svg>
+							<svg viewBox="0 0 256 256">
+								<path
+									d="M234.5,114.38l-45.1,39.36,13.51,58.6a16,16,0,0,1-23.84,17.34l-51.11-31-51,31a16,16,0,0,1-23.84-17.34L66.61,153.8,21.5,114.38a16,16,0,0,1,9.11-28.06l59.46-5.15,23.21-55.36a15.95,15.95,0,0,1,29.44,0L166,81.17l59.44,5.15a16,16,0,0,1,9.11,28.06Z"
+								/>
+							</svg>
+						</span>
+						<span>5.0 Boutique Rating</span>
+					</div>
+					<h2>Voices from the Amberhaus Circle</h2>
+				</div>
+
+				<div class="testi-grid">
+					<div class="tcol c1"><ul class="tstack up" data-dup></ul></div>
+					<div class="tcol c2"><ul class="tstack down" data-dup></ul></div>
+					<div class="tcol c3"><ul class="tstack up" data-dup></ul></div>
+					<div class="tcol c4"><ul class="tstack down" data-dup></ul></div>
+				</div>
+			</section>
+		</main>
+
+		<!-- ========== FOOTER ========== -->
+		<footer class="footer" id="contact">
+			<div class="footer-inner">
+				<div class="canvas">
+					<div class="tex-ov"></div>
+					<div class="brand-id">
+						<div class="nm">A.H.</div>
+						<div class="since">Since MMXXII</div>
+					</div>
+					<div class="giant">
+						<h2>
+							<span>P</span><span>A</span><span>W</span><span>S</span
+							><span>.</span>
+						</h2>
+					</div>
+					<div class="legal">
+						<p>&copy; 2024 Amberhaus Circle</p>
+						<div class="lk"><a href="#">Privacy</a><a href="#">Terms</a></div>
+					</div>
+				</div>
+
+				<div class="contact-card reveal">
+					<div class="cols">
+						<div>
+							<h5>The Circle</h5>
+							<ul>
+								<li><a href="#services">Our Services</a></li>
+								<li><a href="#services">Boutique Shop</a></li>
+								<li><a href="#journey">Our Story</a></li>
+							</ul>
+						</div>
+						<div>
+							<h5>Connect</h5>
+							<ul>
+								<li><a href="#">Instagram</a></li>
+								<li><a href="#">Facebook</a></li>
+								<li><a href="#">Pinterest</a></li>
+							</ul>
+						</div>
+					</div>
+					<div class="contact-cta">
+						<h5>Inquiries</h5>
+						<div class="row">
+							<p>Ready to elevate your pet's lifestyle?</p>
+							<a href="#" data-open-overlay class="btn"
+								>Book Visit
+								<svg
+									width="16"
+									height="16"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2.5"
+									viewBox="0 0 24 24"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M7 17L17 7M17 7H7M17 7V17"
+									/>
+								</svg></a
+							>
+						</div>
+					</div>
+				</div>
+			</div>
+		</footer>
+
+		<!-- ========== PROJECT OVERLAY ========== -->
+		<div class="overlay" id="overlay">
+			<div class="overlay-top">
+				<button class="close-btn" data-close-overlay aria-label="Close">
+					<svg
+						width="24"
+						height="24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						viewBox="0 0 24 24"
+					>
+						<line x1="18" y1="6" x2="6" y2="18" />
+						<line x1="6" y1="6" x2="18" y2="18" />
+					</svg>
+				</button>
+			</div>
+			<div class="overlay-body">
+				<div class="overlay-grid">
+					<a href="#" class="ocard">
+						<span class="lab">Grooming &amp; Care</span>
+						<h2>Ready for a spa day?</h2>
+						<p>
+							Schedule a master grooming session or wellness consultation for
+							your beloved companion.
+						</p>
+						<span class="arrow"
+							><svg
+								width="18"
+								height="18"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								viewBox="0 0 18 18"
+							>
+								<path
+									d="M1 17L17 1M17 1H1M17 1V17"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg></span
+						>
+					</a>
+					<a href="#" class="ocard">
+						<span class="lab">Luxury Concierge</span>
+						<h2>Got a unique request?</h2>
+						<p>
+							From designer custom orders to specialised boarding needs — we're
+							here to help.
+						</p>
+						<span class="arrow"
+							><svg
+								width="18"
+								height="18"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								viewBox="0 0 18 18"
+							>
+								<path
+									d="M1 17L17 1M17 1H1M17 1V17"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg></span
+						>
+					</a>
+				</div>
+			</div>
+		</div>
+
+		<script>
+document.addEventListener("DOMContentLoaded", () => {
+	/* ---------- testimonial data ---------- */
+	const reviews = [
+		{
+			t: "card",
+			q: "The level of care here is unprecedented. Bella always returns from her spa sessions looking like royalty.",
+			img: "assets/av1.jpg",
+			nm: "Sarah Jenkins",
+			rl: "Bella's Guardian",
+		},
+		{
+			t: "card",
+			q: "Curated treats my picky companion actually enjoys. The boutique selection is truly top-tier.",
+			img: "assets/av2.jpg",
+			nm: "Marcus Thorne",
+			rl: "Oliver's Human",
+		},
+		{
+			t: "cream",
+			q: "Amberhaus is the only place I trust with Shadow’s grooming. They are literal magicians.",
+			img: "assets/av3.jpg",
+			nm: "Thomas Ward",
+			rl: "Shadow's Best Friend",
+		},
+		{ t: "image", img: "assets/tcard1.jpg", cap: "Pet Portraits MMXXIV" },
+		{
+			t: "card",
+			q: "The artisan accessories collection is unmatched. Every piece feels custom-made for our home.",
+			img: "assets/av4.jpg",
+			nm: "Julian Pierce",
+			rl: "Baron's Owner",
+		},
+		{ t: "amber", em: "✨", label: "Next-Generation Pet Boutique" },
+		{
+			t: "card",
+			q: "Holistic care that actually respects the pet. Cooper looks amazing and had zero stress.",
+			img: "assets/av5.jpg",
+			nm: "Chloe Smith",
+			rl: "Cooper's Mom",
+		},
+		{
+			t: "image2",
+			img: "assets/tcard2.jpg",
+			label: "luna.",
+			t1: "Lumina Collection",
+			t2: "Luxury Cat Furnishings",
+		},
+	];
+
+	const cardHTML = (r) => {
+		if (r.t === "image") {
+			return `<li class="timg"><img src="${r.img}" alt=""><div class="ov"><div></div><span class="t">${r.cap}</span></div></li>`;
+		}
+		if (r.t === "image2") {
+			return `<li class="timg"><img src="${r.img}" alt=""><div class="ov"><span class="italic">${r.label}</span><div><div class="t">${r.t1}</div><div class="s">${r.t2}</div></div></div></li>`;
+		}
+		if (r.t === "amber") {
+			return `<li class="tcard amber"><span class="em">${r.em}</span><p>${r.label}</p></li>`;
+		}
+		const cls = r.t === "cream" ? " cream" : "";
+		return `<li class="tcard${cls}"><p class="quote">"${r.q}"</p><div class="who"><img src="${r.img}" alt=""><div><div class="nm">${r.nm}</div><div class="rl">${r.rl}</div></div></div></li>`;
+	};
+
+	// distribute reviews across the 4 columns, then duplicate each column for a seamless loop
+	const cols = document.querySelectorAll(".tstack[data-dup]");
+	const buckets = [
+		[0, 1],
+		[2, 3],
+		[4, 5],
+		[6, 7],
+	];
+	cols.forEach((ul, i) => {
+		const items = buckets[i].map((idx) => cardHTML(reviews[idx])).join("");
+		ul.innerHTML = items + items; // duplicate for -50% loop
+	});
+
+	/* ---------- hero crossfade sliders ---------- */
+	document.querySelectorAll("[data-slider]").forEach((slider, sIdx) => {
+		const imgs = slider.querySelectorAll("img");
+		let idx = 0;
+		setTimeout(
+			() =>
+				setInterval(() => {
+					imgs[idx].classList.remove("active");
+					idx = (idx + 1) % imgs.length;
+					imgs[idx].classList.add("active");
+				}, 5000),
+			sIdx * 1500,
+		); // stagger left/right
+	});
+
+	/* ---------- hero parallax ---------- */
+	const heroText = document.getElementById("heroText");
+	if (heroText) {
+		const parent = heroText.parentElement;
+		const onScroll = () => {
+			const rect = parent.getBoundingClientRect();
+			if (rect.top < innerHeight && rect.bottom > 0) {
+				const rel = innerHeight / 2 - (rect.top + rect.height / 2);
+				heroText.style.transform = `translateY(${rel * 0.08}px)`;
+			}
+		};
+		addEventListener("scroll", onScroll, { passive: true });
+		onScroll();
+	}
+
+	/* ---------- horizontal journey ---------- */
+	const track = document.getElementById("journeyTrack");
+	const container = document.querySelector(".journey-container");
+	if (track && container) {
+		const update = () => {
+			const rect = container.getBoundingClientRect();
+			const scrollEnd = container.offsetHeight - innerHeight;
+			let p = -rect.top / scrollEnd;
+			p = Math.max(0, Math.min(1, p));
+			const maxX = track.scrollWidth - innerWidth;
+			track.style.transform = `translateX(${-p * maxX}px)`;
+		};
+		addEventListener("scroll", update, { passive: true });
+		addEventListener("resize", update);
+		update();
+	}
+
+	/* ---------- scroll reveal ---------- */
+	const io = new IntersectionObserver(
+		(entries) => {
+			entries.forEach((e) => {
+				if (e.isIntersecting) {
+					e.target.classList.add("in");
+					io.unobserve(e.target);
+				}
+			});
+		},
+		{ threshold: 0.12 },
+	);
+	document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+
+	/* ---------- menu ---------- */
+	const _menuBtn = document.getElementById("menuBtn");
+	const navBox = document.getElementById("navBox");
+	const bar1 = document.getElementById("bar1"),
+		bar2 = document.getElementById("bar2");
+	const mt1 = document.getElementById("mtxt1"),
+		mt2 = document.getElementById("mtxt2");
+	let menuOpen = false;
+	const setMenu = (open) => {
+		menuOpen = open;
+		navBox.classList.toggle("open", open);
+		bar1.style.transform = open ? "translateY(3.5px) rotate(45deg)" : "";
+		bar2.style.transform = open ? "translateY(-3.5px) rotate(-45deg)" : "";
+		mt1.textContent = open ? "Close" : "Menu";
+		mt2.textContent = open ? "Back" : "Explore";
+	};
+
+	/* ---------- overlay ---------- */
+	const overlay = document.getElementById("overlay");
+	const openOverlay = () => {
+		overlay.classList.add("open");
+		document.body.style.overflow = "hidden";
+		if (menuOpen) setMenu(false);
+	};
+	const closeOverlay = () => {
+		overlay.classList.remove("open");
+		document.body.style.overflow = "";
+	};
+
+	document.addEventListener("click", (e) => {
+		if (e.target.closest("[data-open-overlay]")) {
+			e.preventDefault();
+			openOverlay();
+			return;
+		}
+		if (e.target.closest("[data-close-overlay]")) {
+			closeOverlay();
+			return;
+		}
+		if (e.target.closest("#menuBtn")) {
+			setMenu(!menuOpen);
+			return;
+		}
+		if (menuOpen && !navBox.contains(e.target)) setMenu(false);
+	});
+
+	addEventListener("keydown", (e) => {
+		if (e.key === "Escape") {
+			if (overlay.classList.contains("open")) closeOverlay();
+			if (menuOpen) setMenu(false);
+		}
+	});
+
+	/* ---------- smooth anchor (close menu first) ---------- */
+	document.querySelectorAll('a[href^="#"]').forEach((a) => {
+		a.addEventListener("click", function (e) {
+			const href = this.getAttribute("href");
+			if (href === "#" || this.hasAttribute("data-open-overlay")) return;
+			const target = document.querySelector(href);
+			if (target) {
+				e.preventDefault();
+				if (menuOpen) setMenu(false);
+				scrollTo({
+					top: target.getBoundingClientRect().top + scrollY - 80,
+					behavior: "smooth",
+				});
+			}
+		});
+	});
+});
+
+		</script>
+	</body>
+</html>

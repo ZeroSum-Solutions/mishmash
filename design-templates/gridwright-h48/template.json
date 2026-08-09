@@ -1,0 +1,14 @@
+{
+  "slug": "gridwright-h48",
+  "name": "Gridwright — Neo-Structuralist Blueprint Developer-Infrastructure SaaS Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Space Grotesk",
+    "Space Mono"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/gridwright-h48",
+  "source_license": "MIT"
+}

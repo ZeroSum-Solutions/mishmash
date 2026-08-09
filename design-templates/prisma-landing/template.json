@@ -1,0 +1,11 @@
+{
+  "slug": "prisma-landing",
+  "name": "Prisma — Creative Studio Landing Page",
+  "family": "landing-pages",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/prisma-landing",
+  "source_license": "MIT"
+}

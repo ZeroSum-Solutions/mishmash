@@ -1,0 +1,11 @@
+{
+  "slug": "nexora-automation-hero",
+  "name": "Nexora Automation Hero — SaaS Landing Hero with Frosted-Glass Dashboard Preview",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/nexora-automation-hero",
+  "source_license": "MIT"
+}

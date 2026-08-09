@@ -1,0 +1,194 @@
+---
+name: altitude-index-h38
+description: |
+  A full-viewport hero section for a fictional high-altitude expedition outfitter built in the "Warm Cartography" design language — the opening spread of a printed expedition field guide. A warm paper-stock background (`#E8E5E2`), ink-black Space Grotesk display type clamped from 56px to 184px, and a single ember-orange accent (`#FE5733`) carry a precise 4-column / 3-row bento grid of photo tiles and text panels. Notable techniques: staggered on-load cell reveals via Intersection Observer, RAF-throttled pointer parallax that drifts photo tiles opposite the cursor, a continuous CSS marquee coordinate ticker with hover-pause, and a full-screen ink overlay menu that slides up from the bottom. All motion respects `prefers-reduced-motion`. No build step — all assets are vendored locally.
+tags:
+  - "hero-section"
+  - "hero-sections"
+  - "claude-directory"
+triggers:
+  - "altitude index"
+  - "altitude"
+  - "index"
+  - "editorial"
+  - "expedition"
+  - "bento"
+  - "hero"
+  - "hero-section"
+od:
+  mode: prototype
+  platform: desktop
+  upstream: "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/altitude-index-h38"
+  upstream_license: MIT
+  preview:
+    type: html
+    entry: example.html
+  design_system:
+    requires: false
+  category: "hero-section"
+  scenario: "marketing"
+  example_prompt: "Build Altitude Index — Editorial Expedition Bento Hero as a self-contained responsive page in this template's own visual system. Follow the build spec in this skill exactly — palette, typography, section order, and motion are part of the identity. Ask only for the missing essentials first: brand name, real copy, and any imagery to swap in."
+---
+
+# Altitude Index — Editorial Expedition Bento Hero
+
+> Hero section vendored from the MIT-licensed `pulkitxm/claude-directory` gallery.
+
+A full-viewport hero section for a fictional high-altitude expedition outfitter built in the "Warm Cartography" design language — the opening spread of a printed expedition field guide. A warm paper-stock background (`#E8E5E2`), ink-black Space Grotesk display type clamped from 56px to 184px, and a single ember-orange accent (`#FE5733`) carry a precise 4-column / 3-row bento grid of photo tiles and text panels. Notable techniques: staggered on-load cell reveals via Intersection Observer, RAF-throttled pointer parallax that drifts photo tiles opposite the cursor, a continuous CSS marquee coordinate ticker with hover-pause, and a full-screen ink overlay menu that slides up from the bottom. All motion respects `prefers-reduced-motion`. No build step — all assets are vendored locally.
+
+## Workflow
+
+1. **Clone `example.html`** into the user's workspace as the working file.
+2. **Replace placeholder content** with the user's real brand name, headlines,
+   body copy, numbers, and imagery. Match existing image dimensions when
+   swapping assets.
+3. **Preserve the design system.** The palette, type scale, spacing rhythm, and
+   motion in the build spec below are the identity — do not substitute fonts,
+   recolour the palette, or strip decorative elements.
+4. **Extend by duplicating sections**, never by importing a layout from another
+   template. If a section is missing, design it from scratch in this template's
+   own vocabulary.
+5. **Keep motion accessible.** Every animation must stay behind
+   `prefers-reduced-motion`, as the build spec requires.
+
+## Output contract
+
+Emit between `<artifact>` tags:
+
+```
+<artifact identifier="altitude-index-h38" type="text/html" title="Altitude Index — Editorial Expedition Bento Hero">
+<!doctype html>
+<html>...</html>
+</artifact>
+```
+
+## Build spec
+
+The upstream prompt that produced this design, verbatim.
+
+# ALTITUDE INDEX — EDITORIAL EXPEDITION BENTO HERO
+
+## NAMED AESTHETIC IDENTITY
+
+BUILD A SINGLE, FULL-VIEWPORT HERO SECTION FOR A FICTIONAL HIGH-ALTITUDE
+EXPEDITION OUTFITTER NAMED **ALTITUDE INDEX**. THE NAMED DESIGN LANGUAGE IS
+**"WARM CARTOGRAPHY"** — A CONFIDENT, EDITORIAL, MAGAZINE-STYLE LAYOUT THAT
+FEELS LIKE THE OPENING SPREAD OF A PRINTED EXPEDITION FIELD GUIDE: A WARM
+PAPER-STOCK BACKGROUND, ONE DECISIVE EMBER-ORANGE ACCENT, INK-BLACK
+DISPLAY TYPE, AND A PRECISE MASONRY / BENTO GRID OF PHOTO TILES AND TEXT
+PANELS. THE MOOD IS RUGGED YET REFINED — EXPENSIVE, UNHURRIED, AND
+PURPOSEFUL, LESS A STOREFRONT, MORE A CURATED ATLAS THAT HAPPENS TO SCROLL.
+
+## TECH STACK
+
+- A SINGLE SELF-CONTAINED STATIC PROJECT: PLAIN `INDEX.HTML`, A LOCAL
+  `STYLES.CSS`, AND A LOCAL `SCRIPT.JS`. NO BUILD STEP, NO FRAMEWORK, NO
+  CDN AT RUNTIME.
+- ALL ASSETS (FONTS, PHOTOGRAPHS, ICONS) ARE VENDORED LOCALLY UNDER
+  `ASSETS/` AND REFERENCED WITH RELATIVE PATHS. THE PROJECT MUST RUN
+  FULLY OFFLINE.
+- VANILLA JS ONLY — INTERSECTION OBSERVER FOR SCROLL REVEALS, POINTER
+  EVENTS FOR PARALLAX, NO DEPENDENCIES.
+
+## COLOR SYSTEM
+
+- BACKGROUND / PAPER: WARM BEIGE `RGB(232, 229, 226)` (`#E8E5E2`).
+- INK / PRIMARY TEXT: NEAR-BLACK `RGB(28, 27, 25)` (`#1C1B19`).
+- SECONDARY TEXT: INK AT 65% OPACITY.
+- ACCENT (EMBER ORANGE): `#FE5733`, USED SPARINGLY FOR OVERLINES, THE
+  LOGO MARK DOT, ICON HOVERS, AND ONE STATISTIC HIGHLIGHT.
+- SURFACE (CARD WHITE): `#FFFFFF` FOR THE OCCASIONAL SOLID PANEL.
+- HAIRLINE RULES: INK AT 18% OPACITY, 1PX.
+- CARD CORNER RADIUS: 6PX (CRISP, NOT PILLOWY).
+
+## TYPOGRAPHY
+
+- DISPLAY + UI FONT: A GEOMETRIC GROTESQUE — USE **SPACE GROTESK**
+  (WEIGHTS 400, 500, 700) VENDORED LOCALLY AS WOFF2.
+- THE HERO HEADLINE IS A SINGLE OVERSIZED ALL-CAPS WORD ("ALTITUDE")
+  AT `CLAMP(56PX, 13VW, 184PX)`, LINE-HEIGHT 0.92, LETTER-SPACING
+  -0.05EM, WEIGHT 700.
+- OVERLINES: 11–13PX, WEIGHT 700, LETTER-SPACING 0.22EM, UPPERCASE,
+  EMBER-ORANGE.
+- BODY / LEDE: 18–26PX, WEIGHT 400, LINE-HEIGHT 1.25, INK.
+- MICRO-LABELS AND CAPTIONS: 12–14PX, WEIGHT 500, INK AT 60%.
+
+## LAYOUT & GRID
+
+- A FIXED TRANSPARENT TOP NAV BAR (HEIGHT ~104PX) WITH POINTER-EVENTS
+  PASSED THROUGH EXCEPT ON ITS CHILDREN. LEFT: WORDMARK "ALTITUDE
+  INDEX" WITH A SMALL EMBER DOT BETWEEN THE WORDS. RIGHT: A 2-BAR
+  HAMBURGER BUTTON THAT MORPHS INTO AN X AND OPENS A FULL-SCREEN INK
+  OVERLAY MENU.
+- THE HERO BODY IS A CONSTRAINED CONTAINER (MAX-WIDTH 1560PX, SIDE
+  PADDING 24–40PX) HOLDING A 4-COLUMN, 3-ROW BENTO GRID WITH A 10PX
+  GUTTER. EACH GRID ROW IS ~215PX TALL ON DESKTOP.
+  - ROW 1: THE GIANT HEADLINE SPANS COLUMNS 1–3 (LEFT-ALIGNED, VERTICALLY
+    CENTERED, OVERFLOW VISIBLE); A TALL PHOTO TILE FILLS COLUMN 4.
+  - ROW 2: AN INTRO BLOCK (EMBER OVERLINE + LEDE PARAGRAPH, MAX-WIDTH
+    580PX) SPANS COLUMNS 1–2; TWO PHOTO TILES FILL COLUMNS 3 AND 4.
+  - ROW 3: A "FIELD NOTES" TEXT + SOCIAL-ICON PANEL IN COLUMN 1; TWO
+    PHOTO TILES IN COLUMNS 2 AND 3; A BORDERED "GET IN TOUCH" CTA CARD
+    WITH A DIAGONAL ARROW IN COLUMN 4 THAT INVERTS TO INK-ON-WHITE ON
+    HOVER.
+- ADD A SUBTLE EDITORIAL FLOURISH NOT IN A GENERIC TEMPLATE: A THIN
+  HAIRLINE RUNNER ALONG THE BOTTOM OF THE HERO CARRYING A SCROLLING
+  COORDINATE TICKER (E.G. "27.9881° N  86.9250° E  ·  8,849 M  ·  EST.
+  1971") AND A LIVE-FEELING "EXPEDITION STATUS: ACTIVE" PILL WITH A
+  PULSING EMBER DOT.
+
+## HERO COMPOSITION & IMAGERY
+
+- 5–6 LANDSCAPE / MOUNTAINEERING PHOTOGRAPHS (RIDGELINES, CLIMBING GEAR,
+  SNOW PEAKS, ALPINE TENTS, GLACIAL LAKES) VENDORED LOCALLY AS OPTIMIZED
+  JPGS. EACH TILE USES `OBJECT-FIT: COVER`.
+- ON HOVER, EACH PHOTO TILE SCALES ITS IMAGE TO ~1.08 OVER 700MS WITH A
+  GENTLE EASE; A FAINT INK GRADIENT SCRIM AND A SMALL UPPERCASE CAPTION
+  ("RIDGE TRAVERSE — 04", ETC.) FADE IN FROM THE BOTTOM-LEFT.
+
+## MOTION / ANIMATION / INTERACTION SPEC
+
+- ON LOAD: A STAGGERED REVEAL — EACH GRID CELL STARTS AT OPACITY 0,
+  TRANSLATEY 24PX, AND ANIMATES TO REST OVER 0.8S EASE-OUT, STAGGERED BY
+  ~70MS IN READING ORDER. THE HEADLINE ANIMATES FIRST.
+- SCROLL REVEAL FALLBACK VIA INTERSECTION OBSERVER FOR ANYTHING BELOW
+  THE FOLD (THE GRID IS ABOVE THE FOLD, SO THIS MAINLY GUARDS RESIZE).
+- POINTER PARALLAX: THE PHOTO TILES DRIFT 6–10PX OPPOSITE THE CURSOR
+  (TRANSFORM ONLY, RAF-THROTTLED), GIVING A SUBTLE DIORAMA DEPTH; THE
+  HEADLINE STAYS FIXED.
+- THE COORDINATE TICKER SCROLLS CONTINUOUSLY (CSS MARQUEE) AND PAUSES ON
+  HOVER.
+- THE MENU OVERLAY SLIDES UP FROM THE BOTTOM (TRANSLATEY 100% → 0) OVER
+  500MS; ITS GIANT LINKS STAGGER IN AND TURN EMBER ON HOVER; THE
+  WORDMARK AND HAMBURGER INVERT TO PAPER-WHITE WHILE OPEN; BODY SCROLL
+  LOCKS.
+- ALL MOTION RESPECTS `PREFERS-REDUCED-MOTION`.
+
+## RESPONSIVE BEHAVIOR
+
+- DESKTOP (≥1024PX): THE FULL 4-COLUMN BENTO GRID AS DESCRIBED.
+- TABLET (640–1023PX): COLLAPSE TO 2 COLUMNS; THE HEADLINE SPANS THE FULL
+  WIDTH; TILES FLOW IN A SENSIBLE MASONRY ORDER; FIXED TILE HEIGHTS
+  RELAX.
+- MOBILE (<640PX): SINGLE COLUMN STACK — HEADLINE, INTRO, THEN PHOTO
+  TILES AND PANELS AT COMFORTABLE HEIGHTS; THE COORDINATE TICKER REMAINS
+  AT THE BOTTOM; THE MENU LINKS SHRINK TO FIT.
+- NO HORIZONTAL SCROLL AT ANY WIDTH; TOUCH TARGETS ≥44PX.
+
+## QUALITY BAR
+
+DISTINCTIVE, POLISHED, EDITORIAL — NOT GENERIC AI SLOP. PRECISE GUTTERS,
+INTENTIONAL TYPOGRAPHIC HIERARCHY, RESTRAINED USE OF THE SINGLE ACCENT,
+AND TACTILE HOVER FEEDBACK. THE PAGE SHOULD READ AS A CONFIDENT PRINTED
+ATLAS COVER THAT BREATHES.
+
+## Source & license
+
+Vendored from MIT-licensed
+[`pulkitxm/claude-directory`](https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/altitude-index-h38).
+The upstream MIT licence text ships in this template at [`LICENSE`](./LICENSE) and
+must be redistributed alongside any copy of `example.html` or `assets/`.
+
+Webfonts and full-resolution imagery are **not** vendored: local `@font-face`
+rules are served from the Google Fonts CDN and referenced images are
+downscaled. Fetch the upstream folder for the original assets.

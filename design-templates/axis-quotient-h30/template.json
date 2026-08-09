@@ -1,0 +1,15 @@
+{
+  "slug": "axis-quotient-h30",
+  "name": "Axis Quotient — Quantitative Strategy Consultancy Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Space Grotesk",
+    "Inter",
+    "JetBrains Mono"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/axis-quotient-h30",
+  "source_license": "MIT"
+}

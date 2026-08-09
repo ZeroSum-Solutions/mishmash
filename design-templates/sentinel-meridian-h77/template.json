@@ -1,0 +1,15 @@
+{
+  "slug": "sentinel-meridian-h77",
+  "name": "Sentinel Meridian — Intelligence & Strategy Advisory Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Forum",
+    "DM Sans",
+    "Space Mono"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/sentinel-meridian-h77",
+  "source_license": "MIT"
+}

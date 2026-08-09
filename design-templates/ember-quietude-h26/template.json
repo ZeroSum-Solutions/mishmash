@@ -1,0 +1,14 @@
+{
+  "slug": "ember-quietude-h26",
+  "name": "Ember Quietude — Calm Productivity App Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Instrument Serif",
+    "Inter"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/ember-quietude-h26",
+  "source_license": "MIT"
+}

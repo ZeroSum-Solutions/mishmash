@@ -1,0 +1,6216 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Carriera — Your Next Role Starts Here</title>
+		<meta
+			name="description"
+			content="Carriera is a job board connecting talent with top companies worldwide."
+		>
+		<meta name="robots" content="index, follow">
+		<meta name="theme-color" content="#ffffff">
+		<style>
+
+
+
+
+		</style>
+
+		<!-- Shared styles -->
+		<style>
+/* ============================================================
+   Carriera — shared stylesheet
+   Pixel-faithful clone of the Lexington Themes Carriera template
+   ============================================================ */
+
+/* ---- CSS custom properties -------------------------------- */
+@layer theme {
+	:root,
+	:host {
+		--font-sans: "Geist", sans-serif;
+		--font-mono: "Geist Mono", monospace;
+
+		/* brand palette */
+		--color-primary: oklch(18.7% 0.015 266.77);
+		--color-secondary: oklch(100% 0 0);
+		--color-accent: oklch(71.7% 0.157 53);
+
+		/* tailwind color scale tokens used in the template */
+		--color-white: #fff;
+		--color-red-100: oklch(93.6% 0.032 17.717);
+		--color-orange-100: oklch(95.4% 0.038 75.164);
+		--color-yellow-100: oklch(97.3% 0.071 103.193);
+		--color-yellow-600: oklch(68.1% 0.162 75.834);
+		--color-teal-100: oklch(95.3% 0.051 180.801);
+		--color-indigo-100: oklch(93% 0.034 272.788);
+		--color-purple-100: oklch(94.6% 0.033 307.174);
+		--color-rose-100: oklch(94.1% 0.03 12.58);
+
+		/* spacing scale: 1 unit = 0.25rem */
+		--spacing: 0.25rem;
+
+		/* container widths */
+		--container-sm: 24rem;
+		--container-xl: 36rem;
+		--container-4xl: 56rem;
+
+		/* type scale */
+		--text-xs: 0.75rem;
+		--text-xs--line-height: calc(1 / 0.75);
+		--text-sm: 0.875rem;
+		--text-sm--line-height: calc(1.25 / 0.875);
+		--text-base: 1rem;
+		--text-base--line-height: calc(1.5 / 1);
+		--text-lg: 1.125rem;
+		--text-lg--line-height: calc(1.75 / 1.125);
+		--text-xl: 1.25rem;
+		--text-xl--line-height: calc(1.75 / 1.25);
+		--text-2xl: 1.5rem;
+		--text-2xl--line-height: calc(2 / 1.5);
+		--text-3xl: 1.875rem;
+		--text-3xl--line-height: calc(2.25 / 1.875);
+		--text-4xl: 2.25rem;
+		--text-4xl--line-height: calc(2.5 / 2.25);
+		--text-5xl: 3rem;
+		--text-5xl--line-height: 1;
+		--text-6xl: 3.75rem;
+		--text-6xl--line-height: 1;
+		--text-7xl: 4.5rem;
+		--text-7xl--line-height: 1;
+		--text-8xl: 6rem;
+		--text-8xl--line-height: 1;
+		--text-9xl: 8rem;
+		--text-9xl--line-height: 1;
+
+		/* font weights */
+		--font-weight-medium: 500;
+		--font-weight-semibold: 600;
+
+		/* letter spacing */
+		--tracking-tighter: -0.05em;
+		--tracking-tight: -0.025em;
+		--tracking-wide: 0.025em;
+
+		/* border radius */
+		--radius-md: 0.375rem;
+		--radius-lg: 0.5rem;
+		--radius-xl: 0.75rem;
+
+		/* transitions */
+		--ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+		--default-transition-duration: 0.15s;
+		--default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+
+		/* font families */
+		--default-font-family: var(--font-sans);
+		--default-mono-font-family: var(--font-mono);
+	}
+}
+
+/* ---- Theme variants --------------------------------------- */
+[data-theme="dark"] {
+	--color-primary: oklch(100% 0 0);
+	--color-secondary: oklch(18.7% 0.015 266.77);
+	--color-accent: oklch(71.7% 0.157 53);
+}
+
+[data-theme="accent"] {
+	--color-primary: oklch(66.7% 0 0);
+	--color-secondary: oklch(18.7% 0.015 266.77);
+	--color-accent: oklch(71.7% 0.157 53);
+}
+
+/* ---- Theme-switch animation ------------------------------- */
+html.theme-animating,
+html.theme-animating * {
+	transition:
+		background-color 0.25s,
+		color 0.25s,
+		border-color 0.25s,
+		fill 0.25s,
+		stroke 0.25s,
+		outline-color 0.25s;
+}
+
+/* ---- Base reset ------------------------------------------- */
+@layer base {
+	*,
+	::after,
+	::before,
+	::backdrop {
+		box-sizing: border-box;
+		border: 0 solid;
+		margin: 0;
+		padding: 0;
+	}
+	::file-selector-button {
+		box-sizing: border-box;
+		border: 0 solid;
+		margin: 0;
+		padding: 0;
+	}
+
+	html,
+	:host {
+		text-size-adjust: 100%;
+		tab-size: 4;
+		line-height: 1.5;
+		font-family: var(
+			--default-font-family,
+			ui-sans-serif,
+			system-ui,
+			sans-serif
+		);
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		font-size: inherit;
+		font-weight: inherit;
+	}
+	a {
+		color: inherit;
+		text-decoration: inherit;
+	}
+	b,
+	strong {
+		font-weight: bolder;
+	}
+	code,
+	kbd,
+	samp,
+	pre {
+		font-family: var(--default-mono-font-family, ui-monospace, monospace);
+		font-size: 1em;
+	}
+	small {
+		font-size: 80%;
+	}
+	img,
+	svg,
+	video,
+	canvas,
+	audio,
+	iframe,
+	embed,
+	object {
+		vertical-align: middle;
+		display: block;
+	}
+	img,
+	video {
+		max-width: 100%;
+		height: auto;
+	}
+	ol,
+	ul,
+	menu {
+		list-style: none;
+	}
+	table {
+		text-indent: 0;
+		border-color: inherit;
+		border-collapse: collapse;
+	}
+
+	button,
+	input,
+	select,
+	optgroup,
+	textarea {
+		font: inherit;
+		letter-spacing: inherit;
+		color: inherit;
+		opacity: 1;
+		background-color: transparent;
+		border-radius: 0;
+	}
+
+	textarea {
+		resize: vertical;
+	}
+
+	[hidden]:where(:not([hidden="until-found"])) {
+		display: none !important;
+	}
+
+	button,
+	input:where([type="button"], [type="reset"], [type="submit"]) {
+		appearance: button;
+	}
+}
+
+/* ============================================================
+   Utility classes (mirrors the compiled Tailwind output)
+   ============================================================ */
+
+/* ---- Position --------------------------------------------- */
+.absolute {
+	position: absolute;
+}
+.fixed {
+	position: fixed;
+}
+.relative {
+	position: relative;
+}
+
+.inset-0 {
+	inset: 0;
+}
+.right-4 {
+	right: calc(var(--spacing) * 4);
+}
+.bottom-4 {
+	bottom: calc(var(--spacing) * 4);
+}
+
+.z-10 {
+	z-index: 10;
+}
+.z-40 {
+	z-index: 40;
+}
+.z-50 {
+	z-index: 50;
+}
+.z-80 {
+	z-index: 80;
+}
+
+/* ---- Display --------------------------------------------- */
+.block {
+	display: block;
+}
+.flex {
+	display: flex;
+}
+.grid {
+	display: grid;
+}
+.hidden {
+	display: none;
+}
+.inline {
+	display: inline;
+}
+.inline-block {
+	display: inline-block;
+}
+
+/* ---- Sizing ---------------------------------------------- */
+.aspect-square {
+	aspect-ratio: 1 / 1;
+}
+
+.size-3 {
+	width: calc(var(--spacing) * 3);
+	height: calc(var(--spacing) * 3);
+}
+.size-4 {
+	width: calc(var(--spacing) * 4);
+	height: calc(var(--spacing) * 4);
+}
+.size-5 {
+	width: calc(var(--spacing) * 5);
+	height: calc(var(--spacing) * 5);
+}
+.size-6 {
+	width: calc(var(--spacing) * 6);
+	height: calc(var(--spacing) * 6);
+}
+.size-7 {
+	width: calc(var(--spacing) * 7);
+	height: calc(var(--spacing) * 7);
+}
+.size-7\.5 {
+	width: calc(var(--spacing) * 7.5);
+	height: calc(var(--spacing) * 7.5);
+}
+.size-8 {
+	width: calc(var(--spacing) * 8);
+	height: calc(var(--spacing) * 8);
+}
+.size-9 {
+	width: calc(var(--spacing) * 9);
+	height: calc(var(--spacing) * 9);
+}
+.size-10 {
+	width: calc(var(--spacing) * 10);
+	height: calc(var(--spacing) * 10);
+}
+.size-11 {
+	width: calc(var(--spacing) * 11);
+	height: calc(var(--spacing) * 11);
+}
+.size-12 {
+	width: calc(var(--spacing) * 12);
+	height: calc(var(--spacing) * 12);
+}
+.size-13 {
+	width: calc(var(--spacing) * 13);
+	height: calc(var(--spacing) * 13);
+}
+.size-full {
+	width: 100%;
+	height: 100%;
+}
+
+.h-7\.5 {
+	height: calc(var(--spacing) * 7.5);
+}
+.h-8 {
+	height: calc(var(--spacing) * 8);
+}
+.h-9 {
+	height: calc(var(--spacing) * 9);
+}
+.h-10 {
+	height: calc(var(--spacing) * 10);
+}
+.h-11 {
+	height: calc(var(--spacing) * 11);
+}
+.h-12 {
+	height: calc(var(--spacing) * 12);
+}
+.h-13 {
+	height: calc(var(--spacing) * 13);
+}
+.h-full {
+	height: 100%;
+}
+
+.max-h-0 {
+	max-height: 0;
+}
+.max-h-50 {
+	max-height: calc(var(--spacing) * 50);
+}
+.max-h-100 {
+	max-height: calc(var(--spacing) * 100);
+}
+.max-h-200 {
+	max-height: calc(var(--spacing) * 200);
+}
+
+.min-h-screen {
+	min-height: 100vh;
+}
+.min-h-svh {
+	min-height: 100svh;
+}
+
+.w-auto {
+	width: auto;
+}
+.w-full {
+	width: 100%;
+}
+
+.max-w-none {
+	max-width: none;
+}
+.max-w-screen {
+	max-width: 100vw;
+}
+.max-w-sm {
+	max-width: var(--container-sm);
+}
+.max-w-xl {
+	max-width: var(--container-xl);
+}
+
+/* ---- Margin ---------------------------------------------- */
+.m-4 {
+	margin: calc(var(--spacing) * 4);
+}
+.mx-2 {
+	margin-inline: calc(var(--spacing) * 2);
+}
+.mx-auto {
+	margin-inline: auto;
+}
+
+.mt-1 {
+	margin-top: var(--spacing);
+}
+.mt-2 {
+	margin-top: calc(var(--spacing) * 2);
+}
+.mt-4 {
+	margin-top: calc(var(--spacing) * 4);
+}
+.mt-6 {
+	margin-top: calc(var(--spacing) * 6);
+}
+.mt-8 {
+	margin-top: calc(var(--spacing) * 8);
+}
+.mt-12 {
+	margin-top: calc(var(--spacing) * 12);
+}
+
+.mb-2 {
+	margin-bottom: calc(var(--spacing) * 2);
+}
+.mb-8 {
+	margin-bottom: calc(var(--spacing) * 8);
+}
+
+.ml-auto {
+	margin-left: auto;
+}
+
+/* ---- Padding --------------------------------------------- */
+.p-1 {
+	padding: var(--spacing);
+}
+.p-2 {
+	padding: calc(var(--spacing) * 2);
+}
+.p-4 {
+	padding: calc(var(--spacing) * 4);
+}
+
+.px-0 {
+	padding-inline: 0;
+}
+.px-1\.5 {
+	padding-inline: calc(var(--spacing) * 1.5);
+}
+.px-2 {
+	padding-inline: calc(var(--spacing) * 2);
+}
+.px-4 {
+	padding-inline: calc(var(--spacing) * 4);
+}
+.px-5 {
+	padding-inline: calc(var(--spacing) * 5);
+}
+.px-8 {
+	padding-inline: calc(var(--spacing) * 8);
+}
+
+.py-1 {
+	padding-block: var(--spacing);
+}
+.py-2 {
+	padding-block: calc(var(--spacing) * 2);
+}
+.py-3 {
+	padding-block: calc(var(--spacing) * 3);
+}
+.py-4 {
+	padding-block: calc(var(--spacing) * 4);
+}
+.py-12 {
+	padding-block: calc(var(--spacing) * 12);
+}
+.py-24 {
+	padding-block: calc(var(--spacing) * 24);
+}
+
+.pt-2 {
+	padding-top: calc(var(--spacing) * 2);
+}
+.pt-4 {
+	padding-top: calc(var(--spacing) * 4);
+}
+.pb-2 {
+	padding-bottom: calc(var(--spacing) * 2);
+}
+.pb-8 {
+	padding-bottom: calc(var(--spacing) * 8);
+}
+.pl-3 {
+	padding-left: calc(var(--spacing) * 3);
+}
+
+/* ---- Flex / Grid ----------------------------------------- */
+.flex-1 {
+	flex: 1 1 0%;
+}
+.grow {
+	flex-grow: 1;
+}
+.flex-col {
+	flex-direction: column;
+}
+.flex-wrap {
+	flex-wrap: wrap;
+}
+
+.items-baseline {
+	align-items: baseline;
+}
+.items-center {
+	align-items: center;
+}
+.items-start {
+	align-items: flex-start;
+}
+
+.justify-between {
+	justify-content: space-between;
+}
+.justify-center {
+	justify-content: center;
+}
+.justify-start {
+	justify-content: flex-start;
+}
+
+.grid-cols-1 {
+	grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+.grid-cols-2 {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* ---- Gap ------------------------------------------------- */
+.gap-1 {
+	gap: var(--spacing);
+}
+.gap-2 {
+	gap: calc(var(--spacing) * 2);
+}
+.gap-3 {
+	gap: calc(var(--spacing) * 3);
+}
+.gap-4 {
+	gap: calc(var(--spacing) * 4);
+}
+.gap-8 {
+	gap: calc(var(--spacing) * 8);
+}
+.gap-10 {
+	gap: calc(var(--spacing) * 10);
+}
+.gap-12 {
+	gap: calc(var(--spacing) * 12);
+}
+
+.gap-x-12 {
+	column-gap: calc(var(--spacing) * 12);
+}
+.gap-y-2 {
+	row-gap: calc(var(--spacing) * 2);
+}
+.gap-y-4 {
+	row-gap: calc(var(--spacing) * 4);
+}
+.gap-y-8 {
+	row-gap: calc(var(--spacing) * 8);
+}
+.gap-y-12 {
+	row-gap: calc(var(--spacing) * 12);
+}
+
+/* ---- Space (stack) --------------------------------------- */
+:where(.space-y-1 > :not(:last-child)) {
+	margin-bottom: var(--spacing);
+}
+:where(.space-y-2 > :not(:last-child)) {
+	margin-bottom: calc(var(--spacing) * 2);
+}
+:where(.space-y-12 > :not(:last-child)) {
+	margin-bottom: calc(var(--spacing) * 12);
+}
+:where(.space-x-2 > :not(:last-child)) {
+	margin-right: calc(var(--spacing) * 2);
+}
+
+/* ---- Divide (border between children) -------------------- */
+:where(.divide-y > :not(:last-child)) {
+	border-bottom-style: solid;
+	border-bottom-width: 1px;
+}
+:where(.divide-primary\/10 > :not(:last-child)) {
+	border-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
+}
+
+/* ---- Overflow -------------------------------------------- */
+.overflow-hidden {
+	overflow: hidden;
+}
+.overflow-y-auto {
+	overflow-y: auto;
+}
+.scroll-smooth {
+	scroll-behavior: smooth;
+}
+
+/* ---- Scrollbar hide -------------------------------------- */
+.scrollbar-hide {
+	scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+	display: none;
+}
+
+/* ---- Border radius --------------------------------------- */
+.rounded {
+	border-radius: 0.25rem;
+}
+.rounded-full {
+	border-radius: 9999px;
+}
+.rounded-lg {
+	border-radius: var(--radius-lg);
+}
+.rounded-md {
+	border-radius: var(--radius-md);
+}
+
+/* ---- Borders --------------------------------------------- */
+.border-0 {
+	border-style: solid;
+	border-width: 0;
+}
+.border-y {
+	border-top: 1px solid;
+	border-bottom: 1px solid;
+}
+.border-t {
+	border-top: 1px solid;
+}
+.border-b {
+	border-bottom: 1px solid;
+}
+.border-dotted {
+	border-style: dotted;
+}
+
+.border-primary\/10 {
+	border-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
+}
+.border-primary\/20 {
+	border-color: color-mix(in oklab, var(--color-primary) 20%, transparent);
+}
+.border-primary\/30 {
+	border-color: color-mix(in oklab, var(--color-primary) 30%, transparent);
+}
+
+/* ---- Background ------------------------------------------ */
+.bg-\[\#101319\] {
+	background-color: #101319;
+}
+.bg-\[\#245230\] {
+	background-color: #245230;
+}
+.bg-\[\#305133\] {
+	background-color: #305133;
+}
+.bg-\[\#949494\] {
+	background-color: #949494;
+}
+.bg-\[\#d38c54\] {
+	background-color: #d38c54;
+}
+.bg-\[\#ffffff\] {
+	background-color: #ffffff;
+}
+
+.bg-accent {
+	background-color: var(--color-accent);
+}
+.bg-primary {
+	background-color: var(--color-primary);
+}
+.bg-secondary {
+	background-color: var(--color-secondary);
+}
+.bg-transparent {
+	background-color: transparent;
+}
+.bg-white {
+	background-color: var(--color-white);
+}
+
+.bg-indigo-100 {
+	background-color: var(--color-indigo-100);
+}
+.bg-orange-100 {
+	background-color: var(--color-orange-100);
+}
+.bg-purple-100 {
+	background-color: var(--color-purple-100);
+}
+.bg-red-100 {
+	background-color: var(--color-red-100);
+}
+.bg-rose-100 {
+	background-color: var(--color-rose-100);
+}
+.bg-teal-100 {
+	background-color: var(--color-teal-100);
+}
+.bg-yellow-100 {
+	background-color: var(--color-yellow-100);
+}
+
+.bg-primary\/10 {
+	background-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
+}
+.bg-secondary\/50 {
+	background-color: color-mix(
+		in oklab,
+		var(--color-secondary) 50%,
+		transparent
+	);
+}
+
+/* ---- Object fit ------------------------------------------ */
+.object-cover {
+	object-fit: cover;
+}
+.object-center {
+	object-position: center center;
+}
+
+/* ---- Text align ------------------------------------------ */
+.text-center {
+	text-align: center;
+}
+.text-left {
+	text-align: left;
+}
+
+.align-middle {
+	vertical-align: middle;
+}
+
+/* ---- Font family ----------------------------------------- */
+.font-mono {
+	font-family: var(--font-mono);
+}
+
+/* ---- Font size ------------------------------------------- */
+.text-xs {
+	font-size: var(--text-xs);
+	line-height: var(--text-xs--line-height);
+}
+.text-sm {
+	font-size: var(--text-sm);
+	line-height: var(--text-sm--line-height);
+}
+.text-base {
+	font-size: var(--text-base);
+	line-height: var(--text-base--line-height);
+}
+.text-lg {
+	font-size: var(--text-lg);
+	line-height: var(--text-lg--line-height);
+}
+.text-xl {
+	font-size: var(--text-xl);
+	line-height: var(--text-xl--line-height);
+}
+.text-2xl {
+	font-size: var(--text-2xl);
+	line-height: var(--text-2xl--line-height);
+}
+.text-3xl {
+	font-size: var(--text-3xl);
+	line-height: var(--text-3xl--line-height);
+}
+.text-4xl {
+	font-size: var(--text-4xl);
+	line-height: var(--text-4xl--line-height);
+}
+.text-5xl {
+	font-size: var(--text-5xl);
+	line-height: var(--text-5xl--line-height);
+}
+
+.text-\[0\.6rem\] {
+	font-size: 0.6rem;
+}
+
+/* ---- Font weight ----------------------------------------- */
+.font-medium {
+	font-weight: var(--font-weight-medium);
+}
+.font-semibold {
+	font-weight: var(--font-weight-semibold);
+}
+
+/* ---- Letter spacing -------------------------------------- */
+.tracking-tight {
+	letter-spacing: var(--tracking-tight);
+}
+.tracking-tighter {
+	letter-spacing: var(--tracking-tighter);
+}
+.tracking-wide {
+	letter-spacing: var(--tracking-wide);
+}
+
+/* ---- Text wrap ------------------------------------------- */
+.text-balance {
+	text-wrap: balance;
+}
+
+/* ---- Text color ------------------------------------------ */
+.text-primary {
+	color: var(--color-primary);
+}
+.text-secondary {
+	color: var(--color-secondary);
+}
+.text-white {
+	color: var(--color-white);
+}
+.text-yellow-600 {
+	color: var(--color-yellow-600);
+}
+
+.text-primary\/60 {
+	color: color-mix(in oklab, var(--color-primary) 60%, transparent);
+}
+.text-primary\/70 {
+	color: color-mix(in oklab, var(--color-primary) 70%, transparent);
+}
+.text-primary\/80 {
+	color: color-mix(in oklab, var(--color-primary) 80%, transparent);
+}
+
+/* ---- Text transform -------------------------------------- */
+.capitalize {
+	text-transform: capitalize;
+}
+.lowercase {
+	text-transform: lowercase;
+}
+.uppercase {
+	text-transform: uppercase;
+}
+.not-italic {
+	font-style: normal;
+}
+
+/* ---- Shadows / rings ------------------------------------- */
+.shadow-2xl {
+	box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.ring {
+	box-shadow: 0 0 0 1px currentColor;
+}
+.ring-current {
+	--ring-color: currentColor;
+}
+
+.ring-primary\/10 {
+	box-shadow: 0 0 0 1px
+		color-mix(in oklab, var(--color-primary) 10%, transparent);
+}
+
+.ring-offset-2 {
+	outline-offset: 2px;
+}
+.ring-offset-secondary {
+	/* used via JS focus states */
+}
+
+/* ---- Outline --------------------------------------------- */
+.outline {
+	outline-style: solid;
+	outline-width: 1px;
+}
+.outline-2 {
+	outline-style: solid;
+	outline-width: 2px;
+}
+.outline-primary {
+	outline-color: var(--color-primary);
+}
+
+.outline-primary\/10 {
+	outline-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
+}
+.outline-primary\/20 {
+	outline-color: color-mix(in oklab, var(--color-primary) 20%, transparent);
+}
+
+/* ---- Backdrop -------------------------------------------- */
+.backdrop-blur {
+	backdrop-filter: blur(8px);
+}
+
+/* ---- Transitions ----------------------------------------- */
+.transition {
+	transition-property:
+		color, background-color, border-color, opacity, box-shadow, transform;
+	transition-timing-function: var(--ease-in-out);
+	transition-duration: var(--default-transition-duration);
+}
+.transition-all {
+	transition-property: all;
+	transition-timing-function: var(--ease-in-out);
+	transition-duration: var(--default-transition-duration);
+}
+.transition-colors {
+	transition-property: color, background-color, border-color;
+	transition-timing-function: var(--ease-in-out);
+	transition-duration: var(--default-transition-duration);
+}
+.transition-opacity {
+	transition-property: opacity;
+	transition-timing-function: var(--ease-in-out);
+	transition-duration: var(--default-transition-duration);
+}
+.transition-transform {
+	transition-property: transform;
+	transition-timing-function: var(--ease-in-out);
+	transition-duration: var(--default-transition-duration);
+}
+
+.duration-200 {
+	transition-duration: 0.2s;
+}
+.duration-300 {
+	transition-duration: 0.3s;
+}
+.ease-in-out {
+	transition-timing-function: var(--ease-in-out);
+}
+
+/* ---- Cursor ---------------------------------------------- */
+.cursor-pointer {
+	cursor: pointer;
+}
+
+/* ---- Misc ------------------------------------------------ */
+.list-disc {
+	list-style-type: disc;
+}
+
+/* ---- Hover states (pointer devices only) ----------------- */
+@media (hover: hover) {
+	.hover\:bg-accent\/80:hover {
+		background-color: color-mix(in oklab, var(--color-accent) 80%, transparent);
+	}
+	.hover\:bg-primary\/20:hover {
+		background-color: color-mix(
+			in oklab,
+			var(--color-primary) 20%,
+			transparent
+		);
+	}
+	.hover\:bg-primary\/80:hover {
+		background-color: color-mix(
+			in oklab,
+			var(--color-primary) 80%,
+			transparent
+		);
+	}
+	.hover\:text-primary:hover {
+		color: var(--color-primary);
+	}
+	.hover\:text-primary\/40:hover {
+		color: color-mix(in oklab, var(--color-primary) 40%, transparent);
+	}
+	.hover\:text-primary\/60:hover {
+		color: color-mix(in oklab, var(--color-primary) 60%, transparent);
+	}
+	.hover\:underline:hover {
+		text-decoration-line: underline;
+	}
+	.hover\:opacity-80:hover {
+		opacity: 0.8;
+	}
+
+	/* group-hover: job card title turns accent */
+	.group:hover .group-hover\:text-accent {
+		color: var(--color-accent);
+	}
+}
+
+/* ---- Focus states ---------------------------------------- */
+.focus\:border-primary:focus {
+	border-color: var(--color-primary);
+}
+.focus\:ring-0:focus {
+	box-shadow: none;
+}
+.focus\:ring-2:focus {
+	box-shadow: 0 0 0 2px var(--color-accent);
+}
+.focus\:ring-accent:focus {
+	--ring-color: var(--color-accent);
+}
+.focus\:ring-primary:focus {
+	--ring-color: var(--color-primary);
+}
+.focus\:ring-offset-2:focus {
+	outline-offset: 2px;
+}
+.focus\:outline-none:focus {
+	outline: none;
+}
+
+/* ---- Responsive: sm (≥640px) ----------------------------- */
+@media (width >= 40rem) {
+	.sm\:text-3xl {
+		font-size: var(--text-3xl);
+		line-height: var(--text-3xl--line-height);
+	}
+	.sm\:text-4xl {
+		font-size: var(--text-4xl);
+		line-height: var(--text-4xl--line-height);
+	}
+	.sm\:text-5xl {
+		font-size: var(--text-5xl);
+		line-height: var(--text-5xl--line-height);
+	}
+	.sm\:text-6xl {
+		font-size: var(--text-6xl);
+		line-height: var(--text-6xl--line-height);
+	}
+	.sm\:text-7xl {
+		font-size: var(--text-7xl);
+		line-height: var(--text-7xl--line-height);
+	}
+	.sm\:text-xl {
+		font-size: var(--text-xl);
+		line-height: var(--text-xl--line-height);
+	}
+}
+
+/* ---- Responsive: md (≥768px) ----------------------------- */
+@media (width >= 48rem) {
+	.md\:grid-cols-2 {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.md\:grid-cols-3 {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	.md\:text-2xl {
+		font-size: var(--text-2xl);
+		line-height: var(--text-2xl--line-height);
+	}
+	.md\:text-3xl {
+		font-size: var(--text-3xl);
+		line-height: var(--text-3xl--line-height);
+	}
+	.md\:text-4xl {
+		font-size: var(--text-4xl);
+		line-height: var(--text-4xl--line-height);
+	}
+	.md\:text-5xl {
+		font-size: var(--text-5xl);
+		line-height: var(--text-5xl--line-height);
+	}
+	.md\:text-6xl {
+		font-size: var(--text-6xl);
+		line-height: var(--text-6xl--line-height);
+	}
+	.md\:text-7xl {
+		font-size: var(--text-7xl);
+		line-height: var(--text-7xl--line-height);
+	}
+	.md\:text-8xl {
+		font-size: var(--text-8xl);
+		line-height: var(--text-8xl--line-height);
+	}
+	.md\:text-9xl {
+		font-size: var(--text-9xl);
+		line-height: var(--text-9xl--line-height);
+	}
+	.md\:text-xl {
+		font-size: var(--text-xl);
+		line-height: var(--text-xl--line-height);
+	}
+	.md\:text-balance {
+		text-wrap: balance;
+	}
+}
+
+/* ---- Responsive: lg (≥1024px) ---------------------------- */
+@media (width >= 64rem) {
+	.lg\:sticky {
+		position: sticky;
+	}
+	.lg\:top-24 {
+		top: calc(var(--spacing) * 24);
+	}
+	.lg\:z-40 {
+		z-index: 40;
+	}
+	.lg\:z-50 {
+		z-index: 50;
+	}
+	.lg\:col-span-2 {
+		grid-column: span 2 / span 2;
+	}
+	.lg\:col-span-3 {
+		grid-column: span 3 / span 3;
+	}
+	.lg\:mt-24 {
+		margin-top: calc(var(--spacing) * 24);
+	}
+	.lg\:block {
+		display: block;
+	}
+	.lg\:flex {
+		display: flex;
+	}
+	.lg\:hidden {
+		display: none;
+	}
+	.lg\:w-1\/2 {
+		width: 50%;
+	}
+	.lg\:w-1\/4 {
+		width: 25%;
+	}
+	.lg\:grid-cols-3 {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+	.lg\:grid-cols-4 {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+	.lg\:grid-cols-5 {
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+	}
+	.lg\:flex-nowrap {
+		flex-wrap: nowrap;
+	}
+	.lg\:gap-24 {
+		gap: calc(var(--spacing) * 24);
+	}
+	.lg\:py-24 {
+		padding-block: calc(var(--spacing) * 24);
+	}
+
+	.lg\:text-2xl {
+		font-size: var(--text-2xl);
+		line-height: var(--text-2xl--line-height);
+	}
+	.lg\:text-3xl {
+		font-size: var(--text-3xl);
+		line-height: var(--text-3xl--line-height);
+	}
+	.lg\:text-4xl {
+		font-size: var(--text-4xl);
+		line-height: var(--text-4xl--line-height);
+	}
+	.lg\:text-5xl {
+		font-size: var(--text-5xl);
+		line-height: var(--text-5xl--line-height);
+	}
+	.lg\:text-6xl {
+		font-size: var(--text-6xl);
+		line-height: var(--text-6xl--line-height);
+	}
+	.lg\:text-7xl {
+		font-size: var(--text-7xl);
+		line-height: var(--text-7xl--line-height);
+	}
+	.lg\:text-8xl {
+		font-size: var(--text-8xl);
+		line-height: var(--text-8xl--line-height);
+	}
+	.lg\:text-9xl {
+		font-size: var(--text-9xl);
+		line-height: var(--text-9xl--line-height);
+	}
+	.lg\:text-\[10rem\] {
+		font-size: 10rem;
+	}
+	.lg\:text-\[12rem\] {
+		font-size: 12rem;
+	}
+	.lg\:text-balance {
+		text-wrap: balance;
+	}
+}
+
+/* ---- Responsive: 2xl (≥1536px) --------------------------- */
+@media (width >= 96rem) {
+	.\32xl\:max-w-4xl {
+		max-width: var(--container-4xl);
+	}
+	.\32xl\:max-w-\[1400px\] {
+		max-width: 1400px;
+	}
+}
+
+/* ---- Prose (blog content) -------------------------------- */
+.prose {
+	color: oklch(37.3% 0.034 259.733);
+	max-width: 65ch;
+	font-size: 1rem;
+	line-height: 1.75;
+
+	--tw-prose-body: oklch(37.3% 0.034 259.733);
+	--tw-prose-headings: oklch(21% 0.034 264.665);
+	--tw-prose-lead: oklch(44.6% 0.03 256.802);
+	--tw-prose-links: oklch(21% 0.034 264.665);
+	--tw-prose-bold: oklch(21% 0.034 264.665);
+	--tw-prose-counters: oklch(55.1% 0.027 264.364);
+	--tw-prose-bullets: oklch(87.2% 0.01 258.338);
+	--tw-prose-hr: oklch(92.8% 0.006 264.531);
+	--tw-prose-quotes: oklch(21% 0.034 264.665);
+	--tw-prose-quote-borders: oklch(92.8% 0.006 264.531);
+	--tw-prose-captions: oklch(55.1% 0.027 264.364);
+	--tw-prose-code: oklch(21% 0.034 264.665);
+	--tw-prose-pre-code: oklch(92.8% 0.006 264.531);
+	--tw-prose-pre-bg: oklch(27.8% 0.033 256.848);
+	--tw-prose-th-borders: oklch(87.2% 0.01 258.338);
+	--tw-prose-td-borders: oklch(92.8% 0.006 264.531);
+}
+
+		</style>
+
+		<!-- Fuse.js fuzzy search -->
+		<script>
+/*!
+ * Fuse.js v7.0.0 - Lightweight fuzzy-search (http://fusejs.io)
+ *
+ * Copyright (c) 2023 Kiro Risk (http://kiro.me)
+ * All Rights Reserved. Apache Software License 2.0
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ */
+var e, t;
+(e = this),
+	(t = function () {
+		"use strict";
+		function e(e, t) {
+			var n = Object.keys(e);
+			if (Object.getOwnPropertySymbols) {
+				var r = Object.getOwnPropertySymbols(e);
+				t &&
+					(r = r.filter(function (t) {
+						return Object.getOwnPropertyDescriptor(e, t).enumerable;
+					})),
+					n.push.apply(n, r);
+			}
+			return n;
+		}
+		function t(t) {
+			for (var n = 1; n < arguments.length; n++) {
+				var r = null != arguments[n] ? arguments[n] : {};
+				n % 2
+					? e(Object(r), !0).forEach(function (e) {
+							c(t, e, r[e]);
+						})
+					: Object.getOwnPropertyDescriptors
+						? Object.defineProperties(t, Object.getOwnPropertyDescriptors(r))
+						: e(Object(r)).forEach(function (e) {
+								Object.defineProperty(
+									t,
+									e,
+									Object.getOwnPropertyDescriptor(r, e),
+								);
+							});
+			}
+			return t;
+		}
+		function n(e) {
+			return (
+				(n =
+					"function" == typeof Symbol && "symbol" == typeof Symbol.iterator
+						? function (e) {
+								return typeof e;
+							}
+						: function (e) {
+								return e &&
+									"function" == typeof Symbol &&
+									e.constructor === Symbol &&
+									e !== Symbol.prototype
+									? "symbol"
+									: typeof e;
+							}),
+				n(e)
+			);
+		}
+		function r(e, t) {
+			if (!(e instanceof t))
+				throw new TypeError("Cannot call a class as a function");
+		}
+		function i(e, t) {
+			for (var n = 0; n < t.length; n++) {
+				var r = t[n];
+				(r.enumerable = r.enumerable || !1),
+					(r.configurable = !0),
+					"value" in r && (r.writable = !0),
+					Object.defineProperty(e, v(r.key), r);
+			}
+		}
+		function o(e, t, n) {
+			return (
+				t && i(e.prototype, t),
+				n && i(e, n),
+				Object.defineProperty(e, "prototype", { writable: !1 }),
+				e
+			);
+		}
+		function c(e, t, n) {
+			return (
+				(t = v(t)) in e
+					? Object.defineProperty(e, t, {
+							value: n,
+							enumerable: !0,
+							configurable: !0,
+							writable: !0,
+						})
+					: (e[t] = n),
+				e
+			);
+		}
+		function a(e, t) {
+			if ("function" != typeof t && null !== t)
+				throw new TypeError(
+					"Super expression must either be null or a function",
+				);
+			(e.prototype = Object.create(t && t.prototype, {
+				constructor: { value: e, writable: !0, configurable: !0 },
+			})),
+				Object.defineProperty(e, "prototype", { writable: !1 }),
+				t && u(e, t);
+		}
+		function s(e) {
+			return (
+				(s = Object.setPrototypeOf
+					? Object.getPrototypeOf.bind()
+					: function (e) {
+							return e.__proto__ || Object.getPrototypeOf(e);
+						}),
+				s(e)
+			);
+		}
+		function u(e, t) {
+			return (
+				(u = Object.setPrototypeOf
+					? Object.setPrototypeOf.bind()
+					: function (e, t) {
+							return (e.__proto__ = t), e;
+						}),
+				u(e, t)
+			);
+		}
+		function h(e, t) {
+			if (t && ("object" == typeof t || "function" == typeof t)) return t;
+			if (void 0 !== t)
+				throw new TypeError(
+					"Derived constructors may only return object or undefined",
+				);
+			return (function (e) {
+				if (void 0 === e)
+					throw new ReferenceError(
+						"this hasn't been initialised - super() hasn't been called",
+					);
+				return e;
+			})(e);
+		}
+		function l(e) {
+			var t = (function () {
+				if ("undefined" == typeof Reflect || !Reflect.construct) return !1;
+				if (Reflect.construct.sham) return !1;
+				if ("function" == typeof Proxy) return !0;
+				try {
+					return (
+						Boolean.prototype.valueOf.call(
+							Reflect.construct(Boolean, [], function () {}),
+						),
+						!0
+					);
+				} catch (e) {
+					return !1;
+				}
+			})();
+			return function () {
+				var n,
+					r = s(e);
+				if (t) {
+					var i = s(this).constructor;
+					n = Reflect.construct(r, arguments, i);
+				} else n = r.apply(this, arguments);
+				return h(this, n);
+			};
+		}
+		function f(e) {
+			return (
+				(function (e) {
+					if (Array.isArray(e)) return d(e);
+				})(e) ||
+				(function (e) {
+					if (
+						("undefined" != typeof Symbol && null != e[Symbol.iterator]) ||
+						null != e["@@iterator"]
+					)
+						return Array.from(e);
+				})(e) ||
+				(function (e, t) {
+					if (e) {
+						if ("string" == typeof e) return d(e, t);
+						var n = Object.prototype.toString.call(e).slice(8, -1);
+						return (
+							"Object" === n && e.constructor && (n = e.constructor.name),
+							"Map" === n || "Set" === n
+								? Array.from(e)
+								: "Arguments" === n ||
+										/^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)
+									? d(e, t)
+									: void 0
+						);
+					}
+				})(e) ||
+				(function () {
+					throw new TypeError(
+						"Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.",
+					);
+				})()
+			);
+		}
+		function d(e, t) {
+			(null == t || t > e.length) && (t = e.length);
+			for (var n = 0, r = new Array(t); n < t; n++) r[n] = e[n];
+			return r;
+		}
+		function v(e) {
+			var t = (function (e, t) {
+				if ("object" != typeof e || null === e) return e;
+				var n = e[Symbol.toPrimitive];
+				if (void 0 !== n) {
+					var r = n.call(e, t || "default");
+					if ("object" != typeof r) return r;
+					throw new TypeError("@@toPrimitive must return a primitive value.");
+				}
+				return ("string" === t ? String : Number)(e);
+			})(e, "string");
+			return "symbol" == typeof t ? t : String(t);
+		}
+		function g(e) {
+			return Array.isArray ? Array.isArray(e) : "[object Array]" === S(e);
+		}
+		var y = 1 / 0;
+		function p(e) {
+			return null == e
+				? ""
+				: (function (e) {
+						if ("string" == typeof e) return e;
+						var t = e + "";
+						return "0" == t && 1 / e == -y ? "-0" : t;
+					})(e);
+		}
+		function m(e) {
+			return "string" == typeof e;
+		}
+		function k(e) {
+			return "number" == typeof e;
+		}
+		function M(e) {
+			return (
+				!0 === e ||
+				!1 === e ||
+				((function (e) {
+					return b(e) && null !== e;
+				})(e) &&
+					"[object Boolean]" == S(e))
+			);
+		}
+		function b(e) {
+			return "object" === n(e);
+		}
+		function x(e) {
+			return null != e;
+		}
+		function w(e) {
+			return !e.trim().length;
+		}
+		function S(e) {
+			return null == e
+				? void 0 === e
+					? "[object Undefined]"
+					: "[object Null]"
+				: Object.prototype.toString.call(e);
+		}
+		var L = function (e) {
+				return "Missing ".concat(e, " property in key");
+			},
+			_ = function (e) {
+				return "Property 'weight' in key '".concat(
+					e,
+					"' must be a positive integer",
+				);
+			},
+			O = Object.prototype.hasOwnProperty,
+			j = (function () {
+				function e(t) {
+					var n = this;
+					r(this, e), (this._keys = []), (this._keyMap = {});
+					var i = 0;
+					t.forEach(function (e) {
+						var t = A(e);
+						n._keys.push(t), (n._keyMap[t.id] = t), (i += t.weight);
+					}),
+						this._keys.forEach(function (e) {
+							e.weight /= i;
+						});
+				}
+				return (
+					o(e, [
+						{
+							key: "get",
+							value: function (e) {
+								return this._keyMap[e];
+							},
+						},
+						{
+							key: "keys",
+							value: function () {
+								return this._keys;
+							},
+						},
+						{
+							key: "toJSON",
+							value: function () {
+								return JSON.stringify(this._keys);
+							},
+						},
+					]),
+					e
+				);
+			})();
+		function A(e) {
+			var t = null,
+				n = null,
+				r = null,
+				i = 1,
+				o = null;
+			if (m(e) || g(e)) (r = e), (t = I(e)), (n = C(e));
+			else {
+				if (!O.call(e, "name")) throw new Error(L("name"));
+				var c = e.name;
+				if (((r = c), O.call(e, "weight") && (i = e.weight) <= 0))
+					throw new Error(_(c));
+				(t = I(c)), (n = C(c)), (o = e.getFn);
+			}
+			return { path: t, id: n, weight: i, src: r, getFn: o };
+		}
+		function I(e) {
+			return g(e) ? e : e.split(".");
+		}
+		function C(e) {
+			return g(e) ? e.join(".") : e;
+		}
+		var E = {
+				useExtendedSearch: !1,
+				getFn: function (e, t) {
+					var n = [],
+						r = !1;
+					return (
+						(function e(t, i, o) {
+							if (x(t))
+								if (i[o]) {
+									var c = t[i[o]];
+									if (!x(c)) return;
+									if (o === i.length - 1 && (m(c) || k(c) || M(c)))
+										n.push(p(c));
+									else if (g(c)) {
+										r = !0;
+										for (var a = 0, s = c.length; a < s; a += 1)
+											e(c[a], i, o + 1);
+									} else i.length && e(c, i, o + 1);
+								} else n.push(t);
+						})(e, m(t) ? t.split(".") : t, 0),
+						r ? n : n[0]
+					);
+				},
+				ignoreLocation: !1,
+				ignoreFieldNorm: !1,
+				fieldNormWeight: 1,
+			},
+			$ = t(
+				t(
+					t(
+						t(
+							{},
+							{
+								isCaseSensitive: !1,
+								includeScore: !1,
+								keys: [],
+								shouldSort: !0,
+								sortFn: function (e, t) {
+									return e.score === t.score
+										? e.idx < t.idx
+											? -1
+											: 1
+										: e.score < t.score
+											? -1
+											: 1;
+								},
+							},
+						),
+						{ includeMatches: !1, findAllMatches: !1, minMatchCharLength: 1 },
+					),
+					{ location: 0, threshold: 0.6, distance: 100 },
+				),
+				E,
+			),
+			F = /[^ ]+/g,
+			R = (function () {
+				function e() {
+					var t =
+							arguments.length > 0 && void 0 !== arguments[0]
+								? arguments[0]
+								: {},
+						n = t.getFn,
+						i = void 0 === n ? $.getFn : n,
+						o = t.fieldNormWeight,
+						c = void 0 === o ? $.fieldNormWeight : o;
+					r(this, e),
+						(this.norm = (function () {
+							var e =
+									arguments.length > 0 && void 0 !== arguments[0]
+										? arguments[0]
+										: 1,
+								t =
+									arguments.length > 1 && void 0 !== arguments[1]
+										? arguments[1]
+										: 3,
+								n = new Map(),
+								r = Math.pow(10, t);
+							return {
+								get: function (t) {
+									var i = t.match(F).length;
+									if (n.has(i)) return n.get(i);
+									var o = 1 / Math.pow(i, 0.5 * e),
+										c = parseFloat(Math.round(o * r) / r);
+									return n.set(i, c), c;
+								},
+								clear: function () {
+									n.clear();
+								},
+							};
+						})(c, 3)),
+						(this.getFn = i),
+						(this.isCreated = !1),
+						this.setIndexRecords();
+				}
+				return (
+					o(e, [
+						{
+							key: "setSources",
+							value: function () {
+								var e =
+									arguments.length > 0 && void 0 !== arguments[0]
+										? arguments[0]
+										: [];
+								this.docs = e;
+							},
+						},
+						{
+							key: "setIndexRecords",
+							value: function () {
+								var e =
+									arguments.length > 0 && void 0 !== arguments[0]
+										? arguments[0]
+										: [];
+								this.records = e;
+							},
+						},
+						{
+							key: "setKeys",
+							value: function () {
+								var e = this,
+									t =
+										arguments.length > 0 && void 0 !== arguments[0]
+											? arguments[0]
+											: [];
+								(this.keys = t),
+									(this._keysMap = {}),
+									t.forEach(function (t, n) {
+										e._keysMap[t.id] = n;
+									});
+							},
+						},
+						{
+							key: "create",
+							value: function () {
+								var e = this;
+								!this.isCreated &&
+									this.docs.length &&
+									((this.isCreated = !0),
+									m(this.docs[0])
+										? this.docs.forEach(function (t, n) {
+												e._addString(t, n);
+											})
+										: this.docs.forEach(function (t, n) {
+												e._addObject(t, n);
+											}),
+									this.norm.clear());
+							},
+						},
+						{
+							key: "add",
+							value: function (e) {
+								var t = this.size();
+								m(e) ? this._addString(e, t) : this._addObject(e, t);
+							},
+						},
+						{
+							key: "removeAt",
+							value: function (e) {
+								this.records.splice(e, 1);
+								for (var t = e, n = this.size(); t < n; t += 1)
+									this.records[t].i -= 1;
+							},
+						},
+						{
+							key: "getValueForItemAtKeyId",
+							value: function (e, t) {
+								return e[this._keysMap[t]];
+							},
+						},
+						{
+							key: "size",
+							value: function () {
+								return this.records.length;
+							},
+						},
+						{
+							key: "_addString",
+							value: function (e, t) {
+								if (x(e) && !w(e)) {
+									var n = { v: e, i: t, n: this.norm.get(e) };
+									this.records.push(n);
+								}
+							},
+						},
+						{
+							key: "_addObject",
+							value: function (e, t) {
+								var n = this,
+									r = { i: t, $: {} };
+								this.keys.forEach(function (t, i) {
+									var o = t.getFn ? t.getFn(e) : n.getFn(e, t.path);
+									if (x(o))
+										if (g(o)) {
+											for (
+												var c = [], a = [{ nestedArrIndex: -1, value: o }];
+												a.length;
+											) {
+												var s = a.pop(),
+													u = s.nestedArrIndex,
+													h = s.value;
+												if (x(h))
+													if (m(h) && !w(h)) {
+														var l = { v: h, i: u, n: n.norm.get(h) };
+														c.push(l);
+													} else
+														g(h) &&
+															h.forEach(function (e, t) {
+																a.push({ nestedArrIndex: t, value: e });
+															});
+											}
+											r.$[i] = c;
+										} else if (m(o) && !w(o)) {
+											var f = { v: o, n: n.norm.get(o) };
+											r.$[i] = f;
+										}
+								}),
+									this.records.push(r);
+							},
+						},
+						{
+							key: "toJSON",
+							value: function () {
+								return { keys: this.keys, records: this.records };
+							},
+						},
+					]),
+					e
+				);
+			})();
+		function P(e, t) {
+			var n =
+					arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : {},
+				r = n.getFn,
+				i = void 0 === r ? $.getFn : r,
+				o = n.fieldNormWeight,
+				c = void 0 === o ? $.fieldNormWeight : o,
+				a = new R({ getFn: i, fieldNormWeight: c });
+			return a.setKeys(e.map(A)), a.setSources(t), a.create(), a;
+		}
+		function N(e) {
+			var t =
+					arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : {},
+				n = t.errors,
+				r = void 0 === n ? 0 : n,
+				i = t.currentLocation,
+				o = void 0 === i ? 0 : i,
+				c = t.expectedLocation,
+				a = void 0 === c ? 0 : c,
+				s = t.distance,
+				u = void 0 === s ? $.distance : s,
+				h = t.ignoreLocation,
+				l = void 0 === h ? $.ignoreLocation : h,
+				f = r / e.length;
+			if (l) return f;
+			var d = Math.abs(a - o);
+			return u ? f + d / u : d ? 1 : f;
+		}
+		var W = 32;
+		function T(e, t, n) {
+			var r =
+					arguments.length > 3 && void 0 !== arguments[3] ? arguments[3] : {},
+				i = r.location,
+				o = void 0 === i ? $.location : i,
+				c = r.distance,
+				a = void 0 === c ? $.distance : c,
+				s = r.threshold,
+				u = void 0 === s ? $.threshold : s,
+				h = r.findAllMatches,
+				l = void 0 === h ? $.findAllMatches : h,
+				f = r.minMatchCharLength,
+				d = void 0 === f ? $.minMatchCharLength : f,
+				v = r.includeMatches,
+				g = void 0 === v ? $.includeMatches : v,
+				y = r.ignoreLocation,
+				p = void 0 === y ? $.ignoreLocation : y;
+			if (t.length > W)
+				throw new Error("Pattern length exceeds max of ".concat(W, "."));
+			for (
+				var m,
+					k = t.length,
+					M = e.length,
+					b = Math.max(0, Math.min(o, M)),
+					x = u,
+					w = b,
+					S = d > 1 || g,
+					L = S ? Array(M) : [];
+				(m = e.indexOf(t, w)) > -1;
+			) {
+				var _ = N(t, {
+					currentLocation: m,
+					expectedLocation: b,
+					distance: a,
+					ignoreLocation: p,
+				});
+				if (((x = Math.min(_, x)), (w = m + k), S))
+					for (var O = 0; O < k; ) (L[m + O] = 1), (O += 1);
+			}
+			w = -1;
+			for (
+				var j = [], A = 1, I = k + M, C = 1 << (k - 1), E = 0;
+				E < k;
+				E += 1
+			) {
+				for (var F = 0, R = I; F < R; )
+					N(t, {
+						errors: E,
+						currentLocation: b + R,
+						expectedLocation: b,
+						distance: a,
+						ignoreLocation: p,
+					}) <= x
+						? (F = R)
+						: (I = R),
+						(R = Math.floor((I - F) / 2 + F));
+				I = R;
+				var P = Math.max(1, b - R + 1),
+					T = l ? M : Math.min(b + R, M) + k,
+					z = Array(T + 2);
+				z[T + 1] = (1 << E) - 1;
+				for (var D = T; D >= P; D -= 1) {
+					var K = D - 1,
+						q = n[e.charAt(K)];
+					if (
+						(S && (L[K] = +!!q),
+						(z[D] = ((z[D + 1] << 1) | 1) & q),
+						E && (z[D] |= ((j[D + 1] | j[D]) << 1) | 1 | j[D + 1]),
+						z[D] & C &&
+							(A = N(t, {
+								errors: E,
+								currentLocation: K,
+								expectedLocation: b,
+								distance: a,
+								ignoreLocation: p,
+							})) <= x)
+					) {
+						if (((x = A), (w = K) <= b)) break;
+						P = Math.max(1, 2 * b - w);
+					}
+				}
+				if (
+					N(t, {
+						errors: E + 1,
+						currentLocation: b,
+						expectedLocation: b,
+						distance: a,
+						ignoreLocation: p,
+					}) > x
+				)
+					break;
+				j = z;
+			}
+			var B = { isMatch: w >= 0, score: Math.max(0.001, A) };
+			if (S) {
+				var J = (function () {
+					for (
+						var e =
+								arguments.length > 0 && void 0 !== arguments[0]
+									? arguments[0]
+									: [],
+							t =
+								arguments.length > 1 && void 0 !== arguments[1]
+									? arguments[1]
+									: $.minMatchCharLength,
+							n = [],
+							r = -1,
+							i = -1,
+							o = 0,
+							c = e.length;
+						o < c;
+						o += 1
+					) {
+						var a = e[o];
+						a && -1 === r
+							? (r = o)
+							: a ||
+								-1 === r ||
+								((i = o - 1) - r + 1 >= t && n.push([r, i]), (r = -1));
+					}
+					return e[o - 1] && o - r >= t && n.push([r, o - 1]), n;
+				})(L, d);
+				J.length ? g && (B.indices = J) : (B.isMatch = !1);
+			}
+			return B;
+		}
+		function z(e) {
+			for (var t = {}, n = 0, r = e.length; n < r; n += 1) {
+				var i = e.charAt(n);
+				t[i] = (t[i] || 0) | (1 << (r - n - 1));
+			}
+			return t;
+		}
+		var D = (function () {
+				function e(t) {
+					var n = this,
+						i =
+							arguments.length > 1 && void 0 !== arguments[1]
+								? arguments[1]
+								: {},
+						o = i.location,
+						c = void 0 === o ? $.location : o,
+						a = i.threshold,
+						s = void 0 === a ? $.threshold : a,
+						u = i.distance,
+						h = void 0 === u ? $.distance : u,
+						l = i.includeMatches,
+						f = void 0 === l ? $.includeMatches : l,
+						d = i.findAllMatches,
+						v = void 0 === d ? $.findAllMatches : d,
+						g = i.minMatchCharLength,
+						y = void 0 === g ? $.minMatchCharLength : g,
+						p = i.isCaseSensitive,
+						m = void 0 === p ? $.isCaseSensitive : p,
+						k = i.ignoreLocation,
+						M = void 0 === k ? $.ignoreLocation : k;
+					if (
+						(r(this, e),
+						(this.options = {
+							location: c,
+							threshold: s,
+							distance: h,
+							includeMatches: f,
+							findAllMatches: v,
+							minMatchCharLength: y,
+							isCaseSensitive: m,
+							ignoreLocation: M,
+						}),
+						(this.pattern = m ? t : t.toLowerCase()),
+						(this.chunks = []),
+						this.pattern.length)
+					) {
+						var b = function (e, t) {
+								n.chunks.push({ pattern: e, alphabet: z(e), startIndex: t });
+							},
+							x = this.pattern.length;
+						if (x > W) {
+							for (var w = 0, S = x % W, L = x - S; w < L; )
+								b(this.pattern.substr(w, W), w), (w += W);
+							if (S) {
+								var _ = x - W;
+								b(this.pattern.substr(_), _);
+							}
+						} else b(this.pattern, 0);
+					}
+				}
+				return (
+					o(e, [
+						{
+							key: "searchIn",
+							value: function (e) {
+								var t = this.options,
+									n = t.isCaseSensitive,
+									r = t.includeMatches;
+								if ((n || (e = e.toLowerCase()), this.pattern === e)) {
+									var i = { isMatch: !0, score: 0 };
+									return r && (i.indices = [[0, e.length - 1]]), i;
+								}
+								var o = this.options,
+									c = o.location,
+									a = o.distance,
+									s = o.threshold,
+									u = o.findAllMatches,
+									h = o.minMatchCharLength,
+									l = o.ignoreLocation,
+									d = [],
+									v = 0,
+									g = !1;
+								this.chunks.forEach(function (t) {
+									var n = t.pattern,
+										i = t.alphabet,
+										o = t.startIndex,
+										y = T(e, n, i, {
+											location: c + o,
+											distance: a,
+											threshold: s,
+											findAllMatches: u,
+											minMatchCharLength: h,
+											includeMatches: r,
+											ignoreLocation: l,
+										}),
+										p = y.isMatch,
+										m = y.score,
+										k = y.indices;
+									p && (g = !0),
+										(v += m),
+										p && k && (d = [].concat(f(d), f(k)));
+								});
+								var y = { isMatch: g, score: g ? v / this.chunks.length : 1 };
+								return g && r && (y.indices = d), y;
+							},
+						},
+					]),
+					e
+				);
+			})(),
+			K = (function () {
+				function e(t) {
+					r(this, e), (this.pattern = t);
+				}
+				return (
+					o(
+						e,
+						[{ key: "search", value: function () {} }],
+						[
+							{
+								key: "isMultiMatch",
+								value: function (e) {
+									return q(e, this.multiRegex);
+								},
+							},
+							{
+								key: "isSingleMatch",
+								value: function (e) {
+									return q(e, this.singleRegex);
+								},
+							},
+						],
+					),
+					e
+				);
+			})();
+		function q(e, t) {
+			var n = e.match(t);
+			return n ? n[1] : null;
+		}
+		var B = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = e === this.pattern;
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, this.pattern.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^="(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^=(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			J = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = -1 === e.indexOf(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "inverse-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^!"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^!(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			U = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = e.startsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, this.pattern.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "prefix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^\^"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^\^(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			V = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = !e.startsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "inverse-prefix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^!\^"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^!\^(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			G = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = e.endsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [e.length - this.pattern.length, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "suffix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^"(.*)"\$$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^(.*)\$$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			H = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									var t = !e.endsWith(this.pattern);
+									return {
+										isMatch: t,
+										score: t ? 0 : 1,
+										indices: [0, e.length - 1],
+									};
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "inverse-suffix-exact";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^!"(.*)"\$$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^!(.*)\$$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			Q = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					var i,
+						o =
+							arguments.length > 1 && void 0 !== arguments[1]
+								? arguments[1]
+								: {},
+						c = o.location,
+						a = void 0 === c ? $.location : c,
+						s = o.threshold,
+						u = void 0 === s ? $.threshold : s,
+						h = o.distance,
+						l = void 0 === h ? $.distance : h,
+						f = o.includeMatches,
+						d = void 0 === f ? $.includeMatches : f,
+						v = o.findAllMatches,
+						g = void 0 === v ? $.findAllMatches : v,
+						y = o.minMatchCharLength,
+						p = void 0 === y ? $.minMatchCharLength : y,
+						m = o.isCaseSensitive,
+						k = void 0 === m ? $.isCaseSensitive : m,
+						M = o.ignoreLocation,
+						b = void 0 === M ? $.ignoreLocation : M;
+					return (
+						r(this, n),
+						((i = t.call(this, e))._bitapSearch = new D(e, {
+							location: a,
+							threshold: u,
+							distance: l,
+							includeMatches: d,
+							findAllMatches: g,
+							minMatchCharLength: p,
+							isCaseSensitive: k,
+							ignoreLocation: b,
+						})),
+						i
+					);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									return this._bitapSearch.searchIn(e);
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "fuzzy";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			X = (function (e) {
+				a(n, e);
+				var t = l(n);
+				function n(e) {
+					return r(this, n), t.call(this, e);
+				}
+				return (
+					o(
+						n,
+						[
+							{
+								key: "search",
+								value: function (e) {
+									for (
+										var t, n = 0, r = [], i = this.pattern.length;
+										(t = e.indexOf(this.pattern, n)) > -1;
+									)
+										(n = t + i), r.push([t, n - 1]);
+									var o = !!r.length;
+									return { isMatch: o, score: o ? 0 : 1, indices: r };
+								},
+							},
+						],
+						[
+							{
+								key: "type",
+								get: function () {
+									return "include";
+								},
+							},
+							{
+								key: "multiRegex",
+								get: function () {
+									return /^'"(.*)"$/;
+								},
+							},
+							{
+								key: "singleRegex",
+								get: function () {
+									return /^'(.*)$/;
+								},
+							},
+						],
+					),
+					n
+				);
+			})(K),
+			Y = [B, X, U, V, H, G, J, Q],
+			Z = Y.length,
+			ee = / +(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/,
+			te = new Set([Q.type, X.type]),
+			ne = (function () {
+				function e(t) {
+					var n =
+							arguments.length > 1 && void 0 !== arguments[1]
+								? arguments[1]
+								: {},
+						i = n.isCaseSensitive,
+						o = void 0 === i ? $.isCaseSensitive : i,
+						c = n.includeMatches,
+						a = void 0 === c ? $.includeMatches : c,
+						s = n.minMatchCharLength,
+						u = void 0 === s ? $.minMatchCharLength : s,
+						h = n.ignoreLocation,
+						l = void 0 === h ? $.ignoreLocation : h,
+						f = n.findAllMatches,
+						d = void 0 === f ? $.findAllMatches : f,
+						v = n.location,
+						g = void 0 === v ? $.location : v,
+						y = n.threshold,
+						p = void 0 === y ? $.threshold : y,
+						m = n.distance,
+						k = void 0 === m ? $.distance : m;
+					r(this, e),
+						(this.query = null),
+						(this.options = {
+							isCaseSensitive: o,
+							includeMatches: a,
+							minMatchCharLength: u,
+							findAllMatches: d,
+							ignoreLocation: l,
+							location: g,
+							threshold: p,
+							distance: k,
+						}),
+						(this.pattern = o ? t : t.toLowerCase()),
+						(this.query = (function (e) {
+							var t =
+								arguments.length > 1 && void 0 !== arguments[1]
+									? arguments[1]
+									: {};
+							return e.split("|").map(function (e) {
+								for (
+									var n = e
+											.trim()
+											.split(ee)
+											.filter(function (e) {
+												return e && !!e.trim();
+											}),
+										r = [],
+										i = 0,
+										o = n.length;
+									i < o;
+									i += 1
+								) {
+									for (var c = n[i], a = !1, s = -1; !a && ++s < Z; ) {
+										var u = Y[s],
+											h = u.isMultiMatch(c);
+										h && (r.push(new u(h, t)), (a = !0));
+									}
+									if (!a)
+										for (s = -1; ++s < Z; ) {
+											var l = Y[s],
+												f = l.isSingleMatch(c);
+											if (f) {
+												r.push(new l(f, t));
+												break;
+											}
+										}
+								}
+								return r;
+							});
+						})(this.pattern, this.options));
+				}
+				return (
+					o(
+						e,
+						[
+							{
+								key: "searchIn",
+								value: function (e) {
+									var t = this.query;
+									if (!t) return { isMatch: !1, score: 1 };
+									var n = this.options,
+										r = n.includeMatches;
+									e = n.isCaseSensitive ? e : e.toLowerCase();
+									for (
+										var i = 0, o = [], c = 0, a = 0, s = t.length;
+										a < s;
+										a += 1
+									) {
+										var u = t[a];
+										(o.length = 0), (i = 0);
+										for (var h = 0, l = u.length; h < l; h += 1) {
+											var d = u[h],
+												v = d.search(e),
+												g = v.isMatch,
+												y = v.indices,
+												p = v.score;
+											if (!g) {
+												(c = 0), (i = 0), (o.length = 0);
+												break;
+											}
+											if (((i += 1), (c += p), r)) {
+												var m = d.constructor.type;
+												te.has(m) ? (o = [].concat(f(o), f(y))) : o.push(y);
+											}
+										}
+										if (i) {
+											var k = { isMatch: !0, score: c / i };
+											return r && (k.indices = o), k;
+										}
+									}
+									return { isMatch: !1, score: 1 };
+								},
+							},
+						],
+						[
+							{
+								key: "condition",
+								value: function (e, t) {
+									return t.useExtendedSearch;
+								},
+							},
+						],
+					),
+					e
+				);
+			})(),
+			re = [];
+		function ie(e, t) {
+			for (var n = 0, r = re.length; n < r; n += 1) {
+				var i = re[n];
+				if (i.condition(e, t)) return new i(e, t);
+			}
+			return new D(e, t);
+		}
+		var oe = "$and",
+			ce = "$or",
+			ae = "$path",
+			se = "$val",
+			ue = function (e) {
+				return !(!e[oe] && !e[ce]);
+			},
+			he = function (e) {
+				return c(
+					{},
+					oe,
+					Object.keys(e).map(function (t) {
+						return c({}, t, e[t]);
+					}),
+				);
+			};
+		function le(e, t) {
+			var n = (
+					arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : {}
+				).auto,
+				r = void 0 === n || n;
+			return (
+				ue(e) || (e = he(e)),
+				(function e(n) {
+					var i = Object.keys(n),
+						o = (function (e) {
+							return !!e[ae];
+						})(n);
+					if (!o && i.length > 1 && !ue(n)) return e(he(n));
+					if (
+						(function (e) {
+							return !g(e) && b(e) && !ue(e);
+						})(n)
+					) {
+						var c = o ? n[ae] : i[0],
+							a = o ? n[se] : n[c];
+						if (!m(a))
+							throw new Error(
+								(function (e) {
+									return "Invalid value for key ".concat(e);
+								})(c),
+							);
+						var s = { keyId: C(c), pattern: a };
+						return r && (s.searcher = ie(a, t)), s;
+					}
+					var u = { children: [], operator: i[0] };
+					return (
+						i.forEach(function (t) {
+							var r = n[t];
+							g(r) &&
+								r.forEach(function (t) {
+									u.children.push(e(t));
+								});
+						}),
+						u
+					);
+				})(e)
+			);
+		}
+		function fe(e, t) {
+			var n = e.matches;
+			(t.matches = []),
+				x(n) &&
+					n.forEach(function (e) {
+						if (x(e.indices) && e.indices.length) {
+							var n = { indices: e.indices, value: e.value };
+							e.key && (n.key = e.key.src),
+								e.idx > -1 && (n.refIndex = e.idx),
+								t.matches.push(n);
+						}
+					});
+		}
+		function de(e, t) {
+			t.score = e.score;
+		}
+		var ve = (function () {
+			function e(n) {
+				var i =
+						arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : {},
+					o = arguments.length > 2 ? arguments[2] : void 0;
+				r(this, e),
+					(this.options = t(t({}, $), i)),
+					this.options.useExtendedSearch,
+					(this._keyStore = new j(this.options.keys)),
+					this.setCollection(n, o);
+			}
+			return (
+				o(e, [
+					{
+						key: "setCollection",
+						value: function (e, t) {
+							if (((this._docs = e), t && !(t instanceof R)))
+								throw new Error("Incorrect 'index' type");
+							this._myIndex =
+								t ||
+								P(this.options.keys, this._docs, {
+									getFn: this.options.getFn,
+									fieldNormWeight: this.options.fieldNormWeight,
+								});
+						},
+					},
+					{
+						key: "add",
+						value: function (e) {
+							x(e) && (this._docs.push(e), this._myIndex.add(e));
+						},
+					},
+					{
+						key: "remove",
+						value: function () {
+							for (
+								var e =
+										arguments.length > 0 && void 0 !== arguments[0]
+											? arguments[0]
+											: function () {
+													return !1;
+												},
+									t = [],
+									n = 0,
+									r = this._docs.length;
+								n < r;
+								n += 1
+							) {
+								var i = this._docs[n];
+								e(i, n) && (this.removeAt(n), (n -= 1), (r -= 1), t.push(i));
+							}
+							return t;
+						},
+					},
+					{
+						key: "removeAt",
+						value: function (e) {
+							this._docs.splice(e, 1), this._myIndex.removeAt(e);
+						},
+					},
+					{
+						key: "getIndex",
+						value: function () {
+							return this._myIndex;
+						},
+					},
+					{
+						key: "search",
+						value: function (e) {
+							var t = (
+									arguments.length > 1 && void 0 !== arguments[1]
+										? arguments[1]
+										: {}
+								).limit,
+								n = void 0 === t ? -1 : t,
+								r = this.options,
+								i = r.includeMatches,
+								o = r.includeScore,
+								c = r.shouldSort,
+								a = r.sortFn,
+								s = r.ignoreFieldNorm,
+								u = m(e)
+									? m(this._docs[0])
+										? this._searchStringList(e)
+										: this._searchObjectList(e)
+									: this._searchLogical(e);
+							return (
+								(function (e, t) {
+									var n = t.ignoreFieldNorm,
+										r = void 0 === n ? $.ignoreFieldNorm : n;
+									e.forEach(function (e) {
+										var t = 1;
+										e.matches.forEach(function (e) {
+											var n = e.key,
+												i = e.norm,
+												o = e.score,
+												c = n ? n.weight : null;
+											t *= Math.pow(
+												0 === o && c ? Number.EPSILON : o,
+												(c || 1) * (r ? 1 : i),
+											);
+										}),
+											(e.score = t);
+									});
+								})(u, { ignoreFieldNorm: s }),
+								c && u.sort(a),
+								k(n) && n > -1 && (u = u.slice(0, n)),
+								(function (e, t) {
+									var n =
+											arguments.length > 2 && void 0 !== arguments[2]
+												? arguments[2]
+												: {},
+										r = n.includeMatches,
+										i = void 0 === r ? $.includeMatches : r,
+										o = n.includeScore,
+										c = void 0 === o ? $.includeScore : o,
+										a = [];
+									return (
+										i && a.push(fe),
+										c && a.push(de),
+										e.map(function (e) {
+											var n = e.idx,
+												r = { item: t[n], refIndex: n };
+											return (
+												a.length &&
+													a.forEach(function (t) {
+														t(e, r);
+													}),
+												r
+											);
+										})
+									);
+								})(u, this._docs, { includeMatches: i, includeScore: o })
+							);
+						},
+					},
+					{
+						key: "_searchStringList",
+						value: function (e) {
+							var t = ie(e, this.options),
+								n = this._myIndex.records,
+								r = [];
+							return (
+								n.forEach(function (e) {
+									var n = e.v,
+										i = e.i,
+										o = e.n;
+									if (x(n)) {
+										var c = t.searchIn(n),
+											a = c.isMatch,
+											s = c.score,
+											u = c.indices;
+										a &&
+											r.push({
+												item: n,
+												idx: i,
+												matches: [{ score: s, value: n, norm: o, indices: u }],
+											});
+									}
+								}),
+								r
+							);
+						},
+					},
+					{
+						key: "_searchLogical",
+						value: function (e) {
+							var t = this,
+								n = le(e, this.options),
+								r = function e(n, r, i) {
+									if (!n.children) {
+										var o = n.keyId,
+											c = n.searcher,
+											a = t._findMatches({
+												key: t._keyStore.get(o),
+												value: t._myIndex.getValueForItemAtKeyId(r, o),
+												searcher: c,
+											});
+										return a && a.length
+											? [{ idx: i, item: r, matches: a }]
+											: [];
+									}
+									for (
+										var s = [], u = 0, h = n.children.length;
+										u < h;
+										u += 1
+									) {
+										var l = e(n.children[u], r, i);
+										if (l.length) s.push.apply(s, f(l));
+										else if (n.operator === oe) return [];
+									}
+									return s;
+								},
+								i = this._myIndex.records,
+								o = {},
+								c = [];
+							return (
+								i.forEach(function (e) {
+									var t = e.$,
+										i = e.i;
+									if (x(t)) {
+										var a = r(n, t, i);
+										a.length &&
+											(o[i] ||
+												((o[i] = { idx: i, item: t, matches: [] }),
+												c.push(o[i])),
+											a.forEach(function (e) {
+												var t,
+													n = e.matches;
+												(t = o[i].matches).push.apply(t, f(n));
+											}));
+									}
+								}),
+								c
+							);
+						},
+					},
+					{
+						key: "_searchObjectList",
+						value: function (e) {
+							var t = this,
+								n = ie(e, this.options),
+								r = this._myIndex,
+								i = r.keys,
+								o = r.records,
+								c = [];
+							return (
+								o.forEach(function (e) {
+									var r = e.$,
+										o = e.i;
+									if (x(r)) {
+										var a = [];
+										i.forEach(function (e, i) {
+											a.push.apply(
+												a,
+												f(t._findMatches({ key: e, value: r[i], searcher: n })),
+											);
+										}),
+											a.length && c.push({ idx: o, item: r, matches: a });
+									}
+								}),
+								c
+							);
+						},
+					},
+					{
+						key: "_findMatches",
+						value: function (e) {
+							var t = e.key,
+								n = e.value,
+								r = e.searcher;
+							if (!x(n)) return [];
+							var i = [];
+							if (g(n))
+								n.forEach(function (e) {
+									var n = e.v,
+										o = e.i,
+										c = e.n;
+									if (x(n)) {
+										var a = r.searchIn(n),
+											s = a.isMatch,
+											u = a.score,
+											h = a.indices;
+										s &&
+											i.push({
+												score: u,
+												key: t,
+												value: n,
+												idx: o,
+												norm: c,
+												indices: h,
+											});
+									}
+								});
+							else {
+								var o = n.v,
+									c = n.n,
+									a = r.searchIn(o),
+									s = a.isMatch,
+									u = a.score,
+									h = a.indices;
+								s &&
+									i.push({ score: u, key: t, value: o, norm: c, indices: h });
+							}
+							return i;
+						},
+					},
+				]),
+				e
+			);
+		})();
+		return (
+			(ve.version = "7.0.0"),
+			(ve.createIndex = P),
+			(ve.parseIndex = function (e) {
+				var t =
+						arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : {},
+					n = t.getFn,
+					r = void 0 === n ? $.getFn : n,
+					i = t.fieldNormWeight,
+					o = void 0 === i ? $.fieldNormWeight : i,
+					c = e.keys,
+					a = e.records,
+					s = new R({ getFn: r, fieldNormWeight: o });
+				return s.setKeys(c), s.setIndexRecords(a), s;
+			}),
+			(ve.config = $),
+			(function () {
+				re.push.apply(re, arguments);
+			})(ne),
+			ve
+		);
+	}),
+	"object" == typeof exports && "undefined" != typeof module
+		? (module.exports = t())
+		: "function" == typeof define && define.amd
+			? define(t)
+			: ((e = "undefined" != typeof globalThis ? globalThis : e || self).Fuse =
+					t());
+
+		</script>
+
+		<!-- Theme boot: runs synchronously before paint -->
+		<script>
+		(function () {
+			var t = localStorage.getItem("theme");
+			if (t) document.documentElement.setAttribute("data-theme", t);
+		})();
+		</script>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@300;400;500;600;700;800&display=swap">
+	</head>
+
+	<body class="flex flex-col bg-secondary min-h-svh">
+		<!-- =====================================================
+       NAV
+       ===================================================== -->
+		<section>
+			<div class="max-w-screen 2xl:max-w-[1400px] mx-auto px-8">
+				<div class="grid grid-cols-2 lg:grid-cols-5 gap-4 py-2">
+					<!-- Logo -->
+					<a href="index.html" class="flex items-center gap-2">
+						<span class="text-primary font-medium lowercase">Carriera®</span>
+					</a>
+
+					<!-- Desktop centre nav -->
+					<div
+						class="hidden items-center gap-4 text-primary lg:flex justify-center lg:col-span-3"
+					>
+						<a
+							href="index.html"
+							class="text-sm duration-300"
+							style="transition:color .3s;"
+							>Home</a
+						>
+						<a
+							href="blog.html"
+							class="text-sm duration-300"
+							style="transition:color .3s;"
+							>Blog</a
+						>
+						<a
+							href="helpcenter.html"
+							class="text-sm duration-300"
+							style="transition:color .3s;"
+							>Help Center</a
+						>
+						<a
+							href="pricing.html"
+							class="text-sm duration-300"
+							style="transition:color .3s;"
+							>Pricing</a
+						>
+						<a
+							href="sign-in.html"
+							class="text-sm duration-300"
+							style="transition:color .3s;"
+							>Sign In</a
+						>
+						<a
+							href="system-overview.html"
+							class="text-sm duration-300"
+							style="transition:color .3s;"
+							>Overview</a
+						>
+						<a
+							href="https://lexingtonthemes.com/templates/carriera"
+							class="text-sm duration-300"
+							style="transition:color .3s;"
+							>Buy Carriera</a
+						>
+					</div>
+
+					<!-- Right actions -->
+					<div class="items-center gap-2 flex ml-auto">
+						<!-- Search button + modal -->
+						<div class="relative">
+							<button
+								type="button"
+								id="searchButton"
+								aria-label="Search content"
+								class="text-primary text-sm duration-300"
+								style="transition:color .3s; background:none; border:none; cursor:pointer;"
+							>
+								Search
+							</button>
+
+							<!-- Search modal -->
+							<div
+								id="searchModal"
+								class="fixed inset-0 z-80 hidden overflow-y-auto"
+								role="dialog"
+								aria-modal="true"
+							>
+								<div class="min-h-screen px-4 text-center">
+									<div
+										id="modalOverlay"
+										class="bg-secondary fixed inset-0 backdrop-blur transition-opacity"
+										style="background-color:color-mix(in oklab,var(--color-secondary) 50%,transparent);"
+									></div>
+									<div
+										class="relative mt-12 mb-8 inline-block w-full max-w-xl transform rounded px-1.5 text-left align-middle transition-all lg:mt-24"
+									>
+										<div
+											class="bg-secondary outline-2 w-full rounded p-4 pb-2"
+											style="outline:2px solid color-mix(in oklab,var(--color-primary) 10%,transparent);"
+										>
+											<div class="hidden">
+												<button
+													type="button"
+													id="closeSearch"
+													class="ml-auto cursor-pointer"
+													style="color:color-mix(in oklab,var(--color-primary) 60%,transparent); background:none; border:none;"
+													aria-label="Close search"
+												>
+													Close
+												</button>
+											</div>
+											<div class="p-1">
+												<label
+													for="searchInput"
+													class="text-primary block text-sm font-medium"
+													>Search content</label
+												>
+												<input
+													type="text"
+													id="searchInput"
+													class="text-primary w-full bg-transparent px-0 text-xs focus:outline-none"
+													style="border:none; border-bottom:1px solid color-mix(in oklab,var(--color-primary) 10%,transparent); padding:4px 0;"
+												>
+											</div>
+											<div
+												id="searchResults"
+												class="scrollbar-hide flex flex-col gap-1 overflow-y-auto p-1"
+												style="max-height:calc(var(--spacing)*200);"
+											></div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+						<!-- /search -->
+
+						<!-- Desktop sign-in / sign-up -->
+						<div class="hidden items-center gap-2 lg:flex">
+							<a
+								class="flex items-center font-medium justify-center transition-all rounded-full duration-300 text-primary h-9 px-4 py-3 text-sm"
+								style="background-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+								href="sign-in.html"
+								>Sign in</a
+							>
+							<a
+								class="flex items-center font-medium justify-center transition-all rounded-full duration-300 text-white h-9 px-4 py-3 text-sm"
+								style="background-color:var(--color-accent);"
+								href="sign-up.html"
+								>Sign up</a
+							>
+						</div>
+
+						<!-- Mobile hamburger -->
+						<button
+							id="navToggle"
+							class="text-primary text-sm lg:hidden"
+							style="background:none; border:none; cursor:pointer; transition:color .3s;"
+							aria-expanded="false"
+							aria-controls="mobileMenu"
+						>
+							Menu
+						</button>
+					</div>
+					<!-- /right actions -->
+				</div>
+			</div>
+		</section>
+
+		<!-- =====================================================
+       MOBILE MENU
+       ===================================================== -->
+		<div
+			id="mobileMenu"
+			class="lg:hidden fixed inset-0 z-40 hidden"
+			aria-hidden="true"
+		>
+			<div
+				class="relative z-10 m-4 rounded-lg bg-secondary p-4 shadow-2xl"
+				style="outline:2px solid color-mix(in oklab,var(--color-primary) 10%,transparent);"
+			>
+				<div class="flex items-center justify-between">
+					<a href="index.html" class="flex items-center gap-2">
+						<span class="text-primary font-medium lowercase">Carriera®</span>
+					</a>
+					<button
+						class="text-primary text-sm duration-300"
+						style="background:none; border:none; cursor:pointer; transition:color .3s;"
+						data-close-nav=""
+					>
+						Close
+					</button>
+				</div>
+				<nav class="mt-12 flex flex-col gap-3">
+					<a
+						href="index.html"
+						class="text-primary text-sm"
+						style="transition:color .3s;"
+						>Home</a
+					>
+					<a
+						href="blog.html"
+						class="text-primary text-sm"
+						style="transition:color .3s;"
+						>Blog</a
+					>
+					<a
+						href="helpcenter.html"
+						class="text-primary text-sm"
+						style="transition:color .3s;"
+						>Help Center</a
+					>
+					<a
+						href="pricing.html"
+						class="text-primary text-sm"
+						style="transition:color .3s;"
+						>Pricing</a
+					>
+					<a
+						href="sign-in.html"
+						class="text-primary text-sm"
+						style="transition:color .3s;"
+						>Sign In</a
+					>
+					<a
+						href="system-overview.html"
+						class="text-primary text-sm"
+						style="transition:color .3s;"
+						>Overview</a
+					>
+					<a
+						href="https://lexingtonthemes.com/templates/carriera"
+						class="text-primary text-sm"
+						style="transition:color .3s;"
+						>Buy Carriera</a
+					>
+				</nav>
+				<div class="mt-12 flex items-center gap-2">
+					<button
+						class="flex items-center font-medium justify-center transition-all rounded-full duration-300 text-white h-8 px-4 py-3 text-xs"
+						style="background-color:var(--color-accent); border:none; cursor:pointer;"
+					>
+						Sign in
+					</button>
+					<button
+						class="flex items-center font-medium justify-center transition-all rounded-full duration-300 text-primary h-8 px-4 py-3 text-xs"
+						style="background-color:color-mix(in oklab,var(--color-primary) 10%,transparent); border:none; cursor:pointer;"
+					>
+						Sign up
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- =====================================================
+       MAIN
+       ===================================================== -->
+		<main class="grow">
+			<section>
+				<div class="max-w-screen mx-auto px-8 py-24" style="max-width:1400px;">
+					<!-- Hero heading -->
+					<div>
+						<h1
+							class="text-5xl sm:text-6xl md:text-7xl lg:text-8xl text-primary font-semibold tracking-tighter text-balance"
+						>
+							Your Next Role Starts Here. Or Not.
+						</h1>
+					</div>
+
+					<!-- 4-column grid -->
+					<div
+						class="mt-12 grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-4"
+					>
+						<!-- ===== COL 1: Featured Jobs ===== -->
+						<div>
+							<h2 class="text-base font-medium text-primary">Featured Jobs</h2>
+							<div
+								class="flex flex-col mt-1 divide-y border-y"
+								style="border-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+							>
+								<!-- Job 1: polar — Product Designer -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(266,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											polar — Product Designer
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Remote (US only)
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>Remote</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$90k–$120k
+									</p>
+								</article>
+
+								<!-- Job 10: stripe — Sales Development Rep -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(156,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											stripe — Sales Development Rep
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										San Francisco, CA
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>Hybrid</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$60k–$75k base + commission
+									</p>
+								</article>
+
+								<!-- Job 11: figma — Engineering Manager -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(266,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											figma — Engineering Manager
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Remote (North America)
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>Remote</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$140k–$170k
+									</p>
+								</article>
+
+								<!-- Job 12: github — Senior Frontend Engineer -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(156,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											github — Senior Frontend Engineer
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Barcelona, Spain
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>Hybrid</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$110k–$130k
+									</p>
+								</article>
+
+								<!-- Job 13: github — Head of Marketing -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(189,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											github — Head of Marketing
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Paris, France
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>On-site</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$120k–$160k
+									</p>
+								</article>
+
+								<!-- Job 14: polar — AI Research Engineer -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(156,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											polar — AI Research Engineer
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Dublin, Ireland
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>Hybrid</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$150k–$200k
+									</p>
+								</article>
+
+								<!-- Job 15: github — Product Marketing Manager -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(189,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											github — Product Marketing Manager
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Munich, Germany
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>On-site</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$100k–$125k
+									</p>
+								</article>
+
+								<!-- Job 16: apple — UX Researcher -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(156,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											apple — UX Researcher
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Austin, TX
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>Hybrid</span><span aria-hidden="true">/</span
+										><span>Contract</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$60–$90/hr
+									</p>
+								</article>
+
+								<!-- Job 17: apple — DevOps Engineer -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(266,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											apple — DevOps Engineer
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Remote
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>Remote</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$130k–$150k
+									</p>
+								</article>
+
+								<!-- Job 18: apple — Community Manager -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(156,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											apple — Community Manager
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Copenhagen, Denmark
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>Hybrid</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$75k–$95k
+									</p>
+								</article>
+
+								<!-- Job 19: penpot — Junior Product Designer -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(189,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											penpot — Junior Product Designer
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Boston, MA
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>On-site</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$70k–$85k
+									</p>
+								</article>
+
+								<!-- Job 2: polar — DevOps Engineer -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(156,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											polar — DevOps Engineer
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Berlin, Germany
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>Hybrid</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$100k–$130k
+									</p>
+								</article>
+
+								<!-- Job 20: apple — Data Analyst -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(266,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											apple — Data Analyst
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Remote
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>Remote</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$85k–$105k
+									</p>
+								</article>
+
+								<!-- Job 3: polar — Head of Growth -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(189,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											polar — Head of Growth
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										New York, NY
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>On-site</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$110k–$140k + equity
+									</p>
+								</article>
+
+								<!-- Job 4: polar — Backend Developer -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(189,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											polar — Backend Developer
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										New York, NY
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>On-site</span><span aria-hidden="true">/</span
+										><span>Contract (6 months)</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$70–$90/hr
+									</p>
+								</article>
+
+								<!-- Job 5: polar — Data Analyst -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(156,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											polar — Data Analyst
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Toronto, Canada
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>Hybrid</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$80k–$100k
+									</p>
+								</article>
+
+								<!-- Job 6: supabase — Technical Writer -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(189,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											supabase — Technical Writer
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										London, UK
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>On-site</span><span aria-hidden="true">/</span
+										><span>Part-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$50–$70/hr
+									</p>
+								</article>
+
+								<!-- Job 7: netlify — Technical Writer -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(156,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											netlify — Technical Writer
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Amsterdam, Netherlands
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>Hybrid</span><span aria-hidden="true">/</span
+										><span>Part-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$50–$70/hr
+									</p>
+								</article>
+
+								<!-- Job 8: supabase — Frontend Engineer -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(266,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											supabase — Frontend Engineer
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Remote (Global)
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>Remote</span><span aria-hidden="true">/</span
+										><span>Full-time</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$95k–$120k
+									</p>
+								</article>
+
+								<!-- Job 9: supabase — Recruiting Coordinator -->
+								<article class="relative py-4 group">
+									<a href="job-detail.html" class="absolute inset-0 z-10"> </a>
+									<div class="flex items-center gap-2">
+										<span
+											class="size-3 rounded-full"
+											style="background-color:hsl(189,80%,65%)"
+										></span>
+										<h4
+											class="text-base text-primary flex items-center gap-1 font-medium capitalize group-hover:text-accent"
+											style="transition:color .3s;"
+										>
+											supabase — Recruiting Coordinator
+										</h4>
+									</div>
+									<p
+										class="text-sm"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										Sydney, Australia
+									</p>
+									<p
+										class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+									>
+										<span>On-site</span><span aria-hidden="true">/</span
+										><span>Contract</span>
+									</p>
+									<p
+										class="text-xs mt-1"
+										style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+									>
+										$40–$60/hr
+									</p>
+								</article>
+							</div>
+						</div>
+						<!-- /col 1 -->
+
+						<!-- ===== COL 2: Categories ===== -->
+						<div>
+							<h1
+								class="text-base font-medium tracking-tight text-primary text-balance"
+							>
+								Categories
+							</h1>
+							<div
+								class="flex flex-col mt-1 border-t gap-8"
+								style="border-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+							>
+								<!-- engineering -->
+								<article id="engineering" class="py-2">
+									<h2 class="text-base font-medium capitalize text-primary">
+										engineering
+									</h2>
+									<div
+										class="flex flex-col mt-1 divide-y border-y"
+										style="border-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+									>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(266,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													figma — Engineering Manager
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Remote (North America)
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>Remote</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$140k–$170k
+											</p>
+										</article>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(156,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													github — Senior Frontend Engineer
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Barcelona, Spain
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>Hybrid</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$110k–$130k
+											</p>
+										</article>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(266,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													supabase — Frontend Engineer
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Remote (Global)
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>Remote</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$95k–$120k
+											</p>
+										</article>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(266,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													apple — DevOps Engineer
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Remote
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>Remote</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$130k–$150k
+											</p>
+										</article>
+									</div>
+								</article>
+
+								<!-- marketing -->
+								<article id="marketing" class="py-2">
+									<h2 class="text-base font-medium capitalize text-primary">
+										marketing
+									</h2>
+									<div
+										class="flex flex-col mt-1 divide-y border-y"
+										style="border-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+									>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(189,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													github — Head of Marketing
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Paris, France
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>On-site</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$120k–$160k
+											</p>
+										</article>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(189,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													github — Product Marketing Manager
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Munich, Germany
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>On-site</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$100k–$125k
+											</p>
+										</article>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(189,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													polar — Head of Growth
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												New York, NY
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>On-site</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$110k–$140k + equity
+											</p>
+										</article>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(156,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													apple — Community Manager
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Copenhagen, Denmark
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>Hybrid</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$75k–$95k
+											</p>
+										</article>
+									</div>
+								</article>
+
+								<!-- ai -->
+								<article id="ai" class="py-2">
+									<h2 class="text-base font-medium capitalize text-primary">
+										ai
+									</h2>
+									<div
+										class="flex flex-col mt-1 divide-y border-y"
+										style="border-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+									>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(156,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													polar — AI Research Engineer
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Dublin, Ireland
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>Hybrid</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$150k–$200k
+											</p>
+										</article>
+									</div>
+								</article>
+
+								<!-- sales -->
+								<article id="sales" class="py-2">
+									<h2 class="text-base font-medium capitalize text-primary">
+										sales
+									</h2>
+									<div
+										class="flex flex-col mt-1 divide-y border-y"
+										style="border-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+									>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(156,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													stripe — Sales Development Rep
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												San Francisco, CA
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>Hybrid</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$60k–$75k base + commission
+											</p>
+										</article>
+									</div>
+								</article>
+
+								<!-- operations -->
+								<article id="operations" class="py-2">
+									<h2 class="text-base font-medium capitalize text-primary">
+										operations
+									</h2>
+									<div
+										class="flex flex-col mt-1 divide-y border-y"
+										style="border-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+									>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(189,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													supabase — Recruiting Coordinator
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Sydney, Australia
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>On-site</span><span aria-hidden="true">/</span
+												><span>Contract</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$40–$60/hr
+											</p>
+										</article>
+									</div>
+								</article>
+
+								<!-- content -->
+								<article id="content" class="py-2">
+									<h2 class="text-base font-medium capitalize text-primary">
+										content
+									</h2>
+									<div
+										class="flex flex-col mt-1 divide-y border-y"
+										style="border-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+									>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(189,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													supabase — Technical Writer
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												London, UK
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>On-site</span><span aria-hidden="true">/</span
+												><span>Part-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$50–$70/hr
+											</p>
+										</article>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(156,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													netlify — Technical Writer
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Amsterdam, Netherlands
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>Hybrid</span><span aria-hidden="true">/</span
+												><span>Part-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$50–$70/hr
+											</p>
+										</article>
+									</div>
+								</article>
+
+								<!-- design -->
+								<article id="design" class="py-2">
+									<h2 class="text-base font-medium capitalize text-primary">
+										design
+									</h2>
+									<div
+										class="flex flex-col mt-1 divide-y border-y"
+										style="border-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+									>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(156,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													apple — UX Researcher
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Austin, TX
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>Hybrid</span><span aria-hidden="true">/</span
+												><span>Contract</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$60–$90/hr
+											</p>
+										</article>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(266,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													polar — Product Designer
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Remote (US only)
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>Remote</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$90k–$120k
+											</p>
+										</article>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(189,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													penpot — Junior Product Designer
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Boston, MA
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>On-site</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$70k–$85k
+											</p>
+										</article>
+									</div>
+								</article>
+
+								<!-- data -->
+								<article id="data" class="py-2">
+									<h2 class="text-base font-medium capitalize text-primary">
+										data
+									</h2>
+									<div
+										class="flex flex-col mt-1 divide-y border-y"
+										style="border-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+									>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(156,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													polar — Data Analyst
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Toronto, Canada
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>Hybrid</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$80k–$100k
+											</p>
+										</article>
+										<article class="relative py-4 group">
+											<a
+												href="job-detail.html"
+												class="absolute inset-0 z-10"
+											> </a>
+											<div class="flex items-center gap-2">
+												<span
+													class="size-3 rounded-full"
+													style="background-color:hsl(266,80%,65%)"
+												></span>
+												<h4
+													class="text-base text-primary font-medium capitalize group-hover:text-accent"
+													style="transition:color .3s;"
+												>
+													apple — Data Analyst
+												</h4>
+											</div>
+											<p
+												class="text-sm"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Remote
+											</p>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												<span>Remote</span><span aria-hidden="true">/</span
+												><span>Full-time</span>
+											</p>
+											<p
+												class="text-xs mt-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												$85k–$105k
+											</p>
+										</article>
+									</div>
+								</article>
+							</div>
+						</div>
+						<!-- /col 2 -->
+
+						<!-- ===== COL 3: Companies ===== -->
+						<div class="space-y-12">
+							<!-- Who's Hiring -->
+							<div>
+								<h2 class="text-base font-medium text-primary">Who's Hiring</h2>
+								<div
+									class="flex flex-col mt-1 divide-y border-y"
+									style="border-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+								>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+										></a>
+										<div>
+											<h4 class="text-base font-medium capitalize text-primary">
+												Apple — United States
+											</h4>
+										</div>
+										<p
+											class="text-xs mt-1"
+											style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+										>
+											3 Open Roles
+										</p>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+										></a>
+										<div>
+											<h4 class="text-base font-medium capitalize text-primary">
+												Figma — United States
+											</h4>
+										</div>
+										<p
+											class="text-xs mt-1"
+											style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+										>
+											1 Open Roles
+										</p>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+										></a>
+										<div>
+											<h4 class="text-base font-medium capitalize text-primary">
+												GitHub — United States
+											</h4>
+										</div>
+										<p
+											class="text-xs mt-1"
+											style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+										>
+											3 Open Roles
+										</p>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+										></a>
+										<div>
+											<h4 class="text-base font-medium capitalize text-primary">
+												Netlify — United States
+											</h4>
+										</div>
+										<p
+											class="text-xs mt-1"
+											style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+										>
+											1 Open Roles
+										</p>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+										></a>
+										<div>
+											<h4 class="text-base font-medium capitalize text-primary">
+												Penpot — Spain
+											</h4>
+										</div>
+										<p
+											class="text-xs mt-1"
+											style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+										>
+											1 Open Roles
+										</p>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+										></a>
+										<div>
+											<h4 class="text-base font-medium capitalize text-primary">
+												Polar — Global
+											</h4>
+										</div>
+										<p
+											class="text-xs mt-1"
+											style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+										>
+											5 Open Roles
+										</p>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+										></a>
+										<div>
+											<h4 class="text-base font-medium capitalize text-primary">
+												Stripe — United States
+											</h4>
+										</div>
+										<p
+											class="text-xs mt-1"
+											style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+										>
+											1 Open Roles
+										</p>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+										></a>
+										<div>
+											<h4 class="text-base font-medium capitalize text-primary">
+												Supabase — United States
+											</h4>
+										</div>
+										<p
+											class="text-xs mt-1"
+											style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+										>
+											3 Open Roles
+										</p>
+									</article>
+								</div>
+							</div>
+
+							<!-- All companies -->
+							<div>
+								<h2 class="text-base font-medium text-primary">
+									All companies
+								</h2>
+								<div
+									class="flex flex-col mt-1 divide-y border-y"
+									style="border-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+								>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+											aria-label="Visit Apple"
+										></a>
+										<h4 class="text-base font-medium capitalize text-primary">
+											Apple — United States
+											<span
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+												>5000+</span
+											>
+										</h4>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+											aria-label="Visit Figma"
+										></a>
+										<h4 class="text-base font-medium capitalize text-primary">
+											Figma — United States
+											<span
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+												>1000+</span
+											>
+										</h4>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+											aria-label="Visit GitHub"
+										></a>
+										<h4 class="text-base font-medium capitalize text-primary">
+											GitHub — United States
+											<span
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+												>3000+</span
+											>
+										</h4>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+											aria-label="Visit Netlify"
+										></a>
+										<h4 class="text-base font-medium capitalize text-primary">
+											Netlify — United States
+											<span
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+												>300+</span
+											>
+										</h4>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+											aria-label="Visit Penpot"
+										></a>
+										<h4 class="text-base font-medium capitalize text-primary">
+											Penpot — Spain
+											<span
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+												>50+</span
+											>
+										</h4>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+											aria-label="Visit Polar"
+										></a>
+										<h4 class="text-base font-medium capitalize text-primary">
+											Polar — Global
+											<span
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+												>20+</span
+											>
+										</h4>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+											aria-label="Visit Stripe"
+										></a>
+										<h4 class="text-base font-medium capitalize text-primary">
+											Stripe — United States
+											<span
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+												>7000+</span
+											>
+										</h4>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+											aria-label="Visit Supabase"
+										></a>
+										<h4 class="text-base font-medium capitalize text-primary">
+											Supabase — United States
+											<span
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+												>100+</span
+											>
+										</h4>
+									</article>
+									<article class="relative py-4">
+										<a
+											href="company-detail.html"
+											class="absolute inset-0 z-10"
+											aria-label="Visit Vercel"
+										></a>
+										<h4 class="text-base font-medium capitalize text-primary">
+											Vercel — United States
+											<span
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+												>400+</span
+											>
+										</h4>
+									</article>
+								</div>
+							</div>
+						</div>
+						<!-- /col 3 -->
+
+						<!-- ===== COL 4: Candidates ===== -->
+						<div>
+							<h2 class="text-base font-medium text-primary">Candidates</h2>
+							<div
+								class="flex flex-col mt-1 divide-y border-y"
+								style="border-color:color-mix(in oklab,var(--color-primary) 10%,transparent);"
+							>
+								<!-- Anders Johansson (candidate 5, img 4) -->
+								<article class="relative py-4">
+									<a
+										href="candidate-detail.html"
+										class="absolute inset-0 z-10"
+									> </a>
+									<div class="flex items-center gap-2">
+										<img
+											src="assets/4.mrtVTst-_ZCArFV.webp"
+											alt="Anders Johansson"
+											loading="lazy"
+											decoding="async"
+											width="48"
+											height="48"
+											class="size-10 rounded-full"
+											style="object-fit:cover;"
+										>
+										<div>
+											<h4
+												class="text-base text-primary flex items-center gap-1 font-medium capitalize"
+											>
+												Anders Johansson
+											</h4>
+											<p
+												class="text-sm flex items-center gap-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Stockholm, Sweden<span aria-hidden="true">/</span>Senior
+											</p>
+										</div>
+									</div>
+									<ul class="mt-1 flex flex-col gap-1">
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Backend Developer
+											</p>
+										</li>
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Software Engineer
+											</p>
+										</li>
+									</ul>
+								</article>
+
+								<!-- Carlos Garcia (candidate 1, img 1) -->
+								<article class="relative py-4">
+									<a
+										href="candidate-detail.html"
+										class="absolute inset-0 z-10"
+									> </a>
+									<div class="flex items-center gap-2">
+										<img
+											src="assets/1.DDVDkL9Y_1n4Q1f.webp"
+											alt="Carlos Garcia"
+											loading="lazy"
+											decoding="async"
+											width="48"
+											height="48"
+											class="size-10 rounded-full"
+											style="object-fit:cover;"
+										>
+										<div>
+											<h4
+												class="text-base text-primary flex items-center gap-1 font-medium capitalize"
+											>
+												Carlos Garcia
+											</h4>
+											<p
+												class="text-sm flex items-center gap-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Madrid, Spain<span aria-hidden="true">/</span>Junior
+											</p>
+										</div>
+									</div>
+									<ul class="mt-1 flex flex-col gap-1">
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Front-end Developer
+											</p>
+										</li>
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Web Developer
+											</p>
+										</li>
+									</ul>
+								</article>
+
+								<!-- Emil Lund (candidate 8, img 7) -->
+								<article class="relative py-4">
+									<a
+										href="candidate-detail.html"
+										class="absolute inset-0 z-10"
+									> </a>
+									<div class="flex items-center gap-2">
+										<img
+											src="assets/7.W4-R1DK6_Z3kdDm.webp"
+											alt="Emil Lund"
+											loading="lazy"
+											decoding="async"
+											width="48"
+											height="48"
+											class="size-10 rounded-full"
+											style="object-fit:cover;"
+										>
+										<div>
+											<h4
+												class="text-base text-primary flex items-center gap-1 font-medium capitalize"
+											>
+												Emil Lund
+											</h4>
+											<p
+												class="text-sm flex items-center gap-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Copenhagen, Denmark<span aria-hidden="true"
+													>/</span
+												>Senior
+											</p>
+										</div>
+									</div>
+									<ul class="mt-1 flex flex-col gap-1">
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Backend Developer
+											</p>
+										</li>
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Database Administrator
+											</p>
+										</li>
+									</ul>
+								</article>
+
+								<!-- Freja Svensson (candidate 9, img 8) -->
+								<article class="relative py-4">
+									<a
+										href="candidate-detail.html"
+										class="absolute inset-0 z-10"
+									> </a>
+									<div class="flex items-center gap-2">
+										<img
+											src="assets/8.o1-feshq_Z47URY.webp"
+											alt="Freja Svensson"
+											loading="lazy"
+											decoding="async"
+											width="48"
+											height="48"
+											class="size-10 rounded-full"
+											style="object-fit:cover;"
+										>
+										<div>
+											<h4
+												class="text-base text-primary flex items-center gap-1 font-medium capitalize"
+											>
+												Freja Svensson
+											</h4>
+											<p
+												class="text-sm flex items-center gap-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Gothenburg, Sweden<span aria-hidden="true"
+													>/</span
+												>Mid-level
+											</p>
+										</div>
+									</div>
+									<ul class="mt-1 flex flex-col gap-1">
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Frontend Developer
+											</p>
+										</li>
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												UX/UI Designer
+											</p>
+										</li>
+									</ul>
+								</article>
+
+								<!-- Giulia Bianchi (candidate 4, img 3) -->
+								<article class="relative py-4">
+									<a
+										href="candidate-detail.html"
+										class="absolute inset-0 z-10"
+									> </a>
+									<div class="flex items-center gap-2">
+										<img
+											src="assets/3.BZTvts-C_2ciYoO.webp"
+											alt="Giulia Bianchi"
+											loading="lazy"
+											decoding="async"
+											width="48"
+											height="48"
+											class="size-10 rounded-full"
+											style="object-fit:cover;"
+										>
+										<div>
+											<h4
+												class="text-base text-primary flex items-center gap-1 font-medium capitalize"
+											>
+												Giulia Bianchi
+											</h4>
+											<p
+												class="text-sm flex items-center gap-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Rome, Italy<span aria-hidden="true">/</span>Mid-level
+											</p>
+										</div>
+									</div>
+									<ul class="mt-1 flex flex-col gap-1">
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Graphic Designer
+											</p>
+										</li>
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Web Designer
+											</p>
+										</li>
+									</ul>
+								</article>
+
+								<!-- Klara Peterson (candidate 2, img 10) -->
+								<article class="relative py-4">
+									<a
+										href="candidate-detail.html"
+										class="absolute inset-0 z-10"
+									> </a>
+									<div class="flex items-center gap-2">
+										<img
+											src="assets/10.B6sAOD7z_ZgG9jX.webp"
+											alt="Klara Peterson"
+											loading="lazy"
+											decoding="async"
+											width="48"
+											height="48"
+											class="size-10 rounded-full"
+											style="object-fit:cover;"
+										>
+										<div>
+											<h4
+												class="text-base text-primary flex items-center gap-1 font-medium capitalize"
+											>
+												Klara Peterson
+											</h4>
+											<p
+												class="text-sm flex items-center gap-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Helsinki, Finland<span aria-hidden="true">/</span>Junior
+											</p>
+										</div>
+									</div>
+									<ul class="mt-1 flex flex-col gap-1">
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Web Designer
+											</p>
+										</li>
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Graphic Designer
+											</p>
+										</li>
+									</ul>
+								</article>
+
+								<!-- Luca Rossi (candidate 7, img 6) -->
+								<article class="relative py-4">
+									<a
+										href="candidate-detail.html"
+										class="absolute inset-0 z-10"
+									> </a>
+									<div class="flex items-center gap-2">
+										<img
+											src="assets/6.1Ig3XW_b_EzdNx.webp"
+											alt="Luca Rossi"
+											loading="lazy"
+											decoding="async"
+											width="48"
+											height="48"
+											class="size-10 rounded-full"
+											style="object-fit:cover;"
+										>
+										<div>
+											<h4
+												class="text-base text-primary flex items-center gap-1 font-medium capitalize"
+											>
+												Luca Rossi
+											</h4>
+											<p
+												class="text-sm flex items-center gap-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Milan, Italy<span aria-hidden="true">/</span>Junior
+											</p>
+										</div>
+									</div>
+									<ul class="mt-1 flex flex-col gap-1">
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Software Developer
+											</p>
+										</li>
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Web Developer
+											</p>
+										</li>
+									</ul>
+								</article>
+
+								<!-- Sofia Nilsen (candidate 6, img 5) -->
+								<article class="relative py-4">
+									<a
+										href="candidate-detail.html"
+										class="absolute inset-0 z-10"
+									> </a>
+									<div class="flex items-center gap-2">
+										<img
+											src="assets/5.DDcYZjUj_ZsQcOq.webp"
+											alt="Sofia Nilsen"
+											loading="lazy"
+											decoding="async"
+											width="48"
+											height="48"
+											class="size-10 rounded-full"
+											style="object-fit:cover;"
+										>
+										<div>
+											<h4
+												class="text-base text-primary flex items-center gap-1 font-medium capitalize"
+											>
+												Sofia Nilsen
+											</h4>
+											<p
+												class="text-sm flex items-center gap-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Oslo, Norway<span aria-hidden="true">/</span>Junior
+											</p>
+										</div>
+									</div>
+									<ul class="mt-1 flex flex-col gap-1">
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Full-stack Developer
+											</p>
+										</li>
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Software Engineer
+											</p>
+										</li>
+									</ul>
+								</article>
+
+								<!-- Taro Yamada (candidate 10, img 9) -->
+								<article class="relative py-4">
+									<a
+										href="candidate-detail.html"
+										class="absolute inset-0 z-10"
+									> </a>
+									<div class="flex items-center gap-2">
+										<img
+											src="assets/9.BVI371cF_9rhiF.webp"
+											alt="Taro Yamada"
+											loading="lazy"
+											decoding="async"
+											width="48"
+											height="48"
+											class="size-10 rounded-full"
+											style="object-fit:cover;"
+										>
+										<div>
+											<h4
+												class="text-base text-primary flex items-center gap-1 font-medium capitalize"
+											>
+												Taro Yamada
+											</h4>
+											<p
+												class="text-sm flex items-center gap-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Kyoto, Japan<span aria-hidden="true">/</span>Mid-level
+											</p>
+										</div>
+									</div>
+									<ul class="mt-1 flex flex-col gap-1">
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Full-stack Developer
+											</p>
+										</li>
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Software Developer
+											</p>
+										</li>
+									</ul>
+								</article>
+
+								<!-- Yuki Sato (candidate 3, img 2) -->
+								<article class="relative py-4">
+									<a
+										href="candidate-detail.html"
+										class="absolute inset-0 z-10"
+									> </a>
+									<div class="flex items-center gap-2">
+										<img
+											src="assets/2.DgwWYAxK_1wUWNW.webp"
+											alt="Yuki Sato"
+											loading="lazy"
+											decoding="async"
+											width="48"
+											height="48"
+											class="size-10 rounded-full"
+											style="object-fit:cover;"
+										>
+										<div>
+											<h4
+												class="text-base text-primary flex items-center gap-1 font-medium capitalize"
+											>
+												Yuki Sato
+											</h4>
+											<p
+												class="text-sm flex items-center gap-1"
+												style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+											>
+												Tokyo, Japan<span aria-hidden="true">/</span>Mid-level
+											</p>
+										</div>
+									</div>
+									<ul class="mt-1 flex flex-col gap-1">
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												UI/UX Designer
+											</p>
+										</li>
+										<li>
+											<p
+												class="text-xs text-primary mt-1 flex items-center gap-1 font-mono font-medium uppercase"
+											>
+												Web Designer
+											</p>
+										</li>
+									</ul>
+								</article>
+							</div>
+						</div>
+						<!-- /col 4 -->
+					</div>
+					<!-- /4-col grid -->
+				</div>
+			</section>
+		</main>
+
+		<!-- =====================================================
+       FOOTER
+       ===================================================== -->
+		<footer>
+			<div class="max-w-screen mx-auto px-8 py-12" style="max-width:1400px;">
+				<div class="mt-12 flex flex-wrap items-center justify-between gap-2">
+					<p
+						class="text-xs"
+						style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+					>
+						&copy; Copyright Lexington Themes <span id="year">2026</span>
+					</p>
+					<ul role="list" class="mt-2 flex flex-wrap gap-2">
+						<li>
+							<a
+								class="text-sm transition duration-300 ease-in-out"
+								style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+								href="#_"
+								>X</a
+							>
+						</li>
+						<li>
+							<a
+								class="text-sm transition duration-300 ease-in-out"
+								style="color:color-mix(in oklab,var(--color-primary) 60%,transparent);"
+								href="#_"
+								>LinkedIn</a
+							>
+						</li>
+					</ul>
+				</div>
+			</div>
+		</footer>
+
+		<!-- =====================================================
+       THEME SWITCHER (fixed bottom-right)
+       ===================================================== -->
+		<div class="fixed bottom-4 right-4 z-50">
+			<div class="flex items-center gap-2">
+				<button
+					id="theme-dot-default"
+					data-theme="default"
+					class="size-4 rounded-full transition-colors"
+					style="background-color:#ffffff; outline:2px solid color-mix(in oklab,var(--color-primary) 10%,transparent);"
+					title="Default (light)"
+				></button>
+				<button
+					id="theme-dot-dark"
+					data-theme="dark"
+					class="size-4 rounded-full transition-colors"
+					style="background-color:#101319; outline:2px solid var(--color-primary);"
+					title="Dark"
+				></button>
+				<button
+					id="theme-dot-accent"
+					data-theme="accent"
+					class="size-4 rounded-full transition-colors"
+					style="background-color:#245230; outline:2px solid var(--color-primary);"
+					title="Accent"
+				></button>
+			</div>
+		</div>
+
+		<!-- =====================================================
+       SCRIPTS
+       ===================================================== -->
+
+		<!-- Footer year -->
+		<script>
+		document.getElementById("year").textContent = new Date().getFullYear();
+		</script>
+
+		<!-- Mobile nav toggle -->
+		<script>
+		(function () {
+			const navToggle = document.getElementById("navToggle");
+			const mobileMenu = document.getElementById("mobileMenu");
+			const closeTargets = mobileMenu
+				? mobileMenu.querySelectorAll("[data-close-nav]")
+				: [];
+
+			function openNav() {
+				mobileMenu.classList.remove("hidden");
+				navToggle && navToggle.setAttribute("aria-expanded", "true");
+				document.body.style.overflow = "hidden";
+			}
+			function closeNav() {
+				mobileMenu.classList.add("hidden");
+				navToggle && navToggle.setAttribute("aria-expanded", "false");
+				document.body.style.overflow = "";
+			}
+
+			navToggle &&
+				navToggle.addEventListener("click", function () {
+					navToggle.getAttribute("aria-expanded") === "true"
+						? closeNav()
+						: openNav();
+				});
+			closeTargets.forEach(function (btn) {
+				btn.addEventListener("click", closeNav);
+			});
+			window.addEventListener("resize", function () {
+				if (window.innerWidth >= 1024) closeNav();
+			});
+		})();
+		</script>
+
+		<!-- Theme switcher -->
+		<script>
+		(function () {
+			var dots = Array.from(document.querySelectorAll('[id^="theme-dot"]'));
+			var current = localStorage.getItem("theme") || "default";
+			var timer;
+
+			function applyTheme(t) {
+				document.documentElement.classList.add("theme-animating");
+				clearTimeout(timer);
+				timer = setTimeout(function () {
+					document.documentElement.classList.remove("theme-animating");
+				}, 400);
+
+				if (t === "default") {
+					document.documentElement.removeAttribute("data-theme");
+					localStorage.removeItem("theme");
+				} else {
+					document.documentElement.setAttribute("data-theme", t);
+					localStorage.setItem("theme", t);
+				}
+
+				dots.forEach(function (dot) {
+					var active = dot.dataset.theme === t;
+					dot.style.boxShadow = active
+						? "0 0 0 2px var(--color-secondary), 0 0 0 4px var(--color-primary)"
+						: "";
+				});
+			}
+
+			applyTheme(current);
+			dots.forEach(function (dot) {
+				dot.addEventListener("click", function () {
+					applyTheme(dot.dataset.theme);
+				});
+			});
+		})();
+		</script>
+
+		<!-- Fuse.js search -->
+		<script>
+		(function () {
+			var items = [
+				{
+					title: "Product Designer",
+					subtitle: "polar",
+					description: "Full-time",
+					meta: "Remote (US only) / $90k–$120k",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "DevOps Engineer",
+					subtitle: "polar",
+					description: "Full-time",
+					meta: "Berlin, Germany / $100k–$130k",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Head of Growth",
+					subtitle: "polar",
+					description: "Full-time",
+					meta: "New York, NY / $110k–$140k + equity",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Backend Developer",
+					subtitle: "polar",
+					description: "Contract (6 months)",
+					meta: "New York, NY / $70–$90/hr",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Data Analyst",
+					subtitle: "polar",
+					description: "Full-time",
+					meta: "Toronto, Canada / $80k–$100k",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Technical Writer",
+					subtitle: "supabase",
+					description: "Part-time",
+					meta: "London, UK / $50–$70/hr",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Technical Writer",
+					subtitle: "netlify",
+					description: "Part-time",
+					meta: "Amsterdam, Netherlands / $50–$70/hr",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Frontend Engineer",
+					subtitle: "supabase",
+					description: "Full-time",
+					meta: "Remote (Global) / $95k–$120k",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Recruiting Coordinator",
+					subtitle: "supabase",
+					description: "Contract",
+					meta: "Sydney, Australia / $40–$60/hr",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Sales Development Rep",
+					subtitle: "stripe",
+					description: "Full-time",
+					meta: "San Francisco, CA / $60k–$75k base + commission",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Engineering Manager",
+					subtitle: "figma",
+					description: "Full-time",
+					meta: "Remote (North America) / $140k–$170k",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Senior Frontend Engineer",
+					subtitle: "github",
+					description: "Full-time",
+					meta: "Barcelona, Spain / $110k–$130k",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Head of Marketing",
+					subtitle: "github",
+					description: "Full-time",
+					meta: "Paris, France / $120k–$160k",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "AI Research Engineer",
+					subtitle: "polar",
+					description: "Full-time",
+					meta: "Dublin, Ireland / $150k–$200k",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Product Marketing Manager",
+					subtitle: "github",
+					description: "Full-time",
+					meta: "Munich, Germany / $100k–$125k",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "UX Researcher",
+					subtitle: "apple",
+					description: "Contract",
+					meta: "Austin, TX / $60–$90/hr",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "DevOps Engineer",
+					subtitle: "apple",
+					description: "Full-time",
+					meta: "Remote / $130k–$150k",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Community Manager",
+					subtitle: "apple",
+					description: "Full-time",
+					meta: "Copenhagen, Denmark / $75k–$95k",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Junior Product Designer",
+					subtitle: "penpot",
+					description: "Full-time",
+					meta: "Boston, MA / $70k–$85k",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Data Analyst",
+					subtitle: "apple",
+					description: "Full-time",
+					meta: "Remote / $85k–$105k",
+					url: "job-detail.html",
+					type: "Job",
+				},
+				{
+					title: "Apple",
+					subtitle: "Consumer Electronics",
+					description:
+						"Apple develops hardware and software products for consumers and professionals.",
+					meta: "United States",
+					url: "company-detail.html",
+					type: "Company",
+				},
+				{
+					title: "Figma",
+					subtitle: "Design Tools",
+					description:
+						"Figma is a collaborative interface design tool that runs in the browser.",
+					meta: "United States",
+					url: "company-detail.html",
+					type: "Company",
+				},
+				{
+					title: "GitHub",
+					subtitle: "Software Development",
+					description:
+						"GitHub provides hosting for software development and version control using Git.",
+					meta: "United States",
+					url: "company-detail.html",
+					type: "Company",
+				},
+				{
+					title: "Netlify",
+					subtitle: "Web Infrastructure",
+					description:
+						"Netlify is a modern web development platform that automates builds and deployments.",
+					meta: "United States",
+					url: "company-detail.html",
+					type: "Company",
+				},
+				{
+					title: "Penpot",
+					subtitle: "Design Tools",
+					description:
+						"Penpot is an open-source design and prototyping platform for cross-domain teams.",
+					meta: "Spain",
+					url: "company-detail.html",
+					type: "Company",
+				},
+				{
+					title: "Polar",
+					subtitle: "Open Source Funding",
+					description:
+						"Polar helps developers fund their work through issue-based pledges and subscriptions.",
+					meta: "Global",
+					url: "company-detail.html",
+					type: "Company",
+				},
+				{
+					title: "Stripe",
+					subtitle: "Fintech",
+					description:
+						"Stripe builds economic infrastructure for the internet, powering online payments.",
+					meta: "United States",
+					url: "company-detail.html",
+					type: "Company",
+				},
+				{
+					title: "Supabase",
+					subtitle: "Database & Developer Tools",
+					description:
+						"Supabase is an open source Firebase alternative providing all backend features.",
+					meta: "United States",
+					url: "company-detail.html",
+					type: "Company",
+				},
+				{
+					title: "Carlos Garcia",
+					subtitle: "Madrid, Spain",
+					description: "Front-end Developer, Web Developer",
+					meta: "Junior",
+					url: "candidate-detail.html",
+					type: "Candidate",
+				},
+				{
+					title: "Klara Peterson",
+					subtitle: "Helsinki, Finland",
+					description: "Web Designer, Graphic Designer",
+					meta: "Junior",
+					url: "candidate-detail.html",
+					type: "Candidate",
+				},
+				{
+					title: "Yuki Sato",
+					subtitle: "Tokyo, Japan",
+					description: "UI/UX Designer, Web Designer",
+					meta: "Mid-level",
+					url: "candidate-detail.html",
+					type: "Candidate",
+				},
+				{
+					title: "Giulia Bianchi",
+					subtitle: "Rome, Italy",
+					description: "Graphic Designer, Web Designer",
+					meta: "Mid-level",
+					url: "candidate-detail.html",
+					type: "Candidate",
+				},
+				{
+					title: "Anders Johansson",
+					subtitle: "Stockholm, Sweden",
+					description: "Backend Developer, Software Engineer",
+					meta: "Senior",
+					url: "candidate-detail.html",
+					type: "Candidate",
+				},
+				{
+					title: "Sofia Nilsen",
+					subtitle: "Oslo, Norway",
+					description: "Full-stack Developer, Software Engineer",
+					meta: "Junior",
+					url: "candidate-detail.html",
+					type: "Candidate",
+				},
+				{
+					title: "Luca Rossi",
+					subtitle: "Milan, Italy",
+					description: "Software Developer, Web Developer",
+					meta: "Junior",
+					url: "candidate-detail.html",
+					type: "Candidate",
+				},
+				{
+					title: "Emil Lund",
+					subtitle: "Copenhagen, Denmark",
+					description: "Backend Developer, Database Administrator",
+					meta: "Senior",
+					url: "candidate-detail.html",
+					type: "Candidate",
+				},
+				{
+					title: "Freja Svensson",
+					subtitle: "Gothenburg, Sweden",
+					description: "Frontend Developer, UX/UI Designer",
+					meta: "Mid-level",
+					url: "candidate-detail.html",
+					type: "Candidate",
+				},
+				{
+					title: "Taro Yamada",
+					subtitle: "Kyoto, Japan",
+					description: "Full-stack Developer, Software Developer",
+					meta: "Mid-level",
+					url: "candidate-detail.html",
+					type: "Candidate",
+				},
+				{
+					title: "Account management",
+					subtitle: "Account",
+					description:
+						"Learn how to create a job board account, update your profile, and manage your settings.",
+					meta: "",
+					url: "helpcenter.html",
+					type: "Help Center",
+				},
+				{
+					title: "Customer support",
+					subtitle: "Support",
+					description:
+						"Get help with your job board account, troubleshoot issues, and contact support.",
+					meta: "",
+					url: "helpcenter.html",
+					type: "Help Center",
+				},
+				{
+					title: "Security & fraud protection",
+					subtitle: "Security",
+					description:
+						"Learn how to keep your job board account safe, avoid scams, and protect your information.",
+					meta: "",
+					url: "helpcenter.html",
+					type: "Help Center",
+				},
+				{
+					title: "Billing & payouts",
+					subtitle: "Transactions",
+					description:
+						"Learn how to manage payments for job posts, request invoices, and troubleshoot billing issues.",
+					meta: "",
+					url: "helpcenter.html",
+					type: "Help Center",
+				},
+			];
+
+			window.addEventListener("load", function () {
+				var searchButton = document.getElementById("searchButton");
+				var searchModal = document.getElementById("searchModal");
+				var modalOverlay = document.getElementById("modalOverlay");
+				var searchInput = document.getElementById("searchInput");
+				var searchResults = document.getElementById("searchResults");
+				var closeSearch = document.getElementById("closeSearch");
+
+				searchInput.value = "";
+
+				var fuse = new Fuse(items, {
+					keys: ["title", "subtitle", "description", "meta", "type"],
+					threshold: 0.3,
+					includeMatches: true,
+				});
+
+				function openSearch(e) {
+					e.preventDefault();
+					e.stopPropagation();
+					searchModal.classList.remove("hidden");
+					document.body.style.overflow = "hidden";
+					setTimeout(function () {
+						searchInput.focus();
+					}, 100);
+				}
+
+				function closeSearchModal(e) {
+					if (e) {
+						e.preventDefault();
+						e.stopPropagation();
+					}
+					searchModal.classList.add("hidden");
+					document.body.style.overflow = "";
+					searchInput.value = "";
+					searchResults.innerHTML = "";
+				}
+
+				function renderResults(results) {
+					if (!searchInput.value.trim()) {
+						searchResults.innerHTML = "";
+						return;
+					}
+					if (results.length === 0) {
+						searchResults.innerHTML =
+							'<div style="padding:12px 16px; font-size:.875rem; color:color-mix(in oklab,var(--color-primary) 60%,transparent);">No results found</div>';
+						return;
+					}
+					searchResults.innerHTML = results
+						.slice(0, 8)
+						.map(function (r) {
+							return (
+								'<a href="' +
+								r.item.url +
+								"\" style=\"display:block; padding:16px 4px; background:var(--color-secondary); text-decoration:none; transition:color .3s;\" onmouseover=\"this.querySelector('h3').style.color='var(--color-accent)'\" onmouseout=\"this.querySelector('h3').style.color='var(--color-primary)'\">" +
+								'<div style="display:flex; align-items:center; gap:8px;">' +
+								'<span style="font-size:.6rem; text-transform:uppercase; letter-spacing:.025em; color:color-mix(in oklab,var(--color-primary) 80%,transparent); border-radius:9999px; background:color-mix(in oklab,var(--color-primary) 10%,transparent); padding:2px 8px;">' +
+								r.item.type +
+								"</span>" +
+								(r.item.subtitle
+									? '<span style="font-size:.75rem; color:color-mix(in oklab,var(--color-primary) 60%,transparent);">' +
+										r.item.subtitle +
+										"</span>"
+									: "") +
+								"</div>" +
+								'<h3 style="font-size:1rem; font-weight:500; color:var(--color-primary); margin-top:4px; transition:color .3s;">' +
+								r.item.title +
+								"</h3>" +
+								(r.item.meta
+									? '<p style="margin-top:4px; font-size:.75rem; color:color-mix(in oklab,var(--color-primary) 60%,transparent);">' +
+										r.item.meta +
+										"</p>"
+									: "") +
+								(r.item.description
+									? '<p style="margin-top:4px; font-size:.875rem; color:color-mix(in oklab,var(--color-primary) 70%,transparent);">' +
+										r.item.description +
+										"</p>"
+									: "") +
+								"</a>"
+							);
+						})
+						.join("");
+				}
+
+				searchButton.addEventListener("click", openSearch);
+				searchButton.addEventListener("touchend", openSearch);
+				closeSearch.addEventListener("click", closeSearchModal);
+				closeSearch.addEventListener("touchend", closeSearchModal);
+				modalOverlay.addEventListener("click", closeSearchModal);
+				modalOverlay.addEventListener("touchend", closeSearchModal);
+
+				searchInput.addEventListener("input", function (e) {
+					var val = e.target.value;
+					renderResults(val.trim() ? fuse.search(val) : []);
+				});
+
+				document.addEventListener("keydown", function (e) {
+					if (e.key === "Escape" && !searchModal.classList.contains("hidden")) {
+						closeSearchModal();
+					}
+				});
+			});
+		})();
+		</script>
+	</body>
+</html>

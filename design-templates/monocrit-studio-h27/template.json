@@ -1,0 +1,13 @@
+{
+  "slug": "monocrit-studio-h27",
+  "name": "Monocrit Studio — Cursor-Driven Interactive Portfolio Hero",
+  "family": "hero-sections",
+  "kind": "static",
+  "cdn_fonts": [
+    "Bricolage Grotesque"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/monocrit-studio-h27",
+  "source_license": "MIT"
+}

@@ -1,0 +1,13 @@
+{
+  "slug": "vanguard-hero-landing",
+  "name": "Vanguard — Creative Agency Hero Landing Page",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [
+    "FSP DEMO - PODIUM Sharp 4.11"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/vanguard-hero-landing",
+  "source_license": "MIT"
+}

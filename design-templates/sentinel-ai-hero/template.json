@@ -1,0 +1,11 @@
+{
+  "slug": "sentinel-ai-hero",
+  "name": "SENTINEL AI — Dark Security Hero Section with Interactive 3D Spline Background",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/sentinel-ai-hero",
+  "source_license": "MIT"
+}

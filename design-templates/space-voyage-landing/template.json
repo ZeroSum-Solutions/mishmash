@@ -1,0 +1,11 @@
+{
+  "slug": "space-voyage-landing",
+  "name": "Astra — Cinematic Space-Travel Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/space-voyage-landing",
+  "source_license": "MIT"
+}

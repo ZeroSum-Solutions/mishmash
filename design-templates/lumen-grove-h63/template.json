@@ -1,0 +1,14 @@
+{
+  "slug": "lumen-grove-h63",
+  "name": "Lumen Grove — Botanical Bathhouse & Forest-Spa Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Fraunces",
+    "Inter"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/lumen-grove-h63",
+  "source_license": "MIT"
+}

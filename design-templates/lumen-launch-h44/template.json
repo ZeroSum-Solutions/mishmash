@@ -1,0 +1,14 @@
+{
+  "slug": "lumen-launch-h44",
+  "name": "Lumen Launch — AI SaaS Product Launch Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "DM Sans",
+    "Outfit"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/lumen-launch-h44",
+  "source_license": "MIT"
+}

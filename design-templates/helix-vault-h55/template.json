@@ -1,0 +1,13 @@
+{
+  "slug": "helix-vault-h55",
+  "name": "Helix Vault — Institutional Crypto Terminal Hero Section",
+  "family": "hero-sections",
+  "kind": "static",
+  "cdn_fonts": [
+    "DM Sans"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/helix-vault-h55",
+  "source_license": "MIT"
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "tide-table-h82",
+  "name": "Tide & Table — Coastal Seafood & Oyster Bar Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Playfair Display",
+    "Inter Tight"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/tide-table-h82",
+  "source_license": "MIT"
+}

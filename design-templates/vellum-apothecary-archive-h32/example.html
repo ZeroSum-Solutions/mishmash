@@ -1,0 +1,1481 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>
+			Vellum &amp; Verdigris — Archival Apothecary &amp; Wellness Sanctuary
+		</title>
+		<meta
+			name="description"
+			content="Vellum & Verdigris — an archival apothecary and wellness sanctuary. Documented rituals preserved for the modern spirit."
+		>
+		<style>
+
+
+
+
+
+
+
+
+
+
+:root {
+	--cream: #f4ecd8;
+	--paper: #e7d9bc;
+	--ink: #3a2c1e;
+	--ink-soft: #5a4632;
+	--verdigris: #5c6b54;
+	--rust: #9a5b34;
+	--gilt: #b9a074;
+
+	--serif: "Playfair Display", Georgia, serif;
+	--editorial: "Instrument Serif", Georgia, serif;
+	--mono: "Courier Prime", "Courier New", monospace;
+
+	--ease: cubic-bezier(0.22, 1, 0.36, 1);
+	--pad: clamp(4.5rem, 10vw, 10rem);
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	background: var(--cream);
+	color: var(--ink);
+	font-family: var(--mono);
+	font-size: 16px;
+	line-height: 1.6;
+	overflow-x: hidden;
+	-webkit-font-smoothing: antialiased;
+	position: relative;
+}
+
+::selection {
+	background: var(--ink);
+	color: var(--cream);
+}
+
+::-webkit-scrollbar {
+	width: 9px;
+}
+::-webkit-scrollbar-track {
+	background: var(--cream);
+}
+::-webkit-scrollbar-thumb {
+	background: var(--ink);
+}
+::-webkit-scrollbar-thumb:hover {
+	background: var(--rust);
+}
+
+img {
+	display: block;
+	max-width: 100%;
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+/* paper grain overlay */
+.grain {
+	position: fixed;
+	inset: 0;
+	z-index: 9000;
+	pointer-events: none;
+	opacity: 0.06;
+	mix-blend-mode: multiply;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* custom cursor */
+.cursor {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 26px;
+	height: 26px;
+	border: 1px solid var(--ink);
+	border-radius: 50%;
+	pointer-events: none;
+	z-index: 9999;
+	transform: translate(-50%, -50%);
+	transition:
+		width 0.25s var(--ease),
+		height 0.25s var(--ease),
+		background 0.25s var(--ease),
+		opacity 0.25s var(--ease);
+	mix-blend-mode: multiply;
+	opacity: 0;
+}
+.cursor.active {
+	width: 56px;
+	height: 56px;
+	background: rgba(58, 44, 30, 0.06);
+}
+
+/* ---------- type helpers ---------- */
+.eyebrow {
+	font-family: var(--mono);
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.4em;
+	color: var(--rust);
+}
+.serif {
+	font-family: var(--serif);
+}
+.italic {
+	font-style: italic;
+}
+
+/* ---------- header ---------- */
+.header {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	z-index: 50;
+	height: 100px;
+	display: flex;
+	align-items: center;
+	padding: 0 clamp(1rem, 4vw, 3.5rem);
+	pointer-events: none;
+}
+.header-inner {
+	width: 100%;
+	max-width: 1920px;
+	margin: 0 auto;
+	position: relative;
+	display: flex;
+	align-items: center;
+	height: 100%;
+}
+.logo-plate {
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
+	background: rgba(244, 236, 216, 0.92);
+	backdrop-filter: blur(6px);
+	border: 1px solid rgba(185, 160, 116, 0.5);
+	box-shadow: 0 0 22px rgba(58, 44, 30, 0.08);
+	display: flex;
+	align-items: center;
+	gap: 1.2rem;
+	padding: 0 1.6rem;
+	height: 60px;
+	pointer-events: auto;
+}
+.logo-plate .mark {
+	font-family: var(--serif);
+	font-weight: 700;
+	font-size: 0.92rem;
+	letter-spacing: 0.26em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+.logo-plate .seal {
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: var(--verdigris);
+	box-shadow: 0 0 0 3px rgba(92, 107, 84, 0.18);
+	flex: none;
+}
+.hamburger {
+	pointer-events: auto;
+	margin-left: auto;
+	width: 56px;
+	height: 56px;
+	border: 1px solid var(--ink);
+	background: transparent;
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+.hamburger span {
+	width: 22px;
+	height: 1.5px;
+	background: var(--ink);
+	transition: transform 0.3s var(--ease);
+}
+.reserve {
+	pointer-events: auto;
+	margin-left: 1rem;
+	background: var(--ink);
+	color: var(--cream);
+	height: 56px;
+	display: flex;
+	align-items: center;
+	padding: 0 1.8rem;
+	font-family: var(--editorial);
+	font-style: italic;
+	font-size: 1.35rem;
+	transition: background 0.4s var(--ease);
+}
+.reserve:hover {
+	background: var(--rust);
+}
+
+/* mobile overlay menu */
+.menu {
+	position: fixed;
+	inset: 0;
+	z-index: 60;
+	background: var(--ink);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 1.6rem;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.5s var(--ease);
+}
+.menu.open {
+	opacity: 1;
+	pointer-events: auto;
+}
+.menu a {
+	font-family: var(--serif);
+	color: var(--cream);
+	font-size: clamp(2rem, 7vw, 3.6rem);
+	transition:
+		font-style 0.2s,
+		color 0.3s,
+		letter-spacing 0.4s var(--ease);
+}
+.menu a:hover {
+	font-style: italic;
+	color: var(--gilt);
+	letter-spacing: 0.04em;
+}
+.menu .menu-no {
+	font-family: var(--mono);
+	font-size: 0.65rem;
+	letter-spacing: 0.3em;
+	color: rgba(244, 236, 216, 0.4);
+	margin-right: 1rem;
+}
+.menu-close {
+	position: absolute;
+	top: 2.2rem;
+	right: 2.2rem;
+	background: transparent;
+	border: none;
+	color: var(--cream);
+	font-size: 2rem;
+	cursor: pointer;
+	font-family: var(--serif);
+}
+
+/* ---------- hero ---------- */
+.hero {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+	border-bottom: 1px solid var(--paper);
+}
+@media (min-width: 1000px) {
+	.hero {
+		flex-direction: row;
+		height: 100vh;
+		min-height: 760px;
+	}
+}
+.hero-text {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	text-align: center;
+	padding: 8rem 2rem 4rem;
+}
+@media (min-width: 1000px) {
+	.hero-text {
+		padding: 6rem;
+		border-right: 1px solid var(--paper);
+	}
+}
+.hero-text .eyebrow {
+	margin-bottom: 1.6rem;
+}
+.hero h1 {
+	font-family: var(--serif);
+	font-weight: 700;
+	font-size: clamp(3.2rem, 9vw, 8.5rem);
+	line-height: 0.9;
+	letter-spacing: -0.01em;
+	margin-bottom: 1.8rem;
+}
+.hero .sub {
+	font-family: var(--editorial);
+	font-style: italic;
+	font-size: clamp(1.6rem, 4.4vw, 3rem);
+	line-height: 1.15;
+	color: var(--ink-soft);
+	margin-bottom: 2.6rem;
+}
+.hero-cta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1rem;
+	justify-content: center;
+}
+.btn {
+	font-family: var(--editorial);
+	font-size: 1.4rem;
+	padding: 0.95rem 2.6rem;
+	transition: all 0.4s var(--ease);
+	cursor: pointer;
+	border: 1px solid var(--ink);
+}
+.btn-solid {
+	background: var(--ink);
+	color: var(--cream);
+}
+.btn-solid:hover {
+	background: var(--verdigris);
+	border-color: var(--verdigris);
+}
+.btn-ghost {
+	background: transparent;
+	color: var(--ink);
+	font-style: italic;
+}
+.btn-ghost:hover {
+	background: var(--ink);
+	color: var(--cream);
+}
+.hero-foot {
+	margin-top: 3rem;
+	font-size: 0.62rem;
+	text-transform: uppercase;
+	letter-spacing: 0.32em;
+	color: var(--ink-soft);
+	opacity: 0.5;
+}
+
+.hero-media {
+	flex: 1;
+	position: relative;
+	background: var(--paper);
+	overflow: hidden;
+	min-height: 60vh;
+}
+.hero-media img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	filter: sepia(0.35) contrast(0.92) brightness(0.98);
+	transform: scale(1.15);
+	transition: transform 2s var(--ease);
+}
+.hero-media img.active {
+	transform: scale(1);
+}
+.reveal-overlay {
+	position: absolute;
+	inset: 0;
+	background: var(--cream);
+	z-index: 15;
+	transform-origin: bottom;
+	transition: transform 1.5s cubic-bezier(0.77, 0, 0.175, 1);
+}
+.reveal-overlay.active {
+	transform: scaleY(0);
+}
+.marginalia {
+	position: absolute;
+	bottom: 2.5rem;
+	right: 2.5rem;
+	z-index: 20;
+	background: rgba(244, 236, 216, 0.86);
+	backdrop-filter: blur(4px);
+	border: 1px solid rgba(185, 160, 116, 0.6);
+	padding: 1.6rem 1.8rem;
+	max-width: 17rem;
+}
+.marginalia p {
+	font-family: var(--serif);
+	font-style: italic;
+	font-size: 1.35rem;
+	line-height: 1.25;
+}
+.marginalia .tag {
+	display: block;
+	margin-top: 0.6rem;
+	font-family: var(--mono);
+	font-size: 0.55rem;
+	letter-spacing: 0.3em;
+	text-transform: uppercase;
+	color: var(--rust);
+}
+
+/* ---------- section scaffolding ---------- */
+section {
+	position: relative;
+}
+.wrap {
+	max-width: 1440px;
+	margin: 0 auto;
+	padding-left: clamp(1.4rem, 5vw, 4rem);
+	padding-right: clamp(1.4rem, 5vw, 4rem);
+}
+.sec-pad {
+	padding-top: var(--pad);
+	padding-bottom: var(--pad);
+}
+.rule {
+	height: 1px;
+	background: var(--gilt);
+	width: 0;
+	transition: width 1.1s var(--ease);
+}
+.reveal.in .rule {
+	width: 100%;
+}
+
+/* reveal */
+.reveal {
+	opacity: 0;
+	transform: translateY(34px);
+	transition:
+		opacity 1s var(--ease),
+		transform 1s var(--ease);
+}
+.reveal.in {
+	opacity: 1;
+	transform: none;
+}
+
+/* ---------- philosophy ---------- */
+.philosophy {
+	display: flex;
+	flex-direction: column;
+	gap: 3.5rem;
+}
+@media (min-width: 1000px) {
+	.philosophy {
+		flex-direction: row;
+		gap: 5rem;
+		align-items: flex-start;
+	}
+	.philosophy .lead {
+		width: 34%;
+	}
+	.philosophy .grid {
+		width: 66%;
+	}
+}
+.philosophy .lead h2 {
+	font-family: var(--serif);
+	font-size: clamp(2.2rem, 5vw, 3.8rem);
+	line-height: 1.05;
+	margin-top: 1.6rem;
+}
+.philosophy .grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2.6rem 3.2rem;
+}
+@media (min-width: 640px) {
+	.philosophy .grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+.principle .no {
+	font-family: var(--mono);
+	font-weight: 700;
+	font-size: 0.85rem;
+	color: var(--gilt);
+}
+.principle h3 {
+	font-family: var(--serif);
+	font-size: 1.7rem;
+	margin: 0.9rem 0 0.7rem;
+}
+.principle p {
+	color: var(--ink-soft);
+	font-size: 0.92rem;
+	line-height: 1.75;
+}
+
+/* ---------- rituals ---------- */
+.rituals {
+	background: var(--paper);
+}
+.rituals-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	flex-wrap: wrap;
+	gap: 1.5rem;
+	margin-bottom: 4rem;
+}
+.rituals-head h2 {
+	font-family: var(--serif);
+	font-style: italic;
+	font-size: clamp(2.4rem, 6vw, 5rem);
+	margin-top: 0.6rem;
+}
+.rituals-head .index {
+	font-family: var(--mono);
+	font-size: 0.62rem;
+	text-transform: uppercase;
+	letter-spacing: 0.28em;
+	border-bottom: 1px solid var(--ink);
+	padding-bottom: 0.4rem;
+	transition: opacity 0.3s;
+}
+.rituals-head .index:hover {
+	opacity: 0.55;
+}
+.rituals-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2.4rem;
+}
+@media (min-width: 700px) {
+	.rituals-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+@media (min-width: 1000px) {
+	.rituals-grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+.ritual {
+	cursor: pointer;
+}
+.ritual .frame {
+	position: relative;
+	overflow: hidden;
+	aspect-ratio: 3 / 4;
+	margin-bottom: 1.6rem;
+	background: var(--cream);
+}
+.ritual .frame img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	filter: sepia(0.32) contrast(0.92);
+	transition: transform 1s var(--ease);
+}
+.ritual:hover .frame img {
+	transform: scale(1.06);
+}
+.ritual .code {
+	position: absolute;
+	top: 1.1rem;
+	left: 1.1rem;
+	z-index: 2;
+	font-family: var(--mono);
+	font-size: 0.55rem;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	color: var(--cream);
+	background: rgba(58, 44, 30, 0.55);
+	backdrop-filter: blur(3px);
+	padding: 0.35rem 0.7rem;
+}
+.ritual h3 {
+	font-family: var(--serif);
+	font-size: 1.55rem;
+	margin-bottom: 0.7rem;
+	transition: font-style 0.2s;
+}
+.ritual:hover h3 {
+	font-style: italic;
+}
+.ritual p {
+	font-family: var(--editorial);
+	font-style: italic;
+	font-size: 1.2rem;
+	color: var(--ink-soft);
+	margin-bottom: 1.4rem;
+	line-height: 1.3;
+}
+.ritual .hair {
+	height: 1px;
+	background: rgba(58, 44, 30, 0.14);
+}
+
+/* ---------- sanctuary ---------- */
+.sanctuary-grid {
+	display: flex;
+	flex-direction: column;
+	gap: 3.5rem;
+	align-items: center;
+}
+@media (min-width: 1000px) {
+	.sanctuary-grid {
+		flex-direction: row;
+		gap: 6rem;
+	}
+	.sanctuary-grid > div {
+		flex: 1;
+	}
+}
+.sanctuary-copy h2 {
+	font-family: var(--serif);
+	font-size: clamp(2.4rem, 6vw, 5rem);
+	line-height: 1.02;
+	margin: 1.4rem 0;
+}
+.sanctuary-copy .quote {
+	font-family: var(--editorial);
+	font-style: italic;
+	font-size: clamp(1.5rem, 3.5vw, 2.6rem);
+	line-height: 1.3;
+	color: var(--ink-soft);
+	margin-bottom: 2rem;
+}
+.specs {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 2rem;
+	padding: 1.8rem 0;
+	border-top: 1px solid rgba(58, 44, 30, 0.14);
+	border-bottom: 1px solid rgba(58, 44, 30, 0.14);
+	margin-bottom: 2rem;
+}
+.specs h4 {
+	font-family: var(--mono);
+	font-size: 0.55rem;
+	letter-spacing: 0.26em;
+	text-transform: uppercase;
+	color: var(--ink-soft);
+	opacity: 0.6;
+	margin-bottom: 0.5rem;
+}
+.specs p {
+	font-family: var(--serif);
+	font-size: 1.25rem;
+}
+.estate-link {
+	font-family: var(--mono);
+	font-size: 0.65rem;
+	text-transform: uppercase;
+	letter-spacing: 0.24em;
+	border-bottom: 1px solid var(--ink);
+	padding-bottom: 0.4rem;
+	transition: opacity 0.3s;
+}
+.estate-link:hover {
+	opacity: 0.55;
+}
+.sanctuary-media {
+	position: relative;
+}
+.sanctuary-media .square {
+	aspect-ratio: 1;
+	overflow: hidden;
+	position: relative;
+	background: var(--paper);
+}
+.sanctuary-media img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	filter: sepia(0.3) contrast(0.9);
+}
+.sanctuary-media .inset {
+	position: absolute;
+	inset: 0;
+	border: 20px solid rgba(244, 236, 216, 0.55);
+	pointer-events: none;
+}
+.sanctuary-media .caption {
+	position: absolute;
+	bottom: -2rem;
+	left: -2rem;
+	background: var(--ink);
+	color: var(--cream);
+	padding: 2.2rem;
+	max-width: 17rem;
+	font-size: 0.72rem;
+	line-height: 1.7;
+}
+@media (max-width: 999px) {
+	.sanctuary-media .caption {
+		position: static;
+		margin-top: 1.5rem;
+		max-width: none;
+	}
+}
+
+/* ---------- memoirs ---------- */
+.memoirs {
+	background: var(--ink);
+	color: var(--cream);
+	overflow: hidden;
+}
+.memoirs .ghost {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+	opacity: 0.05;
+}
+.memoirs .ghost span {
+	font-family: var(--serif);
+	font-size: clamp(8rem, 30vw, 26rem);
+	line-height: 1;
+	white-space: nowrap;
+}
+.memoirs-head {
+	text-align: center;
+	margin-bottom: 5rem;
+	position: relative;
+	z-index: 2;
+}
+.memoirs-head .eyebrow {
+	color: var(--gilt);
+}
+.memoirs-head h2 {
+	font-family: var(--serif);
+	font-size: clamp(2.2rem, 5.5vw, 4rem);
+	margin-top: 1.2rem;
+}
+.memoirs-grid {
+	position: relative;
+	z-index: 2;
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 3.5rem;
+}
+@media (min-width: 700px) {
+	.memoirs-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+@media (min-width: 1000px) {
+	.memoirs-grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+.memoir p {
+	font-family: var(--editorial);
+	font-style: italic;
+	font-size: 1.5rem;
+	line-height: 1.4;
+	opacity: 0.92;
+	margin-bottom: 1.6rem;
+}
+.memoir h4 {
+	font-family: var(--serif);
+	font-size: 1.1rem;
+}
+.memoir .credit {
+	font-family: var(--mono);
+	font-size: 0.55rem;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	opacity: 0.5;
+	margin-top: 0.3rem;
+}
+
+/* ---------- booking ---------- */
+.booking {
+	background: var(--paper);
+	border-top: 1px solid rgba(185, 160, 116, 0.5);
+	border-bottom: 1px solid rgba(185, 160, 116, 0.5);
+}
+.booking-inner {
+	max-width: 1000px;
+	margin: 0 auto;
+	text-align: center;
+}
+.booking h2 {
+	font-family: var(--serif);
+	font-size: clamp(3rem, 8vw, 7rem);
+	line-height: 0.95;
+	margin: 1.4rem 0 2rem;
+}
+.booking .lead {
+	font-family: var(--editorial);
+	font-style: italic;
+	font-size: clamp(1.5rem, 3.5vw, 2.4rem);
+	color: var(--ink-soft);
+	max-width: 38rem;
+	margin: 0 auto 3.5rem;
+}
+.form-card {
+	background: var(--cream);
+	padding: clamp(2rem, 5vw, 4.5rem);
+	box-shadow: 0 18px 50px rgba(58, 44, 30, 0.1);
+	text-align: left;
+}
+.form-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2.5rem;
+}
+@media (min-width: 700px) {
+	.form-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+.field label {
+	display: block;
+	font-family: var(--mono);
+	font-size: 0.55rem;
+	letter-spacing: 0.24em;
+	text-transform: uppercase;
+	color: var(--ink-soft);
+	opacity: 0.7;
+	margin-bottom: 0.9rem;
+}
+.field input,
+.field select {
+	width: 100%;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid rgba(58, 44, 30, 0.25);
+	padding: 0.7rem 0;
+	font-family: var(--serif);
+	font-size: 1.3rem;
+	color: var(--ink);
+	transition: border-color 0.3s;
+}
+.field input::placeholder {
+	color: rgba(58, 44, 30, 0.35);
+}
+.field input:focus,
+.field select:focus {
+	outline: none;
+	border-color: var(--ink);
+}
+.form-card button {
+	margin-top: 3rem;
+	width: 100%;
+	background: var(--ink);
+	color: var(--cream);
+	border: none;
+	padding: 1.3rem;
+	font-family: var(--editorial);
+	font-size: 1.6rem;
+	cursor: pointer;
+	transition: background 0.4s var(--ease);
+}
+.form-card button:hover {
+	background: var(--rust);
+}
+.booking .closer {
+	margin-top: 2.5rem;
+	font-size: 0.58rem;
+	letter-spacing: 0.24em;
+	text-transform: uppercase;
+	color: var(--ink-soft);
+	opacity: 0.45;
+}
+
+/* ---------- footer ---------- */
+.footer {
+	background: var(--ink);
+	color: var(--cream);
+	padding: var(--pad) 0 3rem;
+}
+.footer-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 3.5rem;
+	margin-bottom: 5rem;
+}
+@media (min-width: 800px) {
+	.footer-grid {
+		grid-template-columns: 2fr 1fr 1fr;
+	}
+}
+.footer h2 {
+	font-family: var(--serif);
+	font-size: clamp(2rem, 4vw, 3.2rem);
+	margin-bottom: 1.6rem;
+}
+.footer .mission {
+	font-family: var(--editorial);
+	font-style: italic;
+	font-size: 1.5rem;
+	opacity: 0.8;
+	max-width: 28rem;
+	line-height: 1.4;
+}
+.footer h4 {
+	font-family: var(--mono);
+	font-size: 0.6rem;
+	letter-spacing: 0.24em;
+	text-transform: uppercase;
+	color: var(--gilt);
+	margin-bottom: 1.6rem;
+}
+.footer ul {
+	list-style: none;
+}
+.footer li {
+	margin-bottom: 0.9rem;
+	font-size: 0.8rem;
+	opacity: 0.85;
+}
+.footer li a {
+	transition: opacity 0.3s;
+}
+.footer li a:hover {
+	opacity: 0.5;
+}
+.footer-bottom {
+	border-top: 1px solid rgba(244, 236, 216, 0.14);
+	padding-top: 2.5rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1.2rem;
+	justify-content: space-between;
+	align-items: center;
+}
+@media (min-width: 700px) {
+	.footer-bottom {
+		flex-direction: row;
+	}
+}
+.footer-bottom p,
+.footer-bottom a {
+	font-size: 0.56rem;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	opacity: 0.45;
+}
+.footer-bottom .links {
+	display: flex;
+	gap: 2rem;
+}
+.footer-bottom a:hover {
+	opacity: 0.9;
+}
+
+/* ---------- responsive / motion ---------- */
+@media (max-width: 999px) {
+	.reserve {
+		display: none;
+	}
+	.marginalia {
+		display: none;
+	}
+}
+@media (pointer: coarse) {
+	.cursor {
+		display: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.reveal {
+		opacity: 1;
+		transform: none;
+	}
+	.hero-media img {
+		transform: none;
+	}
+	.reveal-overlay {
+		display: none;
+	}
+	.rule {
+		width: 100%;
+	}
+	* {
+		transition: none;
+		animation: none;
+	}
+}
+
+/* hero stagger entrance */
+.stagger {
+	opacity: 0;
+	transform: translateY(20px);
+	animation: rise 1.2s var(--ease) forwards;
+}
+@keyframes rise {
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.stagger {
+		opacity: 1;
+		transform: none;
+		animation: none;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;500;600;700;800&family=Instrument+Serif:wght@300;400;500;600;700;800&family=Courier+Prime:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<div class="grain" aria-hidden="true"></div>
+		<div class="cursor" aria-hidden="true"></div>
+
+		<!-- ============ HEADER ============ -->
+		<header class="header">
+			<div class="header-inner">
+				<div class="logo-plate">
+					<span class="seal" aria-hidden="true"></span>
+					<a href="#top" class="mark">Vellum &amp; Verdigris</a>
+				</div>
+				<a href="#booking" class="reserve">Reserve Silence</a>
+				<button
+					class="hamburger"
+					aria-label="Open menu"
+					aria-controls="menu"
+					aria-expanded="false"
+				>
+					<span></span><span></span><span></span>
+				</button>
+			</div>
+		</header>
+
+		<nav class="menu" id="menu" aria-hidden="true">
+			<button class="menu-close" aria-label="Close menu">&times;</button>
+			<a href="#rituals"><span class="menu-no">01</span>The Rituals</a>
+			<a href="#philosophy"><span class="menu-no">02</span>The Philosophy</a>
+			<a href="#sanctuary"><span class="menu-no">03</span>The Sanctuary</a>
+			<a href="#booking"><span class="menu-no">04</span>The Apothecary</a>
+		</nav>
+
+		<main id="top">
+			<!-- ============ HERO ============ -->
+			<section class="hero">
+				<div class="hero-text">
+					<span class="eyebrow stagger" style="animation-delay:.3s"
+						>The Art of Rest</span
+					>
+					<h1 class="stagger" style="animation-delay:.45s">
+						Archival<br>Wellness
+					</h1>
+					<p class="sub stagger" style="animation-delay:.6s">
+						Slowing time.<br>Restoring the essence.<br>
+						Traditional rituals for<br>the modern spirit.
+					</p>
+					<div class="hero-cta stagger" style="animation-delay:.78s">
+						<a href="#rituals" class="btn btn-solid">View Rituals</a>
+						<a href="#philosophy" class="btn btn-ghost">Our Story</a>
+					</div>
+					<p class="hero-foot stagger" style="animation-delay:.95s">
+						Pure Botanicals &bull; Ancient Wisdom &bull; Uninterrupted Silence
+					</p>
+				</div>
+				<div class="hero-media">
+					<div class="reveal-overlay" id="heroOverlay"></div>
+					<img
+						id="heroImg"
+						src="assets/hero.jpg"
+						alt="Still mineral pool within the Vellum & Verdigris sanctuary"
+					>
+					<div class="marginalia stagger" style="animation-delay:1.2s">
+						<p>"Where memory meets stillness."</p>
+						<span class="tag">Marginalia &bull; fol. I</span>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ PHILOSOPHY ============ -->
+			<section id="philosophy" class="sec-pad">
+				<div class="wrap philosophy reveal">
+					<div class="lead">
+						<span class="eyebrow">— Volume I &middot; The Philosophy</span>
+						<h2>The Archival Method to Healing</h2>
+					</div>
+					<div class="grid">
+						<div class="principle">
+							<span class="no">01.</span>
+							<h3>Documented Tradition</h3>
+							<p>
+								We curate rituals from centuries of documented apothecary
+								wisdom. Every treatment is an echo of a practice once lost to
+								the pace of industry.
+							</p>
+						</div>
+						<div class="principle">
+							<span class="no">02.</span>
+							<h3>Atmospheric Silence</h3>
+							<p>
+								Silence is our primary medium. Within the heavy stone walls of
+								our sanctuary, the outside world is not just forgotten — it
+								ceases to exist.
+							</p>
+						</div>
+						<div class="principle">
+							<span class="no">03.</span>
+							<h3>Sensory Provenance</h3>
+							<p>
+								From hand-pressed oils to period-correct textiles, every tactile
+								element is sourced with a focus on its origin and historical
+								significance.
+							</p>
+						</div>
+						<div class="principle">
+							<span class="no">04.</span>
+							<h3>Temporal Restoration</h3>
+							<p>
+								We do not just treat the body; we restore the sense of time. Our
+								rituals are deliberate, slow, and unhurried by the clock.
+							</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ RITUALS ============ -->
+			<section id="rituals" class="rituals sec-pad">
+				<div class="wrap">
+					<div class="rituals-head reveal">
+						<div>
+							<span class="eyebrow">Core Collection</span>
+							<h2>Signature Rituals</h2>
+							<div class="rule" style="margin-top:1rem;max-width:240px"></div>
+						</div>
+						<a href="#booking" class="index">Catalogue Index &rarr;</a>
+					</div>
+					<div class="rituals-grid">
+						<article class="ritual reveal">
+							<div class="frame">
+								<span class="code">Code: 094-R</span>
+								<img
+									src="assets/ritual-1.jpg"
+									alt="The Obsidian Ritual — heated stone restoration"
+								>
+							</div>
+							<h3>The Obsidian Ritual</h3>
+							<p>
+								Deep tissue restoration using heated volcanic stones and
+								archival resins.
+							</p>
+							<div class="hair"></div>
+						</article>
+						<article class="ritual reveal" style="transition-delay:.12s">
+							<div class="frame">
+								<span class="code">Code: 112-B</span>
+								<img
+									src="assets/ritual-2.jpg"
+									alt="Ether Bathing — mineral hydro-therapy"
+								>
+							</div>
+							<h3>Ether Bathing</h3>
+							<p>
+								Hydro-therapy in mineral-rich waters infused with mountain
+								botanicals.
+							</p>
+							<div class="hair"></div>
+						</article>
+						<article class="ritual reveal" style="transition-delay:.24s">
+							<div class="frame">
+								<span class="code">Code: 045-F</span>
+								<img
+									src="assets/ritual-3.jpg"
+									alt="The Archive Facial — cold-press complexion treatment"
+								>
+							</div>
+							<h3>The Archive Facial</h3>
+							<p>
+								Complexion resurfacing using 19th-century cold-press extracts.
+							</p>
+							<div class="hair"></div>
+						</article>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ SANCTUARY ============ -->
+			<section id="sanctuary" class="sec-pad">
+				<div class="wrap sanctuary-grid">
+					<div class="sanctuary-copy reveal">
+						<span class="eyebrow">— Location &middot; The Highlands</span>
+						<h2>A House of Heavy Stone</h2>
+						<p class="quote">
+							"The walls here are three feet thick. They were built to keep the
+							weather out, but they serve better to keep the modern world at
+							bay."
+						</p>
+						<div class="specs">
+							<div>
+								<h4>Structure</h4>
+								<p>Pre-war Stone Manor</p>
+							</div>
+							<div>
+								<h4>Ambiance</h4>
+								<p>Controlled Darkness</p>
+							</div>
+						</div>
+						<a href="#booking" class="estate-link">Explore the Estate</a>
+					</div>
+					<div class="sanctuary-media reveal" style="transition-delay:.12s">
+						<div class="square">
+							<img
+								src="assets/sanctuary.jpg"
+								alt="A dim stone corridor within the sanctuary"
+							>
+							<div class="inset"></div>
+						</div>
+						<div class="caption">
+							Each corridor is tuned with acoustic precision to ensure absolute
+							sensory deprivation between treatment suites.
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ MEMOIRS ============ -->
+			<section class="memoirs sec-pad">
+				<div class="ghost" aria-hidden="true"><span>MEMOIRS</span></div>
+				<div class="wrap">
+					<div class="memoirs-head reveal">
+						<span class="eyebrow">— The Experience</span>
+						<h2>Letters from the Archive</h2>
+					</div>
+					<div class="memoirs-grid">
+						<blockquote class="memoir reveal">
+							<p>
+								"I entered as a fragmented collection of stresses and left as a
+								singular, quiet being. The Obsidian Ritual is less a massage and
+								more a spiritual recalibration."
+							</p>
+							<h4>Julian V.</h4>
+							<div class="credit">Guest 2024 &bull; London</div>
+						</blockquote>
+						<blockquote class="memoir reveal" style="transition-delay:.12s">
+							<p>
+								"The silence here has a weight to it. It is physical. For the
+								first time in years, I could hear my own thoughts without the
+								static of the digital world."
+							</p>
+							<h4>Elena M.</h4>
+							<div class="credit">Guest 2023 &bull; Zurich</div>
+						</blockquote>
+						<blockquote class="memoir reveal" style="transition-delay:.24s">
+							<p>
+								"Every detail — from the weight of the linen to the scent of the
+								pressed flowers — feels intentional. Vellum &amp; Verdigris is a
+								masterpiece of curation."
+							</p>
+							<h4>Arthur C.</h4>
+							<div class="credit">Guest 2024 &bull; Paris</div>
+						</blockquote>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ BOOKING ============ -->
+			<section id="booking" class="booking sec-pad">
+				<div class="wrap booking-inner reveal">
+					<span class="eyebrow">Final Volume</span>
+					<h2>Return to the Self</h2>
+					<p class="lead">
+						Our archive is small and our suites are limited to ensure complete
+						privacy.
+					</p>
+					<form class="form-card" onsubmit="return false">
+						<div class="form-grid">
+							<div class="field">
+								<label for="name">Full Name</label>
+								<input
+									id="name"
+									type="text"
+									placeholder="Entry name"
+									autocomplete="name"
+								>
+							</div>
+							<div class="field">
+								<label for="ritual">Ritual Interest</label>
+								<select id="ritual">
+									<option>The Obsidian Ritual</option>
+									<option>Ether Bathing</option>
+									<option>The Archive Facial</option>
+								</select>
+							</div>
+						</div>
+						<button type="submit">Request Invitation</button>
+					</form>
+					<p class="closer">
+						Responses typically delivered via post or encrypted mail within 48
+						hours.
+					</p>
+				</div>
+			</section>
+		</main>
+
+		<!-- ============ FOOTER ============ -->
+		<footer class="footer">
+			<div class="wrap">
+				<div class="footer-grid">
+					<div>
+						<h2>Vellum &amp; Verdigris</h2>
+						<p class="mission">
+							A curated archive of wellness practices, preserved for the modern
+							soul seeking stillness.
+						</p>
+					</div>
+					<div>
+						<h4>Sanctuary Locations</h4>
+						<ul>
+							<li>Highlands Estate, Scotland</li>
+							<li>Minimalist Retreat, Kyoto</li>
+							<li>Aged Manor, Cotswolds</li>
+						</ul>
+					</div>
+					<div>
+						<h4>Connect</h4>
+						<ul>
+							<li><a href="#">Instagram</a></li>
+							<li><a href="#">The Journal</a></li>
+							<li><a href="#">Contact Us</a></li>
+						</ul>
+					</div>
+				</div>
+				<div class="footer-bottom">
+					<p>
+						&copy; 2024 Vellum &amp; Verdigris. Established 1924. All Rights
+						Reserved.
+					</p>
+					<div class="links">
+						<a href="#">Privacy Policy</a>
+						<a href="#">Terms of Archive</a>
+					</div>
+				</div>
+			</div>
+		</footer>
+
+		<script>
+(() => {
+	var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	/* ---------- hero reveal on load ---------- */
+	function fireHero() {
+		var overlay = document.getElementById("heroOverlay");
+		var img = document.getElementById("heroImg");
+		if (overlay) overlay.classList.add("active");
+		if (img) img.classList.add("active");
+	}
+	if (reduce) {
+		fireHero();
+	} else {
+		window.setTimeout(fireHero, 120);
+	}
+
+	/* ---------- scroll reveal ---------- */
+	var reveals = document.querySelectorAll(".reveal");
+	if ("IntersectionObserver" in window && !reduce) {
+		var io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((e) => {
+					if (e.isIntersecting) {
+						e.target.classList.add("in");
+						io.unobserve(e.target);
+					}
+				});
+			},
+			{ threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
+		);
+		reveals.forEach((el) => {
+			io.observe(el);
+		});
+	} else {
+		reveals.forEach((el) => {
+			el.classList.add("in");
+		});
+	}
+
+	/* ---------- mobile menu ---------- */
+	var burger = document.querySelector(".hamburger");
+	var menu = document.getElementById("menu");
+	var close = document.querySelector(".menu-close");
+
+	function setMenu(open) {
+		menu.classList.toggle("open", open);
+		menu.setAttribute("aria-hidden", String(!open));
+		burger.setAttribute("aria-expanded", String(open));
+		document.body.style.overflow = open ? "hidden" : "";
+		if (open) {
+			var first = menu.querySelector("a");
+			if (first) first.focus();
+		}
+	}
+	if (burger)
+		burger.addEventListener("click", () => {
+			setMenu(true);
+		});
+	if (close)
+		close.addEventListener("click", () => {
+			setMenu(false);
+		});
+	menu.querySelectorAll("a").forEach((a) => {
+		a.addEventListener("click", () => {
+			setMenu(false);
+		});
+	});
+	document.addEventListener("keydown", (e) => {
+		if (e.key === "Escape" && menu.classList.contains("open")) setMenu(false);
+	});
+
+	/* ---------- custom cursor ---------- */
+	var fine = window.matchMedia("(pointer: fine)").matches;
+	var cursor = document.querySelector(".cursor");
+	if (fine && cursor && !reduce) {
+		var cx = window.innerWidth / 2,
+			cy = window.innerHeight / 2,
+			tx = cx,
+			ty = cy,
+			shown = false;
+
+		window.addEventListener("mousemove", (e) => {
+			tx = e.clientX;
+			ty = e.clientY;
+			if (!shown) {
+				shown = true;
+				cursor.style.opacity = "1";
+			}
+		});
+		window.addEventListener("mouseleave", () => {
+			cursor.style.opacity = "0";
+			shown = false;
+		});
+
+		function loop() {
+			cx += (tx - cx) * 0.2;
+			cy += (ty - cy) * 0.2;
+			cursor.style.transform = `translate(${cx}px,${cy}px) translate(-50%,-50%)`;
+			requestAnimationFrame(loop);
+		}
+		requestAnimationFrame(loop);
+
+		var hot = "a, button, input, select, .ritual";
+		document.addEventListener("mouseover", (e) => {
+			if (e.target.closest(hot)) cursor.classList.add("active");
+		});
+		document.addEventListener("mouseout", (e) => {
+			if (e.target.closest(hot)) cursor.classList.remove("active");
+		});
+	}
+})();
+
+		</script>
+	</body>
+</html>

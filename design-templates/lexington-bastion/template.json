@@ -1,0 +1,13 @@
+{
+  "slug": "bastion",
+  "name": "Bastion , Construction Company Website Template Clone",
+  "family": "lexingtonthemes",
+  "kind": "multipage",
+  "cdn_fonts": [
+    "InterVariable"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/templates/premium/lexingtonthemes/bastion",
+  "source_license": "MIT"
+}

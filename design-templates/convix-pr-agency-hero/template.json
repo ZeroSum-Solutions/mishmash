@@ -1,0 +1,11 @@
+{
+  "slug": "convix-pr-agency-hero",
+  "name": "Convix PR Agency Hero — Full-Viewport SaaS Hero Section",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/convix-pr-agency-hero",
+  "source_license": "MIT"
+}

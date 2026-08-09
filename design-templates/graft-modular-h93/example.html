@@ -1,0 +1,1543 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Graft Modular — Precision Pre-Fabricated Building Systems</title>
+		<meta
+			name="description"
+			content="Graft Modular engineers high-performance pre-fabricated building systems off-site and assembles them in days. Millimeter accuracy, carbon-negative materials, rapid deployment."
+		>
+		<style>
+
+
+
+
+
+
+
+:root {
+	--matcha: #b7c99b;
+	--matcha-dk: #9fb682;
+	--ink: #0f172a;
+	--slate-600: #475569;
+	--slate-400: #94a3b8;
+	--line: #e2e8f0;
+	--bg: #ffffff;
+	--surface: #f8fafc;
+	--maxw: 1280px;
+	--ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+html {
+	scroll-behavior: smooth;
+}
+body {
+	font-family: "Inter Tight", system-ui, sans-serif;
+	color: var(--ink);
+	background: var(--bg);
+	line-height: 1.55;
+	-webkit-font-smoothing: antialiased;
+	overflow-x: hidden;
+}
+img {
+	display: block;
+	max-width: 100%;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+button,
+input,
+select,
+textarea {
+	font-family: inherit;
+}
+
+.syne {
+	font-family: "Syne", sans-serif;
+}
+.wrap {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 0 24px;
+	width: 100%;
+}
+
+.eyebrow {
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	background: var(--matcha);
+	color: var(--ink);
+	padding: 2px 8px;
+	display: inline-block;
+}
+.label {
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	color: var(--slate-400);
+}
+.h-sec {
+	font-family: "Syne", sans-serif;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: -0.02em;
+	font-size: clamp(28px, 4vw, 42px);
+	line-height: 1.02;
+}
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	background: var(--ink);
+	color: #fff;
+	font-size: 13px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	padding: 14px 28px;
+	border: 1px solid var(--ink);
+	transition:
+		background 0.3s var(--ease),
+		color 0.3s var(--ease);
+	cursor: pointer;
+	white-space: nowrap;
+}
+.btn:hover {
+	background: var(--matcha);
+	color: var(--ink);
+	border-color: var(--matcha);
+}
+.btn:focus-visible,
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+	outline: 2px solid var(--ink);
+	outline-offset: 3px;
+}
+
+/* ---------- Header ---------- */
+.hdr {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 18px 24px;
+	border-bottom: 1px solid var(--line);
+	background: rgba(255, 255, 255, 0.72);
+	backdrop-filter: blur(14px);
+	opacity: 0;
+	animation: fadeIn 1s var(--ease) forwards;
+}
+.brand {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-family: "Syne", sans-serif;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: -0.03em;
+	font-size: 18px;
+}
+.brand i {
+	display: block;
+	width: 8px;
+	height: 24px;
+	background: var(--matcha);
+}
+.hdr-left {
+	display: flex;
+	align-items: center;
+	gap: 48px;
+}
+.nav {
+	display: flex;
+	gap: 30px;
+}
+.nav a {
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	color: var(--slate-600);
+	transition: color 0.25s;
+}
+.nav a:hover {
+	color: var(--matcha-dk);
+}
+.hdr-right {
+	display: flex;
+	align-items: center;
+	gap: 22px;
+}
+.portal {
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	color: var(--slate-600);
+	transition: color 0.25s;
+}
+.portal:hover {
+	color: var(--matcha-dk);
+}
+.btn-sm {
+	padding: 10px 22px;
+	font-size: 11px;
+}
+.burger {
+	display: none;
+	flex-direction: column;
+	gap: 5px;
+	background: none;
+	border: none;
+	cursor: pointer;
+	padding: 6px;
+}
+.burger span {
+	width: 24px;
+	height: 2px;
+	background: var(--ink);
+	display: block;
+	transition: 0.3s;
+}
+.mobile-menu {
+	display: none;
+}
+
+/* ---------- Hero ---------- */
+.hero {
+	position: relative;
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+}
+.hero-bg {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transform: scale(1.12);
+	animation: kenburns 9s ease-out forwards;
+}
+.hero-veil {
+	position: absolute;
+	inset: 0;
+	background: rgba(255, 255, 255, 0.42);
+}
+.hero .wrap {
+	position: relative;
+	z-index: 2;
+	padding-top: 120px;
+	padding-bottom: 60px;
+}
+.hero-card {
+	max-width: 600px;
+	width: 100%;
+	background: rgba(255, 255, 255, 0.92);
+	backdrop-filter: blur(8px);
+	border: 1px solid var(--line);
+	box-shadow: 0 30px 60px -20px rgba(15, 23, 42, 0.35);
+	padding: clamp(28px, 5vw, 48px);
+	opacity: 0;
+	transform: translateY(34px);
+	animation: slideUp 0.9s var(--ease) 0.55s forwards;
+}
+.hero h1 {
+	font-family: "Syne", sans-serif;
+	font-weight: 800;
+	text-transform: uppercase;
+	font-size: clamp(34px, 5.4vw, 58px);
+	line-height: 0.98;
+	letter-spacing: -0.03em;
+}
+.hl {
+	position: relative;
+	display: inline-block;
+	padding: 0 8px;
+	color: var(--ink);
+}
+.hl::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: var(--matcha);
+	z-index: -1;
+	clip-path: inset(0 100% 0 0);
+	animation: wipe 1s var(--ease) 1.1s forwards;
+}
+.divider {
+	height: 1px;
+	background: var(--line);
+	width: 0;
+	margin: 28px 0;
+	animation: grow 1.3s var(--ease) 1.1s forwards;
+}
+.hero-row {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 28px;
+	flex-wrap: wrap;
+}
+.hero-row p {
+	max-width: 280px;
+	color: var(--slate-600);
+	font-size: 16px;
+	opacity: 0;
+	animation: fadeIn 0.8s ease 1.3s forwards;
+}
+.hero-row .btn {
+	opacity: 0;
+	animation: fadeIn 0.8s ease 1.5s forwards;
+}
+
+.marquee-wrap {
+	margin-top: 34px;
+}
+.mrule {
+	height: 1px;
+	background: var(--line);
+}
+.marquee {
+	overflow: hidden;
+	height: 30px;
+	margin: 14px 0;
+	position: relative;
+}
+.marquee-track {
+	display: flex;
+	gap: 26px;
+	width: max-content;
+	animation: marquee 22s linear infinite;
+}
+.marquee-track span {
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	font-size: 14px;
+	white-space: nowrap;
+}
+.dot {
+	width: 6px;
+	height: 6px;
+	background: var(--matcha);
+	flex: none;
+	align-self: center;
+}
+
+/* ---------- Systems ---------- */
+.systems {
+	padding: 110px 0;
+	background: #fff;
+}
+.sec-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	gap: 32px;
+	flex-wrap: wrap;
+	margin-bottom: 56px;
+}
+.sec-head .eyebrow {
+	margin-bottom: 14px;
+}
+.sec-head p {
+	color: var(--slate-600);
+	max-width: 380px;
+}
+.grid-sys {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 0;
+	border-top: 1px solid var(--line);
+	border-left: 1px solid var(--line);
+}
+.scard {
+	position: relative;
+	aspect-ratio: 1;
+	overflow: hidden;
+	border-right: 1px solid var(--line);
+	border-bottom: 1px solid var(--line);
+}
+.scard img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.7s var(--ease);
+}
+.scard:hover img {
+	transform: scale(1.09);
+}
+.scard::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		to top,
+		rgba(15, 23, 42, 0.86),
+		rgba(15, 23, 42, 0.1) 55%,
+		transparent
+	);
+}
+.scard-body {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	padding: 28px;
+}
+.scard-num {
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	color: var(--matcha);
+	margin-bottom: 8px;
+}
+.scard-body h4 {
+	font-family: "Syne", sans-serif;
+	font-weight: 700;
+	text-transform: uppercase;
+	color: #fff;
+	font-size: 20px;
+	letter-spacing: -0.01em;
+}
+.scard-body p {
+	color: rgba(255, 255, 255, 0.8);
+	font-size: 12px;
+	margin-top: 8px;
+	max-height: 0;
+	opacity: 0;
+	overflow: hidden;
+	transition:
+		max-height 0.5s var(--ease),
+		opacity 0.5s var(--ease),
+		margin 0.5s var(--ease);
+}
+.scard:hover .scard-body p {
+	max-height: 60px;
+	opacity: 1;
+}
+.scard-link {
+	margin-top: 14px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	color: #fff;
+	transition: color 0.25s;
+}
+.scard:hover .scard-link {
+	color: var(--matcha);
+}
+.scard-link::before {
+	content: "";
+	width: 0;
+	height: 1px;
+	background: rgba(255, 255, 255, 0.3);
+	margin-bottom: 14px;
+	position: absolute;
+	top: 0;
+	left: 28px;
+	right: 28px;
+	transform: translateY(-14px);
+}
+
+/* ---------- Specs (zig-zag) ---------- */
+.specs {
+	padding: 110px 0;
+	background: var(--surface);
+}
+.specs .wrap {
+	display: flex;
+	flex-direction: column;
+	gap: 90px;
+}
+.zz {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 64px;
+	align-items: center;
+}
+.zz.rev .zz-text {
+	order: 2;
+}
+.zz.rev .zz-media {
+	order: 1;
+}
+.zz-text {
+	background: #fff;
+	border: 1px solid var(--line);
+	padding: 40px;
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+}
+.zz-text .eyebrow {
+	align-self: flex-start;
+}
+.zz-text h3 {
+	font-family: "Syne", sans-serif;
+	font-weight: 800;
+	text-transform: uppercase;
+	font-size: clamp(26px, 3.2vw, 36px);
+	line-height: 1;
+	letter-spacing: -0.02em;
+}
+.zz-text p {
+	color: var(--slate-600);
+}
+.statpair {
+	display: flex;
+	align-items: center;
+	gap: 24px;
+	padding-top: 18px;
+	border-top: 1px solid var(--line);
+}
+.statpair .n {
+	font-family: "Syne", sans-serif;
+	font-weight: 800;
+	font-size: 30px;
+	letter-spacing: -0.02em;
+}
+.statpair .vline {
+	width: 1px;
+	height: 44px;
+	background: var(--line);
+}
+.bullets {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.bullets li {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	list-style: none;
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+}
+.bullets li i {
+	width: 6px;
+	height: 6px;
+	background: var(--matcha);
+	flex: none;
+}
+.zz-media {
+	position: relative;
+}
+.zz-back {
+	position: absolute;
+	inset: 0;
+	transform: rotate(2deg);
+	transition: transform 0.55s var(--ease);
+	background: var(--matcha);
+}
+.zz.rev .zz-back {
+	transform: rotate(-2deg);
+	background: var(--ink);
+}
+.zz-media:hover .zz-back {
+	transform: rotate(0);
+}
+.zz-media img {
+	position: relative;
+	z-index: 2;
+	width: 100%;
+	height: 480px;
+	object-fit: cover;
+	border: 1px solid var(--line);
+}
+
+/* ---------- Stats ---------- */
+.stats {
+	padding: 80px 0;
+	background: #fff;
+	border-top: 1px solid var(--line);
+	border-bottom: 1px solid var(--line);
+}
+.stats-grid {
+	display: grid;
+	grid-template-columns: repeat(6, 1fr);
+	gap: 40px 32px;
+}
+.stat .bar {
+	height: 4px;
+	width: 32px;
+	background: var(--matcha);
+	margin-bottom: 22px;
+	transition: width 0.5s var(--ease);
+}
+.stat:nth-child(even) .bar {
+	background: var(--ink);
+}
+.stat:hover .bar {
+	width: 100%;
+}
+.stat .n {
+	font-family: "Syne", sans-serif;
+	font-weight: 800;
+	font-size: clamp(34px, 3vw, 46px);
+	letter-spacing: -0.03em;
+	margin-bottom: 8px;
+}
+.stat .label {
+	display: block;
+}
+
+/* ---------- Process ---------- */
+.process {
+	padding: 110px 0;
+	background: var(--surface);
+}
+.process .center {
+	text-align: center;
+	margin-bottom: 64px;
+}
+.process .center .eyebrow {
+	margin-bottom: 14px;
+}
+.grid-proc {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 24px;
+}
+.pcard {
+	position: relative;
+	background: #fff;
+	border: 1px solid var(--line);
+	padding: 32px;
+	overflow: hidden;
+	transition:
+		transform 0.5s var(--ease),
+		box-shadow 0.5s var(--ease);
+}
+.pcard:hover {
+	transform: translateY(-8px);
+	box-shadow: 0 24px 40px -18px rgba(15, 23, 42, 0.28);
+}
+.pcard .ghost {
+	position: absolute;
+	top: -26px;
+	left: -6px;
+	font-family: "Syne", sans-serif;
+	font-weight: 800;
+	font-size: 118px;
+	color: #eef2f6;
+	transition:
+		color 0.6s,
+		transform 0.6s var(--ease);
+	transform-origin: top left;
+	z-index: 0;
+}
+.pcard:hover .ghost {
+	color: var(--matcha);
+	transform: scale(1.12);
+}
+.pcard .body {
+	position: relative;
+	z-index: 2;
+}
+.pcard h4 {
+	font-family: "Syne", sans-serif;
+	font-weight: 700;
+	text-transform: uppercase;
+	font-size: 20px;
+	margin-bottom: 12px;
+	letter-spacing: -0.01em;
+}
+.pcard p {
+	color: var(--slate-600);
+	font-size: 14px;
+}
+
+/* ---------- CTA ---------- */
+.cta {
+	padding: 110px 0;
+	background: var(--matcha);
+}
+.cta .wrap {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 56px;
+	align-items: center;
+}
+.cta h3 {
+	font-family: "Syne", sans-serif;
+	font-weight: 800;
+	text-transform: uppercase;
+	font-size: clamp(30px, 4vw, 50px);
+	line-height: 0.98;
+	letter-spacing: -0.03em;
+	margin-bottom: 24px;
+}
+.cta p {
+	color: #1e293b;
+	font-size: 18px;
+	max-width: 420px;
+	margin-bottom: 32px;
+}
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 16px;
+	background: rgba(255, 255, 255, 0.28);
+	border: 1px solid rgba(15, 23, 42, 0.12);
+	padding: 16px;
+}
+.chip .ico {
+	width: 42px;
+	height: 42px;
+	background: var(--ink);
+	color: var(--matcha);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.chip .label {
+	color: #334155;
+}
+.chip .val {
+	font-weight: 600;
+	font-size: 15px;
+}
+.form {
+	background: #fff;
+	border: 1px solid var(--line);
+	padding: clamp(28px, 4vw, 48px);
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+	box-shadow: 0 30px 60px -25px rgba(15, 23, 42, 0.4);
+}
+.form-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 22px;
+}
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.field label {
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+}
+.field input,
+.field select,
+.field textarea {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	padding: 13px 14px;
+	font-size: 15px;
+	color: var(--ink);
+	transition: border-color 0.25s;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+	outline: none;
+	border-color: var(--ink);
+}
+.form .btn {
+	width: 100%;
+	padding: 16px;
+}
+
+/* ---------- Footer ---------- */
+.ftr {
+	background: var(--surface);
+	border-top: 1px solid var(--line);
+	padding: 90px 0 44px;
+}
+.ftr-grid {
+	display: grid;
+	grid-template-columns: 2fr 1fr 1fr;
+	gap: 48px;
+	margin-bottom: 60px;
+}
+.ftr h2 {
+	font-family: "Syne", sans-serif;
+	font-weight: 800;
+	text-transform: uppercase;
+	font-size: 24px;
+	letter-spacing: -0.02em;
+	margin-bottom: 22px;
+}
+.ftr-grid p {
+	color: var(--slate-600);
+	max-width: 360px;
+}
+.ftr h4 {
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	margin-bottom: 22px;
+}
+.ftr ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.ftr ul a,
+.ftr ul li {
+	color: var(--slate-600);
+	font-size: 14px;
+	transition: color 0.25s;
+}
+.ftr ul a:hover {
+	color: var(--matcha-dk);
+}
+.ftr-bot {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 16px;
+	flex-wrap: wrap;
+	padding-top: 30px;
+	border-top: 1px solid var(--line);
+}
+.ftr-bot p,
+.ftr-bot a {
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	color: var(--slate-400);
+}
+.ftr-bot .links {
+	display: flex;
+	gap: 28px;
+}
+.ftr-bot a:hover {
+	color: var(--ink);
+}
+
+/* ---------- Scroll reveal ---------- */
+[data-reveal] {
+	opacity: 0;
+	transform: translateY(40px);
+	transition:
+		opacity 1s var(--ease),
+		transform 1s var(--ease);
+}
+[data-reveal="zoom"] {
+	transform: scale(0.92);
+}
+[data-reveal].in {
+	opacity: 1;
+	transform: none;
+}
+
+/* ---------- Keyframes ---------- */
+@keyframes fadeIn {
+	to {
+		opacity: 1;
+	}
+}
+@keyframes slideUp {
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+@keyframes kenburns {
+	from {
+		transform: scale(1.12);
+	}
+	to {
+		transform: scale(1);
+	}
+}
+@keyframes wipe {
+	to {
+		clip-path: inset(0 0 0 0);
+	}
+}
+@keyframes grow {
+	to {
+		width: 100%;
+	}
+}
+@keyframes marquee {
+	to {
+		transform: translateX(calc(-50% - 13px));
+	}
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1024px) {
+	.nav,
+	.portal {
+		display: none;
+	}
+	.burger {
+		display: flex;
+	}
+	.grid-sys {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.grid-proc {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.stats-grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+@media (max-width: 760px) {
+	.hero {
+		align-items: flex-start;
+	}
+	.zz,
+	.zz.rev {
+		grid-template-columns: 1fr;
+	}
+	.zz.rev .zz-text,
+	.zz.rev .zz-media {
+		order: 0;
+	}
+	.zz-media img {
+		height: 360px;
+	}
+	.grid-sys {
+		grid-template-columns: 1fr;
+	}
+	.grid-proc {
+		grid-template-columns: 1fr;
+	}
+	.stats-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.cta .wrap {
+		grid-template-columns: 1fr;
+	}
+	.ftr-grid {
+		grid-template-columns: 1fr;
+		gap: 36px;
+	}
+	.form-row {
+		grid-template-columns: 1fr;
+	}
+	.sec-head {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+	* {
+		animation-duration: 0.001ms;
+		animation-delay: 0ms;
+		transition-duration: 0.001ms;
+	}
+	.hero-bg {
+		transform: none;
+	}
+	.hl::before {
+		clip-path: inset(0 0 0 0);
+	}
+	.divider {
+		width: 100%;
+	}
+	.marquee-track {
+		animation: none;
+	}
+	[data-reveal] {
+		opacity: 1;
+		transform: none;
+	}
+	.hero-card,
+	.hero-row p,
+	.hero-row .btn {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@300;400;500;600;700;800&family=Inter+Tight:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- Header -->
+		<header class="hdr">
+			<div class="hdr-left">
+				<a href="#" class="brand"><i></i>Graft Modular</a>
+				<nav class="nav">
+					<a href="#systems">Systems</a>
+					<a href="#process">Process</a>
+					<a href="#specifications">Specifications</a>
+					<a href="#contact">Enterprise</a>
+				</nav>
+			</div>
+			<div class="hdr-right">
+				<a href="#contact" class="portal">Portal Access</a>
+				<a href="#contact" class="btn btn-sm">Request Quote</a>
+				<button
+					class="burger"
+					id="burger"
+					aria-label="Toggle menu"
+					aria-expanded="false"
+				>
+					<span></span><span></span><span></span>
+				</button>
+			</div>
+		</header>
+
+		<nav class="mobile-menu" id="mobileMenu" aria-hidden="true"></nav>
+
+		<main>
+			<!-- Hero -->
+			<section class="hero">
+				<img
+					class="hero-bg"
+					src="assets/hero.jpg"
+					alt="Aerial view of a precision modular construction site"
+				>
+				<div class="hero-veil"></div>
+				<div class="wrap">
+					<div class="hero-card">
+						<h1>The future of <span class="hl">structural</span> precision</h1>
+						<div class="divider"></div>
+						<div class="hero-row">
+							<p>
+								Engineered off-site. Assembled in days. Graft Modular delivers
+								high-performance pre-fabricated building systems for industrial
+								and residential scale.
+							</p>
+							<a href="#systems" class="btn">Explore Systems</a>
+						</div>
+						<div class="marquee-wrap">
+							<div class="mrule"></div>
+							<div class="marquee">
+								<div class="marquee-track">
+									<span>Millimeter Accuracy</span><i class="dot"></i>
+									<span>Carbon-Negative Materials</span><i class="dot"></i>
+									<span>Rapid Deployment</span><i class="dot"></i>
+									<span>ISO 14001 Certified</span><i class="dot"></i>
+									<span>Millimeter Accuracy</span><i class="dot"></i>
+									<span>Carbon-Negative Materials</span><i class="dot"></i>
+									<span>Rapid Deployment</span><i class="dot"></i>
+									<span>ISO 14001 Certified</span><i class="dot"></i>
+								</div>
+							</div>
+							<div class="mrule"></div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Systems -->
+			<section class="systems" id="systems">
+				<div class="wrap">
+					<div class="sec-head">
+						<div data-reveal>
+							<span class="eyebrow">Core Technology</span>
+							<h2 class="h-sec">Engineered Sub-Systems</h2>
+						</div>
+						<p data-reveal>
+							We fabricate modular components that integrate into any
+							architectural blueprint — high-resolution finishes, full-spectrum
+							color, and millimeter tolerances out of the factory.
+						</p>
+					</div>
+					<div class="grid-sys" id="sysGrid"></div>
+				</div>
+			</section>
+
+			<!-- Specifications (zig-zag) -->
+			<section class="specs" id="specifications">
+				<div class="wrap">
+					<div class="zz" data-reveal>
+						<div class="zz-text">
+							<span class="eyebrow">Fabrication Excellence</span>
+							<h3>Zero-Waste<br>CNC Precision</h3>
+							<p>
+								Automated CNC cutting and robotic assembly hold every structural
+								element to exact specification. By optimizing material at the
+								source, we cut job-site waste by 98%.
+							</p>
+							<div class="statpair">
+								<div>
+									<div class="n">&plusmn;1mm</div>
+									<span class="label">Tolerance</span>
+								</div>
+								<div class="vline"></div>
+								<div>
+									<div class="n">98%</div>
+									<span class="label">Material Efficiency</span>
+								</div>
+							</div>
+						</div>
+						<div class="zz-media">
+							<div class="zz-back"></div>
+							<img src="assets/spec-01.jpg" alt="Robotic fabrication line">
+						</div>
+					</div>
+
+					<div class="zz rev" data-reveal>
+						<div class="zz-text">
+							<span class="eyebrow">Deployment Speed</span>
+							<h3>Parallel Build<br>Architectures</h3>
+							<p>
+								While your foundations are still curing, the structure is
+								already 90% complete in our controlled facilities. This parallel
+								workflow shortens timelines by 40%.
+							</p>
+							<a href="#contact" class="btn" style="align-self:flex-start"
+								>Request Timeline</a
+							>
+						</div>
+						<div class="zz-media">
+							<div class="zz-back"></div>
+							<img src="assets/spec-02.jpg" alt="Modular units in transit">
+						</div>
+					</div>
+
+					<div class="zz" data-reveal>
+						<div class="zz-text">
+							<span class="eyebrow">Material Science</span>
+							<h3>Passive-House<br>Standard Thermal</h3>
+							<p>
+								Our proprietary Axis insulation builds a continuous, airtight
+								thermal envelope that drops operational energy cost by up to 60%
+								over conventional construction.
+							</p>
+							<ul class="bullets">
+								<li><i></i>Advanced R-Value Rating</li>
+								<li><i></i>Carbon-Negative Composite</li>
+								<li><i></i>Acoustic Damping Mastery</li>
+							</ul>
+						</div>
+						<div class="zz-media">
+							<div class="zz-back"></div>
+							<img
+								src="assets/spec-03.jpg"
+								alt="Thermal-engineered facade detail"
+							>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Stats -->
+			<section class="stats">
+				<div class="wrap">
+					<div class="stats-grid" id="statsGrid"></div>
+				</div>
+			</section>
+
+			<!-- Process -->
+			<section class="process" id="process">
+				<div class="wrap">
+					<div class="center" data-reveal>
+						<span class="eyebrow">Workflow Architecture</span>
+						<h2 class="h-sec">From Bit to Build</h2>
+					</div>
+					<div class="grid-proc" id="procGrid"></div>
+				</div>
+			</section>
+
+			<!-- CTA -->
+			<section class="cta" id="contact">
+				<div class="wrap">
+					<div data-reveal>
+						<h3>Ready to build<br>the future?</h3>
+						<p>
+							Partner with Graft for your next project. Our engineers turn your
+							designs into precision-fabricated reality.
+						</p>
+						<div class="chip">
+							<span class="ico" aria-hidden="true">
+								<svg
+									width="20"
+									height="20"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									viewBox="0 0 24 24"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+									/>
+								</svg>
+							</span>
+							<div>
+								<span class="label">Email Inquiries</span>
+								<div class="val">systems@graftmodular.io</div>
+							</div>
+						</div>
+					</div>
+					<div data-reveal>
+						<form class="form" id="quoteForm" novalidate>
+							<div class="form-row">
+								<div class="field">
+									<label for="pname">Project Name</label>
+									<input
+										id="pname"
+										type="text"
+										placeholder="e.g. Helix Industrial"
+										autocomplete="off"
+									>
+								</div>
+								<div class="field">
+									<label for="ptype">Project Type</label>
+									<select id="ptype">
+										<option>Industrial</option>
+										<option>Residential</option>
+										<option>Infrastructure</option>
+									</select>
+								</div>
+							</div>
+							<div class="field">
+								<label for="pmsg">Message</label>
+								<textarea
+									id="pmsg"
+									rows="4"
+									placeholder="Brief project description…"
+								></textarea>
+							</div>
+							<button type="submit" class="btn">Submit System Inquiry</button>
+						</form>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<!-- Footer -->
+		<footer class="ftr">
+			<div class="wrap">
+				<div class="ftr-grid">
+					<div>
+						<h2>Graft Modular</h2>
+						<p>
+							Leading the shift to off-site construction through technical
+							precision and sustainable engineering. Our systems are built for
+							the future of the built environment.
+						</p>
+					</div>
+					<div>
+						<h4>Navigation</h4>
+						<ul>
+							<li><a href="#systems">Building Systems</a></li>
+							<li><a href="#specifications">Material Science</a></li>
+							<li><a href="#specifications">Technical Specs</a></li>
+							<li><a href="#process">Global Logistics</a></li>
+						</ul>
+					</div>
+					<div>
+						<h4>Contact</h4>
+						<ul>
+							<li>HQ: 1200 Tech Plaza, Zurich</li>
+							<li>systems@graftmodular.io</li>
+							<li>+44 (0) 20 7946 0123</li>
+						</ul>
+					</div>
+				</div>
+				<div class="ftr-bot">
+					<p>&copy; 2026 Graft Modular Systems. All rights reserved.</p>
+					<div class="links">
+						<a href="#">Privacy</a>
+						<a href="#">Terms</a>
+						<a href="#">Technical Documentation</a>
+					</div>
+				</div>
+			</div>
+		</footer>
+
+		<script>
+(() => {
+	/* ---------- Systems grid ---------- */
+	const systems = [
+		{
+			n: "01 / External",
+			name: "Axis Wall Systems",
+			img: "sys-01",
+			desc: "High-R insulated panels with vibrant architectural finishes.",
+		},
+		{
+			n: "02 / Structural",
+			name: "Titan Floor Grids",
+			img: "sys-02",
+			desc: "Lightweight steel-composite flooring with epoxy color-coding.",
+		},
+		{
+			n: "03 / Internal",
+			name: "Core Utility Pods",
+			img: "sys-03",
+			desc: "Finished modules with premium tile and fixture selections.",
+		},
+		{
+			n: "04 / Envelope",
+			name: "Apex Roof Units",
+			img: "sys-04",
+			desc: "Solar-ready modules in high-density polymer colorways.",
+		},
+		{
+			n: "05 / Infra",
+			name: "Terra Foundations",
+			img: "sys-05",
+			desc: "Precision-cast footings with durable color-coded sealant.",
+		},
+		{
+			n: "06 / Joinery",
+			name: "Link Connectors",
+			img: "sys-06",
+			desc: "Chrome-plated interlocking structural nodes.",
+		},
+		{
+			n: "07 / Finish",
+			name: "Vista Facades",
+			img: "sys-07",
+			desc: "Full-spectrum architectural skins in any RAL color.",
+		},
+		{
+			n: "08 / MEP",
+			name: "Nexus Shafts",
+			img: "sys-08",
+			desc: "Pre-assembled utility cores with color-coded piping.",
+		},
+		{
+			n: "09 / Intelligence",
+			name: "Smart Hubs",
+			img: "sys-09",
+			desc: "Interactive building-management dashboards, factory-fitted.",
+		},
+	];
+	const arrow =
+		'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>';
+	const sysGrid = document.getElementById("sysGrid");
+	sysGrid.innerHTML = systems
+		.map(
+			(s, i) => `
+    <article class="scard" data-reveal data-delay="${(i % 3) * 90}">
+      <img src="assets/${s.img}.jpg" alt="${s.name}">
+      <div class="scard-body">
+        <span class="scard-num">${s.n}</span>
+        <h4>${s.name}</h4>
+        <p>${s.desc}</p>
+        <span class="scard-link">View Specs ${arrow}</span>
+      </div>
+    </article>`,
+		)
+		.join("");
+
+	/* ---------- Stats ---------- */
+	const stats = [
+		{ v: 540000, suffix: "+", fmt: "k", label: "Total SQ FT Built" },
+		{ v: 14, label: "Active Facilities" },
+		{ v: 45, suffix: "%", label: "Faster Delivery" },
+		{ v: 280, suffix: "k", label: "Lbs Carbon Saved" },
+		{ v: 100, suffix: "%", label: "BIM Compliance" },
+		{ v: 9, label: "Patented Systems" },
+	];
+	const statsGrid = document.getElementById("statsGrid");
+	statsGrid.innerHTML = stats
+		.map(
+			(s, i) => `
+    <div class="stat" data-reveal data-delay="${i * 80}">
+      <div class="bar"></div>
+      <div class="n" data-counter="${s.v}" data-suffix="${s.suffix || ""}" data-kfmt="${s.fmt || ""}">0</div>
+      <span class="label">${s.label}</span>
+    </div>`,
+		)
+		.join("");
+
+	/* ---------- Process ---------- */
+	const steps = [
+		{
+			n: "01",
+			t: "Digital Twin",
+			d: "Full BIM integration. Every screw and conduit is modeled before a single plate is cut.",
+		},
+		{
+			n: "02",
+			t: "Fabrication",
+			d: "Automated robotic assembly in a climate-controlled environment for absolute consistency.",
+		},
+		{
+			n: "03",
+			t: "Logistics",
+			d: "Volumetric shipping optimized for global transit and a minimal carbon footprint.",
+		},
+		{
+			n: "04",
+			t: "Deployment",
+			d: "On-site rapid assembly by certified crews. Foundation to enclosure in days.",
+		},
+	];
+	document.getElementById("procGrid").innerHTML = steps
+		.map(
+			(s, i) => `
+    <article class="pcard" data-reveal="zoom" data-delay="${i * 120}">
+      <span class="ghost">${s.n}</span>
+      <div class="body"><h4>${s.t}</h4><p>${s.d}</p></div>
+    </article>`,
+		)
+		.join("");
+
+	/* ---------- Counter ---------- */
+	function runCounter(el) {
+		const target = parseFloat(el.dataset.counter);
+		const suffix = el.dataset.suffix || "";
+		const kfmt = el.dataset.kfmt === "k";
+		const dur = 2200,
+			start = performance.now();
+		function step(now) {
+			const p = Math.min((now - start) / dur, 1);
+			const e = 1 - (1 - p) ** 3;
+			const cur = Math.floor(e * target);
+			el.textContent =
+				(kfmt ? `${Math.round(cur / 1000)}k` : cur.toLocaleString()) + suffix;
+			if (p < 1) requestAnimationFrame(step);
+			else
+				el.textContent =
+					(kfmt ? `${Math.round(target / 1000)}k` : target.toLocaleString()) +
+					suffix;
+		}
+		requestAnimationFrame(step);
+	}
+
+	/* ---------- Scroll reveal ---------- */
+	const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+	const revealEls = document.querySelectorAll("[data-reveal]");
+	if (reduce) {
+		revealEls.forEach((el) => {
+			el.classList.add("in");
+			el.querySelectorAll("[data-counter]").forEach(runCounter);
+			if (el.dataset.counter) runCounter(el);
+		});
+	} else {
+		const io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((en) => {
+					if (!en.isIntersecting) return;
+					const el = en.target;
+					const delay = parseInt(el.dataset.delay || 0, 10);
+					setTimeout(() => {
+						el.classList.add("in");
+						el.querySelectorAll("[data-counter]").forEach(runCounter);
+						if (el.dataset.counter) runCounter(el);
+					}, delay);
+					io.unobserve(el);
+				});
+			},
+			{ threshold: 0.15 },
+		);
+		revealEls.forEach((el) => io.observe(el));
+	}
+
+	/* ---------- Mobile menu ---------- */
+	const burger = document.getElementById("burger");
+	const menu = document.getElementById("mobileMenu");
+	const links = [
+		["Systems", "#systems"],
+		["Process", "#process"],
+		["Specifications", "#specifications"],
+		["Enterprise", "#contact"],
+	];
+	menu.innerHTML =
+		links.map((l) => `<a href="${l[1]}">${l[0]}</a>`).join("") +
+		'<a href="#contact" class="mm-cta">Request Quote</a>';
+	Object.assign(menu.style, {
+		position: "fixed",
+		top: "61px",
+		left: 0,
+		right: 0,
+		zIndex: 49,
+		background: "rgba(255,255,255,.97)",
+		backdropFilter: "blur(14px)",
+		borderBottom: "1px solid var(--line)",
+		flexDirection: "column",
+		padding: "8px 24px 18px",
+	});
+	menu.querySelectorAll("a").forEach((a) =>
+		Object.assign(a.style, {
+			display: "block",
+			padding: "14px 0",
+			borderBottom: "1px solid var(--line)",
+			fontSize: "13px",
+			fontWeight: 600,
+			textTransform: "uppercase",
+			letterSpacing: ".16em",
+		}),
+	);
+	let open = false;
+	function toggle(state) {
+		open = state ?? !open;
+		menu.style.display = open ? "flex" : "none";
+		burger.setAttribute("aria-expanded", String(open));
+		menu.setAttribute("aria-hidden", String(!open));
+	}
+	toggle(false);
+	burger.addEventListener("click", () => toggle());
+	menu
+		.querySelectorAll("a")
+		.forEach((a) => a.addEventListener("click", () => toggle(false)));
+
+	/* ---------- Form ---------- */
+	const form = document.getElementById("quoteForm");
+	form.addEventListener("submit", (e) => {
+		e.preventDefault();
+		const btn = form.querySelector("button");
+		if (btn.disabled) return;
+		btn.disabled = true;
+		btn.textContent = "Transmitting Data…";
+		setTimeout(() => {
+			btn.textContent = "Inquiry Received";
+			btn.style.background = "var(--matcha)";
+			btn.style.color = "var(--ink)";
+			btn.style.borderColor = "var(--matcha)";
+			form.querySelectorAll("input,textarea").forEach((i) => (i.value = ""));
+			setTimeout(() => {
+				btn.disabled = false;
+				btn.textContent = "Submit System Inquiry";
+				btn.style.background = "";
+				btn.style.color = "";
+				btn.style.borderColor = "";
+			}, 2600);
+		}, 1400);
+	});
+})();
+
+		</script>
+	</body>
+</html>

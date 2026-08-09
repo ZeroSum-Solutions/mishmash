@@ -1,0 +1,1870 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Voltic — Touch. Feel. Choose. Premium Offline Electronics</title>
+		<meta
+			name="description"
+			content="Voltic runs India's premium offline electronics experience centers. Walk in, demo flagship phones, laptops, audio and cameras, and buy with zero waiting."
+		>
+		<style>
+/* ============ VOLTIC SHOWROOM — "ELECTRIC STONE" ============ */
+
+
+
+
+
+
+:root {
+	--ink: rgb(33, 33, 29);
+	--lime: rgb(182, 228, 2);
+	--stone: rgb(243, 239, 235);
+	--surface: rgb(253, 252, 251);
+	--greige: rgb(194, 191, 188);
+	--t-primary: rgb(33, 33, 29);
+	--t-secondary: rgb(70, 70, 67);
+	--t-muted: rgb(144, 144, 142);
+	--t-on-dark: rgb(246, 245, 238);
+	--maxw: 1416px;
+	--r-sm: 4px;
+	--r-md: 10px;
+	--r-lg: 16px;
+	--r-cap: 128px;
+	color-scheme: light only;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	font-family: "Inter", system-ui, sans-serif;
+	background: var(--stone);
+	color: var(--t-primary);
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+	overflow-x: hidden;
+	line-height: 1.5;
+}
+
+img {
+	display: block;
+	max-width: 100%;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+button {
+	font-family: inherit;
+	cursor: pointer;
+	border: none;
+	background: none;
+}
+
+.wrap {
+	max-width: var(--maxw);
+	margin: 0 auto;
+}
+
+/* ---------- Eyebrow ---------- */
+.eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 2px;
+	color: var(--t-secondary);
+	font-weight: 500;
+}
+.eyebrow .dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--lime);
+}
+
+.display {
+	font-weight: 500;
+	letter-spacing: -0.02em;
+	line-height: 1.04;
+}
+.lime {
+	color: var(--lime);
+}
+
+/* ---------- Custom cursor ---------- */
+.cursor-dot {
+	width: 10px;
+	height: 10px;
+	background: var(--lime);
+	border-radius: 50%;
+	position: fixed;
+	top: 0;
+	left: 0;
+	margin: -5px 0 0 -5px;
+	pointer-events: none;
+	z-index: 9999;
+	transition:
+		transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+		opacity 0.3s;
+	mix-blend-mode: difference;
+}
+
+/* ---------- Reveal ---------- */
+.reveal {
+	opacity: 0;
+	transform: translateY(20px);
+	transition:
+		opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+		transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.is-visible {
+	opacity: 1;
+	transform: none;
+}
+
+/* ============ NAVBAR ============ */
+.nav-shell {
+	position: fixed;
+	top: 22px;
+	left: 0;
+	right: 0;
+	z-index: 1000;
+	display: flex;
+	justify-content: center;
+	padding: 0 16px;
+}
+.nav {
+	background: var(--surface);
+	border-radius: var(--r-md);
+	box-shadow:
+		0 1px 3px rgba(0, 0, 0, 0.05),
+		0 8px 30px rgba(0, 0, 0, 0.04);
+	padding: 11px 12px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	max-width: 960px;
+	gap: 12px;
+}
+.nav-left {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.brand {
+	font-size: 13px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	padding: 0 6px;
+}
+.nav-links {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+.nav-links a {
+	position: relative;
+	padding: 8px 14px;
+	font-size: 13.5px;
+	font-weight: 500;
+	border-radius: 7px;
+	transition: color 0.25s;
+}
+.nav-links a::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: var(--stone);
+	border-radius: 7px;
+	opacity: 0;
+	transition: opacity 0.3s;
+	z-index: -1;
+}
+.nav-links a:hover::before {
+	opacity: 1;
+}
+.nav-cta {
+	background: var(--ink);
+	color: var(--surface);
+	font-size: 13.5px;
+	font-weight: 500;
+	padding: 9px 18px;
+	border-radius: var(--r-cap);
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	transition:
+		opacity 0.25s,
+		transform 0.25s;
+}
+.nav-cta:hover {
+	opacity: 0.9;
+	transform: translateY(-1px);
+}
+.nav-cta svg {
+	stroke: var(--surface);
+}
+.hamburger {
+	display: none;
+	padding: 6px;
+	color: var(--ink);
+}
+
+/* Mobile overlay */
+.m-menu {
+	position: fixed;
+	inset: 0;
+	background: var(--stone);
+	z-index: 2000;
+	display: flex;
+	flex-direction: column;
+	transform: translateX(100%);
+	transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.m-menu.open {
+	transform: none;
+}
+.m-menu-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 28px 28px;
+	border-bottom: 1px solid rgba(194, 191, 188, 0.4);
+}
+.m-menu nav {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 36px 28px;
+}
+.m-menu nav a {
+	font-size: 30px;
+	font-weight: 500;
+	letter-spacing: -0.02em;
+	padding: 10px 0;
+	transition: color 0.2s;
+}
+.m-menu nav a:hover {
+	color: var(--lime);
+}
+.m-menu nav a.solid {
+	background: var(--ink);
+	color: var(--surface);
+	padding: 18px;
+	border-radius: var(--r-md);
+	text-align: center;
+	font-size: 18px;
+	margin-top: 24px;
+}
+
+/* ============ HERO ============ */
+.hero {
+	height: 100vh;
+	min-height: 640px;
+	padding: 14px;
+}
+.hero-card {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	height: 100%;
+	background: var(--greige);
+	border-radius: var(--r-lg);
+	position: relative;
+	display: flex;
+	overflow: hidden;
+}
+.hero-text {
+	width: 50%;
+	padding: 64px;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	gap: 40px;
+}
+.hero-lead {
+	font-size: 20px;
+	font-weight: 400;
+	max-width: 30ch;
+	color: var(--t-primary);
+}
+.hero-h {
+	margin-top: 4px;
+}
+.hero-h h1 {
+	font-size: clamp(52px, 6vw, 92px);
+	font-weight: 500;
+	letter-spacing: -0.03em;
+	line-height: 0.98;
+}
+.proof {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.avatars {
+	display: flex;
+}
+.avatars img {
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	object-fit: cover;
+	border: 2px solid var(--surface);
+	margin-left: -12px;
+}
+.avatars img:first-child {
+	margin-left: 0;
+}
+.proof-text {
+	font-size: 13.5px;
+	line-height: 1.35;
+	font-weight: 300;
+}
+.proof-text strong {
+	font-weight: 500;
+	display: block;
+}
+
+.hero-media {
+	width: 50%;
+	position: relative;
+	overflow: hidden;
+}
+.hero-media img {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transform: scale(1.02);
+	animation: heroZoom 18s ease-out forwards;
+}
+@keyframes heroZoom {
+	to {
+		transform: scale(1.12);
+	}
+}
+.hero-media::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		180deg,
+		rgba(20, 20, 16, 0.15) 0%,
+		rgba(20, 20, 16, 0.55) 100%
+	);
+}
+.hero-overlay {
+	position: absolute;
+	left: 56px;
+	right: 56px;
+	bottom: 56px;
+	z-index: 2;
+	color: var(--t-on-dark);
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+}
+.hero-overlay p {
+	font-size: 22px;
+	line-height: 1.4;
+	font-weight: 400;
+	max-width: 28ch;
+}
+.hero-btns {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+.btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 13px 26px;
+	border-radius: var(--r-cap);
+	font-size: 13.5px;
+	font-weight: 500;
+	transition:
+		opacity 0.25s,
+		transform 0.25s,
+		background 0.25s;
+}
+.btn:hover {
+	transform: translateY(-2px);
+}
+.btn-lime {
+	background: var(--lime);
+	color: var(--ink);
+}
+.btn-stone {
+	background: var(--stone);
+	color: var(--ink);
+}
+.btn-lime:hover,
+.btn-stone:hover {
+	opacity: 0.92;
+}
+
+/* scroll graphic */
+.scroll-graphic {
+	position: absolute;
+	bottom: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 3;
+}
+.scroll-graphic svg.curve {
+	display: block;
+}
+.scroll-badge {
+	position: absolute;
+	top: 2px;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 34px;
+	height: 34px;
+	border: 1px solid var(--greige);
+	background: var(--greige);
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* ============ MARQUEE ============ */
+.marquee-sec {
+	padding: 96px 0;
+	background: var(--surface);
+	overflow: hidden;
+}
+.sec-head-center {
+	text-align: center;
+	margin-bottom: 48px;
+	padding: 0 24px;
+}
+.sec-head-center h2 {
+	font-size: clamp(32px, 4vw, 48px);
+	margin-top: 16px;
+}
+.marquee {
+	display: flex;
+	gap: 24px;
+	width: max-content;
+	animation: marquee 42s linear infinite;
+}
+.marquee:hover {
+	animation-play-state: paused;
+}
+@keyframes marquee {
+	to {
+		transform: translateX(-50%);
+	}
+}
+.p-card {
+	flex: 0 0 320px;
+	background: #fff;
+	border: 1px solid rgba(194, 191, 188, 0.18);
+	border-radius: var(--r-md);
+	overflow: hidden;
+}
+.p-card .plate {
+	height: 280px;
+	background: linear-gradient(180deg, var(--stone), #fff);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 36px;
+}
+.p-card .plate img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	border-radius: 6px;
+	transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.p-card:hover .plate img {
+	transform: scale(1.06);
+}
+.p-meta {
+	padding: 18px 20px;
+}
+.p-meta .row {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+}
+.p-meta h3 {
+	font-size: 16px;
+	font-weight: 500;
+}
+.p-meta .price {
+	font-weight: 600;
+}
+.p-tag {
+	font-size: 9.5px;
+	text-transform: uppercase;
+	letter-spacing: 1.5px;
+	color: var(--t-muted);
+	font-weight: 500;
+	margin-top: 6px;
+}
+
+/* ============ ZONES ============ */
+.zones {
+	padding: 96px 24px;
+	background: var(--stone);
+}
+.zones .head {
+	margin-bottom: 48px;
+}
+.zones .head h2 {
+	font-size: clamp(32px, 4vw, 48px);
+	margin-top: 16px;
+}
+.zone-grid {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(4, 1fr);
+}
+.zone {
+	position: relative;
+	aspect-ratio: 4 / 5;
+	border-radius: var(--r-md);
+	overflow: hidden;
+	background: #fff;
+}
+.zone img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.zone:hover img {
+	transform: scale(1.1);
+}
+.zone::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(to top, rgba(20, 20, 16, 0.62), transparent 55%);
+}
+.zone .label {
+	position: absolute;
+	bottom: 24px;
+	left: 24px;
+	z-index: 2;
+	color: #fff;
+}
+.zone .label h3 {
+	font-size: 23px;
+	font-weight: 500;
+}
+.zone .label p {
+	font-size: 13.5px;
+	opacity: 0.82;
+	margin-top: 6px;
+}
+.zone .arrow {
+	position: absolute;
+	top: 18px;
+	right: 18px;
+	z-index: 2;
+	width: 36px;
+	height: 36px;
+	border-radius: 50%;
+	background: rgba(253, 252, 251, 0.16);
+	backdrop-filter: blur(4px);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #fff;
+	opacity: 0;
+	transform: translateY(-6px);
+	transition:
+		opacity 0.35s,
+		transform 0.35s,
+		background 0.35s;
+}
+.zone:hover .arrow {
+	opacity: 1;
+	transform: none;
+}
+.zone:hover .arrow {
+	background: var(--lime);
+	color: var(--ink);
+}
+
+/* ============ ADVANTAGE ACCORDION ============ */
+.advantage {
+	padding: 0 24px 96px;
+	background: var(--stone);
+}
+.adv-panel {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	background: #fff;
+	border-radius: var(--r-lg);
+	padding: 56px;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 80px;
+	min-height: 660px;
+}
+.adv-left {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+.adv-left .top h2 {
+	font-size: clamp(30px, 3.6vw, 46px);
+	line-height: 1.12;
+	margin-top: 22px;
+}
+.acc {
+	margin-top: 40px;
+}
+.acc-item {
+	border-top: 1px solid var(--stone);
+	padding: 18px 0;
+}
+.acc-item:first-child {
+	border-top: none;
+}
+.acc-title {
+	width: 100%;
+	text-align: left;
+	font-size: 23px;
+	font-weight: 400;
+	letter-spacing: -0.01em;
+	color: var(--t-muted);
+	opacity: 0.55;
+	transition:
+		color 0.3s,
+		opacity 0.3s;
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
+.acc-title .num {
+	font-size: 12px;
+	font-weight: 500;
+	opacity: 0.7;
+}
+.acc-item.active .acc-title {
+	color: var(--t-primary);
+	opacity: 1;
+}
+.acc-body {
+	max-height: 0;
+	overflow: hidden;
+	transition: max-height 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.acc-item.active .acc-body {
+	max-height: 160px;
+}
+.acc-body p {
+	color: var(--t-secondary);
+	padding: 14px 0 4px 28px;
+	font-size: 15px;
+	max-width: 44ch;
+}
+.adv-media {
+	position: relative;
+	border-radius: var(--r-md);
+	overflow: hidden;
+	background: var(--surface);
+	min-height: 420px;
+}
+.adv-media .slide {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	transition: opacity 0.55s ease;
+}
+.adv-media .slide.active {
+	opacity: 1;
+}
+.adv-media .slide img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+/* ============ DEALS ============ */
+.deals {
+	padding: 96px 24px;
+}
+.deals .head {
+	text-align: center;
+	margin-bottom: 56px;
+}
+.deals .head h2 {
+	font-size: clamp(32px, 4vw, 48px);
+	margin-top: 16px;
+}
+.deals .head p {
+	color: var(--t-secondary);
+	font-size: 19px;
+	margin-top: 14px;
+}
+.deal-grid {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(3, 1fr);
+}
+.deal {
+	background: var(--surface);
+	border-radius: var(--r-md);
+	padding: 32px;
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+}
+.deal.featured {
+	background: var(--ink);
+	color: var(--t-on-dark);
+	position: relative;
+	box-shadow: 0 30px 60px rgba(33, 33, 29, 0.25);
+}
+.badge {
+	position: absolute;
+	top: 24px;
+	right: 24px;
+	background: var(--lime);
+	color: var(--ink);
+	font-size: 9.5px;
+	text-transform: uppercase;
+	font-weight: 600;
+	letter-spacing: 1px;
+	padding: 5px 11px;
+	border-radius: var(--r-sm);
+}
+.deal .plate {
+	aspect-ratio: 1;
+	background: #fff;
+	border-radius: var(--r-sm);
+	overflow: hidden;
+	padding: 18px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.deal.featured .plate {
+	background: var(--stone);
+}
+.deal .plate img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	border-radius: 4px;
+}
+.deal h3 {
+	font-size: 23px;
+	font-weight: 400;
+}
+.deal .price-row {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.deal .price {
+	font-size: 34px;
+	font-weight: 500;
+}
+.deal .was {
+	text-decoration: line-through;
+	opacity: 0.45;
+}
+.deal .sub {
+	opacity: 0.6;
+}
+.deal .note {
+	font-size: 13.5px;
+	opacity: 0.7;
+}
+.deal hr {
+	border: none;
+	border-top: 1px solid var(--stone);
+}
+.deal.featured hr {
+	border-top: 1px solid rgba(194, 191, 188, 0.22);
+}
+.deal ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.deal li {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 14px;
+	font-weight: 300;
+}
+.deal li svg {
+	flex: 0 0 auto;
+	color: var(--lime);
+}
+.deal-cta {
+	margin-top: auto;
+	background: var(--ink);
+	color: var(--surface);
+	padding: 15px;
+	border-radius: var(--r-cap);
+	text-align: center;
+	font-size: 13.5px;
+	font-weight: 500;
+	transition:
+		opacity 0.25s,
+		transform 0.25s;
+}
+.deal.featured .deal-cta {
+	background: var(--lime);
+	color: var(--ink);
+}
+.deal-cta:hover {
+	opacity: 0.9;
+	transform: translateY(-2px);
+}
+
+/* ============ CONNECT ============ */
+.connect {
+	padding: 0 24px 96px;
+}
+.connect-band {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	background: var(--ink);
+	border-radius: var(--r-lg);
+	padding: 64px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 48px;
+	flex-wrap: wrap;
+	color: var(--t-on-dark);
+}
+.connect-band h2 {
+	font-size: clamp(32px, 4vw, 48px);
+	font-weight: 500;
+}
+.connect-band p {
+	font-size: 19px;
+	opacity: 0.7;
+	max-width: 26ch;
+	margin-top: 14px;
+}
+.connect-btns {
+	display: flex;
+	gap: 14px;
+	flex-wrap: wrap;
+}
+.c-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	padding: 16px 28px;
+	border-radius: var(--r-md);
+	font-size: 14px;
+	font-weight: 600;
+	transition:
+		opacity 0.25s,
+		transform 0.25s,
+		background 0.25s;
+}
+.c-btn:hover {
+	transform: translateY(-2px);
+}
+.c-btn.wa {
+	background: var(--lime);
+	color: var(--ink);
+}
+.c-btn.call {
+	background: var(--surface);
+	color: var(--ink);
+}
+.c-btn.call:hover {
+	background: var(--greige);
+}
+
+/* ============ FOOTER ============ */
+footer {
+	background: var(--ink);
+	color: var(--t-on-dark);
+	padding: 56px 24px;
+}
+.foot-grid {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	display: grid;
+	grid-template-columns: 1.1fr 1fr;
+	gap: 48px;
+	border-bottom: 1px solid rgba(246, 245, 238, 0.12);
+	padding-bottom: 48px;
+}
+.foot-brand .mark {
+	font-size: 18px;
+	font-weight: 600;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: var(--lime);
+}
+.foot-brand h2 {
+	font-size: 34px;
+	font-weight: 500;
+	max-width: 12ch;
+	margin: 22px 0;
+	line-height: 1.12;
+}
+.foot-addr {
+	font-size: 16px;
+	line-height: 1.7;
+	opacity: 0.8;
+}
+.foot-addr .lime {
+	font-weight: 500;
+	opacity: 1;
+}
+.foot-links {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 32px;
+}
+.foot-col h4 {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 2px;
+	opacity: 0.5;
+	margin-bottom: 16px;
+	font-weight: 500;
+}
+.foot-col ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.foot-col a {
+	font-size: 14px;
+	font-weight: 300;
+	opacity: 0.9;
+	transition: color 0.2s;
+}
+.foot-col a:hover {
+	color: var(--lime);
+}
+.foot-bottom {
+	max-width: var(--maxw);
+	margin: 28px auto 0;
+	display: flex;
+	justify-content: space-between;
+	gap: 16px;
+	flex-wrap: wrap;
+	font-size: 11px;
+	letter-spacing: 1px;
+	opacity: 0.5;
+	text-transform: uppercase;
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 1024px) {
+	.zone-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.adv-panel {
+		grid-template-columns: 1fr;
+		gap: 48px;
+		padding: 40px;
+	}
+	.deal-grid {
+		grid-template-columns: 1fr;
+		max-width: 460px;
+	}
+}
+@media (max-width: 768px) {
+	.cursor-dot {
+		display: none;
+	}
+	.nav-links,
+	.nav-cta {
+		display: none;
+	}
+	.hamburger {
+		display: block;
+	}
+	.hero {
+		height: auto;
+		min-height: 0;
+		padding: 8px;
+		padding-top: 86px;
+	}
+	.hero-card {
+		flex-direction: column;
+		height: auto;
+	}
+	.hero-text {
+		width: 100%;
+		padding: 36px 28px;
+		gap: 28px;
+	}
+	.hero-lead {
+		font-size: 16px;
+	}
+	.hero-media {
+		width: 100%;
+		height: 440px;
+	}
+	.hero-overlay {
+		left: 24px;
+		right: 24px;
+		bottom: 24px;
+		gap: 18px;
+	}
+	.hero-overlay p {
+		font-size: 16px;
+	}
+	.scroll-graphic {
+		display: none;
+	}
+	.zone-grid {
+		grid-template-columns: 1fr;
+	}
+	.foot-grid {
+		grid-template-columns: 1fr;
+		gap: 36px;
+	}
+	.foot-links {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.connect-band {
+		padding: 40px 28px;
+	}
+	.marquee-sec,
+	.zones,
+	.deals {
+		padding: 64px 0;
+	}
+	.zones,
+	.deals {
+		padding: 64px 18px;
+	}
+	.advantage,
+	.connect {
+		padding: 0 18px 64px;
+	}
+}
+@media (max-width: 420px) {
+	.hero-h h1 {
+		font-size: 44px;
+	}
+	.foot-links {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.marquee {
+		animation: none;
+	}
+	.hero-media img {
+		animation: none;
+	}
+	.reveal {
+		transition: none;
+		opacity: 1;
+		transform: none;
+	}
+}
+
+		</style>
+		
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<div class="cursor-dot" id="cursor" aria-hidden="true"></div>
+
+		<!-- ============ NAVBAR ============ -->
+		<div class="nav-shell">
+			<nav class="nav">
+				<div class="nav-left">
+					<button class="hamburger" id="menuOpen" aria-label="Open menu">
+						<svg width="20" height="14" viewBox="0 0 20 14" fill="none">
+							<path
+								d="M1 1H19M1 7H19M1 13H19"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+							/>
+						</svg>
+					</button>
+					<a class="brand" href="#top">Voltic</a>
+				</div>
+				<div class="nav-links">
+					<a href="#top">Home</a>
+					<a href="#zones">Experience</a>
+					<a href="#deals">Offers</a>
+					<a href="#advantage">Locations</a>
+				</div>
+				<a class="nav-cta" href="#connect">
+					Contact Us
+					<svg width="16" height="11" viewBox="0 0 18 12" fill="none">
+						<path
+							d="M1 6H17M17 6L12 1M17 6L12 11"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</a>
+			</nav>
+		</div>
+
+		<!-- mobile overlay -->
+		<div class="m-menu" id="mMenu">
+			<div class="m-menu-head">
+				<span class="brand">Voltic</span>
+				<button id="menuClose" aria-label="Close menu">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+						<path
+							d="M18 6L6 18M6 6L18 18"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+						/>
+					</svg>
+				</button>
+			</div>
+			<nav>
+				<a href="#top">Home</a>
+				<a href="#zones">Experience</a>
+				<a href="#deals">Offers</a>
+				<a href="#advantage">Locations</a>
+				<a href="#connect" class="solid">Contact Us</a>
+			</nav>
+		</div>
+
+		<main id="top">
+			<!-- ============ HERO ============ -->
+			<section class="hero">
+				<div class="hero-card">
+					<div class="hero-text">
+						<div class="reveal">
+							<p class="hero-lead">
+								India's most trusted offline destination for premium
+								electronics. Walk in for a hands-on experience today.
+							</p>
+							<div class="hero-h">
+								<h1 class="display">touch<span class="lime">.</span></h1>
+								<h1 class="display">feel<span class="lime">.</span></h1>
+								<h1 class="display">choose<span class="lime">.</span></h1>
+							</div>
+						</div>
+						<div class="proof reveal" style="transition-delay:.15s">
+							<div class="avatars">
+								<img src="assets/av1.jpg" alt="" loading="lazy">
+								<img src="assets/av2.jpg" alt="" loading="lazy">
+								<img src="assets/av3.jpg" alt="" loading="lazy">
+							</div>
+							<div class="proof-text">
+								1.2M+ happy techies visited our stores.
+								<strong>Find your nearest experience center.</strong>
+							</div>
+						</div>
+					</div>
+
+					<div class="hero-media">
+						<img
+							src="assets/hero-store.jpg"
+							alt="Inside a modern Voltic electronics experience center"
+						>
+						<div class="hero-overlay reveal" style="transition-delay:.3s">
+							<p>
+								Try the latest flagship smartphones, powerful laptops and
+								high-fidelity audio before you buy.
+							</p>
+							<div class="hero-btns">
+								<a href="#advantage" class="btn btn-lime">
+									Locate Store
+									<svg width="15" height="10" viewBox="0 0 18 12" fill="none">
+										<path
+											d="M1 6H17M17 6L12 1M17 6L12 11"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+									</svg>
+								</a>
+								<a href="#connect" class="btn btn-stone">
+									WhatsApp Us
+									<svg width="15" height="10" viewBox="0 0 18 12" fill="none">
+										<path
+											d="M1 6H17M17 6L12 1M17 6L12 11"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+									</svg>
+								</a>
+							</div>
+						</div>
+					</div>
+
+					<div class="scroll-graphic">
+						<svg
+							class="curve"
+							width="420"
+							height="64"
+							viewBox="0 0 420 64"
+							fill="none"
+						>
+							<path
+								d="M0 0 C0 35 30 64 64 64 H356 C390 64 420 35 420 0"
+								stroke="rgba(33,33,29,.25)"
+								stroke-width="1"
+								fill="none"
+							/>
+						</svg>
+						<div class="scroll-badge">
+							<svg
+								width="12"
+								height="12"
+								viewBox="0 0 12 12"
+								fill="none"
+								style="transform:rotate(90deg)"
+							>
+								<path
+									d="M1 6H11M11 6L7 2M11 6L7 10"
+									stroke="rgba(33,33,29,.7)"
+									stroke-width="1.2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ MARQUEE ============ -->
+			<section class="marquee-sec">
+				<div class="sec-head-center reveal">
+					<span class="eyebrow"><span class="dot"></span> In-Store Now</span>
+					<h2 class="display">Available for Demo Today</h2>
+				</div>
+				<div class="marquee" id="marquee">
+					<!-- track gets duplicated by JS -->
+					<div class="p-card">
+						<div class="plate">
+							<img
+								src="assets/p-headphones.jpg"
+								alt="Voltic Studio Pro headphones"
+								loading="lazy"
+							>
+						</div>
+						<div class="p-meta">
+							<div class="row">
+								<h3>Voltic Studio Pro</h3>
+								<span class="price">₹14,999</span>
+							</div>
+							<p class="p-tag">Studio Grade Audio • Demo Ready</p>
+						</div>
+					</div>
+					<div class="p-card">
+						<div class="plate">
+							<img
+								src="assets/p-glasses.jpg"
+								alt="Apex Vision G2 smart glasses"
+								loading="lazy"
+							>
+						</div>
+						<div class="p-meta">
+							<div class="row">
+								<h3>Apex Vision G2</h3>
+								<span class="price">₹8,499</span>
+							</div>
+							<p class="p-tag">Smart Glasses • Trial Available</p>
+						</div>
+					</div>
+					<div class="p-card">
+						<div class="plate">
+							<img
+								src="assets/p-camera.jpg"
+								alt="Voltic Cam Z mirrorless camera"
+								loading="lazy"
+							>
+						</div>
+						<div class="p-meta">
+							<div class="row">
+								<h3>Voltic Cam Z</h3>
+								<span class="price">₹45,999</span>
+							</div>
+							<p class="p-tag">Mirrorless • Test in Studio</p>
+						</div>
+					</div>
+					<div class="p-card">
+						<div class="plate">
+							<img
+								src="assets/p-laptop.jpg"
+								alt="Apex Laptop Ultra"
+								loading="lazy"
+							>
+						</div>
+						<div class="p-meta">
+							<div class="row">
+								<h3>Apex Laptop Ultra</h3>
+								<span class="price">₹92,999</span>
+							</div>
+							<p class="p-tag">Core i9 • Hands-on Demo</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ ZONES ============ -->
+			<section class="zones" id="zones">
+				<div class="wrap head reveal">
+					<span class="eyebrow"
+						><span class="dot"></span>
+						Experience Centers</span
+					>
+					<h2 class="display">Curated Zones</h2>
+				</div>
+				<div class="wrap zone-grid">
+					<div class="zone reveal" style="transition-delay:.05s">
+						<img src="assets/zone-phone.jpg" alt="The Phone Hub">
+						<div class="arrow">
+							<svg width="14" height="10" viewBox="0 0 18 12" fill="none">
+								<path
+									d="M1 6H17M17 6L12 1M17 6L12 11"
+									stroke="currentColor"
+									stroke-width="1.6"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						</div>
+						<div class="label">
+							<h3>The Phone Hub</h3>
+							<p>Try every flagship</p>
+						</div>
+					</div>
+					<div class="zone reveal" style="transition-delay:.12s">
+						<img src="assets/zone-computing.jpg" alt="Computing Desk">
+						<div class="arrow">
+							<svg width="14" height="10" viewBox="0 0 18 12" fill="none">
+								<path
+									d="M1 6H17M17 6L12 1M17 6L12 11"
+									stroke="currentColor"
+									stroke-width="1.6"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						</div>
+						<div class="label">
+							<h3>Computing Desk</h3>
+							<p>Test your workflow</p>
+						</div>
+					</div>
+					<div class="zone reveal" style="transition-delay:.19s">
+						<img src="assets/zone-audio.jpg" alt="Audio Lounge">
+						<div class="arrow">
+							<svg width="14" height="10" viewBox="0 0 18 12" fill="none">
+								<path
+									d="M1 6H17M17 6L12 1M17 6L12 11"
+									stroke="currentColor"
+									stroke-width="1.6"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						</div>
+						<div class="label">
+							<h3>Audio Lounge</h3>
+							<p>Pure Hi-Fi experience</p>
+						</div>
+					</div>
+					<div class="zone reveal" style="transition-delay:.26s">
+						<img src="assets/zone-camera.jpg" alt="Camera Studio">
+						<div class="arrow">
+							<svg width="14" height="10" viewBox="0 0 18 12" fill="none">
+								<path
+									d="M1 6H17M17 6L12 1M17 6L12 11"
+									stroke="currentColor"
+									stroke-width="1.6"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						</div>
+						<div class="label">
+							<h3>Camera Studio</h3>
+							<p>Live studio testing</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ ADVANTAGE ============ -->
+			<section class="advantage" id="advantage">
+				<div class="adv-panel reveal">
+					<div class="adv-left">
+						<div class="top">
+							<span class="eyebrow"
+								><span class="dot"></span>
+								In-Store Experience</span
+							>
+							<h2 class="display">
+								The Voltic Advantage.<br>Exclusively Offline.
+							</h2>
+						</div>
+						<div class="acc" id="acc">
+							<div class="acc-item active" data-i="0">
+								<button class="acc-title">
+									<span class="num">01</span>
+									Instant In-Store Purchase
+								</button>
+								<div class="acc-body">
+									<p>
+										Don't wait for delivery. Walk in, choose your tech, and walk
+										out with it today. We accept UPI, cards and cash.
+									</p>
+								</div>
+							</div>
+							<div class="acc-item" data-i="1">
+								<button class="acc-title">
+									<span class="num">02</span>
+									Expert Product Consultations
+								</button>
+								<div class="acc-body">
+									<p>
+										Our tech experts don't just sell — they help you choose
+										what's best for your lifestyle and workflow.
+									</p>
+								</div>
+							</div>
+							<div class="acc-item" data-i="2">
+								<button class="acc-title">
+									<span class="num">03</span>
+									Live Testing Zones
+								</button>
+								<div class="acc-body">
+									<p>
+										Experience 4K rendering on laptops or test noise
+										cancellation in our specialized audio booths before buying.
+									</p>
+								</div>
+							</div>
+							<div class="acc-item" data-i="3">
+								<button class="acc-title">
+									<span class="num">04</span>
+									Same-Day Local Delivery
+								</button>
+								<div class="acc-body">
+									<p>
+										Bought a large TV or sound system? We'll deliver it to your
+										home within 4 hours if you're in the same city.
+									</p>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="adv-media" id="advMedia">
+						<div class="slide active">
+							<img src="assets/adv-purchase.jpg" alt="In-store purchase">
+						</div>
+						<div class="slide">
+							<img src="assets/adv-consult.jpg" alt="Expert consultation">
+						</div>
+						<div class="slide">
+							<img src="assets/adv-testing.jpg" alt="Live testing zone">
+						</div>
+						<div class="slide">
+							<img src="assets/adv-delivery.jpg" alt="Same-day delivery">
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ DEALS ============ -->
+			<section class="deals" id="deals">
+				<div class="head reveal">
+					<span class="eyebrow"
+						><span class="dot"></span>
+						Exclusive In-Store Deals</span
+					>
+					<h2 class="display">Offline Perks You Can't Resist.</h2>
+					<p>Additional discounts available on physical trade-ins.</p>
+				</div>
+				<div class="deal-grid">
+					<div class="deal reveal" style="transition-delay:.05s">
+						<div class="plate">
+							<img
+								src="assets/deal-watch.jpg"
+								alt="Voltic Watch S4"
+								loading="lazy"
+							>
+						</div>
+						<h3>Voltic Watch S4</h3>
+						<div class="price-row">
+							<span class="price">₹12,999</span><span class="was">₹18,000</span>
+						</div>
+						<p class="note">
+							Hands-on testing available at all Delhi / NCR stores.
+						</p>
+						<hr>
+						<ul>
+							<li>
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+									<path
+										d="M2.5 8L6.5 12L13.5 5"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+								In-Store Fit Check
+							</li>
+							<li>
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+									<path
+										d="M2.5 8L6.5 12L13.5 5"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+								Immediate Setup Assistance
+							</li>
+						</ul>
+						<a href="#connect" class="deal-cta">Check Stock</a>
+					</div>
+
+					<div class="deal featured reveal" style="transition-delay:.12s">
+						<span class="badge">Bestseller</span>
+						<div class="plate">
+							<img
+								src="assets/deal-phone.jpg"
+								alt="Apex Pro Flagship"
+								loading="lazy"
+							>
+						</div>
+						<h3>Apex Pro Flagship</h3>
+						<div class="price-row">
+							<span class="price">₹64,999</span
+							><span class="sub">EMI from ₹3,499/mo</span>
+						</div>
+						<p class="note">Live demo available. Take it home today.</p>
+						<hr>
+						<ul>
+							<li>
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+									<path
+										d="M2.5 8L6.5 12L13.5 5"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+								Zero Waiting Period
+							</li>
+							<li>
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+									<path
+										d="M2.5 8L6.5 12L13.5 5"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+								Exchange Old Phone In-Store
+							</li>
+							<li>
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+									<path
+										d="M2.5 8L6.5 12L13.5 5"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+								Paperless No-Cost EMI
+							</li>
+						</ul>
+						<a href="#connect" class="deal-cta">Book Trial</a>
+					</div>
+
+					<div class="deal reveal" style="transition-delay:.19s">
+						<div class="plate">
+							<img
+								src="assets/deal-buds.jpg"
+								alt="Sonic Buds Gen-3"
+								loading="lazy"
+							>
+						</div>
+						<h3>Sonic Buds Gen-3</h3>
+						<div class="price-row">
+							<span class="price">₹4,499</span
+							><span class="sub">Save ₹2,500</span>
+						</div>
+						<p class="note">Sanitized demo units available for sound checks.</p>
+						<hr>
+						<ul>
+							<li>
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+									<path
+										d="M2.5 8L6.5 12L13.5 5"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+								Personal Hygiene Demo Units
+							</li>
+							<li>
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+									<path
+										d="M2.5 8L6.5 12L13.5 5"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+								Free Carry Case with Purchase
+							</li>
+						</ul>
+						<a href="#connect" class="deal-cta">Check Stock</a>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ CONNECT ============ -->
+			<section class="connect" id="connect">
+				<div class="connect-band reveal">
+					<div>
+						<h2 class="display">Visit or Connect.</h2>
+						<p>
+							Have questions? Chat with our experts or visit a Voltic center
+							near you.
+						</p>
+					</div>
+					<div class="connect-btns">
+						<a
+							href="https://wa.me/919876543210"
+							target="_blank"
+							rel="noopener"
+							class="c-btn wa"
+						>
+							<svg
+								width="20"
+								height="20"
+								fill="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"
+								/>
+							</svg>
+							WhatsApp
+						</a>
+						<a href="tel:1800865832" class="c-btn call">
+							<svg
+								width="20"
+								height="20"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+								/>
+							</svg>
+							Call Support
+						</a>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<!-- ============ FOOTER ============ -->
+		<footer>
+			<div class="foot-grid">
+				<div class="foot-brand">
+					<div class="mark">Voltic</div>
+					<h2>Experience tech at our offline hubs across India.</h2>
+					<div class="foot-addr">
+						Cyber Hub, Building 10<br>
+						Gurugram, Haryana 122002<br>
+						India<br><br>
+						<span class="lime">WhatsApp: +91 98765 43210</span><br>
+						<span class="lime">Phone: 1800-VOLTIC</span>
+					</div>
+				</div>
+				<div class="foot-links">
+					<div class="foot-col">
+						<h4>Experience</h4>
+						<ul>
+							<li><a href="#zones">Demo Centers</a></li>
+							<li><a href="#advantage">In-Store Repair</a></li>
+							<li><a href="#advantage">Personal Consult</a></li>
+							<li><a href="#deals">Trade-in</a></li>
+						</ul>
+					</div>
+					<div class="foot-col">
+						<h4>Support</h4>
+						<ul>
+							<li><a href="#advantage">Find a Store</a></li>
+							<li><a href="#connect">Service Warranty</a></li>
+							<li><a href="#connect">Corporate Sales</a></li>
+							<li><a href="#connect">FAQ</a></li>
+						</ul>
+					</div>
+					<div class="foot-col">
+						<h4>Connect</h4>
+						<ul>
+							<li><a href="#connect">Instagram</a></li>
+							<li><a href="#connect">LinkedIn</a></li>
+							<li><a href="#connect">WhatsApp</a></li>
+						</ul>
+					</div>
+				</div>
+			</div>
+			<div class="foot-bottom">
+				<p>© 2025 Voltic Electronics India Pvt Ltd. All rights reserved.</p>
+				<p>Authorized retailer of premium global tech brands.</p>
+			</div>
+		</footer>
+
+		<script>
+(() => {
+	document.addEventListener("DOMContentLoaded", () => {
+		/* ---- Reveal on scroll ---- */
+		var io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((e) => {
+					if (e.isIntersecting) {
+						e.target.classList.add("is-visible");
+						io.unobserve(e.target);
+					}
+				});
+			},
+			{ threshold: 0.12 },
+		);
+		document.querySelectorAll(".reveal").forEach((el) => {
+			io.observe(el);
+		});
+
+		/* ---- Seamless marquee: duplicate the track ---- */
+		var marquee = document.getElementById("marquee");
+		if (marquee) {
+			var cards = Array.prototype.slice.call(marquee.children);
+			cards.forEach((c) => {
+				var clone = c.cloneNode(true);
+				clone.setAttribute("aria-hidden", "true");
+				marquee.appendChild(clone);
+			});
+		}
+
+		/* ---- Accordion + cross-fade image ---- */
+		var accItems = document.querySelectorAll(".acc-item");
+		var slides = document.querySelectorAll("#advMedia .slide");
+		accItems.forEach((item) => {
+			item.querySelector(".acc-title").addEventListener("click", () => {
+				var i = parseInt(item.getAttribute("data-i"), 10);
+				accItems.forEach((it) => {
+					it.classList.remove("active");
+				});
+				slides.forEach((s) => {
+					s.classList.remove("active");
+				});
+				item.classList.add("active");
+				if (slides[i]) slides[i].classList.add("active");
+			});
+		});
+
+		/* ---- Custom cursor (desktop only) ---- */
+		var cursor = document.getElementById("cursor");
+		if (cursor && window.matchMedia("(pointer:fine)").matches) {
+			var cx = window.innerWidth / 2,
+				cy = window.innerHeight / 2;
+			var x = cx,
+				y = cy;
+			window.addEventListener("mousemove", (e) => {
+				cx = e.clientX;
+				cy = e.clientY;
+			});
+			(function loop() {
+				x += (cx - x) * 0.2;
+				y += (cy - y) * 0.2;
+				cursor.style.transform = `translate(${x}px,${y}px)`;
+				requestAnimationFrame(loop);
+			})();
+			// grow over interactive elements
+			document.querySelectorAll("a, button").forEach((el) => {
+				el.addEventListener("mouseenter", () => {
+					cursor.style.width = "34px";
+					cursor.style.height = "34px";
+					cursor.style.margin = "-17px 0 0 -17px";
+					cursor.style.opacity = ".65";
+				});
+				el.addEventListener("mouseleave", () => {
+					cursor.style.width = "10px";
+					cursor.style.height = "10px";
+					cursor.style.margin = "-5px 0 0 -5px";
+					cursor.style.opacity = "1";
+				});
+			});
+		} else if (cursor) {
+			cursor.style.display = "none";
+		}
+
+		/* ---- Mobile menu ---- */
+		var mMenu = document.getElementById("mMenu");
+		document.getElementById("menuOpen").addEventListener("click", () => {
+			mMenu.classList.add("open");
+		});
+		document.getElementById("menuClose").addEventListener("click", () => {
+			mMenu.classList.remove("open");
+		});
+		mMenu.querySelectorAll("a").forEach((a) => {
+			a.addEventListener("click", () => {
+				mMenu.classList.remove("open");
+			});
+		});
+	});
+})();
+
+		</script>
+	</body>
+</html>

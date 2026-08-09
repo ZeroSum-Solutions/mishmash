@@ -1,0 +1,13 @@
+{
+  "slug": "alfred",
+  "name": "Alfred — SaaS Productivity Platform Landing Page",
+  "family": "lexingtonthemes",
+  "kind": "multipage",
+  "cdn_fonts": [
+    "InterVariable"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/templates/premium/lexingtonthemes/alfred",
+  "source_license": "MIT"
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "cobalt-repairworks-h78",
+  "name": "Cobalt Repairworks — Electronics Repair Studio Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Host Grotesk",
+    "IBM Plex Mono"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/cobalt-repairworks-h78",
+  "source_license": "MIT"
+}

@@ -1,0 +1,1367 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Archway Summit 2026 — The Future of Code</title>
+		<meta
+			name="description"
+			content="Archway Summit — a two-day developer conference. Headline speakers, live workshops, and the future of code, all under one arch."
+		>
+		<style>
+
+
+
+
+:root {
+	--bg: #050505;
+	--bg-2: #080808;
+	--bg-3: #0a0a0a;
+	--surface: #111111;
+	--surface-2: #161616;
+	--text: #ffffff;
+	--text-2: #9ca3af;
+	--text-3: #6b7280;
+	--line: rgba(255, 255, 255, 0.06);
+	--line-strong: rgba(255, 255, 255, 0.14);
+	--pink: #f7b5cd;
+	--blue: #dbe8ea;
+	--beige: #e6ddd6;
+	--yellow: #fcd561;
+	--maxw: 1400px;
+}
+
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+	font-family: "Inter", system-ui, sans-serif;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+	overflow-x: hidden;
+	line-height: 1.5;
+}
+
+::selection {
+	background: #fff;
+	color: #000;
+}
+
+::-webkit-scrollbar {
+	width: 9px;
+}
+::-webkit-scrollbar-track {
+	background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+	background: #2a2a2a;
+	border-radius: 5px;
+	border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+	background: #3a3a3a;
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+button {
+	font-family: inherit;
+	cursor: pointer;
+}
+
+.mono {
+	font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+.wrap {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 0 24px;
+}
+.eyebrow {
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	color: var(--text-3);
+}
+
+/* ============ HEADER ============ */
+.header {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	z-index: 50;
+	background: rgba(5, 5, 5, 0.82);
+	backdrop-filter: blur(14px);
+	-webkit-backdrop-filter: blur(14px);
+	border-bottom: 1px solid var(--line);
+}
+.nav {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 0 24px;
+	height: 72px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	position: relative;
+}
+.nav-links {
+	display: flex;
+	gap: 34px;
+}
+.nav-links a {
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--text-2);
+	transition: color 0.25s;
+	position: relative;
+}
+.nav-links a::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	bottom: -5px;
+	height: 1px;
+	width: 0;
+	background: #fff;
+	transition: width 0.3s ease;
+}
+.nav-links a:hover {
+	color: #fff;
+}
+.nav-links a:hover::after {
+	width: 100%;
+}
+.wordmark {
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
+	font-size: 17px;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	white-space: nowrap;
+}
+.wordmark span {
+	color: var(--text-3);
+	font-weight: 500;
+}
+.btn-pill {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	border: 1px solid var(--line-strong);
+	border-radius: 999px;
+	padding: 11px 22px;
+	transition: all 0.25s ease;
+	white-space: nowrap;
+	background: transparent;
+	color: #fff;
+}
+.btn-pill:hover {
+	background: #fff;
+	color: #000;
+	border-color: #fff;
+}
+.hamburger {
+	display: none;
+	background: none;
+	border: none;
+	color: #fff;
+	font-size: 0;
+}
+.hamburger svg {
+	width: 24px;
+	height: 24px;
+}
+
+/* ============ HERO ============ */
+.hero {
+	padding: 130px 0 56px;
+}
+.hero-grid {
+	display: grid;
+	grid-template-columns: 1.1fr 0.9fr;
+	gap: 48px;
+	align-items: start;
+	margin-bottom: 26px;
+}
+.hero h1 {
+	font-size: clamp(2.5rem, 6.4vw, 4.2rem);
+	font-weight: 800;
+	line-height: 0.9;
+	letter-spacing: -0.035em;
+	text-transform: uppercase;
+}
+.hero h1 .light {
+	font-weight: 300;
+	color: #d4d4d4;
+}
+.hero-right {
+	max-width: 460px;
+	justify-self: end;
+	padding-top: 8px;
+}
+.hero-right p {
+	color: var(--text-2);
+	font-size: 1.075rem;
+	line-height: 1.65;
+	margin-bottom: 30px;
+}
+.btn-solid {
+	display: inline-block;
+	background: #fff;
+	color: #000;
+	font-weight: 700;
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	padding: 15px 30px;
+	border-radius: 999px;
+	transition: transform 0.25s ease;
+}
+.btn-solid:hover {
+	transform: scale(1.05);
+}
+.hero-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0;
+	border-top: 1px solid var(--line);
+	margin-top: 10px;
+}
+.hero-meta .cell {
+	padding: 22px 28px 22px 0;
+	margin-right: 28px;
+	border-right: 1px solid var(--line);
+}
+.hero-meta .cell:last-child {
+	border-right: none;
+}
+.hero-meta .k {
+	font-size: 11px;
+	letter-spacing: 0.2em;
+	color: var(--text-3);
+	text-transform: uppercase;
+	margin-bottom: 7px;
+}
+.hero-meta .v {
+	font-size: 1.05rem;
+	font-weight: 600;
+}
+
+/* ============ SPEAKERS / ARCHES ============ */
+.speakers {
+	padding: 14px 0 56px;
+}
+.arch-grid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 22px;
+	align-items: end;
+}
+.arch {
+	border-radius: 9999px 9999px 0 0;
+	height: 580px;
+	padding: 30px 22px 0;
+	position: relative;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	transition:
+		transform 0.35s ease,
+		box-shadow 0.35s ease;
+}
+.arch:hover {
+	transform: translateY(-10px);
+	box-shadow: 0 30px 60px -25px rgba(0, 0, 0, 0.7);
+}
+.arch.pink {
+	background: var(--pink);
+}
+.arch.blue {
+	background: var(--blue);
+}
+.arch.beige {
+	background: var(--beige);
+}
+.arch.yellow {
+	background: var(--yellow);
+}
+.arch-head {
+	text-align: center;
+	color: #000;
+	margin-top: 22px;
+	z-index: 2;
+	position: relative;
+}
+.arch-head h3 {
+	font-size: 1.05rem;
+	font-weight: 900;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	margin-bottom: 5px;
+}
+.arch-head .role {
+	font-size: 0.72rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	opacity: 0.62;
+}
+.arch-photo {
+	flex: 1;
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	position: relative;
+}
+.arch-photo img {
+	width: 118%;
+	max-width: none;
+	height: auto;
+	object-fit: cover;
+	transform: translateY(14px);
+	filter: grayscale(100%) contrast(1.08);
+	-webkit-mask-image: linear-gradient(to bottom, #000 84%, transparent 100%);
+	mask-image: linear-gradient(to bottom, #000 84%, transparent 100%);
+	transition:
+		filter 0.45s ease,
+		transform 0.5s ease;
+}
+.arch:hover .arch-photo img {
+	filter: grayscale(0%) contrast(1);
+	transform: translateY(6px);
+}
+
+/* ============ LOGO STRIP ============ */
+.logos {
+	padding: 50px 0;
+	background: var(--bg-2);
+	border-top: 1px solid var(--line);
+	border-bottom: 1px solid var(--line);
+}
+.logos .eyebrow {
+	text-align: center;
+	display: block;
+	margin-bottom: 34px;
+}
+.logo-row {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	align-items: center;
+	gap: 26px 56px;
+}
+.logo-item {
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	font-size: 1.2rem;
+	font-weight: 700;
+	color: #fff;
+	opacity: 0.45;
+	filter: grayscale(100%);
+	transition:
+		opacity 0.4s,
+		filter 0.4s;
+}
+.logo-row:hover .logo-item {
+	opacity: 0.32;
+}
+.logo-item:hover {
+	opacity: 1;
+	filter: grayscale(0%);
+}
+.logo-item svg {
+	width: 26px;
+	height: 26px;
+}
+
+/* ============ SCHEDULE ============ */
+.schedule {
+	padding: 96px 0;
+	background: var(--bg-3);
+}
+.schedule-inner {
+	max-width: 1000px;
+	margin: 0 auto;
+	padding: 0 24px;
+}
+.schedule-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	margin-bottom: 56px;
+	gap: 28px;
+	flex-wrap: wrap;
+}
+.schedule-head h2 {
+	font-size: clamp(2rem, 4vw, 3rem);
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	margin-bottom: 12px;
+}
+.schedule-head p {
+	color: var(--text-2);
+}
+.toggle {
+	display: flex;
+	gap: 12px;
+}
+.toggle button {
+	border-radius: 999px;
+	padding: 10px 24px;
+	font-weight: 700;
+	font-size: 13px;
+	border: 1px solid var(--line-strong);
+	background: transparent;
+	color: #fff;
+	transition: all 0.25s;
+}
+.toggle button:hover {
+	background: rgba(255, 255, 255, 0.08);
+}
+.toggle button.active {
+	background: #fff;
+	color: #000;
+	border-color: #fff;
+	box-shadow: 0 0 24px rgba(255, 255, 255, 0.28);
+}
+.day {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.day.hidden {
+	display: none;
+}
+.sess {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 18px;
+	padding: 28px 30px;
+	display: flex;
+	align-items: center;
+	gap: 26px;
+	transition: background 0.25s;
+}
+.sess:hover {
+	background: var(--surface-2);
+}
+.sess .time {
+	width: 116px;
+	flex-shrink: 0;
+	color: var(--text-2);
+	font-size: 0.85rem;
+}
+.sess .body {
+	flex: 1;
+}
+.sess .body h4 {
+	font-size: 1.22rem;
+	font-weight: 700;
+	margin-bottom: 5px;
+	transition: color 0.25s;
+}
+.sess .body .meta {
+	color: var(--text-3);
+	font-size: 0.86rem;
+}
+.sess.acc-pink:hover .body h4 {
+	color: var(--pink);
+}
+.sess.acc-blue:hover .body h4 {
+	color: var(--blue);
+}
+.sess.acc-beige:hover .body h4 {
+	color: var(--beige);
+}
+.sess.acc-yellow:hover .body h4 {
+	color: var(--yellow);
+}
+.sess .go {
+	width: 38px;
+	height: 38px;
+	flex-shrink: 0;
+	border-radius: 999px;
+	border: 1px solid var(--line-strong);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #fff;
+	transition: all 0.25s;
+}
+.sess .go svg {
+	width: 16px;
+	height: 16px;
+	transform: rotate(-45deg);
+	transition: transform 0.25s;
+}
+.sess:hover .go {
+	background: #fff;
+	color: #000;
+}
+.sess:hover .go svg {
+	transform: rotate(0deg);
+}
+.fade-in {
+	animation: fadeUp 0.45s ease both;
+}
+@keyframes fadeUp {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* ============ FAQ ============ */
+.faq {
+	padding: 96px 0;
+	background: var(--bg);
+	border-top: 1px solid var(--line);
+}
+.faq-inner {
+	max-width: 800px;
+	margin: 0 auto;
+	padding: 0 24px;
+}
+.faq h2 {
+	font-size: clamp(1.8rem, 4vw, 3rem);
+	font-weight: 800;
+	text-align: center;
+	margin-bottom: 48px;
+	letter-spacing: -0.02em;
+}
+.faq-list {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+details.qa {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 18px;
+	overflow: hidden;
+}
+details.qa summary {
+	list-style: none;
+	cursor: pointer;
+	padding: 24px 26px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 16px;
+	font-weight: 700;
+	font-size: 1.08rem;
+}
+details.qa summary::-webkit-details-marker {
+	display: none;
+}
+details.qa summary .chev {
+	transition: transform 0.3s;
+	color: var(--text-3);
+	flex-shrink: 0;
+}
+details.qa summary .chev svg {
+	width: 18px;
+	height: 18px;
+	display: block;
+}
+details.qa[open] summary .chev {
+	transform: rotate(180deg);
+}
+details.qa .ans {
+	padding: 0 26px 24px;
+	color: var(--text-2);
+	line-height: 1.7;
+}
+
+/* ============ FOOTER / CTA ============ */
+.foot {
+	background: #fff;
+	color: #000;
+	padding: 88px 0 40px;
+}
+.foot-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 48px;
+	align-items: center;
+}
+.foot h2 {
+	font-size: clamp(2.6rem, 6vw, 4.6rem);
+	font-weight: 800;
+	letter-spacing: -0.04em;
+	text-transform: uppercase;
+	line-height: 0.92;
+	margin-bottom: 22px;
+}
+.foot p {
+	font-size: 1.1rem;
+	color: #555;
+	max-width: 420px;
+	margin-bottom: 30px;
+}
+.foot-ctas {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+}
+.foot-ctas a {
+	font-size: 13px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.07em;
+	padding: 15px 28px;
+	border-radius: 999px;
+	transition: all 0.25s;
+}
+.fc-dark {
+	background: #000;
+	color: #fff;
+}
+.fc-dark:hover {
+	background: #2a2a2a;
+}
+.fc-out {
+	border: 1px solid #000;
+	color: #000;
+}
+.fc-out:hover {
+	background: #f1f1f1;
+}
+.stat-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+}
+.stat {
+	background: #f3f3f1;
+	border-radius: 24px;
+	padding: 30px;
+}
+.stat .num {
+	font-size: 2.4rem;
+	font-weight: 800;
+	margin-bottom: 6px;
+	letter-spacing: -0.02em;
+}
+.stat .lbl {
+	font-size: 0.78rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	opacity: 0.55;
+}
+.stat-arrow {
+	background: #000;
+	color: #fff;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 24px;
+	transition: background 0.25s;
+}
+.stat-arrow:hover {
+	background: #2a2a2a;
+}
+.stat-arrow svg {
+	width: 40px;
+	height: 40px;
+	transform: rotate(-45deg);
+	transition: transform 0.3s;
+}
+.stat-arrow:hover svg {
+	transform: rotate(0deg);
+}
+.foot-bar {
+	max-width: var(--maxw);
+	margin: 64px auto 0;
+	padding: 26px 24px 0;
+	border-top: 1px solid #e2e2e2;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 0.85rem;
+	font-weight: 500;
+	color: #888;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+.foot-bar a {
+	transition: color 0.2s;
+}
+.foot-bar a:hover {
+	color: #000;
+}
+.foot-bar .links {
+	display: flex;
+	gap: 24px;
+}
+
+/* ============ SCROLL REVEAL ============ */
+.reveal {
+	opacity: 0;
+	transform: translateY(20px);
+	transition:
+		opacity 0.8s ease-out,
+		transform 0.8s ease-out;
+}
+.reveal.visible {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 1024px) {
+	.arch-grid {
+		grid-template-columns: repeat(2, 1fr);
+		gap: 18px;
+	}
+	.arch {
+		height: 500px;
+	}
+}
+@media (max-width: 820px) {
+	.hero-grid {
+		grid-template-columns: 1fr;
+		gap: 30px;
+	}
+	.hero-right {
+		justify-self: start;
+		max-width: 540px;
+	}
+	.nav-links {
+		display: none;
+	}
+	.hamburger {
+		display: block;
+	}
+	.wordmark {
+		left: auto;
+		right: 0;
+		transform: none;
+		position: static;
+	}
+	.nav {
+		justify-content: space-between;
+	}
+	.foot-grid {
+		grid-template-columns: 1fr;
+	}
+}
+@media (max-width: 560px) {
+	.arch-grid {
+		grid-template-columns: 1fr;
+	}
+	.arch {
+		height: 450px;
+		max-width: 420px;
+		margin: 0 auto;
+		width: 100%;
+	}
+	.sess {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 12px;
+	}
+	.sess .go {
+		align-self: flex-end;
+	}
+	.schedule-head {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+	.hero-meta .cell {
+		border-right: none;
+		border-bottom: 1px solid var(--line);
+		margin-right: 0;
+		padding-right: 0;
+		width: 100%;
+	}
+	.hero-meta .cell:last-child {
+		border-bottom: none;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- HEADER -->
+		<header class="header">
+			<nav class="nav">
+				<div class="nav-links">
+					<a href="#speakers">Speakers</a>
+					<a href="#schedule">Schedule</a>
+					<a href="#pricing">Pricing</a>
+				</div>
+				<button class="hamburger" id="hamburger" aria-label="Toggle menu">
+					<svg
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<line x1="3" y1="6" x2="21" y2="6" />
+						<line x1="3" y1="12" x2="21" y2="12" />
+						<line x1="3" y1="18" x2="21" y2="18" />
+					</svg>
+				</button>
+				<div class="wordmark">archway<span>.summit</span></div>
+				<div><a href="#pricing" class="btn-pill">Get Tickets</a></div>
+			</nav>
+			<div
+				class="mobile-menu"
+				id="mobileMenu"
+				style="display:none; padding: 0 24px 18px; border-top:1px solid var(--line);"
+			>
+				<a
+					href="#speakers"
+					style="display:block; padding:12px 0; color:var(--text-2);"
+					>Speakers</a
+				>
+				<a
+					href="#schedule"
+					style="display:block; padding:12px 0; color:var(--text-2);"
+					>Schedule</a
+				>
+				<a
+					href="#pricing"
+					style="display:block; padding:12px 0; color:var(--text-2);"
+					>Pricing</a
+				>
+			</div>
+		</header>
+
+		<main>
+			<!-- HERO + SPEAKERS -->
+			<section class="hero wrap">
+				<div class="hero-grid">
+					<div class="reveal">
+						<h1>
+							The Brightest<br><span class="light">Minds In Code,</span><br>
+							<span class="light">Under One Arch.</span>
+						</h1>
+					</div>
+					<div class="hero-right reveal">
+						<p>
+							Skip the recycled tutorials. Spend two days with the engineers
+							shaping the next decade of software — live keynotes, hands-on
+							workshops, and conversations you can't get anywhere else.
+						</p>
+						<a href="#schedule" class="btn-solid">View Schedule</a>
+					</div>
+				</div>
+				<div class="hero-meta mono reveal">
+					<div class="cell">
+						<div class="k">Dates</div>
+						<div class="v">May 14–15, 2026</div>
+					</div>
+					<div class="cell">
+						<div class="k">Location</div>
+						<div class="v">Lisbon, PT</div>
+					</div>
+					<div class="cell">
+						<div class="k">Format</div>
+						<div class="v">In-person + Live</div>
+					</div>
+				</div>
+			</section>
+
+			<section class="speakers wrap" id="speakers">
+				<div class="arch-grid">
+					<div class="arch pink reveal">
+						<div class="arch-head">
+							<h3>Anna Dean</h3>
+							<p class="role">React Core Team</p>
+						</div>
+						<div class="arch-photo">
+							<img src="assets/speaker-1.jpg" alt="Anna Dean" loading="lazy">
+						</div>
+					</div>
+					<div class="arch blue reveal">
+						<div class="arch-head">
+							<h3>Chris Mezy</h3>
+							<p class="role">Distributed Systems</p>
+						</div>
+						<div class="arch-photo">
+							<img src="assets/speaker-2.jpg" alt="Chris Mezy" loading="lazy">
+						</div>
+					</div>
+					<div class="arch beige reveal">
+						<div class="arch-head">
+							<h3>Leslie Schnider</h3>
+							<p class="role">Backend Architect</p>
+						</div>
+						<div class="arch-photo">
+							<img
+								src="assets/speaker-3.jpg"
+								alt="Leslie Schnider"
+								loading="lazy"
+							>
+						</div>
+					</div>
+					<div class="arch yellow reveal">
+						<div class="arch-head">
+							<h3>Jim Brickton</h3>
+							<p class="role">Applied AI</p>
+						</div>
+						<div class="arch-photo">
+							<img
+								src="assets/speaker-4.jpg"
+								alt="Jim Brickton"
+								loading="lazy"
+							>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- LOGO STRIP -->
+			<section class="logos">
+				<div class="wrap">
+					<span class="eyebrow">Trusted by engineering teams at</span>
+					<div class="logo-row">
+						<div class="logo-item">
+							<svg viewBox="0 0 24 24" fill="currentColor">
+								<path d="M13.5 2 4 13h6l-.5 9L20 11h-6.5z" />
+							</svg>
+							Voltline
+						</div>
+						<div class="logo-item">
+							<svg viewBox="0 0 24 24" fill="currentColor">
+								<circle cx="12" cy="12" r="9" />
+								<circle cx="12" cy="12" r="3.5" fill="#080808" />
+							</svg>
+							Orbital
+						</div>
+						<div class="logo-item">
+							<svg viewBox="0 0 24 24" fill="currentColor">
+								<rect x="3" y="3" width="8" height="8" rx="1.5" />
+								<rect x="13" y="3" width="8" height="8" rx="1.5" />
+								<rect x="8" y="13" width="8" height="8" rx="1.5" />
+							</svg>
+							Quadra
+						</div>
+						<div class="logo-item">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2.2"
+							>
+								<path d="M4 17 L10 7 L14 14 L20 5" />
+							</svg>
+							Apexly
+						</div>
+						<div class="logo-item">
+							<svg viewBox="0 0 24 24" fill="currentColor">
+								<path
+									d="M12 2 22 8v8l-10 6L2 16V8z"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								/>
+								<circle cx="12" cy="12" r="3" />
+							</svg>
+							Hexform
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- SCHEDULE -->
+			<section class="schedule" id="schedule">
+				<div class="schedule-inner">
+					<div class="schedule-head">
+						<div class="reveal">
+							<h2>Event Schedule</h2>
+							<p>Two days of intensive learning, building, and networking.</p>
+						</div>
+						<div class="toggle">
+							<button id="btnDay1" class="active" data-day="1">Day 1</button>
+							<button id="btnDay2" data-day="2">Day 2</button>
+						</div>
+					</div>
+
+					<div id="day1" class="day">
+						<div class="sess acc-pink reveal">
+							<div class="time mono">09:00 AM</div>
+							<div class="body">
+								<h4>Keynote: The Future of React</h4>
+								<div class="meta">Main Stage · Anna Dean</div>
+							</div>
+							<div class="go">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<line x1="5" y1="12" x2="19" y2="12" />
+									<polyline points="12 5 19 12 12 19" />
+								</svg>
+							</div>
+						</div>
+						<div class="sess acc-yellow reveal">
+							<div class="time mono">11:30 AM</div>
+							<div class="body">
+								<h4>AI in Production Environments</h4>
+								<div class="meta">Tech Hall A · Jim Brickton</div>
+							</div>
+							<div class="go">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<line x1="5" y1="12" x2="19" y2="12" />
+									<polyline points="12 5 19 12 12 19" />
+								</svg>
+							</div>
+						</div>
+						<div class="sess acc-blue reveal">
+							<div class="time mono">02:00 PM</div>
+							<div class="body">
+								<h4>Scalable Data Architectures</h4>
+								<div class="meta">Workshop Room · Chris Mezy</div>
+							</div>
+							<div class="go">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<line x1="5" y1="12" x2="19" y2="12" />
+									<polyline points="12 5 19 12 12 19" />
+								</svg>
+							</div>
+						</div>
+						<div class="sess acc-beige reveal">
+							<div class="time mono">05:30 PM</div>
+							<div class="body">
+								<h4>Opening Night Mixer</h4>
+								<div class="meta">Rooftop Lounge · All Attendees</div>
+							</div>
+							<div class="go">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<line x1="5" y1="12" x2="19" y2="12" />
+									<polyline points="12 5 19 12 12 19" />
+								</svg>
+							</div>
+						</div>
+					</div>
+
+					<div id="day2" class="day hidden">
+						<div class="sess acc-beige reveal">
+							<div class="time mono">10:00 AM</div>
+							<div class="body">
+								<h4>Serverless Architecture Deep Dive</h4>
+								<div class="meta">Main Stage · Leslie Schnider</div>
+							</div>
+							<div class="go">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<line x1="5" y1="12" x2="19" y2="12" />
+									<polyline points="12 5 19 12 12 19" />
+								</svg>
+							</div>
+						</div>
+						<div class="sess acc-pink reveal">
+							<div class="time mono">01:00 PM</div>
+							<div class="body">
+								<h4>Building Accessible UI at Scale</h4>
+								<div class="meta">Workshop Hall B · Sarah Jones</div>
+							</div>
+							<div class="go">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<line x1="5" y1="12" x2="19" y2="12" />
+									<polyline points="12 5 19 12 12 19" />
+								</svg>
+							</div>
+						</div>
+						<div class="sess acc-yellow reveal">
+							<div class="time mono">03:30 PM</div>
+							<div class="body">
+								<h4>Edge Compute &amp; the New Runtime</h4>
+								<div class="meta">Tech Hall A · Marcus Vela</div>
+							</div>
+							<div class="go">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<line x1="5" y1="12" x2="19" y2="12" />
+									<polyline points="12 5 19 12 12 19" />
+								</svg>
+							</div>
+						</div>
+						<div class="sess acc-blue reveal">
+							<div class="time mono">06:00 PM</div>
+							<div class="body">
+								<h4>Closing Ceremony &amp; Networking</h4>
+								<div class="meta">Rooftop Lounge · All Attendees</div>
+							</div>
+							<div class="go">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<line x1="5" y1="12" x2="19" y2="12" />
+									<polyline points="12 5 19 12 12 19" />
+								</svg>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- FAQ -->
+			<section class="faq">
+				<div class="faq-inner">
+					<h2 class="reveal">Frequently Asked Questions</h2>
+					<div class="faq-list">
+						<details class="qa reveal">
+							<summary>
+								Are meals included in the ticket?<span class="chev"
+									><svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<polyline points="6 9 12 15 18 9" />
+									</svg></span
+								>
+							</summary>
+							<div class="ans">
+								Yes. We provide breakfast, lunch, and unlimited coffee
+								throughout both days. There's also a networking dinner on the
+								first evening, included with every in-person pass.
+							</div>
+						</details>
+						<details class="qa reveal">
+							<summary>
+								Can I watch the sessions online?<span class="chev"
+									><svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<polyline points="6 9 12 15 18 9" />
+									</svg></span
+								>
+							</summary>
+							<div class="ans">
+								Absolutely. The digital pass gives you live access to every
+								main-stage talk plus select workshops, with on-demand replays
+								for 60 days after the event.
+							</div>
+						</details>
+						<details class="qa reveal">
+							<summary>
+								Is there a student discount?<span class="chev"
+									><svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<polyline points="6 9 12 15 18 9" />
+									</svg></span
+								>
+							</summary>
+							<div class="ans">
+								Yes — 50% off for currently enrolled students. Email
+								students@archway.summit with a valid student ID and we'll send
+								you a discount code.
+							</div>
+						</details>
+						<details class="qa reveal">
+							<summary>
+								Can I get an invoice for my company?<span class="chev"
+									><svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<polyline points="6 9 12 15 18 9" />
+									</svg></span
+								>
+							</summary>
+							<div class="ans">
+								Of course. After checkout you can download a VAT-ready invoice,
+								or request a custom purchase order for teams of five or more.
+							</div>
+						</details>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<!-- FOOTER / CTA -->
+		<footer class="foot" id="pricing">
+			<div class="wrap">
+				<div class="foot-grid">
+					<div>
+						<h2>Don't<br>Miss Out.</h2>
+						<p>
+							Early-bird tickets are selling fast. Secure your seat under the
+							arch at the world's most curated developer conference.
+						</p>
+						<div class="foot-ctas">
+							<a href="#" class="fc-dark">Get Tickets — $299</a>
+							<a href="#" class="fc-out">Download Brief</a>
+						</div>
+					</div>
+					<div class="stat-grid">
+						<div class="stat">
+							<div class="num">25+</div>
+							<div class="lbl">Speakers</div>
+						</div>
+						<div class="stat">
+							<div class="num">3</div>
+							<div class="lbl">Tracks</div>
+						</div>
+						<div class="stat">
+							<div class="num">100%</div>
+							<div class="lbl">Live Code</div>
+						</div>
+						<a href="#speakers" class="stat-arrow"
+							><svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<line x1="5" y1="12" x2="19" y2="12" />
+								<polyline points="12 5 19 12 12 19" />
+							</svg></a
+						>
+					</div>
+				</div>
+			</div>
+			<div class="foot-bar">
+				<div>© 2026 Archway Summit. All rights reserved.</div>
+				<div class="links">
+					<a href="#">Privacy</a><a href="#">Terms</a
+					><a href="#">Code of Conduct</a>
+				</div>
+			</div>
+		</footer>
+
+		<script>
+(() => {
+	// ---- Scroll reveal ----
+	var observer = new IntersectionObserver(
+		(entries) => {
+			entries.forEach((entry) => {
+				if (entry.isIntersecting) {
+					entry.target.classList.add("visible");
+					observer.unobserve(entry.target);
+				}
+			});
+		},
+		{ threshold: 0.05, rootMargin: "0px 0px -40px 0px" },
+	);
+
+	document.querySelectorAll(".reveal").forEach((el) => {
+		observer.observe(el);
+	});
+
+	// ---- Schedule day toggle ----
+	var btn1 = document.getElementById("btnDay1");
+	var btn2 = document.getElementById("btnDay2");
+	var day1 = document.getElementById("day1");
+	var day2 = document.getElementById("day2");
+
+	function showDay(n) {
+		var on = n === 1 ? day1 : day2;
+		var off = n === 1 ? day2 : day1;
+		var bOn = n === 1 ? btn1 : btn2;
+		var bOff = n === 1 ? btn2 : btn1;
+		off.classList.add("hidden");
+		on.classList.remove("hidden");
+		bOn.classList.add("active");
+		bOff.classList.remove("active");
+		// re-trigger fade
+		on.classList.remove("fade-in");
+		void on.offsetWidth;
+		on.classList.add("fade-in");
+		// ensure rows are visible (they may not have intersected yet)
+		on.querySelectorAll(".reveal").forEach((el) => {
+			el.classList.add("visible");
+		});
+	}
+
+	if (btn1 && btn2) {
+		btn1.addEventListener("click", () => {
+			showDay(1);
+		});
+		btn2.addEventListener("click", () => {
+			showDay(2);
+		});
+	}
+
+	// ---- Mobile menu ----
+	var ham = document.getElementById("hamburger");
+	var menu = document.getElementById("mobileMenu");
+	if (ham && menu) {
+		ham.addEventListener("click", () => {
+			menu.style.display = menu.style.display === "block" ? "none" : "block";
+		});
+		menu.querySelectorAll("a").forEach((a) => {
+			a.addEventListener("click", () => {
+				menu.style.display = "none";
+			});
+		});
+	}
+})();
+
+		</script>
+	</body>
+</html>

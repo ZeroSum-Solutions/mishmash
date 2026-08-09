@@ -1,0 +1,13 @@
+{
+  "slug": "dot-daily-calm-landing",
+  "name": "dot. — Daily Calm Landing Page",
+  "family": "landing-pages",
+  "kind": "vite",
+  "cdn_fonts": [
+    "Nokia Cellphone FC Small"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/dot-daily-calm-landing",
+  "source_license": "MIT"
+}

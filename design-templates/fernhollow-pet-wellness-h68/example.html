@@ -1,0 +1,2468 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Fernhollow: Botanical Pet Wellness</title>
+		<meta
+			name="description"
+			content="Fernhollow blends modern veterinary science with the calm of the wild. Boutique grooming, integrative care, and a forest-apothecary approach to pet wellness."
+		>
+		<style>
+/* Fernhollow — locally vendored variable fonts */
+
+
+
+
+		</style>
+		<style>
+/* ============ FERNHOLLOW — Forest Apothecary ============ */
+:root {
+	--cream: #f4f1e9;
+	--surface: #e8e5d8;
+	--ink: #1e2a22;
+	--forest: #28392e;
+	--clay: #c0623c;
+	--moss: #7c8a5a;
+	--muted: #5c5f52;
+	--hair: #d6d2c4;
+	--on-dark: #a8b0a0;
+	--r-lg: 40px;
+	--r-md: 24px;
+	--maxw: 1440px;
+	--pad: 80px;
+	--serif: "Fraunces", Georgia, serif;
+	--sans: "Inter Tight", system-ui, sans-serif;
+}
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+html {
+	scroll-behavior: smooth;
+}
+body {
+	font-family: var(--sans);
+	background: var(--cream);
+	color: var(--ink);
+	-webkit-font-smoothing: antialiased;
+	line-height: 1.5;
+	overflow-x: hidden;
+}
+img {
+	display: block;
+	max-width: 100%;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+em {
+	font-style: italic;
+}
+
+.container {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding-left: var(--pad);
+	padding-right: var(--pad);
+}
+
+/* ---- shared bits ---- */
+.eyebrow {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	color: var(--muted);
+}
+.eyebrow-tag {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.55rem;
+	background: var(--surface);
+	border: 1px solid var(--hair);
+	padding: 0.55rem 1.1rem;
+	border-radius: 999px;
+	font-size: 11.5px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	color: var(--ink);
+}
+.eyebrow-tag__ico {
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	background: rgba(192, 98, 60, 0.14);
+	color: var(--clay);
+}
+.pill-tag {
+	display: inline-block;
+	background: #fff;
+	border: 1px solid var(--hair);
+	padding: 0.5rem 1.3rem;
+	border-radius: 999px;
+	font-size: 11.5px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.15em;
+	color: var(--ink);
+}
+.pill-tag--surface {
+	background: var(--surface);
+	border-color: transparent;
+}
+.pill-tag--clay {
+	background: var(--clay);
+	color: #fff;
+}
+
+.rule {
+	height: 1px;
+	background: var(--hair);
+	width: 100%;
+}
+
+.section {
+	padding-top: 120px;
+	padding-bottom: 0;
+}
+.section__head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	gap: 2rem;
+	margin-bottom: 2.4rem;
+	flex-wrap: wrap;
+}
+.section__title {
+	font-family: var(--serif);
+	font-weight: 500;
+	font-size: clamp(2rem, 4vw, 3.1rem);
+	letter-spacing: -0.03em;
+	line-height: 1.05;
+	margin-top: 1.1rem;
+}
+.section__title--light {
+	color: var(--cream);
+}
+
+/* ---- buttons ---- */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 1rem;
+	height: 54px;
+	padding: 0 0.65rem 0 1.7rem;
+	border-radius: 999px;
+	font-family: var(--sans);
+	font-size: 11.5px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	cursor: pointer;
+	border: none;
+	transition:
+		background 0.35s,
+		color 0.35s,
+		border-color 0.35s;
+	white-space: nowrap;
+}
+.btn--solid {
+	background: var(--ink);
+	color: var(--cream);
+}
+.btn--solid:hover {
+	background: var(--forest);
+}
+.btn--outline {
+	background: transparent;
+	color: var(--ink);
+	border: 1.5px solid var(--ink);
+	padding-right: 0.6rem;
+}
+.btn--outline:hover {
+	background: var(--ink);
+	color: var(--cream);
+}
+.btn--sm {
+	height: 46px;
+	font-size: 11px;
+	padding-left: 1.5rem;
+}
+.btn--lg {
+	height: 62px;
+}
+.btn--block {
+	width: 100%;
+	justify-content: center;
+}
+.btn__label {
+	position: relative;
+	display: inline-grid;
+	overflow: hidden;
+	height: 1.1em;
+}
+.btn__t {
+	grid-area: 1 / 1;
+	transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn__t--hover {
+	transform: translateY(120%);
+}
+.btn:hover .btn__t {
+	transform: translateY(-120%);
+}
+.btn:hover .btn__t--hover {
+	transform: translateY(0);
+}
+.btn__chip {
+	width: 38px;
+	height: 38px;
+	border-radius: 50%;
+	flex: 0 0 auto;
+	display: grid;
+	place-items: center;
+	background: var(--cream);
+	color: var(--ink);
+	transition:
+		background 0.35s,
+		color 0.35s;
+}
+.btn--outline .btn__chip--dark {
+	background: var(--ink);
+	color: var(--cream);
+}
+.btn--outline:hover .btn__chip--dark {
+	background: var(--cream);
+	color: var(--ink);
+}
+.btn--sm .btn__chip {
+	display: none;
+}
+
+/* ---- navbar ---- */
+.nav {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 1000;
+	background: rgba(244, 241, 233, 0.82);
+	backdrop-filter: blur(14px);
+	border-bottom: 1px solid var(--hair);
+}
+.nav__inner {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 0 var(--pad);
+	height: 84px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+.wordmark {
+	display: inline-flex;
+	align-items: center;
+	font-family: var(--serif);
+	font-weight: 500;
+	font-size: 1.55rem;
+	letter-spacing: -0.02em;
+}
+.wordmark__fern {
+	color: var(--clay);
+}
+.wordmark__hollow {
+	color: var(--ink);
+}
+.wordmark__hollow--light {
+	color: var(--cream);
+}
+.wordmark__dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--clay);
+	margin-left: 5px;
+	align-self: flex-end;
+	margin-bottom: 0.35rem;
+}
+.wordmark--lg {
+	font-size: 2rem;
+}
+.nav__pills {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	background: rgba(232, 229, 216, 0.7);
+	border: 1px solid var(--hair);
+	padding: 0.35rem;
+	border-radius: 999px;
+}
+.pill {
+	padding: 0.5rem 1.1rem;
+	border-radius: 999px;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--ink);
+	transition: 0.25s;
+}
+.pill:hover {
+	color: var(--clay);
+}
+.pill.is-active {
+	background: #fff;
+	box-shadow: 0 2px 8px rgba(30, 42, 34, 0.08);
+}
+.nav__right {
+	display: flex;
+	align-items: center;
+	gap: 1.3rem;
+}
+.nav__phone {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+}
+.nav__phone-badge {
+	width: 38px;
+	height: 38px;
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	background: rgba(192, 98, 60, 0.12);
+	color: var(--clay);
+	transition: 0.3s;
+}
+.nav__phone:hover .nav__phone-badge {
+	background: var(--clay);
+	color: #fff;
+}
+.nav__phone-num {
+	font-weight: 700;
+	font-size: 0.92rem;
+	letter-spacing: -0.01em;
+}
+.nav__burger {
+	display: none;
+	background: none;
+	border: none;
+	color: var(--ink);
+	cursor: pointer;
+}
+
+/* ---- mobile menu ---- */
+.mobile-menu {
+	position: fixed;
+	inset: 0;
+	z-index: 2000;
+	background: var(--cream);
+	transform: translateX(100%);
+	transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+	display: flex;
+	flex-direction: column;
+	padding: 1.4rem var(--pad);
+}
+.mobile-menu.is-open {
+	transform: translateX(0);
+}
+.mobile-menu__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 62px;
+}
+.mobile-menu__close {
+	background: none;
+	border: none;
+	color: var(--ink);
+	cursor: pointer;
+}
+.mobile-menu__nav {
+	display: flex;
+	flex-direction: column;
+	gap: 1.3rem;
+	margin-top: 2.5rem;
+}
+.mobile-menu__nav a {
+	font-family: var(--serif);
+	font-size: 2.2rem;
+	font-weight: 500;
+	letter-spacing: -0.02em;
+	transition: 0.2s;
+}
+.mobile-menu__nav a:hover {
+	color: var(--clay);
+}
+.mobile-menu__foot {
+	margin-top: auto;
+	padding-top: 2rem;
+	border-top: 1px solid var(--hair);
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+.mobile-menu__phone {
+	font-family: var(--serif);
+	font-size: 1.6rem;
+	margin-bottom: 1rem;
+}
+
+/* ---- hero ---- */
+.hero {
+	padding-top: 140px;
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	text-align: center;
+	overflow: hidden;
+}
+.hero__content {
+	max-width: 760px;
+	margin: 0 auto;
+	padding: 0 1.5rem;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 1.4rem;
+}
+.hero__title {
+	font-family: var(--serif);
+	font-weight: 500;
+	font-size: clamp(2.4rem, 6vw, 4.5rem);
+	line-height: 1.04;
+	letter-spacing: -0.035em;
+}
+.hero__title em {
+	color: var(--clay);
+}
+.hero__sub {
+	max-width: 540px;
+	color: var(--muted);
+	font-size: 1.05rem;
+}
+.hero__cta {
+	display: flex;
+	gap: 1rem;
+	flex-wrap: wrap;
+	justify-content: center;
+	margin-top: 0.5rem;
+}
+
+/* ---- marquee ---- */
+.marquee {
+	margin-top: 3.5rem;
+	width: 100%;
+	overflow: hidden;
+	-webkit-mask-image: linear-gradient(
+		90deg,
+		transparent,
+		#000 6%,
+		#000 94%,
+		transparent
+	);
+	mask-image: linear-gradient(
+		90deg,
+		transparent,
+		#000 6%,
+		#000 94%,
+		transparent
+	);
+}
+.marquee__track {
+	display: flex;
+	width: max-content;
+	animation: marquee 45s linear infinite;
+}
+.marquee:hover .marquee__track {
+	animation-play-state: paused;
+}
+.marquee__group {
+	display: flex;
+	gap: 1.1rem;
+	padding-right: 1.1rem;
+}
+.marquee__card {
+	width: 330px;
+	height: 230px;
+	border-radius: var(--r-md);
+	overflow: hidden;
+	flex: 0 0 auto;
+	box-shadow: 0 14px 34px rgba(30, 42, 34, 0.08);
+}
+.marquee__card img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+@keyframes marquee {
+	to {
+		transform: translateX(-50%);
+	}
+}
+
+/* ---- panels ---- */
+.panel {
+	border-radius: var(--r-lg);
+	margin: 120px 20px 0;
+}
+.panel--surface {
+	background: var(--surface);
+}
+.panel--dark {
+	background: var(--forest);
+	color: var(--cream);
+}
+.panel .container {
+	padding-top: 96px;
+	padding-bottom: 96px;
+}
+
+/* ---- story / stats ---- */
+.story__top {
+	display: grid;
+	grid-template-columns: 2fr 10fr;
+	gap: 3rem;
+	align-items: start;
+}
+.story__statement h2 {
+	font-family: var(--serif);
+	font-weight: 500;
+	font-size: clamp(1.5rem, 2.6vw, 2.3rem);
+	line-height: 1.25;
+	letter-spacing: -0.02em;
+	margin-bottom: 2.2rem;
+}
+.stats {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 2.5rem;
+	margin-top: 5rem;
+}
+.stat__num {
+	display: flex;
+	align-items: flex-end;
+	gap: 0.15rem;
+	font-family: var(--serif);
+	font-weight: 500;
+	letter-spacing: -0.04em;
+}
+.stat__num .counter {
+	font-size: clamp(3rem, 5vw, 4.2rem);
+	color: var(--ink);
+}
+.stat__suffix {
+	font-size: 2.4rem;
+	color: var(--clay);
+}
+.stat__rule {
+	height: 1px;
+	background: var(--hair);
+	margin: 1rem 0 1.1rem;
+}
+.stat h4 {
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.13em;
+	margin-bottom: 0.5rem;
+}
+.stat p {
+	font-size: 0.88rem;
+	color: var(--muted);
+}
+
+/* ---- showreel ---- */
+.reel-wrap {
+	margin-top: 40px;
+}
+.reel {
+	position: relative;
+	height: min(76vh, 720px);
+	border-radius: var(--r-lg);
+	overflow: hidden;
+}
+.reel__bg {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transform: scale(1.05);
+	animation: kenburns 22s ease-in-out infinite alternate;
+}
+@keyframes kenburns {
+	to {
+		transform: scale(1.16) translateY(-2%);
+	}
+}
+.reel__overlay {
+	position: absolute;
+	inset: 0;
+	background: rgba(30, 42, 34, 0.18);
+	display: grid;
+	place-items: center;
+}
+.reel__play {
+	width: 128px;
+	height: 128px;
+	border-radius: 50%;
+	background: rgba(244, 241, 233, 0.2);
+	border: 1px solid rgba(244, 241, 233, 0.4);
+	backdrop-filter: blur(6px);
+	display: grid;
+	place-items: center;
+	cursor: pointer;
+	transition: transform 0.35s;
+}
+.reel__play:hover {
+	transform: scale(1.08);
+}
+.reel__core {
+	width: 86px;
+	height: 86px;
+	border-radius: 50%;
+	background: var(--clay);
+	color: #fff;
+	display: grid;
+	place-items: center;
+	box-shadow: 0 16px 40px rgba(192, 98, 60, 0.5);
+	padding-left: 5px;
+}
+.reel__tag {
+	position: absolute;
+	left: 28px;
+	bottom: 24px;
+	background: rgba(244, 241, 233, 0.92);
+	padding: 0.5rem 1.1rem;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+}
+
+/* ---- services ---- */
+.services {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 1.5rem;
+	margin-top: 2.5rem;
+}
+.svc {
+	display: flex;
+}
+.svc__left {
+	flex: 1;
+	background: var(--cream);
+	border: 1px solid var(--hair);
+	border-radius: var(--r-md);
+	padding: 2.6rem;
+	margin-right: -18px;
+	position: relative;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+}
+.svc__num {
+	display: inline-flex;
+	width: 54px;
+	height: 32px;
+	align-items: center;
+	justify-content: center;
+	background: var(--ink);
+	color: var(--cream);
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 700;
+	margin-bottom: 1.4rem;
+}
+.svc__left h3 {
+	font-family: var(--serif);
+	font-weight: 500;
+	font-size: 1.7rem;
+	line-height: 1.15;
+	letter-spacing: -0.02em;
+	margin-bottom: 1rem;
+}
+.svc__left p {
+	color: var(--muted);
+	margin-bottom: 1.8rem;
+	flex: 1;
+}
+.svc__right {
+	flex: 1;
+	background: var(--surface);
+	border: 1px solid var(--hair);
+	border-radius: var(--r-md);
+	padding: 2.6rem 2.6rem 2.6rem 2.9rem;
+	padding-top: 4rem;
+}
+.svc__badge {
+	width: 78px;
+	height: 78px;
+	border-radius: 50%;
+	background: var(--clay);
+	color: #fff;
+	display: grid;
+	place-items: center;
+	margin-bottom: 1.4rem;
+}
+.svc__right h4 {
+	font-size: 1.35rem;
+	font-weight: 700;
+	margin-bottom: 0.7rem;
+}
+.svc__right p {
+	font-size: 0.9rem;
+	color: var(--muted);
+	margin-bottom: 1.4rem;
+}
+.tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+.tag {
+	background: #fff;
+	border: 1px solid var(--hair);
+	padding: 0.4rem 1rem;
+	border-radius: 999px;
+	font-size: 10.5px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+}
+
+/* ---- process ---- */
+.process {
+}
+.process__head {
+	text-align: center;
+	margin-bottom: 3.5rem;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 1.1rem;
+}
+.process__grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 2rem;
+}
+.step__num {
+	display: grid;
+	place-items: center;
+	width: 40px;
+	height: 40px;
+	border-radius: 10px;
+	background: var(--clay);
+	color: var(--ink);
+	font-weight: 700;
+	margin-bottom: 1.6rem;
+}
+.step h3 {
+	font-family: var(--serif);
+	font-weight: 500;
+	text-transform: uppercase;
+	font-size: 1.4rem;
+	letter-spacing: 0.01em;
+	margin-bottom: 0.7rem;
+}
+.step p {
+	color: var(--on-dark);
+	margin-bottom: 1.6rem;
+	font-size: 0.95rem;
+}
+.step img {
+	width: 100%;
+	height: 240px;
+	object-fit: cover;
+	border-radius: var(--r-md);
+	filter: grayscale(1);
+	transition: filter 0.55s;
+}
+.step:hover img {
+	filter: grayscale(0);
+}
+
+/* ---- products ---- */
+.products {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 1.6rem;
+	margin-top: 2.5rem;
+}
+.product__img {
+	aspect-ratio: 1;
+	border-radius: var(--r-md);
+	overflow: hidden;
+	background: var(--surface);
+	margin-bottom: 1.2rem;
+}
+.product__img img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.product:hover .product__img img {
+	transform: scale(1.08);
+}
+.product h3 {
+	font-family: var(--serif);
+	font-weight: 500;
+	text-transform: uppercase;
+	font-size: 1.5rem;
+	letter-spacing: -0.01em;
+	margin-bottom: 0.5rem;
+	transition: 0.25s;
+}
+.product:hover h3 {
+	color: var(--clay);
+}
+.product__price {
+	display: flex;
+	align-items: baseline;
+	gap: 0.9rem;
+}
+.product__price .now {
+	font-family: var(--serif);
+	font-size: 1.7rem;
+	color: var(--clay);
+}
+.product__price .was {
+	color: var(--muted);
+	text-decoration: line-through;
+	font-size: 1.1rem;
+}
+
+/* ---- faq ---- */
+.faq {
+	display: grid;
+	grid-template-columns: 4fr 8fr;
+	gap: 4rem;
+	align-items: start;
+}
+.faq__intro {
+	display: flex;
+	flex-direction: column;
+	gap: 1.4rem;
+}
+.faq__intro .btn {
+	align-self: flex-start;
+	margin-top: 0.5rem;
+}
+.faq__list {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+.acc {
+	background: var(--surface);
+	border: 1px solid var(--hair);
+	border-radius: 20px;
+	overflow: hidden;
+}
+.acc__q {
+	width: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 1.4rem 1.6rem;
+	background: none;
+	border: none;
+	cursor: pointer;
+	text-align: left;
+	font-family: var(--sans);
+	font-size: 1.15rem;
+	font-weight: 700;
+	color: var(--ink);
+}
+.acc__chip {
+	width: 42px;
+	height: 42px;
+	flex: 0 0 auto;
+	border: 1px solid var(--hair);
+	background: #fff;
+	border-radius: 12px;
+	display: grid;
+	place-items: center;
+	transition:
+		transform 0.35s,
+		background 0.3s,
+		color 0.3s;
+}
+.acc.is-open .acc__chip {
+	transform: rotate(180deg);
+	background: var(--clay);
+	color: #fff;
+	border-color: var(--clay);
+}
+.acc__a {
+	max-height: 0;
+	overflow: hidden;
+	transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.acc__a p {
+	padding: 0 1.6rem 1.5rem;
+	color: var(--muted);
+	line-height: 1.6;
+}
+
+/* ---- cta ---- */
+.cta {
+	position: relative;
+	background: var(--ink);
+	color: var(--cream);
+	border-radius: var(--r-lg);
+	padding: clamp(2.5rem, 6vw, 5.5rem);
+	overflow: hidden;
+}
+.cta__deco {
+	position: absolute;
+	inset: 0;
+	color: var(--moss);
+	opacity: 0.16;
+	pointer-events: none;
+}
+.cta__deco svg:first-child {
+	position: absolute;
+	top: 8%;
+	left: 6%;
+	transform: rotate(-15deg);
+}
+.cta__deco svg:last-child {
+	position: absolute;
+	bottom: 6%;
+	right: 7%;
+	transform: rotate(160deg);
+	width: 160px;
+	height: 160px;
+}
+.cta__grid {
+	position: relative;
+	z-index: 2;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 3rem;
+	align-items: center;
+}
+.cta__copy h2 {
+	font-family: var(--serif);
+	font-weight: 500;
+	font-size: clamp(2rem, 3.5vw, 2.9rem);
+	letter-spacing: -0.03em;
+	line-height: 1.08;
+	margin: 1.2rem 0 1rem;
+}
+.cta__copy p {
+	color: var(--on-dark);
+	max-width: 420px;
+}
+.cta__form {
+	display: flex;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+	align-items: center;
+}
+.cta__form input {
+	flex: 1;
+	min-width: 200px;
+	height: 58px;
+	border-radius: 999px;
+	border: none;
+	padding: 0 1.6rem;
+	font-family: var(--sans);
+	font-size: 1rem;
+	background: var(--cream);
+	color: var(--ink);
+}
+.cta__form input:focus {
+	outline: 2px solid var(--clay);
+	outline-offset: 2px;
+}
+.cta__submit {
+	height: 58px;
+	padding: 0 2.2rem;
+	border: none;
+	border-radius: 999px;
+	background: var(--clay);
+	color: #fff;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	font-size: 11.5px;
+	cursor: pointer;
+	transition: background 0.3s;
+}
+.cta__submit:hover {
+	background: #fff;
+	color: var(--clay);
+}
+.cta__success {
+	flex-basis: 100%;
+	color: var(--moss);
+	font-weight: 600;
+	margin-top: 0.4rem;
+}
+
+/* ---- journal ---- */
+.journal {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 1.8rem;
+	margin-top: 2.5rem;
+}
+.post {
+	cursor: pointer;
+}
+.post__img {
+	aspect-ratio: 16 / 10;
+	border-radius: var(--r-md);
+	overflow: hidden;
+	background: var(--surface);
+	margin-bottom: 1.3rem;
+}
+.post__img img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.post:hover .post__img img {
+	transform: scale(1.06);
+}
+.post__meta {
+	display: flex;
+	align-items: center;
+	gap: 0.9rem;
+	font-size: 10.5px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	color: var(--muted);
+	margin-bottom: 0.9rem;
+}
+.post__meta .dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--clay);
+}
+.post h3 {
+	font-family: var(--serif);
+	font-weight: 500;
+	text-transform: uppercase;
+	font-size: 1.4rem;
+	line-height: 1.2;
+	letter-spacing: -0.01em;
+	margin-bottom: 1.1rem;
+	transition: 0.25s;
+}
+.post:hover h3 {
+	color: var(--clay);
+}
+.post__more {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.55rem;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.13em;
+	transition: gap 0.3s;
+}
+.post:hover .post__more {
+	gap: 1rem;
+	color: var(--clay);
+}
+
+/* ---- footer ---- */
+.footer {
+	background: var(--ink);
+	color: var(--cream);
+	border-radius: var(--r-lg) var(--r-lg) 0 0;
+	margin-top: 120px;
+}
+.footer__inner {
+	padding-top: 90px;
+	padding-bottom: 32px;
+}
+.footer__grid {
+	display: grid;
+	grid-template-columns: 4fr 8fr;
+	gap: 3rem;
+}
+.footer__brand p {
+	color: var(--on-dark);
+	max-width: 360px;
+	margin: 1.6rem 0;
+	line-height: 1.6;
+}
+.footer__social {
+	display: flex;
+	flex-direction: column;
+	gap: 0.9rem;
+}
+.footer__social .eyebrow {
+	color: var(--on-dark);
+}
+.footer__icons {
+	display: flex;
+	gap: 0.7rem;
+}
+.footer__icons a {
+	width: 42px;
+	height: 42px;
+	border-radius: 50%;
+	border: 1px solid rgba(244, 241, 233, 0.2);
+	display: grid;
+	place-items: center;
+	transition: 0.3s;
+}
+.footer__icons a:hover {
+	background: var(--clay);
+	border-color: var(--clay);
+}
+.footer__cols {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 2rem;
+}
+.footer__cols h4 {
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	margin-bottom: 1.3rem;
+}
+.footer__cols ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 0.8rem;
+}
+.footer__cols a {
+	color: var(--on-dark);
+	transition: 0.25s;
+}
+.footer__cols a:hover {
+	color: var(--clay);
+}
+.footer__bar {
+	margin-top: 4rem;
+	padding-top: 2rem;
+	border-top: 1px solid rgba(244, 241, 233, 0.12);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1.5rem;
+	flex-wrap: wrap;
+	font-size: 0.85rem;
+	color: var(--on-dark);
+}
+.footer__legal {
+	display: flex;
+	gap: 2rem;
+}
+.footer__legal a:hover {
+	color: var(--cream);
+}
+
+/* ---- reveal ---- */
+.reveal {
+	opacity: 0;
+	transform: translateY(30px);
+	transition:
+		opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0s),
+		transform 0.8s cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0s);
+}
+.reveal.is-visible {
+	opacity: 1;
+	transform: none;
+}
+
+/* ---- responsive ---- */
+@media (max-width: 1100px) {
+	:root {
+		--pad: 48px;
+	}
+	.nav__pills,
+	.nav__phone {
+		display: none;
+	}
+	.nav__burger {
+		display: block;
+	}
+	.nav__inner .btn--sm {
+		display: none;
+	}
+}
+@media (max-width: 900px) {
+	.story__top {
+		grid-template-columns: 1fr;
+		gap: 1.5rem;
+	}
+	.stats {
+		grid-template-columns: 1fr 1fr;
+		gap: 2rem;
+	}
+	.services {
+		grid-template-columns: 1fr;
+	}
+	.svc {
+		flex-direction: column;
+	}
+	.svc__left {
+		margin-right: 0;
+		margin-bottom: -18px;
+	}
+	.svc__right {
+		padding-top: 3rem;
+	}
+	.process__grid,
+	.products,
+	.journal,
+	.footer__cols {
+		grid-template-columns: 1fr 1fr;
+	}
+	.faq {
+		grid-template-columns: 1fr;
+		gap: 2rem;
+	}
+	.cta__grid {
+		grid-template-columns: 1fr;
+		gap: 1.5rem;
+	}
+	.footer__grid {
+		grid-template-columns: 1fr;
+	}
+}
+@media (max-width: 600px) {
+	:root {
+		--pad: 24px;
+		--r-lg: 28px;
+	}
+	.panel {
+		margin: 80px 12px 0;
+	}
+	.panel .container {
+		padding-top: 64px;
+		padding-bottom: 64px;
+	}
+	.marquee__card {
+		width: 230px;
+		height: 160px;
+	}
+	.process__grid,
+	.products,
+	.journal,
+	.footer__cols {
+		grid-template-columns: 1fr;
+	}
+	.footer__bar {
+		flex-direction: column;
+		text-align: center;
+	}
+	.reel {
+		height: 60vh;
+	}
+	.reel__play {
+		width: 96px;
+		height: 96px;
+	}
+	.reel__core {
+		width: 64px;
+		height: 64px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.marquee__track,
+	.reel__bg {
+		animation: none;
+	}
+	.reel__bg {
+		transform: none;
+	}
+	.reveal {
+		opacity: 1;
+		transform: none;
+		transition: none;
+	}
+	html {
+		scroll-behavior: auto;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@300;400;500;600;700;800&family=Inter+Tight:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<header class="nav" id="nav">
+			<div class="nav__inner">
+				<a href="#top" class="wordmark" aria-label="Fernhollow home">
+					<span class="wordmark__fern">Fern</span
+					><span class="wordmark__hollow">hollow</span
+					><span class="wordmark__dot"></span>
+				</a>
+
+				<nav class="nav__pills" aria-label="Primary">
+					<a href="#top" class="pill is-active">Home</a>
+					<a href="#services" class="pill">Services</a>
+					<a href="#story" class="pill">Our Story</a>
+					<a href="#journal" class="pill">Journal</a>
+				</nav>
+
+				<div class="nav__right">
+					<a href="tel:+12135558742" class="nav__phone">
+						<span class="nav__phone-badge" aria-hidden="true">
+							<svg
+								viewBox="0 0 24 24"
+								width="18"
+								height="18"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+								/>
+							</svg>
+						</span>
+						<span class="nav__phone-num">(213) 555 - 8742</span>
+					</a>
+					<a href="#book" class="btn btn--solid btn--sm">
+						<span class="btn__label"
+							><span class="btn__t">Book a Visit</span
+							><span class="btn__t btn__t--hover">Let's Go</span></span
+						>
+						<span class="btn__chip" aria-hidden="true"
+							><svg
+								viewBox="0 0 24 24"
+								width="15"
+								height="15"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M17 8l4 4m0 0l-4 4m4-4H3"
+								/>
+							</svg></span
+						>
+					</a>
+					<button
+						class="nav__burger"
+						id="burger"
+						aria-label="Open menu"
+						aria-expanded="false"
+					>
+						<svg
+							viewBox="0 0 24 24"
+							width="28"
+							height="28"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+						>
+							<path stroke-linecap="round" d="M4 7h16M4 13h16M4 19h16" />
+						</svg>
+					</button>
+				</div>
+			</div>
+		</header>
+
+		<div class="mobile-menu" id="mobileMenu" aria-hidden="true">
+			<div class="mobile-menu__head">
+				<a href="#top" class="wordmark"
+					><span class="wordmark__fern">Fern</span
+					><span class="wordmark__hollow">hollow</span
+					><span class="wordmark__dot"></span></a
+				>
+				<button
+					class="mobile-menu__close"
+					id="menuClose"
+					aria-label="Close menu"
+				>
+					<svg
+						viewBox="0 0 24 24"
+						width="28"
+						height="28"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<path stroke-linecap="round" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+				</button>
+			</div>
+			<nav class="mobile-menu__nav">
+				<a href="#top">Home</a>
+				<a href="#services">Services</a>
+				<a href="#story">Our Story</a>
+				<a href="#journal">Journal</a>
+			</nav>
+			<div class="mobile-menu__foot">
+				<span class="eyebrow">Call any time</span>
+				<a href="tel:+12135558742" class="mobile-menu__phone"
+					>(213) 555 - 8742</a
+				>
+				<a href="#book" class="btn btn--solid btn--block">
+					<span class="btn__label"
+						><span class="btn__t">Book a Visit</span
+						><span class="btn__t btn__t--hover">Let's Go</span></span
+					>
+				</a>
+			</div>
+		</div>
+
+		<main id="top">
+			<section class="hero">
+				<div class="hero__content reveal">
+					<span class="eyebrow-tag">
+						<span class="eyebrow-tag__ico" aria-hidden="true">
+							<svg
+								viewBox="0 0 24 24"
+								width="13"
+								height="13"
+								fill="currentColor"
+							>
+								<path d="M12 2C8 6 6 9 6 13a6 6 0 0012 0c0-4-2-7-6-11z" />
+							</svg>
+						</span>
+						Botanical Wellness for Every Companion
+					</span>
+					<h1 class="hero__title">
+						Where modern science meets the <em>calm</em> of the wild
+					</h1>
+					<p class="hero__sub">
+						A new era of pet wellness rooted in nature. From botanical spa
+						grooming to concierge veterinary care, Fernhollow gives your
+						companion the grounded, gentle attention they deserve.
+					</p>
+					<div class="hero__cta">
+						<a href="#book" class="btn btn--solid">
+							<span class="btn__label"
+								><span class="btn__t">Book a Visit</span
+								><span class="btn__t btn__t--hover">Book a Visit</span></span
+							>
+							<span class="btn__chip" aria-hidden="true"
+								><svg
+									viewBox="0 0 24 24"
+									width="16"
+									height="16"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M17 8l4 4m0 0l-4 4m4-4H3"
+									/>
+								</svg></span
+							>
+						</a>
+						<a href="#services" class="btn btn--outline">
+							<span class="btn__label"
+								><span class="btn__t">Explore Care</span
+								><span class="btn__t btn__t--hover">Explore Care</span></span
+							>
+							<span class="btn__chip btn__chip--dark" aria-hidden="true"
+								><svg
+									viewBox="0 0 24 24"
+									width="16"
+									height="16"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M17 8l4 4m0 0l-4 4m4-4H3"
+									/>
+								</svg></span
+							>
+						</a>
+					</div>
+				</div>
+
+				<div class="marquee" aria-hidden="true">
+					<div class="marquee__track">
+						<div class="marquee__group">
+							<figure class="marquee__card">
+								<img
+									src="assets/hero1.jpg"
+									alt=""
+									loading="eager"
+									fetchpriority="high"
+								>
+							</figure>
+							<figure class="marquee__card">
+								<img src="assets/hero2.jpg" alt="" loading="eager">
+							</figure>
+							<figure class="marquee__card">
+								<img src="assets/hero3.jpg" alt="" loading="eager">
+							</figure>
+							<figure class="marquee__card">
+								<img src="assets/hero4.jpg" alt="" loading="eager">
+							</figure>
+							<figure class="marquee__card">
+								<img src="assets/hero5.jpg" alt="" loading="eager">
+							</figure>
+						</div>
+						<div class="marquee__group">
+							<figure class="marquee__card">
+								<img src="assets/hero1.jpg" alt="" loading="eager">
+							</figure>
+							<figure class="marquee__card">
+								<img src="assets/hero2.jpg" alt="" loading="eager">
+							</figure>
+							<figure class="marquee__card">
+								<img src="assets/hero3.jpg" alt="" loading="eager">
+							</figure>
+							<figure class="marquee__card">
+								<img src="assets/hero4.jpg" alt="" loading="eager">
+							</figure>
+							<figure class="marquee__card">
+								<img src="assets/hero5.jpg" alt="" loading="eager">
+							</figure>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section class="panel panel--surface story" id="story">
+				<div class="container">
+					<div class="story__top">
+						<div class="reveal">
+							<span class="pill-tag">Our Philosophy</span>
+						</div>
+						<div class="story__statement reveal">
+							<h2>
+								Beyond standard care, a sanctuary of wellness. Every companion
+								is a unique individual deserving of bespoke, unhurried attention
+								where clinical precision is delivered with a gentle, herbal
+								touch.
+							</h2>
+							<a href="#book" class="btn btn--solid btn--lg">
+								<span class="btn__label"
+									><span class="btn__t">More About Us</span
+									><span class="btn__t btn__t--hover">More About Us</span></span
+								>
+								<span class="btn__chip" aria-hidden="true"
+									><svg
+										viewBox="0 0 24 24"
+										width="18"
+										height="18"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M17 8l4 4m0 0l-4 4m4-4H3"
+										/>
+									</svg></span
+								>
+							</a>
+						</div>
+					</div>
+
+					<div class="stats">
+						<div class="stat reveal">
+							<div class="stat__num">
+								<span class="counter" data-target="24">0</span
+								><span class="stat__suffix">k+</span>
+							</div>
+							<div class="stat__rule"></div>
+							<h4>Thriving Companions</h4>
+							<p>
+								Families who trust our clinical precision and warm, grounded
+								hearts.
+							</p>
+						</div>
+						<div class="stat reveal" style="--d:.1s">
+							<div class="stat__num">
+								<span class="counter" data-target="75">0</span
+								><span class="stat__suffix">k+</span>
+							</div>
+							<div class="stat__rule"></div>
+							<h4>Sessions Delivered</h4>
+							<p>From botanical baths to longevity wellness checkups.</p>
+						</div>
+						<div class="stat reveal" style="--d:.2s">
+							<div class="stat__num">
+								<span class="counter" data-target="14">0</span
+								><span class="stat__suffix">+</span>
+							</div>
+							<div class="stat__rule"></div>
+							<h4>Years Rooted</h4>
+							<p>
+								Compassionate specialists devoted to every four-legged friend.
+							</p>
+						</div>
+						<div class="stat reveal" style="--d:.3s">
+							<div class="stat__num">
+								<span class="counter" data-target="99">0</span
+								><span class="stat__suffix">%</span>
+							</div>
+							<div class="stat__rule"></div>
+							<h4>Satisfaction</h4>
+							<p>
+								Long-term trust built on reliable, repeatable, gentle service.
+							</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section class="container reel-wrap">
+				<div class="reel reveal">
+					<img
+						class="reel__bg"
+						src="assets/reel.jpg"
+						alt="A calm dog resting in a sunlit forest clearing"
+					>
+					<div class="reel__overlay">
+						<button class="reel__play" aria-label="Play the Fernhollow film">
+							<span class="reel__core" aria-hidden="true">
+								<svg
+									viewBox="0 0 24 24"
+									width="30"
+									height="30"
+									fill="currentColor"
+								>
+									<path d="M8 5v14l11-7z" />
+								</svg>
+							</span>
+						</button>
+					</div>
+					<span class="reel__tag">A day at the hollow</span>
+				</div>
+			</section>
+
+			<section class="container section" id="services">
+				<div class="section__head reveal">
+					<div>
+						<span class="pill-tag pill-tag--surface">Our Services</span>
+						<h2 class="section__title">Bespoke care programs</h2>
+					</div>
+					<a href="#book" class="btn btn--solid btn--sm">
+						<span class="btn__label"
+							><span class="btn__t">View All Programs</span
+							><span class="btn__t btn__t--hover">See It All</span></span
+						>
+					</a>
+				</div>
+				<div class="rule"></div>
+
+				<div class="services">
+					<article class="svc reveal">
+						<div class="svc__left">
+							<span class="svc__num">01</span>
+							<h3>Botanical Spa &amp; Aesthetic Grooming</h3>
+							<p>
+								Therapeutic, plant-based bathing and precision styling. We focus
+								on skin health, coat vitality, and a stress-free, sensory-calm
+								experience.
+							</p>
+							<a href="#book" class="btn btn--solid">
+								<span class="btn__label"
+									><span class="btn__t">Book a Service</span
+									><span class="btn__t btn__t--hover"
+										>Book a Service</span
+									></span
+								>
+								<span class="btn__chip" aria-hidden="true"
+									><svg
+										viewBox="0 0 24 24"
+										width="16"
+										height="16"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M17 8l4 4m0 0l-4 4m4-4H3"
+										/>
+									</svg></span
+								>
+							</a>
+						</div>
+						<div class="svc__right">
+							<span class="svc__badge" aria-hidden="true">
+								<svg
+									viewBox="0 0 24 24"
+									width="34"
+									height="34"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.7"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M12 3c-3 4-5 7-5 10a5 5 0 1010 0c0-3-2-6-5-10zM12 13v8"
+									/>
+								</svg>
+							</span>
+							<h4>Grooming Solutions</h4>
+							<p>
+								Premium botanical products and gentle handling give your pet the
+								ultimate comfort, every visit.
+							</p>
+							<div class="tags">
+								<span class="tag">Herbal Bath</span
+								><span class="tag">Coat Styling</span
+								><span class="tag">Nail Care</span>
+							</div>
+						</div>
+					</article>
+
+					<article class="svc reveal" style="--d:.15s">
+						<div class="svc__left">
+							<span class="svc__num">02</span>
+							<h3>Integrative Veterinary Medicine</h3>
+							<p>
+								Advanced diagnostics meet preventative, longevity-first care.
+								Our veterinary team blends modern science with proactive
+								wellness planning.
+							</p>
+							<a href="#book" class="btn btn--solid">
+								<span class="btn__label"
+									><span class="btn__t">Book a Service</span
+									><span class="btn__t btn__t--hover"
+										>Book a Service</span
+									></span
+								>
+								<span class="btn__chip" aria-hidden="true"
+									><svg
+										viewBox="0 0 24 24"
+										width="16"
+										height="16"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M17 8l4 4m0 0l-4 4m4-4H3"
+										/>
+									</svg></span
+								>
+							</a>
+						</div>
+						<div class="svc__right">
+							<span class="svc__badge" aria-hidden="true">
+								<svg
+									viewBox="0 0 24 24"
+									width="34"
+									height="34"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.7"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M12 4v16M4 12h16"
+									/>
+									<circle cx="12" cy="12" r="9" />
+								</svg>
+							</span>
+							<h4>Expert Vet Solutions</h4>
+							<p>
+								Trusted medical care to keep your companions safe, healthy, and
+								thriving for years to come.
+							</p>
+							<div class="tags">
+								<span class="tag">Checkups</span
+								><span class="tag">Vaccinations</span
+								><span class="tag">Diagnostics</span>
+							</div>
+						</div>
+					</article>
+				</div>
+			</section>
+
+			<section class="panel panel--dark process">
+				<div class="container">
+					<div class="process__head reveal">
+						<span class="pill-tag pill-tag--surface">Easy Steps</span>
+						<h2 class="section__title section__title--light">
+							The seamless care ritual
+						</h2>
+					</div>
+					<div class="process__grid">
+						<div class="step reveal">
+							<span class="step__num">1</span>
+							<h3>Select Expertise</h3>
+							<p>
+								Identify the wellness track that aligns with your companion's
+								life stage and current needs.
+							</p>
+							<img
+								src="assets/step1.jpg"
+								alt="Choosing a pet care plan"
+								loading="lazy"
+							>
+						</div>
+						<div class="step reveal" style="--d:.15s">
+							<span class="step__num">2</span>
+							<h3>Tailor Your Slot</h3>
+							<p>
+								Our concierge booking finds the perfect time for a focused,
+								one-on-one session.
+							</p>
+							<img
+								src="assets/step2.jpg"
+								alt="Scheduling an appointment"
+								loading="lazy"
+							>
+						</div>
+						<div class="step reveal" style="--d:.3s">
+							<span class="step__num">3</span>
+							<h3>Handled With Care</h3>
+							<p>
+								Relax, your companion is with specialists who prioritize
+								psychological and physical comfort.
+							</p>
+							<img
+								src="assets/step3.jpg"
+								alt="A pet being cared for gently"
+								loading="lazy"
+							>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section class="container section" id="apothecary">
+				<div class="section__head reveal">
+					<div>
+						<span class="pill-tag pill-tag--surface">The Apothecary</span>
+						<h2 class="section__title">Our botanical range</h2>
+					</div>
+					<a href="#book" class="btn btn--solid btn--sm">
+						<span class="btn__label"
+							><span class="btn__t">View All Products</span
+							><span class="btn__t btn__t--hover">Shop Now</span></span
+						>
+					</a>
+				</div>
+
+				<div class="products">
+					<a href="#" class="product reveal">
+						<div class="product__img">
+							<img
+								src="assets/prod1.jpg"
+								alt="Healthy Tail botanical food blend"
+								loading="lazy"
+							>
+						</div>
+						<h3>Healthy Tail</h3>
+						<div class="product__price">
+							<span class="now">$120.00</span><span class="was">$185.00</span>
+						</div>
+					</a>
+					<a href="#" class="product reveal" style="--d:.1s">
+						<div class="product__img">
+							<img
+								src="assets/prod2.jpg"
+								alt="Whisker Bites herbal treats"
+								loading="lazy"
+							>
+						</div>
+						<h3>Whisker Bites</h3>
+						<div class="product__price">
+							<span class="now">$115.00</span><span class="was">$135.00</span>
+						</div>
+					</a>
+					<a href="#" class="product reveal" style="--d:.2s">
+						<div class="product__img">
+							<img
+								src="assets/prod3.jpg"
+								alt="Forest Coat conditioning balm"
+								loading="lazy"
+							>
+						</div>
+						<h3>Forest Coat</h3>
+						<div class="product__price">
+							<span class="now">$98.00</span><span class="was">$140.00</span>
+						</div>
+					</a>
+				</div>
+			</section>
+
+			<section class="container section">
+				<div class="faq">
+					<div class="faq__intro reveal">
+						<span class="pill-tag pill-tag--surface">FAQ</span>
+						<h2 class="section__title">
+							Common curiosities &amp; expert answers
+						</h2>
+						<a href="#book" class="btn btn--solid btn--lg">
+							<span class="btn__label"
+								><span class="btn__t">Contact Us</span
+								><span class="btn__t btn__t--hover">Contact Us</span></span
+							>
+							<span class="btn__chip" aria-hidden="true"
+								><svg
+									viewBox="0 0 24 24"
+									width="18"
+									height="18"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M17 8l4 4m0 0l-4 4m4-4H3"
+									/>
+								</svg></span
+							>
+						</a>
+					</div>
+
+					<div class="faq__list reveal">
+						<div class="acc is-open">
+							<button class="acc__q" aria-expanded="true">
+								<span>What services does Fernhollow offer?</span>
+								<span class="acc__chip" aria-hidden="true"
+									><svg
+										viewBox="0 0 24 24"
+										width="18"
+										height="18"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M19 9l-7 7-7-7"
+										/>
+									</svg></span
+								>
+							</button>
+							<div class="acc__a">
+								<p>
+									Botanical spa grooming, integrative veterinary medicine,
+									daycare, overnight boarding, and gentle behavior support, all
+									designed to keep your companion healthy, calm, and well-loved.
+								</p>
+							</div>
+						</div>
+						<div class="acc">
+							<button class="acc__q" aria-expanded="false">
+								<span>Are vaccinations required?</span>
+								<span class="acc__chip" aria-hidden="true"
+									><svg
+										viewBox="0 0 24 24"
+										width="18"
+										height="18"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M19 9l-7 7-7-7"
+										/>
+									</svg></span
+								>
+							</button>
+							<div class="acc__a">
+								<p>
+									Yes. We ask that all guests are up to date on core
+									vaccinations to protect every animal in our care. Proof of
+									vaccination is required before the first visit.
+								</p>
+							</div>
+						</div>
+						<div class="acc">
+							<button class="acc__q" aria-expanded="false">
+								<span>Do I need to book in advance?</span>
+								<span class="acc__chip" aria-hidden="true"
+									><svg
+										viewBox="0 0 24 24"
+										width="18"
+										height="18"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M19 9l-7 7-7-7"
+										/>
+									</svg></span
+								>
+							</button>
+							<div class="acc__a">
+								<p>
+									We recommend booking ahead to secure your preferred date and
+									time, especially across weekends and holidays. Our concierge
+									will help you find a calm, unrushed slot.
+								</p>
+							</div>
+						</div>
+						<div class="acc">
+							<button class="acc__q" aria-expanded="false">
+								<span>What makes your grooming "botanical"?</span>
+								<span class="acc__chip" aria-hidden="true"
+									><svg
+										viewBox="0 0 24 24"
+										width="18"
+										height="18"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M19 9l-7 7-7-7"
+										/>
+									</svg></span
+								>
+							</button>
+							<div class="acc__a">
+								<p>
+									We use plant-derived, dermatologist-reviewed products free of
+									harsh sulfates, paired with a low-stimulation environment and
+									slow, sensory-aware handling to keep anxiety low.
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section class="container reel-wrap" id="book">
+				<div class="cta reveal">
+					<div class="cta__deco" aria-hidden="true">
+						<svg viewBox="0 0 120 120" width="120" height="120">
+							<path
+								d="M60 10C40 40 28 60 28 80a32 32 0 0064 0c0-20-12-40-32-70zM60 70v40"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							/>
+						</svg>
+						<svg viewBox="0 0 120 120" width="120" height="120">
+							<path
+								d="M60 10C40 40 28 60 28 80a32 32 0 0064 0c0-20-12-40-32-70zM60 70v40"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							/>
+						</svg>
+					</div>
+					<div class="cta__grid">
+						<div class="cta__copy">
+							<span class="pill-tag pill-tag--clay">Stay in the Loop</span>
+							<h2>Join the Fernhollow circle</h2>
+							<p>
+								Seasonal wellness rituals, botanical care tips, and quiet
+								updates from the hollow, delivered gently to your inbox.
+							</p>
+						</div>
+						<form class="cta__form" id="newsletter" novalidate>
+							<input
+								type="email"
+								required
+								placeholder="Enter your email"
+								aria-label="Email address"
+							>
+							<button type="submit" class="cta__submit">Submit</button>
+							<p class="cta__success" id="ctaSuccess" hidden>
+								You're on the list. Welcome to the hollow.
+							</p>
+						</form>
+					</div>
+				</div>
+			</section>
+
+			<section class="container section" id="journal">
+				<div class="section__head reveal">
+					<div>
+						<span class="pill-tag pill-tag--surface">Journal</span>
+						<h2 class="section__title">Notes from the hollow</h2>
+					</div>
+					<a href="#" class="btn btn--solid btn--sm">
+						<span class="btn__label"
+							><span class="btn__t">All Articles</span
+							><span class="btn__t btn__t--hover">Read More</span></span
+						>
+					</a>
+				</div>
+
+				<div class="journal">
+					<article class="post reveal">
+						<div class="post__img">
+							<img
+								src="assets/blog1.jpg"
+								alt="A dog walking through woodland"
+								loading="lazy"
+							>
+						</div>
+						<div class="post__meta">
+							<span>March 14, 2025</span><span class="dot"></span
+							><span>4 min read</span>
+						</div>
+						<h3>Holistic Longevity: Advanced Vitality for Senior Companions</h3>
+						<span class="post__more"
+							>Read More
+							<svg
+								viewBox="0 0 24 24"
+								width="16"
+								height="16"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M17 8l4 4m0 0l-4 4m4-4H3"
+								/>
+							</svg></span
+						>
+					</article>
+					<article class="post reveal" style="--d:.1s">
+						<div class="post__img">
+							<img
+								src="assets/blog2.jpg"
+								alt="A calm cat resting"
+								loading="lazy"
+							>
+						</div>
+						<div class="post__meta">
+							<span>February 28, 2025</span><span class="dot"></span
+							><span>5 min read</span>
+						</div>
+						<h3>
+							The Psychology of Grooming: Lowering Anxiety in Sensitive Pets
+						</h3>
+						<span class="post__more"
+							>Read More
+							<svg
+								viewBox="0 0 24 24"
+								width="16"
+								height="16"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M17 8l4 4m0 0l-4 4m4-4H3"
+								/>
+							</svg></span
+						>
+					</article>
+					<article class="post reveal" style="--d:.2s">
+						<div class="post__img">
+							<img
+								src="assets/blog3.jpg"
+								alt="A pet being brushed"
+								loading="lazy"
+							>
+						</div>
+						<div class="post__meta">
+							<span>February 9, 2025</span><span class="dot"></span
+							><span>3 min read</span>
+						</div>
+						<h3>Why Botanical Coat Care Outperforms Conventional Shampoo</h3>
+						<span class="post__more"
+							>Read More
+							<svg
+								viewBox="0 0 24 24"
+								width="16"
+								height="16"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M17 8l4 4m0 0l-4 4m4-4H3"
+								/>
+							</svg></span
+						>
+					</article>
+				</div>
+			</section>
+		</main>
+
+		<footer class="footer">
+			<div class="container footer__inner">
+				<div class="footer__grid">
+					<div class="footer__brand">
+						<a href="#top" class="wordmark wordmark--lg"
+							><span class="wordmark__fern">Fern</span
+							><span class="wordmark__hollow wordmark__hollow--light"
+								>hollow</span
+							><span class="wordmark__dot"></span></a
+						>
+						<p>
+							Redefining pet care through science, soul, and the calm of the
+							wild, a deep commitment to the happiness of every companion since
+							2011.
+						</p>
+						<div class="footer__social">
+							<span class="eyebrow">Follow us</span>
+							<div class="footer__icons">
+								<a href="#" aria-label="Instagram"
+									><svg
+										viewBox="0 0 24 24"
+										width="18"
+										height="18"
+										fill="currentColor"
+									>
+										<path
+											d="M12 2.16c3.2 0 3.58.01 4.85.07 3.25.15 4.77 1.69 4.92 4.92.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.15 3.23-1.66 4.77-4.92 4.92-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-3.26-.15-4.77-1.7-4.92-4.92-.06-1.27-.07-1.65-.07-4.85s.01-3.58.07-4.85C2.38 3.93 3.9 2.38 7.15 2.23 8.42 2.17 8.8 2.16 12 2.16zm0 3.68a6.16 6.16 0 100 12.32 6.16 6.16 0 000-12.32zm0 10.16a4 4 0 110-8 4 4 0 010 8zm6.41-11.85a1.44 1.44 0 100 2.88 1.44 1.44 0 000-2.88z"
+										/>
+									</svg></a
+								>
+								<a href="#" aria-label="LinkedIn"
+									><svg
+										viewBox="0 0 24 24"
+										width="18"
+										height="18"
+										fill="currentColor"
+									>
+										<path
+											d="M19 0h-14c-2.76 0-5 2.24-5 5v14c0 2.76 2.24 5 5 5h14c2.76 0 5-2.24 5-5v-14c0-2.76-2.24-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.27a1.76 1.76 0 110-3.52 1.76 1.76 0 010 3.52zm13.5 12.27h-3v-5.6c0-3.37-4-3.11-4 0v5.6h-3v-11h3v1.77c1.4-2.59 7-2.78 7 2.48v6.75z"
+										/>
+									</svg></a
+								>
+							</div>
+						</div>
+					</div>
+					<div class="footer__cols">
+						<div>
+							<h4>Main Pages</h4>
+							<ul>
+								<li><a href="#top">Home</a></li>
+								<li><a href="#story">Our Story</a></li>
+								<li><a href="#services">Services</a></li>
+								<li><a href="#apothecary">Apothecary</a></li>
+							</ul>
+						</div>
+						<div>
+							<h4>Care</h4>
+							<ul>
+								<li><a href="#services">Grooming</a></li>
+								<li><a href="#services">Veterinary</a></li>
+								<li><a href="#book">Boarding</a></li>
+								<li><a href="#book">Concierge</a></li>
+							</ul>
+						</div>
+						<div>
+							<h4>Company</h4>
+							<ul>
+								<li><a href="#journal">Journal</a></li>
+								<li><a href="#book">Contact</a></li>
+								<li><a href="#book">Careers</a></li>
+								<li><a href="#book">Licensing</a></li>
+							</ul>
+						</div>
+					</div>
+				</div>
+				<div class="footer__bar">
+					<p>© 2025 Fernhollow. All rights reserved.</p>
+					<div class="footer__legal">
+						<a href="#">Privacy Policy</a><a href="#">Terms of Service</a>
+					</div>
+				</div>
+			</div>
+		</footer>
+
+		<script>
+(() => {
+	var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	/* ---- scroll reveals ---- */
+	var revealEls = document.querySelectorAll(".reveal");
+	if (reduced) {
+		revealEls.forEach((el) => {
+			el.classList.add("is-visible");
+		});
+	} else {
+		var io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((e) => {
+					if (e.isIntersecting) {
+						e.target.classList.add("is-visible");
+						io.unobserve(e.target);
+					}
+				});
+			},
+			{ threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
+		);
+		revealEls.forEach((el) => {
+			io.observe(el);
+		});
+	}
+
+	/* ---- stat counters ---- */
+	var counters = document.querySelectorAll(".counter");
+	function runCounter(el) {
+		var target = parseInt(el.getAttribute("data-target"), 10) || 0;
+		if (reduced) {
+			el.textContent = target;
+			return;
+		}
+		var dur = 1200,
+			start = null;
+		function step(ts) {
+			if (start === null) start = ts;
+			var p = Math.min((ts - start) / dur, 1);
+			var eased = 1 - (1 - p) ** 3;
+			el.textContent = Math.round(target * eased);
+			if (p < 1) requestAnimationFrame(step);
+			else el.textContent = target;
+		}
+		requestAnimationFrame(step);
+	}
+	var cio = new IntersectionObserver(
+		(entries) => {
+			entries.forEach((e) => {
+				if (e.isIntersecting) {
+					runCounter(e.target);
+					cio.unobserve(e.target);
+				}
+			});
+		},
+		{ threshold: 0.6 },
+	);
+	counters.forEach((el) => {
+		cio.observe(el);
+	});
+
+	/* ---- mobile menu ---- */
+	var burger = document.getElementById("burger");
+	var menu = document.getElementById("mobileMenu");
+	var close = document.getElementById("menuClose");
+	function openMenu() {
+		menu.classList.add("is-open");
+		menu.setAttribute("aria-hidden", "false");
+		burger.setAttribute("aria-expanded", "true");
+		document.body.style.overflow = "hidden";
+	}
+	function closeMenu() {
+		menu.classList.remove("is-open");
+		menu.setAttribute("aria-hidden", "true");
+		burger.setAttribute("aria-expanded", "false");
+		document.body.style.overflow = "";
+	}
+	if (burger) burger.addEventListener("click", openMenu);
+	if (close) close.addEventListener("click", closeMenu);
+	menu?.querySelectorAll("a").forEach((a) => {
+		a.addEventListener("click", closeMenu);
+	});
+	document.addEventListener("keydown", (e) => {
+		if (e.key === "Escape") closeMenu();
+	});
+
+	/* ---- nav active pill on scroll ---- */
+	var pills = Array.prototype.slice.call(
+		document.querySelectorAll(".nav__pills .pill"),
+	);
+	var sectionMap = pills
+		.map((p) => {
+			var id = p.getAttribute("href").replace("#", "");
+			return { pill: p, el: document.getElementById(id) };
+		})
+		.filter((m) => m.el);
+	function syncPills() {
+		var y = window.scrollY + 140;
+		var current = sectionMap[0];
+		sectionMap.forEach((m) => {
+			if (m.el.offsetTop <= y) current = m;
+		});
+		pills.forEach((p) => {
+			p.classList.remove("is-active");
+		});
+		if (current) current.pill.classList.add("is-active");
+	}
+	window.addEventListener("scroll", syncPills, { passive: true });
+	syncPills();
+
+	/* ---- FAQ accordion (single open) ---- */
+	var accs = document.querySelectorAll(".acc");
+	function setHeight(acc) {
+		var body = acc.querySelector(".acc__a");
+		body.style.maxHeight = acc.classList.contains("is-open")
+			? `${body.scrollHeight}px`
+			: "0px";
+	}
+	accs.forEach((acc) => {
+		var btn = acc.querySelector(".acc__q");
+		setHeight(acc);
+		btn.addEventListener("click", () => {
+			var willOpen = !acc.classList.contains("is-open");
+			accs.forEach((a) => {
+				a.classList.remove("is-open");
+				a.querySelector(".acc__q").setAttribute("aria-expanded", "false");
+				setHeight(a);
+			});
+			if (willOpen) {
+				acc.classList.add("is-open");
+				btn.setAttribute("aria-expanded", "true");
+				setHeight(acc);
+			}
+		});
+	});
+	window.addEventListener("resize", () => {
+		accs.forEach((a) => {
+			if (a.classList.contains("is-open")) setHeight(a);
+		});
+	});
+
+	/* ---- newsletter ---- */
+	var form = document.getElementById("newsletter");
+	if (form) {
+		form.addEventListener("submit", (e) => {
+			e.preventDefault();
+			var input = form.querySelector("input");
+			if (!input.value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value)) {
+				input.focus();
+				return;
+			}
+			var success = document.getElementById("ctaSuccess");
+			input.style.display = "none";
+			form.querySelector(".cta__submit").style.display = "none";
+			if (success) success.hidden = false;
+		});
+	}
+})();
+
+		</script>
+	</body>
+</html>

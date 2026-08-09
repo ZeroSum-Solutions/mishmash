@@ -1,0 +1,1824 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>VANTIX — Precision Medicine &amp; Clinical Intelligence</title>
+		<meta
+			name="description"
+			content="VANTIX pairs genomic intelligence with surgical precision to diagnose earlier and treat with certainty."
+		>
+		<style>
+/* ============================================================
+   VANTIX — "Clinical Obsidian" precision-medicine landing page
+   ============================================================ */
+
+/* ---------- Fonts (vendored) ---------- */
+
+
+
+
+
+
+
+
+
+/* ---------- Tokens ---------- */
+:root {
+	--obsidian: #0a0f1c;
+	--navy: #0f172a;
+	--slate-surface: #141e33;
+	--hairline: rgba(148, 163, 184, 0.14);
+	--hairline-strong: rgba(148, 163, 184, 0.28);
+	--accent: #38bdf8;
+	--accent-deep: #0ea5e9;
+	--mint: #5eead4;
+	--ink: #f1f5f9;
+	--muted: #94a3b8;
+	--dim: #64748b;
+	--coral: #fb7185;
+	--light: #f4f6fb;
+
+	--display: "Bricolage Grotesque", sans-serif;
+	--body: "Inter Tight", sans-serif;
+	--mono: "JetBrains Mono", monospace;
+
+	--r-sm: 10px;
+	--r-md: 16px;
+	--r-lg: 28px;
+	--r-full: 999px;
+
+	--glow: 0 18px 50px -14px rgba(56, 189, 248, 0.45);
+	--shadow-card: 0 30px 60px -28px rgba(0, 0, 0, 0.85);
+	--maxw: 1240px;
+}
+
+/* ---------- Reset ---------- */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+html {
+	scroll-behavior: smooth;
+	-webkit-text-size-adjust: 100%;
+	overflow-x: clip;
+}
+body {
+	font-family: var(--body);
+	background: var(--obsidian);
+	color: var(--ink);
+	line-height: 1.5;
+	overflow-x: hidden;
+	-webkit-font-smoothing: antialiased;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+img {
+	display: block;
+	max-width: 100%;
+}
+button,
+input,
+select,
+textarea {
+	font-family: inherit;
+}
+
+::-webkit-scrollbar {
+	width: 10px;
+}
+::-webkit-scrollbar-track {
+	background: var(--obsidian);
+}
+::-webkit-scrollbar-thumb {
+	background: var(--accent-deep);
+	border-radius: 8px;
+	border: 2px solid var(--obsidian);
+}
+::-webkit-scrollbar-thumb:hover {
+	background: var(--accent);
+}
+::selection {
+	background: var(--accent);
+	color: var(--obsidian);
+}
+
+.wrap {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 0 24px;
+}
+
+/* Shared atoms */
+.eyebrow {
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.24em;
+	text-transform: uppercase;
+	color: var(--accent);
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+}
+.eyebrow::before {
+	content: "";
+	width: 22px;
+	height: 1px;
+	background: var(--accent);
+	display: inline-block;
+}
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	font-family: var(--body);
+	font-weight: 600;
+	font-size: 14px;
+	border-radius: var(--r-full);
+	border: none;
+	cursor: pointer;
+	padding: 16px 30px;
+	transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+	white-space: nowrap;
+}
+.btn-accent {
+	background: var(--accent);
+	color: var(--obsidian);
+	box-shadow: var(--glow);
+}
+.btn-accent:hover {
+	background: #fff;
+	transform: translateY(-2px);
+}
+.btn-ghost-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	font-weight: 600;
+	font-size: 14px;
+	color: var(--ink);
+	transition: color 0.3s ease;
+}
+.btn-ghost-link svg {
+	transition: transform 0.3s ease;
+}
+.btn-ghost-link:hover {
+	color: var(--accent);
+}
+.btn-ghost-link:hover svg {
+	transform: translateX(5px);
+}
+
+.photo {
+	filter: grayscale(100%) contrast(1.05);
+	transition:
+		filter 0.7s ease,
+		transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.photo:hover {
+	filter: grayscale(0%);
+}
+
+/* ---------- Header ---------- */
+.header {
+	position: fixed;
+	inset: 0 0 auto 0;
+	z-index: 50;
+	background: rgba(10, 15, 28, 0.72);
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
+	border-bottom: 1px solid var(--hairline);
+}
+.nav {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 16px 24px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 20px;
+}
+.brand {
+	font-family: var(--display);
+	font-weight: 800;
+	font-size: 22px;
+	letter-spacing: -0.03em;
+}
+.brand .dot {
+	color: var(--accent);
+}
+.nav-links {
+	display: flex;
+	align-items: center;
+	gap: 34px;
+}
+.nav-links a {
+	font-size: 13.5px;
+	font-weight: 500;
+	color: var(--muted);
+	transition: color 0.25s;
+	position: relative;
+}
+.nav-links a:hover {
+	color: var(--ink);
+}
+.nav-actions {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
+.rapid-pill {
+	font-family: var(--mono);
+	font-size: 10.5px;
+	font-weight: 500;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--coral);
+	border: 1px solid rgba(251, 113, 133, 0.3);
+	border-radius: var(--r-full);
+	padding: 9px 14px;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+}
+.rapid-pill .blip {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--coral);
+	animation: pulse-dot 1.8s infinite;
+}
+.header .btn {
+	padding: 11px 22px;
+	font-size: 13px;
+}
+
+.burger {
+	display: none;
+	background: none;
+	border: none;
+	color: var(--ink);
+	cursor: pointer;
+	padding: 6px;
+}
+
+/* Mobile overlay */
+.mobile-menu {
+	position: fixed;
+	inset: 0;
+	z-index: 60;
+	background: var(--obsidian);
+	padding: 24px;
+	display: none;
+	flex-direction: column;
+}
+.mobile-menu.open {
+	display: flex;
+}
+.mobile-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 56px;
+}
+.mobile-links {
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+}
+.mobile-links a {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: 30px;
+	letter-spacing: -0.02em;
+}
+.mobile-foot {
+	margin-top: auto;
+	padding-top: 28px;
+	border-top: 1px solid var(--hairline);
+}
+.mobile-foot .coral {
+	color: var(--coral);
+	font-family: var(--mono);
+	font-size: 13px;
+	display: block;
+	margin-bottom: 18px;
+}
+.mobile-foot .btn {
+	width: 100%;
+}
+.icon-btn {
+	background: none;
+	border: none;
+	color: var(--ink);
+	cursor: pointer;
+	padding: 6px;
+}
+
+/* ---------- Hero ---------- */
+.hero {
+	padding: 122px 24px 60px;
+}
+.hero-panel {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	display: grid;
+	grid-template-columns: 38% 62%;
+	min-height: 600px;
+	border-radius: var(--r-lg);
+	overflow: hidden;
+	border: 1px solid var(--hairline);
+	box-shadow: var(--shadow-card);
+	background: var(--navy);
+}
+.hero-media {
+	position: relative;
+	overflow: hidden;
+	background: var(--navy);
+}
+.hero-media img {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.hero-media .grad {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(to top, rgba(10, 15, 28, 0.7), transparent 55%);
+}
+.tele-chip {
+	position: absolute;
+	left: 18px;
+	bottom: 18px;
+	z-index: 2;
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--ink);
+	background: rgba(10, 15, 28, 0.7);
+	backdrop-filter: blur(6px);
+	border: 1px solid var(--hairline-strong);
+	border-radius: var(--r-full);
+	padding: 8px 13px;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+.tele-chip .blip {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--mint);
+	animation: pulse-dot 1.6s infinite;
+}
+
+.hero-content {
+	padding: clamp(32px, 5vw, 64px);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 26px;
+	position: relative;
+}
+.hero-content::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background-image: linear-gradient(var(--hairline) 1px, transparent 1px);
+	background-size: 100% 44px;
+	opacity: 0.35;
+	mask-image: linear-gradient(to bottom, transparent, #000 40%, transparent);
+}
+.hero-content > * {
+	position: relative;
+	z-index: 1;
+}
+.hero h1 {
+	font-family: var(--display);
+	font-weight: 800;
+	font-size: clamp(2.5rem, 5vw, 4rem);
+	line-height: 1.04;
+	letter-spacing: -0.035em;
+	color: var(--ink);
+}
+.hero h1 .accent {
+	color: var(--accent);
+	font-style: italic;
+}
+.hero-sub {
+	font-size: clamp(1rem, 1.4vw, 1.12rem);
+	color: var(--muted);
+	max-width: 520px;
+}
+.hero-ctas {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 22px;
+	padding-top: 4px;
+}
+
+.metrics {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 36px;
+	padding-top: 30px;
+	margin-top: 8px;
+	border-top: 1px solid var(--hairline);
+}
+.metric .num {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: 2rem;
+	letter-spacing: -0.02em;
+	color: var(--ink);
+	display: block;
+}
+.metric .lbl {
+	font-family: var(--mono);
+	font-size: 9.5px;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: var(--accent);
+	font-weight: 500;
+}
+
+/* ---------- Rapid strip ---------- */
+.rapid {
+	background: linear-gradient(
+		110deg,
+		var(--accent-deep),
+		var(--accent) 65%,
+		var(--mint)
+	);
+	color: var(--obsidian);
+}
+.rapid .wrap {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 22px;
+	padding-top: 24px;
+	padding-bottom: 24px;
+}
+.rapid-left {
+	display: flex;
+	align-items: center;
+	gap: 18px;
+}
+.ring {
+	width: 46px;
+	height: 46px;
+	border-radius: 50%;
+	flex-shrink: 0;
+	background: rgba(10, 15, 28, 0.12);
+	display: grid;
+	place-items: center;
+	position: relative;
+}
+.ring::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: 50%;
+	border: 2px solid rgba(10, 15, 28, 0.5);
+	animation: ring-pulse 2.2s ease-out infinite;
+}
+.rapid-left small {
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	opacity: 0.7;
+	display: block;
+}
+.rapid-left strong {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: 1.25rem;
+	letter-spacing: -0.01em;
+}
+.rapid .pill-white {
+	background: var(--obsidian);
+	color: var(--ink);
+	border-radius: var(--r-full);
+	padding: 14px 26px;
+	font-weight: 600;
+	font-size: 14px;
+	transition: all 0.3s;
+	border: none;
+	cursor: pointer;
+}
+.rapid .pill-white:hover {
+	background: #fff;
+	color: var(--obsidian);
+}
+
+/* ---------- Section base ---------- */
+section.band {
+	padding: clamp(72px, 10vw, 128px) 0;
+}
+.sec-head {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	align-items: flex-end;
+	gap: 24px;
+	margin-bottom: 64px;
+}
+.sec-head h2 {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: clamp(2.2rem, 4.4vw, 3.6rem);
+	line-height: 1.06;
+	letter-spacing: -0.03em;
+	max-width: 640px;
+}
+.sec-head h2 .it {
+	font-style: italic;
+	font-weight: 600;
+	color: var(--accent);
+}
+.sec-head p {
+	color: var(--muted);
+	max-width: 360px;
+	font-size: 15px;
+}
+.sec-head .eyebrow {
+	margin-bottom: 18px;
+}
+
+/* ---------- Capabilities ---------- */
+.cards {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 22px;
+}
+.cap-card {
+	background: var(--navy);
+	border: 1px solid var(--hairline);
+	border-radius: var(--r-md);
+	padding: 32px;
+	transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+	display: flex;
+	flex-direction: column;
+}
+.cap-card.invert {
+	background: var(--slate-surface);
+	border-color: rgba(56, 189, 248, 0.22);
+}
+.cap-card:hover {
+	transform: translateY(-6px);
+	border-color: rgba(56, 189, 248, 0.45);
+	box-shadow: var(--shadow-card);
+}
+.cap-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 40px;
+}
+.cap-idx {
+	font-family: var(--mono);
+	font-size: 12px;
+	letter-spacing: 0.18em;
+	color: var(--accent);
+}
+.cap-top .tick {
+	width: 28px;
+	height: 1px;
+	background: var(--hairline-strong);
+	flex: none;
+}
+.cap-arrow {
+	color: var(--accent);
+	transition: transform 0.4s;
+}
+.cap-card:hover .cap-arrow {
+	transform: rotate(45deg);
+}
+.cap-card h3 {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: 1.7rem;
+	letter-spacing: -0.02em;
+	margin-bottom: 14px;
+}
+.cap-card p {
+	color: var(--muted);
+	font-size: 14.5px;
+	margin-bottom: 28px;
+	flex: 1;
+}
+.cap-card .thumb {
+	border-radius: var(--r-sm);
+	overflow: hidden;
+	height: 180px;
+}
+.cap-card .thumb img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+/* ---------- Platform ---------- */
+.platform {
+	background: var(--navy);
+}
+.platform-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 72px;
+	align-items: center;
+}
+.feat-list {
+	display: flex;
+	flex-direction: column;
+	gap: 30px;
+	margin-top: 36px;
+}
+.feat {
+	display: flex;
+	gap: 22px;
+	align-items: flex-start;
+}
+.feat .fi {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: 1.4rem;
+	color: var(--accent);
+	flex: none;
+	min-width: 36px;
+}
+.feat h4 {
+	font-family: var(--display);
+	font-weight: 600;
+	font-size: 1.3rem;
+	letter-spacing: -0.01em;
+	margin-bottom: 6px;
+}
+.feat p {
+	color: var(--muted);
+	font-size: 14px;
+}
+.platform-img {
+	position: relative;
+}
+.platform-img .halo {
+	position: absolute;
+	inset: -40px;
+	background: radial-gradient(
+		circle at 50% 40%,
+		rgba(56, 189, 248, 0.22),
+		transparent 65%
+	);
+	filter: blur(40px);
+}
+.platform-img .frame {
+	position: relative;
+	z-index: 1;
+	border: 1px solid var(--hairline-strong);
+	border-radius: var(--r-lg);
+	overflow: hidden;
+	box-shadow: var(--shadow-card);
+}
+.platform-img .frame img {
+	width: 100%;
+	height: 560px;
+	object-fit: cover;
+}
+
+/* ---------- Specialists ---------- */
+.specialists {
+	background: var(--obsidian);
+}
+.spec-head {
+	text-align: center;
+	max-width: 640px;
+	margin: 0 auto 64px;
+}
+.spec-head .eyebrow {
+	justify-content: center;
+	margin-bottom: 18px;
+}
+.spec-head h2 {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: clamp(2.2rem, 4vw, 3.2rem);
+	letter-spacing: -0.03em;
+}
+.spec-grid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 22px;
+}
+.spec-card .pf {
+	position: relative;
+	height: 380px;
+	border-radius: var(--r-md);
+	overflow: hidden;
+	background: var(--navy);
+	margin-bottom: 18px;
+	border: 1px solid var(--hairline);
+}
+.spec-card .pf img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.spec-card:hover .pf img {
+	transform: scale(1.08);
+	filter: grayscale(0%);
+}
+.spec-card h4 {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: 1.2rem;
+	letter-spacing: -0.01em;
+}
+.spec-card .role {
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: var(--dim);
+	margin-top: 5px;
+}
+
+/* ---------- Consult ---------- */
+.consult {
+	background: var(--navy);
+	position: relative;
+	overflow: hidden;
+}
+.consult::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background:
+		radial-gradient(
+			circle at 15% 20%,
+			rgba(56, 189, 248, 0.12),
+			transparent 45%
+		),
+		radial-gradient(
+			circle at 90% 90%,
+			rgba(94, 234, 212, 0.08),
+			transparent 50%
+		);
+}
+.consult .wrap {
+	position: relative;
+	z-index: 1;
+}
+.consult-grid {
+	display: grid;
+	grid-template-columns: 45% 55%;
+	gap: 64px;
+	align-items: stretch;
+}
+.consult-left {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 26px;
+}
+.consult-left h2 {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: clamp(2.4rem, 4.6vw, 4rem);
+	line-height: 1.05;
+	letter-spacing: -0.03em;
+}
+.consult-left h2 .accent {
+	color: var(--accent);
+}
+.consult-left p {
+	color: var(--muted);
+	max-width: 420px;
+	font-size: 16px;
+}
+.info-tiles {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 18px;
+	padding-top: 12px;
+}
+.info-tile {
+	background: rgba(20, 30, 51, 0.6);
+	border: 1px solid var(--hairline);
+	border-radius: var(--r-sm);
+	padding: 22px;
+}
+.info-tile small {
+	font-family: var(--mono);
+	font-size: 9.5px;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: var(--accent);
+	display: block;
+	margin-bottom: 8px;
+}
+.info-tile strong {
+	font-family: var(--display);
+	font-weight: 600;
+	font-size: 1.05rem;
+}
+.info-tile span {
+	font-size: 12px;
+	color: var(--dim);
+	text-decoration: underline;
+	cursor: pointer;
+	display: block;
+	margin-top: 5px;
+}
+
+.form-card {
+	background: var(--light);
+	color: var(--navy);
+	border-radius: var(--r-lg);
+	padding: clamp(28px, 4vw, 44px);
+	box-shadow: var(--shadow-card);
+}
+.form-card h3 {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: 1.7rem;
+	letter-spacing: -0.02em;
+	margin-bottom: 28px;
+}
+.form-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 18px;
+}
+.field {
+	margin-bottom: 18px;
+}
+.field label {
+	font-family: var(--mono);
+	font-size: 9.5px;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: var(--dim);
+	display: block;
+	margin-bottom: 8px;
+	font-weight: 500;
+}
+.field input,
+.field select,
+.field textarea {
+	width: 100%;
+	background: #fff;
+	border: 1px solid rgba(15, 23, 42, 0.12);
+	border-radius: var(--r-sm);
+	padding: 13px 15px;
+	font-size: 14.5px;
+	color: var(--navy);
+	transition:
+		border-color 0.25s,
+		box-shadow 0.25s;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+	outline: none;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+}
+.field textarea {
+	resize: vertical;
+	min-height: 96px;
+}
+.submit-btn {
+	width: 100%;
+	padding: 17px;
+	background: var(--navy);
+	color: var(--ink);
+	border: none;
+	border-radius: var(--r-sm);
+	font-weight: 600;
+	font-size: 14px;
+	cursor: pointer;
+	transition: background 0.3s;
+}
+.submit-btn:hover {
+	background: var(--accent);
+	color: var(--obsidian);
+}
+.form-note {
+	font-family: var(--mono);
+	font-size: 9.5px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--dim);
+	text-align: center;
+	margin-top: 16px;
+}
+.form-success {
+	display: none;
+	margin-top: 16px;
+	padding: 13px 15px;
+	border-radius: var(--r-sm);
+	background: rgba(94, 234, 212, 0.16);
+	border: 1px solid rgba(14, 165, 233, 0.3);
+	color: #0c5a52;
+	font-size: 13.5px;
+}
+.form-success.show {
+	display: block;
+}
+
+/* ---------- Footer ---------- */
+.footer {
+	background: var(--obsidian);
+	border-top: 1px solid var(--hairline);
+	padding: 80px 0 40px;
+}
+.foot-grid {
+	display: grid;
+	grid-template-columns: 1.4fr 1fr 1fr 1fr;
+	gap: 56px;
+	margin-bottom: 64px;
+}
+.foot-brand h3 {
+	font-family: var(--display);
+	font-weight: 800;
+	font-size: 1.5rem;
+	letter-spacing: -0.03em;
+	margin-bottom: 18px;
+}
+.foot-brand h3 .dot {
+	color: var(--accent);
+}
+.foot-brand p {
+	color: var(--muted);
+	font-size: 13.5px;
+	max-width: 280px;
+	margin-bottom: 24px;
+}
+.foot-social {
+	display: flex;
+	gap: 12px;
+}
+.foot-social span {
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	background: var(--slate-surface);
+	display: grid;
+	place-items: center;
+	font-family: var(--mono);
+	font-size: 10px;
+	cursor: pointer;
+	transition:
+		background 0.25s,
+		color 0.25s;
+}
+.foot-social span:hover {
+	background: var(--accent);
+	color: var(--obsidian);
+}
+.foot-col h5 {
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: var(--accent);
+	margin-bottom: 22px;
+	font-weight: 500;
+}
+.foot-col ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.foot-col a {
+	color: var(--muted);
+	font-size: 13.5px;
+	transition: color 0.25s;
+}
+.foot-col a:hover {
+	color: var(--ink);
+}
+.foot-contact li {
+	color: var(--muted);
+	font-size: 13px;
+	margin-bottom: 12px;
+}
+.foot-contact b {
+	color: var(--accent);
+	font-weight: 600;
+}
+.foot-bottom {
+	padding-top: 28px;
+	border-top: 1px solid var(--hairline);
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 16px;
+}
+.foot-bottom span,
+.foot-bottom a {
+	font-family: var(--mono);
+	font-size: 9px;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: var(--dim);
+}
+.foot-bottom .links {
+	display: flex;
+	gap: 28px;
+}
+.foot-bottom a:hover {
+	color: var(--accent);
+}
+
+/* ---------- Reveal animations ---------- */
+.reveal {
+	opacity: 0;
+	transform: translateY(30px);
+	transition:
+		opacity 1s cubic-bezier(0.16, 1, 0.3, 1),
+		transform 1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.scale {
+	transform: scale(0.95);
+}
+.reveal.visible {
+	opacity: 1;
+	transform: none;
+}
+
+@keyframes pulse-dot {
+	0%,
+	100% {
+		opacity: 1;
+		box-shadow: 0 0 0 0 currentColor;
+	}
+	50% {
+		opacity: 0.55;
+	}
+}
+@keyframes ring-pulse {
+	0% {
+		transform: scale(0.85);
+		opacity: 0.8;
+	}
+	100% {
+		transform: scale(1.5);
+		opacity: 0;
+	}
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1023px) {
+	.nav-links {
+		display: none;
+	}
+	.burger {
+		display: block;
+	}
+	.rapid-pill {
+		display: none;
+	}
+	.hero-panel {
+		grid-template-columns: 1fr;
+	}
+	.hero-media {
+		height: 320px;
+	}
+	.hero-media img {
+		position: absolute;
+	}
+	.platform-grid {
+		grid-template-columns: 1fr;
+		gap: 48px;
+	}
+	.consult-grid {
+		grid-template-columns: 1fr;
+		gap: 40px;
+	}
+	.cards {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.spec-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.foot-grid {
+		grid-template-columns: 1fr 1fr;
+		gap: 40px;
+	}
+	.platform-img .frame img {
+		height: 460px;
+	}
+}
+@media (max-width: 639px) {
+	.header .btn {
+		display: none;
+	}
+	.cards {
+		grid-template-columns: 1fr;
+	}
+	.spec-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+	.form-row {
+		grid-template-columns: 1fr;
+	}
+	.info-tiles {
+		grid-template-columns: 1fr;
+	}
+	.metrics {
+		gap: 22px;
+	}
+	.metric {
+		min-width: 42%;
+	}
+	.foot-grid {
+		grid-template-columns: 1fr;
+		gap: 36px;
+	}
+	.hero {
+		padding-top: 100px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.reveal {
+		opacity: 1;
+		transform: none;
+		transition: none;
+	}
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001s;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@300;400;500;600;700;800&family=Inter+Tight:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- HEADER -->
+		<header class="header">
+			<nav class="nav">
+				<a href="#top" class="brand">VANTIX<span class="dot">.</span></a>
+				<div class="nav-links">
+					<a href="#platform">Platform</a>
+					<a href="#diagnostics">Diagnostics</a>
+					<a href="#specialists">Specialists</a>
+					<a href="#request">Evidence</a>
+				</div>
+				<div class="nav-actions">
+					<a href="#rapid" class="rapid-pill"
+						><span class="blip"></span>24/7 Rapid Line</a
+					>
+					<a href="#request" class="btn btn-accent">Request Access</a>
+					<button class="burger" id="burger" aria-label="Open menu">
+						<svg
+							width="24"
+							height="24"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+						>
+							<line x1="3" y1="6" x2="21" y2="6" />
+							<line x1="3" y1="12" x2="21" y2="12" />
+							<line x1="3" y1="18" x2="21" y2="18" />
+						</svg>
+					</button>
+				</div>
+			</nav>
+		</header>
+
+		<!-- MOBILE MENU -->
+		<div class="mobile-menu" id="mobileMenu">
+			<div class="mobile-top">
+				<a href="#top" class="brand">VANTIX<span class="dot">.</span></a>
+				<button class="icon-btn" id="closeMenu" aria-label="Close menu">
+					<svg
+						width="26"
+						height="26"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+					>
+						<line x1="18" y1="6" x2="6" y2="18" />
+						<line x1="6" y1="6" x2="18" y2="18" />
+					</svg>
+				</button>
+			</div>
+			<div class="mobile-links">
+				<a href="#platform" data-mlink>Platform</a>
+				<a href="#diagnostics" data-mlink>Diagnostics</a>
+				<a href="#specialists" data-mlink>Specialists</a>
+				<a href="#request" data-mlink>Evidence</a>
+			</div>
+			<div class="mobile-foot">
+				<span class="coral">24/7 RAPID LINE · +1 (800) 928-VANT</span>
+				<a href="#request" class="btn btn-accent" data-mlink>Request Access</a>
+			</div>
+		</div>
+
+		<main id="top">
+			<!-- HERO -->
+			<section class="hero">
+				<div class="hero-panel">
+					<div class="hero-media">
+						<img
+							src="assets/hero.jpg"
+							class="photo"
+							alt="Genomic sequencing laboratory"
+						>
+						<div class="grad"></div>
+						<span class="tele-chip"
+							><span class="blip"></span>Live · Genome Pipeline</span
+						>
+					</div>
+					<div class="hero-content">
+						<span class="eyebrow reveal" data-delay="0"
+							>Precision Medicine OS</span
+						>
+						<h1 class="reveal" data-delay="100">
+							Diagnose earlier.<br>Treat <span class="accent">precisely</span>.
+						</h1>
+						<p class="hero-sub reveal" data-delay="220">
+							VANTIX fuses whole-genome intelligence with robotic surgical
+							precision — surfacing risk years before symptoms and engineering
+							therapies around your unique biology.
+						</p>
+						<div class="hero-ctas reveal" data-delay="340">
+							<a href="#request" class="btn btn-accent"
+								>Book a Genomic Consult</a
+							>
+							<a href="#platform" class="btn-ghost-link"
+								>Explore the platform
+								<svg
+									width="18"
+									height="18"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M5 12h14" />
+									<path d="m12 5 7 7-7 7" />
+								</svg>
+							</a>
+						</div>
+						<div class="metrics reveal" data-delay="460">
+							<div class="metric">
+								<span class="num" data-count="99.7" data-suffix="%" data-dec="1"
+									>0</span
+								><span class="lbl">Diagnostic Accuracy</span>
+							</div>
+							<div class="metric">
+								<span class="num" data-count="2.4" data-suffix="M" data-dec="1"
+									>0</span
+								><span class="lbl">Genomes Sequenced</span>
+							</div>
+							<div class="metric">
+								<span class="num" data-text="TOP 1%">—</span
+								><span class="lbl">Global Outcomes</span>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- RAPID STRIP -->
+			<section class="rapid" id="rapid">
+				<div class="wrap">
+					<div class="rapid-left">
+						<div class="ring">
+							<svg
+								width="20"
+								height="20"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2.4"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path
+									d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"
+								/>
+							</svg>
+						</div>
+						<div>
+							<small>Rapid Clinical Response · 24 / 7</small>
+							<strong
+								>Acute case? Reach a specialist now — +1 (800) 928-VANT</strong
+							>
+						</div>
+					</div>
+					<button class="pill-white">Find the nearest center</button>
+				</div>
+			</section>
+
+			<!-- CAPABILITIES -->
+			<section class="band" id="diagnostics">
+				<div class="wrap">
+					<div class="sec-head reveal">
+						<div>
+							<span class="eyebrow">Core Capabilities</span>
+							<h2>
+								Specialized intelligence for
+								<span class="it">complex</span>
+								conditions.
+							</h2>
+						</div>
+						<p>
+							We focus on disciplines that demand extreme technical precision
+							and continuously-learning treatment protocols.
+						</p>
+					</div>
+					<div class="cards">
+						<article class="cap-card reveal" data-delay="0">
+							<div class="cap-top">
+								<span class="cap-idx">01</span><span class="tick"></span>
+								<svg
+									class="cap-arrow"
+									width="20"
+									height="20"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M5 12h14" />
+									<path d="m12 5 7 7-7 7" />
+								</svg>
+							</div>
+							<h3>Predictive Genomics</h3>
+							<p>
+								Whole-genome models flag inherited and emergent risk years
+								before a single symptom — turning prevention into a measurable
+								plan.
+							</p>
+							<div class="thumb">
+								<img
+									src="assets/cap-genomics.jpg"
+									class="photo"
+									alt="Genomics laboratory"
+								>
+							</div>
+						</article>
+						<article class="cap-card invert reveal" data-delay="150">
+							<div class="cap-top">
+								<span class="cap-idx">02</span><span class="tick"></span>
+								<svg
+									class="cap-arrow"
+									width="20"
+									height="20"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M5 12h14" />
+									<path d="m12 5 7 7-7 7" />
+								</svg>
+							</div>
+							<h3>Neuro Mapping</h3>
+							<p>
+								High-resolution brain mapping and adaptive deep-brain
+								stimulation tuned in real time for neurodegenerative and
+								movement disorders.
+							</p>
+							<div class="thumb">
+								<img
+									src="assets/cap-neuro.jpg"
+									class="photo"
+									alt="Neuro imaging"
+								>
+							</div>
+						</article>
+						<article class="cap-card reveal" data-delay="300">
+							<div class="cap-top">
+								<span class="cap-idx">03</span><span class="tick"></span>
+								<svg
+									class="cap-arrow"
+									width="20"
+									height="20"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M5 12h14" />
+									<path d="m12 5 7 7-7 7" />
+								</svg>
+							</div>
+							<h3>Oncology Intelligence</h3>
+							<p>
+								Patient-specific cancer vaccines and robotic resection
+								engineered for maximum clearance with minimal collateral damage.
+							</p>
+							<div class="thumb">
+								<img
+									src="assets/cap-onco.jpg"
+									class="photo"
+									alt="Oncology research"
+								>
+							</div>
+						</article>
+					</div>
+				</div>
+			</section>
+
+			<!-- PLATFORM -->
+			<section class="band platform" id="platform">
+				<div class="wrap">
+					<div class="platform-grid">
+						<div class="reveal">
+							<span class="eyebrow">The Platform</span>
+							<h2
+								style="font-family:var(--display);font-weight:700;font-size:clamp(2.2rem,4.4vw,3.6rem);line-height:1.06;letter-spacing:-0.03em;margin-top:18px;"
+							>
+								A digital twin of your
+								<span style="color:var(--accent)">biology</span>.
+							</h2>
+							<div class="feat-list">
+								<div class="feat">
+									<span class="fi">01</span>
+									<div>
+										<h4>Predictive Diagnostics</h4>
+										<p>
+											Our models reconcile millions of clinical and genomic
+											signals to identify risk long before symptoms manifest.
+										</p>
+									</div>
+								</div>
+								<div class="feat">
+									<span class="fi">02</span>
+									<div>
+										<h4>Robotic Microsurgery</h4>
+										<p>
+											Surgical systems deliver 10× magnification and tremor-free
+											precision for the most delicate neuro and cardiac work.
+										</p>
+									</div>
+								</div>
+								<div class="feat">
+									<span class="fi">03</span>
+									<div>
+										<h4>Genomic Tailoring</h4>
+										<p>
+											Every protocol is built on your unique genetic signature,
+											optimizing for efficacy while minimizing adverse response.
+										</p>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div class="platform-img reveal scale">
+							<div class="halo"></div>
+							<div class="frame">
+								<img
+									src="assets/platform.jpg"
+									alt="Clinical intelligence platform"
+								>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- SPECIALISTS -->
+			<section class="band specialists" id="specialists">
+				<div class="wrap">
+					<div class="spec-head reveal">
+						<span class="eyebrow">Our Specialists</span>
+						<h2>Architects of modern medicine.</h2>
+					</div>
+					<div class="spec-grid">
+						<div class="spec-card reveal scale" data-delay="0">
+							<div class="pf">
+								<img
+									src="assets/doc1.jpg"
+									class="photo"
+									alt="Dr. Alana Voss"
+								>
+							</div>
+							<h4>Dr. Alana Voss</h4>
+							<div class="role">Director of Innovation</div>
+						</div>
+						<div class="spec-card reveal scale" data-delay="120">
+							<div class="pf">
+								<img
+									src="assets/doc2.jpg"
+									class="photo"
+									alt="Dr. Rohan Mehta"
+								>
+							</div>
+							<h4>Dr. Rohan Mehta</h4>
+							<div class="role">Head of Cardiac Genomics</div>
+						</div>
+						<div class="spec-card reveal scale" data-delay="240">
+							<div class="pf">
+								<img
+									src="assets/doc3.jpg"
+									class="photo"
+									alt="Dr. Lena Park"
+								>
+							</div>
+							<h4>Dr. Lena Park</h4>
+							<div class="role">Chief of Oncology</div>
+						</div>
+						<div class="spec-card reveal scale" data-delay="360">
+							<div class="pf">
+								<img
+									src="assets/doc4.jpg"
+									class="photo"
+									alt="Dr. Marcus Hale"
+								>
+							</div>
+							<h4>Dr. Marcus Hale</h4>
+							<div class="role">Head of Diagnostics</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- CONSULT -->
+			<section class="band consult" id="request">
+				<div class="wrap">
+					<div class="consult-grid">
+						<div class="consult-left reveal">
+							<span class="eyebrow">Request Access</span>
+							<h2>Ready for a <span class="accent">smarter</span> strategy?</h2>
+							<p>
+								Begin your path to precision care. Our team reviews your
+								diagnostic history and returns a strategic treatment brief
+								within 24 hours.
+							</p>
+							<div class="info-tiles">
+								<div class="info-tile">
+									<small>Main Campus</small><strong>Vantix Plaza A</strong
+									><span>View navigation</span>
+								</div>
+								<div class="info-tile">
+									<small>Intake Line</small><strong>+1 (800) 928-VANT</strong
+									><span>Speak with an expert</span>
+								</div>
+							</div>
+						</div>
+						<div class="form-card reveal scale">
+							<h3>Consultation Request</h3>
+							<form id="consultForm" novalidate>
+								<div class="form-row">
+									<div class="field">
+										<label for="name">Full Name</label>
+										<input
+											id="name"
+											type="text"
+											placeholder="Jordan Avery"
+											required
+										>
+									</div>
+									<div class="field">
+										<label for="email">Email Address</label>
+										<input
+											id="email"
+											type="email"
+											placeholder="jordan@example.com"
+											required
+										>
+									</div>
+								</div>
+								<div class="field">
+									<label for="specialty">Specialty Required</label>
+									<select id="specialty">
+										<option>General Precision Checkup</option>
+										<option>Predictive Genomics Panel</option>
+										<option>Neuro-Diagnostic Screening</option>
+										<option>Oncology Intelligence Review</option>
+									</select>
+								</div>
+								<div class="field">
+									<label for="brief">Initial Brief</label
+									><textarea
+										id="brief"
+										placeholder="Briefly describe your goals or symptoms…"
+									></textarea>
+								</div>
+								<button type="submit" class="submit-btn">
+									Submit Clinical Brief
+								</button>
+								<p class="form-note">
+									Secure Transmission · HIPAA Compliant · Encrypted
+								</p>
+								<div class="form-success" id="formSuccess">
+									Your clinical brief was securely transmitted. A coordinator
+									will reach you within 24 hours.
+								</div>
+							</form>
+						</div>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<!-- FOOTER -->
+		<footer class="footer">
+			<div class="wrap">
+				<div class="foot-grid">
+					<div class="foot-brand">
+						<h3>VANTIX<span class="dot">.</span></h3>
+						<p>
+							Redefining medical certainty through genomic intelligence and
+							surgical precision.
+						</p>
+						<div class="foot-social">
+							<span>TW</span><span>LI</span><span>GH</span>
+						</div>
+					</div>
+					<div class="foot-col">
+						<h5>Capabilities</h5>
+						<ul>
+							<li><a href="#diagnostics">Predictive Genomics</a></li>
+							<li><a href="#diagnostics">Neuro Mapping</a></li>
+							<li><a href="#diagnostics">Oncology Intelligence</a></li>
+							<li><a href="#platform">Robotic Surgery</a></li>
+						</ul>
+					</div>
+					<div class="foot-col">
+						<h5>Patients</h5>
+						<ul>
+							<li><a href="#request">Patient Portal</a></li>
+							<li><a href="#request">Insurance</a></li>
+							<li><a href="#specialists">Find a Specialist</a></li>
+							<li><a href="#platform">Evidence Library</a></li>
+						</ul>
+					</div>
+					<div class="foot-col foot-contact">
+						<h5>Contact</h5>
+						<ul>
+							<li><b>Address</b> · 240 Vantix Plaza, Helix City</li>
+							<li><b>Phone</b> · +1 (800) 928-VANT</li>
+							<li><b>Email</b> · care@vantix.health</li>
+						</ul>
+					</div>
+				</div>
+				<div class="foot-bottom">
+					<span>© 2026 Vantix Health Systems · All rights reserved</span>
+					<div class="links">
+						<a href="#">Privacy Policy</a><a href="#">Terms of Service</a>
+					</div>
+				</div>
+			</div>
+		</footer>
+
+		<script>
+(() => {
+	var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	/* ---- Mobile menu ---- */
+	var burger = document.getElementById("burger");
+	var menu = document.getElementById("mobileMenu");
+	var close = document.getElementById("closeMenu");
+	function openMenu() {
+		menu.classList.add("open");
+		document.body.style.overflow = "hidden";
+	}
+	function closeMenu() {
+		menu.classList.remove("open");
+		document.body.style.overflow = "";
+	}
+	if (burger) burger.addEventListener("click", openMenu);
+	if (close) close.addEventListener("click", closeMenu);
+	document.querySelectorAll("[data-mlink]").forEach((a) => {
+		a.addEventListener("click", closeMenu);
+	});
+
+	/* ---- Scroll reveals ---- */
+	var revealEls = Array.prototype.slice.call(
+		document.querySelectorAll(".reveal"),
+	);
+	if (reduce || !("IntersectionObserver" in window)) {
+		revealEls.forEach((el) => {
+			el.classList.add("visible");
+		});
+	} else {
+		var io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((e) => {
+					if (!e.isIntersecting) return;
+					var d = parseInt(e.target.getAttribute("data-delay") || "0", 10);
+					setTimeout(() => {
+						e.target.classList.add("visible");
+					}, d);
+					io.unobserve(e.target);
+				});
+			},
+			{ threshold: 0.12, rootMargin: "0px 0px -40px 0px" },
+		);
+		revealEls.forEach((el) => {
+			io.observe(el);
+		});
+	}
+
+	/* ---- Metric count-up ---- */
+	function runCount(el) {
+		var text = el.getAttribute("data-text");
+		if (text) {
+			el.textContent = text;
+			return;
+		}
+		var target = parseFloat(el.getAttribute("data-count"));
+		var dec = parseInt(el.getAttribute("data-dec") || "0", 10);
+		var suffix = el.getAttribute("data-suffix") || "";
+		if (reduce) {
+			el.textContent = target.toFixed(dec) + suffix;
+			return;
+		}
+		var start = null,
+			dur = 1500;
+		function step(ts) {
+			if (start === null) start = ts;
+			var p = Math.min((ts - start) / dur, 1);
+			var eased = 1 - (1 - p) ** 3;
+			el.textContent = (target * eased).toFixed(dec) + suffix;
+			if (p < 1) requestAnimationFrame(step);
+			else el.textContent = target.toFixed(dec) + suffix;
+		}
+		requestAnimationFrame(step);
+	}
+	var counters = document.querySelectorAll("[data-count],[data-text]");
+	if ("IntersectionObserver" in window && !reduce) {
+		var cio = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((e) => {
+					if (e.isIntersecting) {
+						runCount(e.target);
+						cio.unobserve(e.target);
+					}
+				});
+			},
+			{ threshold: 0.5 },
+		);
+		counters.forEach((c) => {
+			cio.observe(c);
+		});
+	} else {
+		counters.forEach(runCount);
+	}
+
+	/* ---- Form ---- */
+	var form = document.getElementById("consultForm");
+	if (form) {
+		form.addEventListener("submit", (e) => {
+			e.preventDefault();
+			var name = document.getElementById("name");
+			var email = document.getElementById("email");
+			if (!name.value.trim() || !email.value.trim()) {
+				(name.value.trim() ? email : name).focus();
+				return;
+			}
+			document.getElementById("formSuccess").classList.add("show");
+			form.querySelector(".submit-btn").textContent = "Brief Transmitted ✓";
+			setTimeout(() => {
+				form.reset();
+				document.getElementById("formSuccess").classList.remove("show");
+				form.querySelector(".submit-btn").textContent = "Submit Clinical Brief";
+			}, 4200);
+		});
+	}
+})();
+
+		</script>
+	</body>
+</html>

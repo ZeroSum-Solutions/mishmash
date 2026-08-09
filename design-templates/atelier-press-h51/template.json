@@ -1,0 +1,13 @@
+{
+  "slug": "atelier-press-h51",
+  "name": "Atelier Press — Editorial Paper Grid Creative-Workspace Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Familjen Grotesk"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/atelier-press-h51",
+  "source_license": "MIT"
+}

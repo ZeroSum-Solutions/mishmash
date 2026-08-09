@@ -1,0 +1,11 @@
+{
+  "slug": "orbis-nft-landing",
+  "name": "Orbis.Nft — Dark Space NFT Landing Page",
+  "family": "landing-pages",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/orbis-nft-landing",
+  "source_license": "MIT"
+}

@@ -1,0 +1,15 @@
+{
+  "slug": "velvet-vellum-agency-h4",
+  "name": "Velvet Vellum — Precision Marketing Agency Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Josefin Sans",
+    "Space Grotesk",
+    "JetBrains Mono"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/velvet-vellum-agency-h4",
+  "source_license": "MIT"
+}

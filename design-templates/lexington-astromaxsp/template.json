@@ -1,0 +1,14 @@
+{
+  "slug": "astromaxsp",
+  "name": "AstroMax SP: Creative Agency Portfolio Website Clone",
+  "family": "lexingtonthemes",
+  "kind": "multipage",
+  "cdn_fonts": [
+    "Geist",
+    "Geist Mono"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/templates/premium/lexingtonthemes/astromaxsp",
+  "source_license": "MIT"
+}

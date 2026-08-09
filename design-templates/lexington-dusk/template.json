@@ -1,0 +1,14 @@
+{
+  "slug": "dusk",
+  "name": "Dusk: Swiss Design Conference Website Template",
+  "family": "lexingtonthemes",
+  "kind": "multipage",
+  "cdn_fonts": [
+    "Clash Display",
+    "General Sans"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/templates/premium/lexingtonthemes/dusk",
+  "source_license": "MIT"
+}

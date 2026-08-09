@@ -1,0 +1,1533 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Maison Éclisse — Pénombre · Fall–Winter MMXXV</title>
+		<meta
+			name="description"
+			content="Maison Éclisse — a Parisian fashion house. A study in reduction: essential objects for the modern wardrobe."
+		>
+		<style>
+/* ============================================================
+   MAISON ÉCLISSE — "ATELIER NOIR"
+   A quiet, editorial haute-couture lookbook. Ink on bone.
+   ============================================================ */
+
+/* ---------- Fonts (self-hosted) ---------- */
+
+
+
+
+
+
+
+
+
+/* ---------- Tokens ---------- */
+:root {
+	--bone: #f4f1ea;
+	--surface: #ebe6db;
+	--ink: #16130f;
+	--soot: #100e0b;
+	--sepia: #7a7060;
+	--line: #cfc7b6;
+	--accent: #a6492b;
+	--on-dark: #ede7da;
+	--ease: cubic-bezier(0.16, 1, 0.3, 1);
+	--gut: clamp(1.25rem, 5vw, 5rem);
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+html {
+	scroll-behavior: smooth;
+	-webkit-text-size-adjust: 100%;
+}
+body {
+	font-family: "Archivo", system-ui, sans-serif;
+	font-weight: 300;
+	background: var(--bone);
+	color: var(--ink);
+	line-height: 1.6;
+	overflow-x: hidden;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+button {
+	font: inherit;
+	color: inherit;
+	background: none;
+	border: none;
+	cursor: pointer;
+}
+
+.serif {
+	font-family: "Cormorant", Georgia, serif;
+}
+.label {
+	font-family: "Archivo", sans-serif;
+	font-weight: 400;
+	text-transform: uppercase;
+	font-size: 0.66rem;
+	letter-spacing: 0.28em;
+}
+.label-sm {
+	font-family: "Archivo", sans-serif;
+	font-weight: 400;
+	text-transform: uppercase;
+	font-size: 0.6rem;
+	letter-spacing: 0.26em;
+}
+
+/* selection */
+::selection {
+	background: var(--ink);
+	color: var(--bone);
+}
+
+/* focus */
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 3px;
+}
+
+/* ---------- Reveal ---------- */
+.reveal {
+	opacity: 1;
+	transform: none;
+}
+.js .reveal {
+	opacity: 0;
+	transform: translateY(28px);
+	transition:
+		opacity 0.9s var(--ease),
+		transform 0.9s var(--ease);
+}
+.js .reveal.in {
+	opacity: 1;
+	transform: none;
+}
+
+/* ---------- Image frame ---------- */
+.frame {
+	overflow: hidden;
+	position: relative;
+	background: var(--surface);
+}
+.frame img {
+	transition: transform 1.2s var(--ease);
+}
+.frame:hover img,
+.card:hover .frame img,
+.article:hover .frame img {
+	transform: scale(1.06);
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.head {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	z-index: 60;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 1.4rem var(--gut);
+	color: var(--on-dark);
+	transition:
+		background 0.5s var(--ease),
+		color 0.5s var(--ease),
+		border-color 0.5s var(--ease),
+		padding 0.4s var(--ease);
+	border-bottom: 1px solid transparent;
+}
+.head.solid {
+	background: rgba(244, 241, 234, 0.92);
+	-webkit-backdrop-filter: blur(8px);
+	backdrop-filter: blur(8px);
+	color: var(--ink);
+	border-bottom: 1px solid var(--line);
+	padding-top: 1rem;
+	padding-bottom: 1rem;
+}
+.head__menu {
+	display: flex;
+	align-items: center;
+	gap: 0.8rem;
+}
+.burger {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+.burger span {
+	display: block;
+	width: 22px;
+	height: 1px;
+	background: currentColor;
+	transition: width 0.3s var(--ease);
+}
+.burger span:last-child {
+	width: 14px;
+}
+.head__menu:hover .burger span:last-child {
+	width: 22px;
+}
+.wordmark {
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
+	font-family: "Cormorant", serif;
+	font-weight: 500;
+	font-size: clamp(1.05rem, 2.4vw, 1.5rem);
+	letter-spacing: 0.34em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	padding-left: 0.34em;
+}
+.head__right {
+	display: flex;
+	align-items: center;
+	gap: 1.6rem;
+}
+.head__right button:hover,
+.head__menu:hover {
+	opacity: 0.65;
+}
+@media (max-width: 680px) {
+	.head__hide {
+		display: none;
+	}
+}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.hero {
+	position: relative;
+	height: 100svh;
+	min-height: 560px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+}
+.hero__bg {
+	position: absolute;
+	inset: 0;
+}
+.hero__bg img {
+	transform: scale(1.04);
+}
+.hero__bg::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		180deg,
+		rgba(16, 14, 11, 0.34),
+		rgba(16, 14, 11, 0.12) 40%,
+		rgba(16, 14, 11, 0.46)
+	);
+}
+.hero__inner {
+	position: relative;
+	z-index: 2;
+	text-align: center;
+	color: var(--on-dark);
+	padding: 0 1.5rem;
+	max-width: 1000px;
+}
+.hero__kicker {
+	display: block;
+	margin-bottom: 1.6rem;
+	opacity: 0.9;
+}
+.hero__title {
+	font-family: "Cormorant", serif;
+	font-weight: 400;
+	font-size: clamp(3.6rem, 15vw, 12rem);
+	line-height: 0.92;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+}
+.hero__title em {
+	font-style: italic;
+	font-weight: 300;
+}
+.hero__cta {
+	display: inline-block;
+	margin-top: 2.4rem;
+	border: 1px solid rgba(237, 231, 218, 0.7);
+	padding: 0.95rem 2.4rem;
+	font-family: "Archivo", sans-serif;
+	font-weight: 400;
+	text-transform: uppercase;
+	font-size: 0.7rem;
+	letter-spacing: 0.26em;
+	transition:
+		background 0.4s var(--ease),
+		color 0.4s var(--ease),
+		border-color 0.4s var(--ease);
+}
+.hero__cta:hover {
+	background: var(--bone);
+	color: var(--ink);
+	border-color: var(--bone);
+}
+.hero__meta {
+	position: absolute;
+	bottom: 1.6rem;
+	left: var(--gut);
+	z-index: 2;
+	color: var(--on-dark);
+	line-height: 1.9;
+}
+.hero__scrollhint {
+	position: absolute;
+	bottom: 1.7rem;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 2;
+	color: var(--on-dark);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.5rem;
+	opacity: 0.85;
+}
+.hero__scrollhint .bar {
+	width: 1px;
+	height: 34px;
+	background: currentColor;
+	animation: drop 2.4s var(--ease) infinite;
+}
+@keyframes drop {
+	0% {
+		transform: scaleY(0);
+		transform-origin: top;
+	}
+	45% {
+		transform: scaleY(1);
+		transform-origin: top;
+	}
+	55% {
+		transform: scaleY(1);
+		transform-origin: bottom;
+	}
+	100% {
+		transform: scaleY(0);
+		transform-origin: bottom;
+	}
+}
+
+/* rotating badge */
+.badge {
+	position: absolute;
+	bottom: 1.4rem;
+	right: var(--gut);
+	z-index: 2;
+	width: 104px;
+	height: 104px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: transform 0.6s var(--ease);
+}
+.badge:hover {
+	transform: scale(1.1);
+}
+.badge__ring {
+	position: absolute;
+	inset: 0;
+	animation: spin 14s linear infinite;
+}
+.badge__ring text {
+	fill: var(--on-dark);
+	font-family: "Archivo", sans-serif;
+	font-size: 8.4px;
+	letter-spacing: 2.4px;
+	font-weight: 500;
+}
+.badge__disc {
+	position: absolute;
+	inset: 14px;
+	border-radius: 50%;
+	background: rgba(237, 231, 218, 0.06);
+	border: 1px solid rgba(237, 231, 218, 0.18);
+	-webkit-backdrop-filter: blur(2px);
+	backdrop-filter: blur(2px);
+}
+.badge__glyph {
+	position: relative;
+	z-index: 2;
+	color: var(--on-dark);
+	width: 18px;
+	height: 18px;
+}
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@media (max-width: 680px) {
+	.hero__meta,
+	.badge {
+		display: none;
+	}
+}
+
+/* ============================================================
+   MANIFESTO
+   ============================================================ */
+.manifesto {
+	padding: clamp(6rem, 14vw, 11rem) var(--gut);
+	text-align: center;
+}
+.manifesto__q {
+	font-family: "Cormorant", serif;
+	font-weight: 300;
+	font-size: clamp(1.9rem, 5.2vw, 3.7rem);
+	line-height: 1.22;
+	letter-spacing: 0.01em;
+	max-width: 18ch;
+	margin: 0 auto;
+	color: var(--ink);
+}
+.manifesto__q em {
+	font-style: italic;
+	color: var(--sepia);
+}
+.manifesto__sub {
+	margin-top: 2.4rem;
+	color: var(--sepia);
+}
+
+/* ============================================================
+   COLLECTION DIPTYCHS
+   ============================================================ */
+.diptych {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+}
+.diptych .frame {
+	height: clamp(420px, 82vh, 860px);
+}
+.diptych__panel {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: flex-start;
+	padding: clamp(2.5rem, 7vw, 6rem);
+	background: var(--surface);
+	position: relative;
+}
+.diptych--rev .diptych__media {
+	order: 2;
+}
+.diptych--rev .diptych__panel {
+	order: 1;
+	background: var(--bone);
+}
+.diptych__num {
+	color: var(--accent);
+	margin-bottom: 1.6rem;
+}
+.diptych__num span {
+	color: var(--sepia);
+}
+.diptych__title {
+	font-family: "Cormorant", serif;
+	font-weight: 400;
+	font-size: clamp(2.2rem, 5vw, 4rem);
+	line-height: 1.02;
+	margin-bottom: 1.6rem;
+	letter-spacing: 0.005em;
+}
+.diptych__body {
+	color: var(--sepia);
+	max-width: 38ch;
+	font-size: 0.98rem;
+	margin-bottom: 2.2rem;
+}
+.link {
+	position: relative;
+	font-family: "Archivo", sans-serif;
+	font-weight: 400;
+	text-transform: uppercase;
+	font-size: 0.68rem;
+	letter-spacing: 0.24em;
+	padding-bottom: 0.45rem;
+	color: var(--ink);
+}
+.link::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	width: 100%;
+	height: 1px;
+	background: var(--ink);
+	transform-origin: left;
+	transition: transform 0.5s var(--ease);
+}
+.link:hover::after {
+	transform: scaleX(0.4);
+}
+
+/* ============================================================
+   SELECTED PIECES (staggered grid)
+   ============================================================ */
+.pieces {
+	padding: clamp(5rem, 11vw, 9rem) var(--gut) clamp(6rem, 12vw, 9rem);
+}
+.pieces__head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	border-top: 1px solid var(--line);
+	padding-top: 2rem;
+	margin-bottom: clamp(3rem, 6vw, 5rem);
+}
+.pieces__head h2 {
+	font-family: "Cormorant", serif;
+	font-weight: 400;
+	font-size: clamp(2rem, 5vw, 3.4rem);
+}
+.pieces__head a {
+	color: var(--sepia);
+}
+.pieces__head a:hover {
+	color: var(--ink);
+}
+.grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 1.6rem 1.6rem;
+}
+.card {
+	cursor: pointer;
+}
+.card .frame {
+	aspect-ratio: 3 / 4;
+	margin-bottom: 1rem;
+}
+.card__row {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	padding: 0 0.15rem;
+}
+.card__name {
+	font-family: "Archivo", sans-serif;
+	font-weight: 400;
+	text-transform: uppercase;
+	font-size: 0.74rem;
+	letter-spacing: 0.16em;
+}
+.card__price {
+	font-family: "Cormorant", serif;
+	font-weight: 500;
+	font-size: 1.15rem;
+	color: var(--sepia);
+}
+.pieces__foot {
+	text-align: center;
+	margin-top: clamp(3.5rem, 7vw, 5.5rem);
+}
+.ghost {
+	display: inline-block;
+	border: 1px solid var(--ink);
+	padding: 1rem 3rem;
+	font-family: "Archivo", sans-serif;
+	font-weight: 400;
+	text-transform: uppercase;
+	font-size: 0.7rem;
+	letter-spacing: 0.26em;
+	transition:
+		background 0.4s var(--ease),
+		color 0.4s var(--ease);
+}
+.ghost:hover {
+	background: var(--ink);
+	color: var(--bone);
+}
+@media (min-width: 1024px) {
+	.grid .card:nth-child(even) {
+		margin-top: 4rem;
+	}
+}
+@media (max-width: 1023px) {
+	.lg-only {
+		display: none;
+	}
+}
+
+/* ============================================================
+   EDITORIAL STATEMENT BANNER
+   ============================================================ */
+.statement {
+	position: relative;
+	height: clamp(440px, 78vh, 760px);
+	overflow: hidden;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.statement img {
+	position: absolute;
+	inset: 0;
+	transform: scale(1.02);
+}
+.statement::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: rgba(16, 14, 11, 0.22);
+}
+.statement h2 {
+	position: relative;
+	z-index: 2;
+	color: var(--on-dark);
+	font-family: "Cormorant", serif;
+	font-weight: 300;
+	text-transform: uppercase;
+	font-size: clamp(2.2rem, 6.5vw, 5rem);
+	line-height: 1.12;
+	letter-spacing: 0.12em;
+	text-align: center;
+	text-shadow: 0 2px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================================
+   JOURNAL
+   ============================================================ */
+.journal {
+	padding: clamp(5rem, 11vw, 9rem) var(--gut);
+	background: var(--surface);
+}
+.journal__head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	border-top: 1px solid var(--line);
+	padding-top: 2rem;
+	margin-bottom: clamp(3rem, 6vw, 4.5rem);
+}
+.journal__head h2 {
+	font-family: "Cormorant", serif;
+	font-weight: 400;
+	font-size: clamp(2rem, 5vw, 3.2rem);
+}
+.journal__head a {
+	color: var(--sepia);
+}
+.journal__head a:hover {
+	color: var(--ink);
+}
+.journal__grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: clamp(2.5rem, 6vw, 6rem);
+}
+.article {
+	cursor: pointer;
+}
+.article .frame {
+	aspect-ratio: 4 / 3;
+	margin-bottom: 1.6rem;
+}
+.article__cat {
+	color: var(--accent);
+	margin-bottom: 1rem;
+	display: block;
+}
+.article__title {
+	font-family: "Cormorant", serif;
+	font-weight: 400;
+	font-size: clamp(1.5rem, 3vw, 2rem);
+	margin-bottom: 1rem;
+	transition: font-style 0.3s;
+}
+.article:hover .article__title {
+	font-style: italic;
+}
+.article__dek {
+	color: var(--sepia);
+	font-size: 0.94rem;
+	margin-bottom: 1.2rem;
+	max-width: 46ch;
+}
+.article:nth-child(2) {
+	margin-top: clamp(0px, 6vw, 5rem);
+}
+
+/* ============================================================
+   NEWSLETTER
+   ============================================================ */
+.news {
+	padding: clamp(7rem, 15vw, 12rem) var(--gut);
+	text-align: center;
+	border-top: 1px solid var(--line);
+}
+.news__in {
+	max-width: 520px;
+	margin: 0 auto;
+}
+.news h2 {
+	font-family: "Cormorant", serif;
+	font-weight: 400;
+	font-size: clamp(2.2rem, 5vw, 3.4rem);
+	margin-bottom: 1.4rem;
+}
+.news p {
+	color: var(--sepia);
+	margin-bottom: 3rem;
+	font-size: 0.98rem;
+}
+.news form {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+.news input {
+	width: 100%;
+	max-width: 400px;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--line);
+	padding: 0.9rem 0;
+	text-align: center;
+	font-family: "Archivo", sans-serif;
+	font-weight: 300;
+	font-size: 1rem;
+	color: var(--ink);
+	transition: border-color 0.4s var(--ease);
+}
+.news input::placeholder {
+	color: var(--sepia);
+}
+.news input:focus {
+	outline: none;
+	border-color: var(--ink);
+}
+.news button {
+	margin-top: 2.4rem;
+	font-family: "Archivo", sans-serif;
+	font-weight: 400;
+	text-transform: uppercase;
+	font-size: 0.7rem;
+	letter-spacing: 0.26em;
+	padding-bottom: 0.4rem;
+	border-bottom: 1px solid transparent;
+	transition: border-color 0.4s var(--ease);
+}
+.news button:hover {
+	border-color: var(--ink);
+}
+.news__done {
+	color: var(--accent);
+	font-size: 0.84rem;
+	letter-spacing: 0.1em;
+	margin-top: 1.6rem;
+	min-height: 1em;
+	opacity: 0;
+	transition: opacity 0.4s;
+}
+.news__done.show {
+	opacity: 1;
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.foot {
+	background: var(--soot);
+	color: var(--on-dark);
+	padding: clamp(4.5rem, 9vw, 7rem) var(--gut) 2.5rem;
+}
+.foot__grid {
+	display: grid;
+	grid-template-columns: 2fr 1fr 1fr;
+	gap: clamp(2.5rem, 5vw, 4rem);
+	max-width: 1280px;
+	margin: 0 auto;
+}
+.foot__brand h3 {
+	font-family: "Cormorant", serif;
+	font-weight: 500;
+	font-size: clamp(2rem, 4vw, 2.8rem);
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	margin-bottom: 1.8rem;
+}
+.foot__brand p {
+	color: rgba(237, 231, 218, 0.55);
+	max-width: 42ch;
+	font-size: 0.94rem;
+}
+.foot__col h5 {
+	color: rgba(237, 231, 218, 0.45);
+	margin-bottom: 1.8rem;
+}
+.foot__col ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+.foot__col a {
+	color: rgba(237, 231, 218, 0.8);
+	font-size: 0.92rem;
+	transition: color 0.3s;
+}
+.foot__col a:hover {
+	color: var(--on-dark);
+}
+.foot__bar {
+	max-width: 1280px;
+	margin: clamp(3.5rem, 7vw, 5rem) auto 0;
+	padding-top: 1.8rem;
+	border-top: 1px solid rgba(237, 231, 218, 0.12);
+	display: flex;
+	justify-content: space-between;
+	color: rgba(237, 231, 218, 0.4);
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+
+/* ============================================================
+   OVERLAYS (menu / search)
+   ============================================================ */
+.overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 80;
+	background: var(--bone);
+	visibility: hidden;
+}
+.overlay__close {
+	position: absolute;
+	top: 1.5rem;
+	right: var(--gut);
+	z-index: 2;
+	width: 34px;
+	height: 34px;
+	transition: transform 0.5s var(--ease);
+}
+.overlay__close:hover {
+	transform: rotate(90deg);
+}
+.overlay__close::before,
+.overlay__close::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 0;
+	width: 100%;
+	height: 1px;
+	background: var(--ink);
+}
+.overlay__close::before {
+	transform: rotate(45deg);
+}
+.overlay__close::after {
+	transform: rotate(-45deg);
+}
+
+/* menu */
+.menu {
+	transform: translateX(-100%);
+	transition:
+		transform 0.6s var(--ease),
+		visibility 0.6s;
+}
+.menu.open {
+	transform: none;
+	visibility: visible;
+}
+.menu__in {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	padding: 0 var(--gut);
+	max-width: 1280px;
+	margin: 0 auto;
+}
+.menu__list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+.menu__list a {
+	font-family: "Cormorant", serif;
+	font-weight: 400;
+	font-size: clamp(2.4rem, 8vw, 5rem);
+	line-height: 1.18;
+	transition:
+		font-style 0.3s,
+		padding-left 0.4s var(--ease);
+	width: max-content;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+}
+.menu__list a:hover {
+	font-style: italic;
+	padding-left: 1.2rem;
+}
+.menu__meta {
+	display: flex;
+	gap: 3rem;
+	margin-top: clamp(3rem, 7vw, 5rem);
+	color: var(--sepia);
+	flex-wrap: wrap;
+}
+
+/* search */
+.search {
+	opacity: 0;
+	transform: translateY(14px);
+	transition:
+		opacity 0.5s var(--ease),
+		transform 0.5s var(--ease),
+		visibility 0.5s;
+}
+.search.open {
+	opacity: 1;
+	transform: none;
+	visibility: visible;
+}
+.search__in {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 0 var(--gut);
+	text-align: center;
+}
+.search__in label {
+	color: var(--sepia);
+	margin-bottom: 2rem;
+}
+.search__field {
+	width: 100%;
+	max-width: 840px;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--line);
+	padding: 1.2rem 0;
+	text-align: center;
+	font-family: "Cormorant", serif;
+	font-weight: 300;
+	font-size: clamp(1.8rem, 6vw, 3.6rem);
+	color: var(--ink);
+	transition: border-color 0.4s var(--ease);
+}
+.search__field:focus {
+	outline: none;
+	border-color: var(--ink);
+}
+.search__field::placeholder {
+	color: var(--line);
+}
+.search__trend {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 0.6rem 2rem;
+	margin-top: 3rem;
+	color: var(--sepia);
+}
+.search__trend span {
+	color: var(--line);
+}
+.search__trend a {
+	position: relative;
+	color: var(--sepia);
+	transition: color 0.3s;
+}
+.search__trend a:hover {
+	color: var(--ink);
+}
+
+/* lock scroll */
+body.locked {
+	overflow: hidden;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 768px) {
+	.diptych {
+		grid-template-columns: 1fr;
+	}
+	.diptych .frame {
+		height: 62vh;
+	}
+	.diptych--rev .diptych__media {
+		order: 1;
+	}
+	.diptych--rev .diptych__panel {
+		order: 2;
+	}
+	.grid {
+		grid-template-columns: repeat(2, 1fr);
+		gap: 1rem;
+	}
+	.journal__grid {
+		grid-template-columns: 1fr;
+		gap: 3.5rem;
+	}
+	.article:nth-child(2) {
+		margin-top: 0;
+	}
+	.foot__grid {
+		grid-template-columns: 1fr 1fr;
+	}
+	.foot__brand {
+		grid-column: 1 / -1;
+	}
+}
+@media (max-width: 520px) {
+	.grid {
+		grid-template-columns: 1fr;
+	}
+	.foot__grid {
+		grid-template-columns: 1fr;
+	}
+	.foot__bar {
+		flex-direction: column;
+	}
+}
+
+/* reduced motion */
+@media (prefers-reduced-motion: reduce) {
+	* {
+		animation-duration: 0.001ms;
+		animation-iteration-count: 1;
+		transition-duration: 0.001ms;
+		scroll-behavior: auto;
+	}
+	.reveal {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant:wght@300;400;500;600;700;800&family=Archivo:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- ============ HEADER ============ -->
+		<header class="head" id="head">
+			<button
+				class="head__menu"
+				id="menuOpen"
+				aria-label="Open menu"
+				aria-haspopup="true"
+			>
+				<span class="burger" aria-hidden="true"
+					><span></span><span></span></span
+				>
+				<span class="label head__hide">Menu</span>
+			</button>
+			<a href="#top" class="wordmark">Maison Éclisse</a>
+			<div class="head__right">
+				<button class="label head__hide" id="searchOpen">Search</button>
+				<span class="label" aria-label="Cart, 0 items">Cart (0)</span>
+			</div>
+		</header>
+
+		<main id="top">
+			<!-- ============ HERO ============ -->
+			<section class="hero" aria-label="Collection campaign">
+				<div class="hero__bg">
+					<img
+						src="assets/hero.jpg"
+						alt="Editorial campaign photograph for the Pénombre collection"
+						loading="eager"
+					>
+				</div>
+				<div class="hero__inner">
+					<span class="hero__kicker label">Fall–Winter · MMXXV</span>
+					<h1 class="hero__title">Pé<em>nom</em>bre</h1>
+					<a href="#collection" class="hero__cta">View the Lookbook</a>
+				</div>
+
+				<div class="hero__meta label-sm" aria-hidden="true">
+					Paris<br>Est. MMXIV
+				</div>
+
+				<div class="hero__scrollhint" aria-hidden="true">
+					<span class="label-sm">Scroll</span>
+					<span class="bar"></span>
+				</div>
+
+				<div class="badge" aria-hidden="true">
+					<div class="badge__disc"></div>
+					<div class="badge__ring">
+						<svg
+							viewBox="0 0 100 100"
+							width="100%"
+							height="100%"
+							overflow="visible"
+						>
+							<defs>
+								<path
+									id="bp"
+									d="M 50,50 m -36,0 a 36,36 0 1,1 72,0 a 36,36 0 1,1 -72,0"
+								></path>
+							</defs>
+							<text>
+								<textPath href="#bp">
+									NEW SEASON · MMXXV · MAISON ÉCLISSE ·
+								</textPath>
+							</text>
+						</svg>
+					</div>
+					<svg
+						class="badge__glyph"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1"
+					>
+						<path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19" />
+					</svg>
+				</div>
+			</section>
+
+			<!-- ============ MANIFESTO ============ -->
+			<section class="manifesto reveal" aria-label="Manifesto">
+				<p class="manifesto__q serif">
+					Form is the <em>silence</em> between gestures.
+				</p>
+				<p class="manifesto__sub label">Scroll to Explore</p>
+			</section>
+
+			<!-- ============ COLLECTION DIPTYCHS ============ -->
+			<section id="collection" aria-label="The collection">
+				<div class="diptych reveal">
+					<div class="diptych__media frame">
+						<img
+							src="assets/coat.jpg"
+							alt="Model wearing a structured wool coat"
+						>
+					</div>
+					<div class="diptych__panel">
+						<span class="diptych__num label">01 <span>— The Coat</span></span>
+						<h2 class="diptych__title serif">Structured Wool</h2>
+						<p class="diptych__body">
+							Cut from Italian virgin wool, this piece holds the line between
+							masculine tailoring and feminine grace — an essential silhouette
+							for the turning of the season.
+						</p>
+						<a href="#pieces" class="link">Discover</a>
+					</div>
+				</div>
+
+				<div class="diptych diptych--rev reveal">
+					<div class="diptych__media frame">
+						<img
+							src="assets/silk.jpg"
+							alt="Model wearing a flowing silk garment"
+						>
+					</div>
+					<div class="diptych__panel">
+						<span class="diptych__num label">02 <span>— The Silk</span></span>
+						<h2 class="diptych__title serif">Fluid Motion</h2>
+						<p class="diptych__body">
+							Our signature silk fabrication moves as a second skin — drawn to
+							catch the light and let the shadow fall, gathering grace in every
+							step.
+						</p>
+						<a href="#pieces" class="link">Discover</a>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ SELECTED PIECES ============ -->
+			<section id="pieces" class="pieces" aria-label="Selected pieces">
+				<div class="pieces__head reveal">
+					<h2 class="serif">Selected Pieces</h2>
+					<a href="#pieces" class="label">View All</a>
+				</div>
+
+				<div class="grid">
+					<article class="card reveal">
+						<div class="frame"><img src="assets/p1.jpg" alt="Noir blazer"></div>
+						<div class="card__row">
+							<h3 class="card__name">Noir Blazer</h3>
+							<span class="card__price">$450</span>
+						</div>
+					</article>
+
+					<article class="card reveal">
+						<div class="frame">
+							<img src="assets/p2.jpg" alt="Cashmere knit">
+						</div>
+						<div class="card__row">
+							<h3 class="card__name">Cashmere Knit</h3>
+							<span class="card__price">$320</span>
+						</div>
+					</article>
+
+					<article class="card reveal">
+						<div class="frame">
+							<img src="assets/p3.jpg" alt="Pleated trouser">
+						</div>
+						<div class="card__row">
+							<h3 class="card__name">Pleated Trouser</h3>
+							<span class="card__price">$280</span>
+						</div>
+					</article>
+
+					<article class="card reveal lg-only">
+						<div class="frame">
+							<img src="assets/p4.jpg" alt="Oxford shirt">
+						</div>
+						<div class="card__row">
+							<h3 class="card__name">Oxford Shirt</h3>
+							<span class="card__price">$180</span>
+						</div>
+					</article>
+
+					<article class="card reveal lg-only">
+						<div class="frame"><img src="assets/p5.jpg" alt="Silk scarf"></div>
+						<div class="card__row">
+							<h3 class="card__name">Silk Scarf</h3>
+							<span class="card__price">$90</span>
+						</div>
+					</article>
+
+					<article class="card reveal lg-only">
+						<div class="frame">
+							<img src="assets/p6.jpg" alt="Leather loafer">
+						</div>
+						<div class="card__row">
+							<h3 class="card__name">Leather Loafer</h3>
+							<span class="card__price">$240</span>
+						</div>
+					</article>
+				</div>
+
+				<div class="pieces__foot reveal">
+					<a href="#pieces" class="ghost">Shop All</a>
+				</div>
+			</section>
+
+			<!-- ============ STATEMENT BANNER ============ -->
+			<section class="statement reveal" aria-label="Editorial statement">
+				<img
+					src="assets/banner.jpg"
+					alt="Atmospheric editorial campaign backdrop"
+				>
+				<h2 class="serif">Form Follows<br>Feeling</h2>
+			</section>
+
+			<!-- ============ JOURNAL ============ -->
+			<section class="journal" aria-label="The Journal">
+				<div class="journal__head reveal">
+					<h2 class="serif">The Journal</h2>
+					<a href="#" class="label">Read All</a>
+				</div>
+				<div class="journal__grid">
+					<article class="article reveal">
+						<div class="frame">
+							<img
+								src="assets/journal1.jpg"
+								alt="Behind the scenes at the Paris presentation"
+							>
+						</div>
+						<span class="article__cat label-sm">Editorials</span>
+						<h3 class="article__title serif">Paris — Behind the Curtain</h3>
+						<p class="article__dek">
+							An intimate look at the preparation behind our Fall presentation,
+							staged in the quiet of Le Marais.
+						</p>
+						<a href="#" class="link">Read Story</a>
+					</article>
+					<article class="article reveal">
+						<div class="frame">
+							<img src="assets/journal2.jpg" alt="Inside the atelier">
+						</div>
+						<span class="article__cat label-sm">Craftsmanship</span>
+						<h3 class="article__title serif">The Art of Linen</h3>
+						<p class="article__dek">
+							On the heritage techniques and slow practices that shape our most
+							essential summer fabrics.
+						</p>
+						<a href="#" class="link">Read Story</a>
+					</article>
+				</div>
+			</section>
+
+			<!-- ============ NEWSLETTER ============ -->
+			<section class="news" aria-label="Newsletter">
+				<div class="news__in reveal">
+					<h2 class="serif">Join the Atelier</h2>
+					<p>
+						Early access to collections, private viewings, and our weekly
+						journal — delivered with restraint.
+					</p>
+					<form id="newsForm" novalidate>
+						<label
+							class="label-sm"
+							for="email"
+							style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)"
+							>Email Address</label
+						>
+						<input
+							id="email"
+							type="email"
+							placeholder="Email Address"
+							autocomplete="email"
+							required
+						>
+						<button type="submit">Subscribe</button>
+					</form>
+					<p class="news__done label-sm" id="newsDone" role="status">
+						Welcome to the Atelier.
+					</p>
+				</div>
+			</section>
+		</main>
+
+		<!-- ============ FOOTER ============ -->
+		<footer class="foot">
+			<div class="foot__grid">
+				<div class="foot__brand">
+					<h3 class="serif">Maison Éclisse</h3>
+					<p>
+						A study in reduction. We make essential objects for the modern
+						wardrobe — focused on form, material, and the long quiet of
+						longevity.
+					</p>
+				</div>
+				<div class="foot__col">
+					<h5 class="label-sm">Maison</h5>
+					<ul>
+						<li><a href="#collection">Collection</a></li>
+						<li><a href="#pieces">Selected Pieces</a></li>
+						<li><a href="#">The Journal</a></li>
+						<li><a href="#">Stores</a></li>
+					</ul>
+				</div>
+				<div class="foot__col">
+					<h5 class="label-sm">Social</h5>
+					<ul>
+						<li><a href="#">Instagram</a></li>
+						<li><a href="#">Pinterest</a></li>
+						<li><a href="#">Journal</a></li>
+					</ul>
+				</div>
+			</div>
+			<div class="foot__bar">
+				<span class="label-sm">© MMXXV Maison Éclisse · Paris</span>
+				<span class="label-sm">Privacy &amp; Terms</span>
+			</div>
+		</footer>
+
+		<!-- ============ MENU OVERLAY ============ -->
+		<div
+			class="overlay menu"
+			id="menu"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Main menu"
+		>
+			<button
+				class="overlay__close"
+				id="menuClose"
+				aria-label="Close menu"
+			></button>
+			<nav class="menu__in">
+				<div class="menu__list">
+					<a href="#collection" data-close="menu">Collection 2025</a>
+					<a href="#collection" data-close="menu">Lookbook</a>
+					<a href="#pieces" data-close="menu">Selected Pieces</a>
+					<a href="#" data-close="menu">The Atelier</a>
+					<a href="#" data-close="menu">Stores</a>
+				</div>
+				<div class="menu__meta">
+					<span class="label-sm">Paris · Est. MMXIV</span>
+					<span class="label-sm">Fall–Winter MMXXV</span>
+				</div>
+			</nav>
+		</div>
+
+		<!-- ============ SEARCH OVERLAY ============ -->
+		<div
+			class="overlay search"
+			id="search"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Search"
+		>
+			<button
+				class="overlay__close"
+				id="searchClose"
+				aria-label="Close search"
+			></button>
+			<div class="search__in">
+				<label class="label" for="searchField">Type to Search</label>
+				<input
+					class="search__field"
+					id="searchField"
+					type="text"
+					placeholder="Try “Silk Dress” or “Wool”"
+				>
+				<div class="search__trend label-sm">
+					<span>Trending —</span>
+					<a href="#">New In</a><a href="#">Knitwear</a
+					><a href="#">Accessories</a><a href="#">Editorials</a>
+				</div>
+			</div>
+		</div>
+
+		<script>
+(() => {
+	document.documentElement.classList.add("js");
+	var head = document.getElementById("head");
+	var onScroll = () => {
+		if (window.scrollY > 40) head.classList.add("solid");
+		else head.classList.remove("solid");
+	};
+	window.addEventListener("scroll", onScroll, { passive: true });
+	onScroll();
+
+	var reveals = document.querySelectorAll(".reveal");
+	var revealVisible = () => {
+		reveals.forEach((element) => {
+			if (
+				!element.classList.contains("in") &&
+				element.getBoundingClientRect().top <= window.innerHeight + 120
+			) {
+				element.classList.add("in");
+			}
+		});
+	};
+	if ("IntersectionObserver" in window) {
+		var io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((entry) => {
+					if (entry.isIntersecting) {
+						entry.target.classList.add("in");
+						io.unobserve(entry.target);
+					}
+				});
+			},
+			{ threshold: 0, rootMargin: "0px 0px 120px 0px" },
+		);
+		reveals.forEach((el) => {
+			io.observe(el);
+		});
+	} else {
+		reveals.forEach((el) => {
+			el.classList.add("in");
+		});
+	}
+	window.addEventListener("scroll", revealVisible, { passive: true });
+	window.addEventListener("resize", revealVisible);
+	revealVisible();
+	setTimeout(() => {
+		reveals.forEach((element) => {
+			element.classList.add("in");
+		});
+	}, 1200);
+
+	var body = document.body;
+	var menu = document.getElementById("menu");
+	var search = document.getElementById("search");
+	var lastFocus = null;
+
+	function openOverlay(el, focusEl) {
+		lastFocus = document.activeElement;
+		el.classList.add("open");
+		body.classList.add("locked");
+		if (focusEl)
+			setTimeout(() => {
+				focusEl.focus();
+			}, 60);
+	}
+	function closeOverlay(el) {
+		el.classList.remove("open");
+		if (
+			!menu.classList.contains("open") &&
+			!search.classList.contains("open")
+		) {
+			body.classList.remove("locked");
+		}
+		if (lastFocus) lastFocus.focus();
+	}
+
+	document.getElementById("menuOpen").addEventListener("click", () => {
+		openOverlay(menu);
+	});
+	document.getElementById("menuClose").addEventListener("click", () => {
+		closeOverlay(menu);
+	});
+	document.getElementById("searchOpen").addEventListener("click", () => {
+		openOverlay(search, document.getElementById("searchField"));
+	});
+	document.getElementById("searchClose").addEventListener("click", () => {
+		closeOverlay(search);
+	});
+
+	document.querySelectorAll('[data-close="menu"]').forEach((a) => {
+		a.addEventListener("click", () => {
+			closeOverlay(menu);
+		});
+	});
+
+	document.addEventListener("keydown", (e) => {
+		if (e.key === "Escape") {
+			if (menu.classList.contains("open")) closeOverlay(menu);
+			if (search.classList.contains("open")) closeOverlay(search);
+		}
+	});
+
+	var form = document.getElementById("newsForm");
+	var done = document.getElementById("newsDone");
+	form.addEventListener("submit", (e) => {
+		e.preventDefault();
+		var input = document.getElementById("email");
+		if (!input.value || input.value.indexOf("@") === -1) {
+			input.focus();
+			return;
+		}
+		done.classList.add("show");
+		form.reset();
+		setTimeout(() => {
+			done.classList.remove("show");
+		}, 4000);
+	});
+})();
+
+		</script>
+	</body>
+</html>

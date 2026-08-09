@@ -1,0 +1,11 @@
+{
+  "slug": "digital-epoch-hero",
+  "name": "Digital Epoch — Cinematic Hero Section with Logo Marquee",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/digital-epoch-hero",
+  "source_license": "MIT"
+}

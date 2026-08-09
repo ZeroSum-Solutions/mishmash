@@ -1,0 +1,1444 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Meridian Grove — Forward-Thinking Capital</title>
+		<meta
+			name="description"
+			content="Meridian Grove partners with bold founders to scale breakthrough ideas — venture acceleration, growth equity, and institutional advisory."
+		>
+		<style>
+/* ===== Evergreen Ledger — Meridian Grove ===== */
+
+
+
+
+
+
+
+
+:root {
+	--pine: rgb(11, 49, 51);
+	--pine-90: rgba(11, 49, 51, 0.9);
+	--pine-80: rgba(11, 49, 51, 0.8);
+	--pine-70: rgba(11, 49, 51, 0.7);
+	--pine-10: rgba(11, 49, 51, 0.1);
+	--lime: rgb(220, 253, 163);
+	--bone: rgb(246, 245, 242);
+	--white: #fff;
+	--black: #000;
+	--radius-sm: 4px;
+	--radius-md: 8px;
+	--radius-lg: 12px;
+	--radius-xl: 28px;
+	--shadow-card: 0 4px 20px rgba(0, 0, 0, 0.05);
+	--shadow-deep: 0 30px 60px -20px rgba(11, 49, 51, 0.45);
+	--maxw: 1440px;
+	--pad: clamp(1.25rem, 5vw, 5rem);
+}
+
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+html {
+	scroll-behavior: smooth;
+	-webkit-tap-highlight-color: transparent;
+}
+body {
+	font-family: "Inter", system-ui, sans-serif;
+	color: var(--pine);
+	background: var(--bone);
+	overflow-x: hidden;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+	line-height: 1.5;
+}
+img {
+	display: block;
+	max-width: 100%;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+.mono {
+	font-family: "Space Mono", ui-monospace, monospace;
+}
+
+.shell {
+	max-width: var(--maxw);
+	margin-inline: auto;
+	padding-inline: var(--pad);
+}
+
+/* eyebrow pills */
+.eyebrow {
+	display: inline-flex;
+	align-items: center;
+	font-family: "Space Mono", monospace;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+}
+.eyebrow.outline {
+	border: 1px solid var(--pine);
+	border-radius: 999px;
+	padding: 0.35rem 1rem;
+	color: var(--pine);
+}
+.eyebrow.glass {
+	background: rgba(255, 255, 255, 0.12);
+	border: 1px solid rgba(255, 255, 255, 0.22);
+	border-radius: var(--radius-sm);
+	padding: 0.45rem 0.75rem;
+	color: #fff;
+	backdrop-filter: blur(8px);
+}
+
+/* buttons */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	font-weight: 600;
+	border-radius: var(--radius-md);
+	transition: all 0.25s ease;
+	cursor: pointer;
+	border: none;
+	font-size: 0.95rem;
+	font-family: inherit;
+}
+.btn-pine {
+	background: var(--pine);
+	color: #fff;
+	padding: 0.7rem 1.3rem;
+}
+.btn-pine:hover {
+	background: var(--pine-90);
+	transform: translateY(-2px);
+}
+.btn-lime {
+	background: var(--lime);
+	color: var(--pine);
+	padding: 1rem 2rem;
+	font-weight: 700;
+}
+.btn-lime:hover {
+	filter: brightness(1.05);
+	transform: translateY(-2px);
+}
+.btn-ghost {
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	color: #fff;
+	padding: 1rem 2rem;
+	font-weight: 700;
+}
+.btn-ghost:hover {
+	background: rgba(255, 255, 255, 0.1);
+}
+
+/* ===== HEADER ===== */
+#main-header {
+	position: fixed;
+	inset: 0 0 auto 0;
+	z-index: 100;
+	transition: padding 0.3s ease;
+}
+.nav-wrap {
+	max-width: var(--maxw);
+	margin-inline: auto;
+	padding: 1rem var(--pad);
+}
+.nav {
+	background: rgba(237, 236, 233, 0.93);
+	backdrop-filter: blur(12px);
+	border: 1px solid var(--pine-10);
+	border-radius: var(--radius-lg);
+	padding: 0.85rem 1.25rem;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	position: relative;
+	transition: padding 0.3s ease;
+}
+#main-header.scrolled .nav {
+	padding: 0.55rem 1.25rem;
+	box-shadow: 0 8px 30px rgba(11, 49, 51, 0.08);
+}
+.logo {
+	font-weight: 700;
+	font-size: 1.2rem;
+	letter-spacing: -0.02em;
+	color: var(--pine);
+}
+.logo span {
+	color: var(--pine-70);
+	font-weight: 400;
+}
+.nav-links {
+	display: none;
+	gap: 0.25rem;
+}
+.nav-links a {
+	padding: 0.55rem 1rem;
+	font-size: 0.9rem;
+	font-weight: 500;
+	border-radius: var(--radius-md);
+	transition: background 0.2s;
+}
+.nav-links a:hover {
+	background: rgba(11, 49, 51, 0.06);
+}
+.nav-cta {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+.menu-toggle {
+	display: inline-flex;
+	background: none;
+	border: none;
+	color: var(--pine);
+	padding: 0.4rem;
+	cursor: pointer;
+}
+.nav-pill {
+	display: none;
+}
+
+#mobile-menu {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: calc(100% + 0.75rem);
+	background: var(--bone);
+	border: 1px solid var(--pine-10);
+	border-radius: var(--radius-xl);
+	padding: 1.25rem;
+	box-shadow: 0 30px 60px rgba(0, 0, 0, 0.18);
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	opacity: 0;
+	pointer-events: none;
+	transform: translateY(-12px);
+	transition:
+		opacity 0.3s ease,
+		transform 0.3s ease;
+}
+#mobile-menu.open {
+	opacity: 1;
+	pointer-events: auto;
+	transform: translateY(0);
+}
+#mobile-menu a {
+	padding: 0.85rem 0.5rem;
+	font-size: 1.05rem;
+	font-weight: 600;
+	border-bottom: 1px solid rgba(11, 49, 51, 0.07);
+}
+#mobile-menu a.btn-pine {
+	margin-top: 0.75rem;
+	border: none;
+	border-radius: var(--radius-md);
+	justify-content: center;
+}
+
+@media (min-width: 1024px) {
+	.nav-links {
+		display: flex;
+	}
+	.nav-pill {
+		display: inline-flex;
+	}
+	.menu-toggle {
+		display: none;
+	}
+}
+
+/* ===== HERO ===== */
+#hero {
+	position: relative;
+	min-height: 100vh;
+	background: var(--pine);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	padding: 9rem var(--pad) 8rem;
+	overflow: hidden;
+}
+.hero-bg {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+}
+.hero-bg img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.hero-bg::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		to bottom,
+		rgba(11, 49, 51, 0.45),
+		rgba(11, 49, 51, 0.78) 55%,
+		var(--pine)
+	);
+}
+.hero-top {
+	position: relative;
+	z-index: 2;
+	max-width: 84rem;
+	margin-inline: auto;
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+	justify-content: space-between;
+	align-items: flex-start;
+}
+.hero-head {
+	max-width: 48rem;
+}
+.hero-head h1 {
+	color: var(--lime);
+	font-size: clamp(2.4rem, 7vw, 4.7rem);
+	font-weight: 700;
+	line-height: 1.05;
+	letter-spacing: -0.035em;
+	margin-top: 1.4rem;
+}
+.hero-sub {
+	color: #fff;
+	max-width: 20rem;
+	font-size: 1.05rem;
+	font-weight: 500;
+	line-height: 1.6;
+	opacity: 0.9;
+}
+
+/* stat cards */
+.hero-stats {
+	position: relative;
+	z-index: 3;
+	max-width: 84rem;
+	margin: 5rem auto 0;
+	width: 100%;
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 1.5rem;
+}
+.stat {
+	border-radius: var(--radius-xl);
+	padding: 2.25rem;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	box-shadow: var(--shadow-deep);
+	min-height: 240px;
+}
+.stat h3 {
+	font-size: clamp(2rem, 4vw, 2.6rem);
+	font-weight: 700;
+	letter-spacing: -0.03em;
+	line-height: 1;
+}
+.stat p {
+	font-size: 0.7rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	margin-top: 0.5rem;
+}
+.stat-1 {
+	background: #fff;
+	color: var(--pine);
+}
+.stat-1 img {
+	width: 100%;
+	height: 74px;
+	object-fit: cover;
+	border-radius: var(--radius-md);
+	margin-top: 1.5rem;
+	opacity: 0.85;
+}
+.stat-2 {
+	background: #000;
+	color: #fff;
+}
+.stat-2 p {
+	color: rgba(255, 255, 255, 0.7);
+}
+.avatars {
+	display: flex;
+	margin-top: 1.5rem;
+}
+.avatars img,
+.avatars .vc {
+	width: 46px;
+	height: 46px;
+	border-radius: 999px;
+	border: 2px solid #000;
+	object-fit: cover;
+	margin-left: -14px;
+}
+.avatars img:first-child {
+	margin-left: 0;
+}
+.avatars .vc {
+	background: var(--lime);
+	color: var(--pine);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 11px;
+	font-weight: 700;
+	font-family: "Space Mono", monospace;
+	letter-spacing: -0.04em;
+}
+.stat-3 {
+	background: var(--lime);
+	color: var(--pine);
+	position: relative;
+	overflow: hidden;
+}
+.stat-3 img {
+	width: 100%;
+	height: 118px;
+	object-fit: cover;
+	border-radius: var(--radius-lg);
+	opacity: 0.4;
+	margin-top: 1.5rem;
+}
+
+@media (min-width: 768px) {
+	.hero-top {
+		flex-direction: row;
+		gap: 3rem;
+	}
+	.hero-sub {
+		padding-top: 2.5rem;
+	}
+	.hero-stats {
+		grid-template-columns: repeat(3, 1fr);
+		gap: 2rem;
+		margin-top: 8rem;
+	}
+}
+
+/* ===== SECTIONS ===== */
+.section {
+	padding: clamp(4.5rem, 10vw, 9rem) 0;
+}
+.who {
+	background: var(--bone);
+	text-align: center;
+}
+.who .shell {
+	max-width: 62rem;
+}
+.who h2 {
+	font-size: clamp(1.5rem, 4vw, 3rem);
+	font-weight: 700;
+	line-height: 1.25;
+	letter-spacing: -0.02em;
+	margin-top: 2rem;
+	color: var(--pine);
+}
+
+.sec-head {
+	text-align: center;
+	margin-bottom: clamp(3rem, 6vw, 5rem);
+}
+.sec-head h2 {
+	font-size: clamp(1.9rem, 5vw, 3rem);
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	margin-top: 1.25rem;
+	color: var(--pine);
+}
+
+/* services sticky stack */
+#services {
+	background: var(--bone);
+	padding-bottom: 4rem;
+}
+.service {
+	position: sticky;
+	border-radius: var(--radius-xl);
+	padding: clamp(2rem, 5vw, 5rem);
+	margin-bottom: clamp(3rem, 6vw, 5rem);
+	display: flex;
+	flex-direction: column;
+	gap: 2.5rem;
+	overflow: hidden;
+	box-shadow: var(--shadow-deep);
+}
+.service .copy {
+	flex: 1;
+}
+.service .num {
+	display: inline-flex;
+	border-radius: 999px;
+	padding: 0.35rem 1rem;
+	font-family: "Space Mono", monospace;
+	font-size: 0.75rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+}
+.service h3 {
+	font-size: clamp(1.5rem, 3vw, 2rem);
+	font-weight: 700;
+	margin: 1.5rem 0 1rem;
+}
+.service p {
+	font-size: 1.05rem;
+	line-height: 1.65;
+	max-width: 30rem;
+}
+.service .img {
+	flex: 1;
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+	height: 250px;
+}
+.service .img img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.service:hover .img img {
+	transform: scale(1.08);
+}
+.s1 {
+	background: var(--lime);
+	color: var(--pine);
+	top: 6rem;
+}
+.s1 .num {
+	background: var(--pine);
+	color: var(--lime);
+}
+.s2 {
+	background: #fff;
+	color: var(--pine);
+	border: 1px solid var(--pine-10);
+	top: 7rem;
+}
+.s2 .num {
+	background: var(--pine);
+	color: #fff;
+}
+.s3 {
+	background: var(--pine);
+	color: #fff;
+	top: 8rem;
+}
+.s3 .num {
+	background: var(--lime);
+	color: var(--pine);
+}
+.s3 h3 {
+	color: var(--lime);
+}
+.s3 p {
+	color: rgba(255, 255, 255, 0.8);
+}
+.s1 p,
+.s2 p {
+	color: var(--pine-80);
+}
+
+@media (min-width: 768px) {
+	.service {
+		flex-direction: row;
+		align-items: center;
+		height: 540px;
+		gap: 3.5rem;
+	}
+	.service .img {
+		height: 100%;
+	}
+	.s1 {
+		top: 8rem;
+	}
+	.s2 {
+		top: 10rem;
+	}
+	.s3 {
+		top: 12rem;
+	}
+}
+
+/* ethos tilted cards */
+.ethos {
+	background: var(--bone);
+	overflow: hidden;
+}
+.ethos-grid {
+	max-width: 84rem;
+	margin-inline: auto;
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+	position: relative;
+}
+.ethos-card {
+	border-radius: var(--radius-xl);
+	padding: 2.5rem;
+	box-shadow: var(--shadow-card);
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	min-height: 300px;
+}
+.ethos-card h3 {
+	font-size: clamp(1.25rem, 2.5vw, 1.6rem);
+	font-weight: 700;
+	margin-bottom: 1rem;
+}
+.ethos-card p {
+	line-height: 1.65;
+}
+.ethos-text {
+	background: #fff;
+	color: var(--pine);
+	position: relative;
+	z-index: 1;
+}
+.ethos-text p {
+	color: var(--pine-70);
+}
+.ethos-lime {
+	background: var(--lime);
+	color: var(--pine);
+}
+.ethos-lime p {
+	color: var(--pine-80);
+}
+.ethos-img {
+	border-radius: var(--radius-xl);
+	overflow: hidden;
+	box-shadow: var(--shadow-deep);
+	min-height: 340px;
+	z-index: 2;
+	position: relative;
+}
+.ethos-img img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+@media (min-width: 768px) {
+	.ethos-grid {
+		grid-template-columns: repeat(3, 1fr);
+		gap: 3rem;
+		align-items: center;
+	}
+	.ethos-img {
+		min-height: 400px;
+	}
+}
+@media (min-width: 920px) {
+	.ethos-text {
+		transform: translate(-40px, -40px) rotate(-4deg);
+	}
+	.ethos-lime {
+		transform: translate(40px, 40px) rotate(11deg);
+	}
+}
+
+/* why partner */
+.why {
+	position: relative;
+	min-height: 560px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: clamp(4rem, 8vw, 9rem) var(--pad);
+	overflow: hidden;
+}
+.why-bg {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+}
+.why-bg img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	filter: grayscale(0.6);
+}
+.why-bg::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: rgba(11, 49, 51, 0.32);
+}
+.why-card {
+	position: relative;
+	z-index: 2;
+	max-width: 30rem;
+	background: var(--lime);
+	color: var(--pine);
+	border-radius: var(--radius-xl);
+	padding: clamp(2rem, 4vw, 3rem);
+	box-shadow: var(--shadow-deep);
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+}
+.why-card h2 {
+	font-size: clamp(1.7rem, 3.5vw, 2.4rem);
+	font-weight: 700;
+	line-height: 1.15;
+	letter-spacing: -0.02em;
+	margin: 1rem 0;
+}
+.why-card p {
+	color: var(--pine-80);
+	line-height: 1.65;
+}
+.why-card .head {
+	text-align: center;
+}
+@media (min-width: 1024px) {
+	.why {
+		justify-content: flex-end;
+	}
+	.why-card .head {
+		text-align: left;
+	}
+}
+
+/* insights */
+#insights {
+	background: var(--bone);
+}
+.insights-head {
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+	align-items: flex-start;
+	margin-bottom: clamp(3rem, 6vw, 4rem);
+}
+.insights-head h2 {
+	font-size: clamp(1.9rem, 5vw, 3rem);
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	margin-top: 1rem;
+	color: var(--pine);
+}
+.article-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 2rem;
+}
+.article {
+	background: #fff;
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+	box-shadow: var(--shadow-card);
+	display: flex;
+	flex-direction: column;
+	transition:
+		transform 0.3s ease,
+		box-shadow 0.3s ease;
+}
+.article:hover {
+	transform: translateY(-6px);
+	box-shadow: 0 24px 48px -16px rgba(11, 49, 51, 0.22);
+}
+.article .cover {
+	height: 216px;
+	overflow: hidden;
+}
+.article .cover img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.5s ease;
+}
+.article:hover .cover img {
+	transform: scale(1.06);
+}
+.article .body {
+	padding: 2rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	flex: 1;
+}
+.meta {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	font-family: "Space Mono", monospace;
+	font-size: 10px;
+	text-transform: uppercase;
+	color: var(--pine-70);
+	letter-spacing: 0.05em;
+}
+.meta .dot {
+	width: 4px;
+	height: 4px;
+	border-radius: 999px;
+	background: var(--pine);
+}
+.article h3 {
+	font-size: 1.2rem;
+	font-weight: 700;
+	line-height: 1.3;
+	color: var(--pine);
+}
+.article .excerpt {
+	font-size: 0.9rem;
+	color: var(--pine-70);
+	line-height: 1.6;
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+@media (min-width: 768px) {
+	.insights-head {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: flex-end;
+	}
+	.article-grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+
+/* final CTA */
+#contact {
+	background: var(--pine);
+	text-align: center;
+	position: relative;
+	overflow: hidden;
+	padding: clamp(5rem, 10vw, 8rem) var(--pad);
+}
+.cta-bg {
+	position: absolute;
+	inset: 0;
+	opacity: 0.1;
+	z-index: 0;
+}
+.cta-bg img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.cta-inner {
+	position: relative;
+	z-index: 2;
+	max-width: 60rem;
+	margin-inline: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 3rem;
+}
+.cta-inner h2 {
+	color: var(--lime);
+	font-size: clamp(2.2rem, 6.5vw, 4.5rem);
+	font-weight: 700;
+	letter-spacing: -0.035em;
+	line-height: 1.08;
+}
+.cta-btns {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	justify-content: center;
+}
+@media (min-width: 640px) {
+	.cta-btns {
+		flex-direction: row;
+	}
+}
+
+/* footer */
+footer {
+	background: var(--pine);
+	color: #fff;
+	padding: clamp(5rem, 9vw, 8rem) var(--pad) clamp(3rem, 5vw, 5rem);
+}
+.foot-grid {
+	max-width: 84rem;
+	margin-inline: auto;
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 4rem;
+}
+.foot-statement {
+	color: var(--lime);
+	font-size: clamp(2rem, 5vw, 3.5rem);
+	font-weight: 700;
+	line-height: 1.1;
+	letter-spacing: -0.03em;
+}
+.foot-news {
+	max-width: 28rem;
+	margin-top: 2.5rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1.25rem;
+}
+.foot-news p {
+	color: rgba(255, 255, 255, 0.8);
+	font-weight: 500;
+}
+.foot-form {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+.foot-form input {
+	background: rgba(255, 255, 255, 0.1);
+	border: none;
+	border-radius: var(--radius-md);
+	padding: 0.85rem 1rem;
+	color: #fff;
+	flex: 1;
+	font-family: inherit;
+	outline: none;
+	transition: box-shadow 0.2s;
+}
+.foot-form input::placeholder {
+	color: rgba(255, 255, 255, 0.55);
+}
+.foot-form input:focus {
+	box-shadow: 0 0 0 2px var(--lime);
+}
+.foot-fine {
+	font-size: 0.7rem;
+	color: rgba(255, 255, 255, 0.5);
+}
+.foot-links {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 2.5rem;
+}
+.foot-links h5 {
+	color: var(--lime);
+	font-weight: 700;
+	font-size: 1.05rem;
+	margin-bottom: 1.25rem;
+}
+.foot-links ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+.foot-links a {
+	color: rgba(255, 255, 255, 0.72);
+	transition: color 0.2s;
+}
+.foot-links a:hover {
+	color: var(--lime);
+}
+.foot-bottom {
+	max-width: 84rem;
+	margin: clamp(4rem, 7vw, 7rem) auto 0;
+	padding-top: 2rem;
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+}
+.foot-bottom .copy {
+	color: rgba(255, 255, 255, 0.6);
+	font-size: 0.9rem;
+}
+.foot-bottom .legal {
+	color: rgba(255, 255, 255, 0.4);
+	font-size: 10px;
+	line-height: 1.7;
+	max-width: 60rem;
+}
+@media (min-width: 640px) {
+	.foot-form {
+		flex-direction: row;
+	}
+}
+@media (min-width: 1024px) {
+	.foot-grid {
+		grid-template-columns: 1.2fr 1fr;
+		gap: 5rem;
+	}
+	.foot-bottom {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: flex-start;
+	}
+}
+
+/* scroll reveal */
+.reveal {
+	opacity: 0;
+	transform: translateY(40px);
+	transition:
+		opacity 1s cubic-bezier(0.16, 1, 0.3, 1),
+		transform 1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.show {
+	opacity: 1;
+	transform: none;
+}
+/* directional offsets only on wide desktop to avoid horizontal overflow */
+@media (min-width: 1100px) {
+	.reveal.from-left {
+		transform: translateX(-50px);
+	}
+	.reveal.from-right {
+		transform: translateX(50px);
+	}
+}
+.d1 {
+	transition-delay: 0.1s;
+}
+.d2 {
+	transition-delay: 0.2s;
+}
+.d3 {
+	transition-delay: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	* {
+		transition: none;
+		animation: none;
+	}
+	.reveal {
+		opacity: 1;
+		transform: none;
+	}
+	html {
+		scroll-behavior: auto;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Mono:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- HEADER -->
+		<header id="main-header">
+			<div class="nav-wrap">
+				<nav class="nav">
+					<a class="logo" href="#hero">MERIDIAN<span>GROVE</span></a>
+					<div class="nav-links">
+						<a href="#services">Capital Services</a>
+						<a href="#who-we-are">Who We Are</a>
+						<a href="#insights">Market Insights</a>
+					</div>
+					<div class="nav-cta">
+						<a href="#contact" class="btn btn-pine nav-pill">Get in touch</a>
+						<button
+							class="menu-toggle"
+							id="menu-toggle"
+							aria-label="Toggle menu"
+							aria-expanded="false"
+						>
+							<svg
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.6"
+								stroke-linecap="round"
+							>
+								<path d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+							</svg>
+						</button>
+					</div>
+					<div id="mobile-menu">
+						<a href="#services">Capital Services</a>
+						<a href="#who-we-are">Who We Are</a>
+						<a href="#insights">Market Insights</a>
+						<a href="#contact" class="btn btn-pine">Get in touch</a>
+					</div>
+				</nav>
+			</div>
+		</header>
+
+		<main>
+			<!-- HERO -->
+			<section id="hero">
+				<div class="hero-bg">
+					<img src="assets/hero.jpg" alt="" loading="eager">
+				</div>
+				<div class="hero-top">
+					<div class="hero-head reveal">
+						<span class="eyebrow glass"
+							>Ranked #1 in Emerging Markets 2024</span
+						>
+						<h1>Empowering Change.<br>Defining the Future.</h1>
+					</div>
+					<p class="hero-sub reveal d1">
+						We partner with bold founders to scale breakthrough ideas that
+						redefine industries and build long-term, sustainable growth.
+					</p>
+				</div>
+
+				<div class="hero-stats">
+					<div class="stat stat-1 reveal d1">
+						<div>
+							<h3>$3.5B+</h3>
+							<p>Assets Under Strategic Management</p>
+						</div>
+						<img src="assets/stat-strip.jpg" alt="">
+					</div>
+					<div class="stat stat-2 reveal d2">
+						<div>
+							<h3>450+</h3>
+							<p>Global Portfolios Backed</p>
+						</div>
+						<div class="avatars">
+							<img src="assets/avatar1.jpg" alt="Founder">
+							<img src="assets/avatar2.jpg" alt="Founder">
+							<img src="assets/avatar3.jpg" alt="Founder">
+							<div class="vc">VC</div>
+						</div>
+					</div>
+					<div class="stat stat-3 reveal d3">
+						<div>
+							<h3>$1.2B+</h3>
+							<p>Venture Capital Deployed</p>
+						</div>
+						<img src="assets/stat-abstract.jpg" alt="">
+					</div>
+				</div>
+			</section>
+
+			<!-- WHO WE ARE -->
+			<section id="who-we-are" class="section who">
+				<div class="shell">
+					<span class="eyebrow outline reveal">Who We Are</span>
+					<h2 class="reveal d1">
+						We are a multi-disciplinary investment firm dedicated to identifying
+						exceptional opportunities, fueling long-term innovation, and
+						creating lasting impact across the global market.
+					</h2>
+				</div>
+			</section>
+
+			<!-- SERVICES -->
+			<section id="services" class="section">
+				<div class="shell">
+					<div class="sec-head">
+						<span class="eyebrow outline reveal">Our Expertise</span>
+						<h2 class="reveal d1">Tailored Capital Solutions</h2>
+					</div>
+
+					<div class="service s1 reveal from-left">
+						<div class="copy">
+							<span class="num">01</span>
+							<h3>Venture Acceleration</h3>
+							<p>
+								We back early-stage visionaries with capital, operating
+								expertise, and a global network to scale from zero to category
+								leader.
+							</p>
+						</div>
+						<div class="img">
+							<img
+								src="assets/service-venture.jpg"
+								alt="Venture acceleration"
+							>
+						</div>
+					</div>
+
+					<div class="service s2 reveal from-right">
+						<div class="copy">
+							<span class="num">02</span>
+							<h3>Growth Equity</h3>
+							<p>
+								Unlocking potential in mature enterprises through operational
+								excellence, strategic restructuring, and robust funding models.
+							</p>
+						</div>
+						<div class="img">
+							<img src="assets/service-growth.jpg" alt="Growth equity">
+						</div>
+					</div>
+
+					<div class="service s3 reveal from-left">
+						<div class="copy">
+							<span class="num">03</span>
+							<h3>Institutional Advisory</h3>
+							<p>
+								Guiding high-net-worth individuals and institutional partners
+								through complex market cycles with integrity and data-driven
+								foresight.
+							</p>
+						</div>
+						<div class="img">
+							<img
+								src="assets/service-advisory.jpg"
+								alt="Institutional advisory"
+							>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ETHOS -->
+			<section class="section ethos">
+				<div class="shell">
+					<div class="sec-head">
+						<span class="eyebrow outline reveal">Our Ethos</span>
+						<h2 class="reveal d1">The Principles That Move Us</h2>
+					</div>
+					<div class="ethos-grid">
+						<div class="ethos-card ethos-text reveal">
+							<h3>Unyielding Integrity</h3>
+							<p>
+								We prioritize ethics and transparency in every transaction.
+								Doing right is our only roadmap to long-term success.
+							</p>
+						</div>
+						<div class="ethos-img reveal d1">
+							<img src="assets/ethos.jpg" alt="Collaboration">
+						</div>
+						<div class="ethos-card ethos-lime reveal d2">
+							<h3>Radical Partnership</h3>
+							<p>
+								We aren't just financiers; we are co-architects. Your growth is
+								our mission, and we share the risks and the rewards.
+							</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- WHY PARTNER -->
+			<section class="why">
+				<div class="why-bg"><img src="assets/office.jpg" alt=""></div>
+				<div class="why-card reveal from-right">
+					<div class="head">
+						<span class="eyebrow outline">Why Partner With Us</span>
+						<h2>Beyond Traditional Financing</h2>
+						<p>
+							We provide the intellectual and operational capital that money
+							alone can't buy. Join a network of elite performers.
+						</p>
+					</div>
+					<a href="#contact" class="btn btn-pine" style="justify-content:center"
+						>Meet the Leadership Team</a
+					>
+				</div>
+			</section>
+
+			<!-- INSIGHTS -->
+			<section id="insights" class="section">
+				<div class="shell">
+					<div class="insights-head">
+						<div>
+							<span class="eyebrow outline reveal">Knowledge Base</span>
+							<h2 class="reveal d1">Strategic Intelligence</h2>
+						</div>
+						<a href="#insights" class="btn btn-lime reveal d1"
+							>Explore All Insights</a
+						>
+					</div>
+					<div class="article-grid">
+						<article class="article reveal">
+							<div class="cover"><img src="assets/article1.jpg" alt=""></div>
+							<div class="body">
+								<div class="meta">
+									<span>May 2025</span><span class="dot"></span
+									><span>Technology</span>
+								</div>
+								<h3>Scaling AI-Driven Infrastructure in Emerging Markets</h3>
+								<p class="excerpt">
+									How decentralized computing is reshaping the investment
+									landscape for the next decade of digital growth.
+								</p>
+							</div>
+						</article>
+						<article class="article reveal d1">
+							<div class="cover"><img src="assets/article2.jpg" alt=""></div>
+							<div class="body">
+								<div class="meta">
+									<span>Apr 2025</span><span class="dot"></span
+									><span>Leadership</span>
+								</div>
+								<h3>The Psychology of Sustainable Venture Growth</h3>
+								<p class="excerpt">
+									Rethinking the "growth at all costs" mentality to build
+									businesses that endure beyond the current hype cycle.
+								</p>
+							</div>
+						</article>
+						<article class="article reveal d2">
+							<div class="cover"><img src="assets/article3.jpg" alt=""></div>
+							<div class="body">
+								<div class="meta">
+									<span>Mar 2025</span><span class="dot"></span
+									><span>Market Analysis</span>
+								</div>
+								<h3>Hidden Metrics: Measuring Value Beyond Revenue</h3>
+								<p class="excerpt">
+									Identifying the core health signals of early-stage startups
+									that indicate true market-fit potential.
+								</p>
+							</div>
+						</article>
+					</div>
+				</div>
+			</section>
+
+			<!-- FINAL CTA -->
+			<section id="contact">
+				<div class="cta-bg"><img src="assets/cta-pattern.jpg" alt=""></div>
+				<div class="cta-inner reveal">
+					<h2>Let's Build Something Legendary Together.</h2>
+					<div class="cta-btns">
+						<a href="#contact" class="btn btn-lime">Submit an Opportunity</a>
+						<a href="#contact" class="btn btn-ghost">Contact Advisory Team</a>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<!-- FOOTER -->
+		<footer>
+			<div class="foot-grid">
+				<div>
+					<h2 class="foot-statement">
+						Empowering Vision.<br>Building Futures.
+					</h2>
+					<div class="foot-news">
+						<p>Subscribe to our monthly investment briefing</p>
+						<form class="foot-form" onsubmit="return false">
+							<input
+								type="email"
+								placeholder="Email Address"
+								aria-label="Email Address"
+							>
+							<button
+								type="submit"
+								class="btn btn-lime"
+								style="padding:.85rem 2rem"
+							>
+								Submit
+							</button>
+						</form>
+						<p class="foot-fine">
+							We respect your privacy and data protection.
+						</p>
+					</div>
+				</div>
+				<div class="foot-links">
+					<div>
+						<h5>Essential Links</h5>
+						<ul>
+							<li><a href="#services">Venture Capital</a></li>
+							<li><a href="#services">Private Equity</a></li>
+							<li><a href="#services">Asset Management</a></li>
+							<li><a href="#who-we-are">About Us</a></li>
+						</ul>
+					</div>
+					<div>
+						<h5>Social Connect</h5>
+						<ul>
+							<li><a href="#">LinkedIn</a></li>
+							<li><a href="#">Twitter</a></li>
+							<li><a href="#">Instagram</a></li>
+						</ul>
+					</div>
+				</div>
+			</div>
+			<div class="foot-bottom">
+				<div class="copy">
+					© 2025 Meridian Grove Capital Group. All Rights Reserved.
+				</div>
+				<p class="legal">
+					Meridian Grove is a fictional investment-services brand created for
+					design demonstration. Any information presented here is for general
+					informational purposes only and does not constitute financial,
+					investment, or legal advice. All investment involves risk, including
+					potential loss of principal. Please consult qualified advisors before
+					making any investment decisions.
+				</p>
+			</div>
+		</footer>
+
+		<script>
+(() => {
+	document.addEventListener("DOMContentLoaded", () => {
+		var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+		// Scroll reveal
+		var revealEls = document.querySelectorAll(".reveal");
+		if (reduce || !("IntersectionObserver" in window)) {
+			revealEls.forEach((el) => {
+				el.classList.add("show");
+			});
+		} else {
+			var obs = new IntersectionObserver(
+				(entries) => {
+					entries.forEach((e) => {
+						if (e.isIntersecting) {
+							e.target.classList.add("show");
+							obs.unobserve(e.target);
+						}
+					});
+				},
+				{ threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
+			);
+			revealEls.forEach((el) => {
+				obs.observe(el);
+			});
+		}
+
+		// Header compaction on scroll
+		var header = document.getElementById("main-header");
+		var onScroll = () => {
+			if (window.scrollY > 50) header.classList.add("scrolled");
+			else header.classList.remove("scrolled");
+		};
+		onScroll();
+		window.addEventListener("scroll", onScroll, { passive: true });
+
+		// Mobile menu
+		var toggle = document.getElementById("menu-toggle");
+		var menu = document.getElementById("mobile-menu");
+		if (toggle && menu) {
+			var setOpen = (open) => {
+				menu.classList.toggle("open", open);
+				toggle.setAttribute("aria-expanded", String(open));
+			};
+			toggle.addEventListener("click", () => {
+				setOpen(!menu.classList.contains("open"));
+			});
+			menu.querySelectorAll("a").forEach((a) => {
+				a.addEventListener("click", () => {
+					setOpen(false);
+				});
+			});
+		}
+	});
+})();
+
+		</script>
+	</body>
+</html>

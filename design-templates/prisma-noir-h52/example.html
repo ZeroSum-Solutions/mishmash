@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Marlowe König — Creative Director · PRISMA NOIR</title>
+		<meta
+			name="description"
+			content="PRISMA NOIR — Marlowe König, creative director. A spectral-darkroom hero: near-black canvas lit by drifting spectral color and a cinematic discover menu."
+		>
+		<style>
+/* ============================================================
+   PRISMA NOIR — "Spectral Darkroom" creative-director hero
+   ============================================================ */
+
+
+
+
+:root {
+	--black: #060606;
+	--white: #ffffff;
+	--dim: rgba(255, 255, 255, 0.5);
+	--hair: rgba(255, 255, 255, 0.1);
+	--hair-on: rgba(255, 255, 255, 0.4);
+	--grid: rgba(255, 255, 255, 0.12);
+	--row-h: clamp(74px, 13.5vw, 168px);
+	--pad-x: clamp(20px, 4vw, 40px);
+	font-family: "Manrope", system-ui, sans-serif;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	background: var(--black);
+	color: var(--white);
+	font-family: "Manrope", system-ui, sans-serif;
+	-webkit-font-smoothing: antialiased;
+	overflow-x: hidden;
+}
+
+#app {
+	position: relative;
+	width: 100%;
+	min-height: 100vh;
+	min-height: 100svh;
+	display: flex;
+	flex-direction: column;
+}
+
+/* ===================== BACKGROUND ===================== */
+.bg {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	overflow: hidden;
+	background: var(--black);
+}
+
+.bg__drift {
+	position: absolute;
+	inset: -15%;
+	filter: blur(100px);
+	opacity: 0.72;
+	animation: drift 20s ease-in-out infinite;
+	will-change: transform;
+	transform: translate3d(var(--px, 0), var(--py, 0), 0);
+}
+@keyframes drift {
+	0% {
+		transform: translate3d(var(--px, 0), var(--py, 0), 0) scale(1) rotate(0deg);
+	}
+	50% {
+		transform: translate3d(var(--px, 0), var(--py, 0), 0) scale(1.15)
+			rotate(2deg);
+	}
+	100% {
+		transform: translate3d(var(--px, 0), var(--py, 0), 0) scale(1) rotate(0deg);
+	}
+}
+
+.blob {
+	position: absolute;
+	border-radius: 50%;
+	mix-blend-mode: screen;
+	display: block;
+}
+.blob--amber {
+	top: 5%;
+	left: 5%;
+	width: 50%;
+	height: 50%;
+	background: #fbbf24;
+	opacity: 0.4;
+}
+.blob--pink {
+	top: 35%;
+	right: 5%;
+	width: 45%;
+	height: 45%;
+	background: #ec4899;
+	opacity: 0.35;
+}
+.blob--blue {
+	bottom: 5%;
+	left: 15%;
+	width: 55%;
+	height: 55%;
+	background: #3b82f6;
+	opacity: 0.4;
+}
+.blob--orange {
+	top: 15%;
+	right: 25%;
+	width: 40%;
+	height: 40%;
+	background: #f97316;
+	opacity: 0.35;
+}
+.blob--violet {
+	bottom: 15%;
+	right: 15%;
+	width: 50%;
+	height: 50%;
+	background: #8b5cf6;
+	opacity: 0.45;
+}
+
+.bg__grid {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	opacity: 0.6;
+	background-image:
+		linear-gradient(to right, var(--grid) 1px, transparent 1px),
+		linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+	background-size: 60px 60px;
+	mask-image: radial-gradient(140% 120% at 50% 40%, #000 30%, transparent 92%);
+}
+.bg__settle {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	background: linear-gradient(
+		to bottom,
+		transparent 0%,
+		rgba(6, 6, 6, 0.1) 55%,
+		rgba(6, 6, 6, 0.85) 100%
+	);
+}
+.bg__grain {
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	opacity: 0.06;
+	pointer-events: none;
+	mix-blend-mode: overlay;
+	background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+	background-size: 200px 200px;
+}
+.bg__vignette {
+	position: absolute;
+	inset: 0;
+	z-index: 4;
+	pointer-events: none;
+	box-shadow:
+		inset 0 0 150px rgba(0, 0, 0, 0.6),
+		inset 0 0 60px rgba(0, 0, 0, 0.35);
+}
+
+/* ===================== HEADER ===================== */
+.bar {
+	position: relative;
+	z-index: 20;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 22px var(--pad-x);
+}
+.wordmark {
+	display: inline-flex;
+	align-items: flex-start;
+	gap: 4px;
+	color: var(--white);
+	text-decoration: none;
+	font-size: clamp(20px, 2.4vw, 30px);
+	font-weight: 400;
+	letter-spacing: -0.03em;
+}
+.wordmark__dot {
+	width: 9px;
+	height: 9px;
+	margin-top: 7px;
+}
+.wordmark__dot svg {
+	width: 100%;
+	height: 100%;
+	fill: rgba(255, 255, 255, 0.7);
+}
+
+.discover {
+	font-family: "Manrope", sans-serif;
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-size: 15px;
+	color: var(--dim);
+	border-top: 1px solid var(--dim);
+	border-bottom: 1px solid var(--dim);
+	padding: 7px 18px;
+	transition:
+		color 0.3s,
+		border-color 0.3s,
+		letter-spacing 0.3s;
+}
+.discover:hover {
+	color: var(--white);
+	border-color: var(--white);
+	letter-spacing: 0.06em;
+}
+
+/* ===================== HERO ===================== */
+.hero {
+	position: relative;
+	z-index: 10;
+	flex: 1;
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 40px;
+	padding: 0 var(--pad-x) clamp(40px, 7vh, 64px);
+	max-width: 1800px;
+	width: 100%;
+	margin: 0 auto;
+}
+.hero__left {
+	display: flex;
+	align-items: flex-end;
+	gap: clamp(20px, 4vw, 57px);
+}
+
+.social {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	padding-bottom: 6px;
+}
+.chip {
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	border: 1px solid var(--hair);
+	text-decoration: none;
+	transition:
+		border-color 0.3s,
+		transform 0.3s;
+}
+.chip span {
+	font-family: "Titillium Web", sans-serif;
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	color: rgba(255, 255, 255, 0.4);
+	transition: color 0.3s;
+}
+.chip:hover {
+	border-color: var(--hair-on);
+	transform: translateY(-2px);
+}
+.chip:hover span {
+	color: var(--white);
+}
+
+.headline {
+	display: flex;
+	flex-direction: column;
+}
+.line {
+	font-size: clamp(56px, 11.2vw, 120px);
+	line-height: 1;
+	letter-spacing: -0.03em;
+}
+.line--solid {
+	font-weight: 400;
+	color: var(--white);
+	margin-bottom: clamp(8px, 1.6vw, 24px);
+}
+.line--row {
+	display: flex;
+	align-items: flex-start;
+	gap: clamp(10px, 1.4vw, 20px);
+	flex-wrap: wrap;
+}
+.line__faint {
+	font-weight: 200;
+	color: var(--dim);
+}
+
+.loop {
+	display: inline-block;
+	height: var(--row-h);
+	overflow: hidden;
+}
+.loop__inner {
+	display: flex;
+	flex-direction: column;
+	animation: loop 11s cubic-bezier(0.76, 0, 0.24, 1) infinite;
+	will-change: transform;
+}
+.loop__word {
+	height: var(--row-h);
+	line-height: var(--row-h);
+	font-weight: 400;
+	color: var(--white);
+	background: linear-gradient(
+		92deg,
+		#fff 0%,
+		#fff 55%,
+		#f4d6e6 75%,
+		#cfe0ff 100%
+	);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	white-space: nowrap;
+}
+@keyframes loop {
+	0%,
+	20% {
+		transform: translateY(0);
+	}
+	25%,
+	45% {
+		transform: translateY(calc(-1 * var(--row-h)));
+	}
+	50%,
+	70% {
+		transform: translateY(calc(-2 * var(--row-h)));
+	}
+	75%,
+	95% {
+		transform: translateY(calc(-3 * var(--row-h)));
+	}
+	100% {
+		transform: translateY(calc(-4 * var(--row-h)));
+	}
+}
+
+.kicker {
+	margin-top: clamp(18px, 2.6vw, 30px);
+	font-family: "Titillium Web", sans-serif;
+	font-size: clamp(11px, 1vw, 13px);
+	letter-spacing: 0.04em;
+	color: rgba(255, 255, 255, 0.42);
+	max-width: 46ch;
+}
+
+.hero__star {
+	width: clamp(64px, 7vw, 116px);
+	padding-bottom: 6px;
+}
+.hero__star svg {
+	width: 100%;
+	height: auto;
+	fill: var(--white);
+	filter: drop-shadow(0 0 24px rgba(255, 255, 255, 0.25));
+	animation: spin-soft 28s linear infinite;
+}
+@keyframes spin-soft {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* ===================== ENTRANCE ===================== */
+[data-rise] {
+	opacity: 0;
+	transform: translateY(26px);
+}
+.is-ready [data-rise] {
+	opacity: 1;
+	transform: translateY(0);
+	transition:
+		opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0s),
+		transform 0.9s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0s);
+}
+
+/* ===================== DISCOVER OVERLAY ===================== */
+.overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 100;
+	background: rgba(6, 6, 6, 0.96);
+	backdrop-filter: blur(28px);
+	-webkit-backdrop-filter: blur(28px);
+	transform: translateY(100%);
+	transition: transform 0.7s cubic-bezier(0.85, 0, 0.15, 1);
+	display: flex;
+	flex-direction: column;
+	padding-top: clamp(80px, 14vh, 128px);
+	overflow: hidden;
+	pointer-events: none;
+}
+.overlay.is-open {
+	transform: translateY(0);
+	pointer-events: auto;
+}
+
+.overlay__close {
+	position: absolute;
+	top: 26px;
+	right: var(--pad-x);
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: rgba(255, 255, 255, 0.45);
+	font-family: "Titillium Web", sans-serif;
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	transition: color 0.3s;
+}
+.overlay__close:hover {
+	color: var(--white);
+}
+.overlay__rule {
+	width: 32px;
+	height: 1px;
+	background: rgba(255, 255, 255, 0.25);
+	transition: background 0.3s;
+}
+.overlay__close:hover .overlay__rule {
+	background: var(--white);
+}
+
+.overlay__list {
+	display: flex;
+	flex-direction: column;
+}
+
+.menu-row {
+	position: relative;
+	height: clamp(76px, 11vh, 104px);
+	border-top: 1px solid var(--hair);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	cursor: pointer;
+}
+.overlay__list .menu-row:last-child {
+	border-bottom: 1px solid var(--hair);
+}
+.menu-row__label {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 10px;
+	transition: opacity 0.3s;
+}
+.menu-row__idx {
+	font-family: "Titillium Web", sans-serif;
+	font-size: 11px;
+	color: rgba(255, 255, 255, 0.4);
+	text-transform: uppercase;
+}
+.menu-row__txt {
+	font-size: clamp(30px, 6vw, 48px);
+	font-weight: 300;
+	letter-spacing: -0.02em;
+	text-transform: lowercase;
+}
+
+.menu-row__hover {
+	position: absolute;
+	inset: 0;
+	background: var(--white);
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+	opacity: 0;
+	transition: opacity 0.3s;
+	pointer-events: none;
+}
+.menu-row:hover .menu-row__hover {
+	opacity: 1;
+}
+.menu-row:hover .menu-row__label {
+	opacity: 0;
+}
+
+.ticker {
+	display: flex;
+	white-space: nowrap;
+	animation: ticker 20s linear infinite;
+}
+@keyframes ticker {
+	to {
+		transform: translateX(-50%);
+	}
+}
+.ticker__set {
+	display: flex;
+	align-items: center;
+	gap: clamp(32px, 5vw, 72px);
+	padding: 0 36px;
+	flex-shrink: 0;
+}
+.ticker__txt {
+	color: var(--black);
+	font-size: clamp(30px, 6vw, 48px);
+	font-weight: 500;
+	text-transform: lowercase;
+}
+.ticker__img {
+	height: 56px;
+	width: 200px;
+	object-fit: cover;
+	border-radius: 3px;
+	flex-shrink: 0;
+}
+
+.overlay__foot {
+	margin-top: auto;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 10px;
+	padding: 20px var(--pad-x) 26px;
+	font-family: "Titillium Web", sans-serif;
+	font-size: 11px;
+	letter-spacing: 0.06em;
+	color: rgba(255, 255, 255, 0.4);
+}
+
+/* ===================== RESPONSIVE ===================== */
+@media (max-width: 980px) {
+	.hero__star {
+		display: none;
+	}
+}
+@media (max-width: 640px) {
+	.hero__left {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 26px;
+	}
+	.social {
+		flex-direction: row;
+		gap: 12px;
+		padding-bottom: 0;
+	}
+	.line--row {
+		gap: 10px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.bg__drift,
+	.loop__inner,
+	.ticker,
+	.hero__star svg {
+		animation: none;
+	}
+	.loop__inner {
+		transform: translateY(0);
+	}
+	.is-ready [data-rise] {
+		transition-duration: 0.01ms;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Titillium+Web:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<div id="app">
+			<!-- ===================== BACKGROUND ===================== -->
+			<div class="bg" aria-hidden="true">
+				<div class="bg__drift" id="drift">
+					<span class="blob blob--amber"></span>
+					<span class="blob blob--pink"></span>
+					<span class="blob blob--blue"></span>
+					<span class="blob blob--orange"></span>
+					<span class="blob blob--violet"></span>
+				</div>
+				<div class="bg__grid"></div>
+				<div class="bg__settle"></div>
+				<div class="bg__grain"></div>
+				<div class="bg__vignette"></div>
+			</div>
+
+			<!-- ===================== HEADER ===================== -->
+			<header class="bar">
+				<a href="#" class="wordmark" data-rise style="--d:.05s">
+					<span class="wordmark__name">Marlowe König</span>
+					<span class="wordmark__dot" aria-hidden="true">
+						<svg viewBox="0 0 11 11">
+							<path
+								d="M5.5 11A5.5 5.5 0 1 1 5.5 0a5.5 5.5 0 0 1 0 11Zm0-10a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Z"
+							/>
+						</svg>
+					</span>
+				</a>
+				<button id="menu-trigger" class="discover" data-rise style="--d:.1s">
+					discover
+				</button>
+			</header>
+
+			<!-- ===================== HERO CONTENT ===================== -->
+			<main class="hero">
+				<div class="hero__left">
+					<nav class="social" aria-label="Social links">
+						<a href="#" class="chip" data-rise style="--d:.35s"
+							><span>Dr</span></a
+						>
+						<a href="#" class="chip" data-rise style="--d:.42s"
+							><span>Be</span></a
+						>
+						<a href="#" class="chip" data-rise style="--d:.49s"
+							><span>Li</span></a
+						>
+					</nav>
+
+					<div class="headline">
+						<h1 class="line line--solid" data-rise style="--d:.15s">
+							Crafting
+						</h1>
+						<div class="line line--row">
+							<span class="line__faint" data-rise style="--d:.22s">beyond</span>
+							<span
+								class="loop"
+								aria-label="boundaries, expectations, conventions, reality"
+							>
+								<span class="loop__inner" id="loop-inner">
+									<span class="loop__word">Boundaries</span>
+									<span class="loop__word">Expectations</span>
+									<span class="loop__word">Conventions</span>
+									<span class="loop__word">Reality</span>
+									<span class="loop__word">Boundaries</span>
+								</span>
+							</span>
+						</div>
+						<p class="kicker" data-rise style="--d:.55s">
+							Creative direction, art &amp; motion · Berlin / everywhere ·
+							Booking Q3
+						</p>
+					</div>
+				</div>
+
+				<div
+					class="hero__star"
+					id="star"
+					data-rise
+					style="--d:.3s"
+					aria-hidden="true"
+				>
+					<svg viewBox="0 0 116 115">
+						<path
+							d="M58 0l3.6 42.4L104 46l-42.4 3.6L58 92l-3.6-42.4L12 46l42.4-3.6L58 0Z"
+						/>
+					</svg>
+				</div>
+			</main>
+
+			<!-- ===================== DISCOVER OVERLAY ===================== -->
+			<div id="menu-overlay" class="overlay" aria-hidden="true">
+				<button id="menu-close" class="overlay__close">
+					<span>Close menu</span>
+					<i class="overlay__rule"></i>
+				</button>
+				<div class="overlay__list" id="overlay-list"></div>
+				<div class="overlay__foot">
+					<span>PRISMA NOIR™</span>
+					<span
+						>©<span id="year"></span>
+						— selected works available on request</span
+					>
+				</div>
+			</div>
+		</div>
+
+		<script>
+/* ============================================================
+   PRISMA NOIR — interactions
+   ============================================================ */
+(() => {
+	const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	/* ---------- entrance ---------- */
+	requestAnimationFrame(() =>
+		requestAnimationFrame(() => document.body.classList.add("is-ready")),
+	);
+
+	/* ---------- current year ---------- */
+	const yearEl = document.getElementById("year");
+	if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+	/* ---------- build discover menu rows ---------- */
+	const ITEMS = [
+		{ i: "01", label: "home", imgs: ["home-1", "home-2"] },
+		{ i: "02", label: "projects", imgs: ["projects-1", "projects-2"] },
+		{ i: "03", label: "blog", imgs: ["blog-1", "blog-2"] },
+		{ i: "04", label: "contact", imgs: ["contact-1", "contact-2"] },
+	];
+
+	const list = document.getElementById("overlay-list");
+	if (list) {
+		ITEMS.forEach((it) => {
+			const row = document.createElement("a");
+			row.href = "#";
+			row.className = "menu-row";
+
+			const set = `
+        <div class="ticker__set">
+          <span class="ticker__txt">${it.label}</span>
+          <img class="ticker__img" src="assets/${it.imgs[0]}.svg" alt="" />
+          <span class="ticker__txt">${it.label}</span>
+          <img class="ticker__img" src="assets/${it.imgs[1]}.svg" alt="" />
+        </div>`;
+
+			row.innerHTML = `
+        <span class="menu-row__label">
+          <span class="menu-row__idx">${it.i}</span>
+          <span class="menu-row__txt">${it.label}</span>
+        </span>
+        <span class="menu-row__hover" aria-hidden="true">
+          <span class="ticker">${set}${set}</span>
+        </span>`;
+			list.appendChild(row);
+		});
+	}
+
+	/* ---------- overlay open / close ---------- */
+	const overlay = document.getElementById("menu-overlay");
+	const trigger = document.getElementById("menu-trigger");
+	const close = document.getElementById("menu-close");
+
+	const open = () => {
+		overlay.classList.add("is-open");
+		overlay.setAttribute("aria-hidden", "false");
+		document.body.style.overflow = "hidden";
+	};
+	const shut = () => {
+		overlay.classList.remove("is-open");
+		overlay.setAttribute("aria-hidden", "true");
+		document.body.style.overflow = "";
+	};
+
+	trigger?.addEventListener("click", open);
+	close?.addEventListener("click", shut);
+	window.addEventListener("keydown", (e) => {
+		if (e.key === "Escape") shut();
+	});
+
+	/* ---------- pointer parallax (blobs + star) ---------- */
+	if (!reduce) {
+		const drift = document.getElementById("drift");
+		const star = document.getElementById("star");
+		let tx = 0,
+			ty = 0,
+			cx = 0,
+			cy = 0;
+
+		window.addEventListener("pointermove", (e) => {
+			const nx = e.clientX / window.innerWidth - 0.5;
+			const ny = e.clientY / window.innerHeight - 0.5;
+			tx = nx * 34;
+			ty = ny * 34;
+		});
+
+		const tick = () => {
+			cx += (tx - cx) * 0.06;
+			cy += (ty - cy) * 0.06;
+			if (drift) {
+				drift.style.setProperty("--px", `${cx.toFixed(2)}px`);
+				drift.style.setProperty("--py", `${cy.toFixed(2)}px`);
+			}
+			// only drive the star once the cursor has actually moved, so the
+			// entrance transition (data-rise) isn't overridden on load
+			if (star && (Math.abs(cx) > 0.1 || Math.abs(cy) > 0.1)) {
+				star.style.transform = `translate(${(-cx * 0.5).toFixed(2)}px, ${(-cy * 0.5).toFixed(2)}px)`;
+			}
+			requestAnimationFrame(tick);
+		};
+		requestAnimationFrame(tick);
+	}
+})();
+
+		</script>
+	</body>
+</html>

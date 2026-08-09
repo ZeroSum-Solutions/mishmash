@@ -1,0 +1,11 @@
+{
+  "slug": "auroracast-hls-landing",
+  "name": "Auroracast — HLS Video Streaming Landing Page",
+  "family": "landing-pages",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/auroracast-hls-landing",
+  "source_license": "MIT"
+}

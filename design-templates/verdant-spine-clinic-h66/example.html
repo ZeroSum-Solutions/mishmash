@@ -1,0 +1,1777 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Verdant Spine — Precision Chiropractic &amp; Wellness</title>
+		<meta
+			name="description"
+			content="Verdant Spine — elite spinal care and movement science combined to liberate you from chronic pain. The clinical-calm standard in modern chiropractic rehabilitation."
+		>
+		<style>
+/* ============ VERDANT SPINE — "Clinical Calm" ============ */
+
+
+
+
+
+
+:root {
+	--sage: rgb(97, 142, 100);
+	--forest: rgb(62, 92, 64);
+	--paper: rgb(236, 239, 236);
+	--ink: rgb(51, 51, 51);
+	--muted: rgb(96, 96, 96);
+	--hair: #d0d0d0;
+	--maxw: 1408px;
+	--ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+html {
+	scroll-behavior: smooth;
+	-webkit-font-smoothing: antialiased;
+}
+body {
+	font-family: "Inter", system-ui, sans-serif;
+	background: var(--paper);
+	color: var(--ink);
+	overflow-x: hidden;
+	line-height: 1.5;
+}
+.font-display {
+	font-family: "Schibsted Grotesk", "Inter", sans-serif;
+}
+img {
+	display: block;
+	max-width: 100%;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+button {
+	font-family: inherit;
+	cursor: pointer;
+	border: none;
+	background: none;
+}
+.wrap {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	width: 100%;
+}
+.eyebrow {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 1.5px;
+}
+
+/* ---------- Top bar + Nav ---------- */
+.topbar {
+	background: var(--forest);
+	height: 33px;
+	width: 100%;
+}
+header {
+	padding: 18px 32px;
+}
+.nav {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 60px;
+}
+.logo {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 700;
+	font-style: italic;
+	font-size: 26px;
+	letter-spacing: -1.2px;
+	color: var(--forest);
+	display: flex;
+	align-items: center;
+	gap: 9px;
+}
+.logo .dot {
+	width: 11px;
+	height: 11px;
+	border-radius: 50%;
+	background: var(--sage);
+	display: inline-block;
+}
+.nav-links {
+	display: flex;
+	align-items: center;
+	gap: 34px;
+}
+.nav-links a,
+.nav-links .pages-btn {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 1.5px;
+	color: var(--ink);
+	transition: color 0.25s var(--ease);
+	background: none;
+}
+.nav-links a:hover,
+.nav-links .pages-btn:hover {
+	color: var(--sage);
+}
+.nav-links a.active {
+	color: var(--sage);
+}
+.pages-wrap {
+	position: relative;
+}
+.pages-btn {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+}
+.pages-btn svg {
+	width: 12px;
+	height: 12px;
+	transition: transform 0.3s var(--ease);
+}
+.pages-wrap:hover .pages-btn svg {
+	transform: rotate(180deg);
+}
+.dropdown {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	margin-top: 14px;
+	width: 190px;
+	background: var(--forest);
+	border-radius: 12px;
+	overflow: hidden;
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(8px);
+	transition: all 0.3s var(--ease);
+	box-shadow: 0 24px 48px -16px rgba(40, 60, 42, 0.5);
+}
+.pages-wrap:hover .dropdown {
+	opacity: 1;
+	visibility: visible;
+	transform: translateY(0);
+}
+.dropdown a {
+	display: block;
+	padding: 13px 18px;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 1.5px;
+	text-transform: uppercase;
+	color: #fff;
+	transition: background 0.2s;
+}
+.dropdown a:hover {
+	background: rgba(255, 255, 255, 0.08);
+	color: #fff;
+}
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	font-weight: 500;
+	border-radius: 10px;
+	transition: all 0.3s var(--ease);
+}
+.btn-outline {
+	border: 1px solid var(--hair);
+	color: var(--forest);
+	padding: 14px 26px;
+}
+.btn-outline:hover {
+	background: var(--forest);
+	color: #fff;
+	border-color: var(--forest);
+}
+.btn-fill {
+	background: var(--sage);
+	color: #fff;
+	padding: 15px 30px;
+}
+.btn-fill:hover {
+	background: var(--forest);
+}
+.menu-toggle {
+	display: none;
+	color: var(--ink);
+}
+.menu-toggle svg {
+	width: 30px;
+	height: 30px;
+}
+
+/* ---------- Mobile menu ---------- */
+.mobile-menu {
+	position: fixed;
+	inset: 0;
+	z-index: 200;
+	background: var(--paper);
+	transform: translateX(100%);
+	transition: transform 0.4s var(--ease);
+}
+.mobile-menu.open {
+	transform: translateX(0);
+}
+.mm-inner {
+	padding: 32px;
+}
+.mm-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 48px;
+}
+.mm-top button {
+	color: var(--ink);
+}
+.mm-top button svg {
+	width: 30px;
+	height: 30px;
+}
+.mm-nav {
+	display: flex;
+	flex-direction: column;
+	gap: 26px;
+}
+.mm-nav a {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: 30px;
+	letter-spacing: -1.5px;
+}
+.mm-nav a.active {
+	color: var(--sage);
+}
+.mm-nav hr {
+	border: none;
+	border-top: 1px solid var(--hair);
+	margin: 8px 0;
+}
+.mm-nav .small {
+	font-size: 13px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 1.5px;
+	color: var(--muted);
+}
+
+/* ---------- Hero ---------- */
+.hero {
+	padding: 8px 24px 36px;
+}
+.hero-inner {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 30px;
+}
+.hero-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	gap: 24px;
+	padding: 0 12px;
+}
+.hero h1 {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: clamp(44px, 7vw, 86px);
+	line-height: 0.92;
+	letter-spacing: -3px;
+	max-width: 860px;
+}
+.hero h1 .line2 {
+	display: block;
+	color: var(--sage);
+}
+.hero-sub {
+	color: var(--muted);
+	font-weight: 500;
+	max-width: 330px;
+	font-size: 15px;
+	margin-bottom: 6px;
+}
+.hero-figure {
+	position: relative;
+	width: 100%;
+	height: min(58vh, 560px);
+	min-height: 380px;
+	border-radius: 20px;
+	overflow: hidden;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	padding: 24px;
+}
+.hero-figure img.bg {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	z-index: 0;
+}
+.hero-figure::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(90deg, rgba(40, 60, 42, 0.18), transparent 60%);
+	z-index: 1;
+}
+.appt-card {
+	position: relative;
+	z-index: 2;
+	width: 100%;
+	max-width: 368px;
+	border-radius: 14px;
+	padding: 26px;
+	background: rgba(255, 255, 255, 0.5);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	border: 1px solid rgba(255, 255, 255, 0.6);
+	box-shadow: 0 18px 50px -20px rgba(40, 60, 42, 0.4);
+}
+.appt-card h3 {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: 20px;
+	letter-spacing: -0.5px;
+	margin-bottom: 4px;
+}
+.appt-card .note {
+	font-size: 12.5px;
+	color: var(--muted);
+	margin-bottom: 18px;
+}
+.field {
+	margin-bottom: 14px;
+}
+.field label {
+	display: block;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 1.4px;
+	color: var(--muted);
+	margin-bottom: 6px;
+}
+.field input,
+.field textarea {
+	width: 100%;
+	background: rgba(255, 255, 255, 0.45);
+	border: 1px solid rgba(255, 255, 255, 0.85);
+	border-radius: 10px;
+	padding: 12px 14px;
+	font-family: inherit;
+	font-size: 14px;
+	color: var(--ink);
+	transition:
+		border-color 0.25s,
+		background 0.25s;
+	resize: none;
+}
+.field input::placeholder,
+.field textarea::placeholder {
+	color: rgba(60, 70, 60, 0.45);
+}
+.field input:focus,
+.field textarea:focus {
+	outline: none;
+	border-color: var(--sage);
+	background: rgba(255, 255, 255, 0.7);
+}
+.appt-card button {
+	width: 100%;
+	background: var(--sage);
+	color: #fff;
+	font-weight: 700;
+	padding: 14px;
+	border-radius: 10px;
+	text-transform: uppercase;
+	letter-spacing: 1.5px;
+	font-size: 12px;
+	transition: background 0.3s var(--ease);
+	margin-top: 4px;
+}
+.appt-card button:hover {
+	background: var(--forest);
+}
+
+/* ---------- About ---------- */
+.section {
+	padding: 96px 32px;
+}
+.about-h {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 600;
+	font-size: clamp(30px, 4.2vw, 56px);
+	line-height: 1.12;
+	letter-spacing: -2px;
+	max-width: 840px;
+	margin-bottom: 64px;
+}
+.about-inner {
+	max-width: 1184px;
+	margin: 0 auto;
+}
+.about-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 60px;
+}
+.stat-cards {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+}
+.stat-card {
+	position: relative;
+	height: 392px;
+	border-radius: 12px;
+	overflow: hidden;
+	display: flex;
+	align-items: flex-end;
+	padding: 18px;
+}
+.stat-card img {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.stat-card::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		0deg,
+		rgba(15, 25, 16, 0.85),
+		rgba(15, 25, 16, 0) 60%
+	);
+}
+.stat-card .stat-txt {
+	position: relative;
+	z-index: 1;
+	color: #fff;
+}
+.stat-card .num {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: 44px;
+	letter-spacing: -2px;
+	line-height: 1;
+}
+.stat-card .lbl {
+	font-size: 13px;
+	color: #e4e4e4;
+	margin-top: 2px;
+}
+.about-right {
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	align-items: flex-start;
+	gap: 30px;
+}
+.about-right p {
+	max-width: 320px;
+	line-height: 1.7;
+}
+.feature-panel {
+	margin-top: 64px;
+	width: 100%;
+	height: 500px;
+	border-radius: 20px;
+	overflow: hidden;
+	position: relative;
+	background: var(--forest);
+}
+.feature-panel img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	opacity: 0.55;
+}
+.play {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.play .circle {
+	width: 84px;
+	height: 84px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.2);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: transform 0.3s var(--ease);
+	border: 1px solid rgba(255, 255, 255, 0.3);
+}
+.play .circle:hover {
+	transform: scale(1.1);
+}
+.play svg {
+	width: 30px;
+	height: 30px;
+	color: #fff;
+}
+
+/* ---------- Services ---------- */
+.services {
+	background: var(--forest);
+	color: #fff;
+	padding: 96px 0;
+	overflow: hidden;
+}
+.marquee {
+	overflow: hidden;
+	width: 100%;
+	margin-bottom: 72px;
+	-webkit-mask-image: linear-gradient(
+		90deg,
+		transparent,
+		#000 8%,
+		#000 92%,
+		transparent
+	);
+	mask-image: linear-gradient(
+		90deg,
+		transparent,
+		#000 8%,
+		#000 92%,
+		transparent
+	);
+}
+.marquee-track {
+	display: flex;
+	width: max-content;
+	animation: marquee 22s linear infinite;
+}
+.marquee-track span {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: clamp(56px, 10vw, 120px);
+	line-height: 1;
+	letter-spacing: -5px;
+	text-transform: uppercase;
+	padding: 0 26px;
+	color: rgba(255, 255, 255, 0.92);
+	white-space: nowrap;
+}
+@keyframes marquee {
+	to {
+		transform: translateX(-50%);
+	}
+}
+.services-body {
+	max-width: 1216px;
+	margin: 0 auto;
+	padding: 0 32px;
+}
+.services-title {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 600;
+	font-size: clamp(30px, 4vw, 56px);
+	letter-spacing: -2px;
+	line-height: 1.15;
+	text-align: center;
+	max-width: 720px;
+	margin: 0 auto 60px;
+}
+.svc-card {
+	max-width: 1184px;
+	margin: 0 auto 28px;
+	background: #fff;
+	color: var(--ink);
+	border-radius: 14px;
+	padding: 34px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 48px;
+}
+.svc-left {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 56px;
+	align-self: stretch;
+}
+.svc-left .idx {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 1.5px;
+	color: var(--sage);
+	text-transform: uppercase;
+}
+.svc-left h3 {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 600;
+	font-size: 34px;
+	letter-spacing: -2px;
+	line-height: 1.1;
+	max-width: 200px;
+	margin-top: 8px;
+}
+.svc-img {
+	width: 352px;
+	height: 352px;
+	flex-shrink: 0;
+	border-radius: 12px;
+	overflow: hidden;
+	border: 1px solid var(--hair);
+}
+.svc-img img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.6s var(--ease);
+}
+.svc-card:hover .svc-img img {
+	transform: scale(1.05);
+}
+
+/* ---------- How it works ---------- */
+.how-inner {
+	max-width: 1216px;
+	margin: 0 auto;
+}
+.how-h {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 600;
+	font-size: clamp(30px, 4.2vw, 56px);
+	letter-spacing: -2px;
+	margin-bottom: 64px;
+}
+.how-grid {
+	display: flex;
+	gap: 80px;
+	align-items: flex-start;
+}
+.how-sticky {
+	width: 45%;
+	position: sticky;
+	top: 48px;
+}
+.how-panel {
+	background: var(--forest);
+	border-radius: 20px;
+	height: 420px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	padding: 34px;
+	color: #fff;
+	overflow: hidden;
+	position: relative;
+}
+.how-panel .ghost {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-style: italic;
+	font-weight: 700;
+	font-size: 62px;
+	letter-spacing: -3px;
+	color: rgba(255, 255, 255, 0.1);
+	line-height: 1;
+}
+.how-panel .tagline {
+	font-size: 15px;
+	color: #dfe6df;
+	max-width: 280px;
+	line-height: 1.6;
+}
+.how-panel .badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 1.5px;
+	text-transform: uppercase;
+	color: var(--paper);
+}
+.how-panel .badge .d {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--sage);
+}
+.how-steps {
+	width: 50%;
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+.step {
+	display: flex;
+	gap: 30px;
+	border-bottom: 1px solid var(--hair);
+	padding: 40px 0;
+}
+.step:first-child {
+	padding-top: 0;
+}
+.step .n {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 600;
+	font-size: 84px;
+	line-height: 1;
+	letter-spacing: -3px;
+	color: var(--ink);
+}
+.step .stepbody {
+	padding-top: 8px;
+}
+.step h3 {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 600;
+	font-size: 30px;
+	letter-spacing: -1.5px;
+	margin-bottom: 10px;
+}
+.step p {
+	color: var(--muted);
+	line-height: 1.65;
+	max-width: 380px;
+}
+
+/* ---------- Testimonials ---------- */
+.tst-inner {
+	max-width: 1216px;
+	margin: 0 auto;
+}
+.tst-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	margin-bottom: 56px;
+	gap: 24px;
+}
+.tst-head h2 {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 600;
+	font-size: clamp(30px, 4.2vw, 56px);
+	letter-spacing: -2px;
+	max-width: 460px;
+	line-height: 1.1;
+}
+.tst-nav {
+	display: flex;
+	gap: 14px;
+}
+.tst-nav button {
+	width: 56px;
+	height: 56px;
+	border-radius: 50%;
+	border: 1px solid var(--hair);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.3s var(--ease);
+	color: var(--ink);
+}
+.tst-nav button:hover {
+	background: var(--forest);
+	color: #fff;
+	border-color: var(--forest);
+}
+.tst-nav svg {
+	width: 22px;
+	height: 22px;
+}
+.tst-slider {
+	display: flex;
+	gap: 16px;
+	overflow-x: auto;
+	scroll-snap-type: x mandatory;
+	scroll-behavior: smooth;
+	scrollbar-width: none;
+}
+.tst-slider::-webkit-scrollbar {
+	display: none;
+}
+.tst-card {
+	position: relative;
+	height: 460px;
+	min-width: calc(33.333% - 11px);
+	flex-shrink: 0;
+	scroll-snap-align: start;
+	border-radius: 14px;
+	overflow: hidden;
+}
+.tst-card img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.7s var(--ease);
+}
+.tst-card:hover img {
+	transform: scale(1.05);
+}
+.tst-quote {
+	position: absolute;
+	left: 16px;
+	right: 16px;
+	bottom: 16px;
+	background: rgba(255, 255, 255, 0.62);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	border: 1px solid rgba(255, 255, 255, 0.5);
+	border-radius: 12px;
+	padding: 22px;
+}
+.tst-quote p {
+	font-style: italic;
+	color: var(--ink);
+	margin-bottom: 14px;
+	line-height: 1.55;
+}
+.tst-quote .who {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 1.5px;
+	text-transform: uppercase;
+	color: var(--forest);
+}
+
+/* ---------- Blog ---------- */
+.blog {
+	background: rgba(255, 255, 255, 0.45);
+}
+.blog-inner {
+	max-width: 1216px;
+	margin: 0 auto;
+}
+.blog-inner h2 {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 600;
+	font-size: clamp(30px, 4.2vw, 56px);
+	letter-spacing: -2px;
+	margin-bottom: 60px;
+}
+.blog-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 18px;
+}
+.post {
+	border: 1px solid var(--hair);
+	border-radius: 18px;
+	padding: 8px;
+	background: #fff;
+	display: block;
+	transition: transform 0.35s var(--ease);
+}
+.post:hover {
+	transform: translateY(-5px);
+}
+.post-img {
+	aspect-ratio: 1;
+	border-radius: 12px;
+	overflow: hidden;
+	border: 1px solid var(--hair);
+	margin-bottom: 20px;
+}
+.post-img img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.5s var(--ease);
+}
+.post:hover .post-img img {
+	transform: scale(1.05);
+}
+.post-body {
+	padding: 6px 16px 26px;
+}
+.post-meta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--muted);
+	margin-bottom: 14px;
+}
+.post-meta .sep {
+	opacity: 0.5;
+}
+.post h3 {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 600;
+	font-size: 21px;
+	letter-spacing: -0.6px;
+	line-height: 1.2;
+	transition: color 0.25s;
+}
+.post:hover h3 {
+	color: var(--sage);
+}
+
+/* ---------- Footer ---------- */
+footer {
+	padding: 16px 32px 36px;
+}
+.foot-panel {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	background: var(--forest);
+	border-radius: 24px;
+	padding: 72px;
+	color: #fff;
+}
+.foot-news {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	gap: 48px;
+	padding-bottom: 64px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.foot-news h4 {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 600;
+	font-size: clamp(26px, 3vw, 38px);
+	letter-spacing: -1.5px;
+	line-height: 1.15;
+	margin-bottom: 14px;
+}
+.foot-news p {
+	color: #dfe6df;
+	max-width: 560px;
+	line-height: 1.6;
+}
+.news-form {
+	width: 560px;
+	display: flex;
+	align-items: flex-end;
+	gap: 10px;
+}
+.news-form .field {
+	flex: 1;
+	margin: 0;
+}
+.news-form label {
+	color: rgba(255, 255, 255, 0.8);
+}
+.news-form input {
+	background: transparent;
+	border: 1px solid rgba(255, 255, 255, 0.4);
+	color: #fff;
+}
+.news-form input::placeholder {
+	color: rgba(255, 255, 255, 0.45);
+}
+.news-form input:focus {
+	border-color: var(--sage);
+	background: rgba(255, 255, 255, 0.05);
+}
+.news-form button {
+	background: var(--sage);
+	color: #fff;
+	padding: 14px 30px;
+	border-radius: 10px;
+	font-weight: 500;
+	white-space: nowrap;
+	transition: background 0.3s var(--ease);
+}
+.news-form button:hover {
+	background: #fff;
+	color: var(--forest);
+}
+.foot-links {
+	padding-top: 64px;
+	display: flex;
+	justify-content: space-between;
+	gap: 48px;
+	flex-wrap: wrap;
+}
+.foot-brand .logo {
+	color: #fff;
+	font-size: 34px;
+}
+.foot-brand p {
+	color: #dfe6df;
+	max-width: 300px;
+	margin-top: 18px;
+	line-height: 1.6;
+}
+.foot-cols {
+	display: flex;
+	gap: 80px;
+	flex-wrap: wrap;
+}
+.foot-col h6 {
+	font-family: "Schibsted Grotesk", sans-serif;
+	font-weight: 700;
+	font-size: 18px;
+	letter-spacing: -0.5px;
+	margin-bottom: 20px;
+}
+.foot-col nav {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.foot-col a {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 1.5px;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.85);
+	transition: color 0.25s;
+}
+.foot-col a:hover {
+	color: var(--sage);
+}
+.copyright {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding-top: 28px;
+	display: flex;
+	justify-content: space-between;
+	color: var(--muted);
+	font-size: 14px;
+}
+
+/* ---------- Scroll reveal ---------- */
+[data-reveal] {
+	opacity: 0;
+	transform: translateY(30px);
+	transition:
+		opacity 0.8s var(--ease),
+		transform 0.8s var(--ease);
+}
+[data-reveal].in {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1024px) {
+	.topbar {
+		display: none;
+	}
+	.nav-links,
+	.btn-outline.nav-cta {
+		display: none;
+	}
+	.menu-toggle {
+		display: block;
+	}
+	.hero-top {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 16px;
+	}
+	.hero-sub {
+		text-align: left;
+	}
+	.about-grid {
+		grid-template-columns: 1fr;
+		gap: 40px;
+	}
+	.how-grid {
+		flex-direction: column;
+		gap: 48px;
+	}
+	.how-sticky,
+	.how-steps {
+		width: 100%;
+		position: static;
+	}
+	.svc-card {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 28px;
+	}
+	.svc-left {
+		flex-direction: row;
+		justify-content: space-between;
+		width: 100%;
+		align-items: center;
+		gap: 20px;
+	}
+	.svc-left h3 {
+		max-width: none;
+	}
+	.svc-img {
+		width: 100%;
+		height: 300px;
+	}
+	.tst-card {
+		min-width: calc(50% - 8px);
+	}
+	.foot-news {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	.news-form {
+		width: 100%;
+	}
+	.blog-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+	.foot-panel {
+		padding: 48px 36px;
+	}
+}
+@media (max-width: 640px) {
+	.section {
+		padding: 64px 20px;
+	}
+	.hero {
+		padding: 6px 16px 28px;
+	}
+	.hero-figure {
+		padding: 14px;
+		align-items: flex-end;
+	}
+	.appt-card {
+		max-width: none;
+	}
+	.stat-cards {
+		grid-template-columns: 1fr 1fr;
+		gap: 10px;
+	}
+	.stat-card {
+		height: 280px;
+	}
+	.tst-card {
+		min-width: calc(100% - 0px);
+	}
+	.blog-grid {
+		grid-template-columns: 1fr;
+	}
+	.foot-cols {
+		gap: 40px;
+	}
+	.copyright {
+		flex-direction: column;
+		gap: 6px;
+	}
+	.foot-panel {
+		padding: 36px 24px;
+		border-radius: 18px;
+	}
+	.news-form {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	.news-form button {
+		width: 100%;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Schibsted+Grotesk:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- Top bar -->
+		<div class="topbar"></div>
+
+		<!-- Nav -->
+		<header>
+			<nav class="nav">
+				<a href="#top" class="logo"><span class="dot"></span>Verdant Spine</a>
+				<div class="nav-links">
+					<a href="#top" class="active">Home</a>
+					<a href="#about">About</a>
+					<a href="#services">Services</a>
+					<div class="pages-wrap">
+						<button class="pages-btn">
+							Pages
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2.5"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M6 9l6 6 6-6"
+								/>
+							</svg>
+						</button>
+						<div class="dropdown">
+							<a href="#blog">Journal</a>
+							<a href="#services">Pricing</a>
+							<a href="#appointment">Contact</a>
+						</div>
+					</div>
+				</div>
+				<a href="#appointment" class="btn btn-outline nav-cta"
+					>Make Appointment</a
+				>
+				<button class="menu-toggle" id="menuOpen" aria-label="Open menu">
+					<svg
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<path stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16" />
+					</svg>
+				</button>
+			</nav>
+		</header>
+
+		<!-- Mobile menu -->
+		<div class="mobile-menu" id="mobileMenu">
+			<div class="mm-inner">
+				<div class="mm-top">
+					<span class="logo"><span class="dot"></span>Verdant Spine</span>
+					<button id="menuClose" aria-label="Close menu">
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+						>
+							<path stroke-linecap="round" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				</div>
+				<nav class="mm-nav">
+					<a href="#top" class="active mlink">Home</a>
+					<a href="#about" class="mlink">About</a>
+					<a href="#services" class="mlink">Services</a>
+					<a href="#appointment" class="mlink">Appointment</a>
+					<hr>
+					<a href="#blog" class="small mlink">Journal</a>
+					<a href="#appointment" class="small mlink">Contact</a>
+				</nav>
+			</div>
+		</div>
+
+		<main id="top">
+			<!-- Hero -->
+			<section class="hero">
+				<div class="hero-inner">
+					<div class="hero-top" data-reveal>
+						<h1>Restoring Motion,<span class="line2">Empowering Life</span></h1>
+						<p class="hero-sub">
+							Elite spinal care and movement science combined to liberate you
+							from chronic pain — the Verdant Spine standard in modern
+							chiropractic rehabilitation.
+						</p>
+					</div>
+					<div class="hero-figure" data-reveal>
+						<img
+							class="bg"
+							src="assets/hero.jpg"
+							alt="Calm, light-filled modern chiropractic clinic interior"
+						>
+						<form class="appt-card" id="appointment" onsubmit="return false">
+							<h3>Book your bio-consult</h3>
+							<p class="note">
+								A 45-minute movement assessment. No referral required.
+							</p>
+							<div class="field">
+								<label>Your Name</label>
+								<input type="text" placeholder="Jordan Avery">
+							</div>
+							<div class="field">
+								<label>Email Address</label>
+								<input type="email" placeholder="you@example.com">
+							</div>
+							<div class="field">
+								<label>Message</label>
+								<textarea
+									rows="2"
+									placeholder="Tell us about your symptoms"
+								></textarea>
+							</div>
+							<button type="submit">Request Appointment</button>
+						</form>
+					</div>
+				</div>
+			</section>
+
+			<!-- About -->
+			<section class="section" id="about">
+				<div class="about-inner">
+					<h2 class="about-h" data-reveal>
+						Precision at every point: tailored recovery strategies that evolve
+						with your performance.
+					</h2>
+					<div class="about-grid">
+						<div class="stat-cards" data-reveal>
+							<div class="stat-card">
+								<img
+									src="assets/stat-1.jpg"
+									alt="Patient receiving a consultation in a calm clinical setting"
+								>
+								<div class="stat-txt">
+									<div class="num">95%</div>
+									<div class="lbl">Satisfied Clients</div>
+								</div>
+							</div>
+							<div class="stat-card">
+								<img
+									src="assets/stat-2.jpg"
+									alt="Chiropractor working with a spinal model"
+								>
+								<div class="stat-txt">
+									<div class="num">15+</div>
+									<div class="lbl">Years of Practice</div>
+								</div>
+							</div>
+						</div>
+						<div class="about-right" data-reveal>
+							<span class="eyebrow" style="color:var(--sage)"
+								>Our Philosophy</span
+							>
+							<p>
+								We merge high-definition biomechanical analysis with specialized
+								manual adjustments to craft a recovery roadmap as unique as your
+								own DNA. No generic plans — just measurable, lasting results.
+							</p>
+							<a href="#services" class="btn btn-fill">Learn More</a>
+						</div>
+					</div>
+					<div class="feature-panel" data-reveal>
+						<img
+							src="assets/feature.jpg"
+							alt="Cinematic interior of a modern wellness facility with natural light"
+						>
+						<div class="play">
+							<div class="circle">
+								<svg viewBox="0 0 24 24" fill="currentColor">
+									<path d="M8 5v14l11-7z" />
+								</svg>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Services -->
+			<section class="services" id="services">
+				<div class="marquee">
+					<div class="marquee-track">
+						<span
+							>Expert Care • Real Results • Expert Care • Real Results •&nbsp;</span
+						>
+						<span
+							>Expert Care • Real Results • Expert Care • Real Results •&nbsp;</span
+						>
+					</div>
+				</div>
+				<div class="services-body">
+					<h2 class="services-title">Advanced modalities for peak function</h2>
+
+					<div class="svc-card" data-reveal>
+						<div class="svc-left">
+							<span class="idx">01 — Structural</span>
+							<h3>Structural Alignment</h3>
+							<a href="#" class="btn btn-outline">Read More</a>
+						</div>
+						<div class="svc-img">
+							<img
+								src="assets/service-1.jpg"
+								alt="Precise spinal adjustment in progress"
+							>
+						</div>
+					</div>
+
+					<div class="svc-card" data-reveal>
+						<div class="svc-left">
+							<span class="idx">02 — Kinetic</span>
+							<h3>Kinetic Therapy</h3>
+							<a href="#" class="btn btn-outline">Read More</a>
+						</div>
+						<div class="svc-img">
+							<img
+								src="assets/service-2.jpg"
+								alt="Movement-assessment physical therapy session"
+							>
+						</div>
+					</div>
+
+					<div class="svc-card" data-reveal>
+						<div class="svc-left">
+							<span class="idx">03 — Neural</span>
+							<h3>Neural Mobilization</h3>
+							<a href="#" class="btn btn-outline">Read More</a>
+						</div>
+						<div class="svc-img">
+							<img
+								src="assets/service-3.jpg"
+								alt="Practitioner explaining nerve pathways to a patient"
+							>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- How it works -->
+			<section class="section">
+				<div class="how-inner">
+					<h2 class="how-h" data-reveal>The path to peak performance</h2>
+					<div class="how-grid">
+						<div class="how-sticky" data-reveal>
+							<div class="how-panel">
+								<span class="badge"><span class="d"></span>How it works</span>
+								<div class="ghost">Verdant Spine</div>
+								<p class="tagline">
+									A structured, evidence-led journey — from your first
+									assessment to lifelong mobility coaching.
+								</p>
+							</div>
+						</div>
+						<div class="how-steps">
+							<div class="step" data-reveal>
+								<div class="n">01</div>
+								<div class="stepbody">
+									<h3>Initial Bio-Consult</h3>
+									<p>
+										Start your journey with a deep-dive consultation. Share your
+										history and goals so we can build your performance profile.
+									</p>
+								</div>
+							</div>
+							<div class="step" data-reveal>
+								<div class="n">02</div>
+								<div class="stepbody">
+									<h3>Analysis &amp; Relief</h3>
+									<p>
+										Undergo specialized orthopaedic testing followed by
+										immediate corrective care to jumpstart your neurological
+										recovery.
+									</p>
+								</div>
+							</div>
+							<div class="step" data-reveal>
+								<div class="n">03</div>
+								<div class="stepbody">
+									<h3>Evolutionary Coaching</h3>
+									<p>
+										Follow a progressive six-step roadmap with constant
+										reassessments so you keep meeting your strength and mobility
+										targets.
+									</p>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Testimonials -->
+			<section class="section">
+				<div class="tst-inner">
+					<div class="tst-head">
+						<h2 data-reveal>Voices of healing and trust</h2>
+						<div class="tst-nav">
+							<button id="tstPrev" aria-label="Previous">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M15 19l-7-7 7-7"
+									/>
+								</svg>
+							</button>
+							<button id="tstNext" aria-label="Next">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M9 5l7 7-7 7"
+									/>
+								</svg>
+							</button>
+						</div>
+					</div>
+					<div class="tst-slider" id="tstSlider" data-reveal>
+						<div class="tst-card">
+							<img src="assets/t1.jpg" alt="Smiling woman after a workout">
+							<div class="tst-quote">
+								<p>
+									"The attention to detail and root-cause analysis was something
+									I hadn't experienced before. I'm finally pain-free after
+									years."
+								</p>
+								<div class="who">Hannah Morales</div>
+							</div>
+						</div>
+						<div class="tst-card">
+							<img
+								src="assets/t2.jpg"
+								alt="Confident man in a relaxed setting"
+							>
+							<div class="tst-quote">
+								<p>
+									"The team here is incredible. They don't just adjust your back
+									— they teach you how to maintain your health long-term."
+								</p>
+								<div class="who">James Chen</div>
+							</div>
+						</div>
+						<div class="tst-card">
+							<img
+								src="assets/t3.jpg"
+								alt="Active senior stretching outdoors"
+							>
+							<div class="tst-quote">
+								<p>
+									"Recovery from my sports injury was faster than expected. The
+									personalized plan made all the difference."
+								</p>
+								<div class="who">Elena Rodriguez</div>
+							</div>
+						</div>
+						<div class="tst-card">
+							<img
+								src="assets/t4.jpg"
+								alt="Person jogging on a beach at sunrise"
+							>
+							<div class="tst-quote">
+								<p>
+									"I thought surgery was my only option for chronic back pain.
+									Verdant Spine changed that narrative completely."
+								</p>
+								<div class="who">Robert Miller</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Blog -->
+			<section class="section blog" id="blog">
+				<div class="blog-inner">
+					<h2 data-reveal>Read our journal &amp; articles</h2>
+					<div class="blog-grid">
+						<a href="#" class="post" data-reveal>
+							<div class="post-img">
+								<img
+									src="assets/blog-1.jpg"
+									alt="Spine model in a medical office"
+								>
+							</div>
+							<div class="post-body">
+								<div class="post-meta">
+									<span>August 16, 2025</span><span class="sep">|</span
+									><span>Healing</span>
+								</div>
+								<h3>
+									Beyond the Crack: The Science of Neuro-Muscular Integration
+								</h3>
+							</div>
+						</a>
+						<a href="#" class="post" data-reveal>
+							<div class="post-img">
+								<img
+									src="assets/blog-2.jpg"
+									alt="Athlete on a running track"
+								>
+							</div>
+							<div class="post-body">
+								<div class="post-meta">
+									<span>August 09, 2025</span><span class="sep">|</span
+									><span>Sports</span>
+								</div>
+								<h3>
+									Maximizing Athletic Longevity Through Corrective Alignment
+								</h3>
+							</div>
+						</a>
+						<a href="#" class="post" data-reveal>
+							<div class="post-img">
+								<img
+									src="assets/blog-3.jpg"
+									alt="Bright modern medical consultation room"
+								>
+							</div>
+							<div class="post-body">
+								<div class="post-meta">
+									<span>August 02, 2025</span><span class="sep">|</span
+									><span>Therapy</span>
+								</div>
+								<h3>
+									De-bunking Spine Care: Why Structural Health Is Your Best
+									Asset
+								</h3>
+							</div>
+						</a>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<!-- Footer -->
+		<footer>
+			<div class="foot-panel">
+				<div class="foot-news">
+					<div>
+						<h4>Subscribe to our newsletter</h4>
+						<p>
+							Stay updated with our latest movement-science tips and specialized
+							chiropractic techniques, delivered straight to your inbox.
+						</p>
+					</div>
+					<form class="news-form" onsubmit="return false">
+						<div class="field">
+							<label>Email Address</label>
+							<input type="email" placeholder="you@example.com">
+						</div>
+						<button type="submit">Subscribe</button>
+					</form>
+				</div>
+				<div class="foot-links">
+					<div class="foot-brand">
+						<span class="logo"><span class="dot"></span>Verdant Spine</span>
+						<p>
+							Precision chiropractic &amp; movement science. Excellence in
+							alignment, restored.
+						</p>
+					</div>
+					<div class="foot-cols">
+						<div class="foot-col">
+							<h6>Quick Links</h6>
+							<nav>
+								<a href="#about">About</a>
+								<a href="#services">Services</a>
+								<a href="#services">Pricing</a>
+								<a href="#appointment">Appointment</a>
+							</nav>
+						</div>
+						<div class="foot-col">
+							<h6>Other Pages</h6>
+							<nav>
+								<a href="#blog">Journal</a>
+								<a href="#">Style Guide</a>
+								<a href="#">Licenses</a>
+								<a href="#">Changelog</a>
+							</nav>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="copyright">
+				<p>© 2025 Verdant Spine Chiropractic. All rights reserved.</p>
+				<p>Excellence in Alignment.</p>
+			</div>
+		</footer>
+
+		<script>
+document.addEventListener("DOMContentLoaded", () => {
+	/* Scroll reveal */
+	const io = new IntersectionObserver(
+		(entries) => {
+			entries.forEach((e) => {
+				if (e.isIntersecting) {
+					e.target.classList.add("in");
+					io.unobserve(e.target);
+				}
+			});
+		},
+		{ threshold: 0.08, rootMargin: "0px 0px -40px 0px" },
+	);
+	document.querySelectorAll("[data-reveal]").forEach((el) => io.observe(el));
+
+	/* Mobile menu */
+	const menu = document.getElementById("mobileMenu");
+	const open = document.getElementById("menuOpen");
+	const close = document.getElementById("menuClose");
+	const toggle = (show) => {
+		menu.classList.toggle("open", show);
+		document.body.style.overflow = show ? "hidden" : "";
+	};
+	open.addEventListener("click", () => toggle(true));
+	close.addEventListener("click", () => toggle(false));
+	document
+		.querySelectorAll(".mlink")
+		.forEach((l) => l.addEventListener("click", () => toggle(false)));
+
+	/* Testimonial carousel */
+	const slider = document.getElementById("tstSlider");
+	const prev = document.getElementById("tstPrev");
+	const next = document.getElementById("tstNext");
+	if (slider && prev && next) {
+		const amount = () => {
+			const first = slider.firstElementChild;
+			return first ? first.offsetWidth + 16 : 360;
+		};
+		prev.addEventListener("click", () =>
+			slider.scrollBy({ left: -amount(), behavior: "smooth" }),
+		);
+		next.addEventListener("click", () =>
+			slider.scrollBy({ left: amount(), behavior: "smooth" }),
+		);
+		const sync = () => {
+			prev.style.opacity = slider.scrollLeft <= 4 ? "0.45" : "1";
+			next.style.opacity =
+				slider.scrollLeft + slider.offsetWidth >= slider.scrollWidth - 4
+					? "0.45"
+					: "1";
+		};
+		slider.addEventListener("scroll", sync);
+		window.addEventListener("resize", sync);
+		sync();
+	}
+
+	/* Active nav link on scroll */
+	const sections = ["top", "about", "services"];
+	const navMap = {};
+	document.querySelectorAll(".nav-links a").forEach((a) => {
+		const id = a.getAttribute("href").replace("#", "");
+		if (sections.includes(id)) navMap[id] = a;
+	});
+	const navIo = new IntersectionObserver(
+		(entries) => {
+			entries.forEach((e) => {
+				if (e.isIntersecting) {
+					Object.values(navMap).forEach((a) => a.classList.remove("active"));
+					if (navMap[e.target.id]) navMap[e.target.id].classList.add("active");
+				}
+			});
+		},
+		{ threshold: 0.4 },
+	);
+	sections.forEach((id) => {
+		const el = document.getElementById(id);
+		if (el) navIo.observe(el);
+	});
+});
+
+		</script>
+	</body>
+</html>

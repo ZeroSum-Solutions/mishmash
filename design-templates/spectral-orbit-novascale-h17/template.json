@@ -1,0 +1,14 @@
+{
+  "slug": "spectral-orbit-novascale-h17",
+  "name": "Spectral Orbit — NovaScale Paid-Ads Agency Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Instrument Serif",
+    "Inter"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/spectral-orbit-novascale-h17",
+  "source_license": "MIT"
+}

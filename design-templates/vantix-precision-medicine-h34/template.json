@@ -1,0 +1,15 @@
+{
+  "slug": "vantix-precision-medicine-h34",
+  "name": "Vantix — Precision Medicine & Clinical Intelligence Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Bricolage Grotesque",
+    "Inter Tight",
+    "JetBrains Mono"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/vantix-precision-medicine-h34",
+  "source_license": "MIT"
+}

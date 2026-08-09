@@ -1,0 +1,14 @@
+{
+  "slug": "verdant-advisory-h10",
+  "name": "Verdant — Quiet-Luxury Strategy Advisory Hero Section",
+  "family": "hero-sections",
+  "kind": "static",
+  "cdn_fonts": [
+    "Hedvig Letters Serif",
+    "Inter"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/verdant-advisory-h10",
+  "source_license": "MIT"
+}

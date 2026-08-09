@@ -1,0 +1,14 @@
+{
+  "slug": "solace-wellness-grid-h13",
+  "name": "Solace — Holistic Wellness Studio Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Manrope",
+    "Inter Tight"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/solace-wellness-grid-h13",
+  "source_license": "MIT"
+}
