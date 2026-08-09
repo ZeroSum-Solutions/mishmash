@@ -45,6 +45,11 @@ beforeAll(async () => {
     path.join(entryDir, 'assets', 'leak.txt'),
   );
   writeFileSync(path.join(entryDir, 'assets', '.env'), 'TOKEN=secret');
+  // A dot-prefixed DIRECTORY, not just a dot-prefixed leaf. `dotfiles: 'allow'`
+  // tolerates every dot segment in the path, and a basename check only ever
+  // sees `secret.txt` — so this is the case the leaf check cannot cover.
+  mkdirSync(path.join(entryDir, 'assets', '.hidden'), { recursive: true });
+  writeFileSync(path.join(entryDir, 'assets', '.hidden', 'secret.txt'), 'NESTED-SECRET');
   writeFileSync(
     path.join(entryDir, 'example.html'),
     '<!DOCTYPE html><body><iframe src="./assets/index.html"></iframe></body>',
@@ -111,4 +116,14 @@ it('refuses a symlink that resolves outside the entry assets directory', async (
 it('refuses a dot-prefixed leaf inside the entry assets directory', async () => {
   const resp = await fetch(`${baseUrl}/api/skills/${ENTRY_ID}/assets/.env`);
   expect(resp.status).not.toBe(200);
+});
+
+// The route is reachable from a sandboxed template iframe, which carries
+// `Origin: null` and is answered with `Access-Control-Allow-Origin: *`. So one
+// template's script can read another template's assets, and a dot-prefixed
+// directory must be as unreachable as a dot-prefixed file.
+it('refuses a file nested inside a dot-prefixed directory in the entry assets', async () => {
+  const resp = await fetch(`${baseUrl}/api/skills/${ENTRY_ID}/assets/.hidden/secret.txt`);
+  expect(resp.status).not.toBe(200);
+  await expect(resp.text()).resolves.not.toContain('NESTED-SECRET');
 });
