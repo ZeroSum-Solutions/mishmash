@@ -744,6 +744,23 @@
     ]
   },
   {
+    "capability": "design-templates",
+    "uiEntryPoint": "Templates gallery (/templates)",
+    "cliArgs": [
+      "design-templates",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/design-templates",
+    "outputSchema": "{ designTemplates: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/design-templates",
+      "GET /api/design-templates/:param"
+    ]
+  },
+  {
     "capability": "design-systems",
     "uiEntryPoint": "Design systems library panel",
     "cliArgs": [
