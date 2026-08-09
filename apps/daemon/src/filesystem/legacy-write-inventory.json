@@ -1,5 +1,6 @@
 {
   "apps/daemon/src/app-config.ts#doWrite": "mkdir:1,rename:1,writeFile:1",
+  "apps/daemon/src/artifacts/interruption-marker.ts#markInterruptedRunArtifacts": "appendFileSync:1",
   "apps/daemon/src/backup/create.ts#createBackupArchive": "mkdirSync:4,writeFileSync:4",
   "apps/daemon/src/backup/fs-helpers.ts#copyDirWithChecksums": "cpSync:1,mkdirSync:1",
   "apps/daemon/src/backup/fs-helpers.ts#promoteIntoPlace": "cpSync:1,mkdirSync:1,renameSync:1,rmSync:2",

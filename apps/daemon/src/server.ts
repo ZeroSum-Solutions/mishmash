@@ -523,6 +523,7 @@ import {
   reconcileHtmlArtifactManifest,
 } from './projects.js';
 import { validateArtifactManifestInput } from './artifacts/manifest.js';
+import { markInterruptedRunArtifacts } from './artifacts/interruption-marker.js';
 import { ArtifactPublicationBlockedError } from './artifacts/publication-guard.js';
 import {
   appendMessageStatusEvent,
@@ -5135,7 +5136,45 @@ export async function startServer({
       try {
         previousOnFinalize?.();
       } finally {
-        resolveRunArtifactOutcomeBeforeFinish();
+        const outcome = resolveRunArtifactOutcomeBeforeFinish();
+        // Issue #37: a canceled run can SIGTERM the agent mid-write, leaving a
+        // touched HTML artifact silently truncated. Mark those here — sync, so
+        // the marker and its diagnostic both land before the terminal SSE
+        // frame (finish() sets run.status before invoking this hook and
+        // publishes 'end' after it). On the user-cancel path the child has
+        // already exited (cancel() waits for it before finish()); shutdown
+        // cancellation finishes while the child may still be writing, so a
+        // live child skips marking rather than racing it — that residual is
+        // documented in the PR's adjacent issues.
+        const childStillRunning = Boolean(
+          run.child && run.child.exitCode === null && run.child.signalCode === null,
+        );
+        if (
+          run.status === 'canceled'
+          && !childStillRunning
+          && outcome?.diff?.touchedPaths?.length
+          && outcome.projectRoot
+        ) {
+          try {
+            const projectRoot = outcome.projectRoot;
+            const marked = markInterruptedRunArtifacts({
+              touchedPaths: outcome.diff.touchedPaths,
+              runId: run.id,
+            });
+            if (marked.length) {
+              console.warn(
+                `[runs] run ${run.id} was canceled mid-generation; marked ${marked.length} truncated artifact(s)`,
+                marked,
+              );
+              design.runs.emit(run, 'diagnostic', {
+                type: 'artifact_interrupted',
+                paths: marked.map((p) => path.relative(projectRoot, p)),
+              });
+            }
+          } catch {
+            // Best-effort: marking must never break run finalization.
+          }
+        }
       }
     };
     let codexGeneratedImagesDir = resolveCodexGeneratedImagesDir(
