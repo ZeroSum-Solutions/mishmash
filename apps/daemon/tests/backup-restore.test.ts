@@ -16,6 +16,7 @@ import { register } from 'prom-client';
 import Database from 'better-sqlite3';
 import { createBackupArchive } from '../src/backup/create.js';
 import { restoreBackupArchive, RestoreError } from '../src/backup/restore.js';
+import { sha256Bytes, sha256File } from '../src/backup/fs-helpers.js';
 
 let daemon: http.Server | undefined;
 let daemonShutdown: (() => Promise<void> | void) | undefined;
@@ -313,6 +314,75 @@ describe('backup/restore engine', () => {
     expect(manifestClasses.has('byok-keys')).toBe(false);
 
     await rm(archiveDir, { recursive: true, force: true });
+  });
+
+  // Security review finding: restore trusted manifest.json's `class` and
+  // `relPath` verbatim. Both are attacker-controlled whenever the caller can
+  // point `archivePath` at a directory it wrote itself (the route is
+  // loopback-gated, so "any local process", not "remote"), and neither the
+  // sha256 integrity pass nor the promotion step re-checked containment: the
+  // hash only proves the archive agrees with itself, and the attacker
+  // computes both sides. `promoteIntoPlace` then rmSync + renames onto the
+  // resolved destination.
+  it('rejects a manifest relPath that escapes the destination data dir, leaving the outside file untouched', async () => {
+    await seedProjects(1, 1);
+    // The archive sits one level DEEPER than the restore destination, so a
+    // single "../" resolves to the attacker's payload when joined to the
+    // archive root and to the victim when joined to the data dir -- i.e. a
+    // real escape, not the same path twice.
+    const sandbox = await mkdtemp(path.join(os.tmpdir(), 'od-backup-traversal-'));
+    const archivePath = path.join(sandbox, 'inner', 'archive');
+    const restoreDir = path.join(sandbox, 'restore');
+    fs.mkdirSync(path.join(sandbox, 'inner'), { recursive: true });
+    fs.mkdirSync(restoreDir, { recursive: true });
+    await createBackupArchive({ dataDir, outPath: archivePath });
+
+    const payloadRelPath = '../payload.bin';
+    fs.writeFileSync(path.resolve(archivePath, payloadRelPath), 'pwned');
+    const victimPath = path.resolve(restoreDir, payloadRelPath);
+    fs.writeFileSync(victimPath, 'original-must-survive');
+
+    // Re-sign the rewritten manifest so its own integrity check still passes.
+    const manifest = [{ class: 'sqlite-database', relPath: payloadRelPath, sha256: sha256Bytes('pwned') }];
+    const manifestBytes = Buffer.from(JSON.stringify(manifest), 'utf8');
+    fs.writeFileSync(path.join(archivePath, 'manifest.json'), manifestBytes);
+    fs.writeFileSync(path.join(archivePath, 'manifest.sha256'), sha256Bytes(manifestBytes));
+
+    try {
+      await restoreBackupArchive({ archivePath, dataDir: restoreDir });
+      expect.fail('expected restore to reject the traversal-shaped relPath');
+    } catch (err) {
+      expect(err).toBeInstanceOf(RestoreError);
+      expect((err as RestoreError).corruptedClass).toBe('manifest-entry');
+    }
+    expect(fs.readFileSync(victimPath, 'utf8')).toBe('original-must-survive');
+
+    await rm(sandbox, { recursive: true, force: true });
+  });
+
+  it('rejects a manifest entry naming an unknown archive class', async () => {
+    await seedProjects(1, 1);
+    const archiveDir = await mkdtemp(path.join(os.tmpdir(), 'od-backup-badclass-'));
+    const archivePath = path.join(archiveDir, 'archive');
+    await createBackupArchive({ dataDir, outPath: archivePath });
+
+    // `class` is joined onto the staging root as a directory name, so an
+    // unknown value is both an integrity problem and a second escape route.
+    const manifest = [{ class: '../../escaped', relPath: 'data/app.sqlite', sha256: sha256File(path.join(archivePath, 'data', 'app.sqlite')) }];
+    const manifestBytes = Buffer.from(JSON.stringify(manifest), 'utf8');
+    fs.writeFileSync(path.join(archivePath, 'manifest.json'), manifestBytes);
+    fs.writeFileSync(path.join(archivePath, 'manifest.sha256'), sha256Bytes(manifestBytes));
+
+    const restoreDir = await mkdtemp(path.join(os.tmpdir(), 'od-backup-badclass-restore-'));
+    try {
+      await restoreBackupArchive({ archivePath, dataDir: restoreDir });
+      expect.fail('expected restore to reject the unknown archive class');
+    } catch (err) {
+      expect(err).toBeInstanceOf(RestoreError);
+      expect((err as RestoreError).corruptedClass).toBe('manifest-entry');
+    }
+    await rm(archiveDir, { recursive: true, force: true });
+    await rm(restoreDir, { recursive: true, force: true });
   });
 
   it('refuses to restore onto a data directory that already has a payload', async () => {

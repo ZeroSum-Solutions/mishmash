@@ -6,7 +6,16 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
-import { isDirEntry, MANIFEST_FILENAME, MANIFEST_HASH_FILENAME, type ArchiveManifestEntry } from './manifest.js';
+import {
+  ALL_ARCHIVE_CLASSES,
+  CHECKSUMS_RELPATH_BY_CLASS,
+  isDirEntry,
+  MANIFEST_FILENAME,
+  MANIFEST_HASH_FILENAME,
+  RELPATH_BY_CLASS,
+  type ArchiveClass,
+  type ArchiveManifestEntry,
+} from './manifest.js';
 import { promoteIntoPlace, sha256Bytes, sha256File, verifyDirChecksums } from './fs-helpers.js';
 
 export class RestoreError extends Error {
@@ -54,7 +63,51 @@ function readManifestEntries(archivePath: string): ArchiveManifestEntry[] {
   if (!Array.isArray(parsed)) {
     throw new RestoreError('manifest-entry', `corrupted archive entry: class "manifest-entry" -- ${MANIFEST_FILENAME} top level must be an array`);
   }
-  return parsed as ArchiveManifestEntry[];
+  return toKnownArchiveEntries(parsed);
+}
+
+/**
+ * Every path this engine reads from or writes to during a restore is a lookup
+ * in a fixed class -> path map, never a join with manifest text.
+ *
+ * The manifest is attacker-controlled input, not a trusted self-report: the
+ * caller supplies `archivePath`, so anything able to write a directory and
+ * reach the daemon controls both the payload and the recorded checksums, and
+ * the sha256 pass only proves the archive agrees with itself. An entry is
+ * therefore accepted only when it names a class this engine actually writes
+ * and records exactly that class's canonical paths -- and the accepted entry
+ * is rebuilt from the map rather than carried through, so a traversal-shaped
+ * `relPath` or `class` cannot reach `path.resolve`, `path.join`, or
+ * `promoteIntoPlace`'s `rmSync`/`renameSync`.
+ */
+function toKnownArchiveEntries(parsed: unknown[]): ArchiveManifestEntry[] {
+  const reject = (detail: string): never => {
+    throw new RestoreError('manifest-entry', `corrupted archive entry: class "manifest-entry" -- ${detail}`);
+  };
+  return parsed.map((raw) => {
+    const candidate = (raw ?? {}) as Partial<Record<'class' | 'relPath' | 'sha256' | 'checksumsRelPath', unknown>>;
+    const archiveClass = candidate.class;
+    if (typeof archiveClass !== 'string' || !(ALL_ARCHIVE_CLASSES as readonly string[]).includes(archiveClass)) {
+      reject(`${MANIFEST_FILENAME} names an unknown archive class ${JSON.stringify(archiveClass)}`);
+    }
+    const known = archiveClass as ArchiveClass;
+    const relPath = RELPATH_BY_CLASS[known];
+    if (candidate.relPath !== relPath) {
+      reject(`class "${known}" must record relPath "${relPath}", got ${JSON.stringify(candidate.relPath)}`);
+    }
+    // A class has a checksum index exactly when it is a directory class.
+    const checksumsRelPath = CHECKSUMS_RELPATH_BY_CLASS[known];
+    if (checksumsRelPath === undefined) {
+      if (typeof candidate.sha256 !== 'string' || candidate.sha256.length === 0) {
+        reject(`class "${known}" must record a sha256, got ${JSON.stringify(candidate.sha256)}`);
+      }
+      return { class: known, relPath, sha256: candidate.sha256 as string };
+    }
+    if (candidate.checksumsRelPath !== checksumsRelPath) {
+      reject(`class "${known}" must record checksumsRelPath "${checksumsRelPath}", got ${JSON.stringify(candidate.checksumsRelPath)}`);
+    }
+    return { class: known, relPath, checksumsRelPath };
+  });
 }
 
 /** Verifies every entry's recorded checksum(s) against the archive's own on-disk bytes. Throws RestoreError naming the first corrupted class. */
