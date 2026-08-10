@@ -572,7 +572,7 @@ function DesignLibraryCard({
       <div className={styles.meta} data-testid="design-library-meta">
         <h3 className={styles.label}>{item.label}</h3>
         <p className={styles.detail}>
-          {item.kind} · {item.files} {t('designLibrary.filesUnit')} · {item.size}
+          {item.kind} · {item.files} {t(item.files === 1 ? 'designLibrary.filesUnitOne' : 'designLibrary.filesUnit')} · {item.size}
         </p>
         {item.description ? (
           <p className={styles.description} data-testid="design-library-description">
@@ -791,7 +791,7 @@ function DesignLibraryDetailDialog({
           </div>
         </div>
         <p className={styles.detail}>
-          {item.kind} · {item.files} {t('designLibrary.filesUnit')} · {item.size}
+          {item.kind} · {item.files} {t(item.files === 1 ? 'designLibrary.filesUnitOne' : 'designLibrary.filesUnit')} · {item.size}
         </p>
         {item.description ? <p className={styles.previewDescription}>{item.description}</p> : null}
         {item.domains.length > 0 ? (

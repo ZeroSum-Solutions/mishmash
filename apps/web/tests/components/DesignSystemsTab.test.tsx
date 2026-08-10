@@ -183,6 +183,26 @@ describe('DesignSystemsTab', () => {
     expect(row.queryByText('Design system')).toBeNull();
   });
 
+  it('strips markdown emphasis from a user system subtitle instead of rendering raw asterisks', () => {
+    const starred: DesignSystemSummary[] = [
+      { ...systems[0]!, summary: '*Dream Journal & AI Interpreter*' },
+      systems[1]!,
+    ];
+    render(
+      <DesignSystemsTab
+        systems={starred}
+        selectedId="user:acme"
+        onSelect={() => {}}
+        onCreate={() => {}}
+        onOpenSystem={() => {}}
+      />,
+    );
+
+    const row = within(screen.getByTestId('design-system-card-user:acme'));
+    expect(row.getByText('Dream Journal & AI Interpreter')).toBeTruthy();
+    expect(row.queryByText('*Dream Journal & AI Interpreter*')).toBeNull();
+  });
+
   it('routes create and edit actions to the dedicated design-system flow', async () => {
     const onCreate = vi.fn();
     const onOpenSystem = vi.fn();

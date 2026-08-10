@@ -124,6 +124,26 @@ describe('DesignLibrarySection', () => {
     expect(fetchDesignLibraryCatalog).toHaveBeenCalledTimes(1);
   });
 
+  it('uses the singular file unit for a one-file collection', async () => {
+    fetchDesignLibraryCatalog.mockResolvedValue({
+      ok: true,
+      catalog: {
+        ...CATALOG,
+        groups: [
+          {
+            ...CATALOG.groups[0]!,
+            items: [{ ...CATALOG.groups[0]!.items[0]!, files: 1, size: '11 MB', kind: 'Figma file' }],
+          },
+        ],
+      },
+    });
+
+    render(<DesignLibrarySection active />);
+    await screen.findByText('Neon Dashboard Kit');
+    expect(screen.getByText('Figma file · 1 file · 11 MB')).toBeTruthy();
+    expect(screen.queryByText('Figma file · 1 files · 11 MB')).toBeNull();
+  });
+
   it('condenses domain facets into a counted select and narrows the grid', async () => {
     render(<DesignLibrarySection active />);
     await screen.findByText('Neon Dashboard Kit');

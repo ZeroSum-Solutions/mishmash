@@ -4443,6 +4443,7 @@ export interface Dict {
   'designLibrary.allCategories': string;
   'designLibrary.allDomains': string;
   'designLibrary.filesUnit': string;
+  'designLibrary.filesUnitOne': string;
   'designLibrary.openFolder': string;
   'designLibrary.duplicateOfPrefix': string;
   'designLibrary.loading': string;
@@ -4535,6 +4536,7 @@ export interface Dict {
   'storyboard.loading': string;
   'storyboard.emptyState': string;
   'storyboard.shotCount': string;
+  'storyboard.shotCountOne': string;
   'storyboard.back': string;
   'storyboard.titleLabel': string;
   'storyboard.ratio': string;
