@@ -14,7 +14,7 @@
 
 import type http from 'node:http';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { isApiAuthDisabled, isApiTokenMiddlewareEnabled } from '../src/api-token-auth.js';
+import { isApiAuthDisabled, isApiTokenMiddlewareEnabled, isMatchingApiToken } from '../src/api-token-auth.js';
 import { startServer } from '../src/server.js';
 
 const PREVIOUS_TOKEN = process.env.OD_API_TOKEN;
@@ -113,5 +113,30 @@ describe('bearer middleware', () => {
         OD_DISABLE_API_AUTH: '1',
       }),
     ).toBe(true);
+  });
+});
+
+// Security review finding: the bearer comparison was a plain `!==` against the
+// configured secret, while desktop-auth.ts already compares an analogous token
+// with crypto.timingSafeEqual. Timing is not directly assertable, so these
+// pin the behaviour the constant-time comparison must preserve -- including
+// the length-mismatch case, where a naive timingSafeEqual throws instead of
+// returning false.
+describe('isMatchingApiToken', () => {
+  it('accepts the exact token', () => {
+    expect(isMatchingApiToken('secret-test-token', 'secret-test-token')).toBe(true);
+  });
+
+  it('rejects a wrong token of the same length', () => {
+    expect(isMatchingApiToken('secret-test-tokeN', 'secret-test-token')).toBe(false);
+  });
+
+  it('rejects a wrong token of a different length', () => {
+    expect(isMatchingApiToken('short', 'secret-test-token')).toBe(false);
+    expect(isMatchingApiToken('secret-test-token-and-then-some', 'secret-test-token')).toBe(false);
+  });
+
+  it('rejects an empty presented token', () => {
+    expect(isMatchingApiToken('', 'secret-test-token')).toBe(false);
   });
 });

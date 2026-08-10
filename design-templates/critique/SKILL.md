@@ -20,6 +20,7 @@ triggers:
   - "评审"
   - "复盘"
 od:
+  category: "tool"
   mode: prototype
   platform: desktop
   scenario: design

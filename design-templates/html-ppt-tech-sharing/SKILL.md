@@ -37,7 +37,7 @@ od:
     requires: false
   speaker_notes: true
   animations: true
-  category: "ai-literacy"
+  category: "deck"
   scenario: "ai"
   example_prompt: "Create \"Give an Engineering Tech Talk like a Staff Developer-Advocate\" as a decision-grade AI literacy deck in this template's own visual system. Subject: MishMash internals: how the agent stream, sandbox, and artifacts work — an engineering deep-dive talk. Audience: engineers, dev community. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does the deck make AI implementation concrete enough to fund."
 ---

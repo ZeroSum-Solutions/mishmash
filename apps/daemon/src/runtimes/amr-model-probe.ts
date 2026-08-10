@@ -8,6 +8,18 @@ import { agentCliEnvForAgent, type readAppConfig } from '../app-config.js';
 import { readVelaCredentialRevision } from '../integrations/vela.js';
 import type { VelaCredentialRevision } from '../integrations/vela.js';
 
+/**
+ * The optional AMR (vela) runtime is not installed / not resolvable on this
+ * host. Callers that surface the model catalog treat this as "no catalog",
+ * not as a server error.
+ */
+export class AmrVelaUnresolvedError extends Error {
+  constructor() {
+    super('AMR vela binary could not be resolved');
+    this.name = 'AmrVelaUnresolvedError';
+  }
+}
+
 export interface ResolveAmrModelProbeDeps {
   dataDir: string;
   env: NodeJS.ProcessEnv;
@@ -48,7 +60,7 @@ export async function resolveAmrModelProbe({
   if (!def) throw new Error('AMR runtime definition is missing');
   const agentLaunch = resolveAgentLaunch(def, configuredEnv);
   const launchPath = agentLaunch.launchPath ?? agentLaunch.selectedPath;
-  if (!launchPath) throw new Error('AMR vela binary could not be resolved');
+  if (!launchPath) throw new AmrVelaUnresolvedError();
   const env = applyAgentLaunchEnv(
     spawnEnvForAgent(
       def.id,

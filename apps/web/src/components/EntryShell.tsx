@@ -26,6 +26,7 @@ import {
   type AmrWalletSnapshot,
   type ChatSessionMode,
   type ConnectorDetail,
+  type GuidedCreateBrief,
   type InstalledPluginRecord,
   type RunContextSelection,
   type UpsertMemoryRequest,
@@ -332,6 +333,8 @@ type OnboardingProfileState = {
 type EntryCreateProjectInput = Omit<CreateInput, 'metadata'> & {
   metadata?: CreateInput['metadata'];
   pendingPrompt?: string;
+  /** Guided create flow answers (PRD C8), folded server-side into pendingPrompt. */
+  brief?: GuidedCreateBrief;
   pluginId?: string;
   pluginType?: string;
   appliedPluginSnapshotId?: string;
@@ -787,13 +790,16 @@ export function EntryShell({
   // user has already chosen the one thing that form would ask for.
   // Returns the outcome rather than swallowing it, so the gallery overlay can
   // stay open and show an error instead of closing on a failed create.
-  function startProjectFromTemplate(template: SkillSummary) {
+  // `brief` carries the guided create flow's answers (PRD C8), gathered by
+  // TemplatesSection's GuidedCreateDialog immediately before this call.
+  function startProjectFromTemplate(template: SkillSummary, brief?: GuidedCreateBrief) {
     return Promise.resolve(
       onCreateProject({
         name: template.name,
         skillId: template.id,
         designSystemId: null,
         metadata: metadataForSkill(template),
+        ...(brief ? { brief } : {}),
       }),
     );
   }

@@ -19,6 +19,7 @@ triggers:
   - "side panel"
   - "knobs"
 od:
+  category: "tool"
   mode: prototype
   platform: desktop
   scenario: design

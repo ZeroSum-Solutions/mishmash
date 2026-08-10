@@ -37,7 +37,7 @@ od:
     requires: false
   speaker_notes: true
   animations: true
-  category: "b2b-sales"
+  category: "deck"
   scenario: "sales"
   example_prompt: "Create \"Pitch a Team Rollout like a Strategic Account Executive\" as a decision-grade B2B sales deck in this template's own visual system. Subject: MishMash Teams: a launch-and-adoption proposal for a mid-market design team weighing a switch from closed cloud tools. Audience: design team lead, IT. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can the champion forward this internally without rewriting it."
 ---

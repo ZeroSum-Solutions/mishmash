@@ -38,7 +38,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "life"
+  category: "deck"
   scenario: "personal"
   example_prompt: "Create \"Make a Neighborhood Zine Story like an Indie Photo Editor\" as a decision-grade Life & story deck in this template's own visual system. Subject: A neighborhood zine on the disappearing corner shops — portraits, voices, and what a block loses when they close. Audience: community, local readers. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would someone retell the story after seeing it once."
 ---

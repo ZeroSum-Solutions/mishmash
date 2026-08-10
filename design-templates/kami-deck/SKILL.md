@@ -42,7 +42,7 @@ od:
     requires:
       - typographic-rhythm
       - pixel-discipline
-  category: "academic-research"
+  category: "deck"
   scenario: "research"
   example_prompt: "Create \"Turn a Study into a Lab Meeting Deck like a Senior Postdoc\" as a decision-grade Academic research deck in this template's own visual system. Subject: A lab-meeting deck on gut-microbiome links to sleep quality — the design, the results, the caveats, and the next experiment. Audience: lab group, PI. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does the deck prove novelty without overclaiming."
 inputs:

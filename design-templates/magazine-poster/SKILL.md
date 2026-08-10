@@ -18,6 +18,7 @@ triggers:
   - "杂志海报"
   - "报纸版式"
 od:
+  category: "document-guide"
   featured: 0.02
   mode: prototype
   platform: desktop

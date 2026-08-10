@@ -39,7 +39,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "career"
+  category: "deck"
   scenario: "personal"
   example_prompt: "Create \"Build a Designer Portfolio Narrative like a Hiring Bar-Raiser\" as a decision-grade Career deck in this template's own visual system. Subject: A designer's portfolio narrative for a senior interview — three case studies, the craft, and the judgment behind each. Audience: hiring panel. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does the evidence make the claim feel earned."
 ---

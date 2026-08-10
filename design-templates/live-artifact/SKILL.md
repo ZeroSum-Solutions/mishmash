@@ -13,6 +13,7 @@ triggers:
   - "可刷新"
   - "实时看板"
 od:
+  category: "tool"
   mode: prototype
   scenario: live
   preview:

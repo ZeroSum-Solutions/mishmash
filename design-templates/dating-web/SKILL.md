@@ -17,6 +17,7 @@ triggers:
   - "约会应用"
   - "婚恋"
 od:
+  category: "dashboard"
   mode: prototype
   platform: desktop
   scenario: personal

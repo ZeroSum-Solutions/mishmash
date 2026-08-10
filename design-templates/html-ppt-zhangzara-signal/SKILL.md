@@ -38,7 +38,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "corporate-strategy"
+  category: "deck"
   scenario: "strategy"
   example_prompt: "Create \"Write a Strategy Decision Memo like a Corp-Dev Lead\" as a decision-grade Corporate strategy deck in this template's own visual system. Subject: MishMash's strategy memo: should it monetize the plugin registry now or hold — options, risks, and the recommendation. Audience: CEO, strategy team. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would a board member know what to approve and why before page five."
 ---

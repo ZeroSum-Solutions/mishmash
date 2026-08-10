@@ -11,6 +11,7 @@ triggers:
   - "email capture page"
   - "launch page"
 od:
+  category: "landing-page"
   mode: prototype
   platform: desktop
   scenario: marketing

@@ -20,6 +20,7 @@ import {
   localizeDesignSystemSummary,
 } from '../i18n/content';
 import { takeDesignSystemFocus } from '../runtime/brands';
+import { stripInlineMarkdown } from '../runtime/design-md-parse';
 import {
   deleteDesignSystemDraft,
   fetchDesignSystem,
@@ -734,7 +735,7 @@ export function DesignSystemsTab({
           // (host, truncated by CSS), then the generic placeholder. Presets keep
           // their localized category, which already reads as their scenario.
           isUserSystem(system)
-            ? (system.summary?.trim()
+            ? (stripInlineMarkdown(system.summary ?? '')
               || designSystemLogoHost(system)
               || t('brandDetail.designSystem'))
             : localizeDesignSystemCategory(locale, system.category || 'Uncategorized')

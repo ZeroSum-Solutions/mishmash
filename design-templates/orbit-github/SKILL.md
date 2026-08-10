@@ -16,6 +16,7 @@ triggers:
   - "github 简报"
   - "代码活动汇总"
 od:
+  category: "prototype"
   mode: prototype
   platform: desktop
   scenario: orbit

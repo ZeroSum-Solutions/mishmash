@@ -13,6 +13,7 @@ triggers:
   - "service runbook"
   - "运维手册"
 od:
+  category: "dashboard"
   mode: prototype
   platform: desktop
   scenario: engineering

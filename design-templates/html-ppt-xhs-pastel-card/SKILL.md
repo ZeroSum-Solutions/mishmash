@@ -37,7 +37,7 @@ od:
     requires: false
   speaker_notes: true
   animations: true
-  category: "life"
+  category: "deck"
   scenario: "personal"
   example_prompt: "Create \"Write a Personal Manifesto Talk like a Narrative Podcast Producer\" as a decision-grade Life & story deck in this template's own visual system. Subject: A personal manifesto: a year of saying yes — the premise, the scenes, the turn, and the meaning that lands. Audience: community, talk audience. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would someone retell the story after seeing it once."
 ---

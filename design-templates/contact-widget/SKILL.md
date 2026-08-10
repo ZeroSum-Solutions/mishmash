@@ -8,6 +8,7 @@ triggers:
   - "live chat widget"
 
 od:
+  category: "component"
   mode: "prototype"
   platform: "desktop"
   scenario: "engineering"

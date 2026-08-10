@@ -35,7 +35,7 @@ od:
   design_system:
     requires: true
     sections: [color, typography, layout, components]
-  category: "corporate-strategy"
+  category: "deck"
   scenario: "strategy"
   example_prompt: "Create \"Write an Operating Review like a Disciplined COO\" as a decision-grade Corporate strategy deck in this template's own visual system. Subject: MishMash's operating review: growth, burn, and the concrete path to sustainability without losing the open ethos. Audience: leadership team. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would a board member know what to approve and why before page five."
 ---

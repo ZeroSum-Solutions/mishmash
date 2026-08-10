@@ -9,6 +9,7 @@ triggers:
   - "marketing page"
   - "product landing"
 od:
+  category: "landing-page"
   mode: prototype
   platform: desktop
   scenario: marketing

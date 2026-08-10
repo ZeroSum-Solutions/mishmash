@@ -38,7 +38,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "life"
+  category: "deck"
   scenario: "personal"
   example_prompt: "Create \"Turn an Anniversary into a Photo Essay like a Wedding Storyteller\" as a decision-grade Life & story deck in this template's own visual system. Subject: A wedding-anniversary tribute photo essay — a decade in scenes, the turning points, and the quiet meaning of staying. Audience: couple, family, friends. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would someone retell the story after seeing it once."
 ---

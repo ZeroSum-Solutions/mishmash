@@ -17,6 +17,7 @@ triggers:
   - "推特情绪"
   - "X 上怎么说"
 od:
+  category: "tool"
   mode: prototype
   preview:
     type: markdown

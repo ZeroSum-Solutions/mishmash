@@ -19,6 +19,7 @@ triggers:
   - "游戏化"
   - "习惯打卡"
 od:
+  category: "mobile-app"
   mode: prototype
   platform: mobile
   scenario: personal

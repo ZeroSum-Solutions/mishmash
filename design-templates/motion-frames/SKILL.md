@@ -19,6 +19,7 @@ triggers:
   - "动态设计"
   - "动效"
 od:
+  category: "video-motion"
   mode: prototype
   platform: desktop
   scenario: marketing

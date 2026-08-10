@@ -457,3 +457,76 @@ describe('StoryboardEditor draft-the-whole-storyboard-from-a-brief', () => {
     expect(screen.getByText('someone else already added this')).toBeTruthy();
   });
 });
+
+/**
+ * PRD C14: mimic Higgsfield's film-creation flow (project -> scenes -> shots,
+ * each with a start image + motion prompt + engine pick, chained via
+ * last-frame-seeds-next, then assembled). These assertions confirm the
+ * existing editor already reads that way end-to-end through the real model
+ * catalog (apps/web/src/media/models.ts) and the real per-shot chain
+ * affordance, rather than a rebuild — see the storyboard AGENTS/PRD note that
+ * this surface was already closely aligned.
+ */
+describe('StoryboardEditor Higgsfield-aligned shot flow (PRD C14)', () => {
+  it("renders a shot's start-frame control beside its motion-prompt input, in that order", () => {
+    render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
+    openShotDetails();
+
+    const card = screen.getByTestId('shot-card');
+    const startFrame = within(card).getByTestId('start-frame-dropzone');
+    const motionPrompt = within(card).getByTestId('motion-prompt-input');
+    expect(startFrame).toBeTruthy();
+    expect(motionPrompt).toBeTruthy();
+    // DOCUMENT_POSITION_FOLLOWING (4): start frame precedes the motion
+    // prompt in document order, matching Higgsfield's start-image-then-
+    // motion-prompt shot layout.
+    expect(startFrame.compareDocumentPosition(motionPrompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("lists the Higgsfield Seedance engines in a shot's video-model picker (engine pick per shot)", () => {
+    render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
+    openShotDetails();
+
+    const modelSelect = within(screen.getByTestId('shot-card')).getByLabelText('Model') as HTMLSelectElement;
+    const optionLabels = Array.from(modelSelect.options).map((o) => o.textContent);
+    expect(optionLabels.some((label) => label?.includes('Seedance 2.0 (Higgsfield)'))).toBe(true);
+    expect(optionLabels.some((label) => label?.includes('Seedance 2.0 Mini (Higgsfield)'))).toBe(true);
+  });
+
+  it("chains a shot's start frame from the previous shot's end frame via the explicit chain affordance", async () => {
+    mockPatchStoryboard.mockImplementation(async (id: string, patch: Record<string, unknown>) => ({
+      ok: true,
+      value: { ...baseDoc(), ...patch, updatedAt: '2026-01-01T00:01:00.000Z' },
+    }));
+    const doc = baseDoc({
+      shots: [
+        baseShot({ endFrame: { path: 'shot-1-end.png', origin: 'derived' } }),
+        baseShot({ id: 'shot-2', order: 1 }),
+      ],
+    });
+
+    render(<StoryboardEditor storyboard={doc} configured={{}} onBack={() => {}} />);
+    openShotDetails(1);
+
+    fireEvent.click(screen.getByText("Use previous shot's end frame"));
+
+    await waitFor(() => expect(mockPatchStoryboard).toHaveBeenCalled());
+    const [, patchArg] = mockPatchStoryboard.mock.calls.at(-1)!;
+    const patchedShots = (patchArg as { shots: StoryboardShot[] }).shots;
+    expect(patchedShots[1]!.startFrame).toEqual({ path: 'shot-1-end.png', origin: 'previous-shot' });
+  });
+
+  it('gates the film-assembly step on shot completeness (assemble affordance state)', () => {
+    const { rerender } = render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
+    expect(screen.getByText('Assemble video').closest('button')).toBeDisabled();
+
+    rerender(
+      <StoryboardEditor
+        storyboard={baseDoc({ shots: [baseShot({ status: 'done', output: 'out.mp4' })] })}
+        configured={{}}
+        onBack={() => {}}
+      />,
+    );
+    expect(screen.getByText('Assemble video').closest('button')).not.toBeDisabled();
+  });
+});

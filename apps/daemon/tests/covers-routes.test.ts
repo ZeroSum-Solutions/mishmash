@@ -2,7 +2,7 @@
 // real booted daemons, real HTTP requests, real Chromium renders. Mirrors
 // the backup-http-routes.test.ts pattern: no mocked transport.
 
-import type http from 'node:http';
+import http from 'node:http';
 import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -148,10 +148,25 @@ describe('POST /api/projects/:id/cover/generate + GET /api/projects/:id/cover', 
 
     // ".." resolves (via path.join(coversRoot, "..")) to RUNTIME_DATA_DIR
     // itself -- the traversal target a correct guard must reject.
+    //
+    // The requests go out over a raw socket path (node:http with the path
+    // passed verbatim), NOT fetch: fetch/URL normalizes dot segments on the
+    // CLIENT ("/api/projects/../../cover" becomes "/cover") so the daemon
+    // would only ever see a normalized non-traversal URL -- answered 200 by
+    // the SPA fallback like any unknown app route, which is what kept this
+    // spec permanently red while the route guard itself was correct.
+    const rawStatus = (rawPath: string) =>
+      new Promise<number>((resolve, reject) => {
+        const req = http.request(new URL(baseUrl), { path: rawPath, method: 'GET' }, (res) => {
+          res.resume();
+          res.on('end', () => resolve(res.statusCode ?? 0));
+        });
+        req.on('error', reject);
+        req.end();
+      });
     const traversalIds = ['..', '../..', `..%2F..%2Fcovers%2F${id}`];
     for (const traversalId of traversalIds) {
-      const resp = await fetch(`${baseUrl}/api/projects/${traversalId}/cover`);
-      expect(resp.status).toBe(404);
+      expect(await rawStatus(`/api/projects/${traversalId}/cover`)).toBe(404);
     }
   });
 

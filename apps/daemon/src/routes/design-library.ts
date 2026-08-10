@@ -35,7 +35,10 @@ import type {
 } from '@open-design/contracts';
 import { mimeFor } from '../projects.js';
 import { copyDirectoryContents, type CopyDirectoryState } from '../copy-directory.js';
-import { DESIGN_LIBRARY_PRIVATE_METADATA_NAMES } from '../design-library/private-metadata.js';
+import {
+  DESIGN_LIBRARY_PRIVATE_METADATA_NAMES,
+  isDesignLibraryPrivateMetadataName,
+} from '../design-library/private-metadata.js';
 import {
   designLibraryTreeSha256,
   resolveCurrentDesignLibraryRights,
@@ -53,6 +56,7 @@ import {
 import { designLibraryRoot } from '../design-library/root.js';
 import { openBrowser } from '../browser/browser-open.js';
 import type { createFilesystemWriteGateway } from '../filesystem/write-gateway.js';
+import { buildGuidedBriefSection, normalizeGuidedBrief } from '../prompts/guided-brief.js';
 
 export interface RegisterDesignLibraryRoutesDeps
   extends RouteDeps<'http' | 'db' | 'paths' | 'ids' | 'projectStore' | 'projectFiles' | 'conversations'> {
@@ -245,13 +249,49 @@ async function detectItemEntryHtml(root: string, rel: string): Promise<string | 
   return (await isRealFileWithNoSymlinkIndirection(root, entryPath)) ? entry : null;
 }
 
+// A curated cover may ship alternate preview images alongside it under
+// `.catalog/thumbs/`: the Figma-source cover some UI8 kits publish next to
+// their generated JPG (`<id>-fig.png`), and up to four individually
+// extracted screens for kits whose only bundled preview was a contact-sheet
+// grid (`<id>-tile-1.jpg` .. `<id>-tile-4.jpg`, written by
+// scripts/generate-library-covers.ts's sheet-slicing remediation). Matched
+// by EXACT id+suffix, never by prefix: a prefix match would also catch an
+// unrelated item whose own id happens to start with this item's id (the
+// library has several `--variant-2` ids that are their own catalog entries,
+// not alternate images of the base item). This is real, already-published
+// data -- never a directory scan that could invent a strip entry.
+const GALLERY_SUFFIXES = ['-fig', '-tile-1', '-tile-2', '-tile-3', '-tile-4'] as const;
+
 /**
- * Returns the catalog with `entry_html` stamped on every item. One bounded
- * depth-2 scan per collection; the whole library resolves in well under a
- * second and the catalog is fetched once per session, so this stays inline
- * rather than growing a cache that would need its own invalidation rules.
+ * Resolves the detail-view preview strip for one catalog item: the primary
+ * `thumb` first, then any known alternate cover that actually exists on
+ * disk. Returns `[]` when the item has no thumb at all -- there is nothing
+ * to browse, so the strip stays absent rather than showing an empty state.
  */
-async function withEntryHtml(root: string, catalog: unknown): Promise<Record<string, unknown>> {
+function detectItemGallery(root: string, item: Pick<DesignLibraryItem, 'id' | 'thumb'>): string[] {
+  if (!item.thumb) return [];
+  const thumbsBase = path.resolve(root, '.catalog', 'thumbs');
+  const gallery = [item.thumb];
+  for (const suffix of GALLERY_SUFFIXES) {
+    for (const ext of THUMB_EXTENSIONS) {
+      const candidateRel = path.posix.join('.catalog', 'thumbs', `${item.id}${suffix}${ext}`);
+      if (candidateRel === item.thumb) continue;
+      if (fs.existsSync(path.join(thumbsBase, `${item.id}${suffix}${ext}`))) {
+        gallery.push(candidateRel);
+      }
+    }
+  }
+  return gallery;
+}
+
+/**
+ * Returns the catalog with `entry_html` and `gallery` stamped on every item.
+ * One bounded depth-2 scan per collection plus a handful of `existsSync`
+ * probes; the whole library resolves in well under a second and the catalog
+ * is fetched once per session, so this stays inline rather than growing a
+ * cache that would need its own invalidation rules.
+ */
+async function withComputedCatalogFields(root: string, catalog: unknown): Promise<Record<string, unknown>> {
   const base = (catalog && typeof catalog === 'object' ? catalog : {}) as Record<string, unknown>;
   const groups = (base as unknown as DesignLibraryCatalog).groups;
   if (!Array.isArray(groups)) return base;
@@ -260,6 +300,7 @@ async function withEntryHtml(root: string, catalog: unknown): Promise<Record<str
     const items = await Promise.all(group.items.map(async (item) => ({
       ...item,
       entry_html: await detectItemEntryHtml(root, item?.rel),
+      gallery: detectItemGallery(root, item),
     })));
     return { ...group, items };
   }));
@@ -385,6 +426,7 @@ async function buildReferencePrompt(
   itemRoot: string,
   item: DesignLibraryItem,
   aspects: string[],
+  briefSection: string,
 ): Promise<string> {
   const reference = item.reference;
   if (!reference || (!reference.design && !reference.html)) {
@@ -428,6 +470,7 @@ async function buildReferencePrompt(
     '',
     item.description ? `Curated summary:\n${item.description}\n` : '',
     selectedMarkdown ? `Design reference excerpt:\n\n${selectedMarkdown}` : '',
+    briefSection,
   ]
     .filter(Boolean)
     .join('\n');
@@ -546,7 +589,7 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
       // Passthrough of the on-disk catalog plus `root` so the web UI can
       // label where the library came from, plus the per-item live-preview
       // entry so the UI knows which cards can offer the action at all.
-      res.json({ ...(await withEntryHtml(root, catalog)), root });
+      res.json({ ...(await withComputedCatalogFields(root, catalog)), root });
     } catch (err: any) {
       if (err?.code === 'ENOENT') {
         return res.status(404).json({ error: 'design library not found' });
@@ -630,6 +673,11 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
   // same-origin caller. A `file://` document gets an opaque origin, so it
   // renders exactly as authored — CDN scripts, webfonts, and ES modules all
   // resolve — while reaching nothing of this daemon's.
+  //
+  // The in-app "Explore kit" canvas below needs the opposite trade: an
+  // embeddable iframe, not a new OS window. GET /preview-asset closes the
+  // same-origin gap this comment describes by construction rather than by
+  // opaque protocol — see that route for how.
   app.post('/api/design-library/live-preview', async (req, res) => {
     if (!isLocalSameOrigin(req, getResolvedPort())) {
       return res.status(403).json({ error: 'cross-origin request rejected' });
@@ -677,6 +725,94 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
     // and platform-correct for the same reason.
     openBrowser(entryPath);
     res.json({ ok: true, entryFile } satisfies DesignLibraryLivePreviewResponse);
+  });
+
+  // Serves one file from inside a catalog item's own directory, for the
+  // "Explore kit" interactive canvas: an iframe that needs the entry HTML AND
+  // its relatively-referenced CSS/JS/image siblings, all resolvable through
+  // ordinary relative URLs. Same rights gate as live-preview
+  // (LIVE_PREVIEWABLE_ALLOWED_USE — rendering runs the author's scripts) and
+  // the same containment pattern the rest of this file uses.
+  //
+  // This is same-origin HTTP, unlike live-preview's opaque file://, so it
+  // closes the "reachable /api/*" gap that route's comment describes with two
+  // independent layers instead: the response Content-Security-Policy below
+  // (mirrors server.ts's projectRawFileCsp exactly — no external network,
+  // 'self' only) AND the web host loading it into an iframe with
+  // `sandbox="allow-scripts allow-popups"` and no `allow-same-origin`, which
+  // forces an opaque document origin regardless of serving origin. A script
+  // from inside that iframe fetching this daemon's API sends `Origin: null`,
+  // which isLocalSameOrigin already rejects — that check still runs below as
+  // the first line of defense, not as the only one.
+  //
+  // `:rel` is the catalog item's `rel`, `encodeURIComponent`-ed as a single
+  // opaque path segment (embedded `/` becomes `%2F`, so it cannot be
+  // confused with the file path that follows). The trailing splat is the
+  // file path within that item's own directory; private library metadata
+  // (`.catalog/`, `rights.json`, …) is rejected in any segment, matching
+  // START_PROJECT_EXCLUDED_* below.
+  const previewAssetCsp = [
+    "default-src 'self' data: blob:",
+    "img-src 'self' data: blob:",
+    "media-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "style-src 'self' 'unsafe-inline'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "connect-src 'none'",
+    "form-action 'none'",
+    "base-uri 'none'",
+    "object-src 'none'",
+  ].join('; ');
+  app.get(/^\/api\/design-library\/preview-asset\/([^/]+)\/(.+)$/u, async (req, res) => {
+    if (!isLocalSameOrigin(req, getResolvedPort())) {
+      return res.status(403).json({ error: 'cross-origin request rejected' });
+    }
+    const root = designLibraryRoot();
+    const params = req.params as unknown as { 0?: string; 1?: string };
+    const rel = String(params[0] ?? '');
+    const filePath = String(params[1] ?? '');
+    if (!rel || !filePath || path.isAbsolute(filePath)
+      || filePath.split('/').some((segment) => isDesignLibraryPrivateMetadataName(segment))) {
+      return res.status(400).json({ error: 'invalid path' });
+    }
+    const itemRoot = path.resolve(root, rel);
+    if (itemRoot !== root && !itemRoot.startsWith(root + path.sep)) {
+      return res.status(400).json({ error: 'invalid path' });
+    }
+    if (!(await isRealDirectoryWithNoSymlinkIndirection(root, itemRoot))) {
+      return res.status(400).json({ error: 'invalid path' });
+    }
+
+    // Re-authorize at the action boundary, exactly as live-preview does —
+    // the catalog's entry_html is presentation data, never an authorization
+    // input.
+    const authorizedRights = await resolveCurrentRights(root, rel);
+    if (!LIVE_PREVIEWABLE_ALLOWED_USE.has(authorizedRights.allowedUse)) {
+      return res.status(403).json({
+        error: 'current rights do not allow this item to be opened for preview',
+      });
+    }
+
+    const target = path.resolve(itemRoot, filePath);
+    if (target === itemRoot || !target.startsWith(itemRoot + path.sep)) {
+      return res.status(400).json({ error: 'invalid path' });
+    }
+    // Same double check buildReferencePrompt's resolveReferenceFile uses:
+    // full-library-root containment AND no symlink indirection scoped to
+    // this item's own directory, so an in-root symlink cannot serve bytes
+    // belonging to a different, possibly more-restricted collection.
+    if (!(await withinReal(root, target)) || !(await isRealFileWithNoSymlinkIndirection(itemRoot, target))) {
+      return res.status(400).json({ error: 'invalid path' });
+    }
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', previewAssetCsp);
+    try {
+      await res.type(mimeFor(target)).sendFile(target);
+    } catch (err: any) {
+      res.status(500).json({ error: String(err && err.message ? err.message : err) });
+    }
   });
 
   // Start a new project either by copying a licensed kit (`mode: copy`) or by
@@ -780,8 +916,18 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
       if (mode === 'copy' && aspects.length > 0) {
         throw new DesignLibraryStartProjectError(400, 'aspects are only supported in reference mode');
       }
+      const briefResult = normalizeGuidedBrief(body.brief);
+      if (!briefResult.ok) {
+        throw new DesignLibraryStartProjectError(400, briefResult.message);
+      }
+      const briefSection = buildGuidedBriefSection(briefResult.brief, { subjectLabel: item.label });
       const referencePrompt =
-        mode === 'reference' ? await buildReferencePrompt(root, target, item, aspects) : null;
+        mode === 'reference' ? await buildReferencePrompt(root, target, item, aspects, briefSection) : null;
+      // Copy mode never sent a starting prompt before this brief existed —
+      // preserve that exactly when the brief is empty (skip-all / no brief
+      // sent), so the guided flow's "Skip" reproduces today's single-click
+      // behavior byte-for-byte.
+      const copyPrompt = mode === 'copy' && briefSection ? briefSection : null;
       const now = Date.now();
       const projectId = ids.randomId();
       const conversationId = ids.randomId();
@@ -862,7 +1008,7 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
         name: projectName,
         skillId: null,
         designSystemId: null,
-        pendingPrompt: referencePrompt,
+        pendingPrompt: mode === 'reference' ? referencePrompt : copyPrompt,
         metadata,
         createdAt: now,
         updatedAt: now,

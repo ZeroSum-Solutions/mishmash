@@ -71,6 +71,10 @@ interface Section {
 const HEX_RE = /#[0-9a-fA-F]{8}\b|#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/;
 
 /** Strip markdown emphasis, backticks and surrounding quotes from a fragment. */
+export function stripInlineMarkdown(value: string): string {
+  return clean(value);
+}
+
 function clean(value: string): string {
   return value
     .replace(/`+/g, '')

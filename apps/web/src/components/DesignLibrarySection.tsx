@@ -17,8 +17,10 @@ import type {
   DesignLibraryAllowedUse,
   DesignLibraryGroup,
   DesignLibraryItem,
+  GuidedCreateBrief,
 } from '@open-design/contracts';
 import {
+  designLibraryPreviewAssetUrl,
   designLibraryThumbUrl,
   fetchDesignLibraryCatalog,
   openDesignLibraryLivePreview,
@@ -27,9 +29,15 @@ import {
   type DesignLibraryCatalogResult,
 } from '../providers/registry';
 import { Icon } from './Icon';
+import { MediaFallback } from './MediaFallback';
 import { DesignLibraryPromotionPanel } from './DesignLibraryPromotionPanel';
+import { GuidedCreateDialog } from './GuidedCreateDialog';
 import { useT } from '../i18n';
 import styles from './DesignLibrarySection.module.css';
+
+// Adds the group-local hidden-duplicate count computed above; render-only,
+// never sent to or received from the daemon.
+type RenderableGroup = DesignLibraryGroup & { hiddenDuplicateCount: number };
 
 interface Props {
   active: boolean;
@@ -63,6 +71,32 @@ function allowedUseLabel(value: DesignLibraryAllowedUse): string {
     .split('-')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+function categoryLabel(category: string): string {
+  return category
+    .split(/[-\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+// "Explore kit" (t7/PRD C7): only categories that are actually a runnable
+// interface — a screenshot set or a single landing page has nothing to
+// interact with — and only on the same copyable tiers live-preview already
+// uses (rendering runs the author's scripts). Mirrors
+// LIVE_PREVIEWABLE_ALLOWED_USE in apps/daemon/src/routes/design-library.ts;
+// the preview-asset route re-authorizes independently, same as live-preview.
+const EXPLORABLE_CATEGORIES = new Set(['ui-kit', 'design-system']);
+function canExploreKit(item: DesignLibraryItem): boolean {
+  return Boolean(item.entry_html) && EXPLORABLE_CATEGORIES.has(item.category) && COPYABLE_ALLOWED_USE.has(item.allowed_use);
+}
+
+// Real strip images only — falls back to the primary thumb alone when the
+// catalog has no `gallery` (older daemon) or reports none beyond the cover.
+function galleryImages(item: DesignLibraryItem): string[] {
+  if (item.gallery && item.gallery.length > 0) return item.gallery;
+  return item.thumb ? [item.thumb] : [];
 }
 
 export function DesignLibrarySection({ active, onOpenProject }: Props) {
@@ -132,13 +166,19 @@ export function DesignLibrarySection({ active, onOpenProject }: Props) {
     // A mixed source group appears once in the primary results and once in
     // the clearly labeled reference-only section rather than interleaving
     // Human Local Only cards with project-ready options.
-    const primaryGroups: DesignLibraryGroup[] = [];
-    const humanLocalGroups: DesignLibraryGroup[] = [];
+    const primaryGroups: RenderableGroup[] = [];
+    const humanLocalGroups: RenderableGroup[] = [];
     for (const group of matchingGroups) {
-      const primaryItems = group.items.filter((item) => item.allowed_use !== 'human-local-only');
-      const humanLocalItems = group.items.filter((item) => item.allowed_use === 'human-local-only');
-      if (primaryItems.length > 0) primaryGroups.push({ ...group, items: primaryItems });
-      if (humanLocalItems.length > 0) humanLocalGroups.push({ ...group, items: humanLocalItems });
+      // Duplicate suppression (t9): a catalog item carrying `duplicate_of`
+      // is hidden from the grid by default. Filtered here, before the
+      // allowed_use partition below, so a hidden duplicate never counts
+      // toward either section's items.
+      const visibleItems = group.items.filter((item) => !item.duplicate_of);
+      const hiddenDuplicateCount = group.items.length - visibleItems.length;
+      const primaryItems = visibleItems.filter((item) => item.allowed_use !== 'human-local-only');
+      const humanLocalItems = visibleItems.filter((item) => item.allowed_use === 'human-local-only');
+      if (primaryItems.length > 0) primaryGroups.push({ ...group, items: primaryItems, hiddenDuplicateCount });
+      if (humanLocalItems.length > 0) humanLocalGroups.push({ ...group, items: humanLocalItems, hiddenDuplicateCount });
     }
     return { primaryGroups, humanLocalGroups };
   }, [catalog, search, category, domain]);
@@ -256,7 +296,7 @@ function DesignLibraryGroupSection({
   onOpenProject,
   nested = false,
 }: {
-  group: DesignLibraryGroup;
+  group: RenderableGroup;
   t: ReturnType<typeof useT>;
   onOpenProject?: (projectId: string, conversationId?: string, entryFile?: string) => void;
   nested?: boolean;
@@ -267,6 +307,11 @@ function DesignLibraryGroupSection({
       <header className={styles.groupHead}>
         <GroupHeading className={styles.groupTitle}>{group.title}</GroupHeading>
         <p className={styles.groupBlurb}>{group.blurb}</p>
+        {group.hiddenDuplicateCount > 0 ? (
+          <p className={styles.duplicatesHiddenNote}>
+            {t('designLibrary.duplicatesHidden', { count: group.hiddenDuplicateCount })}
+          </p>
+        ) : null}
       </header>
       <div className={styles.grid}>
         {group.items.map((item) => (
@@ -296,14 +341,20 @@ function useStartFromDesignLibrary(
       ? COPYABLE_ALLOWED_USE.has(item.allowed_use)
       : Boolean(item.reference) && REFERENCEABLE_ALLOWED_USE.has(item.allowed_use));
 
-  async function handleStart() {
+  // `brief` is only ever supplied for `mode: 'copy'` — the guided create
+  // flow (PRD C8) sits in front of "Use as template" only; reference mode
+  // keeps its existing aspect-selection flow untouched. An empty brief
+  // (every guided question skipped) is dropped rather than sent, so the
+  // request is byte-for-byte identical to today's single-click start.
+  async function handleStart(brief?: GuidedCreateBrief) {
     if (starting) return;
     setStartError(null);
     setStarting(true);
+    const hasBrief = Boolean(brief && Object.keys(brief).length > 0);
     const result =
       mode === 'reference'
         ? await startDesignLibraryProject(item.rel, undefined, { mode, aspects })
-        : await startDesignLibraryProject(item.rel);
+        : await startDesignLibraryProject(item.rel, undefined, hasBrief ? { mode: 'copy', brief } : undefined);
     setStarting(false);
     if (!result.ok) {
       setStartError(
@@ -459,7 +510,10 @@ function DesignLibraryCard({
   onOpenProject?: (projectId: string, conversationId?: string, entryFile?: string) => void;
 }) {
   const [thumbError, setThumbError] = useState(false);
+  const [thumbLoaded, setThumbLoaded] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [canvasOpen, setCanvasOpen] = useState(false);
+  const [guidedOpen, setGuidedOpen] = useState(false);
   const [selectedAspects, setSelectedAspects] = useState<string[]>([]);
   const tooltip = t(ALLOWED_USE_TOOLTIP_KEY[item.allowed_use]);
   const templateStart = useStartFromDesignLibrary(
@@ -473,21 +527,30 @@ function DesignLibraryCard({
   const livePreview = useLivePreview(item, t);
   const hasVisualPreview = Boolean(item.thumb) && !thumbError;
 
+  // "Use as template" (PRD C8) opens the shared guided brief flow instead of
+  // starting the project immediately — the dialog's own Skip/Start always
+  // work, so the eventual startDesignLibraryProject call stays backward
+  // compatible for a user who skips every question.
+  function openGuidedCreate() {
+    setPreviewOpen(false);
+    setGuidedOpen(true);
+  }
+
   return (
     <article className={styles.card} data-testid="design-library-card" data-allowed-use={item.allowed_use}>
-      <div className={styles.thumb}>
+      <div className={styles.thumb} data-testid="design-library-cover">
         {hasVisualPreview && item.thumb ? (
           <img
-            className={styles.thumbImg}
+            className={`${styles.thumbImg}${thumbLoaded ? ` ${styles.thumbImgLoaded}` : ''}`}
             src={designLibraryThumbUrl(item.thumb)}
             alt={item.label}
             loading="lazy"
+            onLoad={() => setThumbLoaded(true)}
             onError={() => setThumbError(true)}
           />
         ) : (
           <div className={styles.thumbUnavailable} aria-hidden>
-            <Icon name="image" size={28} className={styles.thumbGlyph} />
-            <span>Visual preview unavailable</span>
+            <MediaFallback />
           </div>
         )}
         <button
@@ -506,10 +569,10 @@ function DesignLibraryCard({
           {allowedUseLabel(item.allowed_use)}
         </span>
       </div>
-      <div className={styles.meta}>
+      <div className={styles.meta} data-testid="design-library-meta">
         <h3 className={styles.label}>{item.label}</h3>
         <p className={styles.detail}>
-          {item.kind} · {item.files} {t('designLibrary.filesUnit')} · {item.size}
+          {item.kind} · {item.files} {t(item.files === 1 ? 'designLibrary.filesUnitOne' : 'designLibrary.filesUnit')} · {item.size}
         </p>
         {item.description ? (
           <p className={styles.description} data-testid="design-library-description">
@@ -544,7 +607,7 @@ function DesignLibraryCard({
           </p>
         ) : null}
       </div>
-      <div className={styles.cardActions}>
+      <div className={styles.cardActions} data-testid="design-library-actions">
         <button type="button" className={styles.openFolderBtn} onClick={() => openDesignLibraryPath(item.rel)}>
           <Icon name="folder" size={14} />
           {t('designLibrary.openFolder')}
@@ -555,7 +618,7 @@ function DesignLibraryCard({
         {templateStart.canStart ? (
           <UseAsTemplateButton
             starting={templateStart.starting}
-            onClick={templateStart.handleStart}
+            onClick={openGuidedCreate}
             t={t}
           />
         ) : referenceStart.canStart ? (
@@ -572,8 +635,21 @@ function DesignLibraryCard({
           {templateStart.startError || referenceStart.startError || livePreview.error}
         </p>
       ) : null}
+      {guidedOpen ? (
+        <GuidedCreateDialog
+          title={item.label}
+          subjectLabel={item.label}
+          showMatchKitLook
+          busy={templateStart.starting}
+          onClose={() => setGuidedOpen(false)}
+          onSubmit={(brief) => {
+            setGuidedOpen(false);
+            void templateStart.handleStart(brief);
+          }}
+        />
+      ) : null}
       {previewOpen ? (
-        <DesignLibraryPreviewDialog
+        <DesignLibraryDetailDialog
           item={item}
           t={t}
           hasVisualPreview={hasVisualPreview}
@@ -581,38 +657,84 @@ function DesignLibraryCard({
           onOpenProject={onOpenProject}
           selectedAspects={selectedAspects}
           onSelectedAspectsChange={setSelectedAspects}
+          onExplore={
+            canExploreKit(item)
+              ? () => {
+                  setPreviewOpen(false);
+                  setCanvasOpen(true);
+                }
+              : undefined
+          }
+          onRequestGuidedCreate={templateStart.canStart ? openGuidedCreate : undefined}
         />
+      ) : null}
+      {canvasOpen ? (
+        <DesignLibraryKitCanvas item={item} t={t} onClose={() => setCanvasOpen(false)} />
       ) : null}
     </article>
   );
 }
 
-// Quick catalog details for every item. When the catalog supplies a curated
-// visual it is shown uncropped; otherwise the dialog keeps the metadata and
-// permitted actions useful without inventing a preview asset. Rendered
-// through the shared Dialog primitive in a portal so it escapes the grid.
-function DesignLibraryPreviewDialog({
+// The detail view (t6/PRD C6): a large hero (the item's cover, swappable via
+// a browsable strip of every image the catalog actually published for it),
+// identity (title, canonical category chip, rights-tier badge, description),
+// and the same permitted actions the card offers, in one consistent action
+// bar. Rendered through the shared Dialog primitive in a portal so it
+// escapes the grid; Escape closes via Dialog's own `closeOnEscape`.
+function DesignLibraryDetailDialog({
   item,
   t,
   hasVisualPreview,
   onClose,
   onOpenProject,
+  onExplore,
   selectedAspects,
   onSelectedAspectsChange,
+  onRequestGuidedCreate,
 }: {
   item: DesignLibraryItem;
   t: ReturnType<typeof useT>;
   hasVisualPreview: boolean;
   onClose: () => void;
   onOpenProject?: (projectId: string, conversationId?: string, entryFile?: string) => void;
+  onExplore?: () => void;
   selectedAspects: string[];
   onSelectedAspectsChange: (next: string[]) => void;
+  /** Present only when "Use as template" is offered (PRD C8 guided flow). */
+  onRequestGuidedCreate?: () => void;
 }) {
-  const [previewImageError, setPreviewImageError] = useState(false);
+  const images = useMemo(() => galleryImages(item), [item]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [heroError, setHeroError] = useState(false);
+  const [heroLoaded, setHeroLoaded] = useState(false);
+  const clampedIndex = images.length > 0 ? Math.min(activeIndex, images.length - 1) : 0;
+  const activeImage = images[clampedIndex] ?? null;
   const templateStart = useStartFromDesignLibrary(item, t, 'copy', [], onOpenProject);
   const referenceStart = useStartFromDesignLibrary(item, t, 'reference', selectedAspects, onOpenProject);
   const livePreview = useLivePreview(item, t);
-  const showImage = hasVisualPreview && Boolean(item.thumb) && !previewImageError;
+  const showImage = hasVisualPreview && Boolean(activeImage) && !heroError;
+
+  // Strip keyboard navigation: left/right swaps the hero without reloading
+  // the dialog. Escape stays owned entirely by the Dialog primitive above.
+  useEffect(() => {
+    if (images.length <= 1) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'ArrowLeft') {
+        setActiveIndex((i) => (i - 1 + images.length) % images.length);
+      } else if (event.key === 'ArrowRight') {
+        setActiveIndex((i) => (i + 1) % images.length);
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [images.length]);
+
+  function selectImage(index: number) {
+    setHeroError(false);
+    setHeroLoaded(false);
+    setActiveIndex(index);
+  }
+
   return createPortal(
     <Dialog
       ariaLabel={item.label}
@@ -622,35 +744,56 @@ function DesignLibraryPreviewDialog({
       className={styles.previewDialog}
     >
       <div className={styles.previewImageWrap}>
-        {showImage && item.thumb ? (
+        {showImage && activeImage ? (
           <img
-            className={styles.previewImage}
-            src={designLibraryThumbUrl(item.thumb)}
+            className={`${styles.previewImage}${heroLoaded ? ` ${styles.previewImageLoaded}` : ''}`}
+            src={designLibraryThumbUrl(activeImage)}
             alt={item.label}
-            onError={() => setPreviewImageError(true)}
+            onLoad={() => setHeroLoaded(true)}
+            onError={() => setHeroError(true)}
+            data-testid="design-library-hero-image"
           />
         ) : (
           <div className={styles.previewUnavailable}>
-            <Icon name="image" size={32} className={styles.thumbGlyph} />
-            <span>Visual preview unavailable</span>
+            <MediaFallback size={32} />
           </div>
         )}
       </div>
+      {images.length > 1 ? (
+        <div className={styles.stripRow} role="group" aria-label={t('designLibrary.stripLabel')}>
+          {images.map((image, index) => (
+            <button
+              key={image}
+              type="button"
+              className={styles.stripItem}
+              aria-pressed={index === clampedIndex}
+              aria-label={t('designLibrary.stripItemLabel', { index: index + 1 })}
+              onClick={() => selectImage(index)}
+              data-testid="design-library-strip-item"
+            >
+              <img src={designLibraryThumbUrl(image)} alt="" loading="lazy" />
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className={styles.previewMeta}>
         <div className={styles.previewHeading}>
           <h2 className={styles.previewTitle}>{item.label}</h2>
-          <span
-            className={`${styles.badge} ${styles.previewBadge}`}
-            data-allowed-use={item.allowed_use}
-            title={t(ALLOWED_USE_TOOLTIP_KEY[item.allowed_use])}
-          >
-            {allowedUseLabel(item.allowed_use)}
-          </span>
+          <div className={styles.previewBadges}>
+            <span className={styles.categoryChip}>{categoryLabel(item.category)}</span>
+            <span
+              className={`${styles.badge} ${styles.previewBadge}`}
+              data-allowed-use={item.allowed_use}
+              title={t(ALLOWED_USE_TOOLTIP_KEY[item.allowed_use])}
+            >
+              {allowedUseLabel(item.allowed_use)}
+            </span>
+          </div>
         </div>
         <p className={styles.detail}>
-          {item.kind} · {item.files} {t('designLibrary.filesUnit')} · {item.size}
+          {item.kind} · {item.files} {t(item.files === 1 ? 'designLibrary.filesUnitOne' : 'designLibrary.filesUnit')} · {item.size}
         </p>
-        {item.description ? <p className={styles.description}>{item.description}</p> : null}
+        {item.description ? <p className={styles.previewDescription}>{item.description}</p> : null}
         {item.domains.length > 0 ? (
           <div className={styles.domains}>
             {item.domains.map((domain) => (
@@ -686,10 +829,16 @@ function DesignLibraryPreviewDialog({
           {livePreview.canOpen ? (
             <OpenLivePreviewButton opening={livePreview.opening} onClick={livePreview.handleOpen} t={t} />
           ) : null}
+          {onExplore ? (
+            <button type="button" className={styles.useAsTemplateBtn} onClick={onExplore} data-testid="design-library-explore-kit">
+              <Icon name="layout" size={14} />
+              {t('designLibrary.exploreKit')}
+            </button>
+          ) : null}
           {templateStart.canStart ? (
             <UseAsTemplateButton
               starting={templateStart.starting}
-              onClick={templateStart.handleStart}
+              onClick={() => onRequestGuidedCreate?.()}
               t={t}
             />
           ) : referenceStart.canStart ? (
@@ -709,6 +858,79 @@ function DesignLibraryPreviewDialog({
             {templateStart.startError || referenceStart.startError || livePreview.error}
           </p>
         ) : null}
+      </div>
+    </Dialog>,
+    document.body,
+  );
+}
+
+// The interactive kit canvas (t7/PRD C7): the item's entry HTML in a
+// scrollable, browser-viewport-sized iframe with a width toggle. Only
+// reachable from `canExploreKit` items — see that guard for the category and
+// rights gate. Sandboxed WITHOUT `allow-same-origin` so the previewed
+// document — served same-origin for correct relative asset resolution, see
+// the daemon's preview-asset route — gets an opaque origin regardless: a
+// script inside it cannot reach this app's own `/api/*` as a same-origin
+// caller.
+const CANVAS_VIEWPORT_WIDTH = { desktop: 1280, mobile: 390 } as const;
+type CanvasViewport = keyof typeof CANVAS_VIEWPORT_WIDTH;
+
+function DesignLibraryKitCanvas({
+  item,
+  t,
+  onClose,
+}: {
+  item: DesignLibraryItem;
+  t: ReturnType<typeof useT>;
+  onClose: () => void;
+}) {
+  const [viewport, setViewport] = useState<CanvasViewport>('desktop');
+  if (!item.entry_html) return null;
+  const src = designLibraryPreviewAssetUrl(item.rel, item.entry_html);
+  return createPortal(
+    <Dialog
+      ariaLabel={`${item.label} — ${t('designLibrary.exploreKit')}`}
+      onClose={onClose}
+      closeOnEscape
+      backdropClassName={styles.previewBackdrop}
+      className={styles.canvasDialog}
+    >
+      <div className={styles.canvasHead}>
+        <h2 className={styles.canvasTitle}>{item.label}</h2>
+        <div className={styles.viewportToggle} role="group" aria-label={t('designLibrary.viewportLabel')}>
+          <button
+            type="button"
+            aria-pressed={viewport === 'desktop'}
+            onClick={() => setViewport('desktop')}
+            data-testid="design-library-canvas-desktop"
+          >
+            <Icon name="layout" size={14} />
+            {t('designLibrary.viewportDesktop')}
+          </button>
+          <button
+            type="button"
+            aria-pressed={viewport === 'mobile'}
+            onClick={() => setViewport('mobile')}
+            data-testid="design-library-canvas-mobile"
+          >
+            <Icon name="smartphone" size={14} />
+            {t('designLibrary.viewportMobile')}
+          </button>
+        </div>
+        <button type="button" className={styles.openFolderBtn} onClick={onClose}>
+          {t('designLibrary.previewClose')}
+        </button>
+      </div>
+      <div className={styles.canvasStage}>
+        <iframe
+          key={src}
+          className={styles.canvasFrame}
+          style={{ width: CANVAS_VIEWPORT_WIDTH[viewport] }}
+          src={src}
+          sandbox="allow-scripts allow-popups"
+          title={item.label}
+          data-testid="design-library-kit-canvas-frame"
+        />
       </div>
     </Dialog>,
     document.body,

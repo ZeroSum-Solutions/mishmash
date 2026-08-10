@@ -271,8 +271,12 @@ const PROJECT_STRING_FLAGS = new Set([
   'agent', 'model', 'snapshot-id', 'inputs', 'grant-caps', 'editor',
   'title', 'label', 'against', 'seed-from', 'fork-after', 'mode',
   'source', 'root', 'out',
+  // Guided create flow (PRD C8) — `od project create --skill <id>` is the
+  // template-start path's CLI mirror (Templates tab "Start"), so it carries
+  // the same brief flags as `od design-library start-project`.
+  'brief-file', 'screens', 'fidelity', 'iterations', 'pages', 'product', 'audience', 'use-case', 'direction',
 ]);
-const PROJECT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'follow']);
+const PROJECT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'follow', 'match-kit-look']);
 // `od templates …` mirrors NewProjectPanel / ExamplesTab. Same surface,
 // same /api/templates store. The CLI form is the embeddability contract:
 // external agents (hermes-agent, openclaw, ...) can snapshot, list, or
@@ -6717,7 +6721,13 @@ async function runProject(args) {
     console.log(`Usage:
   od project create [--name "<title>"] [--skill <id>] [--design-system <id>]
                     [--plugin <id>] [--inputs <json>] [--metadata-json <path|->]
-                    [--mode design|chat|plan]
+                    [--mode design|chat|plan] [guided-brief flags]
+                    Guided-brief flags mirror 'od design-library
+                    start-project' (PRD C8) — --brief-file, --screens,
+                    --fidelity, --iterations, --pages, --product,
+                    --audience, --use-case, --direction, --match-kit-look.
+                    Folded into pendingPrompt server-side; every flag is
+                    optional.
   od project create-design-system <id> [--name "<title>"]
                     [--prompt "<text>" | --prompt-file <path|->] [--json]
                     Duplicate a project as a design-system workspace and seed
@@ -6824,6 +6834,14 @@ Common options:
       if (flags['grant-caps']) {
         body.grantCaps = String(flags['grant-caps']).split(',').map((c) => c.trim()).filter(Boolean);
       }
+      // Guided create flow (PRD C8) — same brief flags as `od design-library
+      // start-project`, folded server-side into pendingPrompt when present.
+      const briefResult = await readGuidedBriefFromFlags(flags);
+      if (briefResult.error) {
+        console.error(briefResult.error);
+        process.exit(2);
+      }
+      if (briefResult.brief) body.brief = briefResult.brief;
       const resp = await fetch(`${base}/api/projects`, {
         method:  'POST',
         headers: { 'content-type': 'application/json' },
@@ -9388,7 +9406,7 @@ function printDesignLibraryHelp() {
   console.log(`Usage:
   od design-library catalog [--json]
   od design-library show <rel> [--json]
-  od design-library start-project --rel <rel> [--name <name>] [--mode copy|reference] [--aspects hero,webgl] [--json]
+  od design-library start-project --rel <rel> [--name <name>] [--mode copy|reference] [--aspects hero,webgl] [guided-brief flags] [--json]
   od design-library live-preview <rel> [--json]
   od design-library promote --asset <id> --group app-captures|site-capture|site-clone [--note <text>] [--json]
   od design-library promotions [--status claimable|pending|claimed|succeeded|failed|all] [--json]
@@ -9405,7 +9423,9 @@ description, preview thumb URL) resolved by its rel path — the composable
 \`start-project\` either copies a licensed kit or prepares a prompt-only
 project from a private local reference over the same POST
 /api/design-library/start-project contract as the web actions. Reference
-mode never copies the source HTML/DESIGN files into the new project.
+mode never copies the source HTML/DESIGN files into the new project. The
+guided-brief flags mirror the web "GuidedCreateDialog" flow (PRD C8) — every
+one is optional and folds into the generated project's starting prompt.
 
 \`live-preview\` opens the collection's entry HTML in the OS default browser
 as a file:// document — the full creation as authored, CDN scripts and all.
@@ -9421,7 +9441,20 @@ Options:
   --note <text>        Optional curator note
   --status <status>    Promotion queue status filter
   --json               Print the raw response envelope
-  --daemon-url <url>   Override daemon URL`);
+  --daemon-url <url>   Override daemon URL
+
+Guided-brief flags (start-project only; PRD C8):
+  --brief-file <path|->  JSON brief, same shape as the HTTP contract's
+                          \`brief\` field; - reads from stdin
+  --screens <n>           How many screens to build
+  --fidelity <level>      wireframe | clean-prototype | high-fidelity
+  --iterations <n>        How many distinct variations (1-3)
+  --pages <list>          Comma-separated required pages/flows
+  --product <text>        What is being built
+  --audience <text>       Who it is for
+  --use-case <text>       The core use case
+  --direction <text>      Brand/content/visual-direction requirements
+  --match-kit-look        Match the kit's own visual direction`);
 }
 
 // `od design-library <sub>` — AGENTS.md's UI/CLI dual-track rule: every
@@ -9528,16 +9561,76 @@ async function runDesignLibraryShow(rawArgs) {
   }
 }
 
+// `--brief-file <path|->` (JSON, GuidedCreateBrief shape) and/or individual
+// flags for the guided create flow (PRD C8) — shared by `od design-library
+// start-project` and `od project create --skill <id>` (the template-start
+// path's CLI mirror). Both may be combined; individual flags override the
+// matching --brief-file key. Mirrors readPromptFromFlags's file-or-stdin
+// convention.
+async function readGuidedBriefFromFlags(flags) {
+  let brief = {};
+  if (typeof flags['brief-file'] === 'string' && flags['brief-file'].length > 0) {
+    const path = flags['brief-file'];
+    let raw;
+    if (path === '-') {
+      raw = await new Promise((resolve, reject) => {
+        let buf = '';
+        process.stdin.setEncoding('utf8');
+        process.stdin.on('data', (chunk) => { buf += chunk; });
+        process.stdin.on('end', () => resolve(buf));
+        process.stdin.on('error', reject);
+      });
+    } else {
+      const { readFile } = await import('node:fs/promises');
+      raw = await readFile(path, 'utf8');
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      return { error: `--brief-file must contain valid JSON: ${err?.message ?? err}` };
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { error: '--brief-file JSON must be an object' };
+    }
+    brief = { ...parsed };
+  }
+  if (typeof flags.screens === 'string' && flags.screens.length > 0) {
+    const screens = Number(flags.screens);
+    if (!Number.isFinite(screens)) return { error: '--screens must be a number' };
+    brief.screens = screens;
+  }
+  if (typeof flags.fidelity === 'string' && flags.fidelity.length > 0) brief.fidelity = flags.fidelity;
+  if (typeof flags.iterations === 'string' && flags.iterations.length > 0) {
+    const iterations = Number(flags.iterations);
+    if (!Number.isFinite(iterations)) return { error: '--iterations must be a number' };
+    brief.iterations = iterations;
+  }
+  if (typeof flags.pages === 'string' && flags.pages.length > 0) {
+    brief.pages = [...new Set(flags.pages.split(',').map((value) => value.trim()).filter(Boolean))];
+  }
+  if (typeof flags.product === 'string' && flags.product.length > 0) brief.product = flags.product;
+  if (typeof flags.audience === 'string' && flags.audience.length > 0) brief.audience = flags.audience;
+  if (typeof flags['use-case'] === 'string' && flags['use-case'].length > 0) brief.useCase = flags['use-case'];
+  if (typeof flags.direction === 'string' && flags.direction.length > 0) brief.direction = flags.direction;
+  if (flags['match-kit-look']) brief.matchKitLook = true;
+  return { brief: Object.keys(brief).length > 0 ? brief : undefined };
+}
+
 async function runDesignLibraryStartProject(rawArgs) {
-  const stringFlags = new Set([...LIBRARY_STRING_FLAGS, 'rel', 'name', 'mode', 'aspects']);
-  const flags = parseFlags(rawArgs, { string: stringFlags, boolean: LIBRARY_BOOLEAN_FLAGS });
+  const stringFlags = new Set([
+    ...LIBRARY_STRING_FLAGS, 'rel', 'name', 'mode', 'aspects',
+    'brief-file', 'screens', 'fidelity', 'iterations', 'pages', 'product', 'audience', 'use-case', 'direction',
+  ]);
+  const booleanFlags = new Set([...LIBRARY_BOOLEAN_FLAGS, 'match-kit-look']);
+  const flags = parseFlags(rawArgs, { string: stringFlags, boolean: booleanFlags });
   if (flags.help || flags.h) {
     printDesignLibraryHelp();
     return;
   }
   const rel = typeof flags.rel === 'string' ? flags.rel : positionalArgs(rawArgs, stringFlags)[0];
   if (!rel) {
-    console.error('Usage: od design-library start-project --rel <rel> [--name <name>] [--mode copy|reference] [--aspects hero,webgl]');
+    console.error('Usage: od design-library start-project --rel <rel> [--name <name>] [--mode copy|reference] [--aspects hero,webgl] [--brief-file <path|->] [guided-brief flags]');
     process.exit(2);
   }
   const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
@@ -9550,11 +9643,17 @@ async function runDesignLibraryStartProject(rawArgs) {
     typeof flags.aspects === 'string'
       ? [...new Set(flags.aspects.split(',').map((value) => value.trim()).filter(Boolean))]
       : undefined;
+  const briefResult = await readGuidedBriefFromFlags(flags);
+  if (briefResult.error) {
+    console.error(briefResult.error);
+    process.exit(2);
+  }
   const body = {
     rel,
     ...(typeof flags.name === 'string' ? { name: flags.name } : {}),
     ...(mode ? { mode } : {}),
     ...(aspects?.length ? { aspects } : {}),
+    ...(briefResult.brief ? { brief: briefResult.brief } : {}),
   };
   let resp;
   try {

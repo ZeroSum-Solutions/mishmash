@@ -17,6 +17,7 @@ triggers:
   - "gmail 简报"
   - "邮件摘要"
 od:
+  category: "prototype"
   mode: prototype
   platform: desktop
   scenario: orbit

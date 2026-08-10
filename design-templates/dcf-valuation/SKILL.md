@@ -16,6 +16,7 @@ triggers:
   - "估值"
   - "内在价值"
 od:
+  category: "document-guide"
   mode: prototype
   preview:
     type: markdown

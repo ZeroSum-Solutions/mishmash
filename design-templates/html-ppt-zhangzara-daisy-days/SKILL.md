@@ -39,7 +39,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "professional-training"
+  category: "deck"
   scenario: "education"
   example_prompt: "Create \"Write a Customer Onboarding Workshop like a Field Enablement Director\" as a decision-grade Professional training deck in this template's own visual system. Subject: A customer-success workshop onboarding users to a project-management app — the first-value path and the habits that retain. Audience: new customers, CS team. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can a learner perform the target task the next day."
 ---

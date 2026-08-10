@@ -38,7 +38,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "design-craft"
+  category: "deck"
   scenario: "design"
   example_prompt: "Create \"Present a Visual-Identity System like a Lead Brand Designer\" as a decision-grade Design craft deck in this template's own visual system. Subject: A brand visual-identity system reveal for an outdoor label — logo, color, type, and the rules that keep it consistent. Audience: brand team, client. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does the deck feel authored by a senior designer rather than generated."
 ---

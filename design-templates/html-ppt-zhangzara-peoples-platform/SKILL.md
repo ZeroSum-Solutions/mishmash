@@ -38,7 +38,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "government-policy"
+  category: "deck"
   scenario: "policy"
   example_prompt: "Create \"Make a Public-Transit Funding Case like a Transportation Policy Lead\" as a decision-grade Government & policy deck in this template's own visual system. Subject: A public-transit funding proposal for a city council — ridership need, the plan, the risk controls, and the ask. Audience: city council, public board. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does the deck reduce approval risk rather than create rhetorical heat."
 ---

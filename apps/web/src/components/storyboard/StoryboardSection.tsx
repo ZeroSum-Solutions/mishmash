@@ -157,7 +157,7 @@ export function StoryboardSection({ active }: Props) {
             >
               <h3 className={styles.cardTitle}>{sb.title}</h3>
               <p className={styles.cardMeta}>
-                {t('storyboard.shotCount', { count: sb.shotCount })} · {new Date(sb.updatedAt).toLocaleDateString()}
+                {t(sb.shotCount === 1 ? 'storyboard.shotCountOne' : 'storyboard.shotCount', { count: sb.shotCount })} · {new Date(sb.updatedAt).toLocaleDateString()}
               </p>
             </button>
           ))}

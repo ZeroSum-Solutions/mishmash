@@ -283,23 +283,37 @@
    real thumbnail, dashed-empty box, or a spinner while generating into it —
    with Generate/Upload/Derive as secondary actions underneath, instead of a
    bare button stack with no preview surface. */
+/* Hidden until decoded: a failed request never paints a broken-image glyph —
+   the img stays transparent over the well's black backdrop until onLoad
+   flips .frameWellLoaded, and onError swaps it out for the fallback state
+   before it ever becomes visible. */
 .frameWell {
   width: 100%;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   border-radius: 8px;
   background: #000;
+  opacity: 0;
+  transition: opacity 200ms var(--ease-out);
+}
+.frameWellLoaded {
+  opacity: 1;
 }
 .frameWellEmpty {
   width: 100%;
   aspect-ratio: 16 / 9;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
+  padding: 4px;
   border: 1px dashed var(--border);
   border-radius: 8px;
   background: var(--bg-muted);
   color: var(--text-faint);
+  font-size: 10px;
+  text-align: center;
 }
 .shotFrameActions {
   display: flex;

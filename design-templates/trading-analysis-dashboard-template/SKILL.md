@@ -15,6 +15,7 @@ triggers:
   - "华尔街风格看板"
   - "高科技金融 dashboard 模板"
 od:
+  category: "dashboard"
   mode: template
   platform: desktop
   scenario: live-artifacts

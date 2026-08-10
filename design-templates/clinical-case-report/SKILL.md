@@ -16,6 +16,7 @@ triggers:
   - "case summary"
   - "medical case"
 od:
+  category: "document-guide"
   mode: prototype
   platform: desktop
   scenario: healthcare

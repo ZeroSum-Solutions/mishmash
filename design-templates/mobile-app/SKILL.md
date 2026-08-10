@@ -15,6 +15,7 @@ triggers:
   - "移动端"
   - "手机 app"
 od:
+  category: "mobile-app"
   mode: prototype
   platform: mobile
   scenario: design

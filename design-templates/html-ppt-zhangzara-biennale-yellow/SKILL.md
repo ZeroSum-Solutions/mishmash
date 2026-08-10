@@ -38,7 +38,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "design-craft"
+  category: "deck"
   scenario: "design"
   example_prompt: "Create \"Curate an Art Biennale Deck like a Museum Exhibition Director\" as a decision-grade Design craft deck in this template's own visual system. Subject: A curatorial deck for a contemporary art biennale — the thesis, the rooms, the works, and the visitor journey. Audience: museum board, curators. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does the deck feel authored by a senior designer rather than generated."
 ---

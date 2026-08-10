@@ -12,6 +12,7 @@ triggers:
   - "feature doc"
   - "需求文档"
 od:
+  category: "document-guide"
   mode: prototype
   platform: desktop
   scenario: product

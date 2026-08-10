@@ -15,6 +15,7 @@ triggers:
   - "仓库看板"
   - "GitHub 看板"
 od:
+  category: "dashboard"
   mode: prototype
   platform: desktop
   scenario: operation

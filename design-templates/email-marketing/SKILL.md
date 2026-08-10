@@ -16,6 +16,7 @@ triggers:
   - "邮件营销"
   - "邮件模板"
 od:
+  category: "email"
   mode: prototype
   platform: desktop
   scenario: marketing

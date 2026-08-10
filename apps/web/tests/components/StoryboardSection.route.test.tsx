@@ -168,3 +168,28 @@ describe('StoryboardSection routing (OBS-2)', () => {
     expect(await screen.findByTestId('storyboard-card')).toBeTruthy();
   });
 });
+
+describe('StoryboardSection list copy', () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('pluralizes the card shot count (1 shot, 2 shots)', async () => {
+    registryMocks.fetchStoryboardList.mockResolvedValue({
+      ok: true,
+      value: [
+        { id: 'sb-one', title: 'One-shot board', createdAt: SB.createdAt, updatedAt: SB.updatedAt, shotCount: 1 },
+        { id: 'sb-two', title: 'Two-shot board', createdAt: SB.createdAt, updatedAt: SB.updatedAt, shotCount: 2 },
+      ],
+    });
+    window.history.replaceState(null, '', '/storyboard');
+    renderSection();
+
+    await waitFor(() => expect(screen.getAllByTestId('storyboard-card')).toHaveLength(2));
+    expect(screen.getByText(/^1 shot ·/)).toBeTruthy();
+    expect(screen.getByText(/^2 shots ·/)).toBeTruthy();
+    expect(screen.queryByText(/^1 shots ·/)).toBeNull();
+  });
+});

@@ -18,7 +18,7 @@ import {
   projectKindFromMetadataToTracking,
   fidelityToTracking,
 } from '@open-design/contracts/analytics';
-import type { AmrModelsResponse, ChatSessionMode, RunContextSelection } from '@open-design/contracts';
+import type { AmrModelsResponse, ChatSessionMode, GuidedCreateBrief, RunContextSelection } from '@open-design/contracts';
 import { DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID } from '@open-design/contracts';
 import { EntryView } from './components/EntryView';
 import type { IntegrationTab } from './components/IntegrationsView';
@@ -139,6 +139,8 @@ import type {
 type AppCreateProjectInput = Omit<CreateInput, 'metadata'> & {
   metadata?: CreateInput['metadata'];
   pendingPrompt?: string;
+  /** Guided create flow answers (PRD C8), folded server-side into pendingPrompt. */
+  brief?: GuidedCreateBrief;
   pluginId?: string;
   pluginType?: string;
   appliedPluginSnapshotId?: string;
@@ -1557,6 +1559,7 @@ function AppInner() {
             ? { appliedPluginSnapshotId: input.appliedPluginSnapshotId }
             : {}),
           ...(input.pluginInputs ? { pluginInputs: input.pluginInputs } : {}),
+          ...(input.brief ? { brief: input.brief } : {}),
         });
       } catch (err) {
         const errorCode =

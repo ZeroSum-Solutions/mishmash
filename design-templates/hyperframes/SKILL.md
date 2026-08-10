@@ -16,6 +16,7 @@ triggers:
   - "vfx-liquid-glass"
   - "vfx-portal"
 od:
+  category: "video-motion"
   mode: video
   surface: video
   scenario: video

@@ -5,6 +5,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   allowedBrowserPorts,
+  allowsMissingOriginRequest,
   configuredAllowedInternalHosts,
   configuredAllowedOrigins,
   isAllowedBrowserOrigin,
@@ -62,7 +63,10 @@ function createOriginMiddleware(resolvedPort: number, host = '127.0.0.1') {
       return next();
     }
     const origin = req.headers.origin;
-    if (origin == null || origin === '') return next();
+    if (origin == null || origin === '') {
+      if (allowsMissingOriginRequest(req)) return next();
+      return res.status(403).json({ error: 'Cross-origin requests are not allowed' });
+    }
     if (origin === 'null') {
       const isSafeReadOnly =
         req.method === 'GET' && _NULL_ORIGIN_SAFE_GET_RE.test(req.path);

@@ -38,7 +38,7 @@ od:
     requires: false
   speaker_notes: true
   animations: true
-  category: "career"
+  category: "deck"
   scenario: "personal"
   example_prompt: "Create \"Write a Staff-Engineer Promotion Case like a Calibration-Committee Insider\" as a decision-grade Career deck in this template's own visual system. Subject: A staff-engineer promotion packet — scope, the proof moments, the artifacts, and the impact that clears the bar. Audience: manager, calibration committee. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does the evidence make the claim feel earned."
 ---
