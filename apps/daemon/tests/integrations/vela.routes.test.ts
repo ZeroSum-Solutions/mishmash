@@ -495,6 +495,27 @@ describe('GET /api/integrations/vela/wallet', () => {
     expect(afterPlanChange.body.refreshing).toBe(true);
   });
 
+  it('serves an empty preset catalog instead of a 500 when the vela binary cannot be resolved', async () => {
+    // AMR is an optional runtime. A host without the vela CLI is a normal
+    // state — the Home surface polls this endpoint on every load, so it must
+    // see an empty catalog, not a server error.
+    const previousPath = process.env.PATH;
+    const emptyDir = mkdtempSync(path.join(tmpdir(), 'no-vela-'));
+    try {
+      await setSettingsAmrEnv({ VELA_BIN: path.join(emptyDir, 'missing-vela') });
+      process.env.PATH = emptyDir;
+      const { status, body } = await getJson<Record<string, unknown>>(
+        `${baseUrl}/api/amr/models`,
+      );
+      expect(status).toBe(200);
+      expect(body).toEqual({ source: 'preset', models: [], refreshing: false });
+    } finally {
+      process.env.PATH = previousPath;
+      await setSettingsAmrEnv({ VELA_BIN: FAKE_VELA });
+      rmSync(emptyDir, { recursive: true, force: true });
+    }
+  });
+
   it('does not serve a cached wallet balance after the control key is rejected', async () => {
     let requestCount = 0;
     const walletApi = await startWalletApi((_req, res) => {
@@ -1432,6 +1453,50 @@ describe('ALL /api/integrations/vela/api-proxy/*', () => {
       );
       expect(upstreamRequests[0]?.headers['content-length']).toBe(String(Buffer.byteLength(body)));
       expect(upstreamRequests[0]?.body).toBe(body);
+    } finally {
+      requestSpy.mockRestore();
+    }
+  });
+
+  it('honors all:true socket lookups so autoSelectFamily can connect upstream', async () => {
+    // Node's default autoSelectFamily (happy eyeballs) calls the socket's
+    // lookup with `{ all: true }` and expects an address ARRAY back. A proxy
+    // lookup that forces `all: false` hands the socket a bare string, and
+    // every proxied request dies with "Invalid IP address: undefined" before
+    // touching the network — surfacing as a permanent 502 on the anonymous
+    // Message Center path.
+    type LookupFn = (
+      hostname: string,
+      options: { all?: boolean; family?: number },
+      callback: (err: NodeJS.ErrnoException | null, addresses: unknown, family?: number) => void,
+    ) => void;
+    let capturedLookup: LookupFn | undefined;
+    const requestSpy = vi.spyOn(https, 'request').mockImplementation(((target, options, callback) => {
+      capturedLookup = (options as { lookup?: LookupFn })?.lookup;
+      const req = new PassThrough() as any;
+      req.on('finish', () => {
+        const upstreamRes = new PassThrough() as any;
+        upstreamRes.statusCode = 200;
+        upstreamRes.headers = { 'content-type': 'application/json' };
+        callback?.(upstreamRes);
+        upstreamRes.end(JSON.stringify({ messages: [], nextCursor: null, unreadCount: 0 }));
+      });
+      req.setTimeout = () => req;
+      return req;
+    }) as typeof https.request);
+    try {
+      const resp = await fetch(
+        `${baseUrl}/api/integrations/vela/api-proxy/api/v1/message-center/messages?locale=en-US&filter=all&limit=100`,
+      );
+      expect(resp.status).toBe(200);
+      expect(capturedLookup).toBeTypeOf('function');
+      const addresses = await new Promise<unknown>((resolve, reject) => {
+        capturedLookup?.('localhost', { all: true, family: 0 }, (err, resolved) => {
+          if (err) reject(err);
+          else resolve(resolved);
+        });
+      });
+      expect(Array.isArray(addresses)).toBe(true);
     } finally {
       requestSpy.mockRestore();
     }

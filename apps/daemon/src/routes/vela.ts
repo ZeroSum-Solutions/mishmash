@@ -37,7 +37,7 @@ import {
   velaWalletSnapshotReader,
 } from '../integrations/vela-wallet.js';
 import { amrModelLoadingCache } from '../runtimes/amr-model-cache.js';
-import { buildAmrModelCacheKey } from '../runtimes/amr-model-probe.js';
+import { AmrVelaUnresolvedError, buildAmrModelCacheKey } from '../runtimes/amr-model-probe.js';
 import {
   fetchVelaBillingSummary,
   fetchVelaPresetModels,
@@ -137,8 +137,12 @@ function proxyAmrApiRequest(req: Request, res: Response): void {
     {
       method: req.method,
       headers,
+      // Pin the upstream connection to IPv4 (broken v6 edge paths, #3726)
+      // but preserve the caller's `all` flag: Node's autoSelectFamily calls
+      // this with `all: true` and needs the address array back — overriding
+      // it to false fails every request with "Invalid IP address: undefined".
       lookup: (hostname, options, callback) => {
-        dns.lookup(hostname, { ...options, family: 4, all: false }, callback);
+        dns.lookup(hostname, { ...options, family: 4 }, callback);
       },
     },
     (upstreamRes) => {
@@ -250,7 +254,7 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
     if (!def) throw new Error('AMR runtime definition is missing');
     const agentLaunch = resolveAgentLaunch(def, configuredEnv);
     const launchPath = agentLaunch.launchPath ?? agentLaunch.selectedPath;
-    if (!launchPath) throw new Error('AMR vela binary could not be resolved');
+    if (!launchPath) throw new AmrVelaUnresolvedError();
     const spawnEnv = applyAgentLaunchEnv(
       spawnEnvForAgent(
         def.id,
@@ -337,6 +341,12 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
       });
       res.json(response);
     } catch (err) {
+      if (err instanceof AmrVelaUnresolvedError) {
+        // AMR is an optional runtime; a host without the vela CLI gets an
+        // empty catalog, not a server error (Home polls this on every load).
+        res.json({ source: 'preset', models: [], refreshing: false });
+        return;
+      }
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
