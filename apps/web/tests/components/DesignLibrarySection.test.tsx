@@ -15,6 +15,8 @@ const uploadLibraryFile = vi.fn();
 vi.mock('../../src/providers/registry', () => ({
   fetchDesignLibraryCatalog: (...args: unknown[]) => fetchDesignLibraryCatalog(...(args as [])),
   designLibraryThumbUrl: (thumb: string) => `/api/design-library/thumb/${thumb.split('/').pop()}`,
+  designLibraryPreviewAssetUrl: (rel: string, file: string) =>
+    `/api/design-library/preview-asset/${encodeURIComponent(rel)}/${file}`,
   openDesignLibraryPath: (...args: unknown[]) => openDesignLibraryPath(...(args as [])),
   startDesignLibraryProject: (...args: unknown[]) => startDesignLibraryProject(...(args as [])),
   openDesignLibraryLivePreview: (...args: unknown[]) => openDesignLibraryLivePreview(...(args as [])),
@@ -42,10 +44,11 @@ const CATALOG: DesignLibraryCatalog = {
           label: 'Neon Dashboard Kit',
           rel: '01 UI Kits/neon-dashboard',
           thumb: '.catalog/thumbs/ui-kit-1.jpg',
+          gallery: ['.catalog/thumbs/ui-kit-1.jpg', '.catalog/thumbs/ui-kit-1-fig.png'],
           kind: 'Figma file',
           files: 12,
           size: '40 MB',
-          category: '01 UI Kits',
+          category: 'ui-kit',
           domains: ['ui-kit', 'dashboard'],
           allowed_use: 'licensed-source-review',
           entry_html: 'index.html',
@@ -66,7 +69,7 @@ const CATALOG: DesignLibraryCatalog = {
           kind: 'No preview',
           files: 40,
           size: '12 MB',
-          category: '02 App Captures',
+          category: 'capture',
           domains: ['app-ui', 'fintech'],
           allowed_use: 'human-local-only',
         },
@@ -78,7 +81,7 @@ const CATALOG: DesignLibraryCatalog = {
           kind: 'NeuForm motion/WebGL tool',
           files: 2,
           size: '42 KB',
-          category: '05 NeuForm Favorites/Tools',
+          category: 'design-system',
           domains: ['neuform', 'webgl-motion'],
           allowed_use: 'human-local-only',
           entry_html: 'reference.html',
@@ -306,7 +309,7 @@ describe('DesignLibrarySection', () => {
     expect(screen.getByRole('heading', { name: 'Human Local Only' })).toBeTruthy();
   });
 
-  it('starts a project and navigates via onOpenProject when Use as template succeeds', async () => {
+  it('opens the guided create dialog from Use as template, then starts a project and navigates via onOpenProject on Skip all', async () => {
     startDesignLibraryProject.mockResolvedValue({
       ok: true,
       response: { ok: true, projectId: 'proj-1', conversationId: 'conv-1', entryFile: 'index.html', copiedFiles: 12, skippedFiles: 0, warnings: [] },
@@ -318,8 +321,40 @@ describe('DesignLibrarySection', () => {
     const card = label.closest('article') as HTMLElement;
     fireEvent.click(within(card).getByText('Use as template'));
 
-    await waitFor(() => expect(startDesignLibraryProject).toHaveBeenCalledWith('01 UI Kits/neon-dashboard'));
+    const dialog = await screen.findByTestId('guided-create-dialog');
+    // Skip all reproduces today's single-click behavior exactly: no options
+    // (in particular no brief) sent to startDesignLibraryProject at all.
+    fireEvent.click(within(dialog).getByTestId('guided-create-skip'));
+
+    await waitFor(() => expect(startDesignLibraryProject).toHaveBeenCalledWith('01 UI Kits/neon-dashboard', undefined, undefined));
     await waitFor(() => expect(onOpenProject).toHaveBeenCalledWith('proj-1', 'conv-1', 'index.html'));
+  });
+
+  it('collects guided create answers into the brief sent to startDesignLibraryProject', async () => {
+    startDesignLibraryProject.mockResolvedValue({
+      ok: true,
+      response: { ok: true, projectId: 'proj-brief', conversationId: 'conv-brief', copiedFiles: 12, skippedFiles: 0, warnings: [] },
+    });
+    const onOpenProject = vi.fn();
+    render(<DesignLibrarySection active onOpenProject={onOpenProject} />);
+
+    const label = await screen.findByText('Neon Dashboard Kit');
+    const card = label.closest('article') as HTMLElement;
+    fireEvent.click(within(card).getByText('Use as template'));
+
+    const dialog = await screen.findByTestId('guided-create-dialog');
+    const screensPresets = within(dialog).getAllByTestId('guided-create-screens-preset');
+    fireEvent.click(screensPresets.find((el) => el.getAttribute('data-value') === '5')!);
+    fireEvent.click(within(dialog).getByTestId('guided-create-start'));
+
+    await waitFor(() =>
+      expect(startDesignLibraryProject).toHaveBeenCalledWith(
+        '01 UI Kits/neon-dashboard',
+        undefined,
+        { mode: 'copy', brief: { screens: 5 } },
+      ),
+    );
+    await waitFor(() => expect(onOpenProject).toHaveBeenCalledWith('proj-brief', 'conv-brief', undefined));
   });
 
   it('selects an aspect and starts a prompt-only project from a private reference', async () => {
@@ -354,6 +389,8 @@ describe('DesignLibrarySection', () => {
     const label = await screen.findByText('Neon Dashboard Kit');
     const card = label.closest('article') as HTMLElement;
     fireEvent.click(within(card).getByText('Use as template'));
+    const dialog = await screen.findByTestId('guided-create-dialog');
+    fireEvent.click(within(dialog).getByTestId('guided-create-skip'));
 
     await screen.findByText('items with allowed_use cannot start a project');
     expect(onOpenProject).not.toHaveBeenCalled();
@@ -402,5 +439,224 @@ describe('DesignLibrarySection', () => {
     fireEvent.click(within(card).getByTestId('design-library-live-preview'));
 
     await screen.findByText('this collection has no previewable HTML file');
+  });
+
+  // --- card contract (t4/t11): cover, clamped title/description, metadata
+  // row, actions, and image-load fallbacks ----------------------------------
+
+  it('renders the full card shape: cover image, single-line title, clamped description, metadata row, and actions', async () => {
+    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
+    const label = await screen.findByText('Neon Dashboard Kit');
+    const card = label.closest('article') as HTMLElement;
+
+    const cover = within(card).getByTestId('design-library-cover');
+    expect(within(cover).getByRole('img', { name: 'Neon Dashboard Kit' })).toBeTruthy();
+    expect(within(card).getByRole('heading', { name: 'Neon Dashboard Kit' })).toBeTruthy();
+    expect(within(card).getByTestId('design-library-description').textContent).toBe(
+      'Dark glassmorphic analytics dashboard. Best for SaaS admin panels.',
+    );
+    const meta = within(card).getByTestId('design-library-meta');
+    expect(meta.contains(within(card).getByRole('heading'))).toBe(true);
+    const actions = within(card).getByTestId('design-library-actions');
+    expect(within(actions).getByRole('button', { name: /open folder/i })).toBeTruthy();
+  });
+
+  it('swaps the cover to the shared fallback state when the thumbnail image fails to load', async () => {
+    render(<DesignLibrarySection active />);
+    const label = await screen.findByText('Neon Dashboard Kit');
+    const card = label.closest('article') as HTMLElement;
+    const cover = within(card).getByTestId('design-library-cover');
+
+    const img = within(cover).getByRole('img', { name: 'Neon Dashboard Kit' });
+    fireEvent.error(img);
+
+    expect(within(cover).queryByRole('img')).toBeNull();
+    // The fallback still fills the cover slot — never an empty collapse.
+    expect(within(cover).getByText('Visual preview unavailable')).toBeTruthy();
+  });
+
+  it('keeps the cover image hidden until it decodes, so a failed load never flashes a broken-image glyph', async () => {
+    render(<DesignLibrarySection active />);
+    const label = await screen.findByText('Neon Dashboard Kit');
+    const card = label.closest('article') as HTMLElement;
+    const cover = within(card).getByTestId('design-library-cover');
+    const img = within(cover).getByRole('img', { name: 'Neon Dashboard Kit' }) as HTMLImageElement;
+
+    const classNameBeforeLoad = img.className;
+    fireEvent.load(img);
+    expect(img.className).not.toBe(classNameBeforeLoad);
+  });
+
+  it('renders the fallback immediately for a catalog item with a null thumb, without ever mounting an img', async () => {
+    render(<DesignLibrarySection active />);
+    const label = await screen.findByText('Fintune (iOS)');
+    const card = label.closest('article') as HTMLElement;
+    const cover = within(card).getByTestId('design-library-cover');
+
+    expect(within(cover).queryByRole('img')).toBeNull();
+    expect(within(cover).getByText('Visual preview unavailable')).toBeTruthy();
+  });
+
+  // --- detail view (t6/PRD C6): hero, identity, preview strip -------------
+
+  it('renders the detail dialog\'s hero, title, category chip, description, and preview strip', async () => {
+    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
+    await screen.findByText('Neon Dashboard Kit');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
+
+    expect(within(dialog).getByTestId('design-library-hero-image')).toBeTruthy();
+    expect(within(dialog).getByRole('heading', { name: 'Neon Dashboard Kit' })).toBeTruthy();
+    expect(within(dialog).getByText('Ui Kit')).toBeTruthy();
+    expect(
+      within(dialog).getByText('Dark glassmorphic analytics dashboard. Best for SaaS admin panels.'),
+    ).toBeTruthy();
+    expect(within(dialog).getAllByTestId('design-library-strip-item')).toHaveLength(2);
+  });
+
+  it('does not render a preview strip at all when the item has no thumb', async () => {
+    render(<DesignLibrarySection active />);
+    await screen.findByText('Fintune (iOS)');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Fintune (iOS)' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Fintune (iOS)' });
+    expect(dialog.querySelector('[data-testid="design-library-strip-item"]')).toBeNull();
+  });
+
+  it('omits the strip for an item with only a single cover image, no catalog gallery', async () => {
+    render(<DesignLibrarySection active />);
+    await screen.findByText('NeuForm Particle Field');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview NeuForm Particle Field' }));
+    const dialog = await screen.findByRole('dialog', { name: 'NeuForm Particle Field' });
+    expect(within(dialog).queryByTestId('design-library-strip-item')).toBeNull();
+  });
+
+  it('swaps the hero image when a strip thumbnail is clicked, without closing the dialog', async () => {
+    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
+    await screen.findByText('Neon Dashboard Kit');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
+
+    const hero = within(dialog).getByTestId('design-library-hero-image') as HTMLImageElement;
+    expect(hero.getAttribute('src')).toBe('/api/design-library/thumb/ui-kit-1.jpg');
+
+    const stripItems = within(dialog).getAllByTestId('design-library-strip-item');
+    fireEvent.click(stripItems[1]!);
+
+    const heroAfter = within(dialog).getByTestId('design-library-hero-image') as HTMLImageElement;
+    expect(heroAfter.getAttribute('src')).toBe('/api/design-library/thumb/ui-kit-1-fig.png');
+    // Still the same dialog — the strip never reloads it.
+    expect(screen.getByRole('dialog', { name: 'Neon Dashboard Kit' })).toBeTruthy();
+  });
+
+  it('swaps the hero image with the left/right arrow keys', async () => {
+    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
+    await screen.findByText('Neon Dashboard Kit');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
+
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(
+      (within(dialog).getByTestId('design-library-hero-image') as HTMLImageElement).getAttribute('src'),
+    ).toBe('/api/design-library/thumb/ui-kit-1-fig.png');
+
+    fireEvent.keyDown(document, { key: 'ArrowLeft' });
+    expect(
+      (within(dialog).getByTestId('design-library-hero-image') as HTMLImageElement).getAttribute('src'),
+    ).toBe('/api/design-library/thumb/ui-kit-1.jpg');
+  });
+
+  // --- duplicate suppression (t9) ------------------------------------------
+
+  it('hides duplicate_of items from the grid and notes how many were hidden', async () => {
+    fetchDesignLibraryCatalog.mockResolvedValue({
+      ok: true,
+      catalog: {
+        ...CATALOG,
+        total_collections: 2,
+        groups: [{
+          title: 'UI Kits',
+          folder: '01 UI Kits',
+          blurb: 'Purchased kits.',
+          items: [
+            CATALOG.groups[0]!.items[0]!,
+            {
+              ...CATALOG.groups[0]!.items[0]!,
+              id: 'ui-kit-1-dup',
+              label: 'Neon Dashboard Kit (copy)',
+              rel: '01 UI Kits/neon-dashboard-copy',
+              duplicate_of: '01 UI Kits/neon-dashboard',
+            },
+          ],
+        }],
+      },
+    });
+
+    render(<DesignLibrarySection active />);
+    await screen.findByText('Neon Dashboard Kit');
+
+    expect(screen.queryByText('Neon Dashboard Kit (copy)')).toBeNull();
+    expect(screen.getAllByTestId('design-library-card')).toHaveLength(1);
+    expect(screen.getByText('1 duplicates hidden')).toBeTruthy();
+  });
+
+  // --- interactive kit canvas (t7/PRD C7) -----------------------------------
+
+  it('offers Explore kit for a permitted ui-kit item with entry_html, and opens the canvas', async () => {
+    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
+    await screen.findByText('Neon Dashboard Kit');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
+
+    const exploreBtn = within(dialog).getByTestId('design-library-explore-kit');
+    fireEvent.click(exploreBtn);
+
+    // Explore kit replaces the detail dialog with the canvas.
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Neon Dashboard Kit' })).toBeNull());
+    const frame = (await screen.findByTestId('design-library-kit-canvas-frame')) as HTMLIFrameElement;
+    expect(frame.getAttribute('src')).toBe(
+      '/api/design-library/preview-asset/01%20UI%20Kits%2Fneon-dashboard/index.html',
+    );
+    expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-popups');
+    expect(frame.style.width).toBe('1280px');
+
+    fireEvent.click(screen.getByTestId('design-library-canvas-mobile'));
+    expect((screen.getByTestId('design-library-kit-canvas-frame') as HTMLIFrameElement).style.width).toBe(
+      '390px',
+    );
+  });
+
+  it('omits Explore kit for a human-local-only item even with a matching category and entry_html', async () => {
+    render(<DesignLibrarySection active />);
+    await screen.findByText('NeuForm Particle Field');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview NeuForm Particle Field' }));
+    const dialog = await screen.findByRole('dialog', { name: 'NeuForm Particle Field' });
+
+    expect(within(dialog).queryByTestId('design-library-explore-kit')).toBeNull();
+  });
+
+  it('omits Explore kit for an otherwise-permitted item with no renderable entry', async () => {
+    fetchDesignLibraryCatalog.mockResolvedValue({
+      ok: true,
+      catalog: {
+        ...CATALOG,
+        groups: [
+          {
+            ...CATALOG.groups[0]!,
+            items: [{ ...CATALOG.groups[0]!.items[0]!, entry_html: null }],
+          },
+          CATALOG.groups[1]!,
+        ],
+      },
+    });
+
+    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
+    await screen.findByText('Neon Dashboard Kit');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
+
+    expect(within(dialog).queryByTestId('design-library-explore-kit')).toBeNull();
   });
 });

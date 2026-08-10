@@ -17,6 +17,7 @@ triggers:
   - "Notion 仪表盘"
   - "Live Artifact dashboard"
 od:
+  category: "dashboard"
   mode: prototype
   platform: desktop
   scenario: operation

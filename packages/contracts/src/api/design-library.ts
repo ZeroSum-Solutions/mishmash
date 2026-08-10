@@ -9,7 +9,7 @@
 //
 // Keep this file pure TypeScript — no Node, browser, or daemon imports.
 
-import type { Project } from './projects.js';
+import type { GuidedCreateBrief, Project } from './projects.js';
 
 export type DesignLibraryAllowedUse =
   | 'own-code'
@@ -47,6 +47,16 @@ export interface DesignLibraryItem {
    * independently.
    */
   entry_html?: string | null;
+  /**
+   * Additional preview images for the item's detail-view strip, beyond the
+   * primary `thumb` — e.g. an alternate Figma-source cover published
+   * alongside the generated JPG. Computed by the daemon from files that
+   * already exist under `.catalog/thumbs/`; the primary `thumb` is always
+   * first when present. Absent, `null`, or a single-element array means the
+   * cover is the item's only visual — the detail view must not invent strip
+   * entries beyond what this lists.
+   */
+  gallery?: string[];
   /** Selectable visual/interaction ingredients, e.g. hero, WebGL, GSAP. */
   aspects?: string[];
   /** Implementation technologies detected in the source reference. */
@@ -109,6 +119,12 @@ export interface DesignLibraryStartProjectRequest {
   mode?: 'copy' | 'reference';
   /** Optional subset of the item's declared aspects; empty means full design. */
   aspects?: string[];
+  /**
+   * The guided create flow's answers (PRD C8), when the caller collected
+   * one. Folded server-side into the generated project's starting prompt —
+   * see `GuidedCreateBrief` in `./projects.js`.
+   */
+  brief?: GuidedCreateBrief;
 }
 
 export interface DesignLibraryStartProjectResponse {

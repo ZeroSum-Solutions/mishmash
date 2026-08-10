@@ -37,7 +37,7 @@ od:
     requires: false
   speaker_notes: true
   animations: true
-  category: "government-policy"
+  category: "deck"
   scenario: "policy"
   example_prompt: "Create \"Brief a Health-System Board on Data Governance like a Chief Compliance Officer\" as a decision-grade Government & policy deck in this template's own visual system. Subject: A hospital data-governance briefing: patient-data risk, the control framework, accountability, and the approval the board must give. Audience: health-system board, regulators. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does the deck reduce approval risk rather than create rhetorical heat."
 ---

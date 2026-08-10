@@ -12,6 +12,7 @@ triggers:
   - "all-hands recap"
   - "会议纪要"
 od:
+  category: "document-guide"
   mode: prototype
   platform: desktop
   scenario: operations

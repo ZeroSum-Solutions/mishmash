@@ -55,6 +55,7 @@ import {
 } from '../../project-locations.js';
 import { auditDesignSystemPackage } from '../../tools-connectors-cli.js';
 import { parseOrchestratorWorkspace } from '../../workspace-contract.js';
+import { buildGuidedBriefSection, foldGuidedBriefIntoPrompt, normalizeGuidedBrief } from '../../prompts/guided-brief.js';
 import { registerProjectConversationRoutes } from './conversations.js';
 import { cancelRunsOwnedBy } from './cancel-owned-runs.js';
 
@@ -1564,7 +1565,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
 
   app.post('/api/projects', async (req, res) => {
     try {
-      const { id, name, projectLocationId, skillId, designSystemId, pendingPrompt, metadata, customInstructions, skipDiscoveryBrief } =
+      const { id, name, projectLocationId, skillId, designSystemId, pendingPrompt, metadata, customInstructions, skipDiscoveryBrief, brief } =
         req.body || {};
       if (typeof id !== 'string' || !isSafeId(id)) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'invalid project id');
@@ -1626,6 +1627,15 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       if (skipDiscoveryBrief !== undefined && typeof skipDiscoveryBrief !== 'boolean') {
         return sendApiError(res, 400, 'BAD_REQUEST', 'skipDiscoveryBrief must be a boolean');
       }
+      // Guided create flow (PRD C8) — the template-start path's equivalent of
+      // design-library.ts's start-project brief folding. `brief` is optional
+      // and undefined for every pre-existing caller of this generic endpoint,
+      // so an absent brief leaves pendingPrompt exactly as before.
+      const briefResult = normalizeGuidedBrief(brief);
+      if (!briefResult.ok) {
+        return sendApiError(res, 400, 'BAD_REQUEST', briefResult.message);
+      }
+      const guidedBriefSection = buildGuidedBriefSection(briefResult.brief);
       const designSystemValidation = await validateProjectDesignSystemId(designSystemId);
       if (!designSystemValidation.ok) {
         return sendApiError(
@@ -1724,7 +1734,12 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           name: name.trim(),
           skillId: normalizedSkillId,
           designSystemId: normalizedDesignSystemId,
-          pendingPrompt: pendingPrompt || null,
+          // Fold the guided brief in only when one was actually collected —
+          // an absent/empty brief (every pre-existing caller) leaves
+          // pendingPrompt byte-for-byte as it was before this flow existed.
+          pendingPrompt: guidedBriefSection
+            ? foldGuidedBriefIntoPrompt(pendingPrompt, guidedBriefSection)
+            : (pendingPrompt || null),
           metadata: projectMetadata,
           customInstructions:
             typeof customInstructions === 'string'

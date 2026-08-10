@@ -19,6 +19,7 @@ triggers:
   - "电子指南"
   - "电子书"
 od:
+  category: "document-guide"
   mode: prototype
   platform: desktop
   scenario: marketing

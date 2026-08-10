@@ -16,6 +16,7 @@ triggers:
   - "配音"
   - "音效"
 od:
+  category: "audio"
   mode: audio
   surface: audio
   scenario: marketing

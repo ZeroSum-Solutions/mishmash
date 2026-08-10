@@ -12,6 +12,7 @@ triggers:
   - "入职"
   - "新员工"
 od:
+  category: "document-guide"
   mode: prototype
   platform: desktop
   scenario: hr

@@ -13,6 +13,7 @@ triggers:
   - "app onboarding"
   - "移动端引导"
 od:
+  category: "mobile-app"
   mode: prototype
   platform: mobile
   scenario: design

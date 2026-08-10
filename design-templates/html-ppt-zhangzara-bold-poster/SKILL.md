@@ -39,7 +39,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "fundraising-pitch"
+  category: "deck"
   scenario: "finance"
   example_prompt: "Create \"Write a Series A Growth Story like a Tier-1 VC Partner\" as a decision-grade Fundraising pitch deck in this template's own visual system. Subject: MishMash's Series A growth story: the traction curve, the expansion motion, and why it's venture-scale. Audience: Series A partners. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would an investor know why this is venture-scale and urgent."
 ---

@@ -116,6 +116,67 @@
   box-shadow: var(--shadow-xs);
 }
 
+/* ---------- Category chips ---------- */
+/* Same chip grammar as .templates-view__filters, but wraps across multiple
+   rows — up to 20 taxonomy categories plus All, vs. the 3-item source
+   filter. */
+.templates-view__category-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.templates-view__category-filters button {
+  appearance: none;
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-quick) var(--ease-out),
+    color var(--dur-quick) var(--ease-out),
+    border-color var(--dur-quick) var(--ease-out);
+}
+.templates-view__category-filters button:hover:not([data-active='true']) {
+  color: var(--text);
+  border-color: var(--text-faint);
+}
+.templates-view__category-filters button[data-active='true'] {
+  border-color: transparent;
+  background: var(--bg-elevated);
+  color: var(--text-strong);
+  box-shadow: var(--shadow-xs);
+}
+
+/* ---------- Category sections ---------- */
+.templates-view__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.templates-view__section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.templates-view__section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
+}
+.templates-view__section-count {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Card grid ---------- */
 .templates-view__grid {
   display: grid;
@@ -150,16 +211,21 @@
 
 /* The thumbnail is a 1280px-wide render scaled to fit the card, so the
    template is previewed at the desktop breakpoint it was designed for
-   rather than at a ~260px mobile layout. */
+   rather than at a ~260px mobile layout. Cover contract: fixed 16/10 band,
+   shared with the Design Library and Design Systems cards — the scaled
+   live-content render crops at the same band as the poster path. */
 .templates-card__thumb {
   position: relative;
   display: block;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 10;
   overflow: hidden;
   background: var(--bg-subtle);
   border-bottom: 1px solid var(--border-soft);
 }
-/* Poster path: a real screenshot of the template, cropped to the card. */
+/* Poster path: a real screenshot of the template, cropped to the card.
+   Hidden until decoded (opacity 0 -> 1 on .is-loaded) so a failed request
+   never paints a broken-image glyph even for a frame; onError swaps the img
+   for the live iframe fallback before it ever becomes visible. */
 .templates-card__thumb--poster img {
   position: absolute;
   inset: 0;
@@ -168,13 +234,24 @@
   object-fit: cover;
   object-position: top center;
   display: block;
+  opacity: 0;
+  transition: opacity 200ms var(--ease-out, ease);
 }
+.templates-card__thumb--poster img.is-loaded {
+  opacity: 1;
+}
+/* Fixed reference box, not container-relative: at the 320px card width this
+   scale assumes (1280 * 0.25), height must be 1280 * 10/16 = 800 to match
+   the card's 16/10 cover band exactly. It was 960 (1280 * 3/4) for the old
+   4/3 band — left at that value here it would overflow the shorter 16/10
+   crop window by 40px, cutting more of the page than the top-anchored crop
+   intends. */
 .templates-card__thumb iframe {
   position: absolute;
   top: 0;
   left: 0;
   width: 1280px;
-  height: 960px;
+  height: 800px;
   border: 0;
   transform: scale(0.25);
   transform-origin: top left;
@@ -187,13 +264,38 @@
   inset: 0;
 }
 
-/* Entries whose preview is not HTML (a handful are markdown) have no
-   rendered example to show. */
-.templates-card__thumb--none,
-.templates-viewer__no-preview {
+/* Hover/focus "Preview" cue — same dark-scrim + glyph + label overlay as the
+   Design Library card's thumbButton overlay, so the click affordance reads
+   identically across both galleries. */
+.templates-card__thumb-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 7px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity var(--dur-quick) var(--ease-out);
+}
+.templates-card:hover .templates-card__thumb-hint,
+.templates-card:focus-visible .templates-card__thumb-hint {
+  opacity: 1;
+}
+
+/* Entries whose preview is not HTML (a handful are markdown) have no
+   rendered example to show — the same quiet glyph + label fallback pattern
+   used everywhere an image can't be shown (MediaFallback). */
+.templates-card__thumb--none {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 0 18px;
   margin: 0;
   text-align: center;
@@ -202,8 +304,16 @@
   color: var(--text-faint);
 }
 .templates-viewer__no-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 100%;
+  padding: 0 18px;
+  margin: 0;
+  text-align: center;
   font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-faint);
 }
 
 .templates-card__body {
@@ -236,6 +346,19 @@
 .templates-card__mode {
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+/* Description contract: exactly 2 lines, same type size as the Design
+   Library card's clamped description, so every card in the grid keeps a
+   uniform shape regardless of copy length. */
+.templates-card__description {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .templates-view__empty {
@@ -386,7 +509,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .templates-card {
+  .templates-card,
+  .templates-card__thumb-hint,
+  .templates-card__thumb--poster img {
     transition: none;
   }
   .templates-card:hover {

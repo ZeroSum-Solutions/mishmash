@@ -2934,6 +2934,7 @@ import type {
   DesignLibraryPromotionListStatus,
   DesignLibraryPromotionsResponse,
   DesignLibraryStartProjectResponse,
+  GuidedCreateBrief,
 } from '@open-design/contracts';
 
 // Read-only browse of the local curated reference-asset library
@@ -2977,6 +2978,8 @@ function isDesignLibraryItemShape(item: unknown): boolean {
       (Array.isArray(candidate.aspects) && candidate.aspects.every((aspect) => typeof aspect === 'string'))) &&
     (candidate.stacks === undefined ||
       (Array.isArray(candidate.stacks) && candidate.stacks.every((stack) => typeof stack === 'string'))) &&
+    (candidate.gallery === undefined ||
+      (Array.isArray(candidate.gallery) && candidate.gallery.every((entry) => typeof entry === 'string'))) &&
     (candidate.reference === undefined || isDesignLibraryReferenceShape(candidate.reference))
   );
 }
@@ -3151,6 +3154,23 @@ export function designLibraryThumbUrl(thumb: string): string {
   return `/api/design-library/thumb/${encodeURIComponent(file)}`;
 }
 
+// Points the "Explore kit" iframe canvas at one file inside a catalog item's
+// own directory (the entry HTML, or one of its relatively-referenced
+// CSS/JS/image siblings — the browser resolves those against this URL on its
+// own). `rel` is encoded as a single opaque path segment so an embedded `/`
+// cannot be confused with the file path that follows; `file` is encoded
+// per-segment so its own `/` separators survive. See
+// apps/daemon/src/routes/design-library.ts's preview-asset route for the
+// rights gate and containment checks this URL is authorized against.
+export function designLibraryPreviewAssetUrl(rel: string, file: string): string {
+  const relSegment = encodeURIComponent(rel);
+  const fileSegment = file
+    .split('/')
+    .map((seg) => encodeURIComponent(seg))
+    .join('/');
+  return `/api/design-library/preview-asset/${relSegment}/${fileSegment}`;
+}
+
 export async function openDesignLibraryPath(rel: string): Promise<boolean> {
   try {
     const resp = await fetch('/api/design-library/open', {
@@ -3198,7 +3218,7 @@ export type StartDesignLibraryProjectResult =
 export async function startDesignLibraryProject(
   rel: string,
   name?: string,
-  options?: { mode?: 'copy' | 'reference'; aspects?: string[] },
+  options?: { mode?: 'copy' | 'reference'; aspects?: string[]; brief?: GuidedCreateBrief },
 ): Promise<StartDesignLibraryProjectResult> {
   try {
     const body = {
@@ -3206,6 +3226,7 @@ export async function startDesignLibraryProject(
       ...(name ? { name } : {}),
       ...(options?.mode ? { mode: options.mode } : {}),
       ...(options?.aspects?.length ? { aspects: options.aspects } : {}),
+      ...(options?.brief && Object.keys(options.brief).length > 0 ? { brief: options.brief } : {}),
     };
     const resp = await fetch('/api/design-library/start-project', {
       method: 'POST',

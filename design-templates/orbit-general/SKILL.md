@@ -20,6 +20,7 @@ triggers:
   - "早安简报"
   - "跨工具汇总"
 od:
+  category: "dashboard"
   mode: prototype
   platform: desktop
   scenario: orbit

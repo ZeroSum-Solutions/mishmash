@@ -37,7 +37,7 @@ od:
     requires: false
   speaker_notes: true
   animations: true
-  category: "data-finance"
+  category: "deck"
   scenario: "finance"
   example_prompt: "Create \"Write a Weekly Growth Review like a Head of Analytics\" as a decision-grade Data, KPI & finance deck in this template's own visual system. Subject: MishMash's weekly growth review: stars, installs, activation — the number, the driver, and the recommended move. Audience: growth & product team. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does every chart have a decision above it."
 ---

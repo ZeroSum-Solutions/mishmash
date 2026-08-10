@@ -15,6 +15,7 @@ triggers:
   - "海报"
   - "插画"
 od:
+  category: "tool"
   mode: image
   surface: image
   scenario: design

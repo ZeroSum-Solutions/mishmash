@@ -38,7 +38,7 @@ od:
     requires: true
     sections: [color, typography, layout, components]
   speaker_notes: true
-  category: "fundraising-pitch"
+  category: "deck"
   scenario: "finance"
   example_prompt: "Create \"Write an Investor Pitch Book like a Growth-Equity Analyst\" as a decision-grade Fundraising pitch deck in this template's own visual system. Subject: MishMash's investor pitch book: market map, moat, unit economics, and the ask — analyst-grade and diligence-ready. Audience: growth-equity investors. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would an investor know why this is venture-scale and urgent."
 ---

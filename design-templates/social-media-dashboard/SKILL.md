@@ -19,6 +19,7 @@ triggers:
   - "创作者后台"
   - "社交媒体仪表盘"
 od:
+  category: "dashboard"
   mode: prototype
   platform: desktop
   scenario: creator

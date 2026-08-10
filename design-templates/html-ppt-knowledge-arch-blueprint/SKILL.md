@@ -37,7 +37,7 @@ od:
     requires: false
   speaker_notes: true
   animations: true
-  category: "product-management"
+  category: "deck"
   scenario: "product"
   example_prompt: "Create \"Turn an Incident Retro into a Learning Deck like a Platform VP\" as a decision-grade Product management deck in this template's own visual system. Subject: MishMash's incident retro: the daemon-restart data bug, the root cause, the fix, and the systemic follow-ups. Audience: engineering, SRE, leadership. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can cross-functional reviewers agree on the next irreversible step."
 ---

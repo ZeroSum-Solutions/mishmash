@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PERIHELION — Instruments for what moves.</title>
+<meta name="description" content="PERIHELION: hand-finished orbital instruments and timepieces, built in runs of twelve. A scroll-scrubbed cinematic hero dissolving into the collection, the craft, and the workshop.">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='none' stroke='%23c9a15f' stroke-width='1.4'/%3E%3Ccircle cx='16' cy='4.5' r='2.1' fill='%23c9a15f'/%3E%3C/svg%3E">
+<script>
+/* Hardening #1: apply the `.js` gate SYNCHRONOUSLY, before first paint,
+   so the tall pinned-film layout and the initial hidden states in the
+   `.js`-scoped CSS below are the very first thing the browser paints —
+   never a post-load shift. Gated on prefers-reduced-motion up front: a
+   reduced-motion visitor never gets the class, and never sees a shift
+   either, because the static layout is what renders from frame one. */
+(function(){
+  try {
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    document.documentElement.classList.add('js');
+  } catch (e) {}
+})();
+</script>
+<style>
+/* ============================================================
+   PERIHELION — scroll-film hero. Design tokens.
+   ============================================================ */
+:root{
+  --void:#06070a;
+  --void-2:#0c0e15;
+  --void-3:#12141d;
+  --paper:#f4efe3;
+  --paper-2:#eae1cd;
+  --ink:#181510;
+  --ink-dim:#3a352c;
+  --brass:#c9a15f;
+  --brass-soft:#dcc08b;
+  --ember:#d97350;
+  --line-on-dark:rgba(244,239,227,.15);
+  --line-on-light:rgba(24,21,16,.14);
+  --dim-on-dark:rgba(244,239,227,.62);
+  --dim-on-light:rgba(24,21,16,.6);
+  --display: ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+  --ease-out: cubic-bezier(.16,1,.3,1);
+  --ease-soft: cubic-bezier(.23,1,.32,1);
+}
+
+*,*::before,*::after{box-sizing:border-box;}
+html{scroll-behavior:auto;}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overflow-x:hidden;
+}
+img,svg{display:block;max-width:100%;}
+a{color:inherit;}
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
+.eyebrow{
+  font-family:var(--mono);
+  font-size:.72rem;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+}
+
+/* ============================================================
+   Top bar
+   ============================================================ */
+.topbar{
+  position:fixed; inset:0 0 auto 0; z-index:40;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:clamp(14px,3vw,26px) clamp(16px,4vw,40px);
+  color:var(--paper);
+  mix-blend-mode:normal;
+  transition:color .4s var(--ease-soft);
+}
+.topbar.on-light{ color:var(--ink); }
+.brand-mark{
+  display:flex; align-items:center; gap:.6em;
+  font-family:var(--display);
+  font-size:clamp(1rem,2.2vw,1.15rem);
+  letter-spacing:.04em;
+  text-decoration:none;
+}
+.brand-mark svg{ width:22px; height:22px; flex:0 0 auto; }
+.brand-full{ display:inline; }
+@media (max-width:480px){ .brand-full{ display:none; } }
+.topnav{
+  display:flex; align-items:center; gap:clamp(16px,3vw,32px);
+  font-size:.85rem; letter-spacing:.02em;
+}
+.topnav a{ text-decoration:none; opacity:.86; transition:opacity .2s var(--ease-out); }
+.topnav a:hover, .topnav a:focus-visible{ opacity:1; }
+.topnav .btn-line{
+  border:1px solid currentColor; border-radius:999px;
+  padding:.5em 1.1em; font-size:.78rem; letter-spacing:.06em;
+}
+@media (max-width:640px){ .topnav .nav-links{ display:none; } }
+
+/* ============================================================
+   FILM — pinned hero. Default (no JS / reduced motion): a single
+   elegant static viewport-height composition, normal document
+   flow, everything visible immediately.
+   ============================================================ */
+.film-scroll{
+  position:relative;
+  background:var(--void);
+  min-height:100vh;
+}
+.film-stage{
+  position:relative;
+  min-height:100vh;
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden;
+  background:
+    radial-gradient(120% 90% at 50% 18%, var(--void-3), var(--void) 65%);
+}
+/* Once JS confirms motion is allowed, it stretches the driver tall
+   and switches the stage to a pinned sticky region for GSAP. */
+.js .film-scroll{ min-height:340vh; }
+.js .film-stage{ position:sticky; top:0; height:100vh; }
+
+.orbit-field{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none;
+}
+.orbit-svg{
+  width:min(92vw,900px); height:min(92vw,900px);
+  overflow:visible;
+}
+.orbit-ring{ fill:none; stroke:var(--line-on-dark); stroke-width:1; }
+.orbit-ring--brass{ stroke:var(--brass); stroke-opacity:.55; }
+.orbit-group{ transform-origin:200px 200px; }
+.orbit-dot{ fill:var(--brass-soft); }
+.orbit-tick{ stroke:var(--line-on-dark); stroke-width:1; }
+
+.hero-copy{
+  position:relative; z-index:2;
+  text-align:center; color:var(--paper);
+  padding:0 20px;
+}
+.hero-eyebrow{
+  color:var(--brass-soft); margin-bottom:1.1em;
+}
+.hero-word{
+  margin:0;
+  font-family:var(--display);
+  font-weight:400;
+  font-size:clamp(2.6rem,10vw,7.4rem);
+  line-height:.94;
+  letter-spacing:-.01em;
+}
+.char{ display:inline-block; will-change:transform; }
+.js .char{ opacity:0; transform:translateY(120%); }
+.hero-sub{
+  margin:1.4em auto 0;
+  max-width:34ch;
+  font-size:clamp(.95rem,1.6vw,1.08rem);
+  line-height:1.6;
+  color:var(--dim-on-dark);
+}
+.js .hero-sub{ opacity:0; transform:translateY(14px); }
+
+.scroll-cue{
+  position:absolute; left:50%; bottom:clamp(64px,9vh,96px);
+  transform:translateX(-50%);
+  display:flex; flex-direction:column; align-items:center; gap:.6em;
+  color:var(--dim-on-dark);
+}
+.scroll-cue .eyebrow{ letter-spacing:.22em; }
+.scroll-line{ width:1px; height:34px; background:var(--line-on-dark); position:relative; overflow:hidden; }
+.scroll-line::after{
+  content:""; position:absolute; left:0; top:-100%; width:100%; height:100%;
+  background:var(--brass-soft);
+}
+@media (prefers-reduced-motion:no-preference){
+  .js .scroll-line::after{ animation:cueDrift 1.8s var(--ease-soft) infinite; }
+}
+@keyframes cueDrift{ 0%{top:-100%;} 60%{top:100%;} 100%{top:100%;} }
+
+.chapter-readout{
+  position:absolute; left:0; right:0; bottom:0; z-index:2;
+  display:flex; align-items:center; justify-content:space-between;
+  gap:16px;
+  padding:18px clamp(16px,4vw,40px) 22px;
+  color:var(--dim-on-dark);
+}
+.chapter-readout .eyebrow{ white-space:nowrap; }
+.readout-track{
+  flex:1 1 auto; height:1px; background:var(--line-on-dark);
+  position:relative;
+}
+.readout-fill{
+  position:absolute; left:0; top:-.5px; height:2px; width:0%;
+  background:var(--brass); transform-origin:0 50%;
+}
+
+/* seam veil — bridges the film into the paper section beneath. Static
+   default: always a subtle fixed vignette (no JS needed to see the seam).
+   Under `.js` it starts fully invisible and GSAP fades it in on scroll. */
+.film-veil{
+  position:absolute; inset:0; z-index:1;
+  background:linear-gradient(180deg, rgba(6,7,10,0) 55%, var(--paper) 100%);
+  pointer-events:none;
+}
+.js .film-veil{ opacity:0; }
+
+/* ============================================================
+   SCENE — horizontal pinned specimen run
+   ============================================================ */
+.scene-collection{
+  position:relative;
+  background:var(--void);
+  padding-top:clamp(48px,8vh,96px);
+}
+.js .scene-collection{ height:100vh; padding-top:0; display:flex; flex-direction:column; justify-content:center; }
+.collection-head{
+  padding:0 clamp(16px,4vw,40px);
+  color:var(--paper);
+  margin-bottom:clamp(24px,4vh,48px);
+}
+.collection-head h2{
+  font-family:var(--display); font-weight:400;
+  font-size:clamp(1.7rem,4vw,2.6rem);
+  margin:.3em 0 0;
+}
+.specimen-viewport{
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+}
+.js .specimen-viewport{ overflow:hidden; }
+.specimen-track{
+  display:flex;
+  gap:clamp(18px,3vw,32px);
+  width:max-content;
+  padding:0 clamp(16px,4vw,40px) clamp(24px,4vh,40px);
+  scroll-snap-type:x proximity;
+}
+.js .specimen-track{ scroll-snap-type:none; will-change:transform; }
+.specimen-card{
+  flex:0 0 auto;
+  width:clamp(240px,68vw,380px);
+  scroll-snap-align:start;
+  background:var(--void-2);
+  border:1px solid var(--line-on-dark);
+  border-radius:2px;
+  padding:clamp(20px,2.6vw,30px);
+  color:var(--paper);
+}
+.specimen-card svg{ width:100%; height:auto; margin-bottom:1.4em; }
+.specimen-card h3{
+  font-family:var(--display); font-weight:400; font-size:1.25rem; margin:0 0 .5em;
+}
+.specimen-card p{
+  margin:0; font-size:.92rem; line-height:1.6; color:var(--dim-on-dark);
+}
+
+/* ============================================================
+   SCENE — craft, clip-path reveal rows
+   ============================================================ */
+.scene-craft{
+  background:var(--paper);
+  padding:clamp(72px,12vh,140px) clamp(16px,4vw,40px);
+}
+.craft-head{ max-width:60ch; margin:0 0 clamp(40px,6vh,72px); }
+.craft-head h2{
+  font-family:var(--display); font-weight:400;
+  font-size:clamp(1.9rem,4.4vw,3rem); margin:.35em 0 0;
+}
+.reveal-row{
+  display:grid; grid-template-columns:auto 1fr;
+  gap:clamp(20px,4vw,56px);
+  align-items:baseline;
+  padding:clamp(22px,3.4vh,34px) 0;
+  border-top:1px solid var(--line-on-light);
+  max-width:920px;
+}
+.reveal-row:last-child{ border-bottom:1px solid var(--line-on-light); }
+.js .reveal-row{ clip-path:inset(0 0 100% 0); }
+.reveal-num{
+  font-family:var(--mono); font-size:.85rem; color:var(--brass);
+  letter-spacing:.08em;
+}
+.reveal-body h3{
+  font-family:var(--display); font-weight:400; font-size:clamp(1.2rem,2.4vw,1.5rem);
+  margin:0 0 .4em;
+}
+.reveal-body p{
+  margin:0; font-size:.98rem; line-height:1.65; color:var(--dim-on-light); max-width:60ch;
+}
+
+/* ============================================================
+   SCENE — stats
+   ============================================================ */
+.scene-stats{
+  background:var(--ink);
+  color:var(--paper);
+  padding:clamp(64px,10vh,110px) clamp(16px,4vw,40px);
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:clamp(28px,4vw,40px);
+}
+.stat{ border-top:1px solid var(--line-on-dark); padding-top:1.2em; }
+.stat-num{
+  font-family:var(--display); font-weight:400;
+  font-size:clamp(2rem,4.4vw,3rem);
+  color:var(--brass-soft);
+  line-height:1;
+}
+.stat-label{
+  margin-top:.6em; font-size:.85rem; line-height:1.5; color:var(--dim-on-dark); max-width:22ch;
+}
+
+/* ============================================================
+   SCENE — marquee drift (pure CSS by default; JS adds velocity skew)
+   ============================================================ */
+.scene-marquee{
+  background:var(--paper-2);
+  padding:clamp(26px,4vh,40px) 0;
+  border-top:1px solid var(--line-on-light);
+  border-bottom:1px solid var(--line-on-light);
+}
+.marquee-viewport{ overflow:hidden; }
+.marquee-track{ display:flex; width:max-content; }
+@media (prefers-reduced-motion:no-preference){
+  .marquee-track{ animation:marqueeDrift 26s linear infinite; }
+}
+@keyframes marqueeDrift{ to{ transform:translateX(-50%); } }
+.marquee-row{
+  display:flex; align-items:center; gap:2.4em;
+  padding-right:2.4em;
+  font-family:var(--display); font-size:clamp(1.1rem,2.6vw,1.6rem);
+  white-space:nowrap;
+  color:var(--ink-dim);
+}
+.marquee-row .dot{ color:var(--brass); }
+
+/* ============================================================
+   Post-film content — always fully rendered
+   ============================================================ */
+.section{ padding:clamp(72px,12vh,140px) clamp(16px,4vw,40px); }
+.section-about{
+  background:var(--paper);
+  display:grid; grid-template-columns:1.3fr .7fr; gap:clamp(32px,6vw,80px);
+  align-items:start;
+}
+@media (max-width:820px){ .section-about{ grid-template-columns:1fr; } }
+.about-lede{
+  font-family:var(--display); font-weight:400;
+  font-size:clamp(1.5rem,3.2vw,2.2rem); line-height:1.35;
+  margin:.3em 0 0;
+}
+.fact-list{ list-style:none; margin:0; padding:0; }
+.fact-list li{
+  display:flex; justify-content:space-between; gap:16px;
+  padding:.9em 0; border-top:1px solid var(--line-on-light);
+  font-size:.92rem;
+}
+.fact-list li:last-child{ border-bottom:1px solid var(--line-on-light); }
+.fact-list dt{ color:var(--dim-on-light); }
+.fact-list dd{ margin:0; text-align:right; }
+
+.section-grid{ background:var(--paper); padding-top:0; }
+.grid-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:clamp(28px,5vh,48px); flex-wrap:wrap; }
+.grid-head h2{ font-family:var(--display); font-weight:400; font-size:clamp(1.7rem,4vw,2.4rem); margin:0; }
+.card-grid{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:clamp(20px,3vw,28px);
+}
+.piece-card{
+  border:1px solid var(--line-on-light); border-radius:2px;
+  padding:clamp(20px,2.6vw,26px);
+  background:var(--paper-2);
+}
+.piece-card svg{ width:100%; height:auto; margin-bottom:1.2em; }
+.piece-card h3{ font-family:var(--display); font-weight:400; font-size:1.15rem; margin:0 0 .4em; }
+.piece-card p{ margin:0 0 1.1em; font-size:.9rem; line-height:1.6; color:var(--dim-on-light); }
+.piece-card a{ font-size:.82rem; letter-spacing:.04em; text-decoration:underline; text-underline-offset:.2em; }
+
+.section-quote{
+  background:var(--void); color:var(--paper); text-align:center;
+}
+.section-quote blockquote{
+  margin:0 auto; max-width:52ch;
+  font-family:var(--display); font-weight:400;
+  font-size:clamp(1.5rem,3.6vw,2.4rem); line-height:1.4;
+}
+.section-quote cite{
+  display:block; margin-top:1.4em; font-style:normal;
+  font-family:var(--mono); font-size:.78rem; letter-spacing:.1em; color:var(--dim-on-dark);
+  text-transform:uppercase;
+}
+
+.section-cta{
+  background:var(--paper); text-align:center;
+}
+.cta-inner{ max-width:640px; margin:0 auto; }
+.cta-inner h2{ font-family:var(--display); font-weight:400; font-size:clamp(1.8rem,4.2vw,2.6rem); margin:0 0 .5em; }
+.cta-inner p{ margin:0 0 2em; color:var(--dim-on-light); font-size:1rem; line-height:1.6; }
+.cta-form{
+  display:flex; gap:10px; max-width:420px; margin:0 auto; flex-wrap:wrap; justify-content:center;
+}
+.cta-form input{
+  flex:1 1 220px;
+  padding:.9em 1.1em; border:1px solid var(--line-on-light); border-radius:999px;
+  background:var(--paper); color:var(--ink); font-family:var(--sans); font-size:.92rem;
+}
+.cta-form input::placeholder{ color:var(--dim-on-light); }
+.btn-solid{
+  padding:.9em 1.6em; border-radius:999px; border:1px solid var(--ink);
+  background:var(--ink); color:var(--paper);
+  font-family:var(--sans); font-size:.88rem; letter-spacing:.03em;
+  cursor:pointer; transition:transform .2s var(--ease-out), background .2s var(--ease-out);
+}
+.btn-solid:hover, .btn-solid:focus-visible{ transform:translateY(-2px); background:#000; }
+
+footer.site-footer{
+  background:var(--ink); color:var(--paper);
+  padding:clamp(56px,9vh,90px) clamp(16px,4vw,40px) clamp(28px,4vh,40px);
+}
+.footer-grid{
+  display:grid; grid-template-columns:1.4fr repeat(3,1fr); gap:clamp(28px,4vw,48px);
+  padding-bottom:clamp(36px,5vh,56px); border-bottom:1px solid var(--line-on-dark);
+}
+@media (max-width:760px){ .footer-grid{ grid-template-columns:repeat(2,1fr); } }
+.footer-brand p{ font-size:.9rem; line-height:1.6; color:var(--dim-on-dark); max-width:34ch; margin:1em 0 0; }
+.footer-col h4{ font-family:var(--mono); font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; color:var(--dim-on-dark); margin:0 0 1em; }
+.footer-col ul{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.7em; font-size:.9rem; }
+.footer-col a{ text-decoration:none; opacity:.88; }
+.footer-col a:hover, .footer-col a:focus-visible{ opacity:1; text-decoration:underline; }
+.footer-bottom{
+  display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  padding-top:clamp(20px,3vh,28px);
+  font-size:.78rem; color:var(--dim-on-dark);
+}
+.footer-social{ display:flex; gap:14px; }
+.footer-social a{ display:inline-flex; }
+.footer-social svg{ width:18px; height:18px; opacity:.8; }
+.footer-social a:hover svg, .footer-social a:focus-visible svg{ opacity:1; }
+
+/* focus visibility everywhere */
+a:focus-visible, button:focus-visible, input:focus-visible{
+  outline:2px solid var(--brass); outline-offset:3px;
+}
+
+/* ============================================================
+   Reduced-motion backstop — collapses every scroll-jacked layout
+   back to plain static flow even if the JS gate somehow slipped.
+   ============================================================ */
+@media (prefers-reduced-motion:reduce){
+  .film-scroll, .js .film-scroll{ min-height:0; }
+  .film-stage, .js .film-stage{ position:relative; height:auto; min-height:100vh; }
+  .char, .js .char{ opacity:1; transform:none; }
+  .hero-sub, .js .hero-sub{ opacity:1; transform:none; }
+  .scroll-line::after, .js .scroll-line::after{ animation:none; top:0; }
+  .scene-collection, .js .scene-collection{ height:auto; }
+  .specimen-viewport, .js .specimen-viewport{ overflow-x:auto; }
+  .specimen-track, .js .specimen-track{ transform:none !important; scroll-snap-type:x proximity; }
+  .reveal-row, .js .reveal-row{ clip-path:none; }
+  .marquee-track{ animation:none; transform:none; }
+  * { scroll-behavior:auto !important; }
+}
+</style>
+</head>
+<body>
+
+<a class="sr-only" href="#main">Skip to content</a>
+
+<header class="topbar" id="topbar">
+  <a class="brand-mark" href="#top">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13.5" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="16" cy="4.3" r="2" fill="currentColor"/></svg>
+    <span class="brand-full">PERIHELION</span>
+  </a>
+  <nav class="topnav" aria-label="Primary">
+    <span class="nav-links" style="display:flex;gap:inherit;">
+      <a href="#collection">Collection</a>
+      <a href="#craft">Craft</a>
+      <a href="#workshop">Workshop</a>
+    </span>
+    <a class="btn-line" href="#inquire">Inquire</a>
+  </nav>
+</header>
+
+<main id="main">
+
+  <!-- ================= FILM: pinned hero ================= -->
+  <div class="film-scroll" id="top">
+    <div class="film-stage">
+      <div class="orbit-field" aria-hidden="true">
+        <svg class="orbit-svg" viewBox="0 0 400 400">
+          <g>
+            <circle class="orbit-ring" cx="200" cy="200" r="170"/>
+            <circle class="orbit-ring orbit-ring--brass" cx="200" cy="200" r="128"/>
+            <circle class="orbit-ring" cx="200" cy="200" r="86"/>
+            <g class="orbit-tick-set">
+              <line class="orbit-tick" x1="200" y1="14" x2="200" y2="30"/>
+              <line class="orbit-tick" x1="200" y1="370" x2="200" y2="386"/>
+              <line class="orbit-tick" x1="14" y1="200" x2="30" y2="200"/>
+              <line class="orbit-tick" x1="370" y1="200" x2="386" y2="200"/>
+            </g>
+            <g class="orbit-group orbit-group--outer">
+              <circle class="orbit-dot" cx="200" cy="30" r="3.4"/>
+            </g>
+            <g class="orbit-group orbit-group--mid">
+              <circle class="orbit-dot" cx="200" cy="72" r="2.6"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="hero-copy">
+        <p class="eyebrow hero-eyebrow">Est. workshop of small instruments</p>
+        <h1 class="hero-word" aria-label="PERIHELION">
+          <span class="char">P</span><span class="char">E</span><span class="char">R</span><span class="char">I</span><span class="char">H</span><span class="char">E</span><span class="char">L</span><span class="char">I</span><span class="char">O</span><span class="char">N</span>
+        </h1>
+        <p class="hero-sub">Instruments for what moves. Hand-finished orbital timepieces, built in runs of twelve — never more.</p>
+      </div>
+
+      <div class="film-veil" aria-hidden="true"></div>
+
+      <div class="scroll-cue">
+        <span class="eyebrow">Scroll</span>
+        <span class="scroll-line"></span>
+      </div>
+
+      <div class="chapter-readout">
+        <span class="eyebrow">Perihelion — the point of closest approach</span>
+        <span class="readout-track"><span class="readout-fill" id="readoutFill"></span></span>
+        <span class="eyebrow" aria-hidden="true">01</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SCENE: horizontal collection run ================= -->
+  <section class="scene-collection" id="collection">
+    <div class="collection-head">
+      <p class="eyebrow" style="color:var(--brass-soft);">The collection</p>
+      <h2>Four instruments, twelve of each.</h2>
+    </div>
+    <div class="specimen-viewport">
+      <div class="specimen-track">
+        <article class="specimen-card">
+          <svg viewBox="0 0 200 140" aria-hidden="true"><circle cx="100" cy="70" r="46" fill="none" stroke="var(--brass)" stroke-width="1"/><circle cx="100" cy="70" r="28" fill="none" stroke="var(--line-on-dark)" stroke-width="1"/><circle cx="100" cy="24" r="2.6" fill="var(--brass-soft)"/><circle cx="128" cy="70" r="2" fill="var(--paper)"/></svg>
+          <h3>No. I — The Orrery</h3>
+          <p>A hand-turned brass orrery tracking eight bodies in true relative ratio.</p>
+        </article>
+        <article class="specimen-card">
+          <svg viewBox="0 0 200 140" aria-hidden="true"><rect x="60" y="20" width="80" height="100" rx="6" fill="none" stroke="var(--brass)" stroke-width="1"/><circle cx="100" cy="70" r="30" fill="none" stroke="var(--line-on-dark)" stroke-width="1"/><line x1="100" y1="70" x2="100" y2="48" stroke="var(--brass-soft)" stroke-width="1.4"/><line x1="100" y1="70" x2="116" y2="78" stroke="var(--paper)" stroke-width="1"/></svg>
+          <h3>No. II — The Chronometer</h3>
+          <p>A deck chronometer, gimbal-mounted, accurate to nine seconds a month.</p>
+        </article>
+        <article class="specimen-card">
+          <svg viewBox="0 0 200 140" aria-hidden="true"><circle cx="100" cy="70" r="48" fill="none" stroke="var(--brass)" stroke-width="1"/><line x1="60" y1="70" x2="140" y2="70" stroke="var(--line-on-dark)" stroke-width="1"/><line x1="100" y1="30" x2="100" y2="110" stroke="var(--line-on-dark)" stroke-width="1"/><line x1="70" y1="42" x2="130" y2="98" stroke="var(--brass-soft)" stroke-width="1.4"/></svg>
+          <h3>No. III — The Astrolabe</h3>
+          <p>A planispheric astrolabe for taking the altitude of a star by hand.</p>
+        </article>
+        <article class="specimen-card">
+          <svg viewBox="0 0 200 140" aria-hidden="true"><ellipse cx="100" cy="70" rx="52" ry="24" fill="none" stroke="var(--brass)" stroke-width="1"/><ellipse cx="100" cy="70" rx="30" ry="46" fill="none" stroke="var(--line-on-dark)" stroke-width="1" transform="rotate(20 100 70)"/><circle cx="100" cy="70" r="2.4" fill="var(--paper)"/></svg>
+          <h3>No. IV — The Meridian Ring</h3>
+          <p>An armillary ring instrument for reading true solar noon at the bench.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SCENE: craft reveal rows ================= -->
+  <section class="scene-craft" id="craft" data-header="light">
+    <div class="craft-head">
+      <p class="eyebrow" style="color:var(--brass);">The craft</p>
+      <h2>Three hands, one bench, no shortcuts.</h2>
+    </div>
+    <div class="reveal-list">
+      <div class="reveal-row">
+        <span class="reveal-num">01 — Cut</span>
+        <div class="reveal-body">
+          <h3>Every ring is spun from a single brass blank</h3>
+          <p>Turned on a manual lathe, then hand-filed true against a reference gauge cut in 1994 and never replaced.</p>
+        </div>
+      </div>
+      <div class="reveal-row">
+        <span class="reveal-num">02 — Set</span>
+        <div class="reveal-body">
+          <h3>Jewels are seated one at a time, under a loupe</h3>
+          <p>By the same two hands that will later regulate the finished piece — no assembly line, no division of labor.</p>
+        </div>
+      </div>
+      <div class="reveal-row">
+        <span class="reveal-num">03 — Sign</span>
+        <div class="reveal-body">
+          <h3>Each instrument is numbered, dated, and signed</h3>
+          <p>On the underside of the base, in the order it left the bench. Never twice the same day.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SCENE: stats ================= -->
+  <section class="scene-stats" aria-label="By the numbers">
+    <div class="stat"><div class="stat-num" data-value="0.02" data-decimals="2" data-suffix="mm">0.02mm</div><div class="stat-label">Tolerance held across every gear cut</div></div>
+    <div class="stat"><div class="stat-num" data-value="128" data-suffix="" >128</div><div class="stat-label">Components, in the Meridian Ring alone</div></div>
+    <div class="stat"><div class="stat-num" data-value="41" data-suffix="hrs">41hrs</div><div class="stat-label">Average hand-finishing time per instrument</div></div>
+    <div class="stat"><div class="stat-num" data-value="12" data-suffix="">12</div><div class="stat-label">Instruments made per run — never more</div></div>
+  </section>
+
+  <!-- ================= SCENE: marquee ================= -->
+  <section class="scene-marquee" aria-label="Materials" data-header="light">
+    <div class="marquee-viewport">
+      <div class="marquee-track" id="marqueeTrack">
+        <span class="marquee-row"><span>BRASS</span><span class="dot">·</span><span>SAPPHIRE CRYSTAL</span><span class="dot">·</span><span>BLUED STEEL</span><span class="dot">·</span><span>PATINA BRONZE</span><span class="dot">·</span><span>TITANIUM</span><span class="dot">·</span><span>ENAMEL</span><span class="dot">·</span></span>
+        <span class="marquee-row" aria-hidden="true"><span>BRASS</span><span class="dot">·</span><span>SAPPHIRE CRYSTAL</span><span class="dot">·</span><span>BLUED STEEL</span><span class="dot">·</span><span>PATINA BRONZE</span><span class="dot">·</span><span>TITANIUM</span><span class="dot">·</span><span>ENAMEL</span><span class="dot">·</span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Post-film content ================= -->
+  <section class="section section-about" id="workshop" data-header="light">
+    <p class="about-lede">We build one thing: instruments that make an invisible motion legible — the turn of a planet, the fall of true noon, the drift of a second. Nothing in the workshop is made to be replaced.</p>
+    <dl class="fact-list">
+      <li><dt>Founded</dt><dd>2011, on a single bench</dd></li>
+      <li><dt>Workshop</dt><dd>Lausanne, Switzerland</dd></li>
+      <li><dt>Output</dt><dd>4 designs, 12 per run</dd></li>
+      <li><dt>Warranty</dt><dd>Lifetime regulation</dd></li>
+    </dl>
+  </section>
+
+  <section class="section section-grid" id="pieces" data-header="light">
+    <div class="grid-head">
+      <h2>The current run</h2>
+      <a class="btn-line" style="border:1px solid var(--ink); padding:.5em 1.1em; border-radius:999px; font-size:.8rem; text-decoration:none;" href="#inquire">Request availability</a>
+    </div>
+    <div class="card-grid">
+      <article class="piece-card">
+        <svg viewBox="0 0 200 120" aria-hidden="true"><circle cx="100" cy="60" r="42" fill="none" stroke="var(--brass)" stroke-width="1"/><circle cx="100" cy="60" r="24" fill="none" stroke="var(--ink-dim)" stroke-width="1" opacity=".5"/><circle cx="100" cy="18" r="2.4" fill="var(--brass)"/></svg>
+        <h3>The Orrery</h3>
+        <p>Eight bodies, one ratio. Brass and blued steel.</p>
+        <a href="#inquire">Inquire →</a>
+      </article>
+      <article class="piece-card">
+        <svg viewBox="0 0 200 120" aria-hidden="true"><rect x="64" y="12" width="72" height="96" rx="6" fill="none" stroke="var(--brass)" stroke-width="1"/><circle cx="100" cy="60" r="26" fill="none" stroke="var(--ink-dim)" stroke-width="1" opacity=".5"/></svg>
+        <h3>The Chronometer</h3>
+        <p>Gimbal-mounted, accurate to nine seconds a month.</p>
+        <a href="#inquire">Inquire →</a>
+      </article>
+      <article class="piece-card">
+        <svg viewBox="0 0 200 120" aria-hidden="true"><circle cx="100" cy="60" r="44" fill="none" stroke="var(--brass)" stroke-width="1"/><line x1="62" y1="60" x2="138" y2="60" stroke="var(--ink-dim)" stroke-width="1" opacity=".5"/><line x1="100" y1="24" x2="100" y2="96" stroke="var(--ink-dim)" stroke-width="1" opacity=".5"/></svg>
+        <h3>The Astrolabe</h3>
+        <p>Planispheric, engraved to a single degree of arc.</p>
+        <a href="#inquire">Inquire →</a>
+      </article>
+      <article class="piece-card">
+        <svg viewBox="0 0 200 120" aria-hidden="true"><ellipse cx="100" cy="60" rx="48" ry="22" fill="none" stroke="var(--brass)" stroke-width="1"/><ellipse cx="100" cy="60" rx="26" ry="40" fill="none" stroke="var(--ink-dim)" stroke-width="1" opacity=".5" transform="rotate(20 100 60)"/></svg>
+        <h3>The Meridian Ring</h3>
+        <p>Armillary, set to read true solar noon at the bench.</p>
+        <a href="#inquire">Inquire →</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="section section-quote">
+    <blockquote>
+      “It does not tell time so much as it explains why time is moving at all.”
+      <cite>— J. Sorensen, private collection</cite>
+    </blockquote>
+  </section>
+
+  <section class="section section-cta" id="inquire" data-header="light">
+    <div class="cta-inner">
+      <h2>Request the catalogue</h2>
+      <p>Four designs, twelve of each, made to order. The current run closes when the bench says it closes.</p>
+      <form class="cta-form" action="#" onsubmit="return false;">
+        <label class="sr-only" for="ctaEmail">Email address</label>
+        <input id="ctaEmail" type="email" placeholder="you@example.com" autocomplete="email">
+        <button class="btn-solid" type="submit">Request</button>
+      </form>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <a class="brand-mark" href="#top">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13.5" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="16" cy="4.3" r="2" fill="currentColor"/></svg>
+        <span class="brand-full">PERIHELION</span>
+      </a>
+      <p>Instruments for what moves. A single bench in Lausanne, since 2011.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Collection</h4>
+      <ul>
+        <li><a href="#collection">The Orrery</a></li>
+        <li><a href="#collection">The Chronometer</a></li>
+        <li><a href="#collection">The Astrolabe</a></li>
+        <li><a href="#collection">The Meridian Ring</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Studio</h4>
+      <ul>
+        <li><a href="#craft">Craft</a></li>
+        <li><a href="#workshop">Workshop</a></li>
+        <li><a href="#inquire">Inquire</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Correspondence</h4>
+      <ul>
+        <li><a href="mailto:atelier@perihelion.example">atelier@perihelion.example</a></li>
+        <li>By appointment only</li>
+      </ul>
+      <div class="footer-social" aria-label="Elsewhere">
+        <a href="#" aria-label="Journal"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="1.5"/><line x1="6.5" y1="7" x2="13.5" y2="7"/><line x1="6.5" y1="10" x2="13.5" y2="10"/><line x1="6.5" y1="13" x2="10.5" y2="13"/></svg></a>
+        <a href="#" aria-label="Correspondence"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="3" y="4.5" width="14" height="11" rx="1.5"/><path d="M3.5 5.5l6.5 5 6.5-5"/></svg></a>
+        <a href="#" aria-label="Showroom"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="10" cy="8.4" r="3"/><path d="M10 18c3.5-4 6-7 6-9.6A6 6 0 1 0 4 8.4C4 11 6.5 14 10 18z"/></svg></a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 Perihelion Instruments. All pieces numbered and signed.</span>
+    <span>Scroll-film reference build — design-templates/scroll-film-hero</span>
+  </div>
+</footer>
+
+<noscript>
+<style>
+  /* Real backstop, not a formality: the `.js` class can only ever be added
+     by JS, so this normally never needs to fire. It exists in case a
+     future edit adds an unscoped hidden state or the `.js` gate is ever
+     satisfied by something other than the inline head script (e.g. a
+     stale cached class from a prior render) — it forces every gated
+     element visible and collapses the pinned film's scroll-driver height
+     back to a plain static section, matching the CSS default exactly. */
+  .film-scroll{ min-height:0 !important; }
+  .film-stage{ position:relative !important; height:auto !important; min-height:100vh !important; }
+  .char, .hero-sub, .film-veil, .reveal-row{
+    opacity:1 !important; transform:none !important; clip-path:none !important;
+  }
+  .scene-collection{ height:auto !important; padding-top:clamp(48px,8vh,96px) !important; }
+  .specimen-viewport{ overflow-x:auto !important; }
+  .specimen-track{ transform:none !important; scroll-snap-type:x proximity !important; }
+</style>
+</noscript>
+
+<script>
+(function(){
+  var html = document.documentElement;
+  var coarsePointerMQ = window.matchMedia('(pointer: coarse)');
+  var JUMP = new URLSearchParams(location.search).get('jump');
+
+  function markReady(){ window.__ready = true; }
+
+  // Hardening #1 (early-return half): the head-level inline script already
+  // ran the prefers-reduced-motion check and only added `.js` when motion
+  // is allowed. If it's missing here, the reduced-motion path early-returns
+  // before touching any motion library — the CSS above already renders the
+  // full static composition by default.
+  if (!html.classList.contains('js')) { markReady(); return; }
+
+  function loadScript(src){
+    return new Promise(function(resolve, reject){
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  loadScript('assets/vendor/gsap.min.js')
+    .then(function(){ return loadScript('assets/vendor/ScrollTrigger.min.js'); })
+    .then(function(){
+      // Hardening #2: skip the smooth-scroll layer on touch/coarse
+      // pointers and let native touch scroll drive ScrollTrigger directly.
+      if (!coarsePointerMQ.matches) {
+        return loadScript('assets/vendor/lenis.min.js').catch(function(){ /* Lenis optional */ });
+      }
+    })
+    .then(initFilm)
+    .catch(function(){
+      // A vendored library failed to load/register — fall back to the
+      // static composition rather than getting stuck in the `.js`-scoped
+      // hidden state with no motion library to ever reveal it.
+      html.classList.remove('js');
+      markReady();
+    });
+
+  function initFilm(){
+    if (!window.gsap || !window.ScrollTrigger) { html.classList.remove('js'); markReady(); return; }
+    gsap.registerPlugin(ScrollTrigger);
+
+    if (window.Lenis && !coarsePointerMQ.matches) {
+      var lenis = new Lenis({ lerp: 0.09, smoothWheel: true });
+      lenis.on('scroll', ScrollTrigger.update);
+      gsap.ticker.add(function(t){ lenis.raf(t * 1000); });
+      gsap.ticker.lagSmoothing(0);
+    }
+
+    if (JUMP !== null) history.scrollRestoration = 'manual';
+
+    // -- entrance: char-split wordmark + subhead ------------------------
+    gsap.timeline({ delay: 0.15 })
+      .to('.char', {
+        yPercent: 0, opacity: 1, duration: 0.9, ease: 'power4.out', stagger: 0.035
+      })
+      .to('.hero-sub', { opacity: 1, y: 0, duration: 0.7, ease: 'power2.out' }, '-=0.5');
+
+    // -- Ordering law: PINNED scenes are created before any ambient /
+    //    background ScrollTriggers (creation order == refresh order).
+
+    // Pinned hero scrub.
+    var heroTl = gsap.timeline({
+      scrollTrigger: {
+        trigger: '.film-scroll',
+        start: 'top top',
+        end: '+=240%',
+        scrub: 0.4,
+        pin: '.film-stage',
+        invalidateOnRefresh: true,
+        onUpdate: function(self){
+          var fill = document.getElementById('readoutFill');
+          if (fill) fill.style.width = (self.progress * 100).toFixed(1) + '%';
+        }
+      }
+    });
+    heroTl
+      .to('.orbit-group--outer', { rotate: 130, transformOrigin: '50% 50%', ease: 'none' }, 0)
+      .to('.orbit-group--mid', { rotate: -190, transformOrigin: '50% 50%', ease: 'none' }, 0)
+      .to('.orbit-tick-set', { rotate: 45, transformOrigin: '50% 50%', ease: 'none' }, 0)
+      .to('.hero-copy', { yPercent: -16, opacity: 0.1, ease: 'none' }, 0.5)
+      .to('.orbit-field', { opacity: 0.25, scale: 1.06, ease: 'none' }, 0.55)
+      .to('.film-veil', { opacity: 1, ease: 'none' }, 0.72)
+      .to('.scroll-cue', { opacity: 0, ease: 'none' }, 0);
+
+    // Pinned horizontal specimen run.
+    var track = document.querySelector('.specimen-track');
+    var trackWrap = document.querySelector('.scene-collection');
+    if (track && trackWrap) {
+      var setX = gsap.quickSetter(track, 'x', 'px');
+      ScrollTrigger.create({
+        trigger: trackWrap,
+        start: 'top top',
+        end: function(){ return '+=' + Math.max(0, track.scrollWidth - window.innerWidth); },
+        pin: true,
+        scrub: 0.3,
+        invalidateOnRefresh: true,
+        onUpdate: function(self){
+          setX(-self.progress * Math.max(0, track.scrollWidth - window.innerWidth));
+        }
+      });
+    }
+
+    // -- Ambient / background triggers AFTER pinned scenes --------------
+
+    // Clip-path craft reveals.
+    gsap.utils.toArray('.reveal-row').forEach(function(row, i){
+      gsap.fromTo(row,
+        { clipPath: 'inset(0 0 100% 0)' },
+        {
+          clipPath: 'inset(0 0 0% 0)',
+          duration: 0.9,
+          ease: 'power4.out',
+          scrollTrigger: { trigger: row, start: 'top 85%', toggleActions: 'play none none reverse' }
+        }
+      );
+    });
+
+    // Counters. Zero the DOM text from the resting (real) value the
+    // instant motion initializes — BEFORE any ScrollTrigger can fire —
+    // so the visitor never sees the final number then watches it reset
+    // and recount when they scroll to it.
+    gsap.utils.toArray('.stat-num').forEach(function(el){
+      var end = parseFloat(el.getAttribute('data-value'));
+      var decimals = parseInt(el.getAttribute('data-decimals') || '0', 10);
+      var suffix = el.getAttribute('data-suffix') || '';
+      var obj = { val: 0 };
+      el.textContent = (decimals ? obj.val.toFixed(decimals) : obj.val) + suffix;
+      ScrollTrigger.create({
+        trigger: el,
+        start: 'top 90%',
+        once: true,
+        onEnter: function(){
+          gsap.to(obj, {
+            val: end, duration: 1.5, ease: 'power2.out',
+            onUpdate: function(){
+              el.textContent = (decimals ? obj.val.toFixed(decimals) : Math.round(obj.val)) + suffix;
+            }
+          });
+        }
+      });
+    });
+
+    // Adaptive header: track which section sits under the fixed bar across
+    // the WHOLE page (not just the craft scene) and swap header text color
+    // for contrast against every light (paper) section, not only one.
+    var topbarEl = document.getElementById('topbar');
+    var themedEls = Array.prototype.slice.call(document.querySelectorAll('[data-header]'));
+    var themedRanges = [];
+    function measureThemedRanges(){
+      themedRanges = themedEls.map(function(el){
+        var rect = el.getBoundingClientRect();
+        var top = rect.top + window.scrollY;
+        return { top: top, bottom: top + el.offsetHeight, light: el.getAttribute('data-header') === 'light' };
+      });
+    }
+    function updateHeaderTheme(){
+      var probeY = window.scrollY + topbarEl.offsetHeight / 2;
+      var isLight = false;
+      for (var i = 0; i < themedRanges.length; i++) {
+        if (probeY >= themedRanges[i].top && probeY < themedRanges[i].bottom) { isLight = themedRanges[i].light; break; }
+      }
+      topbarEl.classList.toggle('on-light', isLight);
+    }
+    measureThemedRanges();
+
+    // Single body-scoped ScrollTrigger drives both the header theme AND the
+    // marquee velocity-skew — both are page-wide ambient effects, so they
+    // share one onUpdate tick instead of two redundant triggers.
+    var marqueeViewport = document.querySelector('.marquee-viewport');
+    ScrollTrigger.create({
+      trigger: document.body,
+      start: 0,
+      end: 'max',
+      onRefresh: function(){ measureThemedRanges(); updateHeaderTheme(); },
+      onUpdate: function(self){
+        updateHeaderTheme();
+        if (marqueeViewport) {
+          // Hardening fix: velocity comes from the ScrollTrigger INSTANCE
+          // (`self.getVelocity()`), not a `ScrollTrigger.getVelocity`
+          // static — that static does not exist on this build.
+          var v = self.getVelocity();
+          var skew = gsap.utils.clamp(-6, 6, v / -260);
+          gsap.to(marqueeViewport, { skewX: skew, duration: 0.4, overwrite: 'auto', ease: 'power1.out' });
+        }
+      }
+    });
+
+    // Hardening #5: resize / orientation refresh, debounced. No dead
+    // zones or misaligned pins after a viewport or orientation change.
+    var resizeTimer;
+    window.addEventListener('resize', function(){
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function(){ ScrollTrigger.refresh(); }, 150);
+    });
+    window.addEventListener('orientationchange', function(){
+      setTimeout(function(){ ScrollTrigger.refresh(); }, 200);
+    });
+
+    // Dev contract: ?jump=<scrollY> lands pre-scrolled with all
+    // scroll-driven state force-settled; __ready gates the screenshot harness.
+    requestAnimationFrame(function(){
+      ScrollTrigger.refresh();
+      if (JUMP !== null) {
+        window.scrollTo(0, +JUMP || 0);
+        ScrollTrigger.update();
+      }
+      markReady();
+    });
+  }
+})();
+</script>
+</body>
+</html>

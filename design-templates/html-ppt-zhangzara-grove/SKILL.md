@@ -38,7 +38,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "government-policy"
+  category: "deck"
   scenario: "policy"
   example_prompt: "Create \"Write an Urban Green-Space Policy Brief like a City Sustainability Director\" as a decision-grade Government & policy deck in this template's own visual system. Subject: A municipal urban-tree-canopy policy proposal — the public need, the evidence, the options, and the funding decision. Audience: city council, agency reviewers. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does the deck reduce approval risk rather than create rhetorical heat."
 ---

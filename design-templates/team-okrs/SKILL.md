@@ -12,6 +12,7 @@ triggers:
   - "objectives"
   - "目标"
 od:
+  category: "dashboard"
   mode: prototype
   platform: desktop
   scenario: product

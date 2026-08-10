@@ -39,7 +39,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "student-coursework"
+  category: "deck"
   scenario: "education"
   example_prompt: "Create \"Present a Senior Thesis Defense like a Distinction-Grade Economics Student\" as a decision-grade Student coursework deck in this template's own visual system. Subject: An economics senior thesis on the employment effects of local minimum-wage increases — identification strategy, evidence, and limitations. Audience: thesis committee. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can a reviewer find the contribution, evidence, and limitation in under 90 seconds."
 ---

@@ -13,6 +13,7 @@ triggers:
   - "定价"
   - "套餐"
 od:
+  category: "landing-page"
   mode: prototype
   platform: desktop
   scenario: sales

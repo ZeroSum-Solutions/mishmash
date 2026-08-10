@@ -1025,6 +1025,34 @@ export interface Dict {
   'templates.close': string;
   'templates.previewAria': string;
   'templates.noPreview': string;
+  'templates.categoryAll': string;
+  'templates.categoryFilterLabel': string;
+  'templates.sectionCount': string;
+  // Templates gallery — one rendered label per `od.category` value (mirrors
+  // scripts/design-taxonomy.mjs's CATEGORY_LABELS) plus the top-3
+  // product-facing overrides and the "no category" fallback. Used for both
+  // section headers and category filter chips.
+  'templates.category.landingPage': string;
+  'templates.category.webApp': string;
+  'templates.category.dashboard': string;
+  'templates.category.deck': string;
+  'templates.category.mobileApp': string;
+  'templates.category.docs': string;
+  'templates.category.documentGuide': string;
+  'templates.category.email': string;
+  'templates.category.prototype': string;
+  'templates.category.audio': string;
+  'templates.category.videoMotion': string;
+  'templates.category.webgl': string;
+  'templates.category.icons': string;
+  'templates.category.effect': string;
+  'templates.category.component': string;
+  'templates.category.uiKit': string;
+  'templates.category.designSystem': string;
+  'templates.category.capture': string;
+  'templates.category.inspiration': string;
+  'templates.category.tool': string;
+  'templates.category.uncategorized': string;
   // Client message center
   'messageCenter.openAria': string;
   'messageCenter.unreadCount': string;
@@ -4443,6 +4471,14 @@ export interface Dict {
   'designLibrary.openLivePreview': string;
   'designLibrary.openLivePreviewBusy': string;
   'designLibrary.openLivePreviewError': string;
+  // Detail-view preview strip and interactive kit canvas (C6/C7).
+  'designLibrary.stripLabel': string;
+  'designLibrary.stripItemLabel': string;
+  'designLibrary.duplicatesHidden': string;
+  'designLibrary.exploreKit': string;
+  'designLibrary.viewportLabel': string;
+  'designLibrary.viewportDesktop': string;
+  'designLibrary.viewportMobile': string;
   'designLibrary.promotions.title': string;
   'designLibrary.promotions.policy': string;
   'designLibrary.promotions.bulkError': string;
@@ -4454,6 +4490,45 @@ export interface Dict {
   'designLibrary.promotions.uploading': string;
   'designLibrary.promotions.queued': string;
   'designLibrary.promotions.failed': string;
+  // GuidedCreateDialog (PRD C8) — shared 3-step brief flow in front of
+  // "start from a kit/template", used by both the Design Library "Use as
+  // template" action and the Templates tab create-from-template action.
+  // Every field is optional; Start/Skip all always work.
+  'guidedCreate.subtitle': string;
+  'guidedCreate.stepIndicator': string;
+  'guidedCreate.step.scope.title': string;
+  'guidedCreate.step.content.title': string;
+  'guidedCreate.step.direction.title': string;
+  'guidedCreate.screensLabel': string;
+  'guidedCreate.screensCustomPlaceholder': string;
+  'guidedCreate.fidelityLabel': string;
+  'guidedCreate.fidelity.wireframe': string;
+  'guidedCreate.fidelity.cleanPrototype': string;
+  'guidedCreate.fidelity.highFidelity': string;
+  'guidedCreate.iterationsLabel': string;
+  'guidedCreate.pagesLabel': string;
+  'guidedCreate.pagesPlaceholder': string;
+  'guidedCreate.chip.home': string;
+  'guidedCreate.chip.pricing': string;
+  'guidedCreate.chip.about': string;
+  'guidedCreate.chip.dashboard': string;
+  'guidedCreate.chip.onboarding': string;
+  'guidedCreate.chip.settings': string;
+  'guidedCreate.chip.checkout': string;
+  'guidedCreate.productLabel': string;
+  'guidedCreate.productPlaceholder': string;
+  'guidedCreate.audienceLabel': string;
+  'guidedCreate.audiencePlaceholder': string;
+  'guidedCreate.useCaseLabel': string;
+  'guidedCreate.useCasePlaceholder': string;
+  'guidedCreate.directionLabel': string;
+  'guidedCreate.directionPlaceholder': string;
+  'guidedCreate.matchKitLook': string;
+  'guidedCreate.back': string;
+  'guidedCreate.next': string;
+  'guidedCreate.skipAll': string;
+  'guidedCreate.start': string;
+  'guidedCreate.starting': string;
   // Storyboard — Seedance 2.0 image-first keyframe workflow.
   'storyboard.title': string;
   'storyboard.newStoryboard': string;

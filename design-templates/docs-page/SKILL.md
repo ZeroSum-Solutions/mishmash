@@ -12,6 +12,7 @@ triggers:
   - "api reference"
   - "文档"
 od:
+  category: "docs"
   mode: prototype
   platform: desktop
   scenario: engineering

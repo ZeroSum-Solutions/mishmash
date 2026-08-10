@@ -15,6 +15,7 @@ triggers:
   - "最近30天"
   - "社区反馈"
 od:
+  category: "tool"
   mode: prototype
   preview:
     type: markdown

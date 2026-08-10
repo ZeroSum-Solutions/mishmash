@@ -13,6 +13,7 @@ triggers:
   - "marketing page"
   - "homepage"
 od:
+  category: "prototype"
   mode: prototype
   platform: desktop
   scenario: design

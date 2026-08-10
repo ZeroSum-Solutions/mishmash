@@ -39,7 +39,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "professional-training"
+  category: "deck"
   scenario: "education"
   example_prompt: "Create \"Deliver a Security-Awareness Training like a CISO Enablement Team\" as a decision-grade Professional training deck in this template's own visual system. Subject: An IT security-awareness training on spotting phishing — the tells, the drill, and what to do in the first 60 seconds. Audience: all employees. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can a learner perform the target task the next day."
 ---

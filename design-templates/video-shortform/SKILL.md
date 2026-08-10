@@ -15,6 +15,7 @@ triggers:
   - "短视频"
   - "动效"
 od:
+  category: "video-motion"
   mode: video
   surface: video
   scenario: marketing

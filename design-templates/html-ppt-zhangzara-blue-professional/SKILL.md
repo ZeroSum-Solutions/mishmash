@@ -38,7 +38,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "corporate-strategy"
+  category: "deck"
   scenario: "strategy"
   example_prompt: "Create \"Present a Quarterly Business Review like a Chief of Staff\" as a decision-grade Corporate strategy deck in this template's own visual system. Subject: MishMash's QBR for the executive committee: what moved, what stalled, and the resource reallocation ask. Audience: executive committee. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would a board member know what to approve and why before page five."
 ---

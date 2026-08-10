@@ -25,7 +25,7 @@ od:
     entry: example.html
   design_system:
     requires: false
-  category: "hero-section"
+  category: "component"
   scenario: "marketing"
   example_prompt: "Build AI Builder Dark Hero — Dark-Mode AI Website Builder Hero Section as a self-contained responsive page in this template's own visual system. Follow the build spec in this skill exactly — palette, typography, section order, and motion are part of the identity. Ask only for the missing essentials first: brand name, real copy, and any imagery to swap in."
 ---

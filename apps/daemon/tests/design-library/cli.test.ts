@@ -164,4 +164,62 @@ describe('design-library CLI privacy', () => {
       tsxCli, cliSource, 'design-library', 'promotions', 'unexpected', '--daemon-url', daemonUrl,
     ], { cwd: daemonRoot, env, timeout: 15_000 })).rejects.toMatchObject({ code: 2 });
   });
+
+  it('start-project forwards a guided-create brief from --brief-file merged with individual flags', async () => {
+    const seen: Array<{ method: string; url: string; body: unknown }> = [];
+    const mock = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      req.on('end', () => {
+        const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : null;
+        seen.push({ method: req.method ?? '', url: req.url ?? '', body });
+        res.setHeader('Content-Type', 'application/json');
+        res.statusCode = 201;
+        res.end(JSON.stringify({
+          ok: true, projectId: 'proj-cli-brief', conversationId: 'conv-cli-brief',
+          project: { id: 'proj-cli-brief', pendingPrompt: 'Design brief:\n- Build 5 screens.' },
+          copiedFiles: 1, skippedFiles: 0, warnings: [],
+        }));
+      });
+    });
+    await new Promise<void>((resolve) => mock.listen(0, '127.0.0.1', resolve));
+    server = mock;
+    const address = mock.address();
+    if (!address || typeof address === 'string') throw new Error('mock server did not bind');
+    const daemonUrl = `http://127.0.0.1:${address.port}`;
+    const env = { ...process.env };
+    delete env.NODE_OPTIONS;
+
+    fixtureDir = mkdtempSync(path.join(tmpdir(), 'od-design-library-cli-brief-'));
+    const briefFile = path.join(fixtureDir, 'brief.json');
+    writeFileSync(briefFile, JSON.stringify({ screens: 3, product: 'From file' }), 'utf8');
+
+    const result = await execFileP(process.execPath, [
+      tsxCli, cliSource, 'design-library', 'start-project',
+      '--rel', '01 Kits/permitted-kit',
+      '--brief-file', briefFile,
+      '--screens', '5',
+      '--fidelity', 'high-fidelity',
+      '--pages', 'Home, Pricing',
+      '--match-kit-look',
+      '--json', '--daemon-url', daemonUrl,
+    ], { cwd: daemonRoot, env, timeout: 15_000 });
+
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, projectId: 'proj-cli-brief' });
+    expect(seen[0]).toMatchObject({
+      method: 'POST',
+      url: '/api/design-library/start-project',
+      body: {
+        rel: '01 Kits/permitted-kit',
+        brief: {
+          // --screens overrides the file's screens: 3.
+          screens: 5,
+          product: 'From file',
+          fidelity: 'high-fidelity',
+          pages: ['Home', 'Pricing'],
+          matchKitLook: true,
+        },
+      },
+    });
+  });
 });

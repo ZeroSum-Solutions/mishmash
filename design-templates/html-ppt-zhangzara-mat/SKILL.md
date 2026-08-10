@@ -38,7 +38,7 @@ od:
     requires: false
   speaker_notes: false
   animations: false
-  category: "consulting"
+  category: "deck"
   scenario: "strategy"
   example_prompt: "Create \"Write a Margin-Recovery Final Deck like a McKinsey Engagement Manager\" as a decision-grade Consulting deck in this template's own visual system. Subject: A margin-recovery diagnosis for a regional grocery chain — the governing thought, the driver tree, the priorities, and the roadmap. Audience: client sponsor, steering committee. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would a client know what to do Monday morning."
 ---

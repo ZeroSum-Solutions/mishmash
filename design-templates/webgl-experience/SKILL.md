@@ -21,6 +21,7 @@ triggers:
   - "着色器"
   - "webgl 效果"
 od:
+  category: "webgl"
   mode: prototype
   platform: web
   scenario: design

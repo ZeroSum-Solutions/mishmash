@@ -151,6 +151,11 @@ const residualAllowedPathPrefixes = [
   "design-templates/last30days/scripts/lib/vendor/",
   // Vendored upstream html-ppt runtime assets (lewislulu/html-ppt-skill, design template).
   "design-templates/html-ppt/assets/",
+  // Vendored pinned motion runtime for the scroll-film template (GSAP 3.12.7,
+  // ScrollTrigger 3.12.7, Lenis 1.1.18). GSAP licensing decision
+  // docs/decisions/gsap-licensing.md requires pinned versions; same
+  // precedent as design-templates/html-ppt/assets/ above.
+  "design-templates/scroll-film-hero/assets/vendor/",
   // Vendored upstream website-clone recon/mirror/audit helpers
   // (Jane-xiaoer/claude-skill-web-clone). Global skill assets staged into the
   // project cwd for direct `node scripts/...` execution by the agent.

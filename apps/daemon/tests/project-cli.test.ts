@@ -184,6 +184,54 @@ describe('od project CLI', () => {
     expect(JSON.parse(stub.requests[0]!.body)).toMatchObject({ name: '--json' });
   });
 
+  it('forwards guided-create brief flags (PRD C8) on project create', async () => {
+    stub = await startProjectStubServer();
+
+    const result = await runCli([
+      'project',
+      'create',
+      '--name',
+      'From Template',
+      '--skill',
+      'saas-landing',
+      '--screens',
+      '5',
+      '--fidelity',
+      'wireframe',
+      '--pages',
+      'Home,Pricing',
+      '--match-kit-look',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(stub.requests).toHaveLength(1);
+    expect(JSON.parse(stub.requests[0]!.body)).toMatchObject({
+      skillId: 'saas-landing',
+      brief: {
+        screens: 5,
+        fidelity: 'wireframe',
+        pages: ['Home', 'Pricing'],
+        matchKitLook: true,
+      },
+    });
+  });
+
+  it('omits brief from the create body when no guided-create flags are given', async () => {
+    stub = await startProjectStubServer();
+
+    const result = await runCli([
+      'project', 'create', '--name', 'Plain', '--json', '--daemon-url', stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(0);
+    const body = JSON.parse(stub.requests[0]!.body);
+    expect(body.brief).toBeUndefined();
+  });
+
   it('creates a design-system project with prompt-file content and JSON output', async () => {
     stub = await startProjectStubServer();
     tempRoot = mkdtempSync(join(tmpdir(), 'od-project-cli-'));

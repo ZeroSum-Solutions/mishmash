@@ -37,7 +37,7 @@ od:
     requires: false
   speaker_notes: true
   animations: true
-  category: "ai-literacy"
+  category: "deck"
   scenario: "ai"
   example_prompt: "Create \"Run a BYOK Model-Choice Session like an Applied-AI Engineer\" as a decision-grade AI literacy deck in this template's own visual system. Subject: MishMash + BYOK: choosing and wiring your own model, hands-on — cost, quality, and the routing decision. Audience: engineers, IT, applied-AI teams. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does the deck make AI implementation concrete enough to fund."
 ---

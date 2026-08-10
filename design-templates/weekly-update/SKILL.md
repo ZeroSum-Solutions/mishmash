@@ -35,7 +35,7 @@ od:
   design_system:
     requires: true
     sections: [color, typography, layout, components]
-  category: "data-finance"
+  category: "deck"
   scenario: "finance"
   example_prompt: "Create \"Run a Metrics Standup like a Data-Driven Ops Lead\" as a decision-grade Data, KPI & finance deck in this template's own visual system. Subject: MishMash's weekly metrics standup: this week's numbers, the one anomaly, and the single decision it forces. Audience: ops & growth team. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does every chart have a decision above it."
 ---

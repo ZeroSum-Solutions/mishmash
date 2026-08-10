@@ -315,6 +315,46 @@ export interface CreateProjectRequest {
   customInstructions?: string;
   /** Persisted to metadata.skipDiscoveryBrief for automated project runs. */
   skipDiscoveryBrief?: boolean;
+  /**
+   * The guided create flow's answers (PRD C8), when the caller collected
+   * one — e.g. starting from a template. Folded server-side into a
+   * concise design-brief section appended to `pendingPrompt`; every field
+   * is optional and unanswered fields never appear in the resulting
+   * prompt. See `GuidedCreateBrief` below.
+   */
+  brief?: GuidedCreateBrief;
+}
+
+/** Fidelity level answered in the guided create flow (PRD C8, step "Scope"). */
+export type GuidedCreateFidelity = 'wireframe' | 'clean-prototype' | 'high-fidelity';
+
+/**
+ * Answers collected by the shared `GuidedCreateDialog` (apps/web) before
+ * starting a project from a UI kit or template — a low-friction, fully
+ * optional brief that feeds the generation prompt server-side. Every field
+ * is optional; omitted fields must never appear as placeholder text in the
+ * assembled prompt (see `buildGuidedBriefSection` in
+ * apps/daemon/src/prompts/guided-brief.ts).
+ */
+export interface GuidedCreateBrief {
+  /** How many screens to build. */
+  screens?: number;
+  /** Target fidelity level. */
+  fidelity?: GuidedCreateFidelity;
+  /** How many distinct variations to produce (1-3). */
+  iterations?: number;
+  /** Required pages/flows — quick-chip picks plus any free-text entries. */
+  pages?: string[];
+  /** Short description of the product being built. */
+  product?: string;
+  /** Short description of the intended audience. */
+  audience?: string;
+  /** Short description of the core use case. */
+  useCase?: string;
+  /** Brand/content/visual-direction requirements, free text. */
+  direction?: string;
+  /** When starting from a kit, match the kit's own visual direction. */
+  matchKitLook?: boolean;
 }
 
 export interface UpdateProjectRequest {

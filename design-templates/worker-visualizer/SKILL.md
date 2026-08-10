@@ -22,6 +22,7 @@ triggers:
   - "多线程"
   - "粒子"
 od:
+  category: "effect"
   mode: prototype
   platform: web
   scenario: design

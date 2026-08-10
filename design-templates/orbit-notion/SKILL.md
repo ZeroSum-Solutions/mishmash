@@ -16,6 +16,7 @@ triggers:
   - "notion 简报"
   - "文档摘要"
 od:
+  category: "prototype"
   mode: prototype
   platform: desktop
   scenario: orbit

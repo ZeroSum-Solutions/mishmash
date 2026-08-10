@@ -38,7 +38,7 @@ od:
     requires: false
   speaker_notes: true
   animations: true
-  category: "professional-training"
+  category: "deck"
   scenario: "education"
   example_prompt: "Create \"Build a New-Hire Onboarding Module like a Top Enablement Lead\" as a decision-grade Professional training deck in this template's own visual system. Subject: A first-30-days onboarding module for new hospitality hires — the behaviors, the practice, the checks, and the manager follow-up. Audience: new hires, managers. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can a learner perform the target task the next day."
 ---

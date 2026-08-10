@@ -13,6 +13,7 @@ triggers:
   - "jira board"
   - "看板"
 od:
+  category: "web-app"
   mode: prototype
   platform: desktop
   scenario: operations

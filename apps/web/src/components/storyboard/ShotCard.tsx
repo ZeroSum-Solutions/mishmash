@@ -8,7 +8,7 @@
 // enablement/gating state machine (see shot-editor-state.ts) testable
 // without mocking network calls.
 
-import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import type { StoryboardShot } from '@open-design/contracts';
 import { Button } from '@open-design/components';
 import { useT } from '../../i18n';
@@ -21,6 +21,7 @@ import {
   resolutionForModelId,
 } from './model-defaults';
 import { Icon } from '../Icon';
+import { MediaFallback } from '../MediaFallback';
 import { computeRenderButtonMode, computeShotDisplayStatus, computeShotEditorState } from './shot-editor-state';
 import styles from './StoryboardSection.module.css';
 
@@ -54,10 +55,32 @@ function modelLabel(model: MediaModel, configured: ConfiguredProviderMap, t: Ret
  * in THIS slot) — see the two call sites below.
  */
 function FrameWell({ url, generating }: { url: string | null; generating: boolean }) {
-  if (url) return <img className={styles.frameWell} src={url} alt="" />;
+  const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  // A new URL (retry, replace, re-derive) deserves a fresh attempt rather
+  // than staying stuck on a previous load's failure or fade-in state.
+  useEffect(() => {
+    setFailed(false);
+    setLoaded(false);
+  }, [url]);
+
+  if (url && !failed) {
+    return (
+      <img
+        // Hidden until decoded: a failed request never paints a broken-image
+        // glyph even for a frame — onLoad reveals it, onError swaps it out
+        // for the shared fallback before it ever becomes visible.
+        className={`${styles.frameWell}${loaded ? ` ${styles.frameWellLoaded}` : ''}`}
+        src={url}
+        alt=""
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
   return (
     <div className={styles.frameWellEmpty} aria-hidden>
-      {generating ? <Icon name="spinner" size={18} /> : null}
+      {generating ? <Icon name="spinner" size={18} /> : failed ? <MediaFallback size={16} /> : null}
     </div>
   );
 }

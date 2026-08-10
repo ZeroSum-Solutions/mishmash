@@ -16,6 +16,7 @@ triggers:
   - "linear 简报"
   - "issue 汇总"
 od:
+  category: "prototype"
   mode: prototype
   platform: desktop
   scenario: orbit

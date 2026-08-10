@@ -21,6 +21,7 @@ triggers:
   - "像素动画"
   - "复古动画"
 od:
+  category: "video-motion"
   mode: prototype
   platform: desktop
   scenario: marketing

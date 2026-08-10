@@ -18,7 +18,7 @@ triggers:
   - print-grade page
   - kami landing
 od:
-  category: brand-page
+  category: "document-guide"
   surface: web
   mode: prototype
   platform: desktop

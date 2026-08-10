@@ -321,3 +321,53 @@ describe('ShotCard upload — drag-and-drop and file-picker', () => {
     expect(handlers.onUploadFile).not.toHaveBeenCalled();
   });
 });
+
+describe('ShotCard frame wells — images always load (t11)', () => {
+  it('renders the empty well without an img when a shot has no frame yet', () => {
+    renderShotCard(baseShot());
+    const dropzone = screen.getByTestId('start-frame-dropzone');
+    // No frame path means no src to request in the first place.
+    expect(dropzone.querySelector('img')).toBeNull();
+  });
+
+  it('swaps a start-frame thumbnail to the shared fallback state when it fails to load', () => {
+    renderShotCard(baseShot({ startFrame: { path: 'start.png', origin: 'generated' } }));
+    const dropzone = screen.getByTestId('start-frame-dropzone');
+    const img = dropzone.querySelector('img') as HTMLImageElement;
+    expect(img).toBeTruthy();
+
+    fireEvent.error(img);
+
+    // Never a broken-image glyph, never an empty collapse: the well keeps
+    // its slot and shows the shared fallback content instead.
+    expect(dropzone.querySelector('img')).toBeNull();
+    expect(within(dropzone).getByText('Visual preview unavailable')).toBeTruthy();
+  });
+
+  it('keeps a start-frame thumbnail hidden until it decodes, so a failed load never flashes a broken-image glyph', () => {
+    renderShotCard(baseShot({ startFrame: { path: 'start.png', origin: 'generated' } }));
+    const dropzone = screen.getByTestId('start-frame-dropzone');
+    const img = dropzone.querySelector('img') as HTMLImageElement;
+
+    const classNameBeforeLoad = img.className;
+    fireEvent.load(img);
+    expect(img.className).not.toBe(classNameBeforeLoad);
+  });
+
+  it('swaps an end-frame thumbnail to the shared fallback state when it fails to load', () => {
+    renderShotCard(
+      baseShot({
+        startFrame: { path: 'start.png', origin: 'generated' },
+        endFrame: { path: 'end.png', origin: 'derived' },
+      }),
+    );
+    const dropzone = screen.getByTestId('end-frame-dropzone');
+    const img = dropzone.querySelector('img') as HTMLImageElement;
+    expect(img).toBeTruthy();
+
+    fireEvent.error(img);
+
+    expect(dropzone.querySelector('img')).toBeNull();
+    expect(within(dropzone).getByText('Visual preview unavailable')).toBeTruthy();
+  });
+});

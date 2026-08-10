@@ -11,6 +11,7 @@ triggers:
   - "发票"
   - "账单"
 od:
+  category: "document-guide"
   mode: prototype
   platform: desktop
   scenario: finance
