@@ -5,7 +5,7 @@
 //   - drag & drop  (directory-aware; the parent reads the DataTransfer)
 //   - click to browse
 //   - paste (Cmd/Ctrl+V image/file content from the clipboard)
-//   - gated "Select from library" affordance when the Library UI is visible
+//   - gated "Select from Assets" affordance when the Library UI is visible
 //   - a thumbnail grid with remove + click-to-enlarge preview
 //
 // Every staged file is previewable — not just images. The grid renders a
@@ -39,7 +39,7 @@ interface Props {
   onDrop: (dataTransfer: DataTransfer) => void;
   /** Remove one staged file (matched by reference). */
   onRemove: (file: File) => void;
-  /** Open the "Select from library" picker. */
+  /** Open the "Select from Assets" picker. */
   onSelectFromLibrary?: () => void;
 }
 
