@@ -19,6 +19,9 @@
 //
 // Usage:
 //   node scripts/generate-library-covers.ts [--only <category|id>]
+//
+// The mishmash-assets checkout defaults to the maintainer's path; set
+// OD_MISHMASH_ASSETS_DIR to point at a checkout under a different home.
 
 import * as fs from 'node:fs';
 import path from 'node:path';
@@ -64,7 +67,9 @@ const importedPlaywright = (await import(pathToFileURL(playwrightEntry).href)) a
   | { default: PlaywrightModule };
 const { chromium } = 'default' in importedPlaywright ? importedPlaywright.default : importedPlaywright;
 
-const ASSETS_ROOT = '/Users/zero-suminc./projects/mishmash-assets';
+const ASSETS_ROOT = process.env.OD_MISHMASH_ASSETS_DIR?.trim()
+  ? path.resolve(process.env.OD_MISHMASH_ASSETS_DIR)
+  : '/Users/zero-suminc./projects/mishmash-assets';
 const CATALOG_PATH = path.join(ASSETS_ROOT, 'catalog.json');
 const THUMBS_DIR = path.join(ASSETS_ROOT, '.catalog', 'thumbs');
 const META_DIR = path.join(THUMBS_DIR, '.generate-covers-meta');
