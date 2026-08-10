@@ -12,6 +12,42 @@ export interface RequestWithOriginHeaders {
   };
 }
 
+export interface RequestWithFetchMetadata {
+  method?: unknown;
+  headers?: {
+    'sec-fetch-site'?: unknown;
+    'sec-fetch-mode'?: unknown;
+  };
+}
+
+/**
+ * Whether a request carrying NO `Origin` header may pass the cross-origin
+ * gate.
+ *
+ * A missing Origin does not mean "not a browser". Per the Fetch spec browsers
+ * omit Origin on cross-site GET subresource loads (`<img>`, `<script>`,
+ * `<link>`, `<iframe src>`) and on top-level GET navigations, so treating its
+ * absence as proof of a CLI/proxy client lets any page a user has open issue
+ * GETs to every route behind the gate. `Sec-Fetch-Site` is set by the user
+ * agent and cannot be set from JavaScript, which is what separates the cases:
+ *
+ *   - absent               a genuine non-browser client (CLI, curl, proxy)
+ *   - `same-origin`/`none` our own page, or a user-initiated navigation
+ *   - GET + `navigate`     the browser leaves the initiating page, so that
+ *                          page can never read the response; required for the
+ *                          OAuth provider redirect back into `/api` and for
+ *                          the powered-preview iframe, which is deliberately
+ *                          cross-site
+ *   - anything else        a cross-site subresource load: reject
+ */
+export function allowsMissingOriginRequest(req: RequestWithFetchMetadata): boolean {
+  const site = headerValue(req.headers?.['sec-fetch-site']);
+  if (site === undefined || site === '') return true;
+  if (site === 'same-origin' || site === 'none') return true;
+  const isGet = String(req.method ?? '').toUpperCase() === 'GET';
+  return isGet && headerValue(req.headers?.['sec-fetch-mode']) === 'navigate';
+}
+
 export function configuredAllowedOrigins(env: NodeJS.ProcessEnv = process.env): string[] {
   const raw = env.OD_ALLOWED_ORIGINS || '';
   if (!raw.trim()) return [];

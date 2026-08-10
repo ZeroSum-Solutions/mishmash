@@ -701,6 +701,7 @@ import {
 } from './deploy/cloudflare-pages-helpers.js';
 import {
   allowedBrowserPorts,
+  allowsMissingOriginRequest,
   configuredAllowedOrigins,
   isAllowedBrowserOrigin,
   isLocalSameOrigin,
@@ -713,7 +714,7 @@ import {
   seedLibraryExtensionOrigins,
 } from './library-tokens.js';
 import { listLibraryTokenOrigins } from './library-store.js';
-import { apiTokenFromEnv, isApiAuthDisabled, isApiTokenMiddlewareEnabled } from './api-token-auth.js';
+import { apiTokenFromEnv, isApiAuthDisabled, isApiTokenMiddlewareEnabled, isMatchingApiToken } from './api-token-auth.js';
 import { createOpenDesignPublicMetadataService } from './services/open-design-public-metadata.js';
 import { createWhatsNewService } from './services/whats-new.js';
 import { execCommandViaLoginShell } from './services/login-shell.js';
@@ -2204,7 +2205,7 @@ export async function startServer({
       if (isLoopbackPeerAddress(req.socket?.remoteAddress)) return next();
       const auth = req.get('authorization') ?? '';
       const match = /^Bearer\s+(\S+)\s*$/i.exec(auth);
-      if (!match || match[1] !== apiToken) {
+      if (!match || !isMatchingApiToken(match[1], apiToken)) {
         return res.status(401).json({
           error: { code: 'API_TOKEN_REQUIRED', message: 'Authorization: Bearer <OD_API_TOKEN> required' },
         });
@@ -2281,7 +2282,7 @@ export async function startServer({
 
   // Reject cross-origin requests to API endpoints.
   // Health/version remain open for monitoring probes.
-  // Non-browser clients (no Origin header) are always allowed.
+  // Non-browser clients (no Origin header, no fetch metadata) are allowed.
   app.use('/api', (req, res, next) => {
     // Live artifact previews have stricter local-daemon validation and
     // loopback CORS handling on the route itself. Let that middleware produce
@@ -2331,8 +2332,12 @@ export async function startServer({
     }
 
     const origin = req.headers.origin;
-    // Non-browser client → allow.
-    if (origin == null || origin === '') return next();
+    // No Origin header. That alone does not mean "not a browser" — see
+    // allowsMissingOriginRequest for the Sec-Fetch-Site reasoning.
+    if (origin == null || origin === '') {
+      if (allowsMissingOriginRequest(req)) return next();
+      return res.status(403).json({ error: 'Cross-origin requests are not allowed' });
+    }
 
     // Origin: null (sandboxed iframes).  Only allowed for safe, read-only
     // routes that set their own CORS headers for canvas drawing.
