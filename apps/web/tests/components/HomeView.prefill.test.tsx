@@ -826,20 +826,21 @@ describe('HomeView prompt handoff', () => {
     );
 
     await clearActiveTypeChip();
-    fireEvent.click(await screen.findByTestId('home-hero-rail-prototype'));
+    // `prototype` moved behind the overflow ("More") menu in the composer rail.
+    await clickHomeShortcut('prototype');
 
+    // `prototype` moved to the migrate group, so the footer "Template" pill
+    // (create-group only) no longer reflects it — wait on the design-system
+    // picker hydrating from the plugin's default instead, a signal that
+    // requires the chip's `usePlugin` bind to have actually run.
     await waitFor(() => {
-      expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Prototype');
+      expect(
+        screen.getByTestId('home-hero-design-system-trigger').textContent,
+      ).toContain('Refly Design System');
     });
     expect(fetchMock.mock.calls.some(([url]) => (
       typeof url === 'string' && url.includes('/api/plugins/example-web-prototype/apply')
     ))).toBe(false);
-    // The design-system picker is now a persistent control in the row below the
-    // composer (next to the working-directory picker), available for every
-    // product kind rather than gated on the prototype/deck footer.
-    expect(
-      screen.getByTestId('home-hero-design-system-trigger').textContent,
-    ).toContain('Refly Design System');
     // Fidelity is no longer a prototype footer control — the agent asks for it
     // in discovery instead.
     expect(screen.queryByTestId('home-hero-footer-option-fidelity')).toBeNull();
@@ -924,10 +925,15 @@ describe('HomeView prompt handoff', () => {
     );
 
     await clearActiveTypeChip();
-    fireEvent.click(await screen.findByTestId('home-hero-rail-document'));
+    // `document` moved behind the overflow ("More") menu in the composer rail.
+    await clickHomeShortcut('document');
 
+    // `document` moved to the migrate group, so the footer "Template" pill
+    // (create-group only) no longer reflects it — wait on the chip's static
+    // prompt-example fallback rendering instead, a signal that requires the
+    // chip's `usePlugin` bind to have actually run.
     await waitFor(() => {
-      expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Document');
+      expect(screen.getByTestId('home-hero-prompt-examples')).toBeTruthy();
     });
     await setPromptAndSettle('Write a crisp launch memo for the new analytics product.');
     const submit = screen.getByTestId('home-hero-submit') as HTMLButtonElement;
@@ -992,10 +998,15 @@ describe('HomeView prompt handoff', () => {
     );
 
     await clearActiveTypeChip();
-    fireEvent.click(await screen.findByTestId('home-hero-rail-prototype'));
+    // `prototype` moved behind the overflow ("More") menu in the composer rail.
+    await clickHomeShortcut('prototype');
 
+    // `prototype` moved to the migrate group, so the footer "Template" pill
+    // (create-group only) no longer reflects it — wait on the chip's example
+    // preset cards rendering instead, a signal that requires the chip's
+    // `usePlugin` bind to have actually run.
     await waitFor(() => {
-      expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Prototype');
+      expect(screen.getByTestId('home-hero-plugin-presets')).toBeTruthy();
     });
     expect(
       screen.getByTestId('home-hero-design-system-trigger').textContent,
@@ -1053,7 +1064,8 @@ describe('HomeView prompt handoff', () => {
     );
 
     await clearActiveTypeChip();
-    fireEvent.click(await screen.findByTestId('home-hero-rail-prototype'));
+    // `prototype` moved behind the overflow ("More") menu in the composer rail.
+    await clickHomeShortcut('prototype');
 
     // The personal default pre-selects, as before.
     await waitFor(() => {
@@ -1116,7 +1128,8 @@ describe('HomeView prompt handoff', () => {
     );
 
     await clearActiveTypeChip();
-    fireEvent.click(await screen.findByTestId('home-hero-rail-prototype'));
+    // `prototype` moved behind the overflow ("More") menu in the composer rail.
+    await clickHomeShortcut('prototype');
     // Card body opens preview; the Use button is what seeds the composer input.
     fireEvent.click(await screen.findByTestId('home-hero-plugin-preset-use-example-web-prototype'));
 
@@ -1129,7 +1142,6 @@ describe('HomeView prompt handoff', () => {
     expect(fetchMock.mock.calls.some(([url]) => (
       typeof url === 'string' && url.includes('/api/plugins/example-web-prototype/apply')
     ))).toBe(false);
-    expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Prototype');
     // The design-system picker is now the persistent control below the composer.
     expect(
       screen.getByTestId('home-hero-design-system-trigger').textContent,
@@ -1364,10 +1376,15 @@ describe('HomeView prompt handoff', () => {
     );
 
     await clearActiveTypeChip();
-    fireEvent.click(await screen.findByTestId('home-hero-rail-deck'));
+    // `deck` moved behind the overflow ("More") menu in the composer rail.
+    await clickHomeShortcut('deck');
 
+    // `deck` moved to the migrate group, so the footer "Template" pill
+    // (create-group only) no longer reflects it — wait on the chip's example
+    // preset cards rendering instead, a signal that requires the chip's
+    // `usePlugin` bind to have actually run.
     await waitFor(() => {
-      expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Slide deck');
+      expect(screen.getByTestId('home-hero-plugin-presets')).toBeTruthy();
     });
     expect(screen.queryByTestId('home-hero-footer-option-speakerNotes')).toBeNull();
     expect(screen.queryByTestId('home-hero-footer-option-slideCount')).toBeNull();
@@ -1418,10 +1435,15 @@ describe('HomeView prompt handoff', () => {
     await screen.findByTestId('home-hero-input');
     await setPromptAndSettle('Keep my current brief');
     await clearActiveTypeChip();
-    fireEvent.click(await screen.findByTestId('home-hero-rail-prototype'));
+    // `prototype` moved behind the overflow ("More") menu in the composer rail.
+    await clickHomeShortcut('prototype');
 
+    // `prototype` moved to the migrate group, so the footer "Template" pill
+    // (create-group only) no longer reflects it — wait on the chip's example
+    // preset cards rendering instead, a signal that requires the chip's
+    // `usePlugin` bind to have actually run.
     await waitFor(() => {
-      expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Prototype');
+      expect(screen.getByTestId('home-hero-plugin-presets')).toBeTruthy();
     });
     expect(fetchMock.mock.calls.some(([url]) => (
       typeof url === 'string' && url.includes('/api/plugins/example-web-prototype/apply')
@@ -1467,11 +1489,11 @@ describe('HomeView prompt handoff', () => {
     );
 
     await clearActiveTypeChip();
-    fireEvent.click(await screen.findByTestId('home-hero-rail-deck'));
+    // `deck` moved behind the overflow ("More") menu in the composer rail.
+    await clickHomeShortcut('deck');
     await waitFor(() => {
-      expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Slide deck');
+      expect(screen.getByTestId('home-hero-plugin-presets')).toBeTruthy();
     });
-    expect(screen.getByTestId('home-hero-plugin-presets')).toBeTruthy();
     expect(screen.getByTestId('home-hero-plugin-presets').textContent).toContain('Simple Deck');
     fireEvent.click(screen.getAllByTestId(/^home-hero-plugin-preset-use-/)[0]!);
     expect(fetchMock.mock.calls.some(([url]) => (
@@ -1484,7 +1506,8 @@ describe('HomeView prompt handoff', () => {
     });
 
     await clearActiveTypeChip();
-    fireEvent.click(await screen.findByTestId('home-hero-rail-prototype'));
+    // `prototype` moved behind the overflow ("More") menu in the composer rail.
+    await clickHomeShortcut('prototype');
     await waitFor(() => {
       expect(screen.getByTestId('home-hero-plugin-presets')).toBeTruthy();
     });

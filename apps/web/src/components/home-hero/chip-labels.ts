@@ -30,6 +30,12 @@ export function homeHeroChipLabel(chipId: string, t: Translate): string {
     case 'create-plugin': return t('homeHero.chip.createPlugin');
     case 'figma': return t('homeHero.chip.figma');
     case 'template': return t('homeHero.chip.template');
+    // Reuse the Home "Featured starters" row's own copy (same Dict keys)
+    // instead of duplicating the label string into a new homeHero.chip.* key.
+    case 'scroll-film': return t('home.featured.tool.scrollFilm.label');
+    case 'hero-creation': return t('home.featured.tool.heroCreation.label');
+    case 'clone-rebrand': return t('home.featured.tool.cloneRebrand.label');
+    case 'scroll-animations': return t('homeHero.chip.scrollAnimations');
     default: return chipId;
   }
 }

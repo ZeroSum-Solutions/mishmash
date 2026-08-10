@@ -162,13 +162,22 @@ export function EntryNavRail({
           <Icon name="folder" size={18} />
         </NavButton>
         <NavButton
-          active={view === 'design-systems'}
-          ariaLabel={t('entry.navDesignSystems')}
-          tooltip={t('entry.navDesignSystems')}
-          onClick={() => selectView('design-systems')}
-          testId="entry-nav-design-systems"
+          active={view === 'templates'}
+          ariaLabel={t('entry.navTemplates')}
+          tooltip={t('entry.navTemplates')}
+          onClick={() => selectView('templates')}
+          testId="entry-nav-templates"
         >
-          <Icon name="palette" size={18} />
+          <Icon name="layout" size={18} />
+        </NavButton>
+        <NavButton
+          active={view === 'design-library'}
+          ariaLabel={t('entry.navDesignLibrary')}
+          tooltip={t('entry.navDesignLibrary')}
+          onClick={() => selectView('design-library')}
+          testId="entry-nav-design-library"
+        >
+          <Icon name="swatchbook" size={18} />
         </NavButton>
         {LIBRARY_UI_VISIBLE ? (
           <NavButton
@@ -182,13 +191,13 @@ export function EntryNavRail({
           </NavButton>
         ) : null}
         <NavButton
-          active={view === 'design-library'}
-          ariaLabel={t('entry.navDesignLibrary')}
-          tooltip={t('entry.navDesignLibrary')}
-          onClick={() => selectView('design-library')}
-          testId="entry-nav-design-library"
+          active={view === 'design-systems'}
+          ariaLabel={t('entry.navDesignSystems')}
+          tooltip={t('entry.navDesignSystems')}
+          onClick={() => selectView('design-systems')}
+          testId="entry-nav-design-systems"
         >
-          <Icon name="swatchbook" size={18} />
+          <Icon name="palette" size={18} />
         </NavButton>
         <NavButton
           active={view === 'templates'}

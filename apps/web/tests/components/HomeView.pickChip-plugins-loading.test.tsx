@@ -58,7 +58,7 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-// The rail correctly disables `home-hero-rail-prototype` while
+// The rail correctly disables `home-hero-rail-webgl` while
 // `pluginsLoading` is true (see HomeHero.tsx `RailGroup`), and a real
 // `<button disabled>` never receives a `click` in any browser — so a real
 // user cannot reach `pickChip` through this control during the loading
@@ -87,10 +87,10 @@ describe('HomeView pickChip plugins-loading guard', () => {
     stubPluginsPending();
     renderHome();
 
-    const prototypeChip = await screen.findByTestId<HTMLButtonElement>('home-hero-rail-prototype');
-    expect(prototypeChip.disabled).toBe(true);
+    const webglChip = await screen.findByTestId<HTMLButtonElement>('home-hero-rail-webgl');
+    expect(webglChip.disabled).toBe(true);
 
-    clickThroughDisabledRail(prototypeChip);
+    clickThroughDisabledRail(webglChip);
 
     expect(screen.queryByRole('alert')).toBeNull();
   });

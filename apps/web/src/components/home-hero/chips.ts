@@ -39,7 +39,13 @@ export type ChipScenarioPluginId =
   // their own bundled example plugins under plugins/_official/examples/, so —
   // like example-hyperframes — they carry their plugin id directly rather than
   // routing through the default kind→plugin table.
-  | 'example-webgl-experience';
+  | 'example-webgl-experience'
+  // Bundled scroll scenarios under plugins/_official/scenarios/ — same
+  // direct-id pattern as the specialised chips above.
+  | 'od-scroll-film'
+  | 'od-scroll-animations'
+  // Bundled example under plugins/_official/examples/curl-field-hero/.
+  | 'example-curl-field-hero';
 
 export type ChipAction =
   | {
@@ -86,41 +92,18 @@ export interface HomeHeroChip {
 
 export const HOME_HERO_CHIPS: ReadonlyArray<HomeHeroChip> = [
   {
-    id: 'create-brand-kit',
+    id: 'template',
     // Inline English fallback only — the rendered label is localized through
-    // the `homeHero.chip.createBrandKit` Dict key (see `homeHeroChipLabel` in
-    // HomeHero.tsx / `homeHeroChipLabelForId` in HomeView.tsx) so the Chinese
-    // UI shows "创建品牌套件".
-    label: 'Create Brand Kit',
-    icon: 'swatchbook',
+    // the `homeHero.chip.template` Dict key (see `homeHeroChipLabel` in
+    // HomeHero.tsx / `homeHeroChipLabelForId` in HomeView.tsx). Formerly the
+    // "From template" migrate-group shortcut; promoted to lead the create
+    // rail since picking from an existing template is the fastest on-ramp.
+    label: 'Build a website',
+    icon: 'file-code',
     group: 'create',
-    description: 'Extract a brand design system',
-    hint: 'Extract a brand kit from a website, then apply it in any chat.',
-    // Distinct from the plugin-bound create chips: this dispatches straight
-    // into the Brand Kit tab's extraction flow instead of binding a scenario
-    // plugin to the composer.
-    action: { kind: 'create-brand-kit' },
-  },
-  {
-    id: 'prototype',
-    label: 'Prototype',
-    icon: 'palette',
-    group: 'create',
-    description: 'Interactive app mockups',
-    // Prototype now binds to the bundled `example-web-prototype` plugin,
-    // which ships `assets/template.html` (single-file HTML prototype
-    // seed), `references/layouts.md` (paste-ready section layouts), and
-    // a P0 checklist. The previous routing to the generic
-    // od-new-generation router left the agent to invent every section's
-    // CSS, producing inconsistent type scales and density between turns.
-    // Web-prototype's manifest owns the editable `{{fidelity}}`,
-    // `{{artifactKind}}`, `{{audience}}`, `{{designSystem}}`, and
-    // `{{template}}` slots; Home renders those placeholders inline.
-    action: {
-      kind: 'apply-scenario',
-      pluginId: 'example-web-prototype',
-      projectKind: 'prototype',
-    },
+    description: 'Start from an existing template',
+    hint: 'Start from a bundled template.',
+    action: { kind: 'open-template-picker' },
   },
   {
     id: 'web-clone',
@@ -146,10 +129,182 @@ export const HOME_HERO_CHIPS: ReadonlyArray<HomeHeroChip> = [
     },
   },
   {
+    id: 'scroll-film',
+    label: 'Scroll film',
+    icon: 'film',
+    group: 'create',
+    description: 'One continuous scroll-driven story',
+    hint: 'Turn an idea into one continuous scroll-driven story: pinned scenes, scrubbed reveals, parallax depth, and chapter transitions.',
+    // Binds the bundled `od-scroll-film` scenario (plugins/_official/scenarios/od-scroll-film).
+    // Its manifest declares a required `idea` input with no default, so the
+    // chip supplies a placeholder value to keep the composer's Send button
+    // enabled — same pattern as the `document` chip's `topic` input below.
+    // 'create'-group chips never render this value into the visible prompt
+    // (see `pickChip` in HomeView.tsx), so it never overwrites what the user
+    // actually types.
+    action: {
+      kind: 'apply-scenario',
+      pluginId: 'od-scroll-film',
+      projectKind: 'prototype',
+      inputs: { idea: 'the user brief' },
+    },
+  },
+  {
+    id: 'hero-creation',
+    label: 'Hero creation',
+    icon: 'maximize',
+    group: 'create',
+    description: 'Full-viewport animated hero section',
+    hint: 'Generate a full-viewport animated hero: generative motion and a spare editorial title card.',
+    // Binds the bundled `example-curl-field-hero` example plugin
+    // (plugins/_official/examples/curl-field-hero). No declared inputs, so no
+    // placeholder values are needed to keep the composer submittable.
+    action: {
+      kind: 'apply-scenario',
+      pluginId: 'example-curl-field-hero',
+      projectKind: 'prototype',
+    },
+  },
+  {
+    id: 'clone-rebrand',
+    label: 'Clone + rebrand',
+    icon: 'paint-bucket',
+    group: 'create',
+    description: "Recreate a site under your client's brand",
+    hint: "Clone a site's structure and visuals, then rebuild it under your client's brand — new colors, logo, and voice.",
+    // Reuses the `web-clone` chip's own `example-web-clone` scenario plugin;
+    // `intent: 'clone-rebrand'` is what distinguishes this card from the
+    // plain Website clone chip (same plugin, same `targetUrl` input) in the
+    // created project's metadata / analytics.
+    action: {
+      kind: 'apply-scenario',
+      pluginId: 'example-web-clone',
+      projectKind: 'prototype',
+      projectMetadata: {
+        kind: 'prototype',
+        intent: 'clone-rebrand',
+      },
+    },
+  },
+  {
+    id: 'scroll-animations',
+    label: 'Animated scroller',
+    icon: 'layers-filled',
+    group: 'create',
+    description: 'Scroll-triggered reveals, pins & parallax',
+    hint: 'Weave scroll-linked animation through a site: scroll-triggered reveals, pinned sections, scrubbed sequences, and parallax depth.',
+    // Binds the bundled `od-scroll-animations` scenario
+    // (plugins/_official/scenarios/od-scroll-animations) — this chip is its
+    // first UI surface. Non-narrative sibling of Scroll film: animation
+    // effects woven through an otherwise ordinary site, not one continuous
+    // story. Same required-`idea`-input placeholder rationale as Scroll film.
+    action: {
+      kind: 'apply-scenario',
+      pluginId: 'od-scroll-animations',
+      projectKind: 'prototype',
+      inputs: { idea: 'the user brief' },
+    },
+  },
+  {
+    id: 'webgl',
+    label: 'WebGL experience',
+    icon: 'sparkles',
+    group: 'create',
+    description: 'Shaders, 3D & generative GPU visuals',
+    hint: 'Build a full-screen real-time WebGL2 shader / 3D scene that runs live on the GPU.',
+    // Powered-preview scenario: binds the bundled `example-webgl-experience`
+    // plugin (shader/3D seed + P0 checklist). The artifact auto-detects into
+    // powered preview via its `getContext('webgl2')` call.
+    action: {
+      kind: 'apply-scenario',
+      pluginId: 'example-webgl-experience',
+      projectKind: 'prototype',
+      projectMetadata: {
+        kind: 'prototype',
+        intent: 'webgl-experience',
+        fidelity: 'high-fidelity',
+      },
+    },
+  },
+  {
+    id: 'hyperframes',
+    label: 'HyperFrames',
+    icon: 'orbit',
+    group: 'create',
+    description: 'Motion graphics & loops',
+    hint: 'Author HTML-based motion: captions, audio-reactive visuals, scene transitions.',
+    // HyperFrames is its own bundled scenario (motion-graphics
+    // specialisation of Video). It surfaces in PluginsHomeSection's
+    // primary category list, so the rail picks it up too rather than
+    // hiding the specialised bucket behind the generic Video chip.
+    action: { kind: 'apply-scenario', pluginId: 'example-hyperframes', projectKind: 'video' },
+  },
+  {
+    id: 'live-artifact',
+    label: 'Live artifact',
+    icon: 'refresh',
+    group: 'create',
+    description: 'Data-backed live dashboards',
+    hint: 'Build a refreshable artifact backed by connector or local data.',
+    action: {
+      kind: 'apply-scenario',
+      pluginId: 'example-live-artifact',
+      projectKind: 'prototype',
+      projectMetadata: {
+        kind: 'prototype',
+        intent: 'live-artifact',
+        fidelity: 'high-fidelity',
+      },
+    },
+  },
+  {
+    id: 'deck',
+    label: 'Slide deck',
+    icon: 'present',
+    group: 'migrate',
+    description: 'Presentations & pitch decks',
+    // Slide deck binds to `example-simple-deck`, which ships a 353-line
+    // `assets/template.html` (the 1920×1080 + scale-to-fit + nav + print
+    // framework paired with proven slide CSS), 8 paste-ready layouts in
+    // `references/layouts.md` (cover, body, big-stat, three-point,
+    // pipeline, dark quote, before/after, closing), and a P0/P1/P2
+    // checklist that catches overflow at 1280×800 / 1440×900. The
+    // previous routing to od-new-generation gave the agent only the
+    // generic deck-framework directive — which fixed nav but not slide
+    // layout — so density bugs (168px headline + absolute footer
+    // collision) shipped on default decks.
+    action: {
+      kind: 'apply-scenario',
+      pluginId: 'example-simple-deck',
+      projectKind: 'deck',
+    },
+  },
+  {
+    id: 'prototype',
+    label: 'Prototype',
+    icon: 'palette',
+    group: 'migrate',
+    description: 'Interactive app mockups',
+    // Prototype now binds to the bundled `example-web-prototype` plugin,
+    // which ships `assets/template.html` (single-file HTML prototype
+    // seed), `references/layouts.md` (paste-ready section layouts), and
+    // a P0 checklist. The previous routing to the generic
+    // od-new-generation router left the agent to invent every section's
+    // CSS, producing inconsistent type scales and density between turns.
+    // Web-prototype's manifest owns the editable `{{fidelity}}`,
+    // `{{artifactKind}}`, `{{audience}}`, `{{designSystem}}`, and
+    // `{{template}}` slots; Home renders those placeholders inline.
+    action: {
+      kind: 'apply-scenario',
+      pluginId: 'example-web-prototype',
+      projectKind: 'prototype',
+    },
+  },
+  {
     id: 'wireframe',
     label: 'Wireframe',
     icon: 'layout',
-    group: 'create',
+    group: 'migrate',
     description: 'Lo-fi screens & flows',
     hint: 'Sketch lo-fi screens and flows to validate structure before visual design.',
     // Wireframe reuses the battle-tested web-prototype seed but stamps a
@@ -169,7 +324,7 @@ export const HOME_HERO_CHIPS: ReadonlyArray<HomeHeroChip> = [
     id: 'mobile',
     label: 'Mobile app',
     icon: 'smartphone',
-    group: 'create',
+    group: 'migrate',
     description: 'iOS & Android screens',
     hint: 'Lay out mobile screens for iOS and Android.',
     // Mobile reuses the web-prototype seed but records mobile platform
@@ -186,32 +341,10 @@ export const HOME_HERO_CHIPS: ReadonlyArray<HomeHeroChip> = [
     },
   },
   {
-    id: 'deck',
-    label: 'Slide deck',
-    icon: 'present',
-    group: 'create',
-    description: 'Presentations & pitch decks',
-    // Slide deck binds to `example-simple-deck`, which ships a 353-line
-    // `assets/template.html` (the 1920×1080 + scale-to-fit + nav + print
-    // framework paired with proven slide CSS), 8 paste-ready layouts in
-    // `references/layouts.md` (cover, body, big-stat, three-point,
-    // pipeline, dark quote, before/after, closing), and a P0/P1/P2
-    // checklist that catches overflow at 1280×800 / 1440×900. The
-    // previous routing to od-new-generation gave the agent only the
-    // generic deck-framework directive — which fixed nav but not slide
-    // layout — so density bugs (168px headline + absolute footer
-    // collision) shipped on default decks.
-    action: {
-      kind: 'apply-scenario',
-      pluginId: 'example-simple-deck',
-      projectKind: 'deck',
-    },
-  },
-  {
     id: 'document',
     label: 'Document',
     icon: 'file-text',
-    group: 'create',
+    group: 'migrate',
     description: 'Resumes, reports & PDFs',
     hint: 'Draft a polished document — resume, report, or PDF — you can export.',
     // Documents (resumes / reports / PDFs) route through the generic
@@ -237,62 +370,10 @@ export const HOME_HERO_CHIPS: ReadonlyArray<HomeHeroChip> = [
     },
   },
   {
-    id: 'hyperframes',
-    label: 'HyperFrames',
-    icon: 'orbit',
-    group: 'create',
-    description: 'Motion graphics & loops',
-    hint: 'Author HTML-based motion: captions, audio-reactive visuals, scene transitions.',
-    // HyperFrames is its own bundled scenario (motion-graphics
-    // specialisation of Video). It surfaces in PluginsHomeSection's
-    // primary category list, so the rail picks it up too rather than
-    // hiding the specialised bucket behind the generic Video chip.
-    action: { kind: 'apply-scenario', pluginId: 'example-hyperframes', projectKind: 'video' },
-  },
-  {
-    id: 'webgl',
-    label: 'WebGL experience',
-    icon: 'sparkles',
-    group: 'create',
-    description: 'Shaders, 3D & generative GPU visuals',
-    hint: 'Build a full-screen real-time WebGL2 shader / 3D scene that runs live on the GPU.',
-    // Powered-preview scenario: binds the bundled `example-webgl-experience`
-    // plugin (shader/3D seed + P0 checklist). The artifact auto-detects into
-    // powered preview via its `getContext('webgl2')` call.
-    action: {
-      kind: 'apply-scenario',
-      pluginId: 'example-webgl-experience',
-      projectKind: 'prototype',
-      projectMetadata: {
-        kind: 'prototype',
-        intent: 'webgl-experience',
-        fidelity: 'high-fidelity',
-      },
-    },
-  },
-  {
-    id: 'live-artifact',
-    label: 'Live artifact',
-    icon: 'refresh',
-    group: 'create',
-    description: 'Data-backed live dashboards',
-    hint: 'Build a refreshable artifact backed by connector or local data.',
-    action: {
-      kind: 'apply-scenario',
-      pluginId: 'example-live-artifact',
-      projectKind: 'prototype',
-      projectMetadata: {
-        kind: 'prototype',
-        intent: 'live-artifact',
-        fidelity: 'high-fidelity',
-      },
-    },
-  },
-  {
     id: 'image',
     label: 'Image',
     icon: 'image',
-    group: 'create',
+    group: 'migrate',
     description: 'Posters, graphics & art',
     action: {
       kind: 'apply-scenario',
@@ -310,7 +391,7 @@ export const HOME_HERO_CHIPS: ReadonlyArray<HomeHeroChip> = [
     id: 'video',
     label: 'Video',
     icon: 'play',
-    group: 'create',
+    group: 'migrate',
     description: 'Clips, reels & promos',
     action: {
       kind: 'apply-scenario',
@@ -328,7 +409,7 @@ export const HOME_HERO_CHIPS: ReadonlyArray<HomeHeroChip> = [
     id: 'audio',
     label: 'Audio',
     icon: 'mic',
-    group: 'create',
+    group: 'migrate',
     description: 'Voiceovers, music & SFX',
     action: {
       kind: 'apply-scenario',
@@ -341,6 +422,22 @@ export const HOME_HERO_CHIPS: ReadonlyArray<HomeHeroChip> = [
         aspect: '16:9',
       },
     },
+  },
+  {
+    id: 'create-brand-kit',
+    // Inline English fallback only — the rendered label is localized through
+    // the `homeHero.chip.createBrandKit` Dict key (see `homeHeroChipLabel` in
+    // HomeHero.tsx / `homeHeroChipLabelForId` in HomeView.tsx) so the Chinese
+    // UI shows "创建品牌套件".
+    label: 'Create Brand Kit',
+    icon: 'swatchbook',
+    group: 'migrate',
+    description: 'Extract a brand design system',
+    hint: 'Extract a brand kit from a website, then apply it in any chat.',
+    // Distinct from the plugin-bound create chips: this dispatches straight
+    // into the Brand Kit tab's extraction flow instead of binding a scenario
+    // plugin to the composer.
+    action: { kind: 'create-brand-kit' },
   },
   {
     id: 'create-plugin',
@@ -366,50 +463,40 @@ export const HOME_HERO_CHIPS: ReadonlyArray<HomeHeroChip> = [
       },
     },
   },
-  {
-    id: 'template',
-    label: 'From template',
-    icon: 'file-code',
-    group: 'migrate',
-    hint: 'Start from a bundled template.',
-    action: { kind: 'open-template-picker' },
-  },
 ];
 
 export function chipsForGroup(group: ChipGroup): HomeHeroChip[] {
   return HOME_HERO_CHIPS.filter((c) => c.group === group);
 }
 
-// Display order for the inline `create` scenario rail. The composer leads with
-// Website clone (the fastest "paste a URL, get a site" on-ramp), then the slide
-// deck ("Slides") and the core build scenarios in decreasing generality
-// (Prototype → Wireframe → Mobile → Document → Animation), then the media
-// scenarios. Brand Kit is intentionally omitted here so it trails the scenario
-// set — it dispatches into the Brand Kit tab rather than seeding a scenario
-// plugin. Any create chip not listed keeps its catalog order after the explicit
+// Display order for the inline `create` scenario rail. The composer leads
+// with the user's core "start building" chips — Build a website, Website
+// clone, then the scroll/hero/rebrand scenarios — followed by the
+// powered-preview / motion specialisations. Everything else (Slide deck,
+// Prototype, Wireframe, Mobile, Document, Image, Video, Audio, Create Brand
+// Kit, Create plugin, From Figma) moved to the `migrate` group and is
+// reachable through the overflow ("More") menu instead — see `chipsForGroup`.
+// Any create chip not listed keeps its catalog order after the explicit
 // entries (see `orderedCreateChips`).
 export const CREATE_RAIL_ORDER = [
+  'template',
   'web-clone',
-  'deck',
-  'prototype',
-  'wireframe',
-  'mobile',
-  'document',
-  'hyperframes',
+  'scroll-film',
+  'hero-creation',
+  'clone-rebrand',
+  'scroll-animations',
   'webgl',
+  'hyperframes',
   'live-artifact',
-  'image',
-  'video',
-  'audio',
 ] as const;
 
 // Chip ids the onboarding "build a design system" teaser intentionally omits.
-// Video and Audio are the trailing pure-media outputs in CREATE_RAIL_ORDER and
-// the least central to the design-system story, so they are the first to drop
-// when keeping the teaser chips to a single tidy row. Website clone starts
-// from someone else's site rather than the user's design system, so it stays
-// off the design-system teaser too.
-const ONBOARDING_ARTIFACT_OMIT = new Set<string>(['web-clone', 'video', 'audio']);
+// `template` (opens the template picker) and `web-clone` / `clone-rebrand`
+// (both start from someone else's site) don't generate a fresh artifact from
+// the user's own brief/brand, so none of the three belong in a "build a
+// design system" teaser — every remaining CREATE_RAIL_ORDER id is a genuine
+// scenario-plugin artifact chip.
+const ONBOARDING_ARTIFACT_OMIT = new Set<string>(['template', 'web-clone', 'clone-rebrand']);
 
 // The artifact chips shown on the onboarding "build a design system" step — a
 // curated single-row subset of the create rail. Derived from CREATE_RAIL_ORDER
@@ -420,9 +507,9 @@ export const ONBOARDING_ARTIFACT_CHIP_IDS = CREATE_RAIL_ORDER.filter(
 );
 
 // The `create` chips in rail-display order. Listed ids come first in
-// `CREATE_RAIL_ORDER`; any unlisted create chip (e.g. `create-brand-kit`)
-// trails in catalog order. Reordering through this helper keeps the catalog
-// data table stable while letting the rail lead with the slide deck.
+// `CREATE_RAIL_ORDER`; any unlisted create chip trails in catalog order.
+// Reordering through this helper keeps the catalog data table stable while
+// letting the rail lead with the user's own chips.
 export function orderedCreateChips(): HomeHeroChip[] {
   const create = chipsForGroup('create');
   const listed = CREATE_RAIL_ORDER

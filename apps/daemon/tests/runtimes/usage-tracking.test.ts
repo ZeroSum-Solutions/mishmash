@@ -21,6 +21,7 @@ import {
   priceForModel,
   projectUsageSummary,
   recordRunUsage,
+  workspaceUsageSummary,
 } from '../../src/runtimes/usage-tracking.js';
 
 function agentUsageEvent(usage: Record<string, number>) {
@@ -308,6 +309,69 @@ describe('run_usage table persistence', () => {
     expect(summary.pricedRunCount).toBe(0);
     expect(summary.pricingVersion).toBe('unavailable');
     expect(summary.totalCostUsd).toBe(0);
+  });
+
+  it('workspaceUsageSummary reports a confident $0 total when the workspace has no runs at all', () => {
+    const summary = workspaceUsageSummary(db);
+    expect(summary.runCount).toBe(0);
+    expect(summary.pricedRunCount).toBe(0);
+    expect(summary.projectCount).toBe(0);
+    expect(summary.pricingVersion).toBe('unavailable');
+    expect(summary.totalCostUsd).toBe(0);
+  });
+
+  it('workspaceUsageSummary sums exactly across every project when every run is priced', () => {
+    const usages: [string, Record<string, number>][] = [
+      ['proj-a', { input_tokens: 200, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }],
+      ['proj-b', { input_tokens: 4000, output_tokens: 800, cache_creation_input_tokens: 300, cache_read_input_tokens: 900 }],
+    ];
+    let expectedTotal = 0;
+    usages.forEach(([projectId, usage], i) => {
+      const record = computeRunUsageRecord({
+        requestedRaw: 'claude-sonnet-4-5', resolvedRaw: 'claude-sonnet-4-5', reportedRaw: 'claude-sonnet-4-5',
+        agentId: 'claude',
+        events: [agentUsageEvent(usage)],
+      });
+      expectedTotal += record.costUsd ?? 0;
+      recordRunUsage(db, { runId: `run-ws-priced-${i}`, projectId, conversationId: 'conv-1', agentId: 'claude', record });
+    });
+    const summary = workspaceUsageSummary(db);
+    expect(summary.totalCostUsd).toBeCloseTo(expectedTotal, 10);
+    expect(summary.pricingVersion).toBe('estimated');
+    expect(summary.runCount).toBe(2);
+    expect(summary.pricedRunCount).toBe(2);
+    expect(summary.projectCount).toBe(2);
+  });
+
+  it('workspaceUsageSummary reports partial (not a confident number) when runs across projects mix priced and unpriced', () => {
+    recordRunUsage(db, {
+      runId: 'run-ws-mixed-priced',
+      projectId: 'proj-ws-mixed-a',
+      conversationId: 'conv-1',
+      agentId: 'claude',
+      record: computeRunUsageRecord({
+        requestedRaw: 'claude-sonnet-4-5', resolvedRaw: 'claude-sonnet-4-5', reportedRaw: 'claude-sonnet-4-5',
+        agentId: 'claude',
+        events: [agentUsageEvent({ input_tokens: 200, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 })],
+      }),
+    });
+    recordRunUsage(db, {
+      runId: 'run-ws-mixed-unpriced',
+      projectId: 'proj-ws-mixed-b',
+      conversationId: 'conv-1',
+      agentId: 'antigravity',
+      record: computeRunUsageRecord({
+        requestedRaw: 'Gemini 3.1 Pro (High)', resolvedRaw: 'Gemini 3.1 Pro (High)', reportedRaw: null,
+        agentId: 'antigravity',
+        events: [],
+      }),
+    });
+    const summary = workspaceUsageSummary(db);
+    expect(summary.pricingVersion).toBe('partial');
+    expect(summary.totalCostUsd).toBeGreaterThan(0);
+    expect(summary.runCount).toBe(2);
+    expect(summary.pricedRunCount).toBe(1);
+    expect(summary.projectCount).toBe(2);
   });
 
   it('survives a fresh Database handle against the same file (daemon-restart durability)', () => {

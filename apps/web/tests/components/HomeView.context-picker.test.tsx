@@ -335,9 +335,16 @@ describe('HomeView context picker', () => {
       />,
     );
 
+    // `prototype` moved behind the overflow ("More") menu in the composer
+    // rail — open it before the chip is reachable.
+    fireEvent.click(await screen.findByTestId('home-hero-shortcuts-trigger'));
     fireEvent.click(await screen.findByTestId('home-hero-rail-prototype'));
+    // `prototype` is a migrate-group chip now, so the footer "Template" pill
+    // (create-group only) no longer reflects it — wait on the chip's example
+    // preset cards rendering instead, a signal that requires the chip's
+    // `usePlugin` bind to have actually run.
     await waitFor(() => {
-      expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Prototype');
+      expect(screen.getByTestId('home-hero-plugin-presets')).toBeTruthy();
     });
 
     screen.getByTestId('home-hero-input');
@@ -347,7 +354,6 @@ describe('HomeView context picker', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('home-hero-active-skill')).toBeTruthy();
-      expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('None');
     });
 
     fireEvent.click(screen.getByTestId('home-hero-submit'));
@@ -415,9 +421,11 @@ describe('HomeView context picker', () => {
       expect(screen.getByTestId('home-hero-active-skill')).toBeTruthy();
     });
 
+    // `prototype` moved behind the overflow ("More") menu in the composer
+    // rail — open it before the chip is reachable.
+    fireEvent.click(await screen.findByTestId('home-hero-shortcuts-trigger'));
     fireEvent.click(await screen.findByTestId('home-hero-rail-prototype'));
     await waitFor(() => {
-      expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Prototype');
       expect(screen.queryByTestId('home-hero-active-skill')).toBeNull();
     });
 

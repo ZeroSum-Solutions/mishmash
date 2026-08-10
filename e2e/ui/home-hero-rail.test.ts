@@ -1084,7 +1084,7 @@ test('[P2] home hero exposes the template picker, starter cards, blank project, 
   await expect(page.getByTestId('home-hero-template-section')).toBeVisible();
   await expect(page.getByTestId('home-hero-blank-project')).toBeVisible();
   await expect(page.getByTestId('home-hero-type-tabs')).toBeVisible();
-  for (const id of ['prototype', 'live-artifact', 'deck', 'image', 'video', 'hyperframes', 'audio']) {
+  for (const id of ['live-artifact', 'hyperframes']) {
     await expect(page.getByTestId(`home-hero-rail-${id}`)).toBeVisible();
   }
   await expect(page.getByTestId('home-hero-shortcuts-trigger')).toBeVisible();
@@ -1092,7 +1092,7 @@ test('[P2] home hero exposes the template picker, starter cards, blank project, 
   await page.getByTestId('home-hero-shortcuts-trigger').click();
   const menu = page.getByTestId('home-hero-shortcuts-menu');
   await expect(menu).toBeVisible();
-  for (const id of ['create-plugin', 'figma', 'template']) {
+  for (const id of ['prototype', 'deck', 'image', 'video', 'audio', 'create-plugin', 'figma']) {
     await expect(menu.getByTestId(`home-hero-rail-${id}`)).toBeVisible();
   }
 });

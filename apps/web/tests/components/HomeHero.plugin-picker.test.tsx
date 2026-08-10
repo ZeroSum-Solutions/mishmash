@@ -714,15 +714,18 @@ describe('HomeHero plugin picker', () => {
   it('hides the active plugin chip clear button when it stands in for a task chip default plugin', () => {
     // Plain task-chip pick: the chip shows the task label and the footer
     // ActiveTypeChip owns the clear affordance, so the plugin chip has none.
-    const active = makePlugin('prototype-plugin', 'Prototype Plugin');
+    // Must be a `create`-group chip id — the footer ActiveTypeChip pill only
+    // stands in for chips in that group (see `activeCreateChip` in
+    // HomeHero.tsx).
+    const active = makePlugin('webgl-plugin', 'WebGL Plugin');
     render(
       <HomeHero
-        prompt="Build a prototype"
+        prompt="Build a WebGL experience"
         onPromptChange={() => undefined}
         onSubmit={() => undefined}
-        activePluginTitle="Prototype"
+        activePluginTitle="WebGL experience"
         activePluginRecord={active}
-        activeChipId="prototype"
+        activeChipId="webgl"
         activePluginIsExplicit={false}
         onClearActivePlugin={() => undefined}
         onOpenPluginDetails={() => undefined}

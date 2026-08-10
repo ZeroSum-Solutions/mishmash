@@ -2,6 +2,14 @@
 
 Date: 2026-08-01 · Branch: `feat/workflows-and-assets` · Status: phase 1 in progress
 
+> **2026-08-09 — owner reversed the "curation over filters" verdict.** Home now carries
+> three named sections below the composer — Templates, Design Library, Recent Projects —
+> each uncapped and each with its own filter control. This supersedes the "Starters is THE
+> Home section: curated ~8 cards, 2×4; curation over filters; no tabs" bullet below. The
+> governing rule ("an element earns Home space only if it starts or resumes a project")
+> still holds: all three sections start or resume work. Everything else in this plan
+> stands.
+
 ## Origin
 
 Owner request: hide/collapse the Home "Workflows and Assets" gallery; build out the

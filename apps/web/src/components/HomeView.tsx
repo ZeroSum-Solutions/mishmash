@@ -1718,13 +1718,16 @@ export function HomeView({
           inputs: chip.action.inputs,
           projectMetadata: chip.action.projectMetadata ?? null,
         };
-        // Output-type tabs (create group) are mode-selection gestures:
-        // switching between them should never prompt for confirmation,
-        // and they should NOT pre-fill the textarea with the rendered
-        // useCase.query — the preset cards are the explicit opt-in
-        // for that. Migrate-group chips (From Figma, etc.) still carry
-        // a meaningful prompt the user wants dropped in, so they keep
-        // the historical behavior.
+        // Output-type (apply-scenario) chips are mode-selection gestures,
+        // regardless of which rail group renders them (the primary create
+        // tabs, or an overflow-menu chip like Wireframe/Document): switching
+        // between them should never prompt for confirmation, and they should
+        // NOT pre-fill the textarea with the rendered useCase.query — the
+        // preset cards are the explicit opt-in for that. `apply-scenario` is
+        // the only action kind sharing this switch case that behaves this
+        // way — `apply-figma-migration` (From Figma) still carries a
+        // meaningful prompt the user wants dropped in, so it keeps the
+        // historical immediate-apply-with-confirmation behavior.
         //
         // Website clone is the one create chip that seeds the composer: the
         // scenario is meaningless without a target URL, so an empty composer
@@ -1734,7 +1737,7 @@ export function HomeView({
           chip.id === 'web-clone' && prompt.trim().length === 0
             ? t('homeHero.chip.webClonePromptSeed')
             : null;
-        if (chip.group === 'create') {
+        if (chip.action.kind === 'apply-scenario') {
           void usePlugin(record, promptSeed ?? undefined, {
             ...pluginOptions,
             suppressPromptUpdate: promptSeed === null,

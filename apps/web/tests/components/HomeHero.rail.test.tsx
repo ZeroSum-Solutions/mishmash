@@ -140,22 +140,22 @@ describe('HomeHero intent rail', () => {
 
   it('forwards the matching chip descriptor when clicked', () => {
     const { onPickChip } = renderHero();
-    fireEvent.click(screen.getByTestId('home-hero-rail-image'));
+    fireEvent.click(screen.getByTestId('home-hero-rail-webgl'));
     expect(onPickChip).toHaveBeenCalledTimes(1);
-    expect(onPickChip).toHaveBeenCalledWith(findChip('image'));
+    expect(onPickChip).toHaveBeenCalledWith(findChip('webgl'));
   });
 
   it('moves the active creation chip into the composer and hides the tab row', () => {
-    renderHero({ activeChipId: 'video' });
+    renderHero({ activeChipId: 'webgl' });
     expect(screen.queryByTestId('home-hero-type-tabs')).toBeNull();
-    expect(screen.queryByTestId('home-hero-rail-video')).toBeNull();
+    expect(screen.queryByTestId('home-hero-rail-webgl')).toBeNull();
     const node = screen.getByTestId('home-hero-template-trigger');
-    expect(node.textContent).toContain('Video');
+    expect(node.textContent).toContain('WebGL experience');
   });
 
   it('keeps the blank project entry visible after a template is selected', () => {
     const onStartBlankProject = vi.fn();
-    renderHero({ activeChipId: 'deck', onStartBlankProject });
+    renderHero({ activeChipId: 'hyperframes', onStartBlankProject });
 
     expect(screen.queryByTestId('home-hero-template-section')).toBeNull();
     const promptExamples = screen.getByTestId('home-hero-prompt-examples');
@@ -171,18 +171,18 @@ describe('HomeHero intent rail', () => {
 
   it('does not reserve an empty active-context row for a hidden chip-bound plugin', () => {
     renderHero({
-      activeChipId: 'wireframe',
-      activePluginTitle: 'Wireframe',
+      activeChipId: 'webgl',
+      activePluginTitle: 'WebGL experience',
       showActivePluginChip: false,
       contextItemCount: 3,
     });
 
     expect(document.querySelector('.home-hero__active')).toBeNull();
-    expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Wireframe');
+    expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('WebGL experience');
   });
 
   it('lets the active creation chip be removed from the composer', () => {
-    const { onClearActiveChip } = renderHero({ activeChipId: 'prototype' });
+    const { onClearActiveChip } = renderHero({ activeChipId: 'webgl' });
     fireEvent.click(screen.getByTestId('home-hero-template-trigger'));
     fireEvent.click(screen.getByTestId('home-hero-template-clear'));
     expect(onClearActiveChip).toHaveBeenCalledTimes(1);
@@ -192,7 +192,7 @@ describe('HomeHero intent rail', () => {
     // The rail owns the hover-preview and unmounts the instant a template
     // becomes active, so its mouseleave never fires — the preview must not
     // outlive the committed selection or Clear leaves a stale pill (issue: the
-    // pill stayed "Slide deck" after Clear).
+    // pill stayed on the previewed template after Clear).
     const baseProps = {
       prompt: '',
       onPromptChange: () => undefined,
@@ -214,19 +214,19 @@ describe('HomeHero intent rail', () => {
 
     const { rerender } = render(<HomeHero {...baseProps} activeChipId={null} />);
 
-    // Hover the Slide deck card → the footer pill previews it.
-    fireEvent.mouseEnter(screen.getByTestId('home-hero-rail-deck'));
-    expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Slide deck');
+    // Hover the WebGL experience card → the footer pill previews it.
+    fireEvent.mouseEnter(screen.getByTestId('home-hero-rail-webgl'));
+    expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('WebGL experience');
 
     // Pick commits the chip; the rail unmounts without firing mouseleave.
-    rerender(<HomeHero {...baseProps} activeChipId="deck" />);
-    expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Slide deck');
+    rerender(<HomeHero {...baseProps} activeChipId="webgl" />);
+    expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('WebGL experience');
 
     // Clear nulls the active chip — the pill must fall back to None.
     rerender(<HomeHero {...baseProps} activeChipId={null} />);
     const trigger = screen.getByTestId('home-hero-template-trigger');
     expect(trigger.textContent).toContain('None');
-    expect(trigger.textContent).not.toContain('Slide deck');
+    expect(trigger.textContent).not.toContain('WebGL experience');
   });
 
   it('clears the template pill to None when Clear is pressed on a stale hover-preview', () => {
@@ -239,8 +239,8 @@ describe('HomeHero intent rail', () => {
     // (Reported: pill stayed on the picked template after Clear.)
     const { onClearActiveChip } = renderHero({ activeChipId: null });
 
-    fireEvent.mouseEnter(screen.getByTestId('home-hero-rail-deck'));
-    expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Slide deck');
+    fireEvent.mouseEnter(screen.getByTestId('home-hero-rail-webgl'));
+    expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('WebGL experience');
 
     fireEvent.click(screen.getByTestId('home-hero-template-trigger'));
     fireEvent.click(screen.getByTestId('home-hero-template-clear'));
@@ -248,14 +248,14 @@ describe('HomeHero intent rail', () => {
     expect(onClearActiveChip).toHaveBeenCalledTimes(1);
     const trigger = screen.getByTestId('home-hero-template-trigger');
     expect(trigger.textContent).toContain('None');
-    expect(trigger.textContent).not.toContain('Slide deck');
+    expect(trigger.textContent).not.toContain('WebGL experience');
   });
 
   it('uses the active creation chip as the only clear control for a chip-bound plugin', () => {
-    const activePlugin = makePlugin('example-image-a', 'image', 'Product image');
+    const activePlugin = makePlugin('example-webgl-experience', 'prototype', 'WebGL Experience');
     renderHero({
-      activeChipId: 'image',
-      activePluginTitle: 'Product image',
+      activeChipId: 'webgl',
+      activePluginTitle: 'WebGL Experience',
       activePluginRecord: activePlugin,
       showActivePluginChip: true,
     });
@@ -516,10 +516,10 @@ describe('HomeHero intent rail', () => {
       .closest('[data-rail-group]');
 
     expect(createPluginGroup?.getAttribute('data-rail-group')).toBe('migrate');
-    for (const id of ['figma', 'template']) {
-      expect(screen.getByTestId(`home-hero-rail-${id}`).closest('[data-rail-group]'))
-        .toBe(createPluginGroup);
-    }
+    // `template` moved to the create rail ("Build a website"); `figma` stays
+    // behind the overflow menu alongside `create-plugin`.
+    expect(screen.getByTestId('home-hero-rail-figma').closest('[data-rail-group]'))
+      .toBe(createPluginGroup);
     expect(screen.queryByTestId('home-hero-rail-folder')).toBeNull();
   });
 
@@ -537,9 +537,8 @@ describe('HomeHero intent rail', () => {
     expect(findChip('template')?.action).toMatchObject({ kind: 'open-template-picker' });
   });
 
-  it('leads the create group with the Brand Kit chip and its own action discriminator', () => {
-    const createChips = HOME_HERO_CHIPS.filter((chip) => chip.group === 'create');
-    expect(createChips[0]?.id).toBe('create-brand-kit');
+  it('moves the Brand Kit chip into the overflow menu with its own action discriminator', () => {
+    expect(findChip('create-brand-kit')?.group).toBe('migrate');
     expect(findChip('create-brand-kit')?.action).toMatchObject({ kind: 'create-brand-kit' });
     expect(findChip('create-brand-kit')?.icon).toBe('swatchbook');
   });

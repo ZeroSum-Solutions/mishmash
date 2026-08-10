@@ -276,6 +276,12 @@ export function parseUsageProjectIdFromSearch(search: string): string | null {
 export interface UsageTotalSummary {
   totalCostUsd: number | null;
   pricingVersion: string;
+  // Workspace-only fields (GET /api/usage) -- absent on the project-scoped
+  // shape (GET /api/projects/:id/usage), which has no aggregate/credits
+  // concept of its own.
+  runCount?: number;
+  projectCount?: number;
+  credits?: AmrWalletSnapshot | null;
 }
 
 // C1-9: an unpriced/unpriceable total must read as "unavailable", never a
@@ -291,6 +297,15 @@ export function formatUsageTotal(summary: UsageTotalSummary): string {
   return summary.pricingVersion === 'partial'
     ? `${amount} (partial — some runs unpriced)`
     : amount;
+}
+
+// Mirrors cli.ts's `runUsage` credits line exactly: a wallet read failure
+// degrades to null rather than blocking the cost aggregate (see
+// registerUsageRoutes's GET /api/usage handler), so "unavailable" here means
+// either signed-out/unreachable, not a real zero balance.
+export function formatUsageCredits(credits: AmrWalletSnapshot | null | undefined): string {
+  const balance = credits?.balanceUsd;
+  return typeof balance === 'string' ? `$${balance}` : 'unavailable';
 }
 const ONBOARDING_BYOK_AUTO_FETCH_DELAY_MS = 300;
 const ONBOARDING_BYOK_AUTO_TEST_DELAY_MS = 500;
@@ -648,17 +663,32 @@ export function EntryShell({
     setUsageProjectId(parseUsageProjectIdFromSearch(window.location.search));
   }, []);
   useEffect(() => {
-    if (!usagePanelOpen || !usageProjectId) return;
+    if (!usagePanelOpen) return;
     let cancelled = false;
     setUsageSummary(null);
-    fetch(`/api/projects/${encodeURIComponent(usageProjectId)}/usage`)
+    // No project open (the Home topbar's only real case, per
+    // workspace-usage.ts) -> the workspace-wide aggregate; otherwise the
+    // project-scoped route, same contract `od usage` reads.
+    const url = usageProjectId
+      ? `/api/projects/${encodeURIComponent(usageProjectId)}/usage`
+      : '/api/usage';
+    fetch(url)
       .then((resp) => (resp.ok ? resp.json() : null))
       .then((data: unknown) => {
         if (cancelled || !data || typeof data !== 'object') return;
-        const body = data as { totalCostUsd?: unknown; pricingVersion?: unknown };
+        const body = data as {
+          totalCostUsd?: unknown;
+          pricingVersion?: unknown;
+          runCount?: unknown;
+          projectCount?: unknown;
+          credits?: unknown;
+        };
         setUsageSummary({
           totalCostUsd: typeof body.totalCostUsd === 'number' ? body.totalCostUsd : null,
           pricingVersion: typeof body.pricingVersion === 'string' ? body.pricingVersion : 'unavailable',
+          runCount: typeof body.runCount === 'number' ? body.runCount : undefined,
+          projectCount: typeof body.projectCount === 'number' ? body.projectCount : undefined,
+          credits: usageProjectId ? undefined : ((body.credits ?? null) as AmrWalletSnapshot | null),
         });
       })
       .catch(() => {
@@ -1390,15 +1420,27 @@ export function EntryShell({
             }}
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 style={{ margin: '0 0 12px', fontSize: '16px' }}>Project usage</h2>
-            {!usageProjectId ? (
-              <p style={{ margin: 0, fontSize: '13px' }}>Open a project to see its usage.</p>
-            ) : !usageSummary ? (
+            <h2 style={{ margin: '0 0 12px', fontSize: '16px' }}>
+              {usageProjectId ? 'Project usage' : 'Workspace usage'}
+            </h2>
+            {!usageSummary ? (
               <p style={{ margin: 0, fontSize: '13px' }}>Loading…</p>
             ) : (
-              <div data-testid="entry-usage-total" style={{ fontSize: '20px', fontWeight: 600 }}>
-                {formatUsageTotal(usageSummary)}
-              </div>
+              <>
+                <div data-testid="entry-usage-total" style={{ fontSize: '20px', fontWeight: 600 }}>
+                  {formatUsageTotal(usageSummary)}
+                </div>
+                {!usageProjectId ? (
+                  <p style={{ margin: '8px 0 0', fontSize: '13px' }}>
+                    {usageSummary.runCount ?? 0} run(s) across {usageSummary.projectCount ?? 0} project(s)
+                  </p>
+                ) : null}
+                {!usageProjectId ? (
+                  <p data-testid="entry-usage-credits" style={{ margin: '4px 0 0', fontSize: '13px' }}>
+                    Credits: {formatUsageCredits(usageSummary.credits)}
+                  </p>
+                ) : null}
+              </>
             )}
             <button
               type="button"

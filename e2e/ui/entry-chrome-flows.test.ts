@@ -156,13 +156,19 @@ test('[P0] @critical entry chrome exposes the primary home creation surface and 
   await expect(page.getByTestId('home-hero-blank-project')).toBeVisible();
   const createTabs = page.getByTestId('home-hero-type-tabs');
   await expect(createTabs).toBeVisible();
-  await expect(page.getByTestId('home-hero-rail-prototype')).toBeVisible();
   await expect(page.getByTestId('home-hero-rail-live-artifact')).toBeVisible();
-  await expect(page.getByTestId('home-hero-rail-deck')).toBeVisible();
-  await expect(page.getByTestId('home-hero-rail-image')).toBeVisible();
-  await expect(page.getByTestId('home-hero-rail-video')).toBeVisible();
   await expect(page.getByTestId('home-hero-rail-hyperframes')).toBeVisible();
-  await expect(page.getByTestId('home-hero-rail-audio')).toBeVisible();
+  // prototype/deck/image/video/audio moved into the "More" shortcuts overflow
+  // (chips.ts CREATE_RAIL_ORDER curation) -- reachable, just not inline.
+  await expect(page.getByTestId('home-hero-shortcuts-trigger')).toBeVisible();
+  await page.getByTestId('home-hero-shortcuts-trigger').click();
+  const shortcutsMenu = page.getByTestId('home-hero-shortcuts-menu');
+  await expect(shortcutsMenu).toBeVisible();
+  for (const id of ['prototype', 'deck', 'image', 'video', 'audio']) {
+    await expect(shortcutsMenu.getByTestId(`home-hero-rail-${id}`)).toBeVisible();
+  }
+  await page.getByTestId('home-hero-shortcuts-trigger').click();
+  await expect(shortcutsMenu).toBeHidden();
 
   // The pet picker rail was removed; pet adoption now lives in
   // Settings → Pet exclusively. Make sure no rail leaks back into the

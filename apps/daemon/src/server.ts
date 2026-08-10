@@ -632,6 +632,7 @@ import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFi
 import { registerCoverRoutes } from './routes/covers.js';
 import { sweepOrphanedRenderProcesses } from './covers/render-pid-registry.js';
 import { registerVelaRoutes } from './routes/vela.js';
+import { velaWalletSnapshotReader } from './integrations/vela-wallet.js';
 import { registerFinalizeRoutes, registerImportRoutes, registerProjectExportRoutes } from './import-export-routes.js';
 import { registerHandoffRoutes } from './routes/handoff.js';
 import { EmptyTranscriptError, synthesizeHandoffPrompt } from './design/index.js';
@@ -9120,7 +9121,16 @@ export async function startServer({
       reconcileAssistantMessageOnRunEnd,
     },
   });
-  registerUsageRoutes(app, { db });
+  registerUsageRoutes(app, {
+    db,
+    wallet: {
+      readSnapshot: async () => {
+        const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
+        const configuredEnv = agentCliEnvForAgent(appConfig.agentCliEnv, 'amr');
+        return velaWalletSnapshotReader.read({ env: process.env, configuredEnv });
+      },
+    },
+  });
   // t8: PROJECTS_DIR is the root POST /api/routing/gates/run's artifactDir
   // must resolve within (path-traversal guard, plan §3.2 L3) -- additive
   // 3rd argument, same call site WR's own P1 tranche added.
