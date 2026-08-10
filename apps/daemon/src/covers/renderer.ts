@@ -40,9 +40,14 @@ export const PER_JOB_TIMEOUT_MS = 20_000;
  * before it threatens the host. */
 const MEMORY_POLL_INTERVAL_MS = 150;
 
-/** Growth ABOVE this job's own baseline (Chromium's fixed startup
- * footprint) kills the job with a typed RENDER_MEMORY_LIMIT. */
-const MEMORY_GROWTH_CEILING_KB = 400 * 1024; // 400 MB
+/** Growth ABOVE this job's own baseline kills the job with a typed
+ * RENDER_MEMORY_LIMIT. The baseline is sampled right after launchServer(),
+ * BEFORE the renderer/GPU processes spawn, so their fixed startup cost plus
+ * rasterization transients count as "growth": a trivial 52KB page measures
+ * ~430MB peak growth on macOS arm64. The ceiling must sit above that
+ * legitimate transient while still catching unbounded allocators (the C4-5
+ * memory-hog proof blows past 1GB within a couple of seconds). */
+const MEMORY_GROWTH_CEILING_KB = 1024 * 1024; // 1 GB
 
 const VIEWPORT_WIDTH = 1280;
 const VIEWPORT_HEIGHT = 960;
