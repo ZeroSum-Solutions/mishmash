@@ -1,0 +1,14 @@
+{
+  "slug": "hearthwell-homeware-h71",
+  "name": "Hearthwell — Homeware Essentials E-commerce Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Fraunces",
+    "Inter"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/hearthwell-homeware-h71",
+  "source_license": "MIT"
+}

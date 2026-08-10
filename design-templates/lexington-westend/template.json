@@ -1,0 +1,14 @@
+{
+  "slug": "westend",
+  "name": "Westend Real Estate Template",
+  "family": "lexingtonthemes",
+  "kind": "multipage",
+  "cdn_fonts": [
+    "InterVariable",
+    "Inter"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/templates/premium/lexingtonthemes/westend",
+  "source_license": "MIT"
+}

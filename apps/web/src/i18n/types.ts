@@ -4438,6 +4438,11 @@ export interface Dict {
   'designLibrary.selectedAspects': string;
   'designLibrary.preview': string;
   'designLibrary.previewClose': string;
+  // "Open live preview" — hands the collection's entry HTML to the OS
+  // browser. Offered only when the catalog reports an entry_html.
+  'designLibrary.openLivePreview': string;
+  'designLibrary.openLivePreviewBusy': string;
+  'designLibrary.openLivePreviewError': string;
   'designLibrary.promotions.title': string;
   'designLibrary.promotions.policy': string;
   'designLibrary.promotions.bulkError': string;

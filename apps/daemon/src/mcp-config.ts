@@ -19,6 +19,10 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
+// Lexical on purpose: this verdict is consumed later (bearer written into a
+// child's MCP config), so trusting DNS here would reopen a rebinding TOCTOU.
+// See security/loopback.ts for the lexical-vs-resolved contract (issue #46).
+import { isLexicalLoopbackHost } from './security/loopback.js';
 
 // Wire-level MCP types. Mirrors `packages/contracts/src/api/mcp.ts` — the
 // daemon and web import-from-contracts side both round-trip the same JSON
@@ -132,33 +136,10 @@ function sanitizeStringArray(raw: unknown): string[] | undefined {
   return out.length > 0 ? out : undefined;
 }
 
-function normalizeHost(hostname: string): string {
-  return hostname
-    .replace(/^\[|\]$/g, '')
-    .toLowerCase()
-    .replace(/\.+$/g, '');
-}
-
-function isLoopbackHost(hostname: string): boolean {
-  const host = normalizeHost(hostname);
-  if (host === 'localhost' || host === '::1') return true;
-  if (/^127(?:\.\d{1,3}){3}$/.test(host)) return true;
-  // IPv4-mapped IPv6 loopback, in both spellings a caller might hand us.
-  // `new URL(...).hostname` — every caller of `isLoopbackHost` today goes
-  // through this — canonicalizes `::ffff:127.0.0.1` to the hex-group form
-  // `::ffff:7f00:1` (verified against Node's WHATWG URL implementation), so
-  // that form must match. The dotted-decimal form is kept too, for a
-  // hypothetical future caller that hands this function a raw,
-  // non-URL-parsed hostname string instead.
-  if (/^::ffff:7f00:1$/i.test(host)) return true;
-  const mapped = /^::ffff:(127(?:\.\d{1,3}){3})$/i.exec(host)?.[1];
-  return Boolean(mapped);
-}
-
 export function inferMcpAuthModeForUrl(rawUrl: string | undefined): McpAuthMode {
   if (!rawUrl) return 'oauth';
   try {
-    return isLoopbackHost(new URL(rawUrl).hostname) ? 'none' : 'oauth';
+    return isLexicalLoopbackHost(new URL(rawUrl).hostname) ? 'none' : 'oauth';
   } catch {
     return 'oauth';
   }
@@ -199,7 +180,7 @@ export function isHttpsOrLoopbackMcpUrl(rawUrl: string): boolean {
   } catch {
     return false; // fail closed — an unparsable URL never gets a bearer
   }
-  return parsed.protocol === 'https:' || isLoopbackHost(parsed.hostname);
+  return parsed.protocol === 'https:' || isLexicalLoopbackHost(parsed.hostname);
 }
 
 /**

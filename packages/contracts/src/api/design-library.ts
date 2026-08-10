@@ -38,6 +38,15 @@ export interface DesignLibraryItem {
    * absent for uncurated items.
    */
   description?: string;
+  /**
+   * Entry HTML for "open live preview", relative to `rel`, or null when the
+   * collection ships no renderable page (a `.fig` source, an image set, a
+   * docs bundle). Computed by the daemon when it serves the catalog — it is
+   * presentation data that decides whether the UI offers the action, never an
+   * authorization input; the live-preview route re-detects and re-authorizes
+   * independently.
+   */
+  entry_html?: string | null;
   /** Selectable visual/interaction ingredients, e.g. hero, WebGL, GSAP. */
   aspects?: string[];
   /** Implementation technologies detected in the source reference. */
@@ -70,6 +79,26 @@ export interface DesignLibraryCatalog {
   groups: DesignLibraryGroup[];
   /** Absolute path the daemon read the catalog from (UI provenance label). */
   root: string;
+}
+
+/**
+ * "Open live preview" — hand the collection's entry HTML to the OS default
+ * browser as a `file://` document, the way double-clicking it in Finder
+ * would. Deliberately NOT an HTTP route that serves library bytes: the page
+ * is third-party code, and serving it from the daemon's own origin would let
+ * it reach every local `/api/*` route as a same-origin caller. A `file://`
+ * document gets an opaque origin instead, so it renders exactly as authored
+ * — CDN scripts, fonts, and ES modules included — with no daemon reach.
+ */
+export interface DesignLibraryLivePreviewRequest {
+  /** Path relative to the library root of the catalog item to open. */
+  rel: string;
+}
+
+export interface DesignLibraryLivePreviewResponse {
+  ok: true;
+  /** The opened entry HTML, relative to `rel`. */
+  entryFile: string;
 }
 
 export interface DesignLibraryStartProjectRequest {

@@ -1,0 +1,13 @@
+{
+  "slug": "altitude-index-h38",
+  "name": "Altitude Index — Editorial Expedition Bento Hero",
+  "family": "hero-sections",
+  "kind": "static",
+  "cdn_fonts": [
+    "Space Grotesk"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/altitude-index-h38",
+  "source_license": "MIT"
+}

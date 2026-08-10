@@ -1,0 +1,1951 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Ochre &amp; Stone — Bespoke Architectural Interiors</title>
+		<meta
+			name="description"
+			content="Ochre &amp; Stone is a studio for bespoke architectural interiors, designing spaces shaped by light, material and silence."
+		>
+		<style>
+/* ============ OCHRE & STONE — WARM EDITORIAL MINIMALISM ============ */
+
+/* ---- Fonts (self-hosted) ---- */
+
+
+
+
+
+
+
+
+
+
+/* ---- Tokens ---- */
+:root {
+	--paper: #f4f1ea;
+	--paper-2: #ede8dd;
+	--ink: #1a1714;
+	--ochre: #b25a1e;
+	--sand: #e9cfa8;
+	--muted: rgba(26, 23, 20, 0.56);
+	--line: rgba(26, 23, 20, 1);
+	--line-soft: rgba(26, 23, 20, 0.14);
+	--serif: "Playfair Display", Georgia, serif;
+	--sans: "Inter Tight", "Helvetica Neue", Arial, sans-serif;
+	--mono: "IBM Plex Mono", ui-monospace, monospace;
+	--maxw: 1280px;
+	--pad: clamp(20px, 5vw, 80px);
+	--ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+html {
+	scroll-behavior: smooth;
+	-webkit-text-size-adjust: 100%;
+}
+body {
+	background: var(--paper);
+	color: var(--ink);
+	font-family: var(--sans);
+	font-weight: 400;
+	line-height: 1.5;
+	overflow-x: hidden;
+	-webkit-font-smoothing: antialiased;
+}
+img {
+	display: block;
+	max-width: 100%;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+button {
+	font-family: inherit;
+	cursor: pointer;
+	border: none;
+	background: none;
+	color: inherit;
+}
+::selection {
+	background: var(--ochre);
+	color: var(--paper);
+}
+
+.wrap {
+	max-width: var(--maxw);
+	margin-inline: auto;
+	padding-inline: var(--pad);
+}
+.mono {
+	font-family: var(--mono);
+	text-transform: uppercase;
+	letter-spacing: 0.3em;
+	font-size: 11px;
+}
+.eyebrow {
+	font-family: var(--mono);
+	text-transform: uppercase;
+	letter-spacing: 0.34em;
+	font-size: 11px;
+	color: var(--ochre);
+	font-weight: 600;
+}
+.serif-i {
+	font-family: var(--serif);
+	font-style: italic;
+}
+
+.h-section {
+	font-family: var(--sans);
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: -0.04em;
+	line-height: 0.9;
+	font-size: clamp(34px, 6vw, 68px);
+}
+
+/* ---- Scroll reveal ---- */
+[data-reveal] {
+	opacity: 0;
+	transform: translateY(30px);
+	transition:
+		opacity 1.2s var(--ease),
+		transform 1.2s var(--ease);
+	will-change: opacity, transform;
+}
+[data-reveal="left"] {
+	transform: translateX(-50px);
+}
+[data-reveal="right"] {
+	transform: translateX(50px);
+}
+[data-reveal].is-in {
+	opacity: 1;
+	transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	[data-reveal] {
+		opacity: 1;
+		transform: none;
+		transition: none;
+	}
+	* {
+		animation: none;
+	}
+}
+
+/* ============ NAV ============ */
+.header {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 50;
+	display: flex;
+	justify-content: center;
+	pointer-events: none;
+}
+.nav-wrap {
+	width: 100%;
+	max-width: var(--maxw);
+	margin-top: clamp(16px, 3vw, 40px);
+	padding-inline: var(--pad);
+	pointer-events: auto;
+}
+.nav {
+	display: flex;
+	align-items: stretch;
+	justify-content: space-between;
+	height: 58px;
+	background: #fbfaf6;
+	border: 1px solid var(--line);
+}
+.nav-brand {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding-inline: 22px;
+	border-right: 1px solid var(--line);
+	flex-shrink: 0;
+}
+.dot {
+	width: 11px;
+	height: 11px;
+	border-radius: 50%;
+	background: var(--ochre);
+	transition: transform 0.3s var(--ease);
+}
+.nav-brand:hover .dot {
+	transform: scale(1.4);
+}
+.brand-name {
+	font-family: var(--mono);
+	font-weight: 600;
+	letter-spacing: 0.2em;
+	font-size: 12.5px;
+	text-transform: uppercase;
+}
+.nav-links {
+	display: flex;
+	flex: 1;
+}
+.nav-cell {
+	position: relative;
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+	border-right: 1px solid var(--line);
+	padding-inline: 26px;
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+}
+.nav-cell span {
+	display: block;
+	transition: transform 0.5s var(--ease);
+}
+.nav-cell .flip {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	padding-inline: 26px;
+	background: var(--ink);
+	color: var(--paper);
+	transform: translateY(100%);
+	transition: transform 0.5s var(--ease);
+}
+.nav-cell:hover > span:first-child {
+	transform: translateY(-130%);
+}
+.nav-cell:hover .flip {
+	transform: translateY(0);
+}
+.nav-cta {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	min-width: 160px;
+	background: var(--ink);
+	color: var(--paper);
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	flex-shrink: 0;
+}
+.nav-cta span {
+	display: block;
+	transition: transform 0.5s var(--ease);
+}
+.nav-cta .flip {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--ochre);
+	transform: translateY(100%);
+	transition: transform 0.5s var(--ease);
+}
+.nav-cta:hover > span:first-child {
+	transform: translateY(-130%);
+}
+.nav-cta:hover .flip {
+	transform: translateY(0);
+}
+.burger {
+	display: none;
+	align-items: center;
+	justify-content: center;
+	width: 56px;
+	border-left: 1px solid var(--line);
+}
+.burger i {
+	display: block;
+	width: 22px;
+	height: 2px;
+	background: var(--ink);
+	position: relative;
+}
+.burger i::before,
+.burger i::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	width: 22px;
+	height: 2px;
+	background: var(--ink);
+}
+.burger i::before {
+	top: -7px;
+}
+.burger i::after {
+	top: 7px;
+}
+
+/* mobile overlay */
+html {
+	overflow-x: hidden;
+}
+.mobile-menu {
+	position: fixed;
+	inset: 0;
+	z-index: 90;
+	background: var(--paper);
+	transform: translateX(100%);
+	transition: transform 0.5s var(--ease);
+	display: flex;
+	flex-direction: column;
+	visibility: hidden;
+}
+.mobile-menu.open {
+	visibility: visible;
+	transform: none;
+}
+.mm-top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 58px;
+	padding-inline: var(--pad);
+	border-bottom: 1px solid var(--line);
+	margin-top: clamp(16px, 3vw, 40px);
+}
+.mm-close {
+	font-size: 26px;
+	line-height: 1;
+}
+.mm-nav {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 6px;
+	padding: var(--pad);
+}
+.mm-nav a {
+	font-family: var(--serif);
+	font-style: italic;
+	font-size: clamp(38px, 11vw, 56px);
+	line-height: 1.05;
+	border-bottom: 1px solid var(--line-soft);
+	padding-bottom: 10px;
+}
+.mm-foot {
+	padding: var(--pad);
+	border-top: 1px solid var(--line);
+	display: flex;
+	gap: 24px;
+}
+.mm-foot span {
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+/* ============ HERO ============ */
+.hero {
+	padding-top: clamp(120px, 18vw, 180px);
+	padding-bottom: 120px;
+}
+.hero-head {
+	padding-block: clamp(20px, 4vw, 40px);
+}
+.hero-title {
+	font-family: var(--sans);
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: -0.045em;
+	line-height: 0.86;
+	font-size: clamp(46px, 12vw, 128px);
+}
+.hero-title em {
+	font-family: var(--serif);
+	font-style: italic;
+	font-weight: 400;
+	letter-spacing: -0.02em;
+	text-transform: none;
+	color: var(--ochre);
+}
+.hero-sub {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	margin-top: 18px;
+}
+.hero-sub .rule {
+	height: 1px;
+	width: 54px;
+	background: var(--ink);
+}
+.hero-sub p {
+	font-family: var(--mono);
+	text-transform: uppercase;
+	letter-spacing: 0.3em;
+	font-size: 12px;
+	color: var(--muted);
+	font-weight: 600;
+}
+
+.hero-stage {
+	position: relative;
+	margin-top: clamp(40px, 7vw, 72px);
+}
+.hero-cut {
+	position: relative;
+	width: 100%;
+	height: clamp(320px, 52vw, 580px);
+	overflow: hidden;
+	clip-path: polygon(0 0, 100% 0, 92% 100%, 0 100%);
+	box-shadow: 0 40px 80px -30px rgba(26, 23, 20, 0.4);
+}
+.hero-cut img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 1s var(--ease);
+}
+.hero-stage:hover .hero-cut img {
+	transform: scale(1.05);
+}
+.hero-cut::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: rgba(26, 23, 20, 0.06);
+	mix-blend-mode: multiply;
+}
+
+.hero-card {
+	position: absolute;
+	bottom: -58px;
+	right: clamp(12px, 4vw, 56px);
+	left: auto;
+	width: min(480px, 92%);
+	background: #fbfaf6;
+	border: 1px solid var(--line-soft);
+	box-shadow: 0 30px 60px -22px rgba(26, 23, 20, 0.3);
+	padding: 16px;
+	display: flex;
+	gap: 20px;
+	z-index: 5;
+}
+.hc-img {
+	flex-shrink: 0;
+	width: 150px;
+	height: 210px;
+	overflow: hidden;
+	border: 1px solid var(--line-soft);
+	background: var(--paper-2);
+}
+.hc-img img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: opacity 0.7s var(--ease);
+}
+.hc-body {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	padding-block: 6px;
+	padding-right: 6px;
+	overflow: hidden;
+}
+.hc-fade {
+	transition:
+		opacity 0.7s var(--ease),
+		transform 0.7s var(--ease);
+}
+.hc-fade.out {
+	opacity: 0;
+	transform: translateY(14px);
+}
+.hc-tag {
+	font-family: var(--mono);
+	text-transform: uppercase;
+	letter-spacing: 0.22em;
+	font-size: 10.5px;
+	color: var(--muted);
+	font-weight: 600;
+}
+.hc-title {
+	font-family: var(--serif);
+	font-style: italic;
+	font-weight: 700;
+	text-transform: uppercase;
+	font-size: clamp(18px, 2.4vw, 25px);
+	line-height: 1.05;
+	margin-top: 8px;
+	letter-spacing: -0.01em;
+}
+.hc-desc {
+	font-size: 13.5px;
+	color: var(--muted);
+	margin-top: 10px;
+	line-height: 1.5;
+}
+.hc-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 14px;
+	margin-top: 18px;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--ink);
+	width: max-content;
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	transition: gap 0.5s var(--ease);
+}
+.hc-link:hover {
+	gap: 30px;
+}
+.hc-link svg {
+	width: 22px;
+	height: 14px;
+}
+
+/* ============ MARQUEE ============ */
+.marquee {
+	border-block: 1px solid var(--line);
+	background: var(--ink);
+	color: var(--paper);
+	overflow: hidden;
+	padding-block: 16px;
+}
+.marquee-track {
+	display: flex;
+	width: max-content;
+	animation: slide 28s linear infinite;
+}
+.marquee-track span {
+	font-family: var(--mono);
+	text-transform: uppercase;
+	letter-spacing: 0.28em;
+	font-size: 13px;
+	padding-inline: 28px;
+	display: inline-flex;
+	align-items: center;
+	gap: 28px;
+	white-space: nowrap;
+}
+.marquee-track span b {
+	color: var(--ochre);
+	font-weight: 400;
+}
+@keyframes slide {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
+}
+
+/* ============ WORK / BENTO ============ */
+.work {
+	padding-block: clamp(80px, 12vw, 140px);
+	background: var(--paper-2);
+}
+.work-head {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	align-items: flex-end;
+	gap: 32px;
+	margin-bottom: clamp(40px, 7vw, 80px);
+}
+.work-head .lead {
+	max-width: 420px;
+	font-family: var(--serif);
+	font-style: italic;
+	font-size: 18px;
+	line-height: 1.5;
+	color: var(--muted);
+}
+.work-head .eyebrow {
+	display: block;
+	margin-bottom: 16px;
+}
+.bento {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	grid-auto-rows: 280px;
+	gap: 14px;
+}
+.tile {
+	position: relative;
+	overflow: hidden;
+	cursor: pointer;
+	background: var(--ink);
+}
+.tile img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition:
+		transform 1s var(--ease),
+		filter 0.6s;
+}
+.tile:hover img {
+	transform: scale(1.06);
+}
+.tile-ov {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		to top,
+		rgba(26, 23, 20, 0.78),
+		rgba(26, 23, 20, 0.1) 60%,
+		transparent
+	);
+	opacity: 0;
+	transition: opacity 0.5s var(--ease);
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	padding: 20px;
+}
+.tile:hover .tile-ov {
+	opacity: 1;
+}
+.tile-cat {
+	font-family: var(--mono);
+	font-size: 9px;
+	letter-spacing: 0.3em;
+	text-transform: uppercase;
+	color: var(--sand);
+	font-weight: 600;
+	margin-bottom: 6px;
+}
+.tile-name {
+	font-family: var(--serif);
+	font-style: italic;
+	text-transform: uppercase;
+	color: var(--paper);
+	font-size: 22px;
+	line-height: 1;
+}
+.t-2x2 {
+	grid-column: span 2;
+	grid-row: span 2;
+}
+.t-1x2 {
+	grid-row: span 2;
+}
+.t-2x1 {
+	grid-column: span 2;
+}
+.work-cta {
+	margin-top: clamp(40px, 7vw, 72px);
+	display: flex;
+	justify-content: center;
+}
+.btn-ghost {
+	padding: 16px 48px;
+	border: 1px solid var(--ink);
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.28em;
+	transition:
+		background 0.35s,
+		color 0.35s;
+}
+.btn-ghost:hover {
+	background: var(--ink);
+	color: var(--paper);
+}
+
+/* ============ PROCESS / FREEFALL ============ */
+.process {
+	padding-block: clamp(80px, 12vw, 140px) clamp(40px, 8vw, 90px);
+	overflow: visible;
+	position: relative;
+}
+.process-head {
+	text-align: center;
+	max-width: 640px;
+	margin-inline: auto;
+}
+.process-head .eyebrow {
+	display: block;
+	margin-bottom: 14px;
+}
+.process-head .quote {
+	font-family: var(--serif);
+	font-style: italic;
+	font-size: clamp(16px, 2.2vw, 20px);
+	color: var(--muted);
+	margin-top: 20px;
+}
+.stage {
+	position: relative;
+	min-height: 760px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-top: clamp(20px, 4vw, 40px);
+}
+.stage-inner {
+	position: relative;
+	width: 100%;
+	max-width: 980px;
+}
+.pcard {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 262px;
+	height: 362px;
+	opacity: 0;
+	pointer-events: none;
+	transform: translate(-50%, -50%) translateY(-380px) rotate(10deg);
+	transition:
+		transform 0.8s var(--ease),
+		opacity 0.6s var(--ease),
+		box-shadow 0.5s var(--ease);
+	will-change: transform, opacity;
+}
+.pcard.dropped {
+	opacity: 1;
+	pointer-events: auto;
+	transform: translate(-50%, -50%) var(--rest);
+}
+.pcard:hover {
+	z-index: 50;
+	transform: translate(-50%, -50%) var(--rest-hover);
+	box-shadow: 0 50px 90px -24px rgba(26, 23, 20, 0.45);
+}
+.pcard-inner {
+	width: 100%;
+	height: 100%;
+	padding: 24px;
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--line-soft);
+	background: #fbfaf6;
+}
+.pcard.ink .pcard-inner {
+	background: var(--ink);
+	color: var(--paper);
+	border-color: rgba(244, 241, 234, 0.18);
+}
+.pcard.ochre .pcard-inner {
+	background: var(--ochre);
+	color: var(--paper);
+	border-color: rgba(244, 241, 234, 0.28);
+}
+.pc-glyph {
+	height: 120px;
+	margin-bottom: 22px;
+	border: 1px solid currentColor;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	position: relative;
+	overflow: hidden;
+	opacity: 0.9;
+}
+.pcard.ink .pc-glyph,
+.pcard.ochre .pc-glyph {
+	border-color: rgba(244, 241, 234, 0.4);
+}
+.glyph-star {
+	font-size: 40px;
+	color: var(--ochre);
+	animation: spin 12s linear infinite;
+}
+.pcard.ink .glyph-star,
+.pcard.ochre .glyph-star {
+	color: var(--sand);
+}
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+.glyph-ring {
+	width: 46px;
+	height: 46px;
+	border: 1px solid currentColor;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--ochre);
+}
+.glyph-ring i {
+	width: 28px;
+	height: 28px;
+	border: 1px solid currentColor;
+	border-radius: 50%;
+	animation: ping 2s var(--ease) infinite;
+}
+@keyframes ping {
+	0% {
+		transform: scale(0.6);
+		opacity: 1;
+	}
+	80%,
+	100% {
+		transform: scale(1.6);
+		opacity: 0;
+	}
+}
+.glyph-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 5px;
+}
+.glyph-grid i {
+	width: 9px;
+	height: 9px;
+	border: 1px solid currentColor;
+}
+.glyph-grid i:nth-child(1),
+.glyph-grid i:nth-child(4) {
+	background: currentColor;
+}
+.glyph-bars {
+	display: flex;
+	gap: 6px;
+	align-items: flex-end;
+	height: 44px;
+}
+.glyph-bars i {
+	width: 3px;
+	background: currentColor;
+	animation: bar 1.4s var(--ease) infinite alternate;
+}
+.glyph-bars i:nth-child(1) {
+	height: 30%;
+	animation-delay: 0s;
+}
+.glyph-bars i:nth-child(2) {
+	height: 70%;
+	animation-delay: 0.2s;
+}
+.glyph-bars i:nth-child(3) {
+	height: 45%;
+	animation-delay: 0.4s;
+}
+.glyph-bars i:nth-child(4) {
+	height: 90%;
+	animation-delay: 0.6s;
+}
+@keyframes bar {
+	to {
+		transform: scaleY(0.5);
+	}
+}
+.pc-index {
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.3em;
+	text-transform: uppercase;
+	font-weight: 600;
+	color: var(--ochre);
+}
+.pcard.ink .pc-index,
+.pcard.ochre .pc-index {
+	color: var(--sand);
+}
+.pc-name {
+	font-family: var(--sans);
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: -0.02em;
+	font-size: 23px;
+	line-height: 1.02;
+	margin-top: 8px;
+}
+.pc-desc {
+	font-family: var(--serif);
+	font-style: italic;
+	font-size: 13px;
+	line-height: 1.5;
+	margin-top: 14px;
+	opacity: 0;
+	transform: translateY(10px);
+	transition:
+		opacity 0.5s var(--ease),
+		transform 0.5s var(--ease);
+}
+.pcard:hover .pc-desc {
+	opacity: 0.85;
+	transform: none;
+}
+.pc-act {
+	margin-top: auto;
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(14px);
+	transition: all 0.5s var(--ease) 0.12s;
+}
+.pcard:hover .pc-act {
+	opacity: 1;
+	visibility: visible;
+	transform: none;
+}
+.pc-act button {
+	width: 100%;
+	padding: 11px;
+	border: 1px solid currentColor;
+	font-family: var(--mono);
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	transition:
+		background 0.3s,
+		color 0.3s;
+}
+.pcard:not(.ink):not(.ochre) .pc-act button:hover {
+	background: var(--ink);
+	color: var(--paper);
+}
+.pcard.ink .pc-act button:hover {
+	background: var(--paper);
+	color: var(--ink);
+}
+.pcard.ochre .pc-act button:hover {
+	background: var(--paper);
+	color: var(--ochre);
+}
+
+/* ============ TESTIMONIAL ============ */
+.testi {
+	background: var(--ink);
+	color: var(--paper);
+	padding-block: clamp(80px, 12vw, 140px);
+	overflow: hidden;
+	position: relative;
+}
+.testi::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 34%;
+	height: 100%;
+	background: var(--sand);
+	opacity: 0.06;
+	transform: skewX(-12deg) translateX(46%);
+}
+.testi-grid {
+	display: grid;
+	grid-template-columns: 1.1fr 0.9fr;
+	gap: clamp(40px, 7vw, 80px);
+	align-items: center;
+	position: relative;
+	z-index: 2;
+}
+.testi-quote-mark {
+	font-family: var(--serif);
+	font-size: 120px;
+	line-height: 0.6;
+	color: var(--sand);
+	opacity: 0.25;
+}
+.testi-quote {
+	font-family: var(--serif);
+	font-style: italic;
+	font-size: clamp(24px, 3.6vw, 42px);
+	line-height: 1.18;
+	margin-block: 24px 36px;
+}
+.testi-by h4 {
+	font-family: var(--mono);
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	font-size: 15px;
+	color: var(--sand);
+	font-weight: 600;
+}
+.testi-by p {
+	font-family: var(--mono);
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	font-size: 10.5px;
+	color: rgba(244, 241, 234, 0.5);
+	margin-top: 6px;
+}
+.testi-imgs {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 14px;
+}
+.testi-imgs img {
+	width: 100%;
+	height: clamp(220px, 28vw, 320px);
+	object-fit: cover;
+}
+.testi-imgs img:first-child {
+	margin-top: 48px;
+}
+
+/* ============ CONTACT ============ */
+.contact {
+	padding-block: clamp(80px, 11vw, 120px);
+	text-align: center;
+	border-top: 1px solid var(--line-soft);
+}
+.contact .eyebrow {
+	color: var(--muted);
+}
+.contact h2 {
+	margin-block: 22px 18px;
+}
+.contact p {
+	max-width: 480px;
+	margin-inline: auto;
+	color: var(--muted);
+	font-size: 15px;
+}
+.contact-btns {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+	justify-content: center;
+	margin-top: 36px;
+}
+.btn-solid {
+	padding: 16px 44px;
+	background: var(--ink);
+	color: var(--paper);
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.26em;
+	transition: background 0.35s;
+}
+.btn-solid:hover {
+	background: var(--ochre);
+}
+
+/* ============ FOOTER ============ */
+.footer {
+	border-top: 1px solid var(--line);
+	background: #fbfaf6;
+}
+.footer-grid {
+	display: grid;
+	grid-template-columns: 1.2fr 1fr 1fr 1.2fr;
+}
+.fcol {
+	padding: clamp(30px, 4vw, 44px);
+	border-right: 1px solid var(--line);
+}
+.fcol:last-child {
+	border-right: none;
+}
+.fcol-brand {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 40px;
+	background: linear-gradient(
+		to bottom,
+		transparent,
+		rgba(233, 207, 168, 0.18)
+	);
+}
+.fbrand {
+	font-family: var(--serif);
+	font-style: italic;
+	font-size: clamp(44px, 6vw, 58px);
+	line-height: 0.9;
+}
+.fbrand span {
+	display: block;
+	font-family: var(--sans);
+	font-style: normal;
+	font-weight: 700;
+	text-transform: uppercase;
+	font-size: 22px;
+	letter-spacing: 0.2em;
+	color: var(--ochre);
+	margin-top: 6px;
+}
+.fbadge {
+	width: 60px;
+	height: 60px;
+	border-radius: 50%;
+	background: var(--ink);
+	color: var(--sand);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 24px;
+	animation: spin 12s linear infinite;
+}
+.fcol-brand .tag {
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	font-weight: 600;
+	color: var(--muted);
+	line-height: 1.6;
+	margin-top: 18px;
+}
+.fhead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	border-bottom: 1px solid var(--line);
+	padding-bottom: 10px;
+	margin-bottom: 24px;
+}
+.fhead h4 {
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+}
+.fhead svg {
+	width: 15px;
+	height: 15px;
+}
+.flist {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.flist li {
+	font-family: var(--mono);
+	font-size: 12px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--muted);
+	transition:
+		transform 0.3s var(--ease),
+		color 0.3s;
+	cursor: pointer;
+}
+.flist li:hover {
+	transform: translateX(8px);
+	color: var(--ochre);
+}
+.fmail {
+	font-family: var(--sans);
+	font-weight: 700;
+	font-size: 17px;
+	letter-spacing: -0.01em;
+	display: block;
+	transition: color 0.3s;
+}
+.fmail:hover {
+	color: var(--ochre);
+}
+.faddr {
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--muted);
+	line-height: 1.8;
+	margin-top: 18px;
+}
+.ficons {
+	display: flex;
+	gap: 12px;
+	margin-top: 26px;
+}
+.ficons button {
+	width: 46px;
+	height: 46px;
+	border: 1px solid var(--ink);
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition:
+		background 0.3s,
+		color 0.3s;
+}
+.ficons button:hover {
+	background: var(--ink);
+	color: var(--paper);
+}
+.ficons svg {
+	width: 18px;
+	height: 18px;
+}
+.copy {
+	border-top: 1px solid var(--line);
+	background: #fbfaf6;
+}
+.copy-in {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 14px;
+	padding-block: 20px;
+	font-family: var(--mono);
+	font-size: 10px;
+	letter-spacing: 0.26em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.copy-in .links {
+	display: flex;
+	gap: 28px;
+}
+.copy-in a:hover {
+	color: var(--ochre);
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 1023px) {
+	.nav-links {
+		display: none;
+	}
+	.burger {
+		display: flex;
+	}
+	.nav-cta {
+		min-width: 130px;
+	}
+	.bento {
+		grid-auto-rows: 220px;
+		gap: 10px;
+	}
+}
+@media (max-width: 900px) {
+	.testi-grid {
+		grid-template-columns: 1fr;
+	}
+	.testi-quote-mark {
+		font-size: 80px;
+	}
+	.footer-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+	.fcol {
+		border-bottom: 1px solid var(--line);
+	}
+	.fcol:nth-child(2) {
+		border-right: none;
+	}
+	.fcol-brand {
+		grid-column: span 2;
+	}
+}
+@media (max-width: 768px) {
+	.bento {
+		grid-template-columns: repeat(2, 1fr);
+		grid-auto-rows: 200px;
+	}
+	.t-2x2 {
+		grid-column: span 2;
+		grid-row: span 1;
+	}
+	.t-1x2 {
+		grid-row: span 1;
+	}
+	.t-2x1 {
+		grid-column: span 2;
+	}
+	.hero-card {
+		position: relative;
+		right: auto;
+		bottom: auto;
+		width: 100%;
+		margin-top: 78px;
+	}
+	/* freefall -> vertical stack */
+	.stage {
+		min-height: 0;
+		display: block;
+	}
+	.stage-inner {
+		max-width: 520px;
+		margin-inline: auto;
+	}
+	.pcard {
+		position: relative;
+		top: auto;
+		left: auto;
+		width: 100%;
+		height: auto;
+		opacity: 1;
+		pointer-events: auto;
+		transform: none;
+		margin-bottom: 16px;
+	}
+	.pcard .pc-glyph {
+		height: 96px;
+	}
+	.pcard .pc-desc {
+		opacity: 0.85;
+		transform: none;
+	}
+	.pcard .pc-act {
+		opacity: 1;
+		visibility: visible;
+		transform: none;
+	}
+}
+@media (max-width: 560px) {
+	.footer-grid {
+		grid-template-columns: 1fr;
+	}
+	.fcol,
+	.fcol:nth-child(2) {
+		border-right: none;
+	}
+	.fcol-brand {
+		grid-column: span 1;
+	}
+	.testi-imgs img:first-child {
+		margin-top: 0;
+	}
+	.hero-cut {
+		clip-path: polygon(0 0, 100% 0, 100% 88%, 0 100%);
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;500;600;700;800&family=Inter+Tight:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- ============ HEADER ============ -->
+		<header class="header">
+			<div class="nav-wrap">
+				<nav class="nav">
+					<a class="nav-brand" href="#top" aria-label="Ochre &amp; Stone home">
+						<span class="dot"></span>
+						<span class="brand-name">Ochre&nbsp;&amp;&nbsp;Stone</span>
+					</a>
+					<div class="nav-links">
+						<a class="nav-cell" href="#work"
+							><span>Work</span><span class="flip">Work</span></a
+						>
+						<a class="nav-cell" href="#process"
+							><span>Studio</span><span class="flip">Studio</span></a
+						>
+						<a class="nav-cell" href="#process"
+							><span>Process</span><span class="flip">Process</span></a
+						>
+						<a class="nav-cell" href="#contact"
+							><span>Journal</span><span class="flip">Journal</span></a
+						>
+					</div>
+					<a class="nav-cta" href="#contact"
+						><span>Enquire</span><span class="flip">Let's Talk</span></a
+					>
+					<button class="burger" id="burger" aria-label="Open menu">
+						<i></i>
+					</button>
+				</nav>
+			</div>
+		</header>
+
+		<!-- mobile menu -->
+		<div class="mobile-menu" id="mobileMenu">
+			<div class="mm-top">
+				<span class="brand-name">Menu</span>
+				<button class="mm-close" id="mmClose" aria-label="Close menu">
+					&times;
+				</button>
+			</div>
+			<nav class="mm-nav">
+				<a href="#work">Work</a>
+				<a href="#process">Studio</a>
+				<a href="#process">Process</a>
+				<a href="#contact">Journal</a>
+				<a href="#contact">Contact</a>
+			</nav>
+			<div class="mm-foot">
+				<span>Instagram</span><span>Pinterest</span><span>LinkedIn</span>
+			</div>
+		</div>
+
+		<main id="top">
+			<!-- ============ HERO ============ -->
+			<section class="hero">
+				<div class="wrap">
+					<div class="hero-head">
+						<h1 class="hero-title" data-reveal="left">
+							Ochre <em>&amp;</em> Stone
+						</h1>
+						<div class="hero-sub" data-reveal="left">
+							<span class="rule"></span>
+							<p>Bespoke Architectural Interiors</p>
+						</div>
+					</div>
+				</div>
+
+				<div class="wrap">
+					<div class="hero-stage" data-reveal>
+						<div class="hero-cut">
+							<img
+								src="assets/hero-main.jpg"
+								alt="A sunlit interior with warm plaster walls and sculptural furniture"
+							>
+						</div>
+
+						<div class="hero-card" id="heroCard">
+							<div class="hc-img">
+								<img
+									id="hcImg"
+									src="assets/thumb-1.jpg"
+									alt="Material study"
+								>
+							</div>
+							<div class="hc-body">
+								<div class="hc-fade" id="hcFade">
+									<p class="hc-tag" id="hcTag">The Curation</p>
+									<h2 class="hc-title" id="hcTitle">Tailored spatial design</h2>
+									<p class="hc-desc" id="hcDesc">
+										We shape rooms around the way you live — through the slow
+										selection of material, form and natural light.
+									</p>
+								</div>
+								<a class="hc-link" href="#work">
+									View Portfolio
+									<svg
+										viewBox="0 0 200 130"
+										fill="currentColor"
+										aria-hidden="true"
+									>
+										<path d="M159 0l-7 7 38 38H0v12h190l-38 38 7 7 50-50z" />
+									</svg>
+								</a>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ MARQUEE ============ -->
+			<div class="marquee" aria-hidden="true">
+				<div class="marquee-track">
+					<span
+						>Space Planning <b>✦</b> Material Sourcing <b>✦</b> Joinery &amp;
+						Detailing <b>✦</b> Lighting Design <b>✦</b> Art Advisory
+						<b>✦</b>
+						Renovation <b>✦</b>&nbsp;</span
+					>
+					<span
+						>Space Planning <b>✦</b> Material Sourcing <b>✦</b> Joinery &amp;
+						Detailing <b>✦</b> Lighting Design <b>✦</b> Art Advisory
+						<b>✦</b>
+						Renovation <b>✦</b>&nbsp;</span
+					>
+				</div>
+			</div>
+
+			<!-- ============ WORK / BENTO ============ -->
+			<section class="work" id="work">
+				<div class="wrap">
+					<div class="work-head">
+						<div data-reveal="left">
+							<span class="eyebrow">Selected — 014 projects</span>
+							<h2 class="h-section">Selected Work</h2>
+						</div>
+						<p class="lead" data-reveal="right">
+							A collection of spaces defined by light, texture and silence. Each
+							commission is a singular answer to its site and the people who
+							live in it.
+						</p>
+					</div>
+
+					<div class="bento">
+						<article class="tile t-2x2" data-reveal>
+							<img
+								src="assets/work-1.jpg"
+								alt="The Heights penthouse living room"
+							>
+							<div class="tile-ov">
+								<span class="tile-cat">Residential</span
+								><span class="tile-name">The Heights</span>
+							</div>
+						</article>
+						<article class="tile" data-reveal>
+							<img src="assets/work-2.jpg" alt="Concrete sanctuary studio">
+							<div class="tile-ov">
+								<span class="tile-cat">Art Studio</span
+								><span class="tile-name">Sanctuary</span>
+							</div>
+						</article>
+						<article class="tile" data-reveal>
+							<img src="assets/work-3.jpg" alt="Oak atelier interior">
+							<div class="tile-ov">
+								<span class="tile-cat">Workshop</span
+								><span class="tile-name">Oak Atelier</span>
+							</div>
+						</article>
+						<article class="tile t-1x2" data-reveal>
+							<img
+								src="assets/work-4.jpg"
+								alt="Azure waters coastal retreat"
+							>
+							<div class="tile-ov">
+								<span class="tile-cat">Retreat</span
+								><span class="tile-name">Azure Waters</span>
+							</div>
+						</article>
+						<article class="tile" data-reveal>
+							<img src="assets/work-5.jpg" alt="Obsidian dark studio">
+							<div class="tile-ov">
+								<span class="tile-cat">Gallery</span
+								><span class="tile-name">Obsidian</span>
+							</div>
+						</article>
+						<article class="tile t-2x1" data-reveal>
+							<img src="assets/work-6.jpg" alt="Nordic house living space">
+							<div class="tile-ov">
+								<span class="tile-cat">Residential</span
+								><span class="tile-name">Nordic House</span>
+							</div>
+						</article>
+						<article class="tile" data-reveal>
+							<img src="assets/work-7.jpg" alt="Velvet lounge interior">
+							<div class="tile-ov">
+								<span class="tile-cat">Hospitality</span
+								><span class="tile-name">Velvet Lounge</span>
+							</div>
+						</article>
+						<article class="tile t-2x1" data-reveal>
+							<img src="assets/work-8.jpg" alt="The marble hall entrance">
+							<div class="tile-ov">
+								<span class="tile-cat">Commercial</span
+								><span class="tile-name">The Marble Hall</span>
+							</div>
+						</article>
+						<article class="tile" data-reveal>
+							<img src="assets/thumb-2.jpg" alt="Ebony suite bedroom">
+							<div class="tile-ov">
+								<span class="tile-cat">Residential</span
+								><span class="tile-name">Ebony Suite</span>
+							</div>
+						</article>
+						<article class="tile" data-reveal>
+							<img src="assets/thumb-3.jpg" alt="The loft conversion">
+							<div class="tile-ov">
+								<span class="tile-cat">Loft</span
+								><span class="tile-name">The Loft</span>
+							</div>
+						</article>
+					</div>
+
+					<div class="work-cta" data-reveal>
+						<a class="btn-ghost" href="#contact">Explore Full Portfolio</a>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ PROCESS / FREEFALL ============ -->
+			<section class="process" id="process">
+				<div class="wrap">
+					<div class="process-head" data-reveal>
+						<span class="eyebrow">Our Methodology</span>
+						<h2 class="h-section">The Studio Method</h2>
+						<p class="quote">
+							"Timeless rooms appear where architectural rigour meets human
+							intuition."
+						</p>
+					</div>
+				</div>
+
+				<div class="stage" id="stage">
+					<div class="stage-inner">
+						<article
+							class="pcard"
+							style="--rest:translate(-380px,-18px) rotate(-6deg); --rest-hover:translate(-380px,-58px) rotate(0deg) scale(1.08)"
+						>
+							<div class="pcard-inner">
+								<div class="pc-glyph"><span class="glyph-star">✦</span></div>
+								<span class="pc-index">01 — Strategy</span>
+								<h3 class="pc-name">Spatial<br>Strategy</h3>
+								<p class="pc-desc">
+									We define the architectural bones and trace how natural light
+									moves through the day.
+								</p>
+								<div class="pc-act"><button>Discovery</button></div>
+							</div>
+						</article>
+
+						<article
+							class="pcard ink"
+							style="--rest:translate(-190px,12px) rotate(3deg); --rest-hover:translate(-190px,-48px) rotate(0deg) scale(1.08)"
+						>
+							<div class="pcard-inner">
+								<div class="pc-glyph">
+									<span class="glyph-bars"><i></i><i></i><i></i><i></i></span>
+								</div>
+								<span class="pc-index">02 — Material</span>
+								<h3 class="pc-name">Material<br>Alchemy</h3>
+								<p class="pc-desc">
+									We source tactile finishes — plaster, stone, oiled timber —
+									chosen to age with grace.
+								</p>
+								<div class="pc-act"><button>Sourcing</button></div>
+							</div>
+						</article>
+
+						<article
+							class="pcard"
+							style="--rest:translate(-10px,-26px) rotate(-3deg); --rest-hover:translate(-10px,-66px) rotate(0deg) scale(1.08)"
+						>
+							<div class="pcard-inner">
+								<div class="pc-glyph">
+									<span class="glyph-ring"><i></i></span>
+								</div>
+								<span class="pc-index">03 — Curation</span>
+								<h3 class="pc-name">Bespoke<br>Curation</h3>
+								<p class="pc-desc">
+									Custom joinery and considered art, tailored to the rhythm of
+									the people who live here.
+								</p>
+								<div class="pc-act"><button>Advisory</button></div>
+							</div>
+						</article>
+
+						<article
+							class="pcard ochre"
+							style="--rest:translate(170px,18px) rotate(4deg); --rest-hover:translate(170px,-42px) rotate(0deg) scale(1.08)"
+						>
+							<div class="pcard-inner">
+								<div class="pc-glyph">
+									<span class="glyph-grid"><i></i><i></i><i></i><i></i></span>
+								</div>
+								<span class="pc-index">04 — Rigour</span>
+								<h3 class="pc-name">Technical<br>Rigour</h3>
+								<p class="pc-desc">
+									Precise project management from first drawing to the final
+									placement of a handle.
+								</p>
+								<div class="pc-act"><button>Delivery</button></div>
+							</div>
+						</article>
+
+						<article
+							class="pcard"
+							style="--rest:translate(350px,-12px) rotate(-2deg); --rest-hover:translate(350px,-52px) rotate(0deg) scale(1.08)"
+						>
+							<div class="pcard-inner">
+								<div class="pc-glyph"><span class="glyph-star">✦</span></div>
+								<span class="pc-index">05 — Handover</span>
+								<h3 class="pc-name">The<br>Handover</h3>
+								<p class="pc-desc">
+									The unveiling of a sanctuary — a room that quietly reflects
+									who you are.
+								</p>
+								<div class="pc-act"><button>Completion</button></div>
+							</div>
+						</article>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ TESTIMONIAL ============ -->
+			<section class="testi">
+				<div class="wrap">
+					<div class="testi-grid">
+						<div data-reveal="left">
+							<div class="testi-quote-mark">&ldquo;</div>
+							<p class="testi-quote serif-i">
+								Ochre &amp; Stone didn't design us a house — they curated a
+								sanctuary. Their feel for material and the play of light
+								reshaped the way we move through each day.
+							</p>
+							<div class="testi-by">
+								<h4>Eleanor Vane</h4>
+								<p>Founding Partner, Vane &amp; Associates</p>
+							</div>
+						</div>
+						<div class="testi-imgs" data-reveal="right">
+							<img
+								src="assets/testi-1.jpg"
+								alt="Detail of a curated living room"
+							>
+							<img
+								src="assets/testi-2.jpg"
+								alt="Marble bathroom with brass fixtures"
+							>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ CONTACT ============ -->
+			<section class="contact" id="contact">
+				<div class="wrap" data-reveal>
+					<span class="eyebrow">Begin Your Project</span>
+					<h2 class="h-section">Let's Create<br>Something Timeless</h2>
+					<p>
+						We take on a small number of residential and commercial commissions
+						each year, worldwide.
+					</p>
+					<div class="contact-btns">
+						<a class="btn-solid" href="mailto:studio@ochreandstone.com"
+							>Book a Consultation</a
+						>
+						<a class="btn-ghost" href="#top">Download Brochure</a>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<!-- ============ FOOTER ============ -->
+		<footer class="footer">
+			<div class="wrap" style="padding-inline:0">
+				<div class="footer-grid">
+					<div class="fcol fcol-brand">
+						<div>
+							<div class="fbrand">ochre.<span>&amp; Stone</span></div>
+							<p class="tag">Architecting silence<br>and light since 2009.</p>
+						</div>
+						<div class="fbadge">✦</div>
+					</div>
+					<div class="fcol">
+						<div class="fhead">
+							<h4>Socials</h4>
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path d="M7 17 16.2 7.8M17 17V7H7" />
+							</svg>
+						</div>
+						<ul class="flist">
+							<li>Instagram</li>
+							<li>Pinterest</li>
+							<li>LinkedIn</li>
+							<li>Behance</li>
+						</ul>
+					</div>
+					<div class="fcol">
+						<div class="fhead">
+							<h4>Resources</h4>
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path d="M7 17 16.2 7.8M17 17V7H7" />
+							</svg>
+						</div>
+						<ul class="flist">
+							<li>Portfolio PDF</li>
+							<li>Material Guide</li>
+							<li>Studio Journal</li>
+							<li>Process Book</li>
+						</ul>
+					</div>
+					<div class="fcol">
+						<div class="fhead">
+							<h4>Let's Talk</h4>
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path d="M7 17 16.2 7.8M17 17V7H7" />
+							</svg>
+						</div>
+						<a class="fmail" href="mailto:studio@ochreandstone.com"
+							>studio@ochreandstone.com</a
+						>
+						<p class="faddr">12 Bruton Place, Mayfair<br>London, W1J 6NP</p>
+						<div class="ficons">
+							<button aria-label="Email">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path
+										d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
+									/>
+									<polyline points="22,6 12,13 2,6" />
+								</svg>
+							</button>
+							<button aria-label="Message">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path
+										d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
+									/>
+								</svg>
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		</footer>
+		<div class="copy">
+			<div class="wrap copy-in">
+				<span>© 2024 Ochre &amp; Stone Studio</span>
+				<span class="links"
+					><a href="#top">Privacy</a><a href="#top">Terms</a></span
+				>
+			</div>
+		</div>
+
+		<script>
+/* ============ OCHRE & STONE — interactions ============ */
+(() => {
+	/* ---- Scroll reveal ---- */
+	var revealEls = document.querySelectorAll("[data-reveal]");
+	if ("IntersectionObserver" in window) {
+		var io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((e) => {
+					if (e.isIntersecting) {
+						e.target.classList.add("is-in");
+						io.unobserve(e.target);
+					}
+				});
+			},
+			{ threshold: 0.12 },
+		);
+		revealEls.forEach((el) => {
+			io.observe(el);
+		});
+	} else {
+		revealEls.forEach((el) => {
+			el.classList.add("is-in");
+		});
+	}
+
+	/* ---- Hero card carousel ---- */
+	var slides = [
+		{
+			tag: "The Curation",
+			title: "Tailored spatial design",
+			desc: "We shape rooms around the way you live — through the slow selection of material, form and natural light.",
+			img: "assets/thumb-1.jpg",
+		},
+		{
+			tag: "The Vision",
+			title: "Form, married to function",
+			desc: "Every square metre earns its place, holding aesthetic clarity without losing the warmth of a home.",
+			img: "assets/thumb-2.jpg",
+		},
+		{
+			tag: "The Detail",
+			title: "Finishes that tell a story",
+			desc: "From honed marble to reclaimed oak, we gather materials that carry texture, memory and patina.",
+			img: "assets/thumb-3.jpg",
+		},
+	];
+	var idx = 0;
+	var fade = document.getElementById("hcFade");
+	var hcImg = document.getElementById("hcImg");
+	var hcTag = document.getElementById("hcTag");
+	var hcTitle = document.getElementById("hcTitle");
+	var hcDesc = document.getElementById("hcDesc");
+
+	if (fade && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+		setInterval(() => {
+			idx = (idx + 1) % slides.length;
+			var s = slides[idx];
+			fade.classList.add("out");
+			hcImg.style.opacity = "0";
+			setTimeout(() => {
+				hcTag.textContent = s.tag;
+				hcTitle.textContent = s.title;
+				hcDesc.textContent = s.desc;
+				hcImg.src = s.img;
+				fade.classList.remove("out");
+				hcImg.style.opacity = "1";
+			}, 600);
+		}, 5000);
+	}
+
+	/* ---- Freefall process cards ---- */
+	var stage = document.getElementById("stage");
+	var cards = document.querySelectorAll(".pcard");
+	if (stage && cards.length) {
+		var dropped = false;
+		var drop = () => {
+			if (dropped) return;
+			dropped = true;
+			cards.forEach((card, i) => {
+				setTimeout(() => {
+					card.classList.add("dropped");
+				}, i * 150);
+			});
+		};
+		if ("IntersectionObserver" in window) {
+			var so = new IntersectionObserver(
+				(entries) => {
+					entries.forEach((e) => {
+						if (e.isIntersecting) {
+							drop();
+							so.unobserve(e.target);
+						}
+					});
+				},
+				{ threshold: 0.15 },
+			);
+			so.observe(stage);
+		} else {
+			drop();
+		}
+	}
+
+	/* ---- Mobile menu ---- */
+	var burger = document.getElementById("burger");
+	var menu = document.getElementById("mobileMenu");
+	var close = document.getElementById("mmClose");
+	var open = () => {
+		menu.classList.add("open");
+		document.body.style.overflow = "hidden";
+	};
+	var shut = () => {
+		menu.classList.remove("open");
+		document.body.style.overflow = "";
+	};
+	if (burger) burger.addEventListener("click", open);
+	if (close) close.addEventListener("click", shut);
+	if (menu)
+		menu.querySelectorAll("a").forEach((a) => {
+			a.addEventListener("click", shut);
+		});
+})();
+
+		</script>
+	</body>
+</html>

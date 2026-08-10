@@ -21,6 +21,7 @@ import type {
 import {
   designLibraryThumbUrl,
   fetchDesignLibraryCatalog,
+  openDesignLibraryLivePreview,
   openDesignLibraryPath,
   startDesignLibraryProject,
   type DesignLibraryCatalogResult,
@@ -32,8 +33,13 @@ import styles from './DesignLibrarySection.module.css';
 
 interface Props {
   active: boolean;
-  /** Omit to hide "Use as template" entirely (e.g. no project-navigation host). */
-  onOpenProject?: (projectId: string, conversationId?: string) => void;
+  /**
+   * Omit to hide "Use as template" entirely (e.g. no project-navigation host).
+   * `entryFile` is the daemon-detected entry HTML of the copied kit; the host
+   * opens it so the new project lands on the same page the live preview
+   * showed instead of whatever the generic primary-file heuristic picks.
+   */
+  onOpenProject?: (projectId: string, conversationId?: string, entryFile?: string) => void;
 }
 
 // Only these allowed_use tiers may be copied into a new project — mirrors
@@ -252,7 +258,7 @@ function DesignLibraryGroupSection({
 }: {
   group: DesignLibraryGroup;
   t: ReturnType<typeof useT>;
-  onOpenProject?: (projectId: string, conversationId?: string) => void;
+  onOpenProject?: (projectId: string, conversationId?: string, entryFile?: string) => void;
   nested?: boolean;
 }) {
   const GroupHeading = nested ? 'h3' : 'h2';
@@ -280,7 +286,7 @@ function useStartFromDesignLibrary(
   t: ReturnType<typeof useT>,
   mode: 'copy' | 'reference',
   aspects: string[],
-  onOpenProject?: (projectId: string, conversationId?: string) => void,
+  onOpenProject?: (projectId: string, conversationId?: string, entryFile?: string) => void,
 ) {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -306,10 +312,56 @@ function useStartFromDesignLibrary(
       );
       return;
     }
-    onOpenProject?.(result.response.projectId, result.response.conversationId);
+    onOpenProject?.(result.response.projectId, result.response.conversationId, result.response.entryFile);
   }
 
   return { starting, startError, canStart, handleStart };
+}
+
+// "Open live preview" — the collection's entry HTML in the OS browser, the
+// full creation rather than the catalog's still thumbnail. Offered when the
+// catalog found an entry_html AND the item is on a copyable tier: rendering
+// runs the author's scripts, so third-party captures stay open-folder-only.
+// Mirrors LIVE_PREVIEWABLE_ALLOWED_USE in the daemon route, which re-
+// authorizes independently — this control is a hint, not the gate.
+function useLivePreview(item: DesignLibraryItem, t: ReturnType<typeof useT>) {
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const canOpen = Boolean(item.entry_html) && COPYABLE_ALLOWED_USE.has(item.allowed_use);
+
+  async function handleOpen() {
+    if (opening) return;
+    setError(null);
+    setOpening(true);
+    const result = await openDesignLibraryLivePreview(item.rel);
+    setOpening(false);
+    if (!result.ok) setError(result.message || t('designLibrary.openLivePreviewError'));
+  }
+
+  return { opening, error, canOpen, handleOpen };
+}
+
+function OpenLivePreviewButton({
+  opening,
+  onClick,
+  t,
+}: {
+  opening: boolean;
+  onClick: () => void;
+  t: ReturnType<typeof useT>;
+}) {
+  return (
+    <button
+      type="button"
+      className={styles.openFolderBtn}
+      onClick={onClick}
+      disabled={opening}
+      data-testid="design-library-live-preview"
+    >
+      <Icon name="external-link" size={14} />
+      {opening ? t('designLibrary.openLivePreviewBusy') : t('designLibrary.openLivePreview')}
+    </button>
+  );
 }
 
 function UseAsTemplateButton({
@@ -404,7 +456,7 @@ function DesignLibraryCard({
 }: {
   item: DesignLibraryItem;
   t: ReturnType<typeof useT>;
-  onOpenProject?: (projectId: string, conversationId?: string) => void;
+  onOpenProject?: (projectId: string, conversationId?: string, entryFile?: string) => void;
 }) {
   const [thumbError, setThumbError] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -418,6 +470,7 @@ function DesignLibraryCard({
     onOpenProject,
   );
   const referenceStart = useStartFromDesignLibrary(item, t, 'reference', selectedAspects, onOpenProject);
+  const livePreview = useLivePreview(item, t);
   const hasVisualPreview = Boolean(item.thumb) && !thumbError;
 
   return (
@@ -496,6 +549,9 @@ function DesignLibraryCard({
           <Icon name="folder" size={14} />
           {t('designLibrary.openFolder')}
         </button>
+        {livePreview.canOpen ? (
+          <OpenLivePreviewButton opening={livePreview.opening} onClick={livePreview.handleOpen} t={t} />
+        ) : null}
         {templateStart.canStart ? (
           <UseAsTemplateButton
             starting={templateStart.starting}
@@ -511,8 +567,10 @@ function DesignLibraryCard({
           />
         ) : null}
       </div>
-      {templateStart.startError || referenceStart.startError ? (
-        <p className={styles.startError}>{templateStart.startError || referenceStart.startError}</p>
+      {templateStart.startError || referenceStart.startError || livePreview.error ? (
+        <p className={styles.startError}>
+          {templateStart.startError || referenceStart.startError || livePreview.error}
+        </p>
       ) : null}
       {previewOpen ? (
         <DesignLibraryPreviewDialog
@@ -546,13 +604,14 @@ function DesignLibraryPreviewDialog({
   t: ReturnType<typeof useT>;
   hasVisualPreview: boolean;
   onClose: () => void;
-  onOpenProject?: (projectId: string, conversationId?: string) => void;
+  onOpenProject?: (projectId: string, conversationId?: string, entryFile?: string) => void;
   selectedAspects: string[];
   onSelectedAspectsChange: (next: string[]) => void;
 }) {
   const [previewImageError, setPreviewImageError] = useState(false);
   const templateStart = useStartFromDesignLibrary(item, t, 'copy', [], onOpenProject);
   const referenceStart = useStartFromDesignLibrary(item, t, 'reference', selectedAspects, onOpenProject);
+  const livePreview = useLivePreview(item, t);
   const showImage = hasVisualPreview && Boolean(item.thumb) && !previewImageError;
   return createPortal(
     <Dialog
@@ -624,6 +683,9 @@ function DesignLibraryPreviewDialog({
             <Icon name="folder" size={14} />
             {t('designLibrary.openFolder')}
           </button>
+          {livePreview.canOpen ? (
+            <OpenLivePreviewButton opening={livePreview.opening} onClick={livePreview.handleOpen} t={t} />
+          ) : null}
           {templateStart.canStart ? (
             <UseAsTemplateButton
               starting={templateStart.starting}
@@ -642,8 +704,10 @@ function DesignLibraryPreviewDialog({
             {t('designLibrary.previewClose')}
           </button>
         </div>
-        {templateStart.startError || referenceStart.startError ? (
-          <p className={styles.startError}>{templateStart.startError || referenceStart.startError}</p>
+        {templateStart.startError || referenceStart.startError || livePreview.error ? (
+          <p className={styles.startError}>
+            {templateStart.startError || referenceStart.startError || livePreview.error}
+          </p>
         ) : null}
       </div>
     </Dialog>,

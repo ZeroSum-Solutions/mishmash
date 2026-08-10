@@ -1,0 +1,159 @@
+---
+name: meridian-grid-systems-h81
+description: |
+  A multi-section marketing landing page for Meridian®, a fictional intelligent-automation consultancy, built on a "Warm Brutalist Grid" design language — a Swiss/editorial poster system on a warm paper-cream canvas, structured entirely by 1px hairline rules and hard rectangular panels with zero border radius and flat blocks of electric green and cobalt blue. The page flows through a live-clock sticky navbar, a 50/50 split hero, a statement band, a seamless logo marquee, about grid, count-up stats strip, staggered process cards, a pricing table with monthly/annual toggle, a hard-offset-shadow contact form, and footer — all self-contained with no runtime CDN dependencies and `prefers-reduced-motion` support.
+tags:
+  - "landing-page"
+  - "landing-pages"
+  - "claude-directory"
+triggers:
+  - "meridian grid systems"
+  - "meridian"
+  - "grid"
+  - "systems"
+  - "warm"
+  - "brutalist"
+  - "automation"
+  - "landing"
+  - "landing-page"
+od:
+  mode: prototype
+  platform: desktop
+  upstream: "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/meridian-grid-systems-h81"
+  upstream_license: MIT
+  preview:
+    type: html
+    entry: example.html
+  design_system:
+    requires: false
+  category: "landing-page"
+  scenario: "marketing"
+  example_prompt: "Build Meridian Grid Systems — Warm Brutalist Automation Landing Page as a self-contained responsive page in this template's own visual system. Follow the build spec in this skill exactly — palette, typography, section order, and motion are part of the identity. Ask only for the missing essentials first: brand name, real copy, and any imagery to swap in."
+---
+
+# Meridian Grid Systems — Warm Brutalist Automation Landing Page
+
+> Landing page vendored from the MIT-licensed `pulkitxm/claude-directory` gallery.
+
+A multi-section marketing landing page for Meridian®, a fictional intelligent-automation consultancy, built on a "Warm Brutalist Grid" design language — a Swiss/editorial poster system on a warm paper-cream canvas, structured entirely by 1px hairline rules and hard rectangular panels with zero border radius and flat blocks of electric green and cobalt blue. The page flows through a live-clock sticky navbar, a 50/50 split hero, a statement band, a seamless logo marquee, about grid, count-up stats strip, staggered process cards, a pricing table with monthly/annual toggle, a hard-offset-shadow contact form, and footer — all self-contained with no runtime CDN dependencies and `prefers-reduced-motion` support.
+
+## Workflow
+
+1. **Clone `example.html`** into the user's workspace as the working file.
+2. **Replace placeholder content** with the user's real brand name, headlines,
+   body copy, numbers, and imagery. Match existing image dimensions when
+   swapping assets.
+3. **Preserve the design system.** The palette, type scale, spacing rhythm, and
+   motion in the build spec below are the identity — do not substitute fonts,
+   recolour the palette, or strip decorative elements.
+4. **Extend by duplicating sections**, never by importing a layout from another
+   template. If a section is missing, design it from scratch in this template's
+   own vocabulary.
+5. **Keep motion accessible.** Every animation must stay behind
+   `prefers-reduced-motion`, as the build spec requires.
+
+## Output contract
+
+Emit between `<artifact>` tags:
+
+```
+<artifact identifier="meridian-grid-systems-h81" type="text/html" title="Meridian Grid Systems — Warm Brutalist Automation Landing Page">
+<!doctype html>
+<html>...</html>
+</artifact>
+```
+
+## Build spec
+
+The upstream prompt that produced this design, verbatim.
+
+# MERIDIAN GRID SYSTEMS — BRUTALIST EDITORIAL AUTOMATION LANDING PAGE
+
+## AESTHETIC IDENTITY
+
+BUILD A COMPLETE, MULTI-SECTION MARKETING LANDING PAGE FOR A FICTIONAL INTELLIGENT-AUTOMATION CONSULTANCY CALLED **MERIDIAN®**. THE NAMED AESTHETIC IS **"WARM BRUTALIST GRID"** — A SWISS / EDITORIAL POSTER SYSTEM RENDERED ON A WARM PAPER-CREAM CANVAS, ORGANISED ENTIRELY BY HAIRLINE DIVIDER RULES AND HARD RECTANGULAR PANELS WITH ZERO BORDER RADIUS. THE MOOD IS CONFIDENT, ENGINEERING-FORWARD, AND PRINT-LIKE: EVERYTHING SNAPS TO A VISIBLE GRID, PANELS ABUT EACH OTHER SEPARATED ONLY BY 1PX RULES, AND COLOR ARRIVES IN BOLD FLAT BLOCKS RATHER THAN GRADIENTS. IT MUST READ LIKE A MEticulously TYPESET ANNUAL REPORT CROSSED WITH A NEO-BRUTALIST SAAS SITE — NOT GENERIC GRADIENT SAAS SLOP.
+
+## COLOR PALETTE (FLAT, NO GRADIENTS)
+
+- PAPER BACKGROUND (PRIMARY CANVAS): `#FBF9EF`
+- SURFACE (MUTED PANEL FILL): `#EEECE3`
+- INK / DARK (PRIMARY TEXT + DARK PANELS): `#171412`
+- ELECTRIC GREEN ACCENT (PRIMARY SIGNAL COLOR): `#5BFB7A`
+- COBALT BLUE (SECONDARY ACCENT, HOVER FILLS, LINKS): `#3255FF`
+- PRIMARY TEXT: `#171412`
+- SECONDARY TEXT: `#4F4F4F`
+- LIGHT TEXT (ON DARK PANELS): `#FBF9EF`
+- HAIRLINE BORDER (ON LIGHT): `rgba(23, 20, 18, 0.15)`
+- HAIRLINE BORDER (ON DARK): `rgba(255, 255, 255, 0.15)`
+- SELECTION: GREEN BACKGROUND, INK TEXT.
+
+## TYPOGRAPHY
+
+- DISPLAY / HEADLINES / UI LABELS: **SPACE GROTESK** (WEIGHTS 400/500/600/700). USED FOR THE LOGO, NAV, EVERY HEADLINE, STAT NUMBERS, BUTTONS, AND META LABELS. HERO HEADLINE NEAR 80PX, FONT-WEIGHT 500, LINE-HEIGHT 0.95, LETTER-SPACING -0.03EM, WITH `text-wrap: balance`.
+- BODY / PARAGRAPHS: **INTER** (WEIGHTS 400/500/600). USED FOR DESCRIPTIVE COPY, FORM FIELDS, CARD BODY TEXT. RELAXED LINE-HEIGHT, ~18PX.
+- VENDOR BOTH FONTS LOCALLY (SELF-HOST WOFF2; DO NOT HOTLINK GOOGLE FONTS AT RUNTIME).
+- BIG STAT NUMBERS USE TIGHT NEGATIVE TRACKING (-0.04EM) AT 72PX+.
+
+## SHAPE & SHADOW SYSTEM
+
+- ZERO BORDER RADIUS ANYWHERE EXCEPT TINY 2PX SQUARE STATUS DOTS AND CIRCULAR AVATARS.
+- ONE SIGNATURE SHADOW: A HARD "BRUTAL" OFFSET SHADOW `4px 4px 0 0 #171412` (NO BLUR) — APPLIED SPARINGLY TO THE CONTACT FORM AND SELECT CTAS.
+- ALL STRUCTURE COMES FROM 1PX HAIRLINE RULES BETWEEN ABUTTING PANELS, NEVER FROM CARD GAPS OR ROUNDED CONTAINERS.
+- MAX CONTENT WIDTH 1440PX, CENTERED.
+
+## LAYOUT & SECTION BREAKDOWN (TOP TO BOTTOM)
+
+1. **STICKY-FEEL NAVBAR (FULL-WIDTH, BORDER-BOTTOM HAIRLINE):** SPLIT INTO TWO HALVES BY A VERTICAL RULE. LEFT HALF: `MERIDIAN®` WORDMARK IN COBALT BLUE + A LOCATION/LIVE-CLOCK READOUT (`NEW YORK, USA` • GREEN DOT • A LIVE-UPDATING LOCAL TIME). RIGHT HALF: EQUAL-WIDTH NAV CELLS DIVIDED BY VERTICAL RULES (`CAPABILITIES`, `CASE STUDIES`, `PLANS`) EACH WITH AN UNDERLINE-GROW HOVER, PLUS A SOLID GREEN `INITIATE` CTA CELL AT THE FAR RIGHT. ON MOBILE THE NAV STACKS AND THE LINK ROW BECOMES A HORIZONTAL SCROLL STRIP.
+
+2. **HERO (SPLIT 50/50):** LEFT = A FULL-BLEED PHOTOGRAPH (TEAM / OPERATIONS THEME) WITH AN OVERLAID FROSTED "SYSTEM STATUS" PANEL IN THE LOWER-LEFT (PULSING GREEN SQUARE + "ALL WORKFLOWS OPERATIONAL"). RIGHT = A VERTICAL STACK: A SMALL OUTLINED PILL BADGE (`MERIDIAN ENGINE V2.4 LIVE` WITH GREEN SQUARE + BLUE ARROW), THE GIANT HEADLINE (e.g. "ARCHITECTING WORKFLOWS FOR AMBITIOUS ENTERPRISES."), AND A TRUST ROW (OVERLAPPING CIRCULAR AVATARS + A 4.9 BADGE + FIVE STARS + "RELIED ON BY 150+ TOP-TIER OPERATIONS") ABOVE A HAIRLINE.
+
+3. **STATEMENT / CTA BAND (SURFACE FILL, BORDER TOP+BOTTOM):** A LARGE SUBHEAD PARAGRAPH ABOUT ELIMINATING OPERATIONAL BOTTLENECKS, PAIRED WITH A TALL DARK CTA BLOCK ("MAP YOUR STRATEGY → RESERVE A SESSION") THAT FLIPS TO COBALT BLUE ON HOVER.
+
+4. **LOGO MARQUEE:** "EMPOWERING INDUSTRY PIONEERS" LABEL ABOVE AN INFINITE HORIZONTAL MARQUEE OF GHOSTED UPPERCASE BRAND WORDS (QUANTUM, VERIDIAN, AETHER, STRATOS, LUMINA, NOVA) SEPARATED BY SMALL GREEN SQUARES, FRAMED BY HAIRLINE RULES TOP AND BOTTOM. SEAMLESS LOOP VIA DUPLICATED CONTENT.
+
+5. **ABOUT GRID (1/3 + 2/3 SPLIT, HAIRLINE DIVIDED):** LEFT THIRD = A BULLETED LIST OF GLOBAL OFFICE LOCATIONS. RIGHT TWO-THIRDS = A BIG STATEMENT HEADLINE ("TRANSFORMING RAW OPERATIONAL CHAOS INTO STREAMLINED, AUTONOMOUS INTELLIGENCE.") + A FULL-WIDTH OUTLINED "DISCOVER OUR METHODOLOGY" LINK THAT INVERTS TO DARK ON HOVER.
+
+6. **STATS STRIP (4 EQUAL CELLS, VERTICAL HAIRLINE DIVIDERS):** `4.9/5`, `150+`, `85%`, `40+`, EACH WITH A HUGE NUMBER AND A SHORT CAPTION. NUMBERS SHOULD COUNT UP WHEN SCROLLED INTO VIEW.
+
+7. **PROCESS / SERVICES (#services):** A SECTION HEADER (HEADLINE + SUPPORTING PARAGRAPH ABOVE A HAIRLINE), THEN A 4-CARD STAGGERED ROW ("DISCOVERY", "BLUEPRINT", "EXECUTION", "EVOLUTION") NUMBERED 01–04. EACH CARD IS A DIFFERENT FLAT COLOR (SURFACE, GREEN, BLUE, INK), HAS A BIG GHOSTED INDEX NUMBER THAT SOLIDIFIES ON HOVER, A DESCRIPTION, AND A PHOTO STRIP AT THE BOTTOM (USE MIX-BLEND-MODE TO TINT EACH PHOTO INTO ITS PANEL). ON DESKTOP THE CARDS STEP DOWN PROGRESSIVELY (INCREASING TOP MARGIN); ON MOBILE THEY STACK FLUSH. CARDS ANIMATE IN WITH A SPRINGY "BOUNCE-IN-UP" KEYFRAME ON A STAGGERED DELAY.
+
+8. **PRICING (#pricing):** CENTERED HEADER WITH A WORKING MONTHLY/ANNUAL TOGGLE (HARD SQUARE KNOB THAT SLIDES; "ANNUAL — SAVE 20%"). A 3-COLUMN PLAN GRID INSIDE A SINGLE HAIRLINE-BORDERED CONTAINER: STARTER (SURFACE), GROWTH (DARK, HIGHLIGHTED, WITH A GREEN "RECOMMENDED" CORNER TAB), CUSTOM (SURFACE). TOGGLING UPDATES THE DISPLAYED PRICES VIA DATA ATTRIBUTES. EACH PLAN LISTS FEATURES WITH SMALL SOLID SQUARE BULLETS AND A FULL-WIDTH CTA THAT INVERTS ON HOVER.
+
+9. **CONTACT (#contact, GREEN FULL-BLEED SECTION):** LEFT = BIG INK HEADLINE ("SOURCE THE RIGHT INTELLIGENCE.") + COPY + DIRECT EMAIL/PHONE LINKS. RIGHT = A BORDERED FORM ON PAPER FILL WITH A HARD OFFSET SHADOW BEHIND IT — NAME/EMAIL ROW, COMPANY FIELD, MESSAGE TEXTAREA, A CUSTOM SQUARE CONSENT CHECKBOX, AND AN "INITIALIZE" SUBMIT BUTTON. ON SUBMIT, PREVENT DEFAULT, FLIP THE BUTTON TO "RECEIVED." (GREEN), THEN RESET AFTER A FEW SECONDS.
+
+10. **FOOTER:** A DARK FULL-WIDTH CTA SLAB ("READY TO DEPLOY AUTONOMOUS OPERATIONS?" + GREEN "COMMENCE DEPLOYMENT" BUTTON) ABOVE A HAIRLINE-SEPARATED COPYRIGHT + SOCIAL-LINK ROW (PRIVACY, TERMS, LINKEDIN, X). LINKS HOVER TO COBALT BLUE.
+
+## MOTION / ANIMATION / INTERACTION SPEC
+
+- SCROLL-REVEAL: SECTIONS FADE-AND-RISE (OPACITY 0→1, TRANSLATEY 20PX→0) VIA AN INTERSECTION OBSERVER ADDING A `.visible` CLASS, 0.8S EASE-OUT.
+- PROCESS CARDS: SPRINGY BOUNCE-IN-UP (`cubic-bezier(0.34,1.56,0.64,1)`) WITH PER-CARD STAGGER (0.1S, 0.2S, 0.3S, 0.4S).
+- NAV LINKS: CENTER-ORIGIN UNDERLINE SCALE-X 0→1 ON HOVER.
+- LOGO MARQUEE: CONTINUOUS LINEAR TRANSLATE LOOP (~20S), DUPLICATED TRACK FOR SEAMLESSNESS.
+- LIVE CLOCK: UPDATES EVERY SECOND TO LOCAL TIME (12-HOUR).
+- STATS: COUNT-UP ON FIRST VISIBILITY.
+- PRICING TOGGLE: KNOB SLIDES, PRICES SWAP, ACTIVE-SIDE LABEL EMPHASIS CHANGES.
+- HOVER STATES EVERYWHERE INVERT FLAT COLORS (NEVER FADE OPACITY ON BUTTONS — SWAP THE FILL).
+- RESPECT `prefers-reduced-motion` BY DISABLING MARQUEE + BOUNCE.
+
+## RESPONSIVE BEHAVIOR
+
+- DESKTOP (≥1024PX): TWO-COLUMN HERO, 4-UP STAGGERED CARDS, 4-UP STATS, 3-UP PRICING, FULL HAIRLINE GRID.
+- TABLET (768–1023PX): HERO STACKS IMAGE-OVER-TEXT, CARDS GO 2-UP (NO STAGGER), STATS 2-UP.
+- MOBILE (<768PX): EVERYTHING SINGLE COLUMN, NAV STACKS WITH A HORIZONTAL-SCROLL LINK STRIP, FORM FIELDS STACK, HARD SHADOW HIDDEN ON SMALL SCREENS.
+
+## TECH & DELIVERY NOTES
+
+- SELF-CONTAINED STATIC BUILD (HTML + CSS + A LITTLE VANILLA JS). NO RUNTIME CDN DEPENDENCIES — VENDOR FONTS, PHOTOS, AND ANY ICONS LOCALLY UNDER `assets/`.
+- PHOTOS SHOULD BE TREATED AS DUOTONE / BLEND-TINTED INTO THE BRUTALIST PALETTE WHERE THEY SIT INSIDE COLORED PANELS.
+- THE WHOLE PAGE MUST RUN OFFLINE FROM A SINGLE STATIC SERVER WITH NO EXTERNAL NETWORK CALLS.
+
+## Source & license
+
+Vendored from MIT-licensed
+[`pulkitxm/claude-directory`](https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/meridian-grid-systems-h81).
+The upstream MIT licence text ships in this template at [`LICENSE`](./LICENSE) and
+must be redistributed alongside any copy of `example.html` or `assets/`.
+
+Webfonts and full-resolution imagery are **not** vendored: local `@font-face`
+rules are served from the Google Fonts CDN and referenced images are
+downscaled. Fetch the upstream folder for the original assets.

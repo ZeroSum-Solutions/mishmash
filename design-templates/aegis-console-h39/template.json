@@ -1,0 +1,14 @@
+{
+  "slug": "aegis-console-h39",
+  "name": "Aegis Console — Precision-Grid Cybersecurity SaaS Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Clash Grotesk",
+    "Satoshi"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/aegis-console-h39",
+  "source_license": "MIT"
+}

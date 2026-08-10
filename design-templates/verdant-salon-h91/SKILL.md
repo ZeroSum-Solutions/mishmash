@@ -1,0 +1,141 @@
+---
+name: verdant-salon-h91
+description: |
+  A fully responsive, multi-section marketing landing page for **Verdant Salon**, a fictional elite social-media and digital-presence agency, built in the "Heritage Verdant" design language. The aesthetic is quiet old-money editorial luxury: a warm paper-beige canvas (`#F9F7F2`), deep midnight-green panels (`#004953`), and cocoa-brown ink for type — less a SaaS storefront, more a printed prospectus from a Mayfair consultancy. Headings use Playfair Display (with occasional italic) over Inter Tight body and wide-tracked uppercase eyebrows, all locally vendored.
+tags:
+  - "landing-page"
+  - "landing-pages"
+  - "claude-directory"
+triggers:
+  - "verdant salon"
+  - "verdant"
+  - "salon"
+  - "luxury"
+  - "social-strategy"
+  - "agency"
+  - "landing"
+  - "landing-page"
+od:
+  mode: prototype
+  platform: desktop
+  upstream: "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/verdant-salon-h91"
+  upstream_license: MIT
+  preview:
+    type: html
+    entry: example.html
+  design_system:
+    requires: false
+  category: "landing-page"
+  scenario: "marketing"
+  example_prompt: "Build Verdant Salon — Luxury Social-Strategy Agency Landing Page as a self-contained responsive page in this template's own visual system. Follow the build spec in this skill exactly — palette, typography, section order, and motion are part of the identity. Ask only for the missing essentials first: brand name, real copy, and any imagery to swap in."
+---
+
+# Verdant Salon — Luxury Social-Strategy Agency Landing Page
+
+> Landing page vendored from the MIT-licensed `pulkitxm/claude-directory` gallery.
+
+A fully responsive, multi-section marketing landing page for **Verdant Salon**, a fictional elite social-media and digital-presence agency, built in the "Heritage Verdant" design language. The aesthetic is quiet old-money editorial luxury: a warm paper-beige canvas (`#F9F7F2`), deep midnight-green panels (`#004953`), and cocoa-brown ink for type — less a SaaS storefront, more a printed prospectus from a Mayfair consultancy. Headings use Playfair Display (with occasional italic) over Inter Tight body and wide-tracked uppercase eyebrows, all locally vendored.
+
+## Workflow
+
+1. **Clone `example.html`** into the user's workspace as the working file.
+2. **Replace placeholder content** with the user's real brand name, headlines,
+   body copy, numbers, and imagery. Match existing image dimensions when
+   swapping assets.
+3. **Preserve the design system.** The palette, type scale, spacing rhythm, and
+   motion in the build spec below are the identity — do not substitute fonts,
+   recolour the palette, or strip decorative elements.
+4. **Extend by duplicating sections**, never by importing a layout from another
+   template. If a section is missing, design it from scratch in this template's
+   own vocabulary.
+5. **Keep motion accessible.** Every animation must stay behind
+   `prefers-reduced-motion`, as the build spec requires.
+
+## Output contract
+
+Emit between `<artifact>` tags:
+
+```
+<artifact identifier="verdant-salon-h91" type="text/html" title="Verdant Salon — Luxury Social-Strategy Agency Landing Page">
+<!doctype html>
+<html>...</html>
+</artifact>
+```
+
+## Build spec
+
+The upstream prompt that produced this design, verbatim.
+
+# VERDANT SALON — A "HERITAGE VERDANT" LUXURY SOCIAL-STRATEGY AGENCY LANDING PAGE
+
+## AESTHETIC IDENTITY
+
+BUILD A FULLY RESPONSIVE, MULTI-SECTION MARKETING LANDING PAGE FOR A FICTIONAL ELITE SOCIAL-MEDIA & DIGITAL-PRESENCE AGENCY NAMED **VERDANT SALON**. THE NAMED DESIGN LANGUAGE IS **"HERITAGE VERDANT"** — A QUIET, OLD-MONEY EDITORIAL LUXURY: A WARM PAPER-BEIGE CANVAS, DEEP MIDNIGHT-GREEN PANELS, AND COCOA-BROWN INK FOR TYPE. THE MOOD IS HUSHED, EXPENSIVE, AND CURATORIAL — LESS A SAAS STOREFRONT, MORE A PRINTED PROSPECTUS FROM A MAYFAIR CONSULTANCY THAT HAPPENS TO SCROLL. THE LUXURY COMES FROM AN EDITORIAL SERIF AT DOORWAY SCALE, GENEROUS NEGATIVE SPACE, FULLY-ROUNDED "PILL" BUTTONS AND SOFTLY-ROUNDED IMAGE CARDS, AND PRECISE, RESTRAINED MICRO-INTERACTIONS. ABSOLUTELY NO GENERIC-AI-SLOP, NO NEON, NO GLASSMORPHISM, NO PURPLE GRADIENTS.
+
+## COLOR PALETTE (EXACT)
+
+- BRAND PRIMARY / MIDNIGHT GREEN: `#004953`
+- PAPER BEIGE (BACKGROUND): `#F9F7F2`
+- WARMER BEIGE PANEL (ALT SECTION): `#F2EFE8`
+- TEXT PRIMARY (HEADINGS, COCOA): `#3E2723`
+- TEXT SECONDARY (BODY, LIGHTER BROWN): `#5D4037`
+- TEXT ON DARK (BEIGE ON GREEN/BROWN): `#F9F7F2`
+- FOOTER GROUND (DEEP COCOA): `#3E2723`
+- HAIRLINES: COCOA AT 10% OPACITY.
+
+## TYPOGRAPHY
+
+- PRIMARY DISPLAY/HEADINGS: **PLAYFAIR DISPLAY** (SERIF), WEIGHTS 400 & 700; OCCASIONAL ITALIC 400 FOR CASE-STUDY TITLES AND PULL-QUOTES.
+- SECONDARY UI/BODY: **INTER TIGHT** (SANS), WEIGHTS 400/500/600.
+- EYEBROWS, NAV LINKS, LABELS, STAT CAPTIONS: INTER TIGHT, UPPERCASE, BOLD, LETTER-SPACING 0.25EM–0.4EM, 11–12PX.
+- HERO H1 SCALES FROM ~32PX MOBILE TO ~88PX DESKTOP, LINE-HEIGHT ~1.0, TIGHT TRACKING.
+- VENDOR BOTH FONTS LOCALLY (WOFF2) — NO REMOTE FONT CDN.
+
+## LAYOUT & SECTION BREAKDOWN
+
+CONTENT MAX-WIDTH ~1505PX, CENTERED, WITH 6/12PX → 36PX HORIZONTAL GUTTERS. VERTICAL RHYTHM ~128PX BETWEEN SECTIONS.
+
+1. **FIXED HEADER / NAV** — TRANSPARENT OVER PAPER AT TOP; WORDMARK "VERDANT.SALON" IN SERIF AT LEFT; CENTER/RIGHT NAV LINKS (SERVICES, APPROACH, EXPERIENCE) IN UPPERCASE TRACKED SANS; A SOLID MIDNIGHT-GREEN PILL CTA "INQUIRE NOW" AT FAR RIGHT. ON SCROLL PAST ~80PX THE HEADER GAINS A BLURRED 95%-OPACITY BEIGE BACKDROP, A FAINT SHADOW, AND TIGHTENS ITS VERTICAL PADDING.
+
+2. **HERO** — FULL-VIEWPORT, PAPER GROUND. A CENTERED OVERSIZED SERIF H1 ("DIGITAL PRESENCE, DEFINED BY DISTINCTION."). BELOW IT A 12-COLUMN GRID: LEFT COLUMN (≈4 COLS) HOLDS A SHORT EDITORIAL SUBPARAGRAPH AND A GREEN PILL CTA ("VIEW CAPABILITIES"); RIGHT COLUMN (≈8 COLS) HOLDS TWO PORTRAIT IMAGE CARDS (≈260×340, ROUNDED ~19PX, DEEP SHADOW) STAGGERED VERTICALLY (ONE PUSHED DOWN ~64PX, ONE ~24PX). EACH IMAGE CARD REVEALS VIA A TILED GRID-OF-SQUARES "DEMASK" ANIMATION (3×4 BEIGE TILES THAT FADE/SCALE AWAY ON STAGGERED DELAYS) WHEN IT ENTERS THE VIEWPORT.
+
+3. **IMPACT / STATS** — TWO-COLUMN: LEFT IS AN EYEBROW ("OUR IMPACT"), A SERIF H2 ("METRICS THAT MATTER TO THOSE WHO MATTER."), AND A LEAD PARAGRAPH; RIGHT IS A 2×2 STAT GRID, EACH STAT A BIG SERIF NUMBER (12M+, 84%, 4.2X, BESPOKE) OVER AN UPPERCASE TRACKED CAPTION, EACH ON A BOTTOM HAIRLINE. BIG NUMBERS COUNT UP WHEN SCROLLED INTO VIEW.
+
+4. **SERVICES** — ON THE WARMER BEIGE PANEL. A SPLIT HEADER (SERIF H2 LEFT, ITALIC PULL-QUOTE RIGHT). THEN A STACK OF 3 FULL-WIDTH SERVICE ROWS SEPARATED BY HAIRLINES (01 SOCIAL CURATORSHIP, 02 ELITE PAID MEDIA, 03 AMBASSADOR RELATIONS). EACH ROW: NUMBERED EYEBROW + SERIF H3 ON LEFT, DESCRIPTION + AN ARROW ICON ON RIGHT. ON HOVER (DESKTOP) THE ROW BACKGROUND WARMS, THE ARROW ROTATES TO HORIZONTAL, AND A SMALL ROTATED PREVIEW IMAGE CARD FLOATS IN AND STRAIGHTENS.
+
+5. **EXPERIENCE / HERITAGE GALLERY** — CENTERED EYEBROW + SERIF H2 ("THE HERITAGE GALLERY"). TWO ALTERNATING CASE-STUDY BLOCKS (IMAGE 7 COLS / TEXT 5 COLS, THEN MIRRORED). EACH IMAGE IS A WIDE 16:10 ROUNDED CARD WITH THE SAME TILED GRID-REVEAL (4×3 TILES) PLUS A SLOW ZOOM-ON-HOVER. TEXT SIDE: ITALIC SERIF CLIENT NAME, A RESULT PARAGRAPH, AND TWO OUTLINED PILL TAGS.
+
+6. **CONTACT** — FULL MIDNIGHT-GREEN PANEL WITH A SKEWED DARKER OVERLAY SHAPE AT RIGHT. LEFT: SERIF H2 ("SECURE YOUR PLACE IN THE NARRATIVE."), A LEAD LINE, AND TWO INFO BLOCKS (HQ LOCATIONS, INQUIRIES EMAIL). RIGHT: A BEIGE CARD WITH AN INQUIRY FORM (NAME, EMAIL, BRAND & VISION TEXTAREA, GREEN SUBMIT PILL). UNDERLINE-STYLE INPUTS THAT TURN GREEN ON FOCUS. SUBMIT IS FAKED CLIENT-SIDE: BUTTON SHOWS "TRANSMITTING…" THEN A SUCCESS MESSAGE.
+
+7. **FOOTER** — DEEP COCOA GROUND, BEIGE TYPE. A LARGE SERIF SIGN-OFF ("READY TO TRANSCEND THE NOISE?"), AN ITALIC EMAIL LINK, NAVIGATION AND SOCIAL LINK COLUMNS, AND A BOTTOM HAIRLINE ROW WITH COPYRIGHT + LEGAL LINKS.
+
+## MOTION / ANIMATION / INTERACTION SPEC
+
+- **SCROLL REVEAL**: ELEMENTS START AT OPACITY 0 / TRANSLATEY 30PX AND EASE IN (OPACITY + TRANSFORM, ~1S, CUBIC-BEZIER(0.16,1,0.3,1)) WHEN OBSERVED VIA INTERSECTIONOBSERVER; STAGGER CHILDREN WITH 0.1/0.2/0.3/0.4S DELAYS.
+- **GRID DEMASK** ON IMAGE CARDS: AN OVERLAID GRID OF BEIGE TILES THAT EACH FADE TO 0 OPACITY AND SCALE TO 0 ON INDIVIDUAL STAGGERED DELAYS (100–900MS), REVEALING THE PHOTO BENEATH.
+- **STAT COUNT-UP**: NUMERIC STATS ANIMATE FROM 0 TO TARGET ONCE IN VIEW.
+- **HEADER**: BACKGROUND/BLUR/PADDING TRANSITION ON SCROLL.
+- **SMOOTH-SCROLL** ANCHOR NAVIGATION WITH HEADER OFFSET.
+- **HOVER**: PILL CTAS SCALE ~1.05; SERVICE ROWS REVEAL FLOATING PREVIEW CARDS; GALLERY IMAGES ZOOM ~1.05.
+- RESPECT `prefers-reduced-motion` (DISABLE TRANSFORMS/COUNT-UP).
+
+## RESPONSIVE BEHAVIOR
+
+- DESKTOP: FULL 12-COLUMN GRIDS, STAGGERED HERO CARDS, HOVER PREVIEWS, 2×2 STATS.
+- TABLET: GRIDS COLLAPSE TO FEWER COLUMNS; HERO CARDS WRAP; HOVER PREVIEWS HIDDEN.
+- MOBILE: SINGLE COLUMN; H1 ~32PX; STACKED STATS AND CASE STUDIES; FORM FULL-WIDTH; NAV LINKS MAY HIDE BEHIND THE WORDMARK + CTA. NO HORIZONTAL OVERFLOW.
+
+## DELIVERY
+
+SELF-CONTAINED STATIC SITE. ALL ASSETS (FONTS, PHOTOGRAPHY) VENDORED LOCALLY UNDER `assets/` AND REFERENCED BY RELATIVE PATHS — NO REMOTE CDNS, NO HOTLINKING. PLAIN HTML + CSS (HAND-WRITTEN, NOT A TAILWIND CDN) + A SMALL VANILLA-JS FILE FOR OBSERVERS, COUNT-UP, HEADER STATE, AND THE FAKE FORM. CLEAN, ACCESSIBLE, KEYBOARD-FOCUSABLE.
+
+## Source & license
+
+Vendored from MIT-licensed
+[`pulkitxm/claude-directory`](https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/verdant-salon-h91).
+The upstream MIT licence text ships in this template at [`LICENSE`](./LICENSE) and
+must be redistributed alongside any copy of `example.html` or `assets/`.
+
+Webfonts and full-resolution imagery are **not** vendored: local `@font-face`
+rules are served from the Google Fonts CDN and referenced images are
+downscaled. Fetch the upstream folder for the original assets.

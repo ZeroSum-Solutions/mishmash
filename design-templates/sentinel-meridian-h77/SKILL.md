@@ -1,0 +1,141 @@
+---
+name: sentinel-meridian-h77
+description: |
+  A single-page marketing site for Sentinel Meridian, a fictional elite private-intelligence and strategic-advisory firm. The named aesthetic is "Cold War Dossier" — a hushed, classified, architectural dark theme that reads like a declassified intelligence brief crossed with a luxury private bank: near-black ink, a cold ice/steel cyan accent, and a single warm signal-amber used only for "classified / live" labels and the primary CTA glow.
+tags:
+  - "landing-page"
+  - "landing-pages"
+  - "claude-directory"
+triggers:
+  - "sentinel meridian"
+  - "sentinel"
+  - "meridian"
+  - "intelligence"
+  - "strategy"
+  - "advisory"
+  - "landing"
+  - "landing-page"
+od:
+  mode: prototype
+  platform: desktop
+  upstream: "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/sentinel-meridian-h77"
+  upstream_license: MIT
+  preview:
+    type: html
+    entry: example.html
+  design_system:
+    requires: false
+  category: "landing-page"
+  scenario: "marketing"
+  example_prompt: "Build Sentinel Meridian — Intelligence & Strategy Advisory Landing Page as a self-contained responsive page in this template's own visual system. Follow the build spec in this skill exactly — palette, typography, section order, and motion are part of the identity. Ask only for the missing essentials first: brand name, real copy, and any imagery to swap in."
+---
+
+# Sentinel Meridian — Intelligence & Strategy Advisory Landing Page
+
+> Landing page vendored from the MIT-licensed `pulkitxm/claude-directory` gallery.
+
+A single-page marketing site for Sentinel Meridian, a fictional elite private-intelligence and strategic-advisory firm. The named aesthetic is "Cold War Dossier" — a hushed, classified, architectural dark theme that reads like a declassified intelligence brief crossed with a luxury private bank: near-black ink, a cold ice/steel cyan accent, and a single warm signal-amber used only for "classified / live" labels and the primary CTA glow.
+
+## Workflow
+
+1. **Clone `example.html`** into the user's workspace as the working file.
+2. **Replace placeholder content** with the user's real brand name, headlines,
+   body copy, numbers, and imagery. Match existing image dimensions when
+   swapping assets.
+3. **Preserve the design system.** The palette, type scale, spacing rhythm, and
+   motion in the build spec below are the identity — do not substitute fonts,
+   recolour the palette, or strip decorative elements.
+4. **Extend by duplicating sections**, never by importing a layout from another
+   template. If a section is missing, design it from scratch in this template's
+   own vocabulary.
+5. **Keep motion accessible.** Every animation must stay behind
+   `prefers-reduced-motion`, as the build spec requires.
+
+## Output contract
+
+Emit between `<artifact>` tags:
+
+```
+<artifact identifier="sentinel-meridian-h77" type="text/html" title="Sentinel Meridian — Intelligence & Strategy Advisory Landing Page">
+<!doctype html>
+<html>...</html>
+</artifact>
+```
+
+## Build spec
+
+The upstream prompt that produced this design, verbatim.
+
+# SENTINEL MERIDIAN — SOVEREIGN INTELLIGENCE & STRATEGY ADVISORY LANDING PAGE
+
+## AESTHETIC IDENTITY
+
+BUILD A SINGLE-PAGE MARKETING SITE FOR **SENTINEL MERIDIAN**, A FICTIONAL ELITE PRIVATE-INTELLIGENCE AND STRATEGIC-ADVISORY FIRM THAT SERVES SOVEREIGN WEALTH FUNDS, HEADS OF STATE, AND TIER-ONE INSTITUTIONS. THE NAMED AESTHETIC IS **"COLD WAR DOSSIER"** — A HUSHED, CLASSIFIED, ARCHITECTURAL DARK THEME THAT FEELS LIKE A DECLASSIFIED INTELLIGENCE BRIEF CROSSED WITH A LUXURY PRIVATE BANK. THE MOOD IS DISCRETION, PRECISION, RESTRAINT, AND QUIET POWER — NOT FLASHY, NOT PLAYFUL. EVERYTHING READS AS IF IT WERE STAMPED, REDACTED, AND CIRCULATED TO A LIST OF FOURTEEN PEOPLE.
+
+## COLOR SYSTEM
+
+- PRIMARY BACKGROUND: NEAR-BLACK INK `#08090B` WITH A SECONDARY PANEL SURFACE `#0E1014`.
+- PRIMARY TEXT: SOFT OFF-WHITE `#EDEFF2`; SECONDARY TEXT: COOL GREY `rgba(237, 239, 242, 0.55)`.
+- SIGNATURE ACCENT: A COLD **ICE / STEEL CYAN** `#7DD3D8` USED SPARINGLY FOR EYEBROWS, KEYLINES, STAT NUMBERS, AND HOVER STATES.
+- SECONDARY ACCENT: A WARM **SIGNAL AMBER** `#E8B65A` USED ONLY FOR "CLASSIFIED / REDACTED / LIVE" MICRO-LABELS AND THE PRIMARY CTA GLOW — IT IS THE ONLY WARM COLOR ON THE PAGE AND MUST FEEL LIKE A WARNING LIGHT.
+- HAIRLINES AND BORDERS: `rgba(237, 239, 242, 0.10)`.
+- USE A FINE GRAIN / NOISE TEXTURE OVERLAY AND A SUBTLE BLUEPRINT GRID (1PX LINES AT LOW OPACITY) ACROSS DARK SECTIONS.
+
+## TYPOGRAPHY
+
+- DISPLAY / HEADINGS: A HIGH-CONTRAST SERIF — **"FORUM"** (OR SIMILAR DIDONE/TRANSITIONAL SERIF) — FOR ALL H1/H2/H3, WITH TIGHT TRACKING (`-0.02em`) AND LEADING NEAR `0.95`.
+- BODY / UI: A GEOMETRIC GROTESK — **"DM SANS"** — WEIGHTS 400/500/700, INCLUDING ITALIC.
+- MONOSPACE: A MONO FACE (**"SPACE MONO" / "IBM PLEX MONO"**) FOR DOSSIER METADATA, COORDINATES, FILE NUMBERS, AND THE TICKER — UPPERCASE, WIDE LETTER-SPACING (`0.2em`–`0.4em`).
+- EYEBROWS / MICRO-LABELS: 10–12PX UPPERCASE MONO WITH WIDE TRACKING, OFTEN PREFIXED WITH A FILE SIGIL LIKE `§` OR `//` OR A REDACTION BAR.
+
+## LAYOUT & SECTION BREAKDOWN
+
+CONTENT IS CONSTRAINED TO A MAX WIDTH OF ~1240PX, CENTERED, WITH GENEROUS VERTICAL RHYTHM (SECTIONS ~`8rem` PADDING). SECTIONS IN ORDER:
+
+1. **FIXED NAV** — LEFT: WORDMARK "SENTINEL MERIDIAN" IN SERIF SMALL-CAPS WITH A TINY CLASSIFICATION SIGIL. CENTER/RIGHT: MONO NAV LINKS (MANDATE, CAPABILITIES, METHOD, INTELLIGENCE, CONTACT). RIGHT: A GHOST "SECURE LINE" BUTTON AND A SOLID AMBER "REQUEST BRIEFING" BUTTON. NAV SHRINKS AND GAINS A BLURRED INK BACKGROUND ON SCROLL.
+
+2. **HERO (FULL VIEWPORT)** — A GRAYSCALE AERIAL/ARCHITECTURAL BACKGROUND IMAGE WITH A SLOW ZOOM-OUT KEN-BURNS AND A SUBTLE MOUSE-PARALLAX. HEAVY BOTTOM-TO-TOP INK GRADIENT FOR LEGIBILITY. OVERLAY A LIVE DOSSIER HEADER STRIP (FILE NUMBER, "CLASSIFIED // EYES ONLY", A BLINKING AMBER "LIVE" DOT, AND CURRENT UTC CLOCK THAT TICKS). HEADLINE IN SERIF, MASK-REVEALED LINE BY LINE: "WE SEE THE SHIFT / BEFORE IT ARRIVES." ONE ITALIC CYAN PHRASE FOR EMPHASIS. SUBHEAD IN GREY. A WHITE→AMBER PRIMARY CTA ("REQUEST A BRIEFING") WITH AN ARROW, AND A HAIRLINE DIVIDER. BOTTOM OF HERO: A SCROLLING MONO MARQUEE/TICKER OF "INTELLIGENCE FEED" SNIPPETS (GEO COORDINATES, MARKET SIGNALS, REDACTED LINES).
+
+3. **MANDATE / DNA** — TWO-COLUMN: LEFT A SERIF STATEMENT ("ABSOLUTE DISCRETION. SURGICAL CLARITY.") + COPY + A NUMBERED `01/02/03` LIST OF PRINCIPLES WITH HAIRLINE DIVIDERS AND CYAN INDICES. RIGHT A TALL 4:5 GRAYSCALE IMAGE CARD WITH A FROSTED-GLASS PULL-QUOTE PINNED AT THE BOTTOM, ATTRIBUTED TO AN ANONYMIZED CLIENT TITLE.
+
+4. **CAPABILITIES** — A 3-UP GRID OF "DISCIPLINE" CARDS (CAPITAL DEFENSE, MARKET CONQUEST, CRISIS MANDATE), SEPARATED BY HAIRLINES (1PX GAP). EACH CARD: A LINE-ART SVG GLYPH, A MONO FILE CODE (E.G. `CAP–01`), SERIF TITLE, COPY, AND A UPPERCASE MONO SUB-LIST. HOVER DEEPENS THE CARD TO PURE INK AND LIGHTS THE BORDER + GLYPH IN CYAN.
+
+5. **METHOD** — A HORIZONTAL THREE-STEP PROCESS (DIAGNOSTIC → ARCHITECTURE → EXECUTION) JOINED BY A THIN CONNECTING LINE; EACH STEP HAS A CIRCULAR NUMBERED NODE THAT LIGHTS CYAN ON HOVER.
+
+6. **INTELLIGENCE / STATS** — A 4-UP ROW OF OVERSIZED SERIF STAT FIGURES IN CYAN ($52B+ CAPITAL PROTECTED, 14 SOVEREIGN MANDATES, 0 DISCLOSURES, ELITE TIER) WITH MONO CAPTIONS, ON A SECONDARY PANEL SURFACE WITH TOP/BOTTOM HAIRLINES. STAT NUMBERS COUNT UP WHEN SCROLLED INTO VIEW.
+
+7. **FINAL CTA / CONTACT** — A FAINT GRAYSCALE BACKGROUND IMAGE AT LOW OPACITY, CENTERED SERIF MAMMOTH HEADLINE ("ARCHITECT YOUR SOVEREIGNTY."), AN AMBER PRIMARY CTA ("INITIATE PROTOCOL") AND A GHOST "VIEW DOSSIER" CTA, PLUS A REASSURING MONO LINE ABOUT ENCRYPTION.
+
+8. **FOOTER** — FOUR-COLUMN: WORDMARK + DESCRIPTION, TWO LINK COLUMNS, AND AN INQUIRIES COLUMN WITH CITY LIST (LONDON · NEW YORK · SINGAPORE) AND A CONTACT ADDRESS. BOTTOM BAR: COPYRIGHT IN MONO + LEGAL LINKS.
+
+## MOTION / ANIMATION / INTERACTION SPEC
+
+- HERO BACKGROUND: 20S EASE-OUT ZOOM FROM `scale(1.15)` TO `scale(1)`, PLUS A SUBTLE MOUSE-PARALLAX TRANSLATE.
+- HEADLINE: PER-LINE MASK REVEAL (`translateY(110%)` → `0`) WITH A `cubic-bezier(0.16, 1, 0.3, 1)` EASE AND STAGGERED DELAYS.
+- SCROLL REVEALS VIA INTERSECTIONOBSERVER: FADE-UP FOR BLOCKS, STAGGERED CHILDREN FOR GRIDS.
+- LIVE UTC CLOCK TICKING ONCE PER SECOND; A BLINKING AMBER "LIVE" DOT.
+- AN INFINITE MONO TICKER MARQUEE AT THE HERO BASE.
+- STAT COUNT-UP ANIMATION ON SCROLL INTO VIEW.
+- CARD HOVERS: SMOOTH 500MS COLOR/BORDER TRANSITIONS; CTA HOVER SHIFTS WHITE→AMBER WITH A SOFT GLOW; CUSTOM CYAN-ON-INK TEXT SELECTION AND A SLIM DARK SCROLLBAR.
+- RESPECT `prefers-reduced-motion` BY DISABLING NON-ESSENTIAL MOTION.
+
+## RESPONSIVE BEHAVIOR
+
+- DESKTOP ≥1024PX: FULL MULTI-COLUMN GRIDS AS DESCRIBED.
+- TABLET 768–1023PX: COLLAPSE TO 1–2 COLUMNS; HERO HEADLINE SCALES DOWN.
+- MOBILE <768PX: SINGLE COLUMN, HIDDEN CENTER NAV LINKS BEHIND A MINIMAL MENU AFFORDANCE, STACKED CTAS, SMALLER SERIF DISPLAY SIZES; TICKER REMAINS.
+
+## TECHNICAL NOTES
+
+- SELF-CONTAINED STATIC BUILD (PLAIN HTML/CSS/JS). VENDOR ALL FONTS AND IMAGES LOCALLY (NO CDN HOTLINKS). USE GRAYSCALE ARCHITECTURAL / AERIAL PHOTOGRAPHY. ENSURE ACCESSIBLE CONTRAST, SEMANTIC LANDMARKS, AND KEYBOARD-FOCUSABLE INTERACTIVE ELEMENTS. THE RESULT MUST FEEL LIKE A CLASSIFIED BRIEF MADE BY A FIRM THAT CHARGES SEVEN FIGURES TO RETURN YOUR CALL.
+
+## Source & license
+
+Vendored from MIT-licensed
+[`pulkitxm/claude-directory`](https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/sentinel-meridian-h77).
+The upstream MIT licence text ships in this template at [`LICENSE`](./LICENSE) and
+must be redistributed alongside any copy of `example.html` or `assets/`.
+
+Webfonts and full-resolution imagery are **not** vendored: local `@font-face`
+rules are served from the Google Fonts CDN and referenced images are
+downscaled. Fetch the upstream folder for the original assets.

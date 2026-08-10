@@ -1,0 +1,11 @@
+{
+  "slug": "hirewise",
+  "name": "Hirewise: Job Board Website Template",
+  "family": "lexingtonthemes",
+  "kind": "multipage",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/templates/premium/lexingtonthemes/hirewise",
+  "source_license": "MIT"
+}

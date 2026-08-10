@@ -1,0 +1,14 @@
+{
+  "slug": "mainframe-hero-landing",
+  "name": "Mainframe — Mouse-Scrub Video Hero with AI Typewriter",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [
+    "HelveticaNowDisplay-Medium",
+    "HelveticaNowDisplayW01-Rg"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/mainframe-hero-landing",
+  "source_license": "MIT"
+}

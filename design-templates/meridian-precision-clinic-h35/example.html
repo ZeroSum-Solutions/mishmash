@@ -1,0 +1,1450 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Meridian — Bespoke Precision Medicine</title>
+		<meta
+			name="description"
+			content="Meridian is a bespoke precision-medicine clinic for longevity and executive health — architecturally precise, clinically exceptional."
+		>
+		<style>
+/* ===== MERIDIAN — Architectural Clinical Editorial ===== */
+
+/* ---- Fonts ---- */
+
+
+
+
+
+
+
+
+
+/* ---- Tokens ---- */
+:root {
+	--ink: #0a2540;
+	--ink-2: #0d2e4e;
+	--overlay: rgba(10, 37, 64, 0.88);
+	--paper: #fbfaf7;
+	--stone: #efede6;
+	--line: rgba(10, 37, 64, 0.12);
+	--line-w: rgba(251, 250, 247, 0.16);
+	--brass: #b08d57;
+	--ink-68: rgba(10, 37, 64, 0.68);
+	--paper-60: rgba(251, 250, 247, 0.6);
+	--paper-85: rgba(251, 250, 247, 0.85);
+	--max: 1440px;
+	--pad: 8vw;
+	--serif: "Fraunces", Georgia, serif;
+	--sans: "Inter", -apple-system, system-ui, sans-serif;
+	--ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+html {
+	scroll-behavior: smooth;
+	-webkit-text-size-adjust: 100%;
+}
+body {
+	font-family: var(--sans);
+	background: var(--paper);
+	color: var(--ink);
+	font-weight: 400;
+	line-height: 1.6;
+	overflow-x: hidden;
+	-webkit-font-smoothing: antialiased;
+}
+img {
+	display: block;
+	max-width: 100%;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+.shell {
+	max-width: var(--max);
+	margin: 0 auto;
+	padding-left: var(--pad);
+	padding-right: var(--pad);
+}
+
+/* ---- Shared bits ---- */
+.eyebrow {
+	font-family: var(--sans);
+	font-weight: 600;
+	font-size: 11px;
+	letter-spacing: 3.5px;
+	text-transform: uppercase;
+	color: var(--brass);
+}
+.serif {
+	font-family: var(--serif);
+}
+.diamond {
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	background: var(--brass);
+	transform: rotate(45deg);
+	vertical-align: middle;
+}
+.keyline {
+	height: 1px;
+	width: 48px;
+	background: var(--brass);
+	display: block;
+}
+
+/* ---- Header ---- */
+.header {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 100;
+	transition:
+		background 0.4s var(--ease),
+		padding 0.4s var(--ease),
+		border-color 0.4s var(--ease);
+	background: rgba(251, 250, 247, 0);
+	border-bottom: 1px solid transparent;
+}
+.header.solid {
+	background: rgba(251, 250, 247, 0.94);
+	backdrop-filter: saturate(140%) blur(8px);
+	border-bottom-color: var(--line);
+}
+.header.over-dark:not(.solid) .nav-link,
+.header.over-dark:not(.solid) .wordmark {
+	color: var(--paper);
+}
+.header.over-dark:not(.solid) .book {
+	color: var(--paper);
+	border-color: var(--paper-60);
+}
+.nav {
+	max-width: var(--max);
+	margin: 0 auto;
+	padding: 26px var(--pad);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	transition: padding 0.4s var(--ease);
+}
+.header.solid .nav {
+	padding-top: 16px;
+	padding-bottom: 16px;
+}
+.wordmark {
+	font-family: var(--sans);
+	font-weight: 600;
+	font-size: 15px;
+	letter-spacing: 4px;
+	text-transform: uppercase;
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	color: var(--ink);
+	transition: color 0.4s var(--ease);
+}
+.nav-mid {
+	display: flex;
+	align-items: center;
+	gap: 44px;
+}
+.nav-link {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 2px;
+	text-transform: uppercase;
+	color: var(--ink-68);
+	transition: color 0.25s ease;
+	position: relative;
+}
+.nav-link:hover {
+	color: var(--ink);
+}
+.book {
+	border: 1px solid var(--line);
+	color: var(--ink);
+	padding: 11px 22px;
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 2.5px;
+	text-transform: uppercase;
+	transition: all 0.35s var(--ease);
+	background: transparent;
+	cursor: pointer;
+}
+.book:hover {
+	background: var(--ink);
+	color: var(--paper);
+	border-color: var(--ink);
+}
+
+/* ---- Hero ---- */
+.hero {
+	position: relative;
+	width: 100%;
+	min-height: 100vh;
+	display: flex;
+	overflow: hidden;
+}
+@media (max-height: 700px) {
+	.hero {
+		min-height: 780px;
+	}
+}
+.hero__photo {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+}
+.hero__photo img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	opacity: 0;
+	animation: fadeIn 1.9s var(--ease) forwards;
+}
+.hero__photo::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		90deg,
+		rgba(10, 37, 64, 0.32),
+		rgba(10, 37, 64, 0.08)
+	);
+}
+.hero__grid {
+	position: relative;
+	z-index: 2;
+	width: 100%;
+	display: flex;
+}
+.hero__spacer {
+	display: none;
+	width: 50%;
+}
+@media (min-width: 1024px) {
+	.hero__spacer {
+		display: block;
+	}
+}
+.hero__panel {
+	width: 100%;
+	background: var(--overlay);
+	backdrop-filter: blur(2px);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	padding: 120px var(--pad) 100px;
+	transform: translateX(102%);
+	animation: slideInPanel 1.4s var(--ease) 0.15s forwards;
+}
+@media (min-width: 1024px) {
+	.hero__panel {
+		width: 50%;
+		padding: 120px 7vw 100px 6vw;
+	}
+}
+.hero__inner {
+	max-width: 520px;
+}
+.hero h1 {
+	font-family: var(--serif);
+	color: var(--paper);
+	font-size: clamp(44px, 7vw, 76px);
+	line-height: 1.04;
+	letter-spacing: 1.5px;
+	margin: 28px 0 26px;
+}
+.hero h1 .l1 {
+	display: block;
+	font-weight: 600;
+	text-transform: uppercase;
+}
+.hero h1 .l2 {
+	display: block;
+	font-weight: 300;
+	font-style: italic;
+	color: #e8d9c0;
+	text-transform: lowercase;
+	letter-spacing: 0.5px;
+}
+.hero p.lead {
+	color: var(--paper-85);
+	font-weight: 300;
+	font-size: clamp(16px, 1.5vw, 19px);
+	line-height: 1.7;
+	margin-bottom: 38px;
+	max-width: 460px;
+}
+.hero__cta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+}
+.btn {
+	display: inline-block;
+	padding: 17px 30px;
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 2.5px;
+	text-transform: uppercase;
+	text-align: center;
+	cursor: pointer;
+	transition: all 0.35s var(--ease);
+	border: 1px solid transparent;
+}
+.btn--solid {
+	background: var(--paper);
+	color: var(--ink);
+}
+.btn--solid:hover {
+	background: #e8d9c0;
+}
+.btn--ghost {
+	border-color: var(--paper-60);
+	color: var(--paper);
+}
+.btn--ghost:hover {
+	background: var(--paper);
+	color: var(--ink);
+}
+.scrollcue {
+	position: absolute;
+	left: var(--pad);
+	bottom: 36px;
+	z-index: 3;
+	display: none;
+	align-items: center;
+	gap: 14px;
+	color: var(--paper-85);
+}
+@media (min-width: 1024px) {
+	.scrollcue {
+		display: flex;
+		left: 6vw;
+	}
+}
+.scrollcue span {
+	font-size: 10px;
+	letter-spacing: 3px;
+	text-transform: uppercase;
+	font-weight: 600;
+}
+.scrollcue .bar {
+	width: 1px;
+	height: 42px;
+	background: var(--paper-60);
+	position: relative;
+	overflow: hidden;
+}
+.scrollcue .bar::after {
+	content: "";
+	position: absolute;
+	top: -100%;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: var(--brass);
+	animation: cue 2.1s var(--ease) infinite;
+}
+
+/* hero stagger */
+.hero [data-stagger] {
+	opacity: 0;
+	transform: translateY(26px);
+	animation: rise 1s var(--ease) forwards;
+}
+.hero .keyline[data-stagger] {
+	animation-delay: 0.85s;
+}
+.hero h1[data-stagger] {
+	animation-delay: 0.98s;
+}
+.hero .lead[data-stagger] {
+	animation-delay: 1.12s;
+}
+.hero .hero__cta[data-stagger] {
+	animation-delay: 1.26s;
+}
+
+/* ---- Marquee ---- */
+.marquee {
+	border-top: 1px solid var(--line);
+	border-bottom: 1px solid var(--line);
+	background: var(--paper);
+	overflow: hidden;
+	padding: 22px 0;
+}
+.marquee__track {
+	display: flex;
+	width: max-content;
+	animation: scrollx 38s linear infinite;
+	will-change: transform;
+}
+.marquee:hover .marquee__track {
+	animation-play-state: paused;
+}
+.marquee__item {
+	display: flex;
+	align-items: center;
+	gap: 32px;
+	padding: 0 32px;
+	font-family: var(--serif);
+	font-size: 18px;
+	font-weight: 400;
+	color: var(--ink-68);
+	white-space: nowrap;
+	letter-spacing: 0.5px;
+}
+.marquee__item .diamond {
+	margin-left: 0;
+}
+
+/* ---- Philosophy ---- */
+.philosophy {
+	background: var(--paper);
+	padding: clamp(90px, 12vw, 160px) 0;
+}
+.philo__grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 64px;
+	align-items: center;
+}
+@media (min-width: 1024px) {
+	.philo__grid {
+		grid-template-columns: 1fr 1fr;
+		gap: 96px;
+	}
+}
+.philo__copy h2 {
+	font-family: var(--serif);
+	font-size: clamp(32px, 4.5vw, 58px);
+	line-height: 1.08;
+	font-weight: 400;
+	margin: 22px 0 26px;
+}
+.philo__copy h2 .it {
+	font-style: italic;
+	font-weight: 300;
+	display: block;
+}
+.philo__copy .rule {
+	height: 1px;
+	width: 64px;
+	background: var(--line);
+	margin: 0 0 28px;
+}
+.philo__copy .body {
+	color: var(--ink-68);
+	font-weight: 300;
+	font-size: 18px;
+	line-height: 1.75;
+	margin-bottom: 36px;
+	max-width: 520px;
+}
+.feat {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 26px;
+}
+.feat li {
+	display: flex;
+	gap: 18px;
+	align-items: flex-start;
+}
+.feat .tick {
+	width: 26px;
+	height: 1px;
+	background: var(--ink);
+	margin-top: 13px;
+	flex: none;
+}
+.feat h4 {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 2.5px;
+	text-transform: uppercase;
+	margin-bottom: 7px;
+}
+.feat p {
+	font-size: 14.5px;
+	color: var(--ink-68);
+	font-weight: 300;
+	line-height: 1.6;
+}
+.philo__media {
+	position: relative;
+}
+.philo__media .frame {
+	aspect-ratio: 4 / 5;
+	overflow: hidden;
+	background: var(--stone);
+}
+.philo__media .frame img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 1.2s var(--ease);
+}
+.philo__media:hover .frame img {
+	transform: scale(1.04);
+}
+.statblock {
+	position: absolute;
+	left: -36px;
+	bottom: -36px;
+	background: var(--ink);
+	padding: 40px 44px;
+	display: none;
+}
+@media (min-width: 768px) {
+	.statblock {
+		display: block;
+	}
+}
+.statblock .num {
+	font-family: var(--serif);
+	color: var(--paper);
+	font-size: 50px;
+	font-weight: 400;
+	line-height: 1;
+}
+.statblock .lbl {
+	color: var(--paper-60);
+	font-size: 10px;
+	letter-spacing: 2.5px;
+	text-transform: uppercase;
+	margin-top: 12px;
+}
+
+/* ---- Disciplines ---- */
+.disc {
+	background: var(--stone);
+	padding: clamp(90px, 12vw, 160px) 0;
+}
+.disc__head {
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+	align-items: flex-start;
+	margin-bottom: 64px;
+}
+@media (min-width: 768px) {
+	.disc__head {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: flex-end;
+		gap: 48px;
+	}
+}
+.disc__head h2 {
+	font-family: var(--serif);
+	font-size: clamp(32px, 4.5vw, 54px);
+	font-weight: 400;
+	line-height: 1.06;
+	margin-top: 18px;
+}
+.disc__head h2 .it {
+	font-style: italic;
+	font-weight: 300;
+}
+.disc__head p {
+	max-width: 380px;
+	font-size: 14.5px;
+	color: var(--ink-68);
+	font-weight: 300;
+	line-height: 1.7;
+}
+.disc__grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 1px;
+	background: var(--line);
+	border: 1px solid var(--line);
+}
+@media (min-width: 640px) {
+	.disc__grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+@media (min-width: 1024px) {
+	.disc__grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+.card {
+	background: var(--paper);
+	padding: 48px 42px 44px;
+	cursor: default;
+	position: relative;
+	transition: background 0.5s var(--ease);
+	min-height: 280px;
+	display: flex;
+	flex-direction: column;
+}
+.card .idx {
+	font-family: var(--serif);
+	font-size: 15px;
+	color: var(--brass);
+	letter-spacing: 1px;
+	margin-bottom: auto;
+	transition:
+		transform 0.5s var(--ease),
+		color 0.5s var(--ease);
+}
+.card h3 {
+	font-family: var(--serif);
+	font-size: 26px;
+	font-weight: 400;
+	margin: 36px 0 16px;
+	transition: color 0.5s var(--ease);
+}
+.card p {
+	font-size: 14px;
+	color: var(--ink-68);
+	font-weight: 300;
+	line-height: 1.65;
+	margin-bottom: 24px;
+	transition: color 0.5s var(--ease);
+}
+.card .kl {
+	height: 1px;
+	width: 32px;
+	background: var(--ink);
+	transition:
+		width 0.5s var(--ease),
+		background 0.5s var(--ease);
+}
+.card:hover {
+	background: var(--ink);
+}
+.card:hover .idx {
+	color: var(--brass);
+	transform: translateX(6px);
+}
+.card:hover h3 {
+	color: var(--paper);
+}
+.card:hover p {
+	color: var(--paper-60);
+}
+.card:hover .kl {
+	background: var(--brass);
+	width: 56px;
+}
+
+/* ---- Method ---- */
+.method {
+	background: var(--paper);
+	padding: clamp(90px, 12vw, 150px) 0;
+}
+.method__head {
+	text-align: center;
+	margin-bottom: 72px;
+}
+.method__head h2 {
+	font-family: var(--serif);
+	font-size: clamp(30px, 4vw, 50px);
+	font-weight: 400;
+	margin-top: 18px;
+}
+.method__head h2 .it {
+	font-style: italic;
+	font-weight: 300;
+}
+.steps {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 48px;
+	position: relative;
+}
+@media (min-width: 768px) {
+	.steps {
+		grid-template-columns: repeat(3, 1fr);
+		gap: 0;
+	}
+}
+.step {
+	padding: 0 0 0 0;
+	position: relative;
+}
+@media (min-width: 768px) {
+	.step {
+		padding: 0 40px;
+		border-left: 1px solid var(--line);
+	}
+	.step:first-child {
+		border-left: 0;
+		padding-left: 0;
+	}
+}
+.step .n {
+	font-family: var(--serif);
+	font-size: 42px;
+	color: var(--brass);
+	font-weight: 300;
+	line-height: 1;
+	margin-bottom: 24px;
+}
+.step h3 {
+	font-family: var(--serif);
+	font-size: 24px;
+	font-weight: 400;
+	margin-bottom: 14px;
+}
+.step p {
+	font-size: 14.5px;
+	color: var(--ink-68);
+	font-weight: 300;
+	line-height: 1.7;
+	max-width: 320px;
+}
+
+/* ---- Contact ---- */
+.contact {
+	position: relative;
+	background: var(--ink);
+	color: var(--paper);
+	padding: clamp(90px, 12vw, 150px) 0;
+	overflow: hidden;
+}
+.contact__tex {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 46%;
+	height: 100%;
+	opacity: 0.14;
+	display: none;
+}
+@media (min-width: 1024px) {
+	.contact__tex {
+		display: block;
+	}
+}
+.contact__tex img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	filter: grayscale(0.3);
+}
+.contact__tex::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(90deg, var(--ink), transparent);
+}
+.contact__inner {
+	position: relative;
+	z-index: 2;
+	max-width: 560px;
+}
+.contact h2 {
+	font-family: var(--serif);
+	font-size: clamp(34px, 5vw, 64px);
+	line-height: 1.06;
+	font-weight: 400;
+	margin: 26px 0 24px;
+	letter-spacing: 1px;
+}
+.contact h2 .it {
+	font-style: italic;
+	font-weight: 300;
+	color: #e8d9c0;
+	display: block;
+	text-transform: lowercase;
+}
+.contact .lead {
+	color: var(--paper-60);
+	font-weight: 300;
+	font-size: 18px;
+	line-height: 1.7;
+	margin-bottom: 48px;
+	max-width: 440px;
+}
+.form {
+	max-width: 440px;
+	display: flex;
+	flex-direction: column;
+	gap: 26px;
+}
+.field {
+	border-bottom: 1px solid var(--line-w);
+	padding-bottom: 11px;
+}
+.field input,
+.field select {
+	width: 100%;
+	background: transparent;
+	border: 0;
+	color: var(--paper);
+	font-family: var(--sans);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 2px;
+	text-transform: uppercase;
+}
+.field input::placeholder {
+	color: rgba(251, 250, 247, 0.34);
+}
+.field input:focus,
+.field select:focus {
+	outline: none;
+}
+.field select {
+	cursor: pointer;
+}
+.field select option {
+	background: var(--ink);
+	color: var(--paper);
+	letter-spacing: normal;
+	text-transform: none;
+}
+.form .btn {
+	margin-top: 14px;
+}
+.form__ok {
+	font-size: 13px;
+	color: #e8d9c0;
+	font-weight: 300;
+	letter-spacing: 0.4px;
+	display: none;
+	margin-top: 18px;
+}
+.form__ok.show {
+	display: block;
+	animation: rise 0.7s var(--ease) forwards;
+}
+
+/* ---- Footer ---- */
+.footer {
+	background: var(--ink);
+	color: var(--paper);
+	padding: clamp(70px, 10vw, 110px) 0 40px;
+}
+.footer__grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 48px;
+	margin-bottom: 80px;
+}
+@media (min-width: 768px) {
+	.footer__grid {
+		grid-template-columns: 2fr 1fr 1fr;
+		gap: 64px;
+	}
+}
+.footer__brand h3 {
+	font-family: var(--sans);
+	font-weight: 600;
+	letter-spacing: 4px;
+	text-transform: uppercase;
+	font-size: 15px;
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	margin-bottom: 22px;
+}
+.footer__brand p {
+	color: var(--paper-60);
+	font-weight: 300;
+	line-height: 1.7;
+	max-width: 420px;
+	font-size: 15px;
+}
+.footer__col h4 {
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 2.5px;
+	text-transform: uppercase;
+	margin-bottom: 22px;
+	color: var(--paper);
+}
+.footer__col ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.footer__col li,
+.footer__col a {
+	color: var(--paper-60);
+	font-size: 14px;
+	font-weight: 300;
+	transition: color 0.25s ease;
+}
+.footer__col a:hover {
+	color: var(--paper);
+}
+.footer__bar {
+	border-top: 1px solid var(--line-w);
+	padding-top: 28px;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	align-items: center;
+	justify-content: space-between;
+}
+@media (min-width: 640px) {
+	.footer__bar {
+		flex-direction: row;
+	}
+}
+.footer__bar p,
+.footer__bar a {
+	font-size: 10px;
+	letter-spacing: 2px;
+	text-transform: uppercase;
+	color: rgba(251, 250, 247, 0.4);
+}
+.footer__bar a:hover {
+	color: var(--paper);
+}
+.footer__links {
+	display: flex;
+	gap: 32px;
+}
+
+/* ---- Reveal ---- */
+[data-reveal] {
+	opacity: 0;
+	transform: translateY(30px);
+	transition:
+		opacity 1.2s var(--ease),
+		transform 1.2s var(--ease);
+	will-change: transform, opacity;
+}
+[data-reveal].sl {
+	transform: translateX(-22px);
+}
+[data-reveal].sr {
+	transform: translateX(22px);
+}
+[data-reveal].zo {
+	transform: scale(0.97) translateY(12px);
+}
+[data-reveal].in {
+	opacity: 1;
+	transform: none;
+}
+[data-reveal][data-d="1"] {
+	transition-delay: 0.1s;
+}
+[data-reveal][data-d="2"] {
+	transition-delay: 0.2s;
+}
+[data-reveal][data-d="3"] {
+	transition-delay: 0.3s;
+}
+[data-reveal][data-d="4"] {
+	transition-delay: 0.4s;
+}
+[data-reveal][data-d="5"] {
+	transition-delay: 0.5s;
+}
+
+/* ---- Keyframes ---- */
+@keyframes fadeIn {
+	to {
+		opacity: 1;
+	}
+}
+@keyframes slideInPanel {
+	from {
+		transform: translateX(102%);
+	}
+	to {
+		transform: translateX(0);
+	}
+}
+@keyframes rise {
+	from {
+		opacity: 0;
+		transform: translateY(26px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+@keyframes scrollx {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
+}
+@keyframes cue {
+	0% {
+		top: -100%;
+	}
+	60%,
+	100% {
+		top: 100%;
+	}
+}
+
+/* ---- Reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	::after {
+		animation: none;
+		transition: none;
+	}
+	.hero__panel {
+		transform: none;
+	}
+	.hero__photo img {
+		opacity: 1;
+	}
+	.hero [data-stagger],
+	[data-reveal] {
+		opacity: 1;
+		transform: none;
+	}
+	html {
+		scroll-behavior: auto;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<header class="header over-dark" id="header">
+			<nav class="nav">
+				<a href="#top" class="wordmark"
+					><span class="diamond"></span>Meridian</a
+				>
+				<div class="nav-mid">
+					<a href="#philosophy" class="nav-link">Method</a>
+					<a href="#disciplines" class="nav-link">Disciplines</a>
+					<a href="#method" class="nav-link">Philosophy</a>
+				</div>
+				<a href="#contact" class="book">Book Consultation</a>
+			</nav>
+		</header>
+
+		<main id="top">
+			<!-- HERO -->
+			<section class="hero" id="hero">
+				<div class="hero__photo">
+					<img src="assets/hero.jpg" alt="Meridian clinical architecture">
+				</div>
+				<div class="hero__grid">
+					<div class="hero__spacer"></div>
+					<div class="hero__panel">
+						<div class="hero__inner">
+							<span class="keyline" data-stagger></span>
+							<h1 data-stagger>
+								<span class="l1">Bespoke</span>
+								<span class="l2">longevity</span>
+							</h1>
+							<p class="lead" data-stagger>
+								Where architectural precision meets clinical excellence. A
+								private practice engineering your health for the decades ahead —
+								measured, personal, exacting.
+							</p>
+							<div class="hero__cta" data-stagger>
+								<a href="#disciplines" class="btn btn--solid"
+									>Our Disciplines</a
+								>
+								<a href="#contact" class="btn btn--ghost"
+									>Speak to a Specialist</a
+								>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="scrollcue">
+					<span>Scroll</span><span class="bar"></span>
+				</div>
+			</section>
+
+			<!-- MARQUEE -->
+			<div class="marquee" aria-hidden="true">
+				<div class="marquee__track" id="marquee">
+					<!-- filled by JS for seamless loop -->
+				</div>
+			</div>
+
+			<!-- PHILOSOPHY -->
+			<section class="philosophy" id="philosophy">
+				<div class="shell">
+					<div class="philo__grid">
+						<div class="philo__copy sl" data-reveal>
+							<p class="eyebrow">The Meridian Standard</p>
+							<h2>
+								Precision care,<span class="it">architecturally defined.</span>
+							</h2>
+							<span class="rule"></span>
+							<p class="body">
+								We believe medicine should be as precise as structural
+								engineering and as personal as a bespoke suit. We remove the
+								industrial noise of modern care to focus on what compounds over
+								a lifetime: clarity, expertise, and measurable outcomes.
+							</p>
+							<ul class="feat">
+								<li>
+									<span class="tick"></span>
+									<div>
+										<h4>Evidence-Based Precision</h4>
+										<p>
+											Molecular diagnostics and whole-genome sequencing inform
+											every protocol we draw.
+										</p>
+									</div>
+								</li>
+								<li>
+									<span class="tick"></span>
+									<div>
+										<h4>Human-Centric Architecture</h4>
+										<p>
+											Calm, considered environments designed to lower cortisol
+											and support cellular repair.
+										</p>
+									</div>
+								</li>
+							</ul>
+						</div>
+						<div class="philo__media sr" data-reveal>
+							<div class="frame">
+								<img src="assets/portrait.jpg" alt="Meridian specialist">
+							</div>
+							<div class="statblock zo" data-reveal>
+								<div class="num">25+</div>
+								<div class="lbl">Years of Clinical Excellence</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- DISCIPLINES -->
+			<section class="disc" id="disciplines">
+				<div class="shell">
+					<div class="disc__head">
+						<div data-reveal>
+							<p class="eyebrow">Areas of Excellence</p>
+							<h2>Clinical <span class="it">disciplines</span></h2>
+						</div>
+						<p data-reveal data-d="1">
+							A multidisciplinary practice, so that complex health questions are
+							answered through one unified lens of expertise — never in
+							fragments.
+						</p>
+					</div>
+					<div class="disc__grid">
+						<div class="card" data-reveal>
+							<span class="idx">01</span>
+							<h3>Cardiology</h3>
+							<p>
+								Advanced cardiovascular diagnostics and minimally invasive
+								structural heart care.
+							</p>
+							<span class="kl"></span>
+						</div>
+						<div class="card" data-reveal data-d="1">
+							<span class="idx">02</span>
+							<h3>Neurology</h3>
+							<p>
+								Care for complex neurological conditions and long-horizon
+								cognitive resilience.
+							</p>
+							<span class="kl"></span>
+						</div>
+						<div class="card" data-reveal data-d="2">
+							<span class="idx">03</span>
+							<h3>Precision Oncology</h3>
+							<p>
+								Genomic-guided, target-led therapy planning built for durable,
+								resilient outcomes.
+							</p>
+							<span class="kl"></span>
+						</div>
+						<div class="card" data-reveal>
+							<span class="idx">04</span>
+							<h3>Internal Medicine</h3>
+							<p>
+								Whole-person management of adult health with a preventative,
+								architectural focus.
+							</p>
+							<span class="kl"></span>
+						</div>
+						<div class="card" data-reveal data-d="1">
+							<span class="idx">05</span>
+							<h3>Diagnostics</h3>
+							<p>
+								World-class imaging and laboratory science forming the
+								foundation of every plan.
+							</p>
+							<span class="kl"></span>
+						</div>
+						<div class="card" data-reveal data-d="2">
+							<span class="idx">06</span>
+							<h3>Executive Health</h3>
+							<p>
+								Optimization protocols tailored to high-performance leaders and
+								demanding lives.
+							</p>
+							<span class="kl"></span>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- METHOD -->
+			<section class="method" id="method">
+				<div class="shell">
+					<div class="method__head" data-reveal>
+						<p class="eyebrow">The Practice</p>
+						<h2>A method, <span class="it">not a menu.</span></h2>
+					</div>
+					<div class="steps">
+						<div class="step" data-reveal>
+							<div class="n">I</div>
+							<h3>Assess</h3>
+							<p>
+								A complete biological portrait — genomic, metabolic, structural
+								— read with surgical attention.
+							</p>
+						</div>
+						<div class="step" data-reveal data-d="1">
+							<div class="n">II</div>
+							<h3>Architect</h3>
+							<p>
+								A single, coherent health blueprint drawn for your body and the
+								decades in front of it.
+							</p>
+						</div>
+						<div class="step" data-reveal data-d="2">
+							<div class="n">III</div>
+							<h3>Accompany</h3>
+							<p>
+								Concierge follow-through, recalibrated continuously as your data
+								and your life evolve.
+							</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- CONTACT -->
+			<section class="contact" id="contact">
+				<div class="contact__tex" aria-hidden="true">
+					<img src="assets/texture.jpg" alt="">
+				</div>
+				<div class="shell">
+					<div class="contact__inner">
+						<span class="keyline" data-reveal></span>
+						<h2 data-reveal data-d="1">
+							Begin your <span class="it">meridian</span>
+						</h2>
+						<p class="lead" data-reveal data-d="2">
+							Schedule a private consultation with our concierge team to discuss
+							your health objectives.
+						</p>
+						<form class="form" id="form" data-reveal data-d="3" novalidate>
+							<div class="field">
+								<input type="text" name="name" placeholder="Full Name" required>
+							</div>
+							<div class="field">
+								<input
+									type="email"
+									name="email"
+									placeholder="Email Address"
+									required
+								>
+							</div>
+							<div class="field">
+								<select name="discipline" required>
+									<option value="">Select Discipline</option>
+									<option>Cardiology</option>
+									<option>Neurology</option>
+									<option>Precision Oncology</option>
+									<option>Internal Medicine</option>
+									<option>Executive Health</option>
+								</select>
+							</div>
+							<button type="submit" class="btn btn--solid">
+								Request Appointment
+							</button>
+							<p class="form__ok" id="formOk">
+								Thank you. A Meridian concierge will be in touch within one
+								business day.
+							</p>
+						</form>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<footer class="footer">
+			<div class="shell">
+				<div class="footer__grid">
+					<div class="footer__brand">
+						<h3><span class="diamond"></span>Meridian</h3>
+						<p>
+							Redefining medical excellence through precision diagnostics and
+							bespoke care. A commitment to architectural clarity in health — so
+							your wellbeing is the only thing in focus.
+						</p>
+					</div>
+					<div class="footer__col">
+						<h4>Practice</h4>
+						<ul>
+							<li><a href="#disciplines">Executive Health</a></li>
+							<li><a href="#disciplines">Precision Oncology</a></li>
+							<li><a href="#disciplines">Cardiovascular Care</a></li>
+							<li><a href="#disciplines">Neurological Science</a></li>
+						</ul>
+					</div>
+					<div class="footer__col">
+						<h4>Contact</h4>
+						<ul>
+							<li>1200 Avenue of Excellence, NY</li>
+							<li>+1 (555) 900-6300</li>
+							<li>concierge@meridianclinic.com</li>
+						</ul>
+					</div>
+				</div>
+				<div class="footer__bar">
+					<p>© 2026 Meridian Medical Group · All Rights Reserved</p>
+					<div class="footer__links">
+						<a href="#">Privacy Policy</a>
+						<a href="#">Terms of Service</a>
+					</div>
+				</div>
+			</div>
+		</footer>
+
+		<script>
+/* ===== MERIDIAN — interactions ===== */
+(() => {
+	var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	/* ---- Header: solid + over-dark state ---- */
+	var header = document.getElementById("header");
+	var hero = document.getElementById("hero");
+
+	function onScroll() {
+		var y = window.scrollY || window.pageYOffset;
+		if (y > 50) header.classList.add("solid");
+		else header.classList.remove("solid");
+
+		// header sits over the dark hero panel only while the hero is in view
+		var hb = hero ? hero.getBoundingClientRect().bottom : 0;
+		if (hb > 80) header.classList.add("over-dark");
+		else header.classList.remove("over-dark");
+	}
+	window.addEventListener("scroll", onScroll, { passive: true });
+	onScroll();
+
+	/* ---- Marquee: build a seamless, duplicated track ---- */
+	var phrases = [
+		"Genomic Sequencing",
+		"Advanced Imaging",
+		"Longevity Science",
+		"Executive Physicals",
+		"Molecular Diagnostics",
+		"Concierge Care",
+	];
+	var track = document.getElementById("marquee");
+	if (track) {
+		var one = document.createElement("span");
+		one.className = "marquee__set";
+		one.style.display = "flex";
+		phrases.forEach((p) => {
+			var item = document.createElement("span");
+			item.className = "marquee__item";
+			item.innerHTML = `${p}<span class="diamond"></span>`;
+			one.appendChild(item);
+		});
+		track.appendChild(one);
+		track.appendChild(one.cloneNode(true)); // duplicate for -50% loop
+	}
+
+	/* ---- Scroll reveal ---- */
+	var reveals = Array.prototype.slice.call(
+		document.querySelectorAll("[data-reveal]"),
+	);
+	if (reduced || !("IntersectionObserver" in window)) {
+		reveals.forEach((el) => {
+			el.classList.add("in");
+		});
+	} else {
+		var io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((e) => {
+					if (e.isIntersecting) {
+						e.target.classList.add("in");
+						io.unobserve(e.target);
+					}
+				});
+			},
+			{ threshold: 0.12, rootMargin: "0px 0px -6% 0px" },
+		);
+		reveals.forEach((el) => {
+			io.observe(el);
+		});
+	}
+
+	/* ---- Smooth anchor scrolling ---- */
+	document.querySelectorAll('a[href^="#"]').forEach((a) => {
+		a.addEventListener("click", (ev) => {
+			var id = a.getAttribute("href");
+			if (id === "#" || id.length < 2) return;
+			var target = document.querySelector(id);
+			if (!target) return;
+			ev.preventDefault();
+			var top = target.getBoundingClientRect().top + window.pageYOffset - 4;
+			window.scrollTo({ top: top, behavior: reduced ? "auto" : "smooth" });
+		});
+	});
+
+	/* ---- Form ---- */
+	var form = document.getElementById("form");
+	var ok = document.getElementById("formOk");
+	if (form) {
+		form.addEventListener("submit", (ev) => {
+			ev.preventDefault();
+			var name = form.querySelector('[name="name"]').value.trim();
+			var email = form.querySelector('[name="email"]').value.trim();
+			var disc = form.querySelector('[name="discipline"]').value;
+			if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !disc) {
+				ok.textContent = "Please complete every field with a valid email.";
+				ok.style.color = "#E0A8A0";
+				ok.classList.add("show");
+				return;
+			}
+			ok.textContent =
+				"Thank you, " +
+				name.split(" ")[0] +
+				". A Meridian concierge will be in touch within one business day.";
+			ok.style.color = "#E8D9C0";
+			ok.classList.add("show");
+			form.reset();
+		});
+	}
+})();
+
+		</script>
+	</body>
+</html>

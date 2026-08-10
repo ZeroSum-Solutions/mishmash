@@ -1,0 +1,2443 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Wayfare — Field-Tested Expeditions</title>
+		<meta
+			name="description"
+			content="Wayfare designs boutique, field-tested expeditions to the edges of the map. Plan a trip led by people who live there."
+		>
+		<style>
+/* ============ WAYFARE — EXPEDITION JOURNAL ============ */
+
+/* ---------- Fonts ---------- */
+
+
+
+
+
+
+
+
+
+/* ---------- Tokens ---------- */
+:root {
+	--paper: #f4efe6;
+	--paper-2: #ede6d8;
+	--ink: #1e1b16;
+	--clay: #c2603a;
+	--clay-dark: #a44d2c;
+	--moss: #3f5141;
+	--ochre: #c9a24b;
+	--sub: #6f665a;
+	--hair: rgba(30, 27, 22, 0.14);
+	--hair-2: rgba(30, 27, 22, 0.08);
+	--serif: "Fraunces", Georgia, serif;
+	--sans: "Inter Tight", system-ui, sans-serif;
+	--maxw: 1240px;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+html {
+	scroll-behavior: smooth;
+	-webkit-text-size-adjust: 100%;
+}
+body {
+	font-family: var(--sans);
+	background: var(--paper);
+	color: var(--ink);
+	line-height: 1.55;
+	overflow-x: hidden;
+	-webkit-font-smoothing: antialiased;
+}
+img {
+	display: block;
+	max-width: 100%;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+button {
+	font-family: inherit;
+	cursor: pointer;
+	border: none;
+	background: none;
+}
+:focus-visible {
+	outline: 2px solid var(--clay);
+	outline-offset: 3px;
+	border-radius: 2px;
+}
+
+.wrap {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 0 28px;
+}
+
+/* paper grain */
+body::before {
+	content: "";
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	pointer-events: none;
+	opacity: 0.04;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- Shared bits ---------- */
+.eyebrow {
+	font-size: 11.5px;
+	font-weight: 600;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	color: var(--clay);
+	display: inline-flex;
+	align-items: center;
+	gap: 9px;
+}
+.eyebrow::before {
+	content: "";
+	width: 22px;
+	height: 1px;
+	background: var(--clay);
+	display: inline-block;
+}
+.eyebrow.moss {
+	color: var(--moss);
+}
+.eyebrow.moss::before {
+	background: var(--moss);
+}
+
+.serif {
+	font-family: var(--serif);
+}
+.italic {
+	font-family: var(--serif);
+	font-style: italic;
+	font-weight: 500;
+}
+.clay {
+	color: var(--clay);
+}
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	font-weight: 500;
+	font-size: 15px;
+	padding: 14px 26px;
+	border-radius: 100px;
+	transition: 0.28s ease;
+	white-space: nowrap;
+}
+.btn-solid {
+	background: var(--clay);
+	color: var(--paper);
+}
+.btn-solid:hover {
+	background: var(--clay-dark);
+	transform: translateY(-2px);
+	box-shadow: 0 12px 26px -10px rgba(194, 96, 58, 0.7);
+}
+.btn-ghost {
+	border: 1px solid var(--hair);
+	color: var(--ink);
+}
+.btn-ghost:hover {
+	background: var(--ink);
+	color: var(--paper);
+	transform: translateY(-2px);
+}
+.btn .arr {
+	transition: transform 0.28s ease;
+}
+.btn:hover .arr {
+	transform: translateX(4px);
+}
+
+.section {
+	padding: 110px 0;
+}
+.lead {
+	font-size: 18px;
+	color: var(--sub);
+	max-width: 54ch;
+	line-height: 1.65;
+}
+
+/* corner ticks decoration */
+.frame {
+	position: relative;
+}
+.frame::before,
+.frame::after {
+	content: "";
+	position: absolute;
+	width: 18px;
+	height: 18px;
+	z-index: 2;
+	pointer-events: none;
+}
+.frame::before {
+	top: -7px;
+	left: -7px;
+	border-top: 1.5px solid var(--clay);
+	border-left: 1.5px solid var(--clay);
+}
+.frame::after {
+	bottom: -7px;
+	right: -7px;
+	border-bottom: 1.5px solid var(--clay);
+	border-right: 1.5px solid var(--clay);
+}
+
+/* reveal */
+[data-reveal] {
+	opacity: 0;
+	transform: translateY(26px);
+	transition:
+		opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+		transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-reveal].in {
+	opacity: 1;
+	transform: none;
+}
+
+/* ================= NAV ================= */
+.nav {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	z-index: 100;
+	transition: 0.35s ease;
+	padding: 22px 0;
+}
+.nav.scrolled {
+	background: rgba(244, 239, 230, 0.82);
+	backdrop-filter: blur(14px);
+	border-bottom: 1px solid var(--hair);
+	padding: 14px 0;
+	box-shadow: 0 8px 30px -20px rgba(30, 27, 22, 0.4);
+}
+.nav-in {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 24px;
+}
+.brand {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-family: var(--serif);
+	font-weight: 900;
+	font-size: 23px;
+	letter-spacing: -0.01em;
+	color: var(--paper);
+	transition: color 0.35s;
+}
+.nav.scrolled .brand {
+	color: var(--ink);
+}
+.brand .star {
+	width: 22px;
+	height: 22px;
+	color: var(--clay);
+	flex: none;
+}
+.nav-links {
+	display: flex;
+	gap: 30px;
+	font-size: 14.5px;
+	font-weight: 400;
+	color: rgba(244, 239, 230, 0.9);
+	transition: color 0.35s;
+}
+.nav.scrolled .nav-links {
+	color: var(--sub);
+}
+.nav-links a {
+	position: relative;
+	padding: 4px 0;
+	transition: color 0.2s;
+}
+.nav-links a::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	bottom: -2px;
+	width: 0;
+	height: 1.5px;
+	background: var(--clay);
+	transition: width 0.26s ease;
+}
+.nav-links a:hover {
+	color: var(--clay);
+}
+.nav-links a:hover::after {
+	width: 100%;
+}
+.nav-cta {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
+.nav-signin {
+	font-size: 14.5px;
+	color: rgba(244, 239, 230, 0.9);
+	transition: color 0.35s;
+}
+.nav.scrolled .nav-signin {
+	color: var(--ink);
+}
+.nav-signin:hover {
+	color: var(--clay);
+}
+.nav-pill {
+	background: var(--clay);
+	color: var(--paper);
+	padding: 10px 20px;
+	border-radius: 100px;
+	font-size: 14px;
+	font-weight: 500;
+	transition: 0.25s;
+}
+.nav-pill:hover {
+	background: var(--clay-dark);
+	transform: translateY(-1px);
+}
+.burger {
+	display: none;
+	color: var(--paper);
+}
+.nav.scrolled .burger {
+	color: var(--ink);
+}
+.burger svg {
+	width: 26px;
+	height: 26px;
+}
+
+/* mobile sheet */
+.sheet {
+	position: fixed;
+	inset: 0;
+	z-index: 120;
+	background: var(--ink);
+	color: var(--paper);
+	display: flex;
+	flex-direction: column;
+	padding: 30px 28px;
+	transform: translateY(-100%);
+	transition: transform 0.4s cubic-bezier(0.7, 0, 0.2, 1);
+	visibility: hidden;
+}
+.sheet.open {
+	transform: none;
+	visibility: visible;
+}
+.sheet-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 50px;
+}
+.sheet-top .brand {
+	color: var(--paper);
+}
+.sheet-x {
+	color: var(--paper);
+}
+.sheet-x svg {
+	width: 28px;
+	height: 28px;
+}
+.sheet a.m-link {
+	font-family: var(--serif);
+	font-size: 38px;
+	font-weight: 600;
+	padding: 14px 0;
+	border-bottom: 1px solid rgba(244, 239, 230, 0.12);
+}
+.sheet a.m-link .clay {
+	color: var(--clay);
+}
+.sheet-bottom {
+	margin-top: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+/* ================= HERO ================= */
+.hero {
+	position: relative;
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	padding: 140px 0 70px;
+	background: var(--ink);
+	overflow: hidden;
+}
+.hero-bg {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+}
+.hero-bg img {
+	width: 100%;
+	height: 120%;
+	object-fit: cover;
+	opacity: 0.42;
+	will-change: transform;
+}
+.hero-bg::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background:
+		linear-gradient(
+			180deg,
+			rgba(30, 27, 22, 0.5) 0%,
+			rgba(30, 27, 22, 0.2) 35%,
+			rgba(30, 27, 22, 0.85) 100%
+		),
+		radial-gradient(
+			60% 60% at 80% 30%,
+			rgba(194, 96, 58, 0.14),
+			transparent 70%
+		);
+}
+.hero-in {
+	position: relative;
+	z-index: 2;
+	width: 100%;
+	display: grid;
+	grid-template-columns: 1.15fr 0.85fr;
+	gap: 60px;
+	align-items: center;
+	color: var(--paper);
+}
+.hero-eye {
+	color: var(--ochre);
+}
+.hero-eye::before {
+	background: var(--ochre);
+}
+.hero h1 {
+	font-family: var(--serif);
+	font-weight: 900;
+	font-size: clamp(48px, 6.6vw, 92px);
+	line-height: 1.02;
+	letter-spacing: -0.018em;
+	margin: 22px 0 24px;
+}
+.hero h1 .it {
+	color: var(--ochre);
+}
+.hero p.sub {
+	font-size: 18.5px;
+	color: rgba(244, 239, 230, 0.78);
+	max-width: 46ch;
+	line-height: 1.62;
+	margin-bottom: 34px;
+}
+.hero-actions {
+	display: flex;
+	gap: 14px;
+	flex-wrap: wrap;
+}
+.hero .btn-ghost {
+	border-color: rgba(244, 239, 230, 0.34);
+	color: var(--paper);
+}
+.hero .btn-ghost:hover {
+	background: var(--paper);
+	color: var(--ink);
+}
+.play {
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	background: var(--clay);
+	display: grid;
+	place-items: center;
+	color: var(--paper);
+}
+.play svg {
+	width: 13px;
+	height: 13px;
+	margin-left: 1px;
+}
+
+/* hero photo + finder */
+.hero-right {
+	display: flex;
+	flex-direction: column;
+	gap: 26px;
+}
+.hero-photo {
+	position: relative;
+}
+.hero-photo .ph {
+	border-radius: 18px;
+	overflow: hidden;
+	height: 340px;
+	box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.7);
+}
+.hero-photo .ph img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.coord-tag {
+	position: absolute;
+	left: 14px;
+	bottom: 14px;
+	background: var(--paper);
+	color: var(--ink);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	padding: 8px 12px;
+	border-radius: 8px;
+	font-variant-numeric: tabular-nums;
+	box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.6);
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+.coord-tag .dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--clay);
+}
+.stamp {
+	position: absolute;
+	top: -14px;
+	right: -12px;
+	width: 84px;
+	height: 84px;
+	border-radius: 50%;
+	background: var(--clay);
+	color: var(--paper);
+	display: grid;
+	place-items: center;
+	text-align: center;
+	font-size: 9px;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	line-height: 1.35;
+	transform: rotate(-12deg);
+	border: 2px dashed rgba(244, 239, 230, 0.55);
+	box-shadow: 0 14px 30px -14px rgba(0, 0, 0, 0.6);
+}
+
+.finder {
+	background: var(--paper);
+	color: var(--ink);
+	border-radius: 18px;
+	padding: 20px;
+	box-shadow: 0 30px 70px -28px rgba(0, 0, 0, 0.7);
+}
+.finder h3 {
+	font-family: var(--serif);
+	font-weight: 600;
+	font-size: 17px;
+	margin-bottom: 3px;
+}
+.finder p {
+	font-size: 12.5px;
+	color: var(--sub);
+	margin-bottom: 16px;
+}
+.finder-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 10px;
+	margin-bottom: 12px;
+}
+.fld {
+	background: var(--paper-2);
+	border: 1px solid var(--hair-2);
+	border-radius: 11px;
+	padding: 9px 12px;
+	transition: border-color 0.2s;
+}
+.fld:focus-within {
+	border-color: var(--clay);
+}
+.fld label {
+	display: block;
+	font-size: 9.5px;
+	font-weight: 600;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--sub);
+	margin-bottom: 3px;
+}
+.fld input,
+.fld select {
+	width: 100%;
+	background: none;
+	border: none;
+	font-family: inherit;
+	font-size: 13.5px;
+	color: var(--ink);
+	outline: none;
+}
+.fld select {
+	cursor: pointer;
+	-webkit-appearance: none;
+	appearance: none;
+}
+.finder-btn {
+	width: 100%;
+	background: var(--ink);
+	color: var(--paper);
+	padding: 13px;
+	border-radius: 11px;
+	font-weight: 500;
+	font-size: 14.5px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 9px;
+	transition: 0.25s;
+}
+.finder-btn:hover {
+	background: var(--clay);
+}
+.finder-btn .arr {
+	transition: transform 0.25s;
+}
+.finder-btn:hover .arr {
+	transform: translateX(4px);
+}
+
+/* scroll hint */
+.scroll-hint {
+	position: absolute;
+	left: 50%;
+	bottom: 26px;
+	transform: translateX(-50%);
+	z-index: 3;
+	color: rgba(244, 239, 230, 0.6);
+	font-size: 10.5px;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+}
+.scroll-hint .line {
+	width: 1px;
+	height: 40px;
+	background: linear-gradient(var(--ochre), transparent);
+	animation: drop 2s ease-in-out infinite;
+}
+@keyframes drop {
+	0%,
+	100% {
+		opacity: 0.3;
+		transform: scaleY(0.6);
+	}
+	50% {
+		opacity: 1;
+		transform: scaleY(1);
+	}
+}
+
+/* ================= MARQUEE ================= */
+.marquee-sec {
+	padding: 42px 0;
+	border-bottom: 1px solid var(--hair);
+	background: var(--paper);
+}
+.marquee-lbl {
+	text-align: center;
+	font-size: 11px;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	color: var(--sub);
+	margin-bottom: 24px;
+}
+.marquee {
+	overflow: hidden;
+	-webkit-mask-image: linear-gradient(
+		90deg,
+		transparent,
+		#000 12%,
+		#000 88%,
+		transparent
+	);
+	mask-image: linear-gradient(
+		90deg,
+		transparent,
+		#000 12%,
+		#000 88%,
+		transparent
+	);
+}
+.marquee-track {
+	display: flex;
+	width: max-content;
+	animation: slide 34s linear infinite;
+}
+.marquee-sec:hover .marquee-track {
+	animation-play-state: paused;
+}
+.marquee-track .item {
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	margin: 0 38px;
+	font-family: var(--serif);
+	font-weight: 600;
+	font-size: 21px;
+	color: var(--ink);
+	opacity: 0.45;
+	transition: opacity 0.3s;
+}
+.marquee-track .item:hover {
+	opacity: 0.9;
+}
+.marquee-track .item .g {
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	border: 1.5px solid var(--ink);
+	display: grid;
+	place-items: center;
+	font-size: 13px;
+	font-family: var(--sans);
+	font-weight: 600;
+}
+@keyframes slide {
+	to {
+		transform: translateX(-50%);
+	}
+}
+
+/* ================= MANIFESTO ================= */
+.manifesto {
+	display: grid;
+	grid-template-columns: 1.05fr 0.95fr;
+	gap: 64px;
+	align-items: center;
+}
+.manifesto h2 {
+	font-family: var(--serif);
+	font-weight: 900;
+	font-size: clamp(34px, 4.4vw, 58px);
+	line-height: 1.05;
+	letter-spacing: -0.018em;
+	margin: 20px 0 22px;
+}
+.manifesto .mimg {
+	position: relative;
+}
+.manifesto .mimg .inner {
+	border: 1px dashed var(--hair);
+	padding: 12px;
+	border-radius: 20px;
+}
+.manifesto .mimg img {
+	border-radius: 13px;
+	height: 440px;
+	width: 100%;
+	object-fit: cover;
+}
+.manifesto .badge {
+	position: absolute;
+	left: -12px;
+	top: 24px;
+	background: var(--moss);
+	color: var(--paper);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	padding: 9px 15px;
+	border-radius: 9px;
+	box-shadow: 0 14px 30px -14px rgba(0, 0, 0, 0.4);
+}
+
+/* stats */
+.stats {
+	margin-top: 88px;
+	padding-top: 46px;
+	border-top: 1px solid var(--hair);
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 30px;
+}
+.stat .num {
+	font-family: var(--serif);
+	font-weight: 900;
+	font-size: clamp(38px, 4.4vw, 56px);
+	line-height: 1;
+	letter-spacing: -0.02em;
+	font-variant-numeric: tabular-nums;
+}
+.stat .num .suf {
+	color: var(--clay);
+}
+.stat .cap {
+	font-size: 12px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--sub);
+	margin-top: 10px;
+	max-width: 18ch;
+}
+
+/* ================= EXPEDITIONS ================= */
+.exp-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	gap: 30px;
+	flex-wrap: wrap;
+	margin-bottom: 30px;
+}
+.exp-head h2 {
+	font-family: var(--serif);
+	font-weight: 900;
+	font-size: clamp(34px, 4.2vw, 54px);
+	line-height: 1.04;
+	letter-spacing: -0.018em;
+	margin-top: 18px;
+}
+.chips {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin-bottom: 42px;
+}
+.chip {
+	padding: 9px 19px;
+	border: 1px solid var(--hair);
+	border-radius: 100px;
+	font-size: 13.5px;
+	font-weight: 500;
+	color: var(--sub);
+	transition: 0.22s;
+}
+.chip:hover {
+	border-color: var(--ink);
+	color: var(--ink);
+}
+.chip.active {
+	background: var(--clay);
+	border-color: var(--clay);
+	color: var(--paper);
+}
+.exp-grid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 26px;
+}
+.card {
+	transition:
+		opacity 0.45s ease,
+		transform 0.45s ease;
+}
+.card.hide {
+	display: none;
+}
+.card.fade {
+	opacity: 0;
+	transform: scale(0.96);
+}
+.card .media {
+	position: relative;
+	border-radius: 15px;
+	overflow: hidden;
+	height: 300px;
+	margin-bottom: 16px;
+}
+.card .media img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card:hover .media img {
+	transform: scale(1.08);
+}
+.region {
+	position: absolute;
+	top: 12px;
+	left: 12px;
+	background: rgba(244, 239, 230, 0.92);
+	color: var(--ink);
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	padding: 6px 11px;
+	border-radius: 7px;
+}
+.card .tick {
+	position: absolute;
+	bottom: 10px;
+	right: 12px;
+	color: var(--paper);
+	font-size: 10px;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	opacity: 0.8;
+}
+.card h3 {
+	font-family: var(--serif);
+	font-weight: 600;
+	font-size: 21px;
+	line-height: 1.15;
+	margin-bottom: 6px;
+}
+.route {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13.5px;
+	color: var(--sub);
+	margin-bottom: 12px;
+}
+.route svg {
+	width: 15px;
+	height: 15px;
+	color: var(--clay);
+	flex: none;
+}
+.meta {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 12.5px;
+	color: var(--sub);
+	padding-bottom: 13px;
+	border-bottom: 1px solid var(--hair);
+	margin-bottom: 13px;
+}
+.meta .d {
+	width: 4px;
+	height: 4px;
+	border-radius: 50%;
+	background: var(--ochre);
+}
+.card-foot {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+.price {
+	font-family: var(--serif);
+	font-weight: 600;
+	font-size: 19px;
+}
+.price small {
+	font-family: var(--sans);
+	font-weight: 400;
+	font-size: 11.5px;
+	color: var(--sub);
+}
+.viewroute {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--clay);
+}
+.viewroute .arr {
+	transition: transform 0.25s;
+}
+.viewroute:hover .arr {
+	transform: translateX(4px);
+}
+
+/* ================= HOW ================= */
+.how {
+	background: var(--paper-2);
+}
+.how-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 24px;
+	margin-top: 48px;
+}
+.step {
+	background: var(--paper);
+	border: 1px solid var(--hair);
+	border-radius: 18px;
+	padding: 34px;
+	position: relative;
+	transition: 0.3s;
+}
+.step:hover {
+	transform: translateY(-5px);
+	box-shadow: 0 26px 50px -28px rgba(30, 27, 22, 0.4);
+}
+.step .no {
+	font-family: var(--serif);
+	font-weight: 900;
+	font-size: 15px;
+	color: var(--clay);
+	letter-spacing: 0.05em;
+}
+.step .ic {
+	width: 50px;
+	height: 50px;
+	border-radius: 13px;
+	background: var(--ink);
+	color: var(--paper);
+	display: grid;
+	place-items: center;
+	margin: 18px 0 22px;
+}
+.step .ic svg {
+	width: 24px;
+	height: 24px;
+}
+.step h3 {
+	font-family: var(--serif);
+	font-weight: 600;
+	font-size: 23px;
+	margin-bottom: 10px;
+}
+.step p {
+	font-size: 14.5px;
+	color: var(--sub);
+	line-height: 1.6;
+}
+.step .dots {
+	position: absolute;
+	top: 34px;
+	right: 34px;
+	color: var(--hair);
+	font-size: 20px;
+	letter-spacing: 2px;
+}
+
+/* ================= GUIDES ================= */
+.guides-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	gap: 24px;
+	margin-bottom: 42px;
+}
+.guides-head h2 {
+	font-family: var(--serif);
+	font-weight: 900;
+	font-size: clamp(32px, 4vw, 50px);
+	line-height: 1.05;
+	margin-top: 16px;
+	letter-spacing: -0.018em;
+}
+.nav-arrows {
+	display: flex;
+	gap: 10px;
+}
+.nav-arrows button {
+	width: 48px;
+	height: 48px;
+	border: 1px solid var(--hair);
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	color: var(--ink);
+	transition: 0.22s;
+}
+.nav-arrows button:hover {
+	background: var(--ink);
+	color: var(--paper);
+}
+.nav-arrows svg {
+	width: 20px;
+	height: 20px;
+}
+.guides-grid {
+	display: flex;
+	gap: 22px;
+	overflow-x: auto;
+	scroll-snap-type: x mandatory;
+	padding-bottom: 8px;
+	scrollbar-width: none;
+}
+.guides-grid::-webkit-scrollbar {
+	display: none;
+}
+.guide {
+	position: relative;
+	border-radius: 18px;
+	overflow: hidden;
+	height: 430px;
+	flex: 0 0 calc((100% - 66px) / 4);
+	min-width: 240px;
+	scroll-snap-align: start;
+}
+.guide img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.6s ease;
+}
+.guide:hover img {
+	transform: scale(1.06);
+}
+.guide::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(0deg, rgba(30, 27, 22, 0.9) 0%, transparent 52%);
+}
+.guide .info {
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	width: 100%;
+	padding: 22px;
+	z-index: 2;
+	color: var(--paper);
+}
+.guide .info h3 {
+	font-family: var(--serif);
+	font-weight: 600;
+	font-size: 21px;
+}
+.guide .info span {
+	font-size: 11px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--ochre);
+	display: block;
+	margin-top: 4px;
+}
+
+/* ================= TESTIMONIAL ================= */
+.quote-sec {
+	background: var(--ink);
+	color: var(--paper);
+}
+.quote-in {
+	max-width: 880px;
+	margin: 0 auto;
+	text-align: center;
+}
+.stars {
+	color: var(--ochre);
+	font-size: 20px;
+	letter-spacing: 4px;
+	margin-bottom: 26px;
+}
+.quote-in blockquote {
+	font-family: var(--serif);
+	font-weight: 600;
+	font-size: clamp(26px, 3.6vw, 42px);
+	line-height: 1.28;
+	letter-spacing: -0.01em;
+}
+.quote-in blockquote .clay {
+	color: var(--clay);
+}
+.attrib {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 14px;
+	margin-top: 34px;
+}
+.attrib img {
+	width: 52px;
+	height: 52px;
+	border-radius: 50%;
+	object-fit: cover;
+	border: 2px solid var(--clay);
+}
+.attrib .who {
+	text-align: left;
+}
+.attrib .who b {
+	font-size: 15px;
+}
+.attrib .who small {
+	display: block;
+	font-size: 12px;
+	color: rgba(244, 239, 230, 0.6);
+	letter-spacing: 0.04em;
+}
+.qdots {
+	display: flex;
+	gap: 9px;
+	justify-content: center;
+	margin-top: 34px;
+}
+.qdots button {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: rgba(244, 239, 230, 0.28);
+	transition: 0.25s;
+}
+.qdots button.active {
+	background: var(--clay);
+	width: 26px;
+	border-radius: 5px;
+}
+
+/* ================= FINAL CTA ================= */
+.cta-sec {
+	padding: 0 0 110px;
+}
+.cta-panel {
+	position: relative;
+	max-width: var(--maxw);
+	margin: 0 auto;
+	border-radius: 34px;
+	overflow: hidden;
+	background: var(--ink);
+	text-align: center;
+	padding: 92px 28px;
+	color: var(--paper);
+}
+.cta-panel .cbg {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+}
+.cta-panel .cbg img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	opacity: 0.22;
+}
+.cta-panel .cbg::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: radial-gradient(
+		70% 90% at 50% 0%,
+		rgba(194, 96, 58, 0.22),
+		transparent 70%
+	);
+}
+.cta-in {
+	position: relative;
+	z-index: 2;
+	max-width: 680px;
+	margin: 0 auto;
+}
+.cta-in h2 {
+	font-family: var(--serif);
+	font-weight: 900;
+	font-size: clamp(38px, 5.5vw, 72px);
+	line-height: 1.02;
+	letter-spacing: -0.02em;
+	margin: 18px 0 22px;
+}
+.cta-in h2 .it {
+	color: var(--ochre);
+}
+.cta-in p {
+	font-size: 18px;
+	color: rgba(244, 239, 230, 0.78);
+	margin-bottom: 34px;
+	line-height: 1.6;
+}
+.cta-actions {
+	display: flex;
+	gap: 14px;
+	justify-content: center;
+	flex-wrap: wrap;
+}
+.cta-sec .btn-ghost {
+	border-color: rgba(244, 239, 230, 0.34);
+	color: var(--paper);
+}
+.cta-sec .btn-ghost:hover {
+	background: var(--paper);
+	color: var(--ink);
+}
+
+/* ================= FOOTER ================= */
+.foot {
+	background: var(--ink);
+	color: var(--paper);
+	padding: 84px 0 34px;
+	position: relative;
+	overflow: hidden;
+}
+.foot-grid {
+	display: grid;
+	grid-template-columns: 1.6fr 1fr 1fr 1.2fr;
+	gap: 46px;
+	position: relative;
+	z-index: 2;
+}
+.foot .brand {
+	color: var(--paper);
+	margin-bottom: 16px;
+}
+.foot-blurb {
+	font-size: 14px;
+	color: rgba(244, 239, 230, 0.6);
+	line-height: 1.6;
+	max-width: 34ch;
+	margin-bottom: 20px;
+}
+.news {
+	display: flex;
+	background: rgba(244, 239, 230, 0.08);
+	border: 1px solid rgba(244, 239, 230, 0.14);
+	border-radius: 11px;
+	padding: 5px;
+	max-width: 330px;
+}
+.news input {
+	flex: 1;
+	background: none;
+	border: none;
+	color: var(--paper);
+	padding: 9px 12px;
+	font-family: inherit;
+	font-size: 14px;
+	outline: none;
+}
+.news input::placeholder {
+	color: rgba(244, 239, 230, 0.4);
+}
+.news button {
+	background: var(--clay);
+	color: var(--paper);
+	padding: 9px 18px;
+	border-radius: 8px;
+	font-weight: 500;
+	font-size: 14px;
+	transition: 0.2s;
+}
+.news button:hover {
+	background: var(--clay-dark);
+}
+.foot h4 {
+	font-size: 12px;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--ochre);
+	margin-bottom: 18px;
+}
+.foot ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 11px;
+}
+.foot ul a {
+	font-size: 14px;
+	color: rgba(244, 239, 230, 0.7);
+	transition: color 0.2s;
+}
+.foot ul a:hover {
+	color: var(--clay);
+}
+.foot-bar {
+	position: relative;
+	z-index: 2;
+	margin-top: 54px;
+	padding-top: 24px;
+	border-top: 1px solid rgba(244, 239, 230, 0.12);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 14px;
+	font-size: 12.5px;
+	color: rgba(244, 239, 230, 0.5);
+}
+.foot-bar .socials {
+	display: flex;
+	gap: 22px;
+}
+.foot-bar .socials a:hover {
+	color: var(--clay);
+}
+.foot-mark {
+	position: absolute;
+	left: 0;
+	bottom: -3%;
+	width: 100%;
+	text-align: center;
+	font-family: var(--serif);
+	font-weight: 900;
+	font-size: clamp(90px, 22vw, 300px);
+	line-height: 0.8;
+	color: rgba(244, 239, 230, 0.04);
+	pointer-events: none;
+	z-index: 1;
+	letter-spacing: -0.03em;
+}
+
+/* ================= RESPONSIVE ================= */
+@media (max-width: 1040px) {
+	.hero-in {
+		grid-template-columns: 1fr;
+		gap: 42px;
+	}
+	.hero-right {
+		max-width: 440px;
+	}
+	.manifesto {
+		grid-template-columns: 1fr;
+		gap: 40px;
+	}
+	.exp-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.stats {
+		grid-template-columns: repeat(2, 1fr);
+		gap: 36px 30px;
+	}
+	.guide {
+		flex: 0 0 calc((100% - 22px) / 2);
+	}
+	.foot-grid {
+		grid-template-columns: 1fr 1fr;
+		gap: 38px;
+	}
+}
+@media (max-width: 760px) {
+	.nav-links,
+	.nav-cta {
+		display: none;
+	}
+	.burger {
+		display: block;
+	}
+	.section {
+		padding: 78px 0;
+	}
+	.how-grid {
+		grid-template-columns: 1fr;
+	}
+	.exp-head,
+	.guides-head {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+	.hero h1 {
+		font-size: clamp(42px, 12vw, 62px);
+	}
+}
+@media (max-width: 520px) {
+	.wrap {
+		padding: 0 20px;
+	}
+	.exp-grid {
+		grid-template-columns: 1fr;
+	}
+	.stats {
+		grid-template-columns: 1fr 1fr;
+		gap: 30px 20px;
+	}
+	.guide {
+		flex: 0 0 82%;
+	}
+	.foot-grid {
+		grid-template-columns: 1fr;
+	}
+	.finder-row {
+		grid-template-columns: 1fr;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	* {
+		animation-duration: 0.001ms;
+		animation-iteration-count: 1;
+		transition-duration: 0.001ms;
+		scroll-behavior: auto;
+	}
+	[data-reveal] {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@300;400;500;600;700;800&family=Inter+Tight:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- ============ NAV ============ -->
+		<header class="nav" id="nav">
+			<div class="wrap nav-in">
+				<a href="#" class="brand" aria-label="Wayfare home">
+					<svg
+						class="star"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.6"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<circle cx="12" cy="12" r="9" />
+						<polygon
+							points="16.2 7.8 14.1 14.1 7.8 16.2 9.9 9.9"
+							fill="currentColor"
+							stroke="none"
+						/>
+					</svg>
+					Wayfare
+				</a>
+				<nav class="nav-links">
+					<a href="#expeditions">Expeditions</a>
+					<a href="#guides">Field Guides</a>
+					<a href="#journal">Journal</a>
+					<a href="#manifesto">About</a>
+				</nav>
+				<div class="nav-cta">
+					<a href="#" class="nav-signin">Sign in</a>
+					<a href="#" class="nav-pill">Plan a trip</a>
+				</div>
+				<button class="burger" id="burger" aria-label="Open menu">
+					<svg
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.6"
+					>
+						<path d="M3 6h18M3 12h18M3 18h18" />
+					</svg>
+				</button>
+			</div>
+		</header>
+
+		<!-- mobile sheet -->
+		<div class="sheet" id="sheet">
+			<div class="sheet-top">
+				<span class="brand">Wayfare</span>
+				<button class="sheet-x" id="sheetX" aria-label="Close menu">
+					<svg
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.6"
+					>
+						<path d="M6 6l12 12M18 6L6 18" />
+					</svg>
+				</button>
+			</div>
+			<a class="m-link" href="#expeditions"
+				>Ex<span class="clay">peditions</span></a
+			>
+			<a class="m-link" href="#guides">Field Guides</a>
+			<a class="m-link" href="#journal">Journal</a>
+			<a class="m-link" href="#manifesto">About</a>
+			<div class="sheet-bottom">
+				<a
+					href="#"
+					class="btn btn-ghost"
+					style="border-color:rgba(244,239,230,.34);color:#F4EFE6;justify-content:center"
+					>Sign in</a
+				>
+				<a href="#" class="btn btn-solid" style="justify-content:center"
+					>Plan a trip</a
+				>
+			</div>
+		</div>
+
+		<!-- ============ HERO ============ -->
+		<section class="hero">
+			<div class="hero-bg">
+				<img
+					id="heroBg"
+					src="assets/hero.jpg"
+					alt="Snow-dusted mountain ridge at dawn"
+				>
+			</div>
+			<div class="wrap hero-in">
+				<div>
+					<span class="eyebrow hero-eye" data-reveal
+						>Field-tested expeditions since 2009</span
+					>
+					<h1 data-reveal>
+						Go where the<br><span class="clay">map</span>
+						runs <span class="it">out.</span>
+					</h1>
+					<p class="sub" data-reveal>
+						Small-group journeys to the wild edges of the world — plotted by
+						hand, led by locals, and built so all you have to do is show up.
+					</p>
+					<div class="hero-actions" data-reveal>
+						<a href="#expeditions" class="btn btn-solid"
+							>Plan a trip
+							<svg
+								class="arr"
+								width="17"
+								height="17"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M5 12h14M13 6l6 6-6 6" />
+							</svg>
+						</a>
+						<a href="#" class="btn btn-ghost">
+							<span class="play"
+								><svg viewBox="0 0 24 24" fill="currentColor">
+									<path d="M8 5v14l11-7z" />
+								</svg></span
+							>
+							Watch the film
+						</a>
+					</div>
+				</div>
+
+				<div class="hero-right">
+					<div class="hero-photo" data-reveal>
+						<div class="ph frame">
+							<img
+								src="assets/trip-polar.jpg"
+								alt="Traveler standing before a glacier"
+							>
+						</div>
+						<span class="stamp">Now<br>Boarding</span>
+						<span class="coord-tag"
+							><span class="dot"></span>64.9631° N · 19.0208° W — Iceland</span
+						>
+					</div>
+
+					<form class="finder" data-reveal onsubmit="return false">
+						<h3>Find your latitude</h3>
+						<p>Tell us where the pull is. We'll plot the rest.</p>
+						<div class="finder-row">
+							<div class="fld">
+								<label for="dest">Destination</label>
+								<input
+									id="dest"
+									type="text"
+									placeholder="Patagonia, Chile"
+									autocomplete="off"
+								>
+							</div>
+							<div class="fld">
+								<label for="when">When</label>
+								<input
+									id="when"
+									type="text"
+									placeholder="Mar — Apr 2026"
+									autocomplete="off"
+								>
+							</div>
+						</div>
+						<div class="finder-row" style="margin-bottom:14px">
+							<div class="fld">
+								<label for="who">Travelers</label>
+								<select id="who">
+									<option>2 travelers</option>
+									<option>Solo</option>
+									<option>3–4 travelers</option>
+									<option>Private group</option>
+								</select>
+							</div>
+							<div class="fld">
+								<label for="terrain">Terrain</label>
+								<select id="terrain">
+									<option>Any</option>
+									<option>Mountains</option>
+									<option>Coast</option>
+									<option>Desert</option>
+									<option>Polar</option>
+								</select>
+							</div>
+						</div>
+						<button class="finder-btn" type="submit">
+							Search expeditions
+							<svg
+								class="arr"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M5 12h14M13 6l6 6-6 6" />
+							</svg>
+						</button>
+					</form>
+				</div>
+			</div>
+
+			<div class="scroll-hint"><span class="line"></span>Scroll</div>
+		</section>
+
+		<!-- ============ MARQUEE ============ -->
+		<section class="marquee-sec">
+			<p class="marquee-lbl">As charted in</p>
+			<div class="marquee">
+				<div class="marquee-track" id="track">
+					<span class="item"><span class="g">C</span>Cairn</span>
+					<span class="item"><span class="g">M</span>Meridian</span>
+					<span class="item"><span class="g">O</span>Outpost</span>
+					<span class="item"><span class="g">A</span>Almanac</span>
+					<span class="item"><span class="g">F</span>Fathom</span>
+					<span class="item"><span class="g">T</span>Trailhead</span>
+					<span class="item" aria-hidden="true"
+						><span class="g">C</span>Cairn</span
+					>
+					<span class="item" aria-hidden="true"
+						><span class="g">M</span>Meridian</span
+					>
+					<span class="item" aria-hidden="true"
+						><span class="g">O</span>Outpost</span
+					>
+					<span class="item" aria-hidden="true"
+						><span class="g">A</span>Almanac</span
+					>
+					<span class="item" aria-hidden="true"
+						><span class="g">F</span>Fathom</span
+					>
+					<span class="item" aria-hidden="true"
+						><span class="g">T</span>Trailhead</span
+					>
+				</div>
+			</div>
+		</section>
+
+		<!-- ============ MANIFESTO ============ -->
+		<section class="section" id="manifesto">
+			<div class="wrap manifesto">
+				<div>
+					<span class="eyebrow moss" data-reveal>The Wayfare Way</span>
+					<h2 data-reveal>
+						We don't sell trips.<br>We set you <span class="clay">loose.</span>
+					</h2>
+					<p class="lead" data-reveal>
+						Anyone can hand you an itinerary. We hand you a place — the unmarked
+						trailhead, the fisherman who knows the tide, the ridge no guidebook
+						bothered to name. Logistics are ours to carry. Wonder is yours to
+						keep.
+					</p>
+					<div data-reveal style="margin-top:28px">
+						<a href="#expeditions" class="btn btn-ghost"
+							>Read our field notes
+							<svg
+								class="arr"
+								width="17"
+								height="17"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M5 12h14M13 6l6 6-6 6" />
+							</svg>
+						</a>
+					</div>
+				</div>
+				<div class="mimg" data-reveal>
+					<span class="badge">Est. 2009 · 64 countries</span>
+					<div class="inner">
+						<img
+							src="assets/manifesto.jpg"
+							alt="Hiker overlooking a remote valley"
+						>
+					</div>
+				</div>
+			</div>
+
+			<div class="wrap">
+				<div class="stats" id="stats">
+					<div class="stat" data-reveal>
+						<div class="num"><span data-count="64">0</span></div>
+						<div class="cap">Countries on our maps</div>
+					</div>
+					<div class="stat" data-reveal>
+						<div class="num"><span data-count="12400">0</span></div>
+						<div class="cap">Travelers set loose</div>
+					</div>
+					<div class="stat" data-reveal>
+						<div class="num">
+							<span data-count="98">0</span><span class="suf">%</span>
+						</div>
+						<div class="cap">Come back for more</div>
+					</div>
+					<div class="stat" data-reveal>
+						<div class="num"><span data-count="31">0</span></div>
+						<div class="cap">Local guides on call</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ============ EXPEDITIONS ============ -->
+		<section class="section" id="expeditions" style="padding-top:30px">
+			<div class="wrap">
+				<div class="exp-head">
+					<div>
+						<span class="eyebrow" data-reveal>Featured expeditions</span>
+						<h2 data-reveal>Pick a horizon.</h2>
+					</div>
+					<a href="#" class="btn btn-ghost" data-reveal
+						>Browse all 64 routes
+						<svg
+							class="arr"
+							width="17"
+							height="17"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="M5 12h14M13 6l6 6-6 6" />
+						</svg>
+					</a>
+				</div>
+
+				<div class="chips" id="chips" data-reveal>
+					<button class="chip active" data-filter="all">All routes</button>
+					<button class="chip" data-filter="mountains">Mountains</button>
+					<button class="chip" data-filter="coast">Coast</button>
+					<button class="chip" data-filter="desert">Desert</button>
+					<button class="chip" data-filter="polar">Polar</button>
+				</div>
+
+				<div class="exp-grid" id="grid"><!-- cards injected --></div>
+			</div>
+		</section>
+
+		<!-- ============ HOW ============ -->
+		<section class="section how">
+			<div class="wrap">
+				<span class="eyebrow moss" data-reveal>How it works</span>
+				<h2
+					class="serif"
+					data-reveal
+					style="font-weight:900;font-size:clamp(32px,4vw,50px);line-height:1.04;margin-top:16px;letter-spacing:-.018em;max-width:14ch"
+				>
+					Three steps from couch to coordinates.
+				</h2>
+				<div class="how-grid">
+					<div class="step" data-reveal>
+						<span class="dots">· · ·</span>
+						<span class="no">01</span>
+						<div class="ic">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.6"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+								<circle cx="12" cy="12" r="5" />
+							</svg>
+						</div>
+						<h3>Choose your latitude</h3>
+						<p>
+							Browse expeditions by terrain, season, or sheer audacity. Or just
+							tell us the feeling you're chasing.
+						</p>
+					</div>
+					<div class="step" data-reveal>
+						<span class="dots">· · ·</span>
+						<span class="no">02</span>
+						<div class="ic">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.6"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M9 3 4 6v15l5-3 6 3 5-3V3l-5 3-6-3z" />
+								<path d="M9 3v15M15 6v15" />
+							</svg>
+						</div>
+						<h3>We plot the route</h3>
+						<p>
+							Permits, lodges, transfers, the right guide for the right ridge —
+							handled and double-checked before you pack.
+						</p>
+					</div>
+					<div class="step" data-reveal>
+						<span class="dots">· · ·</span>
+						<span class="no">03</span>
+						<div class="ic">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.6"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9" />
+								<path d="M2 16h20M8 20h8" />
+							</svg>
+						</div>
+						<h3>You just show up</h3>
+						<p>
+							No spreadsheets, no second-guessing. Step off the plane and into
+							the story we plotted for you.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ============ GUIDES ============ -->
+		<section class="section" id="guides">
+			<div class="wrap">
+				<div class="guides-head">
+					<div>
+						<span class="eyebrow" data-reveal>The field guides</span>
+						<h2 data-reveal>Led by people<br>who live there.</h2>
+					</div>
+					<div class="nav-arrows" data-reveal>
+						<button id="gPrev" aria-label="Previous guides">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.7"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M15 18l-6-6 6-6" />
+							</svg>
+						</button>
+						<button id="gNext" aria-label="More guides">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.7"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M9 6l6 6-6 6" />
+							</svg>
+						</button>
+					</div>
+				</div>
+				<div class="guides-grid" id="guidesGrid">
+					<article class="guide" data-reveal>
+						<img src="assets/guide1.jpg" alt="Elena Rosso">
+						<div class="info">
+							<h3>Elena Rosso</h3>
+							<span>Dolomites · Alpine routes</span>
+						</div>
+					</article>
+					<article class="guide" data-reveal>
+						<img src="assets/guide2.jpg" alt="Mateo Vargas">
+						<div class="info">
+							<h3>Mateo Vargas</h3>
+							<span>Patagonia · Glacier travel</span>
+						</div>
+					</article>
+					<article class="guide" data-reveal>
+						<img src="assets/guide3.jpg" alt="Søren Falk">
+						<div class="info">
+							<h3>Søren Falk</h3>
+							<span>Lofoten · Arctic seas</span>
+						</div>
+					</article>
+					<article class="guide" data-reveal>
+						<img src="assets/guide4.jpg" alt="Amara Diallo">
+						<div class="info">
+							<h3>Amara Diallo</h3>
+							<span>Sahara · Desert logistics</span>
+						</div>
+					</article>
+				</div>
+			</div>
+		</section>
+
+		<!-- ============ TESTIMONIAL ============ -->
+		<section class="section quote-sec">
+			<div class="wrap">
+				<div class="quote-in">
+					<div class="stars" aria-hidden="true">★★★★★</div>
+					<div id="quoteBox">
+						<blockquote>
+							"Wayfare didn't book us a holiday — they handed us a
+							<span class="clay">version of ourselves</span>
+							we'd forgotten existed somewhere above the treeline."
+						</blockquote>
+						<div class="attrib">
+							<img src="assets/avatar.jpg" alt="Priya Nair">
+							<div class="who">
+								<b>Priya &amp; Daniel Nair</b
+								><small>Torres del Paine Circuit · 2025</small>
+							</div>
+						</div>
+					</div>
+					<div class="qdots" id="qdots">
+						<button class="active" aria-label="Quote 1"></button>
+						<button aria-label="Quote 2"></button>
+						<button aria-label="Quote 3"></button>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ============ FINAL CTA ============ -->
+		<section class="cta-sec" id="journal">
+			<div class="cta-panel" data-reveal>
+				<div class="cbg"><img src="assets/cta.jpg" alt=""></div>
+				<div class="cta-in">
+					<span class="eyebrow hero-eye" style="justify-content:center"
+						>Your next chapter</span
+					>
+					<h2>Ready when<br>you <span class="it">are.</span></h2>
+					<p>
+						Send us a feeling and a free week. We'll send back a route worth
+						clearing your calendar for.
+					</p>
+					<div class="cta-actions">
+						<a href="#" class="btn btn-solid"
+							>Plan a trip
+							<svg
+								class="arr"
+								width="18"
+								height="18"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M5 12h14M13 6l6 6-6 6" />
+							</svg>
+						</a>
+						<a href="#expeditions" class="btn btn-ghost">View expeditions</a>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ============ FOOTER ============ -->
+		<footer class="foot">
+			<div class="wrap">
+				<div class="foot-grid">
+					<div>
+						<a href="#" class="brand">
+							<svg
+								class="star"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.6"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<circle cx="12" cy="12" r="9" />
+								<polygon
+									points="16.2 7.8 14.1 14.1 7.8 16.2 9.9 9.9"
+									fill="currentColor"
+									stroke="none"
+								/>
+							</svg>
+							Wayfare
+						</a>
+						<p class="foot-blurb">
+							Boutique, field-tested expeditions for people who'd rather earn
+							the view than buy the postcard.
+						</p>
+						<form class="news" onsubmit="return false">
+							<input
+								type="email"
+								placeholder="Field dispatches, twice a month"
+								aria-label="Email"
+							>
+							<button type="submit">Join</button>
+						</form>
+					</div>
+					<div>
+						<h4>Explore</h4>
+						<ul>
+							<li><a href="#expeditions">Expeditions</a></li>
+							<li><a href="#guides">Field Guides</a></li>
+							<li><a href="#journal">The Journal</a></li>
+							<li><a href="#">Gift a Trip</a></li>
+						</ul>
+					</div>
+					<div>
+						<h4>Company</h4>
+						<ul>
+							<li><a href="#manifesto">About Us</a></li>
+							<li><a href="#">Our Promise</a></li>
+							<li><a href="#">Careers</a></li>
+							<li><a href="#">Press</a></li>
+						</ul>
+					</div>
+					<div>
+						<h4>Follow</h4>
+						<ul>
+							<li><a href="#">Instagram</a></li>
+							<li><a href="#">Substack</a></li>
+							<li><a href="#">YouTube</a></li>
+							<li><a href="#">Spotify</a></li>
+						</ul>
+					</div>
+				</div>
+				<div class="foot-bar">
+					<p>© 2026 Wayfare Expeditions. Made for the curious.</p>
+					<div class="socials">
+						<a href="#">Privacy</a><a href="#">Terms</a
+						><a href="#">Sustainability</a>
+					</div>
+				</div>
+			</div>
+			<div class="foot-mark" aria-hidden="true">WAYFARE</div>
+		</footer>
+
+		<script>
+(() => {
+	const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	/* ---------- Expedition data ---------- */
+	const trips = [
+		{
+			cat: "mountains",
+			img: "trip-mountains.jpg",
+			region: "Dolomites",
+			title: "Alta Via Traverse",
+			from: "Bolzano",
+			to: "Cortina",
+			dur: "8 days",
+			diff: "Strenuous",
+			price: "2,940",
+			tick: "IT · 46.5°N",
+		},
+		{
+			cat: "coast",
+			img: "trip-coast.jpg",
+			region: "Lofoten",
+			title: "Arctic Sea Trail",
+			from: "Svolvær",
+			to: "Reine",
+			dur: "6 days",
+			diff: "Moderate",
+			price: "2,210",
+			tick: "NO · 68.1°N",
+		},
+		{
+			cat: "desert",
+			img: "trip-desert.jpg",
+			region: "Wadi Rum",
+			title: "Red Sands Crossing",
+			from: "Aqaba",
+			to: "Petra",
+			dur: "7 days",
+			diff: "Moderate",
+			price: "2,480",
+			tick: "JO · 29.6°N",
+		},
+		{
+			cat: "polar",
+			img: "trip-polar.jpg",
+			region: "Highlands",
+			title: "Glacier &amp; Geyser",
+			from: "Reykjavík",
+			to: "Höfn",
+			dur: "9 days",
+			diff: "Strenuous",
+			price: "3,360",
+			tick: "IS · 64.9°N",
+		},
+		{
+			cat: "mountains",
+			img: "trip-mountains2.jpg",
+			region: "Patagonia",
+			title: "Torres Circuit",
+			from: "El Chaltén",
+			to: "Paine",
+			dur: "10 days",
+			diff: "Expert",
+			price: "3,690",
+			tick: "CL · 50.9°S",
+		},
+		{
+			cat: "coast",
+			img: "trip-coast2.jpg",
+			region: "Amalfi",
+			title: "Path of the Gods",
+			from: "Sorrento",
+			to: "Positano",
+			dur: "5 days",
+			diff: "Easy",
+			price: "1,880",
+			tick: "IT · 40.6°N",
+		},
+		{
+			cat: "desert",
+			img: "trip-desert2.jpg",
+			region: "Atacama",
+			title: "High Desert Stars",
+			from: "Calama",
+			to: "Uyuni",
+			dur: "8 days",
+			diff: "Moderate",
+			price: "2,760",
+			tick: "CL · 23.6°S",
+		},
+		{
+			cat: "polar",
+			img: "trip-polar2.jpg",
+			region: "Svalbard",
+			title: "Frozen North Sail",
+			from: "Longyearbyen",
+			to: "Pyramiden",
+			dur: "7 days",
+			diff: "Expert",
+			price: "4,120",
+			tick: "SJ · 78.2°N",
+		},
+	];
+
+	const arr =
+		'<svg class="arr" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+	const routeIcon =
+		'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M7.5 16.5 16.5 7.5"/></svg>';
+
+	const grid = document.getElementById("grid");
+	grid.innerHTML = trips
+		.map(
+			(t) => `
+    <article class="card" data-cat="${t.cat}">
+      <div class="media frame">
+        <img src="assets/${t.img}" alt="${t.title} expedition" loading="lazy">
+        <span class="region">${t.region}</span>
+        <span class="tick">${t.tick}</span>
+      </div>
+      <h3>${t.title}</h3>
+      <div class="route">${routeIcon}${t.from} → ${t.to}</div>
+      <div class="meta">${t.dur}<span class="d"></span>${t.diff}</div>
+      <div class="card-foot">
+        <div class="price">$${t.price} <small>/ person</small></div>
+        <a href="#" class="viewroute">View route ${arr}</a>
+      </div>
+    </article>`,
+		)
+		.join("");
+
+	/* ---------- Filter ---------- */
+	const chips = document.getElementById("chips");
+	chips.addEventListener("click", (e) => {
+		const btn = e.target.closest(".chip");
+		if (!btn) return;
+		chips
+			.querySelectorAll(".chip")
+			.forEach((c) => c.classList.remove("active"));
+		btn.classList.add("active");
+		const f = btn.dataset.filter;
+		grid.querySelectorAll(".card").forEach((card) => {
+			const show = f === "all" || card.dataset.cat === f;
+			if (reduce) {
+				card.classList.toggle("hide", !show);
+				return;
+			}
+			card.classList.add("fade");
+			setTimeout(() => {
+				card.classList.toggle("hide", !show);
+				requestAnimationFrame(() => card.classList.remove("fade"));
+			}, 220);
+		});
+	});
+
+	/* ---------- Nav scroll state ---------- */
+	const nav = document.getElementById("nav");
+	const onScroll = () => nav.classList.toggle("scrolled", window.scrollY > 40);
+	onScroll();
+	addEventListener("scroll", onScroll, { passive: true });
+
+	/* ---------- Mobile sheet ---------- */
+	const sheet = document.getElementById("sheet");
+	const open = () => {
+		sheet.classList.add("open");
+		document.body.style.overflow = "hidden";
+	};
+	const close = () => {
+		sheet.classList.remove("open");
+		document.body.style.overflow = "";
+	};
+	document.getElementById("burger").addEventListener("click", open);
+	document.getElementById("sheetX").addEventListener("click", close);
+	sheet
+		.querySelectorAll("a")
+		.forEach((a) => a.addEventListener("click", close));
+
+	/* ---------- Reveal on scroll ---------- */
+	const revs = document.querySelectorAll("[data-reveal]");
+	if (reduce) {
+		revs.forEach((el) => el.classList.add("in"));
+	} else {
+		const io = new IntersectionObserver(
+			(entries, obs) => {
+				entries.forEach((en, _i) => {
+					if (en.isIntersecting) {
+						const sibs = [
+							...en.target.parentElement.querySelectorAll(
+								":scope > [data-reveal]",
+							),
+						];
+						en.target.style.transitionDelay = `${Math.max(0, sibs.indexOf(en.target)) * 80}ms`;
+						en.target.classList.add("in");
+						obs.unobserve(en.target);
+					}
+				});
+			},
+			{ threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
+		);
+		revs.forEach((el) => io.observe(el));
+	}
+
+	/* ---------- Count-up ---------- */
+	const fmt = (n) => (n >= 1000 ? n.toLocaleString("en-US") : String(n));
+	const counters = document.querySelectorAll("[data-count]");
+	const runCount = (el) => {
+		const target = +el.dataset.count;
+		if (reduce) {
+			el.textContent = fmt(target);
+			return;
+		}
+		const start = performance.now(),
+			dur = 1500;
+		const step = (now) => {
+			const p = Math.min((now - start) / dur, 1);
+			const eased = 1 - (1 - p) ** 3;
+			el.textContent = fmt(Math.round(target * eased));
+			if (p < 1) requestAnimationFrame(step);
+		};
+		requestAnimationFrame(step);
+	};
+	const cio = new IntersectionObserver(
+		(entries, obs) => {
+			entries.forEach((en) => {
+				if (en.isIntersecting) {
+					runCount(en.target);
+					obs.unobserve(en.target);
+				}
+			});
+		},
+		{ threshold: 0.6 },
+	);
+	counters.forEach((c) => cio.observe(c));
+
+	/* ---------- Hero parallax ---------- */
+	const heroBg = document.getElementById("heroBg");
+	if (heroBg && !reduce) {
+		let ticking = false;
+		addEventListener(
+			"scroll",
+			() => {
+				if (ticking) return;
+				ticking = true;
+				requestAnimationFrame(() => {
+					const y = window.scrollY;
+					if (y < window.innerHeight)
+						heroBg.style.transform = `translateY(${y * 0.18}px) scale(1.04)`;
+					ticking = false;
+				});
+			},
+			{ passive: true },
+		);
+	}
+
+	/* ---------- Guides scroller ---------- */
+	const gg = document.getElementById("guidesGrid");
+	const amt = () => Math.min(gg.clientWidth * 0.7, 560);
+	document
+		.getElementById("gNext")
+		.addEventListener("click", () =>
+			gg.scrollBy({ left: amt(), behavior: "smooth" }),
+		);
+	document
+		.getElementById("gPrev")
+		.addEventListener("click", () =>
+			gg.scrollBy({ left: -amt(), behavior: "smooth" }),
+		);
+
+	/* ---------- Quote rotation ---------- */
+	const quotes = [
+		{
+			q: '"Wayfare didn\'t book us a holiday — they handed us a <span class="clay">version of ourselves</span> we\'d forgotten existed somewhere above the treeline."',
+			img: "avatar.jpg",
+			who: "Priya &amp; Daniel Nair",
+			sub: "Torres del Paine Circuit · 2025",
+		},
+		{
+			q: '"I\'ve traveled for thirty years. This was the first time the <span class="clay">logistics disappeared</span> entirely and all that was left was the place itself."',
+			img: "guide3.jpg",
+			who: "Marcus Ahlberg",
+			sub: "Lofoten Arctic Sea Trail · 2025",
+		},
+		{
+			q: '"Our guide knew which dune to climb at dusk and which family would feed us after. You cannot <span class="clay">buy that from a brochure</span>."',
+			img: "guide4.jpg",
+			who: "Lina Haddad",
+			sub: "Wadi Rum Red Sands · 2024",
+		},
+	];
+	const box = document.getElementById("quoteBox");
+	const dots = [...document.getElementById("qdots").children];
+	let qi = 0,
+		qTimer;
+	const renderQuote = (i) => {
+		const t = quotes[i];
+		box.innerHTML = `<blockquote>${t.q}</blockquote>
+      <div class="attrib"><img src="assets/${t.img}" alt="${t.who.replace(/&amp;/g, "and")}">
+      <div class="who"><b>${t.who}</b><small>${t.sub}</small></div></div>`;
+		dots.forEach((d, k) => d.classList.toggle("active", k === i));
+		qi = i;
+	};
+	const cycle = () => {
+		if (reduce) return;
+		qTimer = setInterval(() => renderQuote((qi + 1) % quotes.length), 6000);
+	};
+	dots.forEach((d, i) =>
+		d.addEventListener("click", () => {
+			clearInterval(qTimer);
+			renderQuote(i);
+			cycle();
+		}),
+	);
+	cycle();
+})();
+
+		</script>
+	</body>
+</html>

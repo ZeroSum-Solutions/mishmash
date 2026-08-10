@@ -1,0 +1,14 @@
+{
+  "slug": "mindloop-mono-landing",
+  "name": "Mindloop — Dark Monochrome Newsletter Landing Page",
+  "family": "landing-pages",
+  "kind": "vite",
+  "cdn_fonts": [
+    "Inter",
+    "Instrument Serif"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/mindloop-mono-landing",
+  "source_license": "MIT"
+}

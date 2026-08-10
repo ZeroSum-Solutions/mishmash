@@ -1,0 +1,11 @@
+{
+  "slug": "smart-prosthetics-hero",
+  "name": "Smart Prosthetics — Cinematic Hero Section",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/smart-prosthetics-hero",
+  "source_license": "MIT"
+}

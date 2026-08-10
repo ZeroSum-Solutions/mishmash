@@ -1,0 +1,2158 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Aegis — Shield Every Digital Asset with Ironclad Precision</title>
+		<meta
+			name="description"
+			content="Aegis is an enterprise cybersecurity platform delivering real-time threat detection, automated response, and zero-trust access from a single precision console."
+		>
+		<style>
+
+
+
+
+		</style>
+		<style>
+:root {
+	--ink: #1d1d1d;
+	--lime: #dcf986;
+	--orange: #ff8c42;
+	--bg: #ffffff;
+	--bone: #f8f7f7;
+	--card: #fafafa;
+	--gray: #464646;
+	--green: #22c55e;
+	--line: rgba(0, 0, 0, 0.08);
+	--line-soft: rgba(0, 0, 0, 0.06);
+	--maxw: 1140px;
+	--r: 18px;
+}
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+html {
+	scroll-behavior: smooth;
+}
+body {
+	font-family: "Satoshi", system-ui, sans-serif;
+	background: var(--bg);
+	color: var(--ink);
+	-webkit-font-smoothing: antialiased;
+	overflow-x: hidden;
+	line-height: 1.6;
+}
+h1,
+h2,
+h3,
+h4,
+.brand-word {
+	font-family: "Clash Grotesk", "Satoshi", sans-serif;
+	font-weight: 500;
+	letter-spacing: -0.02em;
+	line-height: 1.1;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+.container {
+	width: 100%;
+	max-width: var(--maxw);
+	margin-inline: auto;
+	padding-inline: 24px;
+}
+
+.eyebrow {
+	display: inline-block;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: var(--gray);
+}
+
+/* ---------- pills / buttons ---------- */
+.pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	font-weight: 500;
+	border-radius: 999px;
+	transition:
+		transform 0.25s,
+		box-shadow 0.3s,
+		background 0.25s;
+	white-space: nowrap;
+}
+.pill-ink {
+	background: var(--ink);
+	color: #fff;
+	padding: 13px 14px 13px 26px;
+}
+.pill-ghost {
+	background: #fff;
+	color: var(--ink);
+	border: 1px solid rgba(0, 0, 0, 0.14);
+	padding: 13px 14px 13px 26px;
+}
+.pill-lime {
+	background: var(--lime);
+	color: var(--ink);
+	padding: 13px 14px 13px 26px;
+}
+.pill-lg {
+	height: 62px;
+	font-size: 17px;
+	padding-left: 30px;
+}
+.pill:hover {
+	transform: translateY(-2px);
+}
+.pill-ink:hover {
+	box-shadow: 0 14px 30px -10px rgba(0, 0, 0, 0.45);
+}
+.pill-arrow {
+	width: 42px;
+	height: 42px;
+	border-radius: 999px;
+	display: grid;
+	place-items: center;
+	flex: 0 0 auto;
+	background: var(--lime);
+	overflow: hidden;
+}
+.pill-ghost .pill-arrow.gray {
+	background: #f0f0f0;
+}
+.pill-lime .pill-arrow {
+	background: var(--ink);
+}
+.pill-lime .pill-arrow svg path {
+	stroke: var(--lime);
+}
+.pill-arrow svg {
+	width: 22px;
+	height: 22px;
+	transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-icon:hover .pill-arrow svg {
+	transform: translateX(5px);
+}
+.nav-cta .pill-arrow {
+	width: 34px;
+	height: 34px;
+}
+.nav-cta .pill-arrow svg {
+	width: 18px;
+	height: 18px;
+	stroke: var(--ink);
+}
+.nav-cta .pill-arrow svg path {
+	stroke: var(--ink);
+}
+
+/* ---------- header ---------- */
+.site-header {
+	position: sticky;
+	top: 0;
+	z-index: 60;
+	background: rgba(255, 255, 255, 0.82);
+	backdrop-filter: blur(14px);
+	border-bottom: 1px solid transparent;
+}
+.nav {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 74px;
+}
+.brand {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.brand-chip {
+	width: 34px;
+	height: 34px;
+	border-radius: 10px;
+	background: var(--ink);
+	display: grid;
+	place-items: center;
+}
+.brand-chip svg {
+	width: 20px;
+	height: 20px;
+}
+.brand-word {
+	font-size: 21px;
+	letter-spacing: -0.03em;
+}
+.brand-word.light {
+	color: #fff;
+}
+.nav-links {
+	display: flex;
+	align-items: center;
+	gap: 38px;
+}
+.nav-link {
+	font-size: 15.5px;
+	font-weight: 500;
+	color: var(--gray);
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-family: inherit;
+	transition: color 0.2s;
+}
+.nav-link:hover {
+	color: var(--ink);
+}
+.chev {
+	width: 16px;
+	height: 16px;
+	transition: transform 0.25s;
+}
+.nav-item {
+	position: relative;
+}
+.has-menu:hover .chev {
+	transform: rotate(180deg);
+}
+.mega {
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	transform: translateX(-50%) translateY(8px);
+	padding-top: 14px;
+	opacity: 0;
+	visibility: hidden;
+	transition: 0.25s;
+	z-index: 80;
+	min-width: 250px;
+}
+.has-menu:hover .mega {
+	opacity: 1;
+	visibility: visible;
+	transform: translateX(-50%) translateY(0);
+}
+.mega::before {
+	content: "";
+	position: absolute;
+	inset: 14px 0 0 0;
+	background: #fff;
+	border: 1px solid var(--line);
+	border-radius: 16px;
+	box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.18);
+}
+.mega a {
+	position: relative;
+	display: block;
+	padding: 13px 16px;
+	border-radius: 11px;
+	margin: 6px;
+	transition: background 0.2s;
+}
+.mega a:first-of-type {
+	margin-top: 8px;
+}
+.mega a:hover {
+	background: var(--bone);
+}
+.mega-t {
+	display: block;
+	font-weight: 700;
+	font-size: 14px;
+}
+.mega-s {
+	display: block;
+	font-size: 12.5px;
+	color: var(--gray);
+}
+.nav-right {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
+.hamburger {
+	display: none;
+	flex-direction: column;
+	gap: 5px;
+	width: 42px;
+	height: 42px;
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	background: #fff;
+	cursor: pointer;
+	align-items: center;
+	justify-content: center;
+}
+.hamburger span {
+	width: 18px;
+	height: 2px;
+	background: var(--ink);
+	transition: 0.3s;
+}
+.hamburger.open span:nth-child(1) {
+	transform: translateY(7px) rotate(45deg);
+}
+.hamburger.open span:nth-child(2) {
+	opacity: 0;
+}
+.hamburger.open span:nth-child(3) {
+	transform: translateY(-7px) rotate(-45deg);
+}
+.mobile-sheet {
+	display: none;
+	flex-direction: column;
+	gap: 6px;
+	padding: 0 24px;
+	max-height: 0;
+	overflow: hidden;
+	transition:
+		max-height 0.35s ease,
+		padding 0.35s ease;
+	border-top: 1px solid var(--line-soft);
+}
+.mobile-sheet.open {
+	max-height: 340px;
+	padding: 18px 24px 24px;
+}
+.mobile-sheet a {
+	font-size: 17px;
+	font-weight: 500;
+	padding: 12px 0;
+	border-bottom: 1px solid var(--line-soft);
+}
+.mobile-sheet .sheet-cta {
+	justify-content: center;
+	border-bottom: none;
+	margin-top: 10px;
+	padding: 15px 24px;
+}
+
+/* ---------- hero ---------- */
+.hero {
+	position: relative;
+	padding: 70px 0 100px;
+	overflow: hidden;
+	text-align: center;
+}
+.hero-grid {
+	position: absolute;
+	top: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 140%;
+	max-width: 1500px;
+	height: 640px;
+	z-index: 0;
+	background-size: 80px 80px;
+	background-image:
+		linear-gradient(to right, rgba(0, 0, 0, 0.07) 1px, transparent 1px),
+		linear-gradient(to bottom, rgba(0, 0, 0, 0.07) 1px, transparent 1px);
+	-webkit-mask-image: radial-gradient(
+		ellipse 70% 60% at 50% 35%,
+		#000 0%,
+		transparent 72%
+	);
+	mask-image: radial-gradient(
+		ellipse 70% 60% at 50% 35%,
+		#000 0%,
+		transparent 72%
+	);
+}
+.hero-content {
+	position: relative;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 18px;
+	max-width: 920px;
+	padding-top: 36px;
+}
+.hero-content .eyebrow {
+	color: var(--gray);
+}
+.hero h1 {
+	font-size: clamp(40px, 6.4vw, 66px);
+	max-width: 18ch;
+}
+.hero-sub {
+	font-size: 18px;
+	color: var(--gray);
+	max-width: 600px;
+	line-height: 1.7;
+}
+.hero-actions {
+	display: flex;
+	gap: 14px;
+	flex-wrap: wrap;
+	justify-content: center;
+	margin-top: 14px;
+}
+
+/* ---------- console mockup ---------- */
+.console-wrap {
+	position: relative;
+	z-index: 2;
+	max-width: 1040px;
+	margin-top: 64px;
+}
+.glow {
+	position: absolute;
+	border-radius: 50%;
+	filter: blur(70px);
+	z-index: -1;
+}
+.glow-lime {
+	top: -30px;
+	right: -20px;
+	width: 240px;
+	height: 240px;
+	background: rgba(220, 249, 134, 0.55);
+}
+.glow-ink {
+	bottom: -50px;
+	left: -40px;
+	width: 300px;
+	height: 300px;
+	background: rgba(29, 29, 29, 0.06);
+}
+.console {
+	background: #fff;
+	border: 1px solid var(--line);
+	border-radius: 24px;
+	box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.28);
+	padding: 22px;
+	text-align: left;
+}
+.console-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-bottom: 18px;
+	border-bottom: 1px solid var(--line-soft);
+}
+.console-id {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
+.id-chip {
+	width: 42px;
+	height: 42px;
+	border-radius: 999px;
+	background: var(--lime);
+	display: grid;
+	place-items: center;
+}
+.id-dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 999px;
+	background: var(--ink);
+}
+.id-eyebrow {
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--gray);
+}
+.console-id h3 {
+	font-size: 18px;
+	margin-top: 2px;
+}
+.console-tools {
+	display: flex;
+	gap: 8px;
+}
+.tool {
+	height: 34px;
+	border: 1px solid var(--line);
+	border-radius: 9px;
+	background: var(--card);
+}
+.tool.wide {
+	width: 96px;
+	display: grid;
+	place-items: center;
+	font-size: 12px;
+	color: var(--gray);
+	font-weight: 500;
+}
+.tool.sq {
+	width: 34px;
+}
+.console-grid {
+	display: grid;
+	grid-template-columns: 1fr 2fr;
+	gap: 18px;
+	margin-top: 18px;
+}
+.stat-col {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.stat-card {
+	border-radius: 16px;
+	padding: 18px;
+}
+.stat-card.ink {
+	background: var(--ink);
+	color: #fff;
+}
+.stat-card.bone {
+	background: var(--card);
+	border: 1px solid var(--line-soft);
+}
+.sc-label {
+	font-size: 12px;
+	opacity: 0.65;
+}
+.sc-label.dark {
+	color: var(--gray);
+	opacity: 1;
+}
+.stat-card.ink h4 {
+	font-size: 30px;
+	margin-top: 6px;
+	letter-spacing: -0.03em;
+}
+.bar {
+	height: 5px;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.18);
+	margin-top: 16px;
+	overflow: hidden;
+}
+.bar i {
+	display: block;
+	height: 100%;
+	width: var(--w);
+	background: var(--lime);
+	border-radius: 999px;
+	transform: scaleX(0);
+	transform-origin: left;
+	transition: transform 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) 0.4s;
+}
+.console.in .bar i {
+	transform: scaleX(1);
+}
+.sc-row {
+	display: flex;
+	align-items: flex-end;
+	gap: 8px;
+	margin-top: 4px;
+}
+.big {
+	font-size: 28px;
+	font-weight: 500;
+	font-family: "Clash Grotesk", sans-serif;
+	letter-spacing: -0.03em;
+}
+.big small {
+	font-size: 14px;
+	color: var(--gray);
+}
+.delta {
+	font-size: 11px;
+	font-weight: 700;
+	color: var(--green);
+	margin-bottom: 6px;
+}
+.chart-panel {
+	background: var(--card);
+	border: 1px solid var(--line-soft);
+	border-radius: 16px;
+	padding: 18px;
+	display: flex;
+	flex-direction: column;
+	min-height: 230px;
+}
+.chart-top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+.chart-title {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+.legend {
+	display: flex;
+	gap: 6px;
+}
+.legend .dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 999px;
+}
+.dot.lime {
+	background: var(--lime);
+}
+.dot.blue {
+	background: #9db4ff;
+}
+.chart {
+	width: 100%;
+	height: 100%;
+	margin-top: auto;
+	flex: 1;
+}
+.grid-line {
+	stroke: #ededed;
+	stroke-width: 1;
+}
+.area {
+	fill: rgba(220, 249, 134, 0.18);
+}
+.line-bg {
+	stroke: rgba(29, 29, 29, 0.12);
+	stroke-width: 2.5;
+}
+.line-lime {
+	stroke: var(--lime);
+	stroke-width: 4;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.console-status {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 14px;
+	margin-top: 18px;
+	padding-top: 18px;
+	border-top: 1px solid var(--line-soft);
+}
+.node {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	font-size: 11.5px;
+	font-weight: 500;
+	color: var(--gray);
+}
+.ndot {
+	width: 8px;
+	height: 8px;
+	border-radius: 999px;
+	flex: 0 0 auto;
+}
+.ndot.live {
+	background: var(--green);
+	box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+	animation: pulse 2s infinite;
+}
+.ndot.lime {
+	background: #c4e34f;
+}
+.ndot.gray {
+	background: #cfcfcf;
+}
+.ndot.warn {
+	background: var(--orange);
+}
+@keyframes pulse {
+	0% {
+		box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+	}
+	70% {
+		box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+	}
+	100% {
+		box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+	}
+}
+.float-pill {
+	position: absolute;
+	right: -18px;
+	top: 46%;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	background: #fff;
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	padding: 11px 18px;
+	box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.3);
+	font-size: 12.5px;
+	font-weight: 700;
+	animation: bob 6s ease-in-out infinite;
+}
+@keyframes bob {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-10px);
+	}
+}
+
+/* ---------- trust ---------- */
+.trust {
+	padding: 60px 24px 30px;
+	text-align: center;
+	border-top: 1px solid var(--line-soft);
+}
+.trust-eyebrow {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: #9a9a9a;
+}
+.logos {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 42px;
+	justify-content: center;
+	align-items: center;
+	margin-top: 26px;
+}
+.logos span {
+	font-family: "Clash Grotesk", sans-serif;
+	font-size: 21px;
+	letter-spacing: -0.02em;
+	color: #bdbdbd;
+	transition: color 0.25s;
+}
+.logos span:hover {
+	color: var(--ink);
+}
+
+/* ---------- section heads ---------- */
+.sec-head {
+	max-width: 680px;
+	margin: 0 auto 54px;
+	text-align: center;
+}
+.sec-head h2 {
+	font-size: clamp(30px, 4.2vw, 44px);
+	margin-top: 14px;
+}
+.sec-head p {
+	color: var(--gray);
+	font-size: 17px;
+	margin-top: 14px;
+	line-height: 1.7;
+}
+
+/* ---------- features ---------- */
+.features {
+	padding: 90px 24px;
+}
+.feature-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 20px;
+}
+.feat {
+	background: #fff;
+	border: 1px solid var(--line);
+	border-radius: 18px;
+	padding: 30px;
+	transition:
+		transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1),
+		box-shadow 0.4s;
+}
+.feat:hover {
+	transform: translateY(-8px);
+	box-shadow: 0 26px 50px -22px rgba(0, 0, 0, 0.22);
+}
+.feat-ic {
+	width: 50px;
+	height: 50px;
+	border-radius: 14px;
+	background: var(--lime);
+	display: grid;
+	place-items: center;
+	margin-bottom: 20px;
+}
+.feat-ic svg {
+	width: 24px;
+	height: 24px;
+}
+.feat h3 {
+	font-size: 20px;
+}
+.feat p {
+	color: var(--gray);
+	font-size: 15px;
+	margin-top: 10px;
+	line-height: 1.65;
+}
+
+/* ---------- metrics band ---------- */
+.metrics-band {
+	background: var(--ink);
+	color: #fff;
+	padding: 64px 0;
+}
+.metrics-grid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 24px;
+	text-align: center;
+}
+.metric {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	position: relative;
+}
+.metric:not(:last-child)::after {
+	content: "";
+	position: absolute;
+	right: -12px;
+	top: 14%;
+	height: 72%;
+	width: 1px;
+	background: rgba(255, 255, 255, 0.12);
+}
+.m-num {
+	font-family: "Clash Grotesk", sans-serif;
+	font-size: clamp(34px, 4.6vw, 52px);
+	letter-spacing: -0.03em;
+	color: var(--lime);
+}
+.m-lab {
+	font-size: 13.5px;
+	color: rgba(255, 255, 255, 0.6);
+	font-weight: 500;
+}
+
+/* ---------- how it works ---------- */
+.how {
+	padding: 96px 24px;
+}
+.how-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 40px;
+}
+.how-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 50px;
+	align-items: center;
+}
+.how-row.rev .how-copy {
+	order: 2;
+}
+.step-no {
+	font-family: "Clash Grotesk", sans-serif;
+	font-size: 14px;
+	font-weight: 500;
+	color: var(--ink);
+	background: var(--lime);
+	padding: 4px 12px;
+	border-radius: 999px;
+	letter-spacing: 0.04em;
+}
+.how-copy h3 {
+	font-size: 28px;
+	margin: 18px 0 12px;
+}
+.how-copy p {
+	color: var(--gray);
+	font-size: 16px;
+	line-height: 1.7;
+}
+.ticks {
+	list-style: none;
+	margin-top: 18px;
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+}
+.ticks li {
+	position: relative;
+	padding-left: 28px;
+	font-size: 14.5px;
+	color: var(--ink);
+}
+.ticks li::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 2px;
+	width: 18px;
+	height: 18px;
+	border-radius: 6px;
+	background: var(--lime);
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='m5 12 4 4 10-10' stroke='%231d1d1d' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+	background-size: 14px;
+	background-position: center;
+	background-repeat: no-repeat;
+}
+.how-card {
+	background: #fff;
+	border: 1px solid var(--line);
+	border-radius: 20px;
+	padding: 22px;
+	box-shadow: 0 30px 60px -34px rgba(0, 0, 0, 0.25);
+}
+.feed-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 13px;
+	font-weight: 700;
+	padding-bottom: 14px;
+	border-bottom: 1px solid var(--line-soft);
+}
+.feed-tag {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--gray);
+	background: var(--card);
+	padding: 4px 9px;
+	border-radius: 7px;
+}
+.feed-tag.ok {
+	background: var(--lime);
+	color: var(--ink);
+}
+.feed-item {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 13px 0;
+	border-bottom: 1px solid var(--line-soft);
+}
+.feed-item:last-child {
+	border-bottom: none;
+}
+.feed-item b {
+	font-size: 14px;
+	display: block;
+}
+.feed-item small {
+	font-size: 12px;
+	color: var(--gray);
+}
+.feed-item .ndot {
+	margin-top: 0;
+}
+.risk-bars {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	margin-top: 18px;
+}
+.rb {
+	display: grid;
+	grid-template-columns: 64px 1fr 32px;
+	align-items: center;
+	gap: 12px;
+	font-size: 13px;
+	font-weight: 500;
+}
+.rb i {
+	height: 8px;
+	border-radius: 999px;
+	background: var(--c);
+	width: var(--w);
+	display: block;
+}
+.rb b {
+	text-align: right;
+	font-weight: 700;
+}
+.run {
+	list-style: none;
+	counter-reset: s;
+	margin-top: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.run li {
+	position: relative;
+	padding-left: 30px;
+	font-size: 14.5px;
+	counter-increment: s;
+}
+.run li::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 1px;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: var(--lime);
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m5 12 4 4 10-10' stroke='%231d1d1d' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+	background-size: 13px;
+	background-position: center;
+	background-repeat: no-repeat;
+}
+.run-foot {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	margin-top: 18px;
+	padding-top: 14px;
+	border-top: 1px solid var(--line-soft);
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--green);
+}
+
+/* ---------- pricing ---------- */
+.pricing {
+	padding: 96px 24px;
+}
+.plans {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 20px;
+	align-items: stretch;
+}
+.plan {
+	position: relative;
+	background: #fff;
+	border: 1px solid var(--line);
+	border-radius: 20px;
+	padding: 32px;
+	display: flex;
+	flex-direction: column;
+}
+.plan.featured {
+	border: 2px solid var(--ink);
+	box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.3);
+}
+.pop {
+	position: absolute;
+	top: -13px;
+	left: 50%;
+	transform: translateX(-50%);
+	background: var(--lime);
+	color: var(--ink);
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	padding: 6px 14px;
+	border-radius: 999px;
+}
+.plan-name {
+	font-size: 13px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	color: var(--gray);
+}
+.plan-price {
+	font-family: "Clash Grotesk", sans-serif;
+	font-size: 42px;
+	letter-spacing: -0.03em;
+	margin: 10px 0 6px;
+}
+.plan-price span {
+	font-size: 16px;
+	color: var(--gray);
+	font-family: "Satoshi";
+}
+.plan-desc {
+	color: var(--gray);
+	font-size: 14.5px;
+	min-height: 42px;
+}
+.plan .ticks {
+	flex: 1;
+	margin: 22px 0 24px;
+}
+.plan-cta {
+	justify-content: center;
+	padding: 14px 24px;
+}
+
+/* ---------- cta band ---------- */
+.cta-band {
+	padding: 30px 24px 96px;
+}
+.cta-inner {
+	position: relative;
+	overflow: hidden;
+	background: var(--bone);
+	border: 1px solid var(--line);
+	border-radius: 28px;
+	padding: 72px 28px;
+	text-align: center;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 18px;
+}
+.hero-grid.sm {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	transform: none;
+	max-width: none;
+	-webkit-mask-image: radial-gradient(
+		ellipse 60% 90% at 50% 0%,
+		#000 0%,
+		transparent 70%
+	);
+	mask-image: radial-gradient(
+		ellipse 60% 90% at 50% 0%,
+		#000 0%,
+		transparent 70%
+	);
+}
+.cta-inner h2 {
+	font-size: clamp(30px, 4.4vw, 46px);
+	position: relative;
+	z-index: 2;
+}
+.cta-inner p {
+	color: var(--gray);
+	font-size: 17px;
+	max-width: 480px;
+	position: relative;
+	z-index: 2;
+}
+.cta-inner .pill {
+	position: relative;
+	z-index: 2;
+	margin-top: 8px;
+}
+
+/* ---------- footer ---------- */
+.footer {
+	background: var(--ink);
+	color: rgba(255, 255, 255, 0.7);
+	padding: 64px 0 30px;
+}
+.foot-grid {
+	display: grid;
+	grid-template-columns: 1.6fr 1fr 1fr 1fr;
+	gap: 40px;
+	padding-bottom: 42px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.foot-brand p {
+	font-size: 14px;
+	margin-top: 16px;
+	max-width: 240px;
+	line-height: 1.6;
+}
+.status-line {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	color: var(--lime);
+	font-weight: 700;
+	font-size: 13px;
+}
+.foot-col h4 {
+	color: #fff;
+	font-size: 14px;
+	margin-bottom: 16px;
+}
+.foot-col a {
+	display: block;
+	font-size: 14px;
+	padding: 6px 0;
+	transition: color 0.2s;
+}
+.foot-col a:hover {
+	color: #fff;
+}
+.foot-base {
+	display: flex;
+	justify-content: space-between;
+	padding-top: 24px;
+	font-size: 13px;
+	color: rgba(255, 255, 255, 0.5);
+}
+
+/* ---------- reveal anims ---------- */
+.reveal,
+.reveal-s {
+	opacity: 0;
+	transform: translateY(30px);
+	transition:
+		opacity 1s cubic-bezier(0.21, 0.45, 0.32, 0.9),
+		transform 1s cubic-bezier(0.21, 0.45, 0.32, 0.9);
+}
+.reveal.in,
+.reveal-s.in {
+	opacity: 1;
+	transform: none;
+}
+.reveal[data-d="1"] {
+	transition-delay: 0.08s;
+}
+.reveal[data-d="2"] {
+	transition-delay: 0.16s;
+}
+.reveal[data-d="3"] {
+	transition-delay: 0.24s;
+}
+.reveal[data-d="4"] {
+	transition-delay: 0.34s;
+}
+.feature-grid .feat:nth-child(2) {
+	transition-delay: 0.07s;
+}
+.feature-grid .feat:nth-child(3) {
+	transition-delay: 0.14s;
+}
+.feature-grid .feat:nth-child(5) {
+	transition-delay: 0.07s;
+}
+.feature-grid .feat:nth-child(6) {
+	transition-delay: 0.14s;
+}
+.plans .plan:nth-child(2) {
+	transition-delay: 0.08s;
+}
+.plans .plan:nth-child(3) {
+	transition-delay: 0.16s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	* {
+		animation: none;
+		transition: none;
+	}
+	.reveal,
+	.reveal-s {
+		opacity: 1;
+		transform: none;
+	}
+	.bar i {
+		transform: scaleX(1);
+	}
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 920px) {
+	.nav-links {
+		display: none;
+	}
+	.hamburger {
+		display: flex;
+	}
+	.mobile-sheet {
+		display: flex;
+	}
+	.nav-cta {
+		display: none;
+	}
+	.console-grid {
+		grid-template-columns: 1fr;
+	}
+	.stat-col {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+	.stat-card {
+		flex: 1;
+		min-width: 160px;
+	}
+	.float-pill {
+		display: none;
+	}
+	.feature-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+	.metrics-grid {
+		grid-template-columns: 1fr 1fr;
+		gap: 36px 24px;
+	}
+	.metric:nth-child(2)::after {
+		display: none;
+	}
+	.how-row,
+	.how-row.rev {
+		grid-template-columns: 1fr;
+		gap: 28px;
+	}
+	.how-row.rev .how-copy {
+		order: 0;
+	}
+	.plans {
+		grid-template-columns: 1fr;
+		max-width: 440px;
+		margin-inline: auto;
+	}
+	.foot-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+@media (max-width: 560px) {
+	.feature-grid {
+		grid-template-columns: 1fr;
+	}
+	.metrics-grid {
+		grid-template-columns: 1fr;
+	}
+	.metric::after {
+		display: none;
+	}
+	.foot-grid {
+		grid-template-columns: 1fr;
+	}
+	.foot-base {
+		flex-direction: column;
+		gap: 8px;
+	}
+	.hero {
+		padding-top: 30px;
+	}
+	.console {
+		padding: 16px;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Clash+Grotesk:wght@300;400;500;600;700;800&family=Satoshi:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- ===================== HEADER ===================== -->
+		<header class="site-header" id="top">
+			<nav class="nav container">
+				<a href="#top" class="brand" aria-label="Aegis home">
+					<span class="brand-chip" aria-hidden="true">
+						<svg viewBox="0 0 24 24" fill="none">
+							<path
+								d="M12 2 4 5.5V11c0 5 3.6 8.4 8 10 4.4-1.6 8-5 8-10V5.5L12 2Z"
+								stroke="#DCF986"
+								stroke-width="2"
+								stroke-linejoin="round"
+							/>
+							<path
+								d="m8.5 12 2.4 2.4L15.5 9.6"
+								stroke="#DCF986"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					</span>
+					<span class="brand-word">Aegis</span>
+				</a>
+
+				<div class="nav-links" id="navLinks">
+					<div class="nav-item has-menu">
+						<button class="nav-link nav-trigger" aria-expanded="false">
+							Platform
+							<svg viewBox="0 0 24 24" fill="none" class="chev">
+								<path
+									d="m6 9 6 6 6-6"
+									stroke="currentColor"
+									stroke-width="1.6"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						</button>
+						<div class="mega">
+							<a href="#features"
+								><span class="mega-t">Cloud Security</span
+								><span class="mega-s">Enterprise asset protection</span></a
+							>
+							<a href="#features"
+								><span class="mega-t">Threat Response</span
+								><span class="mega-s">Real-time attack mitigation</span></a
+							>
+							<a href="#features"
+								><span class="mega-t">Consulting</span
+								><span class="mega-s">Expert vulnerability audits</span></a
+							>
+						</div>
+					</div>
+					<a class="nav-link" href="#features">Features</a>
+					<a class="nav-link" href="#pricing">Pricing</a>
+					<a class="nav-link" href="#how">Docs</a>
+				</div>
+
+				<div class="nav-right">
+					<a href="#pricing" class="pill pill-ink nav-cta">
+						Get Started
+						<span class="pill-arrow" aria-hidden="true">
+							<svg viewBox="0 0 24 24" fill="none">
+								<path
+									d="M5 12h14M13 6l6 6-6 6"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						</span>
+					</a>
+					<button
+						class="hamburger"
+						id="hamburger"
+						aria-label="Open menu"
+						aria-expanded="false"
+					>
+						<span></span><span></span><span></span>
+					</button>
+				</div>
+			</nav>
+
+			<div class="mobile-sheet" id="mobileSheet">
+				<a href="#features">Platform</a>
+				<a href="#features">Features</a>
+				<a href="#pricing">Pricing</a>
+				<a href="#how">Docs</a>
+				<a href="#pricing" class="pill pill-ink sheet-cta">Get Started</a>
+			</div>
+		</header>
+
+		<main>
+			<!-- ===================== HERO ===================== -->
+			<section class="hero">
+				<div class="hero-grid" aria-hidden="true"></div>
+
+				<div class="hero-content container">
+					<span class="eyebrow reveal" data-d="0">// Aegis Security Cloud</span>
+					<h1 class="reveal" data-d="1">
+						Shield every digital asset with ironclad precision
+					</h1>
+					<p class="hero-sub reveal" data-d="2">
+						Aegis delivers industry-leading threat detection and real-time
+						response, keeping your infrastructure resilient against an
+						ever-evolving threat landscape — all from a single console.
+					</p>
+
+					<div class="hero-actions reveal" data-d="3">
+						<a href="#pricing" class="pill pill-ink pill-lg btn-icon">
+							Get Started
+							<span class="pill-arrow lime"
+								><svg viewBox="0 0 24 24" fill="none">
+									<path
+										d="M5 12h14M13 6l6 6-6 6"
+										stroke="#1d1d1d"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg></span
+							>
+						</a>
+						<a href="#how" class="pill pill-ghost pill-lg btn-icon">
+							Learn more
+							<span class="pill-arrow gray"
+								><svg viewBox="0 0 24 24" fill="none">
+									<path
+										d="M5 12h14M13 6l6 6-6 6"
+										stroke="#1d1d1d"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg></span
+							>
+						</a>
+					</div>
+				</div>
+
+				<!-- Console mockup -->
+				<div class="console-wrap container reveal" data-d="4">
+					<div class="glow glow-lime" aria-hidden="true"></div>
+					<div class="glow glow-ink" aria-hidden="true"></div>
+
+					<div class="console">
+						<div class="console-head">
+							<div class="console-id">
+								<span class="id-chip"><span class="id-dot"></span></span>
+								<div>
+									<p class="id-eyebrow">Security Console</p>
+									<h3>System Health: Optimal</h3>
+								</div>
+							</div>
+							<div class="console-tools">
+								<span class="tool wide">Last 24h</span>
+								<span class="tool sq"></span>
+							</div>
+						</div>
+
+						<div class="console-grid">
+							<aside class="stat-col">
+								<div class="stat-card ink">
+									<p class="sc-label">Threats Prevented</p>
+									<h4 class="counter" data-target="12842">0</h4>
+									<div class="bar"><i style="--w:78%"></i></div>
+								</div>
+								<div class="stat-card bone">
+									<p class="sc-label dark">Active Scans</p>
+									<div class="sc-row">
+										<span class="big counter" data-target="94" data-suffix="%"
+											>0</span
+										><span class="delta">+2.4%</span>
+									</div>
+								</div>
+								<div class="stat-card bone">
+									<p class="sc-label dark">Mean Response</p>
+									<div class="sc-row">
+										<span class="big">38<small>ms</small></span
+										><span class="delta">-6ms</span>
+									</div>
+								</div>
+							</aside>
+
+							<div class="chart-panel">
+								<div class="chart-top">
+									<span class="chart-title">Attack Surface Analysis</span>
+									<div class="legend">
+										<span class="dot lime"></span><span class="dot blue"></span>
+									</div>
+								</div>
+								<svg
+									class="chart"
+									viewBox="0 0 400 150"
+									preserveAspectRatio="none"
+									aria-hidden="true"
+								>
+									<line x1="0" y1="38" x2="400" y2="38" class="grid-line" />
+									<line x1="0" y1="76" x2="400" y2="76" class="grid-line" />
+									<line x1="0" y1="114" x2="400" y2="114" class="grid-line" />
+									<path
+										class="area"
+										d="M0,120 Q50,108 100,124 T200,64 T300,86 T400,40 L400,150 L0,150 Z"
+									/>
+									<path
+										class="line-bg"
+										d="M0,128 Q50,118 100,132 T200,92 T300,108 T400,74"
+										fill="none"
+									/>
+									<path
+										class="line-lime"
+										id="chartLine"
+										d="M0,120 Q50,108 100,124 T200,64 T300,86 T400,40"
+										fill="none"
+									/>
+								</svg>
+							</div>
+						</div>
+
+						<div class="console-status">
+							<span class="node"
+								><i class="ndot live"></i>Europe-West Node</span
+							>
+							<span class="node"><i class="ndot live"></i>US-East Node</span>
+							<span class="node"
+								><i class="ndot lime"></i>AI Defense Active</span
+							>
+							<span class="node"><i class="ndot gray"></i>99.9% Uptime</span>
+						</div>
+					</div>
+
+					<div class="float-pill" aria-hidden="true">
+						<i class="ndot live"></i><span>Real-time monitoring on</span>
+					</div>
+				</div>
+			</section>
+
+			<!-- ===================== TRUST STRIP ===================== -->
+			<section class="trust container">
+				<p class="trust-eyebrow">Trusted by security teams at</p>
+				<div class="logos">
+					<span>NORTHWIND</span><span>Helix&nbsp;Bank</span><span>Quantar</span
+					><span>Vexel</span><span>Orbital&nbsp;Labs</span><span>Meridian</span>
+				</div>
+			</section>
+
+			<!-- ===================== FEATURES ===================== -->
+			<section class="features container" id="features">
+				<div class="sec-head reveal-s">
+					<span class="eyebrow">Capabilities</span>
+					<h2>A complete defense surface, engineered into one console</h2>
+					<p>
+						Every layer of your stack — observed, scored, and defended in real
+						time, without the noise.
+					</p>
+				</div>
+				<div class="feature-grid">
+					<article class="feat reveal-s">
+						<span class="feat-ic"
+							><svg viewBox="0 0 24 24" fill="none">
+								<circle
+									cx="12"
+									cy="12"
+									r="9"
+									stroke="#1d1d1d"
+									stroke-width="1.8"
+								/>
+								<circle
+									cx="12"
+									cy="12"
+									r="4.5"
+									stroke="#1d1d1d"
+									stroke-width="1.8"
+								/>
+								<path
+									d="M12 12 19 5"
+									stroke="#1d1d1d"
+									stroke-width="1.8"
+									stroke-linecap="round"
+								/>
+								<circle cx="12" cy="12" r="1.6" fill="#1d1d1d" />
+							</svg></span
+						>
+						<h3>Real-Time Threat Detection</h3>
+						<p>
+							Continuous behavioral analysis flags anomalies the moment they
+							appear across cloud and edge.
+						</p>
+					</article>
+					<article class="feat reveal-s">
+						<span class="feat-ic"
+							><svg viewBox="0 0 24 24" fill="none">
+								<path
+									d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"
+									stroke="#1d1d1d"
+									stroke-width="1.8"
+									stroke-linejoin="round"
+								/>
+							</svg></span
+						>
+						<h3>Automated Response</h3>
+						<p>
+							Pre-approved playbooks contain and remediate threats in
+							milliseconds — no human in the loop required.
+						</p>
+					</article>
+					<article class="feat reveal-s">
+						<span class="feat-ic"
+							><svg viewBox="0 0 24 24" fill="none">
+								<rect
+									x="4.5"
+									y="10.5"
+									width="15"
+									height="10"
+									rx="2.5"
+									stroke="#1d1d1d"
+									stroke-width="1.8"
+								/>
+								<path
+									d="M8 10.5V8a4 4 0 0 1 8 0v2.5"
+									stroke="#1d1d1d"
+									stroke-width="1.8"
+								/>
+								<circle cx="12" cy="15.5" r="1.5" fill="#1d1d1d" />
+							</svg></span
+						>
+						<h3>Zero-Trust Access</h3>
+						<p>
+							Every request verified, every identity scoped. Least-privilege
+							enforced down to the API call.
+						</p>
+					</article>
+					<article class="feat reveal-s">
+						<span class="feat-ic"
+							><svg viewBox="0 0 24 24" fill="none">
+								<path
+									d="M6 3h8l4 4v14H6V3Z"
+									stroke="#1d1d1d"
+									stroke-width="1.8"
+									stroke-linejoin="round"
+								/>
+								<path
+									d="M14 3v4h4M9 13l2 2 4-4"
+									stroke="#1d1d1d"
+									stroke-width="1.8"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg></span
+						>
+						<h3>Compliance Reporting</h3>
+						<p>
+							SOC 2, ISO 27001, and HIPAA evidence generated continuously and
+							exported on demand.
+						</p>
+					</article>
+					<article class="feat reveal-s">
+						<span class="feat-ic"
+							><svg viewBox="0 0 24 24" fill="none">
+								<path
+									d="M3 12h4l2-6 4 14 2.5-8H21"
+									stroke="#1d1d1d"
+									stroke-width="1.8"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg></span
+						>
+						<h3>Endpoint Telemetry</h3>
+						<p>
+							Granular signal from every device, normalized into a single
+							timeline you can actually read.
+						</p>
+					</article>
+					<article class="feat reveal-s">
+						<span class="feat-ic"
+							><svg viewBox="0 0 24 24" fill="none">
+								<path
+									d="M12 4a4 4 0 0 0-4 4 3.2 3.2 0 0 0-1 6.2V16a3 3 0 0 0 5 2.2A3 3 0 0 0 17 16v-1.8A3.2 3.2 0 0 0 16 8a4 4 0 0 0-4-4Z"
+									stroke="#1d1d1d"
+									stroke-width="1.7"
+									stroke-linejoin="round"
+								/>
+								<path d="M12 8v10" stroke="#1d1d1d" stroke-width="1.7" />
+							</svg></span
+						>
+						<h3>AI Anomaly Scoring</h3>
+						<p>
+							Models trained on your baseline surface the 0.1% that matters and
+							silence the rest.
+						</p>
+					</article>
+				</div>
+			</section>
+
+			<!-- ===================== METRICS BAND ===================== -->
+			<section class="metrics-band">
+				<div class="container metrics-grid">
+					<div class="metric">
+						<span class="m-num"
+							><span class="counter" data-target="99.99" data-dec="2"
+								>0</span
+							>%</span
+						><span class="m-lab">Platform uptime</span>
+					</div>
+					<div class="metric">
+						<span class="m-num"
+							><span class="counter" data-target="1.2" data-dec="1"
+								>0</span
+							>B</span
+						><span class="m-lab">Events analyzed daily</span>
+					</div>
+					<div class="metric">
+						<span class="m-num"
+							>&lt;<span class="counter" data-target="40">0</span>ms</span
+						><span class="m-lab">Median response time</span>
+					</div>
+					<div class="metric">
+						<span class="m-num"
+							><span class="counter" data-target="0">0</span></span
+						><span class="m-lab">Customer breaches, ever</span>
+					</div>
+				</div>
+			</section>
+
+			<!-- ===================== HOW IT WORKS ===================== -->
+			<section class="how container" id="how">
+				<div class="sec-head reveal-s">
+					<span class="eyebrow">How it works</span>
+					<h2>From signal to resolution in three precise moves</h2>
+				</div>
+
+				<div class="how-rows">
+					<div class="how-row reveal-s">
+						<div class="how-copy">
+							<span class="step-no">01</span>
+							<h3>Ingest every signal</h3>
+							<p>
+								Connect cloud accounts, endpoints, and identity providers in
+								minutes. Aegis normalizes the firehose into one coherent
+								timeline — nothing dropped, nothing duplicated.
+							</p>
+							<ul class="ticks">
+								<li>200+ native integrations</li>
+								<li>Agentless cloud onboarding</li>
+								<li>Schema-aware enrichment</li>
+							</ul>
+						</div>
+						<div class="how-card">
+							<div class="feed-head">
+								<span>Live Alert Feed</span
+								><span class="feed-tag">streaming</span>
+							</div>
+							<div class="feed-item">
+								<i class="ndot live"></i>
+								<div>
+									<b>Privilege escalation blocked</b
+									><small>iam · us-east · 0.4s ago</small>
+								</div>
+							</div>
+							<div class="feed-item">
+								<i class="ndot lime"></i>
+								<div>
+									<b>Anomalous egress flagged</b
+									><small>vpc-3 · scored 0.91</small>
+								</div>
+							</div>
+							<div class="feed-item warn">
+								<i class="ndot warn"></i>
+								<div>
+									<b>Credential reuse detected</b
+									><small>auth · auto-quarantined</small>
+								</div>
+							</div>
+							<div class="feed-item">
+								<i class="ndot live"></i>
+								<div>
+									<b>Patch baseline verified</b
+									><small>fleet · 4,210 hosts</small>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="how-row rev reveal-s">
+						<div class="how-copy">
+							<span class="step-no">02</span>
+							<h3>Score with context</h3>
+							<p>
+								Models trained on your own baseline rank every event by real
+								risk, collapsing thousands of alerts into the handful that
+								demand a human.
+							</p>
+							<ul class="ticks">
+								<li>Per-asset risk baselines</li>
+								<li>Explainable scoring</li>
+								<li>Noise reduced by 98%</li>
+							</ul>
+						</div>
+						<div class="how-card">
+							<div class="feed-head">
+								<span>Risk Distribution</span><span class="feed-tag">24h</span>
+							</div>
+							<div class="risk-bars">
+								<div class="rb">
+									<span>Critical</span><i style="--w:14%;--c:#FF8C42"></i
+									><b>3</b>
+								</div>
+								<div class="rb">
+									<span>High</span><i style="--w:32%;--c:#1d1d1d"></i><b>11</b>
+								</div>
+								<div class="rb">
+									<span>Medium</span><i style="--w:58%;--c:#DCF986"></i
+									><b>46</b>
+								</div>
+								<div class="rb">
+									<span>Low</span><i style="--w:90%;--c:#e6e6e6"></i><b>912</b>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="how-row reveal-s">
+						<div class="how-copy">
+							<span class="step-no">03</span>
+							<h3>Resolve automatically</h3>
+							<p>
+								Pre-approved playbooks isolate, revoke, and remediate before the
+								on-call phone rings — with a full, exportable audit trail for
+								every action taken.
+							</p>
+							<ul class="ticks">
+								<li>Sub-40ms containment</li>
+								<li>One-click rollback</li>
+								<li>Continuous compliance evidence</li>
+							</ul>
+						</div>
+						<div class="how-card">
+							<div class="feed-head">
+								<span>Playbook Run</span
+								><span class="feed-tag ok">resolved</span>
+							</div>
+							<ol class="run">
+								<li class="done">Detected lateral movement</li>
+								<li class="done">Isolated affected node</li>
+								<li class="done">Revoked compromised token</li>
+								<li class="done">Restored from clean snapshot</li>
+							</ol>
+							<div class="run-foot">
+								<i class="ndot lime"></i>Contained in 38ms
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ===================== PRICING ===================== -->
+			<section class="pricing container" id="pricing">
+				<div class="sec-head reveal-s">
+					<span class="eyebrow">Pricing</span>
+					<h2>Defense that scales with your surface</h2>
+					<p>
+						Start free. Upgrade when your perimeter does. No surprise overages.
+					</p>
+				</div>
+				<div class="plans">
+					<article class="plan reveal-s">
+						<p class="plan-name">Starter</p>
+						<p class="plan-price">$0<span>/mo</span></p>
+						<p class="plan-desc">
+							For small teams securing their first cloud footprint.
+						</p>
+						<ul class="ticks">
+							<li>Up to 25 assets</li>
+							<li>Real-time detection</li>
+							<li>Community playbooks</li>
+							<li>7-day retention</li>
+						</ul>
+						<a href="#" class="pill pill-ghost plan-cta">Start free</a>
+					</article>
+					<article class="plan featured reveal-s">
+						<span class="pop">Most popular</span>
+						<p class="plan-name">Team</p>
+						<p class="plan-price">$890<span>/mo</span></p>
+						<p class="plan-desc">
+							For growing security teams that need automation.
+						</p>
+						<ul class="ticks">
+							<li>Up to 2,000 assets</li>
+							<li>Automated response</li>
+							<li>AI anomaly scoring</li>
+							<li>90-day retention</li>
+							<li>SOC 2 evidence export</li>
+						</ul>
+						<a href="#" class="pill pill-lime plan-cta">Get started</a>
+					</article>
+					<article class="plan reveal-s">
+						<p class="plan-name">Enterprise</p>
+						<p class="plan-price">Custom</p>
+						<p class="plan-desc">
+							For regulated orgs with global, hybrid estates.
+						</p>
+						<ul class="ticks">
+							<li>Unlimited assets</li>
+							<li>Zero-trust access</li>
+							<li>Dedicated response pod</li>
+							<li>Custom retention</li>
+							<li>On-prem & air-gapped</li>
+						</ul>
+						<a href="#" class="pill pill-ghost plan-cta">Talk to sales</a>
+					</article>
+				</div>
+			</section>
+
+			<!-- ===================== CTA BAND ===================== -->
+			<section class="cta-band">
+				<div class="container cta-inner reveal-s">
+					<div class="hero-grid sm" aria-hidden="true"></div>
+					<h2>Put your perimeter on autopilot</h2>
+					<p>
+						Deploy Aegis in an afternoon and watch the noise disappear. First 30
+						days, fully on us.
+					</p>
+					<a href="#" class="pill pill-lime pill-lg btn-icon"
+						>Start your trial
+						<span class="pill-arrow"
+							><svg viewBox="0 0 24 24" fill="none">
+								<path
+									d="M5 12h14M13 6l6 6-6 6"
+									stroke="#1d1d1d"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg></span
+						>
+					</a>
+				</div>
+			</section>
+		</main>
+
+		<!-- ===================== FOOTER ===================== -->
+		<footer class="footer">
+			<div class="container foot-grid">
+				<div class="foot-brand">
+					<a href="#top" class="brand">
+						<span class="brand-chip"
+							><svg viewBox="0 0 24 24" fill="none">
+								<path
+									d="M12 2 4 5.5V11c0 5 3.6 8.4 8 10 4.4-1.6 8-5 8-10V5.5L12 2Z"
+									stroke="#DCF986"
+									stroke-width="2"
+									stroke-linejoin="round"
+								/>
+								<path
+									d="m8.5 12 2.4 2.4L15.5 9.6"
+									stroke="#DCF986"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg></span
+						>
+						<span class="brand-word light">Aegis</span>
+					</a>
+					<p>Ironclad precision for the modern perimeter.</p>
+					<p class="status-line">
+						<i class="ndot live"></i>All systems operational
+					</p>
+				</div>
+				<div class="foot-col">
+					<h4>Product</h4>
+					<a href="#features">Features</a><a href="#pricing">Pricing</a
+					><a href="#how">How it works</a><a href="#">Changelog</a>
+				</div>
+				<div class="foot-col">
+					<h4>Company</h4>
+					<a href="#">About</a><a href="#">Careers</a><a href="#">Security</a
+					><a href="#">Contact</a>
+				</div>
+				<div class="foot-col">
+					<h4>Resources</h4>
+					<a href="#">Docs</a><a href="#">API</a><a href="#">Status</a
+					><a href="#">Trust Center</a>
+				</div>
+			</div>
+			<div class="container foot-base">
+				<span>© 2026 Aegis Security, Inc.</span>
+				<span>Privacy · Terms · DPA</span>
+			</div>
+		</footer>
+
+		<script>
+(() => {
+	var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	/* ---- mobile menu ---- */
+	var burger = document.getElementById("hamburger");
+	var sheet = document.getElementById("mobileSheet");
+	if (burger && sheet) {
+		burger.addEventListener("click", () => {
+			var open = sheet.classList.toggle("open");
+			burger.classList.toggle("open", open);
+			burger.setAttribute("aria-expanded", open);
+		});
+		sheet.querySelectorAll("a").forEach((a) => {
+			a.addEventListener("click", () => {
+				sheet.classList.remove("open");
+				burger.classList.remove("open");
+				burger.setAttribute("aria-expanded", "false");
+			});
+		});
+	}
+
+	/* ---- reveal on scroll ---- */
+	var revealEls = document.querySelectorAll(".reveal, .reveal-s");
+	if (reduce) {
+		revealEls.forEach((el) => {
+			el.classList.add("in");
+		});
+	} else {
+		var io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((e) => {
+					if (e.isIntersecting) {
+						e.target.classList.add("in");
+						io.unobserve(e.target);
+					}
+				});
+			},
+			{ threshold: 0.12, rootMargin: "0px 0px -40px 0px" },
+		);
+		revealEls.forEach((el) => {
+			io.observe(el);
+		});
+	}
+
+	/* ---- count up ---- */
+	function animateCount(el) {
+		var target = parseFloat(el.getAttribute("data-target"));
+		var dec = parseInt(el.getAttribute("data-dec") || "0", 10);
+		var suffix = el.getAttribute("data-suffix") || "";
+		if (reduce) {
+			el.textContent = target.toFixed(dec) + suffix;
+			return;
+		}
+		var dur = 1500,
+			start = null;
+		function fmt(v) {
+			var s = dec ? v.toFixed(dec) : Math.round(v).toLocaleString("en-US");
+			return s + suffix;
+		}
+		function step(ts) {
+			if (!start) start = ts;
+			var p = Math.min((ts - start) / dur, 1);
+			var eased = 1 - (1 - p) ** 3;
+			el.textContent = fmt(target * eased);
+			if (p < 1) requestAnimationFrame(step);
+			else el.textContent = fmt(target);
+		}
+		requestAnimationFrame(step);
+	}
+
+	var counters = document.querySelectorAll(".counter");
+	var cio = new IntersectionObserver(
+		(entries) => {
+			entries.forEach((e) => {
+				if (e.isIntersecting) {
+					animateCount(e.target);
+					cio.unobserve(e.target);
+				}
+			});
+		},
+		{ threshold: 0.4 },
+	);
+	counters.forEach((c) => {
+		cio.observe(c);
+	});
+
+	/* ---- console + chart draw on enter ---- */
+	var console_ = document.querySelector(".console");
+	var chartLine = document.getElementById("chartLine");
+	if (chartLine) {
+		var len = chartLine.getTotalLength();
+		chartLine.style.strokeDasharray = len;
+		chartLine.style.strokeDashoffset = reduce ? 0 : len;
+	}
+	if (console_) {
+		var conIo = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((e) => {
+					if (e.isIntersecting) {
+						console_.classList.add("in");
+						if (chartLine && !reduce) {
+							chartLine.style.transition =
+								"stroke-dashoffset 1.8s cubic-bezier(.2,.7,.2,1) .3s";
+							requestAnimationFrame(() => {
+								chartLine.style.strokeDashoffset = 0;
+							});
+						}
+						conIo.unobserve(console_);
+					}
+				});
+			},
+			{ threshold: 0.25 },
+		);
+		conIo.observe(console_);
+	}
+
+	/* ---- header border on scroll ---- */
+	var header = document.querySelector(".site-header");
+	function onScroll() {
+		header.style.borderBottomColor =
+			window.scrollY > 8 ? "rgba(0,0,0,.07)" : "transparent";
+	}
+	window.addEventListener("scroll", onScroll, { passive: true });
+	onScroll();
+})();
+
+		</script>
+	</body>
+</html>

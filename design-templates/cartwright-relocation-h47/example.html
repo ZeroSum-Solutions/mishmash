@@ -1,0 +1,2779 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Cartwright &amp; Co — White-Glove Relocation</title>
+		<meta
+			name="description"
+			content="Cartwright & Co — craft-led, white-glove relocation and storage, doorstep to doorstep."
+		>
+		<style>
+/* ============ CARTWRIGHT & CO — Warm Artisan Logistics ============ */
+
+/* ---- Fonts ---- */
+
+
+
+
+
+
+
+
+
+/* ---- Tokens ---- */
+:root {
+	--clay: #d9603b;
+	--clay-dark: #bf4f2e;
+	--ink: #211c18;
+	--paper: #faf4ec;
+	--panel: #fffdfa;
+	--sand: #efe3d2;
+	--sage: #e5ebe2;
+	--sky: #e4ecf2;
+	--blush: #f6e4dc;
+	--muted: #6f665c;
+	--line: rgba(33, 28, 24, 0.08);
+	--shadow-soft: 0 18px 50px -24px rgba(94, 55, 33, 0.35);
+	--shadow-card: 0 28px 60px -30px rgba(94, 55, 33, 0.45);
+	--ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--maxw: 1280px;
+}
+
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+html {
+	scroll-behavior: smooth;
+}
+body {
+	font-family: "Inter", system-ui, sans-serif;
+	background: var(--paper);
+	color: var(--ink);
+	line-height: 1.6;
+	-webkit-font-smoothing: antialiased;
+	overflow-x: hidden;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+img {
+	display: block;
+	max-width: 100%;
+}
+button {
+	font-family: inherit;
+	cursor: pointer;
+	border: none;
+	background: none;
+}
+h1,
+h2,
+h3,
+h4,
+h5 {
+	font-family: "DM Sans", sans-serif;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	line-height: 1.05;
+}
+.serif {
+	font-family: "Fraunces", serif;
+	font-style: italic;
+	font-weight: 600;
+	color: var(--clay);
+}
+.wrap {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 0 28px;
+}
+
+/* ---- Eyebrow pill ---- */
+.eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	background: rgba(217, 96, 59, 0.1);
+	border: 1px solid rgba(217, 96, 59, 0.22);
+	color: var(--clay);
+	font-weight: 700;
+	font-size: 10px;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	padding: 0.5rem 1rem;
+	border-radius: 999px;
+	width: fit-content;
+}
+.eyebrow .dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--clay);
+}
+
+/* ---- Buttons ---- */
+.btn {
+	position: relative;
+	overflow: hidden;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.55rem;
+	font-weight: 700;
+	font-size: 0.95rem;
+	border-radius: 999px;
+	padding: 0.95rem 1.8rem;
+	transition:
+		transform 0.3s var(--ease),
+		box-shadow 0.3s var(--ease);
+}
+.btn .lbl {
+	position: relative;
+	z-index: 2;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.55rem;
+	transition: color 0.3s;
+}
+.btn .wipe {
+	position: absolute;
+	inset: 0;
+	background: var(--clay);
+	transform: scaleX(0);
+	transform-origin: left;
+	transition: transform 0.35s var(--ease);
+	z-index: 1;
+}
+.btn:hover .wipe {
+	transform: scaleX(1);
+}
+.btn svg {
+	width: 15px;
+	height: 15px;
+	transition: transform 0.3s var(--ease);
+}
+.btn:hover svg {
+	transform: translateX(4px);
+}
+.btn-dark {
+	background: var(--ink);
+	color: #fff;
+	box-shadow: var(--shadow-soft);
+}
+.btn-dark:hover {
+	transform: translateY(-2px);
+}
+.btn-clay {
+	background: var(--clay);
+	color: #fff;
+	box-shadow: var(--shadow-soft);
+}
+.btn-clay .wipe {
+	background: var(--ink);
+}
+.btn-ghost {
+	border: 1.5px solid var(--ink);
+	color: var(--ink);
+}
+.btn-ghost .wipe {
+	background: var(--ink);
+}
+.btn-ghost:hover .lbl {
+	color: #fff;
+}
+
+.textlink {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-weight: 600;
+}
+.textlink::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	bottom: -2px;
+	height: 2px;
+	width: 0;
+	background: var(--clay);
+	transition: width 0.3s var(--ease);
+}
+.textlink:hover::after {
+	width: 100%;
+}
+.textlink svg {
+	width: 16px;
+	height: 16px;
+	transition: transform 0.3s var(--ease);
+}
+.textlink:hover svg {
+	transform: translateX(4px);
+}
+
+/* ---- Reveal ---- */
+[data-reveal] {
+	opacity: 0;
+	transition:
+		opacity 0.9s var(--ease),
+		transform 0.9s var(--ease);
+	will-change: transform, opacity;
+}
+[data-reveal="bottom"] {
+	transform: translateY(46px);
+}
+[data-reveal="left"] {
+	transform: translateX(-46px);
+}
+[data-reveal].in {
+	opacity: 1;
+	transform: none;
+}
+
+/* ============ NAV ============ */
+.nav {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 60;
+	background: rgba(250, 244, 236, 0.72);
+	backdrop-filter: blur(14px);
+	border-bottom: 1px solid var(--line);
+	transition:
+		padding 0.35s var(--ease),
+		background 0.35s;
+}
+.nav.shrink {
+	background: rgba(250, 244, 236, 0.92);
+}
+.nav-inner {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 0 28px;
+	height: 80px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	transition: height 0.35s var(--ease);
+}
+.nav.shrink .nav-inner {
+	height: 62px;
+}
+.brand {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	font-family: "DM Sans";
+	font-weight: 700;
+	font-size: 1.2rem;
+	letter-spacing: -0.02em;
+}
+.brand .tile {
+	width: 40px;
+	height: 40px;
+	border-radius: 12px;
+	background: linear-gradient(135deg, var(--clay), #e88254);
+	display: grid;
+	place-items: center;
+	color: #fff;
+	box-shadow: 0 8px 20px -6px rgba(217, 96, 59, 0.6);
+	transform: rotate(3deg);
+	transition: transform 0.3s;
+}
+.brand:hover .tile {
+	transform: rotate(0);
+}
+.brand .tile svg {
+	width: 20px;
+	height: 20px;
+}
+.nav-links {
+	display: flex;
+	align-items: center;
+	gap: 2rem;
+}
+.nav-item {
+	position: relative;
+	padding: 1.6rem 0;
+}
+.nav-trigger,
+.nav-plain {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	font-weight: 600;
+	font-size: 0.92rem;
+	color: var(--ink);
+	transition: color 0.25s;
+}
+.nav-trigger .chev {
+	width: 11px;
+	height: 11px;
+	opacity: 0.5;
+	transition:
+		transform 0.3s,
+		opacity 0.3s;
+}
+.nav-item:hover .nav-trigger,
+.nav-plain:hover {
+	color: var(--clay);
+}
+.nav-item:hover .chev {
+	transform: rotate(180deg);
+	opacity: 1;
+}
+
+.mega {
+	position: absolute;
+	top: 78%;
+	left: 50%;
+	transform: translateX(-50%) translateY(10px);
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: 22px;
+	box-shadow: var(--shadow-card);
+	opacity: 0;
+	visibility: hidden;
+	transition: all 0.3s var(--ease);
+	z-index: 50;
+	overflow: hidden;
+}
+.nav-item:hover .mega {
+	opacity: 1;
+	visibility: visible;
+	transform: translateX(-50%) translateY(0);
+}
+.mega-services {
+	width: 660px;
+	display: grid;
+	grid-template-columns: 1.55fr 1fr;
+}
+.mega-grid {
+	padding: 1.3rem;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0.4rem;
+}
+.mega-link {
+	display: flex;
+	gap: 0.85rem;
+	padding: 0.8rem;
+	border-radius: 16px;
+	border: 1px solid transparent;
+	transition: 0.3s;
+}
+.mega-link:hover {
+	border-color: var(--line);
+}
+.mega-link.s1:hover {
+	background: var(--blush);
+}
+.mega-link.s2:hover {
+	background: var(--sky);
+}
+.mega-link.s3:hover {
+	background: var(--sage);
+}
+.mega-link.s4:hover {
+	background: var(--sand);
+}
+.mega-ico {
+	width: 42px;
+	height: 42px;
+	border-radius: 12px;
+	flex: none;
+	display: grid;
+	place-items: center;
+	background: var(--sand);
+	color: var(--clay);
+}
+.mega-ico svg {
+	width: 20px;
+	height: 20px;
+}
+.mega-link h5 {
+	font-size: 0.9rem;
+	font-family: "Inter";
+	font-weight: 700;
+}
+.mega-link p {
+	font-size: 0.74rem;
+	color: var(--muted);
+	margin-top: 0.15rem;
+	line-height: 1.35;
+}
+.mega-feat {
+	background: var(--ink);
+	color: #fff;
+	padding: 1.5rem;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 1rem;
+}
+.mega-feat .tag {
+	display: inline-block;
+	background: var(--clay);
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	padding: 0.25rem 0.55rem;
+	border-radius: 6px;
+	width: fit-content;
+}
+.mega-feat h5 {
+	font-family: "Fraunces";
+	font-style: italic;
+	font-weight: 600;
+	font-size: 1.15rem;
+	color: #fff;
+	margin: 0.7rem 0 0.4rem;
+}
+.mega-feat p {
+	font-size: 0.78rem;
+	color: rgba(255, 255, 255, 0.6);
+	line-height: 1.5;
+}
+.avatars {
+	display: flex;
+}
+.avatars img {
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	border: 2px solid var(--ink);
+	margin-left: -8px;
+}
+.avatars img:first-child {
+	margin-left: 0;
+}
+.mega-feat .small {
+	font-size: 10px;
+	font-weight: 700;
+	color: rgba(255, 255, 255, 0.55);
+	margin-top: 0.6rem;
+	letter-spacing: 0.04em;
+}
+
+.mega-guides {
+	width: 300px;
+	padding: 0.7rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+}
+.guide-link {
+	display: flex;
+	gap: 0.8rem;
+	align-items: center;
+	padding: 0.7rem;
+	border-radius: 14px;
+	transition: 0.25s;
+}
+.guide-link:hover {
+	background: var(--blush);
+}
+.guide-ico {
+	width: 38px;
+	height: 38px;
+	border-radius: 11px;
+	background: var(--sand);
+	color: var(--clay);
+	display: grid;
+	place-items: center;
+	flex: none;
+}
+.guide-ico svg {
+	width: 18px;
+	height: 18px;
+}
+.guide-link h5 {
+	font-size: 0.86rem;
+	font-family: "Inter";
+	font-weight: 700;
+}
+.guide-link span {
+	font-size: 0.74rem;
+	color: var(--muted);
+}
+
+.nav-right {
+	display: flex;
+	align-items: center;
+	gap: 1.4rem;
+}
+.nav-track {
+	font-weight: 600;
+	font-size: 0.9rem;
+	color: var(--muted);
+	transition: color 0.25s;
+}
+.nav-track:hover {
+	color: var(--ink);
+}
+.nav-cta {
+	padding: 0.7rem 1.5rem;
+	font-size: 0.88rem;
+}
+.burger {
+	display: none;
+	width: 44px;
+	height: 44px;
+	border-radius: 12px;
+	align-items: center;
+	justify-content: center;
+	color: var(--ink);
+}
+.burger svg {
+	width: 24px;
+	height: 24px;
+}
+
+/* mobile menu */
+.mobile {
+	position: fixed;
+	inset: 0;
+	z-index: 80;
+	background: var(--paper);
+	transform: translateX(100%);
+	transition: transform 0.5s var(--ease);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	gap: 1.4rem;
+	padding: 2rem;
+}
+.mobile.open {
+	transform: translateX(0);
+}
+.mobile a.m-link {
+	font-family: "Fraunces";
+	font-style: italic;
+	font-weight: 600;
+	font-size: 2.3rem;
+	color: var(--ink);
+	transition: color 0.25s;
+}
+.mobile a.m-link:hover {
+	color: var(--clay);
+}
+.mobile .close {
+	position: absolute;
+	top: 1.4rem;
+	right: 1.6rem;
+	width: 48px;
+	height: 48px;
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+}
+.mobile .close svg {
+	width: 28px;
+	height: 28px;
+}
+
+/* ============ HERO ============ */
+.hero {
+	position: relative;
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	padding: 120px 0 60px;
+	overflow: hidden;
+}
+.hero-grid {
+	display: flex;
+	gap: 80px;
+	align-items: center;
+}
+.hero-copy {
+	flex: 0 0 44%;
+	max-width: 44%;
+	display: flex;
+	flex-direction: column;
+	gap: 1.4rem;
+}
+.hero h1 {
+	font-size: clamp(2.6rem, 5vw, 4.6rem);
+	font-weight: 500;
+	line-height: 1.02;
+}
+.hero p.lead {
+	font-size: 1.1rem;
+	color: var(--muted);
+	max-width: 520px;
+}
+.hero-btns {
+	display: flex;
+	align-items: center;
+	gap: 1.6rem;
+	flex-wrap: wrap;
+	margin-top: 0.5rem;
+}
+.hero-tags {
+	display: flex;
+	gap: 1.6rem;
+	margin-top: 1rem;
+	flex-wrap: wrap;
+}
+.hero-tags .t {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-size: 0.82rem;
+	font-weight: 600;
+	color: var(--muted);
+}
+.hero-tags .t svg {
+	width: 16px;
+	height: 16px;
+	color: var(--clay);
+}
+
+.tickers {
+	flex: 1;
+	display: flex;
+	gap: 20px;
+	height: 780px;
+	overflow: hidden;
+	-webkit-mask-image: linear-gradient(
+		to bottom,
+		transparent,
+		#000 9%,
+		#000 91%,
+		transparent
+	);
+	mask-image: linear-gradient(
+		to bottom,
+		transparent,
+		#000 9%,
+		#000 91%,
+		transparent
+	);
+}
+.tcol {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+.ttrack {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+.ttrack.up {
+	animation: tup 26s linear infinite;
+}
+.ttrack.down {
+	animation: tdown 26s linear infinite;
+}
+.tcol:hover .ttrack {
+	animation-play-state: paused;
+}
+@keyframes tup {
+	from {
+		transform: translateY(0);
+	}
+	to {
+		transform: translateY(-50%);
+	}
+}
+@keyframes tdown {
+	from {
+		transform: translateY(-50%);
+	}
+	to {
+		transform: translateY(0);
+	}
+}
+.tcard {
+	aspect-ratio: 4 / 5;
+	border-radius: 20px;
+	overflow: hidden;
+	box-shadow: var(--shadow-soft);
+	background: var(--sand);
+}
+.tcard img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+/* decorative blob */
+.hero-blob {
+	position: absolute;
+	top: 10%;
+	right: -6%;
+	width: 520px;
+	height: 520px;
+	border-radius: 50%;
+	background: radial-gradient(circle, rgba(217, 96, 59, 0.16), transparent 68%);
+	filter: blur(20px);
+	z-index: -1;
+}
+
+/* ============ MARQUEE ============ */
+.partners {
+	border-top: 1px solid var(--line);
+	border-bottom: 1px solid var(--line);
+	background: #f4ecdf;
+	padding: 3.4rem 0;
+	overflow: hidden;
+}
+.partners .lbl {
+	text-align: center;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.3em;
+	text-transform: uppercase;
+	color: var(--muted);
+	margin-bottom: 2rem;
+}
+.marquee-mask {
+	overflow: hidden;
+	-webkit-mask-image: linear-gradient(
+		to right,
+		transparent,
+		#000 14%,
+		#000 86%,
+		transparent
+	);
+	mask-image: linear-gradient(
+		to right,
+		transparent,
+		#000 14%,
+		#000 86%,
+		transparent
+	);
+}
+.marquee {
+	display: flex;
+	width: max-content;
+	animation: scrollx 32s linear infinite;
+}
+.marquee:hover {
+	animation-play-state: paused;
+}
+@keyframes scrollx {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
+}
+.mset {
+	display: flex;
+	align-items: center;
+	gap: 4.5rem;
+	padding: 0 2.25rem;
+}
+.plogo {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	color: rgba(33, 28, 24, 0.5);
+	transition:
+		color 0.3s,
+		transform 0.3s;
+}
+.plogo:hover {
+	color: var(--clay);
+	transform: scale(1.04);
+}
+.plogo svg {
+	width: 30px;
+	height: 30px;
+}
+.plogo span {
+	font-family: "DM Sans";
+	font-weight: 700;
+	font-size: 1.15rem;
+	letter-spacing: -0.03em;
+	text-transform: uppercase;
+}
+
+/* ============ SECTION SHELL ============ */
+.section {
+	padding: 7rem 0;
+}
+.section.white {
+	background: var(--panel);
+}
+.sec-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	gap: 2.5rem;
+	margin-bottom: 3.6rem;
+	flex-wrap: wrap;
+}
+.sec-head .left {
+	max-width: 640px;
+}
+.sec-head h2 {
+	font-size: clamp(2.1rem, 4vw, 3.4rem);
+	font-weight: 500;
+	margin-top: 1.3rem;
+}
+.sec-head .right {
+	max-width: 330px;
+}
+.sec-head .right p {
+	color: var(--muted);
+	font-size: 0.92rem;
+	margin-bottom: 1.1rem;
+}
+
+/* ============ SERVICES ============ */
+.svc-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 1.6rem;
+}
+.svc {
+	background: var(--sand);
+	border: 1px solid transparent;
+	border-radius: 28px;
+	padding: 2.4rem;
+	transition: 0.45s var(--ease);
+}
+.svc:hover {
+	background: var(--panel);
+	border-color: var(--line);
+	box-shadow: var(--shadow-card);
+	transform: translateY(-6px);
+}
+.svc-ico {
+	width: 62px;
+	height: 62px;
+	border-radius: 18px;
+	background: var(--panel);
+	display: grid;
+	place-items: center;
+	color: var(--ink);
+	box-shadow: 0 6px 16px -8px rgba(94, 55, 33, 0.35);
+	margin-bottom: 1.6rem;
+	transition: 0.45s var(--ease);
+}
+.svc:hover .svc-ico {
+	background: var(--clay);
+	color: #fff;
+}
+.svc-ico svg {
+	width: 26px;
+	height: 26px;
+}
+.svc h3 {
+	font-size: 1.5rem;
+	margin-bottom: 0.8rem;
+}
+.svc p {
+	color: var(--muted);
+	font-size: 0.92rem;
+	margin-bottom: 1.6rem;
+}
+.svc ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 0.65rem;
+	margin-bottom: 1.8rem;
+}
+.svc li {
+	display: flex;
+	align-items: center;
+	gap: 0.65rem;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.svc li svg {
+	width: 14px;
+	height: 14px;
+	color: var(--clay);
+}
+.svc .learn {
+	font-weight: 700;
+	font-size: 0.88rem;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	transition: color 0.3s;
+}
+.svc:hover .learn {
+	color: var(--clay);
+}
+.svc .learn svg {
+	width: 12px;
+	height: 12px;
+}
+
+/* ============ STATS ============ */
+.stats {
+	position: relative;
+	background: var(--ink);
+	color: #fff;
+	padding: 5rem 0;
+	overflow: hidden;
+}
+.stats-blob {
+	position: absolute;
+	top: -90px;
+	right: -90px;
+	width: 380px;
+	height: 380px;
+	border-radius: 50%;
+	background: rgba(217, 96, 59, 0.22);
+	filter: blur(90px);
+}
+.stats-grid {
+	position: relative;
+	z-index: 2;
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 2.5rem;
+	text-align: center;
+}
+.stat .num {
+	font-family: "DM Sans";
+	font-weight: 500;
+	font-size: clamp(2.6rem, 5vw, 3.7rem);
+	color: var(--clay);
+	line-height: 1;
+}
+.stat .cap {
+	margin-top: 0.6rem;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.5);
+}
+
+/* ============ PROCESS ============ */
+.proc-head {
+	text-align: center;
+	max-width: 620px;
+	margin: 0 auto 4.5rem;
+}
+.proc-head .eyebrow {
+	margin: 0 auto 1.3rem;
+}
+.proc-head h2 {
+	font-size: clamp(2.1rem, 4vw, 3.4rem);
+	font-weight: 500;
+	margin-bottom: 1rem;
+}
+.proc-head p {
+	color: var(--muted);
+}
+.proc {
+	position: relative;
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 5rem;
+}
+.proc-line {
+	position: absolute;
+	top: 31px;
+	left: 16.6%;
+	right: 16.6%;
+	height: 2px;
+	background: var(--sand);
+	overflow: hidden;
+	z-index: 0;
+}
+.proc-line .fill {
+	height: 100%;
+	width: 0;
+	background: var(--clay);
+	transition: width 1.5s var(--ease);
+}
+.step {
+	position: relative;
+	z-index: 2;
+	text-align: center;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+.step .circle {
+	width: 64px;
+	height: 64px;
+	border-radius: 50%;
+	background: var(--panel);
+	border: 2px solid var(--sand);
+	display: grid;
+	place-items: center;
+	font-family: "Fraunces";
+	font-style: italic;
+	font-weight: 600;
+	font-size: 1.5rem;
+	color: var(--sand);
+	margin-bottom: 1.8rem;
+	transition: all 0.6s var(--ease);
+}
+.step.active .circle {
+	border-color: var(--clay);
+	color: var(--clay);
+	box-shadow: 0 14px 34px -14px rgba(217, 96, 59, 0.7);
+}
+.step h4 {
+	font-size: 1.2rem;
+	margin-bottom: 0.7rem;
+	transition: color 0.3s;
+}
+.step.active h4 {
+	color: var(--clay);
+}
+.step p {
+	color: var(--muted);
+	font-size: 0.9rem;
+	max-width: 280px;
+}
+.mob-line {
+	display: none;
+}
+
+/* ============ TESTIMONIALS ============ */
+.testi-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 4.5rem;
+	align-items: center;
+}
+.testi-copy h2 {
+	font-size: clamp(2.4rem, 4.5vw, 4rem);
+	font-weight: 500;
+	margin: 1.4rem 0;
+}
+.testi-copy p {
+	color: var(--muted);
+	font-size: 1.05rem;
+	max-width: 480px;
+	margin-bottom: 1.8rem;
+}
+.testi-people {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+}
+.testi-people .avatars img {
+	width: 48px;
+	height: 48px;
+	border: 4px solid var(--paper);
+	margin-left: -14px;
+}
+.testi-people .avatars img:first-child {
+	margin-left: 0;
+}
+.testi-people b {
+	font-size: 0.9rem;
+}
+.deck {
+	position: relative;
+	height: 420px;
+}
+.qcard {
+	position: absolute;
+	inset: 0;
+	border-radius: 30px;
+	padding: 2.6rem;
+	color: #fff;
+	box-shadow: var(--shadow-card);
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	transition:
+		transform 0.55s var(--ease),
+		opacity 0.55s var(--ease);
+}
+.qcard .quote {
+	font-family: "Fraunces";
+	font-style: italic;
+	font-size: 3.4rem;
+	line-height: 1;
+	opacity: 0.32;
+}
+.qcard p {
+	font-size: 1.35rem;
+	font-weight: 500;
+	line-height: 1.32;
+}
+.qcard .who {
+	display: flex;
+	align-items: center;
+	gap: 0.9rem;
+}
+.qcard .ava {
+	width: 48px;
+	height: 48px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.18);
+	display: grid;
+	place-items: center;
+	font-weight: 700;
+	font-size: 1.05rem;
+}
+.qcard .who h4 {
+	font-size: 0.98rem;
+}
+.qcard .who span {
+	font-size: 0.82rem;
+	opacity: 0.7;
+}
+.qcard.c-clay {
+	background: var(--clay);
+}
+.qcard.c-ink {
+	background: var(--ink);
+}
+.qcard.c-char {
+	background: #3a322b;
+}
+.deck .hint {
+	position: absolute;
+	bottom: -2.4rem;
+	left: 0;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+/* ============ CONTACT ============ */
+.contact-panel {
+	background: var(--ink);
+	border-radius: 40px;
+	overflow: hidden;
+	display: grid;
+	grid-template-columns: 2fr 3fr;
+}
+.contact-info {
+	position: relative;
+	padding: 3.5rem;
+	color: #fff;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	min-height: 560px;
+}
+.contact-info .bg {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+}
+.contact-info .bg img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	opacity: 0.42;
+}
+.contact-info .bg::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		150deg,
+		var(--ink),
+		rgba(33, 28, 24, 0.85) 50%,
+		rgba(217, 96, 59, 0.32)
+	);
+}
+.contact-info .inner {
+	position: relative;
+	z-index: 2;
+}
+.contact-info h2 {
+	font-size: 2rem;
+	font-weight: 500;
+	margin-bottom: 1.1rem;
+}
+.contact-info > .inner > p {
+	color: rgba(255, 255, 255, 0.6);
+	margin-bottom: 2.2rem;
+	max-width: 340px;
+}
+.cmethod {
+	display: flex;
+	align-items: center;
+	gap: 1.1rem;
+	margin-bottom: 1.3rem;
+}
+.cmethod .ci {
+	width: 48px;
+	height: 48px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.07);
+	display: grid;
+	place-items: center;
+	color: var(--clay);
+	transition: 0.3s;
+}
+.cmethod:hover .ci {
+	background: var(--clay);
+	color: #fff;
+}
+.cmethod .ci svg {
+	width: 18px;
+	height: 18px;
+}
+.cmethod .lab {
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.45);
+}
+.cmethod b {
+	font-size: 1rem;
+}
+.socials {
+	position: relative;
+	z-index: 2;
+	display: flex;
+	gap: 0.7rem;
+	margin-top: 2rem;
+}
+.socials a {
+	width: 42px;
+	height: 42px;
+	border-radius: 50%;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	display: grid;
+	place-items: center;
+	color: #fff;
+	transition: 0.3s;
+}
+.socials a:hover {
+	background: var(--clay);
+	border-color: var(--clay);
+}
+.socials svg {
+	width: 17px;
+	height: 17px;
+}
+
+.form-wrap {
+	background: var(--panel);
+	padding: 3.5rem;
+}
+.frow {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 1.2rem;
+	margin-bottom: 1.2rem;
+}
+.field label {
+	display: block;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--muted);
+	margin-bottom: 0.5rem;
+}
+.field input,
+.field select {
+	width: 100%;
+	padding: 0.95rem 1.1rem;
+	background: var(--paper);
+	border: 2px solid transparent;
+	border-radius: 14px;
+	font-family: inherit;
+	font-size: 0.95rem;
+	color: var(--ink);
+	outline: none;
+	transition: 0.25s;
+}
+.field input:focus,
+.field select:focus {
+	border-color: var(--clay);
+	background: #fff;
+}
+.field.full {
+	margin-bottom: 1.4rem;
+}
+.form-wrap .btn {
+	width: 100%;
+	justify-content: center;
+	padding: 1.15rem;
+	font-size: 1rem;
+}
+.form-note {
+	text-align: center;
+	font-size: 0.78rem;
+	color: var(--muted);
+	margin-top: 1rem;
+}
+.form-ok {
+	display: none;
+	margin-top: 1.2rem;
+	padding: 1rem 1.1rem;
+	border-radius: 14px;
+	background: rgba(217, 96, 59, 0.1);
+	border: 1px solid rgba(217, 96, 59, 0.3);
+	color: var(--clay-dark);
+	font-weight: 600;
+	font-size: 0.9rem;
+}
+.form-ok.show {
+	display: block;
+}
+
+/* ============ FOOTER ============ */
+.footer {
+	background: var(--panel);
+	border-top: 1px solid var(--line);
+	padding: 6rem 0 2.5rem;
+}
+.foot-grid {
+	display: grid;
+	grid-template-columns: 1.1fr 1fr;
+	gap: 4.5rem;
+	align-items: center;
+}
+.foot-l .brand {
+	margin-bottom: 2rem;
+}
+.foot-l h2 {
+	font-size: clamp(2.6rem, 5vw, 4.4rem);
+	font-weight: 500;
+	margin-bottom: 1.5rem;
+	line-height: 1.02;
+}
+.foot-l p {
+	color: var(--muted);
+	max-width: 420px;
+	margin-bottom: 2rem;
+}
+.foot-btns {
+	display: flex;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+.foot-r {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 1rem;
+}
+.ftile {
+	background: var(--sand);
+	border: 1px solid rgba(217, 96, 59, 0.12);
+	border-radius: 26px;
+	padding: 2rem;
+}
+.ftile .num {
+	font-family: "DM Sans";
+	font-weight: 500;
+	font-size: 2.6rem;
+	line-height: 1;
+	margin-bottom: 0.5rem;
+}
+.ftile .cap {
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.ftile.arrow {
+	background: var(--ink);
+	color: #fff;
+	display: grid;
+	place-items: center;
+	transition: 0.45s var(--ease);
+}
+.ftile.arrow:hover {
+	background: var(--clay);
+}
+.ftile.arrow svg {
+	width: 42px;
+	height: 42px;
+	transform: rotate(-45deg);
+	transition: transform 0.45s var(--ease);
+}
+.ftile.arrow:hover svg {
+	transform: rotate(0);
+}
+.foot-bar {
+	max-width: var(--maxw);
+	margin: 4rem auto 0;
+	padding: 2rem 28px 0;
+	border-top: 1px solid var(--line);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1rem;
+	flex-wrap: wrap;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.foot-bar .links {
+	display: flex;
+	gap: 2rem;
+	flex-wrap: wrap;
+}
+.foot-bar a:hover {
+	color: var(--clay);
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 1080px) {
+	.nav-links {
+		display: none;
+	}
+	.nav-right .nav-track {
+		display: none;
+	}
+	.burger {
+		display: flex;
+	}
+	.tickers {
+		display: none;
+	}
+	.hero-copy {
+		flex: 1;
+		max-width: 100%;
+	}
+	.testi-grid {
+		grid-template-columns: 1fr;
+		gap: 3rem;
+	}
+	.contact-panel {
+		grid-template-columns: 1fr;
+	}
+	.foot-grid {
+		grid-template-columns: 1fr;
+		gap: 3rem;
+	}
+}
+@media (max-width: 760px) {
+	.wrap {
+		padding: 0 20px;
+	}
+	.svc-grid {
+		grid-template-columns: 1fr;
+	}
+	.stats-grid {
+		grid-template-columns: 1fr 1fr;
+		gap: 2.5rem 1.5rem;
+	}
+	.proc {
+		grid-template-columns: 1fr;
+		gap: 0;
+	}
+	.proc-line {
+		display: none;
+	}
+	.step {
+		padding-bottom: 1rem;
+	}
+	.mob-line {
+		display: block;
+		width: 2px;
+		height: 46px;
+		background: var(--sand);
+		margin: 1.2rem 0;
+		position: relative;
+	}
+	.mob-line .fill {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 0;
+		background: var(--clay);
+		transition: height 0.6s var(--ease);
+	}
+	.step:last-child .mob-line {
+		display: none;
+	}
+	.frow {
+		grid-template-columns: 1fr;
+	}
+	.foot-r {
+		grid-template-columns: 1fr 1fr;
+	}
+	.contact-info,
+	.form-wrap {
+		padding: 2.4rem;
+	}
+	.deck {
+		height: 460px;
+	}
+	.section {
+		padding: 5rem 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	* {
+		animation-duration: 0.001ms;
+		animation-iteration-count: 1;
+	}
+	[data-reveal] {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700;800&family=Fraunces:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- ============ NAV ============ -->
+		<nav class="nav" id="nav">
+			<div class="nav-inner">
+				<a href="#top" class="brand">
+					<span class="tile">
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="M1 3h15v13H1z" />
+							<path d="M16 8h4l3 3v5h-7" />
+							<circle cx="5.5" cy="18.5" r="2" />
+							<circle cx="18.5" cy="18.5" r="2" />
+						</svg>
+					</span>
+					<span>CARTWRIGHT</span>
+				</a>
+
+				<div class="nav-links">
+					<div class="nav-item">
+						<button class="nav-trigger">
+							Services
+							<svg
+								class="chev"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="3"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M6 9l6 6 6-6" />
+							</svg>
+						</button>
+						<div class="mega mega-services">
+							<div class="mega-grid">
+								<a href="#services" class="mega-link s1">
+									<span class="mega-ico"
+										><svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M3 11l9-8 9 8" />
+											<path d="M5 10v10h14V10" />
+										</svg></span
+									>
+									<div>
+										<h5>Home Relocation</h5>
+										<p>White-glove household moves, packed &amp; tracked.</p>
+									</div>
+								</a>
+								<a href="#services" class="mega-link s2">
+									<span class="mega-ico"
+										><svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M4 21V5a2 2 0 012-2h8a2 2 0 012 2v16" />
+											<path d="M16 8h3a2 2 0 012 2v11" />
+											<path d="M8 7h.01M8 11h.01M8 15h.01" />
+										</svg></span
+									>
+									<div>
+										<h5>Office &amp; Commercial</h5>
+										<p>Low-downtime corporate relocations.</p>
+									</div>
+								</a>
+								<a href="#services" class="mega-link s3">
+									<span class="mega-ico"
+										><svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M3 9l9-6 9 6v11H3z" />
+											<path d="M9 22V12h6v10" />
+										</svg></span
+									>
+									<div>
+										<h5>Climate Storage</h5>
+										<p>Secure, climate-controlled vaults.</p>
+									</div>
+								</a>
+								<a href="#services" class="mega-link s4">
+									<span class="mega-ico"
+										><svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M21 8V21H3V8" />
+											<path d="M1 3h22v5H1z" />
+											<path d="M10 12h4" />
+										</svg></span
+									>
+									<div>
+										<h5>Full Packing</h5>
+										<p>Archival-grade materials &amp; handling.</p>
+									</div>
+								</a>
+							</div>
+							<div class="mega-feat">
+								<div>
+									<span class="tag">PEACE OF MIND</span>
+									<h5>Why Cartwright?</h5>
+									<p>
+										18,000+ careful moves and a 99% on-time record. Your
+										belongings, treated like our own.
+									</p>
+								</div>
+								<div>
+									<div class="avatars">
+										<img src="assets/avatar1.jpg" alt="">
+										<img src="assets/avatar2.jpg" alt="">
+										<img src="assets/avatar3.jpg" alt="">
+									</div>
+									<div class="small">+18k households moved</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="nav-item">
+						<button class="nav-trigger">
+							Guides
+							<svg
+								class="chev"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="3"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M6 9l6 6 6-6" />
+							</svg>
+						</button>
+						<div class="mega mega-guides">
+							<a href="#" class="guide-link">
+								<span class="guide-ico"
+									><svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M9 11l3 3L22 4" />
+										<path
+											d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"
+										/>
+									</svg></span
+								>
+								<div>
+									<h5>Moving Checklist</h5>
+									<span>Stay organised, week by week</span>
+								</div>
+							</a>
+							<a href="#" class="guide-link">
+								<span class="guide-ico"
+									><svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path
+											d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"
+										/>
+										<path d="M3.27 6.96L12 12l8.73-5.04" />
+									</svg></span
+								>
+								<div>
+									<h5>Packing Tips</h5>
+									<span>Protect every fragile thing</span>
+								</div>
+							</a>
+						</div>
+					</div>
+
+					<a href="#reviews" class="nav-plain">Reviews</a>
+				</div>
+
+				<div class="nav-right">
+					<a href="#" class="nav-track">Track Shipment</a>
+					<a href="#contact" class="btn btn-dark nav-cta">
+						<span class="wipe"></span>
+						<span class="lbl"
+							>Get a Quote
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2.4"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M5 12h14M13 6l6 6-6 6" />
+							</svg>
+						</span>
+					</a>
+					<button class="burger" id="burger" aria-label="Open menu">
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+						>
+							<path d="M3 6h18M3 12h18M3 18h18" />
+						</svg>
+					</button>
+				</div>
+			</div>
+		</nav>
+
+		<!-- mobile menu -->
+		<div class="mobile" id="mobile">
+			<button class="close" id="closeMenu" aria-label="Close menu">
+				<svg
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+				>
+					<path d="M18 6L6 18M6 6l12 12" />
+				</svg>
+			</button>
+			<a href="#services" class="m-link">Services</a>
+			<a href="#reviews" class="m-link">Reviews</a>
+			<a href="#contact" class="m-link">Contact</a>
+			<a href="#contact" class="btn btn-clay" style="margin-top:1rem"
+				><span class="wipe"></span><span class="lbl">Get a Quote</span></a
+			>
+		</div>
+
+		<main id="top">
+			<!-- ============ HERO ============ -->
+			<section class="hero">
+				<div class="hero-blob"></div>
+				<div class="wrap hero-grid">
+					<div class="hero-copy">
+						<span class="eyebrow" data-reveal="bottom"
+							><span class="dot"></span>Cartwright &amp; Co · Est. 2009</span
+						>
+						<h1 data-reveal="left">
+							Relocation done with <span class="serif">care</span> — doorstep to
+							doorstep.
+						</h1>
+						<p class="lead" data-reveal="bottom">
+							Across the street or across the country, our specialist crews
+							pack, carry and place every belonging like it belongs to family.
+							Calm, tracked, on time.
+						</p>
+						<div class="hero-btns" data-reveal="bottom">
+							<a href="#contact" class="btn btn-dark"
+								><span class="wipe"></span
+								><span class="lbl"
+									>Get a Quote
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2.4"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M5 12h14M13 6l6 6-6 6" />
+									</svg></span
+								></a
+							>
+							<a href="#services" class="textlink"
+								>Browse services
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M5 12h14M12 5l7 7-7 7" />
+								</svg></a
+							>
+						</div>
+						<div class="hero-tags" data-reveal="bottom">
+							<span class="t"
+								><svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+								</svg>Fully insured</span
+							>
+							<span class="t"
+								><svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<circle cx="12" cy="12" r="9" />
+									<path d="M12 7v5l3 2" />
+								</svg>Real-time tracking</span
+							>
+							<span class="t"
+								><svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M20 6L9 17l-5-5" />
+								</svg>No hidden fees</span
+							>
+						</div>
+					</div>
+
+					<div class="tickers" aria-hidden="true">
+						<div class="tcol">
+							<div class="ttrack up">
+								<div class="tcard">
+									<img src="assets/hero1.jpg" alt="Movers carrying boxes">
+								</div>
+								<div class="tcard">
+									<img src="assets/hero2.jpg" alt="Loading a moving truck">
+								</div>
+								<div class="tcard">
+									<img src="assets/hero3.jpg" alt="Careful box packing">
+								</div>
+								<div class="tcard"><img src="assets/hero1.jpg" alt=""></div>
+								<div class="tcard"><img src="assets/hero2.jpg" alt=""></div>
+								<div class="tcard"><img src="assets/hero3.jpg" alt=""></div>
+							</div>
+						</div>
+						<div class="tcol">
+							<div class="ttrack down">
+								<div class="tcard">
+									<img src="assets/hero4.jpg" alt="Stacked moving boxes">
+								</div>
+								<div class="tcard">
+									<img src="assets/hero5.jpg" alt="Warehouse storage">
+								</div>
+								<div class="tcard">
+									<img src="assets/hero6.jpg" alt="New home interior">
+								</div>
+								<div class="tcard"><img src="assets/hero4.jpg" alt=""></div>
+								<div class="tcard"><img src="assets/hero5.jpg" alt=""></div>
+								<div class="tcard"><img src="assets/hero6.jpg" alt=""></div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ PARTNERS ============ -->
+			<section class="partners">
+				<p class="lbl">Trusted by households &amp; logistics partners</p>
+				<div class="marquee-mask">
+					<div class="marquee" id="marquee">
+						<!-- set rendered twice by JS -->
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ SERVICES ============ -->
+			<section class="section white" id="services">
+				<div class="wrap">
+					<div class="sec-head">
+						<div class="left">
+							<span class="eyebrow" data-reveal="bottom"
+								><span class="dot"></span>Our craft</span
+							>
+							<h2 data-reveal="left">
+								Logistics, refined into <span class="serif">a service.</span>
+							</h2>
+						</div>
+						<div class="right" data-reveal="bottom">
+							<p>
+								From a one-room flat to a full corporate floor, every detail is
+								planned, packed and placed with surgical precision.
+							</p>
+							<a href="#contact" class="textlink"
+								>View all services
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M5 12h14M12 5l7 7-7 7" />
+								</svg></a
+							>
+						</div>
+					</div>
+
+					<div class="svc-grid">
+						<article class="svc" data-reveal="bottom">
+							<div class="svc-ico">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M3 11l9-8 9 8" />
+									<path d="M5 10v10h14V10" />
+								</svg>
+							</div>
+							<h3>Home Relocation</h3>
+							<p>
+								White-glove service for families. From fragile heirlooms to
+								heavy furniture, every item is handled like our own.
+							</p>
+							<ul>
+								<li>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M20 6L9 17l-5-5" />
+									</svg>Full packing
+								</li>
+								<li>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M20 6L9 17l-5-5" />
+									</svg>Furniture assembly
+								</li>
+								<li>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M20 6L9 17l-5-5" />
+									</svg>Live tracking
+								</li>
+							</ul>
+							<a href="#contact" class="learn"
+								>Learn more
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="3"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M9 6l6 6-6 6" />
+								</svg></a
+							>
+						</article>
+
+						<article class="svc" data-reveal="bottom">
+							<div class="svc-ico">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M4 21V5a2 2 0 012-2h8a2 2 0 012 2v16" />
+									<path d="M16 8h3a2 2 0 012 2v11" />
+									<path d="M8 7h.01M8 11h.01M8 15h.01" />
+								</svg>
+							</div>
+							<h3>Office &amp; Commercial</h3>
+							<p>
+								Minimise downtime with efficient corporate relocations. IT
+								infrastructure specialists included on every crew.
+							</p>
+							<ul>
+								<li>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M20 6L9 17l-5-5" />
+									</svg>IT decommissioning
+								</li>
+								<li>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M20 6L9 17l-5-5" />
+									</svg>Weekend scheduling
+								</li>
+								<li>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M20 6L9 17l-5-5" />
+									</svg>Asset inventory
+								</li>
+							</ul>
+							<a href="#contact" class="learn"
+								>Learn more
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="3"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M9 6l6 6-6 6" />
+								</svg></a
+							>
+						</article>
+
+						<article class="svc" data-reveal="bottom">
+							<div class="svc-ico">
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M3 9l9-6 9 6v11H3z" />
+									<path d="M9 22V12h6v10" />
+								</svg>
+							</div>
+							<h3>Climate Storage</h3>
+							<p>
+								Secure, climate-controlled vaults for short or long stays —
+								fully integrated with our delivery platform.
+							</p>
+							<ul>
+								<li>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M20 6L9 17l-5-5" />
+									</svg>24/7 surveillance
+								</li>
+								<li>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M20 6L9 17l-5-5" />
+									</svg>Climate control
+								</li>
+								<li>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M20 6L9 17l-5-5" />
+									</svg>Pickup &amp; delivery
+								</li>
+							</ul>
+							<a href="#contact" class="learn"
+								>Learn more
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="3"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M9 6l6 6-6 6" />
+								</svg></a
+							>
+						</article>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ STATS ============ -->
+			<section class="stats">
+				<div class="stats-blob"></div>
+				<div class="wrap stats-grid">
+					<div class="stat" data-reveal="bottom">
+						<div class="num counter" data-target="18" data-suffix="k+">0</div>
+						<div class="cap">Moves Completed</div>
+					</div>
+					<div class="stat" data-reveal="bottom">
+						<div class="num counter" data-target="99" data-suffix="%">0</div>
+						<div class="cap">On-Time Rate</div>
+					</div>
+					<div class="stat" data-reveal="bottom">
+						<div class="num counter" data-target="140" data-suffix="+">0</div>
+						<div class="cap">Cities Covered</div>
+					</div>
+					<div class="stat" data-reveal="bottom">
+						<div class="num counter" data-target="380" data-suffix="+">0</div>
+						<div class="cap">Trained Crew</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ PROCESS ============ -->
+			<section class="section" id="process">
+				<div class="wrap">
+					<div class="proc-head">
+						<span class="eyebrow"
+							><span class="dot"></span>Our methodology</span
+						>
+						<h2>How we <span class="serif">move you.</span></h2>
+						<p>
+							A precision-engineered three-step process designed for absolute
+							transparency from first quote to final box.
+						</p>
+					</div>
+
+					<div class="proc" id="proc">
+						<div class="proc-line"><div class="fill" id="procFill"></div></div>
+
+						<div class="step" data-step="1">
+							<div class="circle">1</div>
+							<h4>Instant Quote</h4>
+							<p>
+								Tell us about your move through our simple portal and get a
+								transparent, accurate estimate in minutes.
+							</p>
+							<div class="mob-line"><div class="fill"></div></div>
+						</div>
+						<div class="step" data-step="2">
+							<div class="circle">2</div>
+							<h4>Personal Plan</h4>
+							<p>
+								A coordinator designs a custom timeline, inventory list and
+								logistics plan tailored to your dates.
+							</p>
+							<div class="mob-line"><div class="fill"></div></div>
+						</div>
+						<div class="step" data-step="3">
+							<div class="circle">3</div>
+							<h4>Seamless Move</h4>
+							<p>
+								Our elite crew executes with calm precision, sending you
+								real-time tracking updates at every turn.
+							</p>
+							<div class="mob-line"><div class="fill"></div></div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ TESTIMONIALS ============ -->
+			<section class="section white" id="reviews">
+				<div class="wrap testi-grid">
+					<div class="testi-copy">
+						<span class="eyebrow" data-reveal="bottom"
+							><span class="dot"></span>Our reputation</span
+						>
+						<h2 data-reveal="left">
+							What our <span class="serif">clients</span> are saying.
+						</h2>
+						<p data-reveal="bottom">
+							Over 18,000 successful moves. Real feedback from families and
+							businesses who trusted us with their next chapter.
+						</p>
+						<div class="testi-people" data-reveal="bottom">
+							<div class="avatars">
+								<img src="assets/avatar3.jpg" alt="">
+								<img src="assets/avatar4.jpg" alt="">
+								<img src="assets/avatar5.jpg" alt="">
+							</div>
+							<b>+18k happy households</b>
+						</div>
+					</div>
+
+					<div class="deck" id="deck">
+						<div class="qcard c-clay" data-card>
+							<div class="quote">&ldquo;</div>
+							<p>
+								The implementation was seamless. I've never seen a moving team
+								so devoted to the craft of careful handling.
+							</p>
+							<div class="who">
+								<div class="ava">MA</div>
+								<div>
+									<h4>Marcus Aoki</h4>
+									<span>Product Lead · FlowState</span>
+								</div>
+							</div>
+						</div>
+						<div class="qcard c-ink" data-card>
+							<div class="quote">&ldquo;</div>
+							<p>
+								They revolutionised how we think about logistics — a truly
+								indispensable partner in our office relocation.
+							</p>
+							<div class="who">
+								<div class="ava">SL</div>
+								<div>
+									<h4>Sarah Low</h4>
+									<span>Founder · BrightLine</span>
+								</div>
+							</div>
+						</div>
+						<div class="qcard c-char" data-card>
+							<div class="quote">&ldquo;</div>
+							<p>
+								Working with Cartwright felt like magic. Everything just clicks,
+								and our fragile pieces arrived flawless.
+							</p>
+							<div class="who">
+								<div class="ava">EV</div>
+								<div>
+									<h4>Elena Voss</h4>
+									<span>Design Director · Neos</span>
+								</div>
+							</div>
+						</div>
+						<div class="hint">Click the card to read more →</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- ============ CONTACT ============ -->
+			<section class="section" id="contact">
+				<div class="wrap">
+					<div class="contact-panel">
+						<div class="contact-info">
+							<div class="bg"><img src="assets/contact.jpg" alt=""></div>
+							<div class="inner">
+								<h2>
+									Ready for a <span class="serif">stress-free</span> move?
+								</h2>
+								<p>
+									Fill in the form and a move coordinator will reach out within
+									two hours with a preliminary estimate.
+								</p>
+								<div class="cmethod">
+									<div class="ci">
+										<svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path
+												d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0122 16.92z"
+											/>
+										</svg>
+									</div>
+									<div>
+										<div class="lab">Call us</div>
+										<b>1-800-CARTWRIGHT</b>
+									</div>
+								</div>
+								<div class="cmethod">
+									<div class="ci">
+										<svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M4 4h16v16H4z" />
+											<path d="M22 6l-10 7L2 6" />
+										</svg>
+									</div>
+									<div>
+										<div class="lab">Email us</div>
+										<b>hello@cartwright.co</b>
+									</div>
+								</div>
+							</div>
+							<div class="socials">
+								<a href="#" aria-label="Instagram"
+									><svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<rect x="2" y="2" width="20" height="20" rx="5" />
+										<circle cx="12" cy="12" r="4" />
+										<path d="M17.5 6.5h.01" />
+									</svg></a
+								>
+								<a href="#" aria-label="LinkedIn"
+									><svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path
+											d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-4 0v7h-4v-7a6 6 0 016-6z"
+										/>
+										<rect x="2" y="9" width="4" height="12" />
+										<circle cx="4" cy="4" r="2" />
+									</svg></a
+								>
+								<a href="#" aria-label="X"
+									><svg viewBox="0 0 24 24" fill="currentColor">
+										<path
+											d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.66l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+										/>
+									</svg></a
+								>
+							</div>
+						</div>
+
+						<div class="form-wrap">
+							<form id="quoteForm" novalidate>
+								<div class="frow">
+									<div class="field">
+										<label for="f-name">Full Name</label>
+										<input
+											id="f-name"
+											type="text"
+											placeholder="Jordan Avery"
+											required
+										>
+									</div>
+									<div class="field">
+										<label for="f-email">Email Address</label>
+										<input
+											id="f-email"
+											type="email"
+											placeholder="jordan@email.com"
+											required
+										>
+									</div>
+								</div>
+								<div class="frow">
+									<div class="field">
+										<label for="f-from">Moving From</label>
+										<input
+											id="f-from"
+											type="text"
+											placeholder="City or postcode"
+											required
+										>
+									</div>
+									<div class="field">
+										<label for="f-to">Moving To</label>
+										<input
+											id="f-to"
+											type="text"
+											placeholder="City or postcode"
+											required
+										>
+									</div>
+								</div>
+								<div class="field full">
+									<label for="f-type">Service Type</label>
+									<select id="f-type">
+										<option>Home Relocation</option>
+										<option>Office &amp; Commercial</option>
+										<option>Climate Storage</option>
+										<option>Full Packing Service</option>
+									</select>
+								</div>
+								<button type="submit" class="btn btn-dark">
+									<span class="wipe"></span
+									><span class="lbl"
+										>Request My Quote
+										<svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2.4"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										>
+											<path d="M5 12h14M13 6l6 6-6 6" />
+										</svg></span
+									>
+								</button>
+								<p class="form-note">
+									No obligation · No hidden fees · Guaranteed safety
+								</p>
+								<div class="form-ok" id="formOk">
+									Thank you — your request is in. A coordinator will be in touch
+									within two hours.
+								</div>
+							</form>
+						</div>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<!-- ============ FOOTER ============ -->
+		<footer class="footer">
+			<div class="wrap foot-grid">
+				<div class="foot-l">
+					<div class="brand" data-reveal="bottom">
+						<span class="tile"
+							><svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M1 3h15v13H1z" />
+								<path d="M16 8h4l3 3v5h-7" />
+								<circle cx="5.5" cy="18.5" r="2" />
+								<circle cx="18.5" cy="18.5" r="2" />
+							</svg></span
+						>
+						<span>CARTWRIGHT</span>
+					</div>
+					<h2 data-reveal="left">
+						Start your<br><span class="serif">next chapter.</span>
+					</h2>
+					<p data-reveal="bottom">
+						Join thousands of families and businesses who experienced a calm,
+						stress-free relocation with our premium logistics team.
+					</p>
+					<div class="foot-btns" data-reveal="bottom">
+						<a href="#contact" class="btn btn-dark"
+							><span class="wipe"></span
+							><span class="lbl">Request Quote — Free</span></a
+						>
+						<a href="#" class="btn btn-ghost"
+							><span class="wipe"></span
+							><span class="lbl">Moving Guide</span></a
+						>
+					</div>
+				</div>
+				<div class="foot-r" data-reveal="bottom">
+					<div class="ftile">
+						<div class="num counter" data-target="18" data-suffix="k+">0</div>
+						<div class="cap">Moves Done</div>
+					</div>
+					<div class="ftile">
+						<div class="num counter" data-target="99" data-suffix="%">0</div>
+						<div class="cap">On-Time Rate</div>
+					</div>
+					<div class="ftile">
+						<div class="num counter" data-target="140" data-suffix="+">0</div>
+						<div class="cap">Cities</div>
+					</div>
+					<a href="#contact" class="ftile arrow" aria-label="Get started">
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="M5 12h14M13 6l6 6-6 6" />
+						</svg>
+					</a>
+				</div>
+			</div>
+			<div class="foot-bar">
+				<div>© 2024 Cartwright &amp; Co · Worldwide Operations</div>
+				<div class="links">
+					<a href="#">Privacy</a><a href="#">Terms</a><a href="#">Cookies</a
+					><a href="#">Track Order</a>
+				</div>
+			</div>
+		</footer>
+
+		<script>
+(() => {
+	const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	/* ---- Partner marquee (inline SVG wordmarks, rendered twice) ---- */
+	const partners = [
+		["M3 5h6l3 7 3-7h6l-6 14h-6z", "Vantor"],
+		["M4 4h10a5 5 0 010 10H4z M4 14h7l5 6", "Reliant"],
+		["M12 3l9 5v8l-9 5-9-5V8z", "Meridian"],
+		["M5 4h14v4H5z M9 8v12 M15 8v12", "Northbay"],
+		["M4 12a8 8 0 1116 0", "Halcyon"],
+		["M3 18l6-12 6 12 M6 13h6", "Atlas Freight"],
+	];
+	const setHTML = partners
+		.map(
+			([d, name]) => `
+    <a class="plogo" href="#" tabindex="-1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>
+      <span>${name}</span>
+    </a>`,
+		)
+		.join("");
+	const marquee = document.getElementById("marquee");
+	if (marquee)
+		marquee.innerHTML = `<div class="mset">${setHTML}</div><div class="mset" aria-hidden="true">${setHTML}</div>`;
+
+	/* ---- Scroll reveal ---- */
+	const revealEls = document.querySelectorAll("[data-reveal]");
+	if (reduce) {
+		revealEls.forEach((el) => el.classList.add("in"));
+	} else {
+		const ro = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((e) => {
+					if (e.isIntersecting) {
+						e.target.classList.add("in");
+						ro.unobserve(e.target);
+					}
+				});
+			},
+			{ threshold: 0.15 },
+		);
+		revealEls.forEach((el) => ro.observe(el));
+	}
+
+	/* ---- Count-up ---- */
+	const counters = document.querySelectorAll(".counter");
+	const animateCount = (el) => {
+		const target = parseFloat(el.dataset.target);
+		const suffix = el.dataset.suffix || "";
+		if (reduce) {
+			el.textContent = target + suffix;
+			return;
+		}
+		const dur = 1800,
+			start = performance.now();
+		const tick = (now) => {
+			const p = Math.min((now - start) / dur, 1);
+			const ease = 1 - (1 - p) ** 4;
+			el.textContent = Math.floor(target * ease) + suffix;
+			if (p < 1) requestAnimationFrame(tick);
+			else el.textContent = target + suffix;
+		};
+		requestAnimationFrame(tick);
+	};
+	const co = new IntersectionObserver(
+		(entries) => {
+			entries.forEach((e) => {
+				if (e.isIntersecting) {
+					animateCount(e.target);
+					co.unobserve(e.target);
+				}
+			});
+		},
+		{ threshold: 0.6 },
+	);
+	counters.forEach((c) => co.observe(c));
+
+	/* ---- Process timeline ---- */
+	const proc = document.getElementById("proc");
+	if (proc) {
+		const fill = document.getElementById("procFill");
+		const steps = proc.querySelectorAll(".step");
+		const run = () => {
+			if (fill) fill.style.width = "100%";
+			steps.forEach((step, i) => {
+				setTimeout(
+					() => {
+						step.classList.add("active");
+						const mob = step.querySelector(".mob-line .fill");
+						if (mob) mob.style.height = "100%";
+					},
+					reduce ? 0 : i * 480,
+				);
+			});
+		};
+		const po = new IntersectionObserver(
+			(entries) => {
+				if (entries[0].isIntersecting) {
+					run();
+					po.disconnect();
+				}
+			},
+			{ threshold: 0.3 },
+		);
+		po.observe(proc);
+	}
+
+	/* ---- Testimonial deck ---- */
+	const deck = document.getElementById("deck");
+	if (deck) {
+		const cards = Array.from(deck.querySelectorAll("[data-card]"));
+		let animating = false,
+			timer = null;
+
+		const layout = () => {
+			cards.forEach((c, i) => {
+				c.style.zIndex = String(30 - i);
+				c.style.opacity = i > 2 ? "0" : "1";
+				c.style.transform = `translateY(${i * 22}px) scale(${1 - i * 0.05}) rotate(${i * 1.2}deg)`;
+			});
+		};
+		layout();
+
+		const advance = () => {
+			if (animating) return;
+			animating = true;
+			const top = cards[0];
+			top.style.transition =
+				"transform .55s cubic-bezier(.2,.8,.2,1), opacity .55s";
+			top.style.transform = "translateX(118%) rotate(12deg) scale(.85)";
+			top.style.opacity = "0";
+			setTimeout(() => {
+				cards.push(cards.shift());
+				const moved = cards[cards.length - 1];
+				moved.style.transition = "none";
+				layout();
+				requestAnimationFrame(() => {
+					moved.style.transition =
+						"transform .55s cubic-bezier(.2,.8,.2,1), opacity .55s";
+					animating = false;
+				});
+			}, 560);
+		};
+
+		const start = () => {
+			if (!reduce) timer = setInterval(advance, 4200);
+		};
+		deck.addEventListener("click", () => {
+			clearInterval(timer);
+			advance();
+			start();
+		});
+		start();
+	}
+
+	/* ---- Navbar shrink ---- */
+	const nav = document.getElementById("nav");
+	const onScroll = () => {
+		nav.classList.toggle("shrink", window.scrollY > 40);
+	};
+	window.addEventListener("scroll", onScroll, { passive: true });
+	onScroll();
+
+	/* ---- Mobile menu ---- */
+	const burger = document.getElementById("burger");
+	const closeMenu = document.getElementById("closeMenu");
+	const mobile = document.getElementById("mobile");
+	const toggle = (open) => {
+		mobile.classList.toggle("open", open);
+		document.body.style.overflow = open ? "hidden" : "";
+	};
+	if (burger) burger.addEventListener("click", () => toggle(true));
+	if (closeMenu) closeMenu.addEventListener("click", () => toggle(false));
+	mobile
+		.querySelectorAll("a")
+		.forEach((a) => a.addEventListener("click", () => toggle(false)));
+
+	/* ---- Form ---- */
+	const form = document.getElementById("quoteForm");
+	if (form) {
+		form.addEventListener("submit", (e) => {
+			e.preventDefault();
+			if (!form.checkValidity()) {
+				form.reportValidity();
+				return;
+			}
+			document.getElementById("formOk").classList.add("show");
+			form.reset();
+		});
+	}
+})();
+
+		</script>
+	</body>
+</html>

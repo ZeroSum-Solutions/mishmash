@@ -1,0 +1,13 @@
+{
+  "slug": "crimson-cut-studio-h72",
+  "name": "Crimson Cut — Short-Form Video Editing Studio Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Manrope"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/crimson-cut-studio-h72",
+  "source_license": "MIT"
+}

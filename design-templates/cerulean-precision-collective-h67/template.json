@@ -1,0 +1,14 @@
+{
+  "slug": "cerulean-precision-collective-h67",
+  "name": "Cerulean — Precision Medicine Clinic Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Instrument Sans",
+    "Inter Tight"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/cerulean-precision-collective-h67",
+  "source_license": "MIT"
+}

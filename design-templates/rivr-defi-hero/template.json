@@ -1,0 +1,13 @@
+{
+  "slug": "rivr-defi-hero",
+  "name": "RIVR — DeFi Dashboard Glassmorphism Hero Section",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [
+    "Helvetica Regular"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/rivr-defi-hero",
+  "source_license": "MIT"
+}

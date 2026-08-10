@@ -1325,8 +1325,16 @@ export function EntryShell({
             <div data-testid="entry-view-design-library" data-active={view === 'design-library' ? 'true' : 'false'} {...inactiveViewProps(view === 'design-library')}>
               <DesignLibrarySection
                 active={view === 'design-library'}
-                onOpenProject={(projectId, conversationId) =>
-                  navigate({ kind: 'project', projectId, conversationId: conversationId ?? null, fileName: null })
+                onOpenProject={(projectId, conversationId, entryFile) =>
+                  navigate({
+                    kind: 'project',
+                    projectId,
+                    conversationId: conversationId ?? null,
+                    // Land on the kit's own entry HTML, so the project opens on
+                    // the page "Open live preview" just showed rather than
+                    // whatever the generic primary-file heuristic ranks first.
+                    fileName: entryFile ?? null,
+                  })
                 }
               />
             </div>

@@ -1,0 +1,14 @@
+{
+  "slug": "slate-stone-architectural-h73",
+  "name": "Slate & Stone — Architectural Real-Estate Advisory Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Familjen Grotesk",
+    "Inter"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/slate-stone-architectural-h73",
+  "source_license": "MIT"
+}

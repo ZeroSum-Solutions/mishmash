@@ -1,0 +1,15 @@
+{
+  "slug": "orbital-frequency-summit-h22",
+  "name": "Orbital Frequency — Deep-Space Signals Summit Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Oswald",
+    "Inter",
+    "Space Mono"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/orbital-frequency-summit-h22",
+  "source_license": "MIT"
+}

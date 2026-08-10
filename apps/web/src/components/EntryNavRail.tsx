@@ -200,6 +200,15 @@ export function EntryNavRail({
           <Icon name="palette" size={18} />
         </NavButton>
         <NavButton
+          active={view === 'templates'}
+          ariaLabel={t('entry.navTemplates')}
+          tooltip={t('entry.navTemplates')}
+          onClick={() => selectView('templates')}
+          testId="entry-nav-templates"
+        >
+          <Icon name="layout" size={18} />
+        </NavButton>
+        <NavButton
           active={view === 'storyboard'}
           ariaLabel={t('entry.navStoryboard')}
           tooltip={t('entry.navStoryboard')}

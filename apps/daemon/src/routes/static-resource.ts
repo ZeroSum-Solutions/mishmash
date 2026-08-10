@@ -631,14 +631,20 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       // unreachable while the same entry's `/example` (plain `res.send`)
       // returned 200.
       //
-      // `dotfiles: 'allow'` only tolerates the dot-prefixed ANCESTOR; a
-      // dot-prefixed leaf inside the entry (`assets/.env`) would become
-      // downloadable, so those are refused explicitly above the send. Serve
-      // the resolved path so the bytes match what was just validated.
-      if (path.basename(targetReal).startsWith('.')) {
+      // Send the path RELATIVE to the assets root instead of an absolute one.
+      // `send` only applies its dotfiles policy to the segments below `root`,
+      // so the dot-prefixed data-directory ancestor stops being examined while
+      // the default `'ignore'` still refuses every dot segment inside the
+      // entry — the leaf (`assets/.env`) and, unlike a basename check, a
+      // dot-prefixed directory (`assets/.hidden/secret.txt`) too. That matters
+      // because this route answers `Origin: null` callers with
+      // `Access-Control-Allow-Origin: *`, so a sandboxed template iframe can
+      // read another template's assets.
+      const relFromRoot = path.relative(assetsRootReal, targetReal);
+      if (!relFromRoot) {
         return res.status(404).type('text/plain').send('asset not found');
       }
-      await res.type(mimeFor(targetReal)).sendFile(targetReal, { dotfiles: 'allow' });
+      await res.type(mimeFor(targetReal)).sendFile(relFromRoot, { root: assetsRootReal });
     } catch (err: any) {
       res.status(500).type('text/plain').send(String(err));
     }

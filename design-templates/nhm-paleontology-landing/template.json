@@ -1,0 +1,11 @@
+{
+  "slug": "nhm-paleontology-landing",
+  "name": "NHM Paleontology — Natural History Museum Monochrome Landing Page",
+  "family": "landing-pages",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/nhm-paleontology-landing",
+  "source_license": "MIT"
+}

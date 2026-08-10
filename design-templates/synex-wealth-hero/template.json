@@ -1,0 +1,13 @@
+{
+  "slug": "synex-wealth-hero",
+  "name": "Synex — Wealth Management Hero Section",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [
+    "Inter Tight"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/synex-wealth-hero",
+  "source_license": "MIT"
+}

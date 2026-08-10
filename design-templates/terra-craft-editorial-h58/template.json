@@ -1,0 +1,15 @@
+{
+  "slug": "terra-craft-editorial-h58",
+  "name": "Terra Studio — Quiet Craft Editorial Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Plex Serif",
+    "JB Mono",
+    "Inter"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/terra-craft-editorial-h58",
+  "source_license": "MIT"
+}

@@ -1,0 +1,11 @@
+{
+  "slug": "enlightr",
+  "name": "Enlightr: Multi-Page Online Course Website Template",
+  "family": "lexingtonthemes",
+  "kind": "multipage",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/templates/premium/lexingtonthemes/enlightr",
+  "source_license": "MIT"
+}

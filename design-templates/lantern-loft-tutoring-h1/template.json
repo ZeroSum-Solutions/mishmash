@@ -1,0 +1,14 @@
+{
+  "slug": "lantern-loft-tutoring-h1",
+  "name": "Lantern & Loft — Home Tutoring Studio Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Fraunces",
+    "Plus Jakarta Sans"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/lantern-loft-tutoring-h1",
+  "source_license": "MIT"
+}

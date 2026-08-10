@@ -1,0 +1,14 @@
+{
+  "slug": "sencha-atelier-h12",
+  "name": "Sencha Atelier — Ceremonial Japanese Tea House Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Fraunces",
+    "Inter Tight"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/sencha-atelier-h12",
+  "source_license": "MIT"
+}

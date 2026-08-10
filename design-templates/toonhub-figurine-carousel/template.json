@@ -1,0 +1,11 @@
+{
+  "slug": "toonhub-figurine-carousel",
+  "name": "TOONHUB — 3D Figurine Carousel Hero Section",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/toonhub-figurine-carousel",
+  "source_license": "MIT"
+}

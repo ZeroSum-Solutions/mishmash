@@ -1,0 +1,14 @@
+{
+  "slug": "grove-kitchen-fresh-h70",
+  "name": "Grove Kitchen — Fresh Dog Food Brand Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Fraunces",
+    "DM Sans"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/grove-kitchen-fresh-h70",
+  "source_license": "MIT"
+}

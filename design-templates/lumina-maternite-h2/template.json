@@ -1,0 +1,14 @@
+{
+  "slug": "lumina-maternite-h2",
+  "name": "Lumina Maternité — Premium Maternity & Women's Health Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Fraunces",
+    "Geist"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/lumina-maternite-h2",
+  "source_license": "MIT"
+}

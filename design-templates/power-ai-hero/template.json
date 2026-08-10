@@ -1,0 +1,13 @@
+{
+  "slug": "power-ai-hero",
+  "name": "Power AI — Dark Hero Section with Video Fade Loop and Logo Marquee",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [
+    "Geist Sans"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/power-ai-hero",
+  "source_license": "MIT"
+}

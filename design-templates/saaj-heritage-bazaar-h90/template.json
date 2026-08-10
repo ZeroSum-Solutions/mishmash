@@ -1,0 +1,14 @@
+{
+  "slug": "saaj-heritage-bazaar-h90",
+  "name": "Saaj Heritage — Handcrafted Indian Furniture D2C Landing Page",
+  "family": "landing-pages",
+  "kind": "static",
+  "cdn_fonts": [
+    "Inter Tight",
+    "Playfair Display"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/saaj-heritage-bazaar-h90",
+  "source_license": "MIT"
+}

@@ -1,0 +1,11 @@
+{
+  "slug": "kubric-hero-landing",
+  "name": "Kubric™ Hero Landing — Dark Cinematic Hero with Animated SVG Logo",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/kubric-hero-landing",
+  "source_license": "MIT"
+}

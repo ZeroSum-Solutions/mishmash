@@ -1,0 +1,1406 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Terra Studio — Crafting Spaces Where Life Unfolds</title>
+		<meta
+			name="description"
+			content="Terra Studio — artisan furniture & interior design. Timeless pieces made from sustainable materials and honest craftsmanship."
+		>
+		<style>
+/* ===== TERRA STUDIO — Quiet Craft Editorial ===== */
+
+
+
+
+
+
+
+
+:root {
+	--paper: rgb(252, 251, 247);
+	--ink: #1f1f1f;
+	--beige: rgb(238, 235, 230);
+	--oak: rgb(222, 198, 172);
+	--terra: #b4632e;
+	--terra-soft: #e9d4c1;
+	--dark: #2a2a28;
+	--hair: rgba(31, 31, 31, 0.14);
+	--serif: "Plex Serif", Georgia, serif;
+	--mono: "JB Mono", ui-monospace, monospace;
+	--sans: "Inter", system-ui, sans-serif;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+html {
+	scroll-behavior: smooth;
+}
+body {
+	background: var(--paper);
+	color: var(--ink);
+	font-family: var(--sans);
+	-webkit-font-smoothing: antialiased;
+	overflow-x: hidden;
+	line-height: 1.5;
+}
+img {
+	display: block;
+	max-width: 100%;
+}
+a {
+	color: inherit;
+	text-decoration: none;
+}
+button {
+	font-family: inherit;
+	cursor: pointer;
+}
+
+.wrap {
+	max-width: 1480px;
+	margin: 0 auto;
+	padding: 0 clamp(18px, 4vw, 40px);
+}
+.mono {
+	font-family: var(--mono);
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	font-size: 12px;
+}
+.serif {
+	font-family: var(--serif);
+	font-weight: 300;
+}
+.italic {
+	font-style: italic;
+}
+
+/* ---------- Header ---------- */
+header {
+	position: sticky;
+	top: 0;
+	z-index: 60;
+	width: 100%;
+	backdrop-filter: blur(2px);
+}
+.bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 78px;
+}
+.brand-pill {
+	display: flex;
+	align-items: center;
+	gap: 18px;
+	background: rgba(238, 235, 230, 0.65);
+	border: 1px solid var(--hair);
+	padding: 8px 16px;
+	border-radius: 5px;
+}
+.wordmark {
+	font-family: var(--serif);
+	font-weight: 300;
+	font-size: 19px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+.glyph {
+	width: 24px;
+	height: 24px;
+}
+.glyph svg {
+	width: 100%;
+	height: 100%;
+	fill: var(--ink);
+}
+nav.links {
+	display: flex;
+	gap: 30px;
+	margin-right: 26px;
+}
+nav.links a {
+	font-family: var(--mono);
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	font-size: 12px;
+	transition: opacity 0.2s;
+}
+nav.links a:hover {
+	opacity: 0.5;
+}
+.right {
+	display: flex;
+	align-items: center;
+	gap: 22px;
+}
+.acct {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	background: var(--beige);
+	border: 1px solid var(--hair);
+	padding: 6px 14px 6px 7px;
+	border-radius: 5px;
+	font-family: var(--mono);
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+}
+.acct .av {
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	background: var(--oak);
+	display: grid;
+	place-items: center;
+	overflow: hidden;
+}
+.acct .av svg {
+	width: 60%;
+	fill: var(--dark);
+}
+.menu-btn {
+	display: none;
+	font-family: var(--mono);
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	background: var(--beige);
+	border: 1px solid var(--hair);
+	padding: 9px 14px;
+	border-radius: 5px;
+}
+
+/* ---------- Hero ---------- */
+.hero {
+	display: grid;
+	grid-template-columns: 470px 1fr;
+	gap: 36px;
+	padding-top: 26px;
+	padding-bottom: 70px;
+	align-items: stretch;
+}
+.hero-left {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	padding: 40px 10px;
+}
+.eyebrow {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 28px;
+	color: var(--terra);
+}
+.eyebrow .dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--terra);
+}
+.h1 {
+	font-family: var(--serif);
+	font-weight: 300;
+	font-size: clamp(38px, 4.5vw, 58px);
+	line-height: 1.04;
+	letter-spacing: -0.018em;
+	margin-bottom: 30px;
+}
+.h1 .italic {
+	font-style: italic;
+	color: var(--terra);
+}
+.lead {
+	font-size: 17px;
+	line-height: 1.55;
+	max-width: 330px;
+	margin-bottom: 36px;
+	color: #3a3a38;
+}
+.cta-col {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.btn {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px;
+	border: 1px solid var(--ink);
+	border-radius: 5px;
+	padding: 13px 16px;
+	font-size: 15.5px;
+	font-family: var(--sans);
+	font-weight: 500;
+	transition:
+		transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1),
+		box-shadow 0.35s;
+}
+.btn svg {
+	width: 13px;
+	height: 13px;
+	fill: currentColor;
+	flex: none;
+}
+.btn-beige {
+	background: var(--beige);
+	width: 290px;
+	max-width: 100%;
+}
+.btn-terra {
+	background: var(--oak);
+	width: 200px;
+	max-width: 100%;
+}
+.btn:hover {
+	transform: translateX(4px);
+	box-shadow: 4px 4px 0 var(--ink);
+}
+
+.hero-panel {
+	position: relative;
+	background: var(--dark);
+	border-radius: 5px;
+	overflow: hidden;
+	min-height: 560px;
+}
+.hero-panel::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: radial-gradient(
+		120% 90% at 70% 20%,
+		rgba(180, 99, 46, 0.14),
+		transparent 60%
+	);
+	pointer-events: none;
+}
+.card {
+	position: absolute;
+	background: var(--beige);
+	padding: 6px;
+	border-radius: 4px;
+	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
+	transition: transform 1s cubic-bezier(0.2, 0.7, 0.3, 1);
+	will-change: transform;
+}
+.card img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	border-radius: 2px;
+}
+.card.detail {
+	top: 48px;
+	right: 60px;
+	width: 215px;
+	height: 240px;
+}
+.card.detail img {
+	height: 228px;
+}
+.card.scene {
+	top: 118px;
+	left: 64px;
+	width: 430px;
+	max-width: 62%;
+	background: var(--oak);
+}
+.card.scene .im {
+	height: 380px;
+	overflow: hidden;
+	border-radius: 2px;
+}
+.card.scene img {
+	height: 100%;
+}
+.card.scene .cap {
+	font-family: var(--mono);
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	padding: 9px 4px 3px;
+	color: var(--dark);
+}
+.card.chair {
+	bottom: 34px;
+	right: 120px;
+	width: 210px;
+	height: 280px;
+}
+.card.chair img {
+	height: 268px;
+}
+
+/* ---------- Marquee ---------- */
+.marquee {
+	background: var(--dark);
+	color: var(--beige);
+	overflow: hidden;
+	border-top: 1px solid #000;
+	border-bottom: 1px solid #000;
+}
+.marquee .track {
+	display: flex;
+	gap: 0;
+	white-space: nowrap;
+	animation: scroll 26s linear infinite;
+	width: max-content;
+}
+.marquee:hover .track {
+	animation-play-state: paused;
+}
+.marquee span {
+	font-family: var(--mono);
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	padding: 16px 30px;
+	display: inline-flex;
+	align-items: center;
+	gap: 30px;
+}
+.marquee span::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--terra);
+}
+@keyframes scroll {
+	to {
+		transform: translateX(-50%);
+	}
+}
+
+/* ---------- Collection ---------- */
+section.block {
+	padding: 90px 0;
+}
+.sec-head {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 24px;
+	margin-bottom: 46px;
+	flex-wrap: wrap;
+	border-bottom: 1px solid var(--hair);
+	padding-bottom: 24px;
+}
+.sec-head h2 {
+	font-family: var(--serif);
+	font-weight: 300;
+	font-size: clamp(30px, 3.6vw, 46px);
+	line-height: 1.05;
+	letter-spacing: -0.015em;
+}
+.sec-head .eyebrow {
+	margin-bottom: 0;
+}
+.sec-head p {
+	max-width: 300px;
+	font-size: 15px;
+	color: #56564f;
+}
+
+.grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 26px;
+}
+.prod {
+	display: flex;
+	flex-direction: column;
+	transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.prod:hover {
+	transform: translateY(-8px);
+}
+.prod .frame {
+	background: var(--beige);
+	padding: 8px;
+	border-radius: 4px;
+	border: 1px solid var(--hair);
+}
+.prod:nth-child(3n + 2) .frame {
+	background: var(--oak);
+}
+.prod .frame .im {
+	aspect-ratio: 7 / 8;
+	overflow: hidden;
+	border-radius: 2px;
+}
+.prod .frame img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.8s ease;
+}
+.prod:hover img {
+	transform: scale(1.05);
+}
+.prod .meta {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	padding: 16px 4px 4px;
+	border-top: 1px solid var(--hair);
+	margin-top: 14px;
+}
+.prod .meta .nm {
+	font-family: var(--serif);
+	font-size: 20px;
+	font-weight: 400;
+}
+.prod .meta .mt {
+	font-family: var(--mono);
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	color: #7a786f;
+	margin-top: 5px;
+}
+.prod .meta .pr {
+	font-family: var(--mono);
+	font-size: 14px;
+	letter-spacing: 0.05em;
+}
+
+/* ---------- Philosophy ---------- */
+.philo {
+	display: grid;
+	grid-template-columns: 0.85fr 1fr;
+	gap: 60px;
+	align-items: center;
+}
+.philo .imgwrap {
+	background: var(--oak);
+	padding: 9px;
+	border-radius: 5px;
+}
+.philo .imgwrap .im {
+	aspect-ratio: 8 / 11;
+	overflow: hidden;
+	border-radius: 3px;
+}
+.philo .imgwrap img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.philo h2 {
+	font-family: var(--serif);
+	font-weight: 300;
+	font-size: clamp(28px, 3.4vw, 44px);
+	line-height: 1.12;
+	letter-spacing: -0.015em;
+	margin: 16px 0 30px;
+}
+.philo h2 .italic {
+	font-style: italic;
+	color: var(--terra);
+}
+.principles {
+	display: flex;
+	flex-direction: column;
+}
+.principle {
+	display: flex;
+	gap: 22px;
+	padding: 22px 0;
+	border-top: 1px solid var(--hair);
+}
+.principle:last-child {
+	border-bottom: 1px solid var(--hair);
+}
+.principle .num {
+	font-family: var(--mono);
+	font-size: 13px;
+	color: var(--terra);
+	padding-top: 4px;
+}
+.principle h3 {
+	font-family: var(--serif);
+	font-size: 21px;
+	font-weight: 400;
+	margin-bottom: 6px;
+}
+.principle p {
+	font-size: 14.5px;
+	color: #56564f;
+	max-width: 420px;
+}
+
+/* ---------- Stats ---------- */
+.stats-band {
+	background: var(--dark);
+	color: var(--paper);
+}
+.stats {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 30px;
+	padding: 70px 0;
+}
+.stat .n {
+	font-family: var(--serif);
+	font-weight: 300;
+	font-size: clamp(44px, 5vw, 68px);
+	line-height: 1;
+	letter-spacing: -0.02em;
+}
+.stat .n .u {
+	color: var(--terra);
+	font-size: 0.5em;
+	vertical-align: super;
+}
+.stat .l {
+	font-family: var(--mono);
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	color: rgba(252, 251, 247, 0.6);
+	margin-top: 14px;
+	border-top: 1px solid rgba(252, 251, 247, 0.18);
+	padding-top: 12px;
+}
+
+/* ---------- CTA ---------- */
+.cta-band {
+	background: linear-gradient(180deg, var(--terra-soft), var(--oak));
+	border-radius: 5px;
+}
+.cta-inner {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 40px;
+	align-items: center;
+	padding: 64px clamp(28px, 5vw, 68px);
+}
+.cta-inner h2 {
+	font-family: var(--serif);
+	font-weight: 300;
+	font-size: clamp(30px, 4vw, 50px);
+	line-height: 1.05;
+	letter-spacing: -0.018em;
+}
+.cta-inner h2 .italic {
+	font-style: italic;
+}
+.cta-inner p {
+	margin-top: 16px;
+	max-width: 380px;
+	font-size: 15.5px;
+	color: #4a3a2e;
+}
+.form {
+	display: flex;
+	gap: 0;
+	border: 1px solid var(--ink);
+	border-radius: 5px;
+	overflow: hidden;
+	background: var(--paper);
+	min-width: 340px;
+}
+.form input {
+	flex: 1;
+	border: 0;
+	background: transparent;
+	padding: 15px 18px;
+	font-family: var(--mono);
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--ink);
+	outline: none;
+}
+.form input::placeholder {
+	color: #8a887e;
+}
+.form button {
+	background: var(--ink);
+	color: var(--paper);
+	border: 0;
+	padding: 0 24px;
+	font-family: var(--mono);
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	transition: background 0.25s;
+}
+.form button:hover {
+	background: var(--terra);
+}
+.form.done {
+	border-color: var(--terra);
+	background: var(--terra);
+}
+.form.done .msg {
+	color: var(--paper);
+	font-family: var(--mono);
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	padding: 15px 22px;
+	width: 100%;
+	text-align: center;
+}
+
+/* ---------- Footer ---------- */
+footer {
+	background: var(--dark);
+	color: var(--beige);
+}
+.foot {
+	display: grid;
+	grid-template-columns: 1.4fr 1fr 1fr 1fr;
+	gap: 36px;
+	padding: 70px 0 40px;
+}
+.foot .wm {
+	font-family: var(--serif);
+	font-weight: 300;
+	font-size: 30px;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+.foot .tg {
+	font-family: var(--mono);
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	color: rgba(238, 235, 230, 0.6);
+	margin-top: 14px;
+}
+.foot .col h4 {
+	font-family: var(--mono);
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	color: var(--terra);
+	margin-bottom: 18px;
+}
+.foot .col a {
+	display: block;
+	font-size: 14px;
+	padding: 6px 0;
+	color: rgba(238, 235, 230, 0.82);
+	transition: color 0.2s;
+}
+.foot .col a:hover {
+	color: var(--paper);
+}
+.foot-bar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 16px;
+	padding: 20px 0;
+	border-top: 1px solid rgba(238, 235, 230, 0.16);
+	font-family: var(--mono);
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	color: rgba(238, 235, 230, 0.55);
+	flex-wrap: wrap;
+}
+
+/* ---------- Reveal ---------- */
+.reveal {
+	opacity: 0;
+	transform: translateY(22px);
+	transition:
+		opacity 0.8s ease-out,
+		transform 0.8s ease-out;
+}
+.reveal.in {
+	opacity: 1;
+	transform: none;
+}
+.reveal.d1 {
+	transition-delay: 0.08s;
+}
+.reveal.d2 {
+	transition-delay: 0.16s;
+}
+.reveal.d3 {
+	transition-delay: 0.24s;
+}
+
+/* ---------- Mobile menu ---------- */
+.mobile-menu {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: var(--paper);
+	z-index: 80;
+	flex-direction: column;
+	padding: 30px clamp(18px, 4vw, 40px);
+}
+.mobile-menu.open {
+	display: flex;
+}
+.mobile-menu .top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 50px;
+}
+.mobile-menu a {
+	font-family: var(--serif);
+	font-size: 40px;
+	font-weight: 300;
+	padding: 14px 0;
+	border-bottom: 1px solid var(--hair);
+}
+.mobile-menu .close {
+	font-family: var(--mono);
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	background: var(--beige);
+	border: 1px solid var(--hair);
+	padding: 10px 16px;
+	border-radius: 5px;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1023px) {
+	.hero {
+		grid-template-columns: 1fr;
+		gap: 28px;
+	}
+	.hero-left {
+		padding: 30px 4px;
+		text-align: left;
+	}
+	.hero-panel {
+		min-height: 520px;
+	}
+	.philo {
+		grid-template-columns: 1fr;
+		gap: 36px;
+	}
+	.foot {
+		grid-template-columns: 1fr 1fr;
+		gap: 30px;
+	}
+	.cta-inner {
+		grid-template-columns: 1fr;
+	}
+	.form {
+		min-width: 0;
+		width: 100%;
+	}
+}
+@media (max-width: 760px) {
+	nav.links,
+	.acct {
+		display: none;
+	}
+	.menu-btn {
+		display: block;
+	}
+	.grid {
+		grid-template-columns: 1fr 1fr;
+	}
+	.stats {
+		grid-template-columns: 1fr 1fr;
+		gap: 36px;
+	}
+	.card.detail {
+		display: none;
+	}
+	.card.chair {
+		display: none;
+	}
+	.card.scene {
+		position: relative;
+		top: auto;
+		left: auto;
+		width: auto;
+		max-width: none;
+		margin: 18px;
+	}
+	.card.scene .im {
+		height: auto;
+		aspect-ratio: 4 / 3;
+	}
+	.hero-panel {
+		min-height: 0;
+		padding-bottom: 6px;
+	}
+}
+@media (max-width: 480px) {
+	.grid {
+		grid-template-columns: 1fr;
+	}
+	.stats {
+		grid-template-columns: 1fr;
+	}
+	.btn-beige,
+	.btn-terra {
+		width: 100%;
+	}
+	.foot {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	* {
+		animation: none;
+		scroll-behavior: auto;
+	}
+	.reveal {
+		opacity: 1;
+		transform: none;
+		transition: none;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plex+Serif:wght@300;400;500;600;700;800&family=JB+Mono:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- Arrow glyph definition -->
+		<svg width="0" height="0" style="position:absolute">
+			<symbol id="arr" viewBox="0 0 200 200">
+				<path
+					d="M176 83.857v32.286L24 180v-28.7l122.604-50.941v-.718L24 48.7V20z"
+				/>
+			</symbol>
+		</svg>
+
+		<header>
+			<div class="wrap bar">
+				<div class="brand-pill">
+					<a href="#" class="wordmark">Terra</a>
+					<span class="glyph" aria-hidden="true">
+						<svg viewBox="0 0 200 200">
+							<path
+								d="M87.4 134v-.1c0-7 5.6-12.6 12.6-12.6s12.6 5.6 12.6 12.6v.1c0 7-5.6 12.6-12.6 12.6S87.4 141 87.4 134M20 132.7v-.1c0-7 5.7-12.6 12.6-12.6s12.6 5.6 12.6 12.6v.1c0 7-5.6 12.6-12.6 12.6S20 139.7 20 132.7m134.7 0v-.1c0-7 5.7-12.6 12.6-12.6s12.6 5.6 12.6 12.6v.1c0 7-5.6 12.6-12.6 12.6s-12.6-5.6-12.6-12.6M20 66.8v-.2C20 59.7 25.7 54 32.6 54s12.6 5.7 12.6 12.6v.2c0 7-5.6 12.6-12.6 12.6S20 73.7 20 66.8m67.4 0v-.2C87.4 59.7 93 54 100 54s12.6 5.7 12.6 12.6v.2c0 7-5.6 12.6-12.6 12.6s-12.6-5.6-12.6-12.6m67.3 0v-.2c0-7 5.7-12.6 12.6-12.6S180 59.7 180 66.6v.2c0 7-5.6 12.6-12.6 12.6s-12.6-5.6-12.6-12.6"
+							/>
+						</svg>
+					</span>
+				</div>
+				<div class="right">
+					<nav class="links">
+						<a href="#collection">Collection</a>
+						<a href="#atelier">Atelier</a>
+						<a href="#journal">Journal</a>
+						<a href="#contact">Contact</a>
+					</nav>
+					<button class="acct">
+						<span class="av"
+							><svg viewBox="0 0 50 50">
+								<path
+									d="M25 48c-5.9 0-11.3-2.3-15.4-5.9 2.3-5.4 7.5-8.3 15.4-8.3s13.1 3 15.4 8.4C36.3 45.9 30.9 48 25 48m.3-35.3c4.9 0 8.6 3.8 8.6 8.9 0 5.2-3.9 9.5-8.6 9.5s-8.6-4.3-8.6-9.5c0-5.1 3.7-8.9 8.6-8.9M25 0C11.2 0 0 11.2 0 25s11.2 25 25 25 25-11.2 25-25S38.8 0 25 0"
+								/>
+							</svg></span
+						>
+						Account
+					</button>
+					<button class="menu-btn" id="menuBtn">Menu</button>
+				</div>
+			</div>
+		</header>
+
+		<div class="mobile-menu" id="mobileMenu">
+			<div class="top">
+				<span class="wordmark">Terra</span>
+				<button class="close" id="closeBtn">Close</button>
+			</div>
+			<a href="#collection">Collection</a>
+			<a href="#atelier">Atelier</a>
+			<a href="#journal">Journal</a>
+			<a href="#contact">Contact</a>
+		</div>
+
+		<main>
+			<!-- HERO -->
+			<section class="wrap hero">
+				<div class="hero-left">
+					<div class="eyebrow reveal">
+						<span class="dot"></span
+						><span class="mono">Terra Studio — Est. 2009</span>
+					</div>
+					<h1 class="h1 reveal d1">
+						Crafting <span class="italic">Spaces</span> Where Life
+						<span class="italic">Unfolds</span>
+					</h1>
+					<p class="lead reveal d2">
+						Timeless furniture designed for the modern home. Sustainable
+						materials meet patient, hand-finished craftsmanship.
+					</p>
+					<div class="cta-col reveal d3">
+						<a href="#collection" class="btn btn-beige">
+							<span>Shop the Summer Collection</span>
+							<svg><use href="#arr" /></svg>
+						</a>
+						<a href="#atelier" class="btn btn-terra">
+							<span>Design Catalog</span>
+							<svg><use href="#arr" /></svg>
+						</a>
+					</div>
+				</div>
+
+				<div class="hero-panel reveal d2" id="heroPanel">
+					<div class="card detail" data-depth="22">
+						<img
+							src="assets/hero-detail.jpg"
+							alt="Close detail of artisanal wood joinery"
+							loading="eager"
+						>
+					</div>
+					<div class="card scene" data-depth="10">
+						<div class="im">
+							<img
+								src="assets/hero-scene.jpg"
+								alt="Sunlit living room with oak furniture and linen textures"
+							>
+						</div>
+						<p class="cap">— Terra Series 01</p>
+					</div>
+					<div class="card chair" data-depth="34">
+						<img
+							src="assets/hero-chair.jpg"
+							alt="Designer chair in a minimalist sunlit room"
+						>
+					</div>
+				</div>
+			</section>
+
+			<!-- MARQUEE -->
+			<div class="marquee" aria-hidden="true">
+				<div class="track" id="track">
+					<span>Solid Oak</span><span>Hand Joinery</span
+					><span>FSC Certified</span><span>Linen &amp; Wool</span
+					><span>Made to Last</span><span>Low-Waste Finish</span>
+				</div>
+			</div>
+
+			<!-- COLLECTION -->
+			<section class="block wrap" id="collection">
+				<div class="sec-head reveal">
+					<div>
+						<div class="eyebrow">
+							<span class="mono">(01) The Collection</span>
+						</div>
+						<h2>Pieces made slowly,<br>kept for a lifetime.</h2>
+					</div>
+					<p>
+						Each object is built in our atelier from raw, traceable timber and
+						natural fibres — never flat-packed, never rushed.
+					</p>
+				</div>
+				<div class="grid">
+					<article class="prod reveal">
+						<div class="frame">
+							<div class="im">
+								<img src="assets/prod-chair.jpg" alt="Halden Lounge Chair">
+							</div>
+						</div>
+						<div class="meta">
+							<div>
+								<div class="nm">Halden Chair</div>
+								<div class="mt">Solid Oak / Wool</div>
+							</div>
+							<div class="pr">$1,240</div>
+						</div>
+					</article>
+					<article class="prod reveal d1">
+						<div class="frame">
+							<div class="im">
+								<img
+									src="assets/prod-sofa.jpg"
+									alt="Marlow Three-Seat Sofa"
+								>
+							</div>
+						</div>
+						<div class="meta">
+							<div>
+								<div class="nm">Marlow Sofa</div>
+								<div class="mt">Ash Frame / Linen</div>
+							</div>
+							<div class="pr">$3,860</div>
+						</div>
+					</article>
+					<article class="prod reveal d2">
+						<div class="frame">
+							<div class="im">
+								<img src="assets/prod-table.jpg" alt="Brae Dining Table">
+							</div>
+						</div>
+						<div class="meta">
+							<div>
+								<div class="nm">Brae Table</div>
+								<div class="mt">Walnut / Hand-Oiled</div>
+							</div>
+							<div class="pr">$2,490</div>
+						</div>
+					</article>
+					<article class="prod reveal">
+						<div class="frame">
+							<div class="im">
+								<img src="assets/prod-shelf.jpg" alt="Pell Open Shelving">
+							</div>
+						</div>
+						<div class="meta">
+							<div>
+								<div class="nm">Pell Shelving</div>
+								<div class="mt">Oak / Steel Pin</div>
+							</div>
+							<div class="pr">$1,680</div>
+						</div>
+					</article>
+					<article class="prod reveal d1">
+						<div class="frame">
+							<div class="im">
+								<img src="assets/prod-bed.jpg" alt="Vesta Platform Bed">
+							</div>
+						</div>
+						<div class="meta">
+							<div>
+								<div class="nm">Vesta Bed</div>
+								<div class="mt">Birch / Cotton</div>
+							</div>
+							<div class="pr">$2,150</div>
+						</div>
+					</article>
+					<article class="prod reveal d2">
+						<div class="frame">
+							<div class="im">
+								<img src="assets/prod-light.jpg" alt="Soren Pendant Light">
+							</div>
+						</div>
+						<div class="meta">
+							<div>
+								<div class="nm">Soren Pendant</div>
+								<div class="mt">Brass / Linen Shade</div>
+							</div>
+							<div class="pr">$420</div>
+						</div>
+					</article>
+				</div>
+			</section>
+
+			<!-- PHILOSOPHY -->
+			<section class="block wrap" id="atelier">
+				<div class="philo">
+					<div class="imgwrap reveal">
+						<div class="im">
+							<img
+								src="assets/atelier.jpg"
+								alt="Inside the Terra Studio atelier"
+							>
+						</div>
+					</div>
+					<div class="reveal d1">
+						<div class="eyebrow">
+							<span class="mono">(02) The Atelier</span>
+						</div>
+						<h2>
+							We make furniture the way it was
+							<span class="italic">always</span>
+							meant to be made — by hand, with patience.
+						</h2>
+						<div class="principles">
+							<div class="principle">
+								<div class="num">01</div>
+								<div>
+									<h3>Material Honesty</h3>
+									<p>
+										Solid timber, natural fibres and untreated metals. No
+										veneers pretending to be something they are not.
+									</p>
+								</div>
+							</div>
+							<div class="principle">
+								<div class="num">02</div>
+								<div>
+									<h3>Slow Making</h3>
+									<p>
+										Every joint is cut, fitted and oiled by a single maker. A
+										piece can take weeks — and we think that shows.
+									</p>
+								</div>
+							</div>
+							<div class="principle">
+								<div class="num">03</div>
+								<div>
+									<h3>Designed to Outlast</h3>
+									<p>
+										Repairable, re-finishable and built to be handed down.
+										Furniture as inheritance, not consumption.
+									</p>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- STATS -->
+			<div class="stats-band" id="journal">
+				<div class="wrap stats">
+					<div class="stat reveal">
+						<div class="n" data-count="16">0</div>
+						<div class="l">Years of Craft</div>
+					</div>
+					<div class="stat reveal d1">
+						<div class="n" data-count="9400"><span class="u">+</span>0</div>
+						<div class="l">Pieces Made</div>
+					</div>
+					<div class="stat reveal d2">
+						<div class="n" data-count="28">0</div>
+						<div class="l">In-House Makers</div>
+					</div>
+					<div class="stat reveal d3">
+						<div class="n" data-count="4">0</div>
+						<div class="l">City Showrooms</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- CTA -->
+			<section class="block wrap" id="contact">
+				<div class="cta-band reveal">
+					<div class="cta-inner">
+						<div>
+							<div class="eyebrow">
+								<span class="mono">(03) Visit / Join</span>
+							</div>
+							<h2>
+								Visit the atelier, or <span class="italic">join the list.</span>
+							</h2>
+							<p>
+								Private showroom appointments, seasonal releases and the
+								occasional note from the workshop floor.
+							</p>
+						</div>
+						<form class="form" id="ctaForm">
+							<input
+								type="email"
+								id="ctaEmail"
+								placeholder="you@example.com"
+								aria-label="Email address"
+								required
+							>
+							<button type="submit">Join</button>
+						</form>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<footer>
+			<div class="wrap">
+				<div class="foot">
+					<div>
+						<div class="wm">Terra</div>
+						<div class="tg">Crafting Spaces Where Life Unfolds</div>
+					</div>
+					<div class="col">
+						<h4>Studio</h4>
+						<a href="#collection">Collection</a
+						><a href="#atelier">The Atelier</a><a href="#">Made to Order</a
+						><a href="#">Showrooms</a>
+					</div>
+					<div class="col">
+						<h4>Support</h4>
+						<a href="#">Care &amp; Repair</a><a href="#">Shipping</a
+						><a href="#">Returns</a><a href="#">Trade Program</a>
+					</div>
+					<div class="col">
+						<h4>Social</h4>
+						<a href="#">Instagram</a><a href="#">Pinterest</a
+						><a href="#">Journal</a><a href="#contact">Newsletter</a>
+					</div>
+				</div>
+				<div class="foot-bar">
+					<span>© 2024 Terra Studio. Defined by Craft.</span>
+					<span>Sustainable · Hand-Finished · Made to Last</span>
+				</div>
+			</div>
+		</footer>
+
+		<script>
+(() => {
+	var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	/* ---- Scroll reveal ---- */
+	var revealEls = document.querySelectorAll(".reveal");
+	if (reduce) {
+		revealEls.forEach((el) => {
+			el.classList.add("in");
+		});
+	} else {
+		var io = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((e) => {
+					if (e.isIntersecting) {
+						e.target.classList.add("in");
+						io.unobserve(e.target);
+					}
+				});
+			},
+			{ threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
+		);
+		revealEls.forEach((el) => {
+			io.observe(el);
+		});
+	}
+
+	/* ---- Hero load-in (reveals fire immediately at top) ---- */
+	window.addEventListener("load", () => {
+		document
+			.querySelectorAll(".hero .reveal, .hero-panel.reveal")
+			.forEach((el) => {
+				el.classList.add("in");
+			});
+	});
+
+	/* ---- Marquee: duplicate track for seamless loop ---- */
+	var track = document.getElementById("track");
+	if (track) {
+		track.innerHTML += track.innerHTML;
+	}
+
+	/* ---- Hero parallax (mouse + scroll) ---- */
+	var panel = document.getElementById("heroPanel");
+	if (panel && !reduce) {
+		var cards = panel.querySelectorAll(".card");
+		var mx = 0,
+			my = 0,
+			sy = 0,
+			raf = null;
+		function apply() {
+			cards.forEach((c) => {
+				var d = parseFloat(c.getAttribute("data-depth")) || 12;
+				var f = d / 40;
+				c.style.transform =
+					"translate3d(" +
+					(mx * f).toFixed(2) +
+					"px," +
+					(my * f + sy * f * 0.4).toFixed(2) +
+					"px,0)";
+			});
+			raf = null;
+		}
+		function schedule() {
+			if (!raf) raf = requestAnimationFrame(apply);
+		}
+		panel.addEventListener("mousemove", (ev) => {
+			var r = panel.getBoundingClientRect();
+			mx = ((ev.clientX - r.left) / r.width - 0.5) * 24;
+			my = ((ev.clientY - r.top) / r.height - 0.5) * 24;
+			schedule();
+		});
+		panel.addEventListener("mouseleave", () => {
+			mx = 0;
+			my = 0;
+			schedule();
+		});
+		window.addEventListener(
+			"scroll",
+			() => {
+				var r = panel.getBoundingClientRect();
+				sy = (r.top + r.height / 2 - window.innerHeight / 2) / -20;
+				schedule();
+			},
+			{ passive: true },
+		);
+
+		/* hover lift via inline style flag */
+		cards.forEach((c) => {
+			c.addEventListener("mouseenter", () => {
+				c.style.zIndex = 5;
+			});
+		});
+	}
+
+	/* ---- Count-up stats ---- */
+	var stats = document.querySelectorAll(".n[data-count]");
+	function animateCount(el) {
+		var target = parseInt(el.getAttribute("data-count"), 10);
+		var unit = el.querySelector(".u");
+		var prefix = unit ? unit.outerHTML : "";
+		if (reduce) {
+			el.innerHTML = prefix + target.toLocaleString();
+			return;
+		}
+		var start = performance.now(),
+			dur = 1500;
+		function step(now) {
+			var p = Math.min((now - start) / dur, 1);
+			var eased = 1 - (1 - p) ** 3;
+			var v = Math.round(eased * target);
+			el.innerHTML = prefix + v.toLocaleString();
+			if (p < 1) requestAnimationFrame(step);
+		}
+		requestAnimationFrame(step);
+	}
+	if (stats.length) {
+		var sio = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((e) => {
+					if (e.isIntersecting) {
+						animateCount(e.target);
+						sio.unobserve(e.target);
+					}
+				});
+			},
+			{ threshold: 0.5 },
+		);
+		stats.forEach((s) => {
+			sio.observe(s);
+		});
+	}
+
+	/* ---- Mobile menu ---- */
+	var menuBtn = document.getElementById("menuBtn");
+	var closeBtn = document.getElementById("closeBtn");
+	var menu = document.getElementById("mobileMenu");
+	function closeMenu() {
+		menu.classList.remove("open");
+		document.body.style.overflow = "";
+	}
+	if (menuBtn)
+		menuBtn.addEventListener("click", () => {
+			menu.classList.add("open");
+			document.body.style.overflow = "hidden";
+		});
+	if (closeBtn) closeBtn.addEventListener("click", closeMenu);
+	menu.querySelectorAll("a").forEach((a) => {
+		a.addEventListener("click", closeMenu);
+	});
+
+	/* ---- CTA form ---- */
+	var form = document.getElementById("ctaForm");
+	if (form) {
+		form.addEventListener("submit", (ev) => {
+			ev.preventDefault();
+			var email = document.getElementById("ctaEmail").value.trim();
+			if (!email) return;
+			form.classList.add("done");
+			form.innerHTML =
+				'<span class="msg">Thank you — a note from the atelier is on its way.</span>';
+		});
+	}
+})();
+
+		</script>
+	</body>
+</html>

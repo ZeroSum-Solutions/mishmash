@@ -16,7 +16,6 @@
 import fs from 'node:fs';
 import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import type { Express } from 'express';
 import {
   DESIGN_LIBRARY_PROMOTION_GROUPS,
@@ -26,6 +25,7 @@ import type {
   DesignLibraryAllowedUse,
   DesignLibraryCatalog,
   DesignLibraryItem,
+  DesignLibraryLivePreviewResponse,
   DesignLibraryStartProjectRequest,
   DesignLibraryStartProjectResponse,
   CreateDesignLibraryPromotionRequest,
@@ -51,6 +51,7 @@ import {
   PromotionStoreError,
 } from '../design-library/promotions-store.js';
 import { designLibraryRoot } from '../design-library/root.js';
+import { openBrowser } from '../browser/browser-open.js';
 import type { createFilesystemWriteGateway } from '../filesystem/write-gateway.js';
 
 export interface RegisterDesignLibraryRoutesDeps
@@ -70,6 +71,14 @@ const REFERENCEABLE_ALLOWED_USE = new Set<DesignLibraryAllowedUse>([
   'licensed-source-review',
   'human-local-only',
 ]);
+// Live preview EXECUTES the collection's HTML in a real browser tab, which is
+// a materially larger exposure than "Open folder" — a folder view is passive,
+// a rendered page runs the author's scripts and fetches whatever they embed.
+// So this deliberately uses the narrow copyable set rather than the permissive
+// referenceable one: `human-local-only` covers third-party captures and site
+// mirrors whose scripts and trackers should not be run just to look at them,
+// and those items keep "Open folder" exactly as before.
+const LIVE_PREVIEWABLE_ALLOWED_USE = COPYABLE_ALLOWED_USE;
 
 const PROMOTION_GROUPS = new Set<string>(DESIGN_LIBRARY_PROMOTION_GROUPS);
 const PROMOTION_LIST_STATUSES = new Set<DesignLibraryPromotionListStatus>([
@@ -213,6 +222,48 @@ function findCatalogItem(catalog: DesignLibraryCatalog, rel: string): DesignLibr
     }
   }
   return null;
+}
+
+/**
+ * Resolves the live-preview entry of one catalog item, or null when the
+ * collection ships no renderable page. Presentation data only: it decides
+ * whether a card offers "Open live preview", never whether the open is
+ * allowed. The lexical containment check keeps a hand-edited catalog `rel`
+ * from walking the daemon outside the library root during a plain read.
+ */
+async function detectItemEntryHtml(root: string, rel: string): Promise<string | null> {
+  if (typeof rel !== 'string' || !rel || path.isAbsolute(rel)) return null;
+  const target = path.resolve(root, rel);
+  if (target !== root && !target.startsWith(root + path.sep)) return null;
+  // Same symlink-indirection rule the action route applies. Lexical
+  // containment alone would let a symlinked collection folder turn this
+  // read into an existence oracle for paths outside the library.
+  if (!(await isRealDirectoryWithNoSymlinkIndirection(root, target))) return null;
+  const entry = await detectEntryFile(target).catch(() => undefined);
+  if (!entry) return null;
+  const entryPath = path.resolve(target, entry);
+  return (await isRealFileWithNoSymlinkIndirection(root, entryPath)) ? entry : null;
+}
+
+/**
+ * Returns the catalog with `entry_html` stamped on every item. One bounded
+ * depth-2 scan per collection; the whole library resolves in well under a
+ * second and the catalog is fetched once per session, so this stays inline
+ * rather than growing a cache that would need its own invalidation rules.
+ */
+async function withEntryHtml(root: string, catalog: unknown): Promise<Record<string, unknown>> {
+  const base = (catalog && typeof catalog === 'object' ? catalog : {}) as Record<string, unknown>;
+  const groups = (base as unknown as DesignLibraryCatalog).groups;
+  if (!Array.isArray(groups)) return base;
+  const resolved = await Promise.all(groups.map(async (group) => {
+    if (!Array.isArray(group?.items)) return group;
+    const items = await Promise.all(group.items.map(async (item) => ({
+      ...item,
+      entry_html: await detectItemEntryHtml(root, item?.rel),
+    })));
+    return { ...group, items };
+  }));
+  return { ...base, groups: resolved };
 }
 
 async function detectEntryFile(projectRoot: string): Promise<string | undefined> {
@@ -493,8 +544,9 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
       const raw = await readFile(path.join(root, 'catalog.json'), 'utf8');
       const catalog = JSON.parse(raw);
       // Passthrough of the on-disk catalog plus `root` so the web UI can
-      // label where the library came from.
-      res.json({ ...catalog, root });
+      // label where the library came from, plus the per-item live-preview
+      // entry so the UI knows which cards can offer the action at all.
+      res.json({ ...(await withEntryHtml(root, catalog)), root });
     } catch (err: any) {
       if (err?.code === 'ENOENT') {
         return res.status(404).json({ error: 'design library not found' });
@@ -558,15 +610,73 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
     if (!(await withinReal(root, target))) {
       return res.status(400).json({ error: 'invalid path' });
     }
-    // Detached, fire-and-forget — same shape as host-tools.ts's launch of an
-    // external editor. macOS `open` hands off to Finder immediately.
-    const child = spawn('open', [target], { detached: true, stdio: 'ignore' });
-    // A spawn failure (e.g. ENOENT) emits an unhandled 'error' event with no
-    // listener otherwise, which crashes the daemon — the 204 below may
-    // already be on the wire by the time it fires, which is fine.
-    child.on('error', () => {});
-    child.unref();
+    // Detached, fire-and-forget. `openBrowser` picks the platform's opener —
+    // `open` on macOS, `xdg-open` elsewhere, `start` via cmd.exe on Windows —
+    // so this is not a silent no-op off macOS. It also attaches the 'error'
+    // listener a detached spawn needs (an unhandled 'error' would otherwise
+    // crash the daemon) and logs the failure instead of discarding it; the 204
+    // below may already be on the wire by then, which is fine.
+    openBrowser(target);
     res.status(204).end();
+  });
+
+  // Open a collection's entry HTML in the OS default browser as a `file://`
+  // document — "see the full creation in its own browser", the same thing
+  // double-clicking the file in Finder does.
+  //
+  // Deliberately NOT an HTTP route that serves the bytes. These pages are
+  // third-party code that runs inline scripts; serving them from the daemon's
+  // own origin would make every local `/api/*` route reachable to them as a
+  // same-origin caller. A `file://` document gets an opaque origin, so it
+  // renders exactly as authored — CDN scripts, webfonts, and ES modules all
+  // resolve — while reaching nothing of this daemon's.
+  app.post('/api/design-library/live-preview', async (req, res) => {
+    if (!isLocalSameOrigin(req, getResolvedPort())) {
+      return res.status(403).json({ error: 'cross-origin request rejected' });
+    }
+    const root = designLibraryRoot();
+    const rel = typeof req.body?.rel === 'string' ? req.body.rel : '';
+    if (!rel) {
+      return res.status(400).json({ error: 'rel is required' });
+    }
+    const target = path.resolve(root, rel);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      return res.status(400).json({ error: 'invalid path' });
+    }
+    if (!fs.existsSync(target)) {
+      return res.status(404).json({ error: 'path not found' });
+    }
+    // Same no-symlink-indirection rule the copy source uses: an in-root
+    // symlink resolves inside the root yet would open bytes belonging to a
+    // different, possibly more-restricted collection than the rel whose
+    // rights were just checked.
+    if (!(await isRealDirectoryWithNoSymlinkIndirection(root, target))) {
+      return res.status(400).json({ error: 'invalid path' });
+    }
+
+    // The catalog's `entry_html` is presentation data. Re-authorize against
+    // the private record and public ceiling at the action boundary, exactly
+    // as start-project does.
+    const authorizedRights = await resolveCurrentRights(root, rel);
+    if (!LIVE_PREVIEWABLE_ALLOWED_USE.has(authorizedRights.allowedUse)) {
+      return res.status(403).json({
+        error: 'current rights do not allow this item to be opened for preview',
+      });
+    }
+
+    const entryFile = await detectEntryFile(target);
+    if (!entryFile) {
+      return res.status(404).json({ error: 'this collection has no previewable HTML file' });
+    }
+    const entryPath = path.resolve(target, entryFile);
+    if (!(await isRealFileWithNoSymlinkIndirection(root, entryPath))) {
+      return res.status(400).json({ error: 'invalid path' });
+    }
+
+    // Detached, fire-and-forget — identical shape to the /open route above,
+    // and platform-correct for the same reason.
+    openBrowser(entryPath);
+    res.json({ ok: true, entryFile } satisfies DesignLibraryLivePreviewResponse);
   });
 
   // Start a new project either by copying a licensed kit (`mode: copy`) or by

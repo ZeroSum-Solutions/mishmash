@@ -1,0 +1,1415 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Solène — Longevity & Precision Movement Clinic</title>
+		<meta
+			name="description"
+			content="Solène is a high-end longevity and precision-movement clinic blending clinical biomechanics with elite human performance."
+		>
+		<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+		<style>
+/* ============================================================
+   SOLÈNE — Warm Clay Editorial
+   ============================================================ */
+
+
+
+:root {
+	--clay: #9f5434;
+	--clay-deep: #7e3f26;
+	--cream: #fef5f0;
+	--white: #ffffff;
+	--ink: #231f20;
+	--ink-soft: rgba(35, 31, 32, 0.7);
+	--border: rgba(159, 84, 52, 0.14);
+	--sand: #e7c9b4;
+	--maxw: 1680px;
+	--ease: cubic-bezier(0.2, 1, 0.3, 1);
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html {
+	scroll-behavior: smooth;
+	-webkit-text-size-adjust: 100%;
+	overflow-x: clip;
+}
+
+body {
+	font-family: "Archivo", system-ui, sans-serif;
+	background: var(--cream);
+	color: var(--ink);
+	overflow-x: hidden;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+/* plaster grain texture */
+body::before {
+	content: "";
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	pointer-events: none;
+	opacity: 0.035;
+	mix-blend-mode: multiply;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+img {
+	display: block;
+	max-width: 100%;
+}
+
+::selection {
+	background: var(--clay);
+	color: var(--cream);
+}
+
+::-webkit-scrollbar {
+	width: 8px;
+}
+::-webkit-scrollbar-track {
+	background: var(--cream);
+}
+::-webkit-scrollbar-thumb {
+	background: var(--clay);
+	border-radius: 100px;
+}
+
+.shell {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 0 clamp(1.25rem, 4vw, 4rem);
+}
+
+/* ---------- Typography helpers ---------- */
+.eyebrow {
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.3em;
+	color: var(--clay);
+}
+.display {
+	font-weight: 530;
+	line-height: 0.95;
+	letter-spacing: -0.03em;
+}
+.lead {
+	color: var(--ink-soft);
+	font-size: clamp(1rem, 1.2vw, 1.18rem);
+	line-height: 1.65;
+}
+
+/* ---------- Nav ---------- */
+.nav {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 100;
+	display: flex;
+	justify-content: center;
+	padding: 1.4rem clamp(1rem, 4vw, 4rem) 0;
+	pointer-events: none;
+}
+.nav-inner {
+	pointer-events: auto;
+	width: 100%;
+	max-width: var(--maxw);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 60px;
+	padding: 0 0.45rem 0 1.5rem;
+	background: rgba(254, 245, 240, 0.82);
+	backdrop-filter: blur(16px) saturate(1.3);
+	-webkit-backdrop-filter: blur(16px) saturate(1.3);
+	border: 1px solid var(--border);
+	border-radius: 100px;
+	box-shadow: 0 8px 34px rgba(111, 59, 36, 0.08);
+}
+.brand {
+	font-weight: 700;
+	font-size: 1.18rem;
+	letter-spacing: 0.28em;
+	text-transform: uppercase;
+	color: var(--clay);
+}
+.nav-links {
+	display: flex;
+	gap: 0.25rem;
+}
+.nav-links a {
+	padding: 0.55rem 1.05rem;
+	border-radius: 100px;
+	font-size: 0.86rem;
+	font-weight: 500;
+	color: var(--clay);
+	transition: background 0.3s ease;
+}
+.nav-links a:hover,
+.nav-links a:focus-visible {
+	background: rgba(159, 84, 52, 0.08);
+	outline: none;
+}
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 100px;
+	font-weight: 600;
+	cursor: pointer;
+	transition:
+		transform 0.25s var(--ease),
+		background 0.25s ease,
+		color 0.25s ease,
+		opacity 0.25s ease;
+}
+.btn-solid {
+	background: var(--clay);
+	color: var(--cream);
+	padding: 0.7rem 1.4rem;
+	font-size: 0.86rem;
+	box-shadow: 0 10px 24px rgba(159, 84, 52, 0.18);
+}
+.btn-solid:hover {
+	background: var(--clay-deep);
+	transform: translateY(-1px);
+}
+.btn-ghost {
+	background: transparent;
+	color: var(--clay);
+	border: 1px solid rgba(159, 84, 52, 0.4);
+	padding: 0.7rem 1.4rem;
+	font-size: 0.86rem;
+}
+.btn-ghost:hover {
+	background: rgba(159, 84, 52, 0.06);
+}
+
+/* ---------- Hero ---------- */
+.hero {
+	padding: clamp(8rem, 14vh, 11rem) 0 clamp(3rem, 6vw, 5rem);
+	position: relative;
+}
+.hero-grid {
+	display: grid;
+	grid-template-columns: 1.15fr 0.85fr;
+	gap: clamp(2rem, 5vw, 5rem);
+	align-items: end;
+}
+.hero h1 {
+	font-size: clamp(3rem, 8.2vw, 8.4rem);
+	margin-bottom: 1.6rem;
+}
+.hero .accent {
+	color: var(--clay);
+	font-style: italic;
+	font-weight: 500;
+}
+.hero-eyebrow {
+	margin-bottom: 1.8rem;
+	display: inline-block;
+}
+.hero-lead {
+	max-width: 30rem;
+	margin-bottom: 2.4rem;
+}
+.hero-ctas {
+	display: flex;
+	gap: 0.9rem;
+	flex-wrap: wrap;
+}
+.btn-lg {
+	padding: 1rem 2rem;
+	font-size: 0.98rem;
+}
+
+.hero-meta {
+	display: flex;
+	gap: clamp(1.5rem, 3vw, 3rem);
+	flex-wrap: wrap;
+	margin-top: 3rem;
+	padding-top: 1.6rem;
+	border-top: 1px solid var(--border);
+}
+.hero-meta div {
+	display: flex;
+	flex-direction: column;
+}
+.hero-meta .k {
+	font-size: 1.55rem;
+	font-weight: 560;
+	color: var(--clay);
+	letter-spacing: -0.02em;
+}
+.hero-meta .v {
+	font-size: 0.68rem;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	color: var(--ink-soft);
+	margin-top: 0.3rem;
+}
+
+.hero-media {
+	position: relative;
+}
+.hero-frame {
+	aspect-ratio: 4 / 5;
+	border-radius: 24px;
+	overflow: hidden;
+	border: 1px solid var(--border);
+	box-shadow: 0 30px 60px rgba(111, 59, 36, 0.12);
+}
+.hero-frame img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.stat-card {
+	position: absolute;
+	left: -1.8rem;
+	bottom: -1.8rem;
+	background: var(--clay);
+	color: var(--cream);
+	border-radius: 18px;
+	padding: 1.3rem 1.5rem;
+	box-shadow: 0 18px 40px rgba(159, 84, 52, 0.3);
+	max-width: 220px;
+}
+.stat-card .big {
+	font-size: 2.4rem;
+	font-weight: 580;
+	line-height: 1;
+	letter-spacing: -0.03em;
+}
+.stat-card .small {
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	opacity: 0.85;
+	margin-top: 0.5rem;
+}
+
+/* ---------- Marquee ---------- */
+.marquee {
+	margin-top: clamp(3rem, 6vw, 5rem);
+	border-top: 1px solid var(--border);
+	border-bottom: 1px solid var(--border);
+	background: var(--clay);
+	overflow: hidden;
+	padding: 1.1rem 0;
+}
+.marquee-track {
+	display: flex;
+	width: max-content;
+	animation: scroll 32s linear infinite;
+}
+.marquee:hover .marquee-track {
+	animation-play-state: paused;
+}
+.marquee-track span {
+	color: var(--cream);
+	font-size: clamp(1.1rem, 2vw, 1.7rem);
+	font-weight: 500;
+	letter-spacing: -0.01em;
+	padding: 0 1.4rem;
+	white-space: nowrap;
+	display: inline-flex;
+	align-items: center;
+	gap: 1.4rem;
+}
+.marquee-track span::after {
+	content: "✳";
+	color: var(--sand);
+	font-size: 0.9em;
+}
+@keyframes scroll {
+	to {
+		transform: translateX(-50%);
+	}
+}
+
+/* ---------- Method (action blocks) ---------- */
+.method {
+	padding: clamp(5rem, 9vw, 8rem) 0;
+}
+.method-panel {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	background: var(--white);
+	border: 1px solid var(--border);
+	border-radius: 26px;
+	overflow: hidden;
+	box-shadow: 0 24px 56px rgba(111, 59, 36, 0.08);
+}
+.action-block {
+	display: flex;
+	flex-direction: column;
+	border-right: 1px solid var(--border);
+}
+.action-block:last-child {
+	border-right: none;
+}
+.action-head {
+	padding: 2rem;
+	height: 200px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	border-bottom: 1px solid var(--border);
+}
+.action-top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+.action-top svg {
+	width: 20px;
+	height: 20px;
+	color: var(--clay);
+	transition: transform 0.35s var(--ease);
+}
+.action-block:hover .action-top svg {
+	transform: translate(4px, -4px);
+}
+.action-head h3 {
+	font-size: 1.7rem;
+	font-weight: 530;
+	line-height: 1.08;
+	letter-spacing: -0.02em;
+	color: var(--clay);
+	max-width: 16rem;
+}
+.action-img {
+	flex: 1;
+	overflow: hidden;
+}
+.action-img img {
+	width: 100%;
+	height: 100%;
+	min-height: 280px;
+	object-fit: cover;
+	transition: transform 0.6s var(--ease);
+}
+.action-block:hover .action-img img {
+	transform: scale(1.06);
+}
+
+/* ---------- Section heads ---------- */
+.sec-pad {
+	padding: clamp(5rem, 10vw, 8.5rem) 0;
+}
+.zig {
+	background: var(--white);
+}
+.zag {
+	background: var(--cream);
+	border-top: 1px solid var(--border);
+	border-bottom: 1px solid var(--border);
+}
+
+.split {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: clamp(3rem, 7vw, 7rem);
+	align-items: center;
+}
+.split h2 {
+	font-size: clamp(2.4rem, 5.5vw, 5rem);
+	margin: 1.5rem 0 1.8rem;
+}
+.split .body {
+	display: flex;
+	flex-direction: column;
+	gap: 1.1rem;
+	max-width: 34rem;
+}
+
+.stat-row {
+	display: flex;
+	gap: clamp(1.5rem, 4vw, 3.5rem);
+	margin-top: 2.8rem;
+	flex-wrap: wrap;
+}
+.stat-row .item {
+	display: flex;
+	flex-direction: column;
+}
+.stat-row .num {
+	font-size: 2.1rem;
+	font-weight: 560;
+	color: var(--clay);
+	letter-spacing: -0.03em;
+}
+.stat-row .cap {
+	font-size: 0.68rem;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	color: var(--ink-soft);
+	margin-top: 0.4rem;
+}
+
+.portrait-wrap {
+	position: relative;
+}
+.portrait {
+	aspect-ratio: 4 / 5;
+	border-radius: 22px;
+	overflow: hidden;
+	border: 1px solid var(--border);
+	box-shadow: 0 26px 56px rgba(111, 59, 36, 0.12);
+}
+.portrait img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.quote-card {
+	position: absolute;
+	left: -2.4rem;
+	bottom: -2.4rem;
+	background: var(--cream);
+	border: 1px solid var(--border);
+	border-radius: 18px;
+	padding: 2rem;
+	max-width: 290px;
+	box-shadow: 0 20px 44px rgba(111, 59, 36, 0.14);
+}
+.quote-card p.q {
+	color: var(--clay);
+	font-style: italic;
+	font-size: 1.1rem;
+	line-height: 1.35;
+}
+.quote-card p.a {
+	margin-top: 1rem;
+	font-size: 0.68rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+}
+
+/* ---------- Programs grid ---------- */
+.zag-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	gap: 2rem;
+	flex-wrap: wrap;
+	margin-bottom: 3.5rem;
+}
+.zag-head h2 {
+	font-size: clamp(2.4rem, 5.5vw, 5rem);
+	margin-top: 1.4rem;
+	max-width: 16ch;
+}
+.menu-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.6rem;
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.16em;
+	color: var(--clay);
+	border-bottom: 1px solid var(--clay);
+	padding-bottom: 0.4rem;
+}
+.menu-link svg {
+	width: 16px;
+	height: 16px;
+	transition: transform 0.3s var(--ease);
+}
+.menu-link:hover svg {
+	transform: translateX(4px);
+}
+
+.programs {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 1px;
+	background: var(--border);
+	border: 1px solid var(--border);
+	border-radius: 18px;
+	overflow: hidden;
+}
+.prog {
+	background: var(--cream);
+	padding: 2.2rem 1.8rem;
+	display: flex;
+	flex-direction: column;
+	transition: background 0.3s ease;
+}
+.prog:hover {
+	background: var(--white);
+}
+.prog .num {
+	width: 46px;
+	height: 46px;
+	border-radius: 100px;
+	border: 1px solid var(--border);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--clay);
+	font-weight: 500;
+	margin-bottom: 2.2rem;
+	font-size: 0.9rem;
+}
+.prog h3 {
+	font-size: 1.35rem;
+	font-weight: 540;
+	letter-spacing: -0.01em;
+	margin-bottom: 0.7rem;
+}
+.prog p {
+	font-size: 0.86rem;
+	color: var(--ink-soft);
+	line-height: 1.55;
+	margin-bottom: 2rem;
+	flex: 1;
+}
+.prog .pic {
+	aspect-ratio: 1;
+	border-radius: 12px;
+	overflow: hidden;
+}
+.prog .pic img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	filter: grayscale(1);
+	transition:
+		filter 0.7s var(--ease),
+		transform 0.7s var(--ease);
+}
+.prog:hover .pic img {
+	filter: grayscale(0);
+	transform: scale(1.04);
+}
+
+/* ---------- Science (dark) ---------- */
+.science {
+	background: var(--ink);
+	color: var(--cream);
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	padding: clamp(5rem, 10vw, 8rem) 0;
+}
+.science .eyebrow {
+	color: var(--cream);
+}
+.science h2 {
+	font-size: clamp(2.4rem, 5.8vw, 5.4rem);
+	margin: 1.5rem 0 1.8rem;
+}
+.science .lead {
+	color: rgba(254, 245, 240, 0.7);
+	max-width: 34rem;
+}
+.science-stats {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 2rem;
+	margin-top: 3rem;
+	padding-top: 2.4rem;
+	border-top: 1px solid rgba(254, 245, 240, 0.14);
+}
+.science-stats h4 {
+	font-size: 1.1rem;
+	font-weight: 540;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	color: var(--sand);
+	margin-bottom: 0.6rem;
+}
+.science-stats p {
+	font-size: 0.85rem;
+	color: rgba(254, 245, 240, 0.45);
+	line-height: 1.5;
+}
+.science-media {
+	position: relative;
+	aspect-ratio: 16 / 10;
+	border-radius: 22px;
+	overflow: hidden;
+	border: 1px solid rgba(254, 245, 240, 0.12);
+	box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+}
+.science-media img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	opacity: 0.62;
+}
+.play {
+	position: absolute;
+	inset: 0;
+	margin: auto;
+	width: 84px;
+	height: 84px;
+	border-radius: 100px;
+	border: 1px solid rgba(254, 245, 240, 0.4);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	backdrop-filter: blur(4px);
+	cursor: pointer;
+	transition:
+		background 0.3s ease,
+		transform 0.3s var(--ease);
+}
+.play:hover {
+	background: rgba(254, 245, 240, 0.12);
+	transform: scale(1.06);
+}
+.play svg {
+	width: 26px;
+	height: 26px;
+	fill: var(--cream);
+	margin-left: 4px;
+}
+
+/* ---------- Final CTA ---------- */
+.cta {
+	position: relative;
+	text-align: center;
+	padding: clamp(6rem, 12vw, 10rem) 0;
+	background: var(--cream);
+	overflow: hidden;
+	border-bottom: 1px solid var(--border);
+}
+.cta-bg {
+	position: absolute;
+	inset: 0;
+	opacity: 0.06;
+}
+.cta-bg img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.cta-inner {
+	position: relative;
+	max-width: 60rem;
+	margin: 0 auto;
+}
+.cta h2 {
+	font-size: clamp(2.8rem, 8vw, 7rem);
+	margin: 2.2rem 0 2.6rem;
+}
+.cta-ctas {
+	display: flex;
+	justify-content: center;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+.cta .cities {
+	margin-top: 2.8rem;
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	color: var(--ink-soft);
+}
+
+/* ---------- Footer ---------- */
+.footer {
+	background: var(--clay);
+	color: var(--cream);
+	padding: clamp(4rem, 7vw, 6rem) 0 2.5rem;
+}
+.footer-grid {
+	display: grid;
+	grid-template-columns: 1.6fr 1fr 1fr 1fr;
+	gap: 3rem;
+	padding-bottom: 3.5rem;
+	border-bottom: 1px solid rgba(254, 245, 240, 0.16);
+}
+.footer h3 {
+	font-size: 1.4rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.2em;
+	margin-bottom: 1.4rem;
+}
+.footer .blurb {
+	font-size: 0.9rem;
+	line-height: 1.6;
+	color: rgba(254, 245, 240, 0.72);
+	max-width: 26rem;
+}
+.footer h4 {
+	font-size: 0.74rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	margin-bottom: 1.3rem;
+}
+.footer ul {
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 0.85rem;
+}
+.footer ul a {
+	font-size: 0.9rem;
+	color: rgba(254, 245, 240, 0.72);
+	transition: color 0.2s ease;
+}
+.footer ul a:hover {
+	color: var(--white);
+}
+.footer-bottom {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1.5rem;
+	flex-wrap: wrap;
+	margin-top: 2rem;
+	font-size: 0.66rem;
+	text-transform: uppercase;
+	letter-spacing: 0.18em;
+	color: rgba(254, 245, 240, 0.5);
+}
+.footer-bottom .legal {
+	display: flex;
+	gap: 2rem;
+}
+.footer-bottom a:hover {
+	color: var(--white);
+}
+
+/* ---------- Scroll reveal ---------- */
+.reveal {
+	opacity: 0;
+	transition:
+		opacity 1s var(--ease),
+		transform 1s var(--ease);
+	will-change: opacity, transform;
+}
+.reveal.from-left {
+	transform: translateX(-80px);
+}
+.reveal.from-right {
+	transform: translateX(80px);
+}
+.reveal.from-up {
+	transform: translateY(50px);
+}
+.reveal.visible {
+	opacity: 1;
+	transform: none;
+}
+
+.char {
+	display: inline-block;
+	opacity: 0;
+	transform: translateY(14px);
+	transition:
+		opacity 0.5s ease,
+		transform 0.5s var(--ease);
+}
+.visible .char,
+h1 .char.show {
+	opacity: 1;
+	transform: none;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1024px) {
+	.hero-grid {
+		grid-template-columns: 1fr;
+	}
+	.hero-media {
+		max-width: 460px;
+		margin-top: 1rem;
+	}
+	.programs {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.split {
+		grid-template-columns: 1fr;
+	}
+	.portrait-wrap {
+		max-width: 460px;
+	}
+	.science .split {
+		grid-template-columns: 1fr;
+	}
+}
+@media (max-width: 760px) {
+	.nav-links {
+		display: none;
+	}
+	.method-panel {
+		grid-template-columns: 1fr;
+	}
+	.action-block {
+		border-right: none;
+		border-bottom: 1px solid var(--border);
+	}
+	.action-block:last-child {
+		border-bottom: none;
+	}
+	.programs {
+		grid-template-columns: 1fr;
+	}
+	.footer-grid {
+		grid-template-columns: 1fr;
+		gap: 2.2rem;
+	}
+	.quote-card,
+	.stat-card {
+		position: static;
+		margin-top: 1.2rem;
+		max-width: none;
+		left: 0;
+		bottom: 0;
+	}
+	.hero-frame,
+	.portrait {
+		box-shadow: 0 18px 40px rgba(111, 59, 36, 0.12);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	* {
+		animation: none;
+		scroll-behavior: auto;
+	}
+	.reveal {
+		opacity: 1;
+		transform: none;
+	}
+	.char {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+		</style>
+	
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500;600;700;800&display=swap">
+	</head>
+	<body>
+		<!-- NAV -->
+		<header class="nav">
+			<nav class="nav-inner">
+				<a href="#top" class="brand">Solène</a>
+				<div class="nav-links">
+					<a href="#method">Method</a>
+					<a href="#programs">Programs</a>
+					<a href="#science">Science</a>
+					<a href="#clinics">Clinics</a>
+				</div>
+				<a href="#book" class="btn btn-solid">Book Assessment</a>
+			</nav>
+		</header>
+
+		<main id="top">
+			<!-- HERO -->
+			<section class="hero">
+				<div class="shell">
+					<div class="hero-grid">
+						<div class="hero-copy reveal from-up">
+							<span class="eyebrow hero-eyebrow"
+								>Longevity · Movement · Precision</span
+							>
+							<h1 class="display" data-split>
+								Move like the<br>body <span class="accent">remembers.</span>
+							</h1>
+							<p class="lead hero-lead">
+								Where clinical biomechanics meet elite human performance. Solène
+								designs tailored programs to restore, optimise, and elevate the
+								way you move — for the next forty years, not the next forty
+								days.
+							</p>
+							<div class="hero-ctas">
+								<a href="#book" class="btn btn-solid btn-lg">Book Assessment</a>
+								<a href="#programs" class="btn btn-ghost btn-lg"
+									>Explore Programs</a
+								>
+							</div>
+							<div class="hero-meta">
+								<div>
+									<span class="k">12 yrs</span
+									><span class="v">Median patient horizon</span>
+								</div>
+								<div>
+									<span class="k">3 cities</span
+									><span class="v">London · Aspen · Zürich</span>
+								</div>
+								<div>
+									<span class="k">1:1</span
+									><span class="v">Practitioner ratio</span>
+								</div>
+							</div>
+						</div>
+						<div class="hero-media reveal from-right">
+							<div class="hero-frame">
+								<img
+									src="assets/hero-portrait.jpg"
+									alt="Practitioner guiding precise movement in a sunlit studio"
+									loading="eager"
+								>
+							</div>
+							<div class="stat-card">
+								<div class="big">98%</div>
+								<div class="small">Return to full movement</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- MARQUEE -->
+				<div class="marquee" aria-hidden="true">
+					<div class="marquee-track">
+						<span>Gait Analysis</span><span>Longevity Mapping</span
+						><span>Manual Therapy</span><span>Force Plates</span
+						><span>Breathwork</span><span>Recovery Protocols</span>
+						<span>Gait Analysis</span><span>Longevity Mapping</span
+						><span>Manual Therapy</span><span>Force Plates</span
+						><span>Breathwork</span><span>Recovery Protocols</span>
+					</div>
+				</div>
+			</section>
+
+			<!-- METHOD -->
+			<section class="method" id="method">
+				<div class="shell">
+					<div class="method-panel reveal from-up">
+						<a href="#science" class="action-block">
+							<div class="action-head">
+								<div class="action-top">
+									<span class="eyebrow">The Method</span>
+									<svg
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M7 17L17 7M17 7H7M17 7V17"
+										/>
+									</svg>
+								</div>
+								<h3>Biomechanical logic & movement science</h3>
+							</div>
+							<div class="action-img">
+								<img
+									src="assets/method-1.jpg"
+									alt="Biomechanical movement assessment"
+								>
+							</div>
+						</a>
+						<a href="#programs" class="action-block">
+							<div class="action-head">
+								<div class="action-top">
+									<span class="eyebrow">Performance</span>
+									<svg
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M7 17L17 7M17 7H7M17 7V17"
+										/>
+									</svg>
+								</div>
+								<h3>Elite conditioning for the modern body</h3>
+							</div>
+							<div class="action-img">
+								<img
+									src="assets/method-2.jpg"
+									alt="Athlete conditioning session"
+								>
+							</div>
+						</a>
+						<a href="#book" class="action-block">
+							<div class="action-head">
+								<div class="action-top">
+									<span class="eyebrow">Recovery</span>
+									<svg
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M7 17L17 7M17 7H7M17 7V17"
+										/>
+									</svg>
+								</div>
+								<h3>Restoring balance & kinetic freedom</h3>
+							</div>
+							<div class="action-img">
+								<img src="assets/method-3.jpg" alt="Manual recovery therapy">
+							</div>
+						</a>
+					</div>
+				</div>
+			</section>
+
+			<!-- PHILOSOPHY (ZIG) -->
+			<section class="sec-pad zig">
+				<div class="shell">
+					<div class="split">
+						<div class="reveal from-left">
+							<span class="eyebrow">The Solène Method</span>
+							<h2 class="display" data-split>
+								Precision rehab for every body.
+							</h2>
+							<div class="body">
+								<p class="lead">
+									Movement is an exact science. We move beyond generic exercise
+									— using motion capture, force data, and muscular mapping to
+									find the true root of restriction.
+								</p>
+								<p class="lead">
+									Founded by elite sports physicians, Solène bridges
+									high-performance athletic training and patient-centred
+									rehabilitation in a single, unhurried protocol.
+								</p>
+							</div>
+							<div class="stat-row">
+								<div class="item">
+									<span class="num">20+</span
+									><span class="cap">Clinical Protocols</span>
+								</div>
+								<div class="item">
+									<span class="num">98%</span
+									><span class="cap">Recovery Rate</span>
+								</div>
+								<div class="item">
+									<span class="num">05</span
+									><span class="cap">Specialist Labs</span>
+								</div>
+							</div>
+						</div>
+						<div class="portrait-wrap reveal from-right">
+							<div class="portrait">
+								<img
+									src="assets/philosophy.jpg"
+									alt="Clinical director portrait"
+								>
+							</div>
+							<div class="quote-card">
+								<p class="q">
+									"True strength is the absence of restriction and the mastery
+									of kinetic flow."
+								</p>
+								<p class="a">— Marc Thorne, Clinical Director</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- PROGRAMS (ZAG) -->
+			<section class="sec-pad zag" id="programs">
+				<div class="shell">
+					<div class="zag-head reveal from-up">
+						<div>
+							<span class="eyebrow">Clinical Programs</span>
+							<h2 class="display" data-split>Evidence-based interventions.</h2>
+						</div>
+						<a href="#book" class="menu-link"
+							>View Full Menu
+							<svg
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M17 8l4 4m0 0l-4 4m4-4H3"
+								/>
+							</svg>
+						</a>
+					</div>
+					<div class="programs reveal from-up">
+						<div class="prog">
+							<span class="num">01</span>
+							<h3>Sports Rehabilitation</h3>
+							<p>
+								Return to play faster with protocols trusted by world-class
+								athletes.
+							</p>
+							<div class="pic">
+								<img src="assets/program-1.jpg" alt="Sports rehabilitation">
+							</div>
+						</div>
+						<div class="prog">
+							<span class="num">02</span>
+							<h3>Post-Surgical Care</h3>
+							<p>
+								Precision recovery plans following orthopedic procedures for
+								optimal outcomes.
+							</p>
+							<div class="pic">
+								<img src="assets/program-2.jpg" alt="Post-surgical care">
+							</div>
+						</div>
+						<div class="prog">
+							<span class="num">03</span>
+							<h3>Gait & Run Analysis</h3>
+							<p>
+								Video biomechanical breakdown to improve efficiency and reduce
+								injury risk.
+							</p>
+							<div class="pic">
+								<img src="assets/program-3.jpg" alt="Gait and run analysis">
+							</div>
+						</div>
+						<div class="prog">
+							<span class="num">04</span>
+							<h3>Manual Therapy</h3>
+							<p>
+								Advanced mobilisation and soft-tissue techniques to resolve
+								chronic pain.
+							</p>
+							<div class="pic">
+								<img src="assets/program-4.jpg" alt="Manual therapy">
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- SCIENCE (DARK) -->
+			<section class="science" id="science">
+				<div class="shell">
+					<div class="split">
+						<div class="reveal from-left">
+							<span class="eyebrow">Performance Optimisation</span>
+							<h2 class="display" data-split>Data-driven human evolution.</h2>
+							<p class="lead">
+								We use elite-grade monitoring — the same systems used by
+								professional football and F1 teams — to track progress in real
+								time. From muscle activation to joint torque, the data keeps
+								your training as precise as it is effective.
+							</p>
+							<div class="science-stats">
+								<div>
+									<h4>Real-Time</h4>
+									<p>
+										Force-plate analysis for symmetry and explosive-power
+										metrics.
+									</p>
+								</div>
+								<div>
+									<h4>Objective</h4>
+									<p>
+										EMG muscle testing to surface hidden weaknesses and
+										imbalances.
+									</p>
+								</div>
+							</div>
+						</div>
+						<div class="reveal from-right">
+							<div class="science-media">
+								<img src="assets/science.jpg" alt="Performance data lab">
+								<button class="play" aria-label="Play lab walkthrough">
+									<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- FINAL CTA -->
+			<section class="cta" id="book">
+				<div class="cta-bg" aria-hidden="true">
+					<img src="assets/cta-bg.jpg" alt="">
+				</div>
+				<div class="shell">
+					<div class="cta-inner reveal from-up">
+						<span class="eyebrow">Invest in your performance</span>
+						<h2 class="display" data-split>
+							Unlock your full kinetic potential.
+						</h2>
+						<div class="cta-ctas">
+							<a href="#" class="btn btn-solid btn-lg">Schedule Assessment</a>
+							<a href="#" class="btn btn-ghost btn-lg">Speak to a Specialist</a>
+						</div>
+						<p class="cities">Clinics in London · Aspen · Zürich</p>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<!-- FOOTER -->
+		<footer class="footer" id="clinics">
+			<div class="shell">
+				<div class="footer-grid">
+					<div>
+						<h3>Solène</h3>
+						<p class="blurb">
+							Precision-engineered movement medicine. We optimise the human body
+							through advanced biomechanical science and unhurried, elite-level
+							care.
+						</p>
+					</div>
+					<div>
+						<h4>Locations</h4>
+						<ul>
+							<li><a href="#">Mayfair Performance Centre</a></li>
+							<li><a href="#">Aspen Rehabilitation</a></li>
+							<li><a href="#">Zürich Sports Lab</a></li>
+						</ul>
+					</div>
+					<div>
+						<h4>Programs</h4>
+						<ul>
+							<li><a href="#">Post-Surgical Rehab</a></li>
+							<li><a href="#">Gait Analysis</a></li>
+							<li><a href="#">Manual Therapy</a></li>
+							<li><a href="#">Sports Performance</a></li>
+						</ul>
+					</div>
+					<div>
+						<h4>Connect</h4>
+						<ul>
+							<li><a href="#">Clinical Journal</a></li>
+							<li><a href="#">LinkedIn</a></li>
+							<li><a href="#">Patient Portal</a></li>
+						</ul>
+					</div>
+				</div>
+				<div class="footer-bottom">
+					<p>© 2024 Solène Movement Systems. All rights reserved.</p>
+					<div class="legal">
+						<a href="#">Privacy Policy</a>
+						<a href="#">Terms of Care</a>
+					</div>
+				</div>
+			</div>
+		</footer>
+
+		<script>
+(() => {
+	var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	// Split headings into word spans for staggered reveal
+	document.querySelectorAll("[data-split]").forEach((el) => {
+		var nodes = Array.prototype.slice.call(el.childNodes);
+		el.innerHTML = "";
+		nodes.forEach((node) => {
+			if (node.nodeType === Node.TEXT_NODE) {
+				var words = node.textContent.split(/(\s+)/);
+				words.forEach((w) => {
+					if (w.trim() === "") {
+						el.appendChild(document.createTextNode(w));
+						return;
+					}
+					var span = document.createElement("span");
+					span.className = "char";
+					span.textContent = w;
+					el.appendChild(span);
+				});
+			} else {
+				// preserve inline elements (e.g. .accent, <br>)
+				if (node.nodeName === "BR") {
+					el.appendChild(node.cloneNode());
+					return;
+				}
+				var span = document.createElement("span");
+				span.className = "char";
+				if (node.className) span.className += ` ${node.className}`;
+				span.innerHTML =
+					node.innerHTML !== undefined ? node.innerHTML : node.textContent;
+				el.appendChild(span);
+			}
+		});
+	});
+
+	function staggerChars(container) {
+		var chars = container.querySelectorAll(".char");
+		chars.forEach((c, i) => {
+			c.style.transitionDelay = `${i * 0.06}s`;
+		});
+	}
+	document.querySelectorAll("[data-split]").forEach(staggerChars);
+
+	if (reduced) {
+		document.querySelectorAll(".reveal").forEach((el) => {
+			el.classList.add("visible");
+		});
+		document.querySelectorAll("[data-split]").forEach((el) => {
+			el.querySelectorAll(".char").forEach((c) => {
+				c.classList.add("show");
+			});
+		});
+		return;
+	}
+
+	var observer = new IntersectionObserver(
+		(entries) => {
+			entries.forEach((entry) => {
+				if (entry.isIntersecting) {
+					entry.target.classList.add("visible");
+					// reveal split headings inside (covers standalone H1)
+					entry.target.querySelectorAll("[data-split] .char").forEach((c) => {
+						c.classList.add("show");
+					});
+					observer.unobserve(entry.target);
+				}
+			});
+		},
+		{ threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
+	);
+
+	document.querySelectorAll(".reveal").forEach((el) => {
+		observer.observe(el);
+	});
+
+	// Standalone headings that aren't wrapped in a .reveal (hero H1 is inside one already,
+	// but ensure any [data-split] without a reveal ancestor still animates)
+	var headObserver = new IntersectionObserver(
+		(entries) => {
+			entries.forEach((entry) => {
+				if (entry.isIntersecting) {
+					entry.target.querySelectorAll(".char").forEach((c) => {
+						c.classList.add("show");
+					});
+					headObserver.unobserve(entry.target);
+				}
+			});
+		},
+		{ threshold: 0.25 },
+	);
+	document.querySelectorAll("[data-split]").forEach((el) => {
+		if (!el.closest(".reveal")) headObserver.observe(el);
+	});
+})();
+
+		</script>
+	</body>
+</html>

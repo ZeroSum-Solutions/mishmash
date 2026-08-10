@@ -1,0 +1,182 @@
+---
+name: verdigris-trail-h50
+description: |
+  A quiet, gallery-like editorial landing page for **Verdigris Archi.**, a fictional high-end architecture studio, styled in the "Architectural Trail" design language — a printed-monograph feel set on a soft fennel-pastel canvas (`#ECF3E5`), with ink-dark Playfair Display serif type punctuated by a single luminous mint accent (`#A5FFA9`). The whole page is threaded by a literal "trail": a faint hairline running down the left margin with a glowing mint comet looping top-to-bottom, and each major section numbered as a "trail entry." Typography pairs Playfair Display (serif) for display and Inter Tight (sans) for body and labels, both locally vendored.
+tags:
+  - "landing-page"
+  - "landing-pages"
+  - "claude-directory"
+triggers:
+  - "verdigris trail"
+  - "verdigris"
+  - "trail"
+  - "architecture"
+  - "studio"
+  - "landing"
+  - "landing-page"
+od:
+  mode: prototype
+  platform: desktop
+  upstream: "https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/verdigris-trail-h50"
+  upstream_license: MIT
+  preview:
+    type: html
+    entry: example.html
+  design_system:
+    requires: false
+  category: "landing-page"
+  scenario: "marketing"
+  example_prompt: "Build Verdigris Trail — Architecture Studio Landing Page as a self-contained responsive page in this template's own visual system. Follow the build spec in this skill exactly — palette, typography, section order, and motion are part of the identity. Ask only for the missing essentials first: brand name, real copy, and any imagery to swap in."
+---
+
+# Verdigris Trail — Architecture Studio Landing Page
+
+> Landing page vendored from the MIT-licensed `pulkitxm/claude-directory` gallery.
+
+A quiet, gallery-like editorial landing page for **Verdigris Archi.**, a fictional high-end architecture studio, styled in the "Architectural Trail" design language — a printed-monograph feel set on a soft fennel-pastel canvas (`#ECF3E5`), with ink-dark Playfair Display serif type punctuated by a single luminous mint accent (`#A5FFA9`). The whole page is threaded by a literal "trail": a faint hairline running down the left margin with a glowing mint comet looping top-to-bottom, and each major section numbered as a "trail entry." Typography pairs Playfair Display (serif) for display and Inter Tight (sans) for body and labels, both locally vendored.
+
+## Workflow
+
+1. **Clone `example.html`** into the user's workspace as the working file.
+2. **Replace placeholder content** with the user's real brand name, headlines,
+   body copy, numbers, and imagery. Match existing image dimensions when
+   swapping assets.
+3. **Preserve the design system.** The palette, type scale, spacing rhythm, and
+   motion in the build spec below are the identity — do not substitute fonts,
+   recolour the palette, or strip decorative elements.
+4. **Extend by duplicating sections**, never by importing a layout from another
+   template. If a section is missing, design it from scratch in this template's
+   own vocabulary.
+5. **Keep motion accessible.** Every animation must stay behind
+   `prefers-reduced-motion`, as the build spec requires.
+
+## Output contract
+
+Emit between `<artifact>` tags:
+
+```
+<artifact identifier="verdigris-trail-h50" type="text/html" title="Verdigris Trail — Architecture Studio Landing Page">
+<!doctype html>
+<html>...</html>
+</artifact>
+```
+
+## Build spec
+
+The upstream prompt that produced this design, verbatim.
+
+# VERDIGRIS TRAIL — ARCHITECTURE STUDIO LANDING PAGE
+
+## NAMED AESTHETIC IDENTITY
+
+BUILD A FULL, MULTI-SECTION, FULLY RESPONSIVE MARKETING LANDING PAGE FOR A
+FICTIONAL HIGH-END ARCHITECTURE STUDIO NAMED **VERDIGRIS ARCHI.** — "DESIGNING
+THE TRAIL OF MODERN LIVING THROUGH STRUCTURAL PRECISION & ENVIRONMENTAL HARMONY."
+THE NAMED DESIGN LANGUAGE IS **"ARCHITECTURAL TRAIL"**: A QUIET, EXPENSIVE,
+GALLERY-LIKE EDITORIAL AESTHETIC THAT FEELS LIKE A PRINTED MONOGRAPH ABOUT
+BRUTALIST CONCRETE ARCHITECTURE SET ON A SOFT FENNEL-PASTEL CANVAS. THE WHOLE
+PAGE IS THREADED BY A LITERAL "TRAIL" — A FAINT HAIRLINE VERTICAL LINE RUNNING
+EDGE-TO-EDGE DOWN THE LEFT MARGIN WITH A GLOWING MINT COMET CONTINUOUSLY
+TRAVELLING DOWN IT, AND EACH MAJOR SECTION IS NUMBERED AS A "TRAIL ENTRY."
+THE MOOD IS CALM, CONFIDENT, STRUCTURAL, AND ENVIRONMENTAL — NEVER CORPORATE,
+NEVER NEON. STRICTLY AVOID GENERIC AI-SLOP: NO PURPLE-BLUE GRADIENTS, NO
+GLASSMORPHISM BLUR CARDS, NO SOFT DROP SHADOWS, NO EMOJI. COLOR IS USED SPARINGLY
+AS STRUCTURE; CONTRAST COMES FROM INK-DARK TYPE ON PASTEL PAPER PUNCTUATED BY A
+SINGLE LUMINOUS MINT ACCENT.
+
+## COLOR SYSTEM (EXACT)
+
+- BRAND PRIMARY / INK: `#070E01` (NEAR-BLACK PINE)
+- NEUTRAL BACKGROUND (FENNEL PASTEL): `#ECF3E5`
+- BRAND ACCENT (LUMINOUS MINT): `#A5FFA9`
+- TEXT SECONDARY: `#4A4A4A`
+- TEXT ON PRIMARY (PAPER ON INK PANELS): `#ECF3E5`
+- HAIRLINE RULES: `#070E01` AT 10% OPACITY
+- USE THE MINT ACCENT ONLY FOR: THE TRAVELLING TRAIL COMET, HOVER FILLS,
+  SMALL DIAMOND TICKS, AND ONE OR TWO KEY WORDS — NOT AS A FLOOD.
+
+## TYPOGRAPHY
+
+- DISPLAY / HEADINGS: **PLAYFAIR DISPLAY** (SERIF), WEIGHTS 400/600/700, USED
+  AT LARGE SIZES WITH TIGHT TRACKING AND ~1.2 LINE HEIGHT FOR THE HERO HEADLINE.
+- BODY / UI / LABELS: **INTER TIGHT** (SANS), WEIGHTS 400/500/600. ALL EYEBROWS,
+  NAV LINKS, MARQUEE WORDS, AND META LABELS ARE UPPERCASE WITH WIDE LETTER
+  SPACING (`0.3em`–`0.5em`) AT TINY SIZES (9–12PX).
+- VENDOR BOTH FONT FAMILIES LOCALLY AS WOFF2; DO NOT HOTLINK GOOGLE FONTS.
+
+## LAYOUT & SECTION BREAKDOWN
+
+1. **FIXED HEADER** — TRANSPARENT, FULL WIDTH, WITH GENEROUS PADDING. LEFT: A
+   SERIF UPPERCASE WORDMARK "VERDIGRIS ARCHI." WITH WIDE TRACKING. RIGHT: TWO
+   TINY UPPERCASE NAV LINKS (PROJECTS, CONTACT) THAT TURN MINT ON HOVER.
+2. **HERO** — TOP-PADDED. AN EYEBROW "— VERDIGRIS ARCHITECTURAL TRAIL", THEN A
+   HUGE SERIF HEADLINE (UP TO ~6XL) MAXED AT ~1000PX. ON THE FAR RIGHT, A
+   CIRCULAR 128PX "BEGIN TRAIL" CTA: A THIN-BORDERED CIRCLE WITH TINY UPPERCASE
+   TEXT THAT INVERTS TO A SOLID INK FILL WITH PAPER TEXT ON HOVER.
+3. **PILLAR MARQUEE** — A FULL-WIDTH BAND BORDERED TOP AND BOTTOM BY HAIRLINES,
+   CONTINUOUSLY SCROLLING UPPERCASE WIDE-TRACKED PILLAR WORDS (SUSTAINABLE FORM,
+   URBAN INTEGRATION, MATERIAL INTEGRITY, SPATIAL NARRATIVE) SEPARATED BY SMALL
+   ROTATED DIAMOND TICKS.
+4. **HERO IMAGE** — A FULL-WIDTH 500–750PX TALL BRUTALIST CONCRETE ARCHITECTURE
+   PHOTOGRAPH, GRAYSCALE BY DEFAULT, SLIGHTLY OVER-SCALED; ON HOVER IT EASES TO
+   FULL COLOR AND BACK TO 1:1 SCALE OVER ~1S. OVERLAID BOTTOM-LEFT: A SOLID
+   FENNEL PANEL WITH A "TRAIL ENTRY 01 // THE FOUNDATION" LABEL AND AN ITALIC
+   SERIF PULL-QUOTE.
+5. **PRINCIPLES / TRAIL ENTRIES** — A THREE-UP COLUMN GRID OF NUMBERED PRINCIPLE
+   CARDS (01–03) DIVIDED BY HAIRLINES: HEADING, SHORT PARAGRAPH, AND A SMALL
+   MINT DIAMOND.
+6. **PROJECTS** — A TWO-COLUMN STAGGERED GALLERY OF GRAYSCALE PROJECT IMAGES
+   WITH OVERLINE META (YEAR // LOCATION), SERIF PROJECT TITLE, AND A THIN "VIEW
+   ENTRY" LINK; IMAGES REVEAL TO COLOR ON HOVER.
+7. **STATS BAND** — AN INK-DARK FULL-WIDTH PANEL WITH PAPER TEXT: 3–4 LARGE
+   SERIF NUMERALS (YEARS, PROJECTS, AWARDS, CITIES) WITH TINY UPPERCASE LABELS.
+8. **CONTACT / CTA** — A LARGE CLOSING SERIF STATEMENT, A CIRCULAR OR PILL CTA,
+   AND A SIMPLE FOOTER ROW (WORDMARK, COLUMNS OF LINKS, COPYRIGHT) ON HAIRLINES.
+
+## HERO COMPOSITION
+
+LEFT-WEIGHTED HEADLINE, RIGHT-ALIGNED CIRCULAR CTA SITTING LOWER (SELF-END ON
+DESKTOP). THE VERTICAL TRAIL LINE LIVES IN THE LEFT MARGIN BEHIND EVERYTHING
+WITH ITS MINT COMET LOOPING TOP-TO-BOTTOM. NEGATIVE SPACE IS GENEROUS; THE FOLD
+ENDS RIGHT AS THE MARQUEE BEGINS.
+
+## MOTION / ANIMATION / INTERACTION SPEC
+
+- **TRAIL COMET**: A ~64–80PX MINT GLOW BLOCK ANIMATES FROM ABOVE THE VIEWPORT
+  TO BELOW IT ALONG THE LEFT HAIRLINE ON AN ~8S EASE-IN-OUT INFINITE LOOP.
+- **MARQUEE**: HORIZONTAL `translateX(0 → -50%)` LINEAR INFINITE (~30S), DUPLICATED
+  TRACK FOR SEAMLESS LOOP; PAUSES ON HOVER.
+- **SCROLL REVEAL**: ELEMENTS START AT `opacity:0; translateY(30px)` AND EASE TO
+  VISIBLE OVER ~1S VIA AN INTERSECTIONOBSERVER (THRESHOLD ~0.1), UNOBSERVED AFTER.
+- **IMAGE HOVER**: GRAYSCALE→COLOR AND `scale(1.05)→scale(1)` OVER ~1S.
+- **CTA HOVER**: BACKGROUND FILLS INK, TEXT FLIPS TO PAPER OVER ~0.5S.
+- RESPECT `prefers-reduced-motion`: DISABLE THE COMET, MARQUEE TRANSLATION, AND
+  REVEAL TRANSFORMS.
+
+## RESPONSIVE BEHAVIOR
+
+- DESKTOP (≥1024PX): HERO HEADLINE AND CTA SIT SIDE BY SIDE; TRAIL LINE VISIBLE;
+  PROJECTS TWO-UP STAGGERED; PRINCIPLES THREE-UP.
+- TABLET: HERO STACKS, CTA MOVES BELOW HEADLINE; PRINCIPLES TWO-UP.
+- MOBILE (<640PX): EVERYTHING SINGLE COLUMN; TRAIL LINE AND IMAGE-OVERLAY PANEL
+  HIDDEN; FONT SIZES STEP DOWN; MARQUEE AND STATS REMAIN.
+
+## TECH & DELIVERY
+
+- A SINGLE SELF-CONTAINED STATIC PROJECT: `index.html`, `styles.css`, `main.js`,
+  AND A LOCAL `assets/` FOLDER. NO BUILD STEP REQUIRED. PLAIN HTML/CSS/VANILLA JS.
+- VENDOR ALL ASSETS LOCALLY: BOTH FONTS AS WOFF2, AND ALL ARCHITECTURE
+  PHOTOGRAPHS DOWNLOADED INTO `assets/`. REFERENCE EVERYTHING WITH RELATIVE
+  PATHS SO THE PROJECT RUNS FULLY OFFLINE.
+- CLEAN SEMANTIC MARKUP, ACCESSIBLE ALT TEXT, AND KEYBOARD-FOCUSABLE LINKS.
+
+## Source & license
+
+Vendored from MIT-licensed
+[`pulkitxm/claude-directory`](https://github.com/pulkitxm/claude-directory/tree/main/landing-pages/verdigris-trail-h50).
+The upstream MIT licence text ships in this template at [`LICENSE`](./LICENSE) and
+must be redistributed alongside any copy of `example.html` or `assets/`.
+
+Webfonts and full-resolution imagery are **not** vendored: local `@font-face`
+rules are served from the Google Fonts CDN and referenced images are
+downscaled. Fetch the upstream folder for the original assets.

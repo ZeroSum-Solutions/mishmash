@@ -1,0 +1,11 @@
+{
+  "slug": "ai-builder-dark-hero",
+  "name": "AI Builder Dark Hero — Dark-Mode AI Website Builder Hero Section",
+  "family": "hero-sections",
+  "kind": "vite",
+  "cdn_fonts": [],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/ai-builder-dark-hero",
+  "source_license": "MIT"
+}

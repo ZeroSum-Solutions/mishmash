@@ -1,0 +1,144 @@
+---
+name: helix-vault-h55
+description: |
+  An above-the-fold hero section for a fictional high-performance crypto portfolio platform called Helix Vault, rendered in an "Institutional Crypto Terminal" aesthetic: a deep near-black trading-floor canvas (`#07080C`) lit by a single blade of emerald light (`#19F5A0`), with an oversized editorial headline floating above a hyper-detailed glass-panelled portfolio dashboard mockup. The mood is a Bloomberg terminal reimagined as a luxury product — frosted hairline-bordered glass panels, faint grain and dot-grid backdrop, and emerald as the single brand color. DM Sans handles all UI; a monospace stack carries ticker numerals. Fully self-contained with no build step and runs offline.
+tags:
+  - "hero-section"
+  - "hero-sections"
+  - "claude-directory"
+triggers:
+  - "helix vault"
+  - "helix"
+  - "vault"
+  - "institutional"
+  - "crypto"
+  - "terminal"
+  - "hero"
+  - "section"
+  - "hero-section"
+od:
+  mode: prototype
+  platform: desktop
+  upstream: "https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/helix-vault-h55"
+  upstream_license: MIT
+  preview:
+    type: html
+    entry: example.html
+  design_system:
+    requires: false
+  category: "hero-section"
+  scenario: "marketing"
+  example_prompt: "Build Helix Vault — Institutional Crypto Terminal Hero Section as a self-contained responsive page in this template's own visual system. Follow the build spec in this skill exactly — palette, typography, section order, and motion are part of the identity. Ask only for the missing essentials first: brand name, real copy, and any imagery to swap in."
+---
+
+# Helix Vault — Institutional Crypto Terminal Hero Section
+
+> Hero section vendored from the MIT-licensed `pulkitxm/claude-directory` gallery.
+
+An above-the-fold hero section for a fictional high-performance crypto portfolio platform called Helix Vault, rendered in an "Institutional Crypto Terminal" aesthetic: a deep near-black trading-floor canvas (`#07080C`) lit by a single blade of emerald light (`#19F5A0`), with an oversized editorial headline floating above a hyper-detailed glass-panelled portfolio dashboard mockup. The mood is a Bloomberg terminal reimagined as a luxury product — frosted hairline-bordered glass panels, faint grain and dot-grid backdrop, and emerald as the single brand color. DM Sans handles all UI; a monospace stack carries ticker numerals. Fully self-contained with no build step and runs offline.
+
+## Workflow
+
+1. **Clone `example.html`** into the user's workspace as the working file.
+2. **Replace placeholder content** with the user's real brand name, headlines,
+   body copy, numbers, and imagery. Match existing image dimensions when
+   swapping assets.
+3. **Preserve the design system.** The palette, type scale, spacing rhythm, and
+   motion in the build spec below are the identity — do not substitute fonts,
+   recolour the palette, or strip decorative elements.
+4. **Extend by duplicating sections**, never by importing a layout from another
+   template. If a section is missing, design it from scratch in this template's
+   own vocabulary.
+5. **Keep motion accessible.** Every animation must stay behind
+   `prefers-reduced-motion`, as the build spec requires.
+
+## Output contract
+
+Emit between `<artifact>` tags:
+
+```
+<artifact identifier="helix-vault-h55" type="text/html" title="Helix Vault — Institutional Crypto Terminal Hero Section">
+<!doctype html>
+<html>...</html>
+</artifact>
+```
+
+## Build spec
+
+The upstream prompt that produced this design, verbatim.
+
+# HELIX VAULT — AN "INSTITUTIONAL CRYPTO TERMINAL" HERO SECTION
+
+BUILD A SINGLE, ABOVE-THE-FOLD **HERO SECTION** FOR A FICTIONAL HIGH-PERFORMANCE CRYPTO PORTFOLIO PLATFORM CALLED **HELIX VAULT**. THE NAMED AESTHETIC IS **"INSTITUTIONAL CRYPTO TERMINAL"**: A DEEP, NEAR-BLACK TRADING-FLOOR CANVAS LIT BY A SINGLE BLADE OF EMERALD LIGHT, WITH AN OVERSIZED EDITORIAL HEADLINE FLOATING ABOVE A HYPER-DETAILED, GLASS-PANELLED PORTFOLIO DASHBOARD MOCKUP. THE MOOD IS PRECISE, EXPENSIVE, CALM, AND CONFIDENT — A BLOOMBERG TERMINAL REIMAGINED AS A LUXURY PRODUCT. NO PURPLE-BLUE AI-SLOP GRADIENTS, NO STOCK HERO PHOTOS, NO GENERIC TEMPLATED CARDS. EVERY SURFACE IS A HAND-CRAFTED GLASS PANEL ON A VOID.
+
+## DESIGN LANGUAGE & MOOD
+
+- DEEP SPACE-BLACK BACKGROUND THAT FEELS LIKE A DARKENED DEALING ROOM.
+- A SINGLE SIGNATURE STRUCTURAL DEVICE: A **HORIZON BLADE OF LIGHT** — A BRIGHT EMERALD CORE LINE SITTING BEHIND THE TOP EDGE OF THE DASHBOARD, BLOOMING OUTWARD INTO SOFT AMBIENT GLOW, AS IF THE DASHBOARD IS RISING OUT OF A SUNRISE OF LIGHT.
+- FROSTED, HAIRLINE-BORDERED GLASS PANELS (WHITE AT 3–8% OPACITY) WITH 2XL ROUNDED CORNERS, USED FOR EVERY CARD, TILE AND LIST ROW.
+- A FAINT FIXED GRAIN / NOISE TEXTURE AND A SUBTLE DOT-GRID BACKDROP TO KILL FLATNESS.
+- CONFIDENT NEGATIVE SPACE; THE COMPOSITION IS CENTERED AND SYMMETRIC ABOVE, THEN OPENS INTO AN ASYMMETRIC 7/5 DASHBOARD GRID BELOW.
+
+## EXACT COLOR PALETTE
+
+- BACKGROUND VOID: `#07080C` (NEAR-BLACK WITH A COOL UNDERTONE).
+- PANEL SURFACE: WHITE AT 3% (`rgba(255,255,255,0.03)`), HOVER 6%.
+- HAIRLINE BORDERS: WHITE AT 8–10%.
+- BRAND PRIMARY (EMERALD): `#19F5A0`.
+- BRAND DEEP: `#0BD188`.
+- TEXT PRIMARY: `#F4F6F5`; TEXT SECONDARY: `#A7AEB4`; TEXT MUTED: `rgba(167,174,180,0.45)`.
+- POSITIVE = EMERALD `#19F5A0`; NEGATIVE = CORAL `#FF5A6E`.
+- ACCENT ASSET CHIPS: BITCOIN AMBER `#F7931A`, ETHEREUM SLATE-BLUE `#7B89F4`, SOLANA EMERALD.
+- CTA SHADOW: A 34PX EMERALD GLOW (`0 0 34px rgba(25,245,160,0.35)`).
+
+## TYPOGRAPHY
+
+- ONE TYPEFACE FAMILY ONLY: A CLEAN GEOMETRIC GROTESQUE — **DM SANS** (WEIGHTS 400/500/700) FOR ALL UI AND BODY, VENDORED LOCALLY AS WOFF2.
+- USE A MONOSPACE STACK (SYSTEM `ui-monospace`/`SFMono`) ONLY FOR NUMERIC TICKER VALUES AND THE TINY LIVE-DATA LABELS, TO GIVE A TERMINAL FEEL.
+- HERO HEADLINE: 56PX MOBILE → 84PX DESKTOP, WEIGHT 400–500, TIGHT TRACKING (`-0.03em`), LINE-HEIGHT 1.05. THE PHRASE "DIGITAL WEALTH" IS SET IN EMERALD.
+- SUBHEAD: 18PX, TEXT-SECONDARY, MAX-WIDTH ~640PX, CENTERED.
+- UPPERCASE MICRO-LABELS AT 10–11PX WITH WIDE LETTER-SPACING (`0.18em`) FOR CARD TITLES.
+
+## LAYOUT & SECTION BREAKDOWN
+
+1. **FIXED GLASS NAVBAR** (88PX TALL): BLURRED `rgba(7,8,12,0.8)` BACKGROUND WITH A HAIRLINE BOTTOM BORDER. LEFT: A SMALL EMERALD HELIX/VAULT LOGO MARK + WORDMARK "HELIX VAULT". CENTER (DESKTOP ONLY): NAV LINKS — MARKETS, VAULTS, INSIGHTS, PRICING, FAQ — MUTED, EMERALD ON HOVER. RIGHT: A GLOWING EMERALD "OPEN VAULT" PILL BUTTON.
+2. **HERO COPY BLOCK** (CENTERED, MAX-WIDTH ~720PX): EYEBROW PILL ("● INSTITUTIONAL-GRADE CUSTODY"), THE OVERSIZED HEADLINE ("MASTER YOUR DIGITAL WEALTH IN ONE VAULT"), THE SUBHEAD, A PRIMARY CTA ("START YOUR VAULT →" WITH A CIRCULAR ARROW BADGE) AND A SECONDARY GHOST LINK ("VIEW LIVE MARKETS"). BELOW: A SOCIAL-PROOF ROW — FIVE EMERALD STARS, A "4.9" RATING, AND "TRUSTED BY 40,000+ TRADERS" WITH SMALL OVERLAPPING AVATAR DOTS.
+3. **HORIZON BLADE OF LIGHT**: LAYERED GLOW ELEMENTS (AMBIENT EMERALD BLUR, A BRIGHT EMERALD CORE OVAL, A WHITE-HOT CENTER LINE, AND A SHARP `transparent→white→transparent` GRADIENT HAIRLINE) POSITIONED JUST ABOVE THE DASHBOARD'S TOP EDGE.
+4. **THE PORTFOLIO DASHBOARD MOCKUP** (THE CENTERPIECE, MAX-WIDTH ~1180PX, ROUNDED-XL, HAIRLINE BORDER, DEEP DROP SHADOW): A FULLY BUILT FAKE APP UI WITH:
+   - A LEFT **ICON RAIL SIDEBAR** (HOME ACTIVE IN EMERALD, PLUS CHART / SWAP / CALENDAR / SETTINGS GLYPHS).
+   - AN **INTERNAL HEADER** ROW: TABS (WEALTH OVERVIEW ACTIVE, INSIGHTS, TRADE), A SEARCH HINT, A LIVE "MARKET OPEN" DOT, AND A GRADIENT AVATAR CHIP ("AV").
+   - A **7/5 GRID BODY**. LEFT COLUMN: A **TOTAL NET WORTH** BALANCE CARD ($-VALUE IN BOLD 5XL MONO, A "+18.2% / 24H" EMERALD DELTA, A "REAL-TIME" CHIP, AND TWO ACTION BUTTONS — EMERALD "SEND" + GHOST "DEPOSIT"); A **PERFORMANCE INSIGHTS** CARD WITH A LIVE-FEEL BAR CHART (9–12 BARS AT VARYING EMERALD OPACITIES, THE PEAK BAR GLOWING) PLUS A SHORT "STRATEGY ALPHA" ANALYSIS PARAGRAPH; AND A TWO-UP ROW OF SMALL STATUS TILES (NETWORK STATUS = "ALL SYSTEMS OPERATIONAL" WITH A PULSING DOT, SECURITY LEVEL = "ENHANCED · 2FA"). RIGHT COLUMN: A **MY ASSETS** LIST (BITCOIN, ETHEREUM, SOLANA — EACH A GLASS ROW WITH A COLORED COIN CHIP, NAME, HOLDING AMOUNT, USD VALUE, AND COLOR-CODED % CHANGE) AND A **RECENT ACTIVITY** FEED (SWAP / RECEIVE ENTRIES WITH GLYPHS, TIMESTAMPS, AND AMOUNTS).
+   - A TOP-EDGE `transparent→white→transparent` STROKE GRADIENT AND A LOOPING EMERALD **SCAN-LINE** THAT SWEEPS LEFT-TO-RIGHT ACROSS THE DASHBOARD.
+
+## MOTION / ANIMATION / INTERACTION SPEC
+
+- ON LOAD: THE HERO COPY, CTA, AND DASHBOARD FADE+RISE IN STAGGERED (OPACITY 0→1, TRANSLATEY 24PX→0, ~0.8S EASE-OUT), DRIVEN VIA INTERSECTIONOBSERVER SO IT ALSO REPLAYS ON SCROLL-IN.
+- THE EMERALD **SCAN-LINE** LOOPS INFINITELY ACROSS THE DASHBOARD (~3.5S LINEAR, FADING IN/OUT AT THE EDGES).
+- THE BLADE-OF-LIGHT CORE SUBTLY **BREATHES** (SLOW OPACITY/SCALE PULSE).
+- THE BALANCE CARD'S NET-WORTH NUMBER **COUNTS UP** TO ITS FINAL VALUE ONCE WHEN IT FIRST ENTERS VIEW.
+- THE BAR CHART BARS **GROW FROM ZERO HEIGHT** ON REVEAL, STAGGERED LEFT-TO-RIGHT; ON HOVER A BAR LIFTS SLIGHTLY.
+- ONE OR TWO TICKER VALUES (E.G. THE 24H DELTA OR AN ASSET PRICE) **GENTLY FLICKER/UPDATE** ON A TIMER TO FEEL LIVE.
+- GLASS CARDS LIFT AND BRIGHTEN ON HOVER; THE NETWORK-STATUS DOT PULSES; THE CTA SCALES TO 1.05 WITH ITS EMERALD GLOW INTENSIFYING.
+- A CUSTOM EMERALD-RING CURSOR-FOLLOW GLOW IS OPTIONAL BUT WELCOME; KEEP IT SUBTLE.
+
+## RESPONSIVE BEHAVIOR
+
+- DESKTOP (≥1024PX): FULL 7/5 DASHBOARD GRID, CENTERED NAV LINKS VISIBLE, HEADLINE AT 84PX.
+- TABLET: DASHBOARD COLUMNS STACK GRACEFULLY; NAV LINKS COLLAPSE.
+- MOBILE (≤640PX): SINGLE-COLUMN DASHBOARD, HEADLINE 56PX, CTA FULL-WIDTH-FRIENDLY, SOCIAL PROOF WRAPS, SCAN-LINE AND GLOW SCALE DOWN. NO HORIZONTAL OVERFLOW.
+
+## TECH & QUALITY BAR
+
+- SELF-CONTAINED, FRAMEWORK-FREE: PLAIN `index.html` + `styles.css` + `main.js`. NO BUILD STEP, NO CDN AT RUNTIME — VENDOR THE DM SANS FONT FILES LOCALLY AND REFERENCE THEM WITH RELATIVE PATHS. ALL ICONS ARE INLINE SVG. ALL DATA IS HAND-AUTHORED FAKE DATA.
+- THE RESULT MUST RUN OFFLINE FROM A STATIC SERVER, BE PIXEL-CLEAN, AND READ AS A REAL, SHIPPABLE PRODUCT HERO — NOT A WIREFRAME.
+
+## Source & license
+
+Vendored from MIT-licensed
+[`pulkitxm/claude-directory`](https://github.com/pulkitxm/claude-directory/tree/main/hero-sections/helix-vault-h55).
+The upstream MIT licence text ships in this template at [`LICENSE`](./LICENSE) and
+must be redistributed alongside any copy of `example.html` or `assets/`.
+
+Webfonts and full-resolution imagery are **not** vendored: local `@font-face`
+rules are served from the Google Fonts CDN and referenced images are
+downscaled. Fetch the upstream folder for the original assets.

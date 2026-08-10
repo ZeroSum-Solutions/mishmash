@@ -1,0 +1,14 @@
+{
+  "slug": "brightlight",
+  "name": "Brightlight , Developer Email Delivery Platform Template",
+  "family": "lexingtonthemes",
+  "kind": "multipage",
+  "cdn_fonts": [
+    "Geist",
+    "Noto Serif"
+  ],
+  "dropped_assets": [],
+  "vendored_from": "pulkitxm/claude-directory",
+  "source": "https://github.com/pulkitxm/claude-directory/tree/main/templates/premium/lexingtonthemes/brightlight",
+  "source_license": "MIT"
+}

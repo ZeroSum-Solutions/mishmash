@@ -958,6 +958,7 @@
       "GET /api/design-library/catalog",
       "GET /api/design-library/promotions",
       "GET /api/design-library/thumb/:param",
+      "POST /api/design-library/live-preview",
       "POST /api/design-library/open",
       "POST /api/design-library/promotions",
       "PATCH /api/design-library/promotions/:param",
