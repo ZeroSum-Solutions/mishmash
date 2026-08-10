@@ -113,9 +113,14 @@ describe('HomeView duplicate example flow', () => {
     );
 
     // Preset cards render under the active type chip; the fixture's
-    // mode: 'prototype' + html preview places it on the Prototype rail. The
-    // rail disables its chips until the plugin list loads, and a disabled
-    // button swallows the click — wait for enablement first.
+    // mode: 'prototype' + html preview places it on the Prototype rail.
+    // `prototype` moved behind the overflow ("More") menu in the composer
+    // rail — open it before the chip is reachable. The rail disables its
+    // chips until the plugin list loads, and a disabled button swallows the
+    // click — wait for enablement first.
+    const shortcutsTrigger = (await screen.findByTestId('home-hero-shortcuts-trigger')) as HTMLButtonElement;
+    await waitFor(() => expect(shortcutsTrigger.disabled).toBe(false));
+    fireEvent.click(shortcutsTrigger);
     const prototypeChip = (await screen.findByTestId('home-hero-rail-prototype')) as HTMLButtonElement;
     await waitFor(() => expect(prototypeChip.disabled).toBe(false));
     fireEvent.click(prototypeChip);

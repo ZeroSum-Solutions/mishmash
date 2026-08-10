@@ -706,12 +706,18 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     );
   }, [activeExamplePlugins, activeChipId, selectedSubcategory, pluginOptions]);
 
-  // First-run guide, beat 1: pulse the Prototype chip for brand-new users.
+  // First-run guide, beat 1: pulse the HyperFrames chip for brand-new users.
   // The settle delay lets the hero finish its entrance before the sheen.
+  // Must be a chip in the `create` group with curated example/prompt
+  // fallbacks (see HOME_PROMPT_EXAMPLES) — the pulse only attaches inside
+  // the visible create-rail tabs (never the collapsed overflow menu), and
+  // beat 2 (below) pulses that chip's first example card, so the target
+  // needs one to land on. Formerly Prototype, before it moved to the
+  // overflow menu.
   useEffect(() => {
     if (firstRunGuide !== true) return;
     if (readHomeGuideStage() !== 'chip') return;
-    const arm = window.setTimeout(() => setGuidePulseChipId('prototype'), 900);
+    const arm = window.setTimeout(() => setGuidePulseChipId('hyperframes'), 900);
     const disarm = window.setTimeout(() => setGuidePulseChipId(null), 3600);
     return () => {
       window.clearTimeout(arm);
@@ -3783,6 +3789,13 @@ function homeHeroChipDescription(chipId: string, t: ReturnType<typeof useT>): st
     case 'webgl': return t('homeHero.chip.webglDesc');
     case 'live-artifact': return t('homeHero.chip.liveArtifactDesc');
     case 'create-brand-kit': return t('homeHero.chip.createBrandKitDesc');
+    case 'template': return t('homeHero.chip.templateDesc');
+    // Reuse the Home "Featured starters" row's own copy (same Dict keys)
+    // instead of duplicating the description string into a new key.
+    case 'scroll-film': return t('home.featured.tool.scrollFilm.descriptor');
+    case 'hero-creation': return t('home.featured.tool.heroCreation.descriptor');
+    case 'clone-rebrand': return t('home.featured.tool.cloneRebrand.descriptor');
+    case 'scroll-animations': return t('homeHero.chip.scrollAnimationsDesc');
     default: return '';
   }
 }
@@ -3823,6 +3836,10 @@ function homeHeroChipTitle(chip: HomeHeroChip, t: ReturnType<typeof useT>): stri
     case 'create-plugin': return t('homeHero.chip.createPluginHint');
     case 'figma': return t('homeHero.chip.figmaHint');
     case 'template': return t('homeHero.chip.templateHint');
+    case 'scroll-film': return t('homeHero.chip.scrollFilmNext');
+    case 'hero-creation': return t('homeHero.chip.heroCreationNext');
+    case 'clone-rebrand': return t('homeHero.chip.cloneRebrandNext');
+    case 'scroll-animations': return t('homeHero.chip.scrollAnimationsNext');
     default: return homeHeroChipLabel(chip.id, t);
   }
 }

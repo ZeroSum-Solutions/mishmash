@@ -3,16 +3,24 @@
 // live in runtimes/usage-tracking.ts; this file only wires HTTP.
 import type { Express, Request, Response } from 'express';
 import type Database from 'better-sqlite3';
+import type { AmrWalletSnapshot, WorkspaceUsageResponse } from '@open-design/contracts';
 import { getProject } from '../db.js';
 import {
   getRunUsage,
   listProjectRunUsage,
   projectUsageSummary,
+  workspaceUsageSummary,
   type StoredRunUsageRecord,
 } from '../runtimes/usage-tracking.js';
 
 export interface RegisterUsageRoutesDeps {
   db: Database.Database;
+  /** Optional: omitted in tests that don't need the credits block. A reader
+   *  that throws is treated identically to "not configured" -- see the
+   *  GET /api/usage handler below. */
+  wallet?: {
+    readSnapshot: () => Promise<AmrWalletSnapshot>;
+  };
 }
 
 function runUsageResponseShape(record: StoredRunUsageRecord) {
@@ -40,6 +48,33 @@ function routeParamId(req: Request): string | null {
 
 export function registerUsageRoutes(app: Express, deps: RegisterUsageRoutesDeps): void {
   const { db } = deps;
+
+  // Workspace-wide: total cost across every project, for the Home topbar
+  // usage widget in EntryShell.tsx -- it renders where no project is ever
+  // open, so the project-scoped route below can never populate it. Credits
+  // is best-effort: an AMR wallet read failure must never break the cost
+  // aggregate, so it degrades to null rather than failing the request.
+  app.get('/api/usage', async (req: Request, res: Response) => {
+    const summary = workspaceUsageSummary(db);
+    let credits: AmrWalletSnapshot | null = null;
+    if (deps.wallet) {
+      try {
+        credits = await deps.wallet.readSnapshot();
+      } catch {
+        credits = null;
+      }
+    }
+    const response: WorkspaceUsageResponse = {
+      currency: summary.currency,
+      totalCostUsd: summary.totalCostUsd,
+      pricingVersion: summary.pricingVersion,
+      runCount: summary.runCount,
+      pricedRunCount: summary.pricedRunCount,
+      projectCount: summary.projectCount,
+      credits,
+    };
+    res.json(response);
+  });
 
   // Project-scoped: total cost + per-run breakdown for one project. This is
   // the route both the web Usage panel and `od usage` hit -- same contract,

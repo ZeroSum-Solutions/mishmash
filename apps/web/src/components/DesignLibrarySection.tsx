@@ -146,7 +146,7 @@ export function DesignLibrarySection({ active, onOpenProject }: Props) {
   return (
     <div className={`entry-section ${styles.root}`}>
       <header className="entry-section__head">
-        <h1 className="entry-section__title">{catalog?.library || t('designLibrary.title')}</h1>
+        <h1 className="entry-section__title">{t('designLibrary.title')}</h1>
         {catalog ? (
           <div className={styles.headerMeta}>
             <span className={styles.collectionsCount}>{catalog.total_collections} collections</span>

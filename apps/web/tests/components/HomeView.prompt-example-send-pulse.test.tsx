@@ -35,6 +35,24 @@ const WEB_PROTOTYPE_PLUGIN = {
   },
 };
 
+// `hyperframes` (unlike `prototype`) still renders directly in the create
+// rail (see CREATE_RAIL_ORDER in home-hero/chips.ts) rather than behind the
+// overflow menu, so the fallback-prompt-example test below binds this
+// fixture instead of WEB_PROTOTYPE_PLUGIN.
+const HYPERFRAMES_PLUGIN = {
+  ...WEB_PROTOTYPE_PLUGIN,
+  id: 'example-hyperframes',
+  title: 'HyperFrames',
+  source: '/tmp/hyperframes',
+  fsPath: '/tmp/hyperframes',
+  manifest: {
+    ...WEB_PROTOTYPE_PLUGIN.manifest,
+    name: 'example-hyperframes',
+    title: 'HyperFrames',
+    description: 'HTML-based motion graphics scenario.',
+  },
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
   cleanup();
@@ -109,7 +127,7 @@ describe('static prompt-example send pulse', () => {
     writeHomeGuideStage('done');
     vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL) => {
       if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: [WEB_PROTOTYPE_PLUGIN] }), {
+        return new Response(JSON.stringify({ plugins: [HYPERFRAMES_PLUGIN] }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -130,7 +148,7 @@ describe('static prompt-example send pulse', () => {
 
     // The chip's default plugin exists (so the chip binds) but no plugin
     // matches the example filter → fallback static prompt-example cards.
-    fireEvent.click(await screen.findByTestId('home-hero-rail-prototype'));
+    fireEvent.click(await screen.findByTestId('home-hero-rail-hyperframes'));
     const exampleCards = await screen.findAllByTestId('home-hero-prompt-example');
     const firstExample = exampleCards[0];
     if (!firstExample) throw new Error('expected at least one prompt-example card');

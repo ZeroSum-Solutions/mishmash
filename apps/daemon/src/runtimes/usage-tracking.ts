@@ -60,6 +60,15 @@ export interface ProjectUsageSummary {
   pricedRunCount: number;
 }
 
+export interface WorkspaceUsageSummary {
+  currency: 'USD';
+  totalCostUsd: number;
+  pricingVersion: PricingVersion;
+  runCount: number;
+  pricedRunCount: number;
+  projectCount: number;
+}
+
 // Public list pricing (USD per million tokens), as an honest ESTIMATE --
 // not a guarantee of the exact billed amount (real invoices may differ by
 // discount tier, promotional credits, or a provider price change this
@@ -375,5 +384,49 @@ export function projectUsageSummary(
     pricingVersion,
     runCount: runs.length,
     pricedRunCount: priced.length,
+  };
+}
+
+interface WorkspaceUsageAggregateRow {
+  run_count: number;
+  project_count: number;
+  total_cost_usd: number;
+  priced_run_count: number;
+}
+
+/**
+ * Workspace total = the same `run_usage` table `projectUsageSummary` sums,
+ * minus the `WHERE project_id = ?` filter -- every run across every
+ * project. Exists because the Home topbar usage widget (EntryShell.tsx)
+ * renders where no project is ever open, so the project-scoped summary can
+ * never populate it. Mirrors `projectUsageSummary`'s honesty discipline
+ * exactly: `pricingVersion` is 'unavailable' when nothing is priced,
+ * 'partial' when some runs are and some aren't, 'estimated' when every run
+ * priced -- never a bare `totalCostUsd === 0` standing in for "unknown."
+ */
+export function workspaceUsageSummary(db: Database.Database): WorkspaceUsageSummary {
+  const row = db
+    .prepare(
+      `SELECT
+         COUNT(*) AS run_count,
+         COUNT(DISTINCT project_id) AS project_count,
+         COALESCE(SUM(CASE WHEN cost_usd IS NOT NULL THEN cost_usd ELSE 0 END), 0) AS total_cost_usd,
+         COALESCE(SUM(CASE WHEN cost_usd IS NOT NULL THEN 1 ELSE 0 END), 0) AS priced_run_count
+       FROM run_usage`,
+    )
+    .get() as WorkspaceUsageAggregateRow;
+  const pricingVersion: PricingVersion =
+    row.run_count === 0 || row.priced_run_count === 0
+      ? 'unavailable'
+      : row.priced_run_count === row.run_count
+        ? 'estimated'
+        : 'partial';
+  return {
+    currency: 'USD',
+    totalCostUsd: row.total_cost_usd,
+    pricingVersion,
+    runCount: row.run_count,
+    pricedRunCount: row.priced_run_count,
+    projectCount: row.project_count,
   };
 }

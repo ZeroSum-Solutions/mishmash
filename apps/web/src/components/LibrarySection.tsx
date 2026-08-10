@@ -976,7 +976,7 @@ export function LibrarySection({ active, onOpenProject }: Props) {
         const n = appliedCount;
         const text =
           n > 0
-            ? `Use ${n} reference${n > 1 ? 's' : ''} I just added from my Library to refine this design ` +
+            ? `Use ${n} reference${n > 1 ? 's' : ''} I just added from my Assets to refine this design ` +
               `system — pull the palette, typography, and component patterns that fit and update the design tokens.`
             : 'Refine this design system — pull the palette, typography, and component patterns that fit and update the design tokens.';
         setComposerSeed({ projectId, text, attachments });
@@ -1251,10 +1251,10 @@ export function LibrarySection({ active, onOpenProject }: Props) {
     >
       {fontFaceCss ? <style>{fontFaceCss}</style> : null}
       <header className="entry-section__head">
-        <h1 className="entry-section__title">Library</h1>
+        <h1 className="entry-section__title">Assets</h1>
         <div className={styles.clipperHint}>
           <p className={styles.headerHint}>
-            Clip any page, design system, screenshot, image, or Figma import JSON into your Library —
+            Clip any page, design system, screenshot, image, or Figma import JSON into your Assets —
             local-first, one click, no login.
           </p>
           <a
@@ -1335,7 +1335,7 @@ export function LibrarySection({ active, onOpenProject }: Props) {
           onClick={() => void runSync()}
           aria-busy={syncing}
           disabled={syncing}
-          data-tooltip="Pull your design systems and agent-generated artifacts into the Library"
+          data-tooltip="Pull your design systems and agent-generated artifacts into Assets"
           data-tooltip-placement="bottom"
         >
           <Icon name="refresh" size={15} className={syncing ? styles.spin : undefined} />
@@ -1344,7 +1344,7 @@ export function LibrarySection({ active, onOpenProject }: Props) {
         <Button
           className={`${styles.uploadBtn} od-tooltip`}
           onClick={() => openUpload()}
-          data-tooltip="Upload images, fonts, or files into the Library"
+          data-tooltip="Upload images, fonts, or files into Assets"
           data-tooltip-placement="bottom"
         >
           <Icon name="upload" size={15} />
@@ -1496,7 +1496,7 @@ export function LibrarySection({ active, onOpenProject }: Props) {
         <div className={styles.dropOverlay} aria-hidden>
           <div className={styles.dropOverlayInner}>
             <Icon name="upload" size={30} />
-            <span className={styles.dropOverlayText}>Drop to upload to your Library</span>
+            <span className={styles.dropOverlayText}>Drop to upload to Assets</span>
           </div>
         </div>
       ) : null}
@@ -1524,7 +1524,7 @@ export function LibrarySection({ active, onOpenProject }: Props) {
             Delete {selectedCount} {selectedCount === 1 ? 'asset' : 'assets'}?
           </DialogTitle>
           <DialogDescription className="modal-confirm-message">
-            This permanently removes {selectedCount === 1 ? 'it' : 'them'} from your Library. This
+            This permanently removes {selectedCount === 1 ? 'it' : 'them'} from your Assets. This
             can’t be undone.
           </DialogDescription>
           <DialogFooter className="row">

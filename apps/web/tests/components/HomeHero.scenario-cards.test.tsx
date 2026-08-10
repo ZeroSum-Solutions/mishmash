@@ -3,8 +3,8 @@
 // Scenario-card rail coverage.
 //   - The default create rail renders illustrated scenario cards carrying a
 //     title AND a one-line description.
-//   - The rail leads with Website clone, then the slide deck ("Slides"), per the
-//     curated create order.
+//   - The rail leads with Build a website, then Website clone, per the
+//     curated create order (see CREATE_RAIL_ORDER in home-hero/chips.ts).
 //   - The finer-grained scenarios (wireframe / mobile / document) exist and
 //     route to a working scenario plugin.
 
@@ -41,7 +41,7 @@ vi.mock('../../src/components/home-hero/PlaceholderCarousel', () => ({
 }));
 
 import { HomeHero } from '../../src/components/HomeHero';
-import { findChip, orderedCreateChips } from '../../src/components/home-hero/chips';
+import { CREATE_RAIL_ORDER, findChip, orderedCreateChips } from '../../src/components/home-hero/chips';
 
 afterEach(() => {
   placeholderCarouselMock.reportScenario = false;
@@ -73,26 +73,41 @@ function renderHero(overrides: Partial<React.ComponentProps<typeof HomeHero>> = 
 describe('HomeHero scenario cards', () => {
   it('renders each create scenario card with a title and a description', () => {
     renderHero();
-    const prototype = screen.getByTestId('home-hero-rail-prototype');
-    expect(prototype.textContent).toContain('Prototype');
-    expect(prototype.textContent).toContain('Interactive app mockups');
+    const webClone = screen.getByTestId('home-hero-rail-web-clone');
+    expect(webClone.textContent).toContain('Website clone');
+    expect(webClone.textContent).toContain('Source-first site reproduction');
 
-    const deck = screen.getByTestId('home-hero-rail-deck');
-    expect(deck.textContent).toContain('Presentations & pitch decks');
+    const webgl = screen.getByTestId('home-hero-rail-webgl');
+    expect(webgl.textContent).toContain('Shaders, 3D & generative GPU visuals');
   });
 
-  it('leads the create rail with Website clone, then the slide deck', () => {
+  it('leads the create rail with Build a website, then Website clone', () => {
     const ordered = orderedCreateChips();
-    expect(ordered[0]?.id).toBe('web-clone');
-    expect(ordered[1]?.id).toBe('deck');
+    expect(ordered[0]?.id).toBe('template');
+    expect(ordered[1]?.id).toBe('web-clone');
   });
 
-  it('adds the finer-grained scenarios as create cards routed to a scenario plugin', () => {
+  it('orders the full create rail: user chips first, then the powered/motion specialisations', () => {
+    expect(CREATE_RAIL_ORDER).toEqual([
+      'template',
+      'web-clone',
+      'scroll-film',
+      'hero-creation',
+      'clone-rebrand',
+      'scroll-animations',
+      'webgl',
+      'hyperframes',
+      'live-artifact',
+    ]);
+  });
+
+  it('keeps the finer-grained scenarios reachable from the overflow menu, routed to a working scenario plugin', () => {
     renderHero();
+    fireEvent.click(screen.getByTestId('home-hero-shortcuts-trigger'));
+    const menu = screen.getByTestId('home-hero-shortcuts-menu');
     for (const id of ['wireframe', 'mobile', 'document']) {
       const card = screen.getByTestId(`home-hero-rail-${id}`);
-      const tabs = screen.getByTestId('home-hero-type-tabs');
-      expect(tabs.contains(card)).toBe(true);
+      expect(menu.contains(card)).toBe(true);
       expect(findChip(id)?.action.kind).toBe('apply-scenario');
     }
     // Wireframe reuses the web-prototype seed at lo-fi fidelity.

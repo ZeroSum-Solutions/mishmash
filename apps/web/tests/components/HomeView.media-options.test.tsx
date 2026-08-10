@@ -8,6 +8,7 @@ vi.mock('../../src/components/home-hero/PlaceholderCarousel', () => ({
 }));
 
 import { HomeView } from '../../src/components/HomeView';
+import { findChip } from '../../src/components/home-hero/chips';
 import type { DesignSystemSummary, PromptTemplateSummary } from '../../src/types';
 // HomeHero's prompt input migrated from a <textarea> + highlight overlay to the
 // same Lexical contenteditable the project composer uses. It still has
@@ -104,7 +105,7 @@ describe('HomeView media composer options', () => {
     expect(screen.getByTestId('home-hero-design-system-trigger')).toBeTruthy();
 
     await clickHomeRailChip('image');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('image');
     expect(promptIsEmpty()).toBe(true);
     expect(screen.queryByTestId('home-hero-footer-option-designSystem')).toBeNull();
     expect(screen.queryByTestId('home-hero-footer-option-model')).toBeNull();
@@ -113,7 +114,7 @@ describe('HomeView media composer options', () => {
     expect(screen.queryByTestId('home-hero-footer-option-duration')).toBeNull();
 
     await clickHomeRailChip('video');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('video');
     expect(promptIsEmpty()).toBe(true);
     expect(screen.queryByTestId('home-hero-footer-option-designSystem')).toBeNull();
     expect(screen.queryByTestId('home-hero-footer-option-model')).toBeNull();
@@ -123,14 +124,14 @@ describe('HomeView media composer options', () => {
 
     // HyperFrames / Audio keep no pre-flight pills at all.
     await clickHomeRailChip('hyperframes');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('hyperframes');
     expect(promptIsEmpty()).toBe(true);
     expect(screen.queryByTestId('home-hero-footer-option-ratio')).toBeNull();
     expect(screen.queryByTestId('home-hero-footer-option-duration')).toBeNull();
     expect(screen.queryByTestId('home-hero-footer-option-model')).toBeNull();
 
     await clickHomeRailChip('audio');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('audio');
     expect(promptIsEmpty()).toBe(true);
     expect(screen.queryByTestId('home-hero-footer-option-audioType')).toBeNull();
     expect(screen.queryByTestId('home-hero-footer-option-model')).toBeNull();
@@ -190,12 +191,12 @@ describe('HomeView media composer options', () => {
     renderHome();
 
     await clickHomeRailChip('image');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('image');
     expect(screen.queryByRole('dialog', { name: /replace current prompt/i })).toBeNull();
 
     await setHomePrompt('Make this prompt personally tuned.');
     await clickHomeRailChip('video');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('video');
     expect(screen.queryByRole('dialog', { name: /replace current prompt/i })).toBeNull();
   });
 
@@ -206,7 +207,7 @@ describe('HomeView media composer options', () => {
     // Audio type / model / duration / voice are no longer footer pills — the
     // agent asks for them during the run. The composer just stays empty.
     await clickHomeRailChip('audio');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('audio');
     expect(promptIsEmpty()).toBe(true);
     expect(screen.queryByTestId('home-hero-footer-option-audioType')).toBeNull();
     expect(screen.queryByTestId('home-hero-footer-option-duration')).toBeNull();
@@ -219,20 +220,20 @@ describe('HomeView media composer options', () => {
     renderHome();
 
     await clickHomeRailChip('image');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('image');
     expect(screen.queryByRole('combobox', { name: 'Template' })).toBeNull();
     expect(screen.queryByRole('combobox', { name: 'Model' })).toBeNull();
     expect(screen.queryByRole('combobox', { name: 'Ratio' })).toBeNull();
 
     await clickHomeRailChip('video');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('video');
     expect(screen.queryByRole('combobox', { name: 'Duration' })).toBeNull();
     expect(screen.queryByRole('combobox', { name: 'Template' })).toBeNull();
     expect(screen.queryByRole('combobox', { name: 'Model' })).toBeNull();
     expect(screen.queryByRole('combobox', { name: 'Ratio' })).toBeNull();
 
     await clickHomeRailChip('audio');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('audio');
     // No audio pills/combobox at all now — those questions moved to the agent.
     expect(screen.queryByTestId('home-hero-footer-option-audioType')).toBeNull();
     expect(screen.queryByRole('combobox', { name: 'Audio type' })).toBeNull();
@@ -278,7 +279,7 @@ describe('HomeView media composer options', () => {
     const view = render(<HomeView {...props} />);
 
     await clickHomeRailChip('image');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('image');
     await setHomePrompt('Create a campaign image.');
     await submitHome();
     await waitFor(() => {
@@ -314,7 +315,7 @@ describe('HomeView media composer options', () => {
     });
 
     await clickHomeRailChip('video');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('video');
     await chooseOption('designSystem', 'brand-alpha', 'Brand Alpha');
     setHomePrompt('Create a launch teaser.');
     await submitHome();
@@ -347,7 +348,7 @@ describe('HomeView media composer options', () => {
     renderHome({ onSubmit });
 
     await clickHomeRailChip('video');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('video');
     await setHomePrompt('Create a launch teaser.');
     await submitHome();
 
@@ -373,7 +374,7 @@ describe('HomeView media composer options', () => {
     renderHome({ onSubmit });
 
     await clickHomeRailChip('video');
-    await waitFor(() => expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'));
+    await waitForChipActive('video');
     await setHomePrompt('Create a launch teaser.');
     await submitHome();
 
@@ -524,10 +525,61 @@ async function clickHomeRailChip(id: string) {
     await enabledClick(`home-hero-rail-${id}`);
     return;
   }
+  // Media/utility chips (Image, Video, Audio, ...) live in the 'migrate' group,
+  // tucked behind the rail's "More" shortcuts trigger rather than the primary
+  // create rail — see ShortcutsMenu in HomeHero.tsx. Its menu items reuse the
+  // same `home-hero-rail-${id}` testid once open, so open it and retry there
+  // before falling back to the Template dropdown below.
+  if (screen.queryByTestId('home-hero-shortcuts-trigger')) {
+    // The trigger is briefly disabled while plugins load, same as any rail
+    // chip, so it needs the same enabled-wait before the click registers.
+    await enabledClick('home-hero-shortcuts-trigger');
+    await waitFor(() => expect(screen.getByTestId('home-hero-shortcuts-menu')).toBeTruthy());
+    if (screen.queryByTestId(`home-hero-rail-${id}`)) {
+      await enabledClick(`home-hero-rail-${id}`);
+      return;
+    }
+    // Not a migrate-group chip after all — close the menu before falling
+    // through, so it doesn't shadow the Template dropdown query below.
+    fireEvent.click(screen.getByTestId('home-hero-shortcuts-trigger'));
+  } else if (findChip(id)?.group === 'migrate') {
+    // The whole rail section (create cards + the "More" shortcuts trigger) is
+    // unmounted while a *create*-group template is active — see
+    // `{activeCreateChip ? null : (...)}` in HomeHero.tsx. A migrate-group
+    // chip like Image/Video/Audio has no other path to it from here, so back
+    // out of the active template via the footer picker's Clear first (the
+    // real UI has no other route either — this mirrors what a user does),
+    // then retry through the now-restored shortcuts menu.
+    fireEvent.click(await screen.findByTestId('home-hero-template-trigger'));
+    await enabledClick('home-hero-template-clear');
+    await screen.findByTestId('home-hero-shortcuts-trigger');
+    await clickHomeRailChip(id);
+    return;
+  }
   // A template is selected → the rail is hidden; open the Template dropdown and
   // pick from its grid (picking closes the dropdown, so the next open is clean).
   fireEvent.click(await screen.findByTestId('home-hero-template-trigger'));
   await enabledClick(`home-hero-template-card-${id}`);
+}
+
+// Confirm a chip picked via clickHomeRailChip has actually become the active
+// selection before asserting on its downstream effects. The Template trigger
+// badge (`homeHero.templatePicker.label`) only tracks the create-group
+// templates it lists — the "Template:" kicker is specifically about picking a
+// template. For a migrate-group chip (Image/Video/Audio/...), the readiness
+// signal instead is the "More" shortcuts trigger picking up its `is-active`
+// class, set from the same `activeChipId` state (see ShortcutsMenu in
+// HomeHero.tsx).
+async function waitForChipActive(id: string) {
+  if (findChip(id)?.group === 'migrate') {
+    await waitFor(() =>
+      expect(screen.getByTestId('home-hero-shortcuts-trigger').className).toContain('is-active'),
+    );
+    return;
+  }
+  await waitFor(() =>
+    expect(screen.getByTestId('home-hero-template-trigger').textContent).not.toContain('None'),
+  );
 }
 
 // Drive the Lexical editor and let the OnChange -> onPromptChange -> setPrompt

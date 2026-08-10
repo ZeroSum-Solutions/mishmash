@@ -14,14 +14,17 @@ import { en } from '../src/i18n/locales/en';
 const TIMING = DEFAULT_DISSOLVE_TIMING;
 
 describe('PLACEHOLDER_SCENARIO_DEFS bindings', () => {
-  it('binds every scenario to an apply-scenario create chip that exists', () => {
+  it('binds every scenario to an apply-scenario chip that exists', () => {
     for (const def of PLACEHOLDER_SCENARIO_DEFS) {
       const chip = findChip(def.chipId);
       expect(chip, `chip "${def.chipId}" for scenario "${def.id}"`).toBeDefined();
-      // One-click create reuses the rail's apply-scenario path; a chip that
-      // navigates away (create-plugin / template / brand-kit) would dead-end.
+      // One-click create reuses the rail's apply-scenario path (via
+      // `submitScenario` -> `pickChip`, which dispatches on `action.kind` only
+      // and does not consult `group`); a chip that navigates away
+      // (create-plugin / template / brand-kit) would dead-end. `group` governs
+      // rail visibility (create tab vs. overflow menu), not one-click eligibility,
+      // so a chip can live in either group here.
       expect(chip?.action.kind, `scenario "${def.id}"`).toBe('apply-scenario');
-      expect(chip?.group).toBe('create');
     }
   });
 

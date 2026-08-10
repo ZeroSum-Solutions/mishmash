@@ -177,7 +177,10 @@ describe('home composer sending state', () => {
     );
 
     // Seeding through a fallback prompt-example card is what arms the
-    // examplePromptContext marker.
+    // examplePromptContext marker. `prototype` moved behind the overflow
+    // ("More") menu in the composer rail — open it before the chip is
+    // reachable.
+    fireEvent.click(await screen.findByTestId('home-hero-shortcuts-trigger'));
     fireEvent.click(await screen.findByTestId('home-hero-rail-prototype'));
     const exampleCards = await screen.findAllByTestId('home-hero-prompt-example');
     fireEvent.click(exampleCards[0]!);

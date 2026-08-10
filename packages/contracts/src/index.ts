@@ -49,6 +49,7 @@ export * from './api/storyboard.js';
 export * from './api/terminals.js';
 export * from './api/version.js';
 export * from './api/whats-new.js';
+export * from './api/workspace-usage.js';
 export * from './api/workspaces.js';
 export * from './examples.js';
 export * from './execution-profile.js';

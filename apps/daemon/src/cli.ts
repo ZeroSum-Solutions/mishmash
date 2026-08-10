@@ -9268,22 +9268,35 @@ async function runVersion(args) {
 
 function printUsageHelp() {
   console.log(`Usage:
-  od usage --project <id> [--json]
+  od usage [--json]                 Workspace-wide total cost + credits
+  od usage --project <id> [--json]  Project cost + per-run breakdown
 
-NM-20 cost & usage meter: prints the project's total cost and a per-run
-breakdown, over the same GET /api/projects/:id/usage contract the web
-Usage panel reads. Unknown/unpriced models render as unavailable, never a
-confident fake number.
+NM-20 cost & usage meter: with --project, prints that project's total cost
+and a per-run breakdown, over the same GET /api/projects/:id/usage contract
+the web Usage panel reads. Without --project, prints the workspace-wide
+total across every project (GET /api/usage). Unknown/unpriced models render
+as unavailable, never a confident fake number.
 
 Options:
-  --project <id>    Project id (required)
+  --project <id>    Project id (omit for the workspace-wide total)
   --json             Print the raw response envelope
   --daemon-url <url> Override daemon URL`);
 }
 
+function usageTotalLabel(data) {
+  // C1-7: totalCostUsd is always a real number now (0 when nothing is
+  // priced) -- pricingVersion is the sole "is this confident/complete"
+  // signal, so a genuine $0 sum must not print as a real figure here.
+  const total = data?.totalCostUsd;
+  return typeof total === 'number' && data?.pricingVersion !== 'unavailable'
+    ? `$${total.toFixed(4)}${data?.pricingVersion === 'partial' ? ' (partial — some runs unpriced)' : ''}`
+    : 'unavailable';
+}
+
 // `od usage` — NM-20 cost & usage meter CLI mirror. Same contract as the web
-// Usage panel (GET /api/projects/:id/usage) — AGENTS.md's UI/CLI dual-track
-// rule: every capability reachable through both surfaces over the same API.
+// Usage panel (GET /api/projects/:id/usage, GET /api/usage) — AGENTS.md's
+// UI/CLI dual-track rule: every capability reachable through both surfaces
+// over the same API.
 async function runUsage(args) {
   const flags = parseFlags(args, { string: USAGE_STRING_FLAGS, boolean: USAGE_BOOLEAN_FLAGS });
   if (flags.help || flags.h) {
@@ -9291,11 +9304,30 @@ async function runUsage(args) {
     process.exit(0);
   }
   const projectId = flags.project || process.env.OD_PROJECT_ID;
-  if (!projectId) {
-    printUsageHelp();
-    process.exit(2);
-  }
   const base = await cliDaemonBaseUrl(flags);
+
+  if (!projectId) {
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/usage`);
+    } catch (err) {
+      return exitWithStructuredError({
+        code: 'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    // Single-line -- see the --project branch below for why.
+    if (flags.json) return process.stdout.write(JSON.stringify(data) + '\n');
+    console.log(
+      `Workspace: ${usageTotalLabel(data)} across ${data?.runCount ?? 0} run(s) in ${data?.projectCount ?? 0} project(s), ${data?.pricedRunCount ?? 0} priced.`,
+    );
+    const balance = data?.credits?.balanceUsd;
+    console.log(`  Credits: ${typeof balance === 'string' ? `$${balance}` : 'unavailable'}`);
+    return;
+  }
+
   let resp;
   try {
     resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/usage`);
@@ -9312,16 +9344,7 @@ async function runUsage(args) {
   // line of stdout (so a leading banner/log line can be skipped) cannot
   // parse a pretty-printed object, whose last line is a bare "}".
   if (flags.json) return process.stdout.write(JSON.stringify(data) + '\n');
-  const total = data?.totalCostUsd;
-  // C1-7: totalCostUsd is always a real number now (0 when nothing is
-  // priced) -- pricingVersion is the sole "is this confident/complete"
-  // signal, so an unpriced project's genuine $0 sum must not print as a
-  // real figure here.
-  const totalLabel =
-    typeof total === 'number' && data?.pricingVersion !== 'unavailable'
-      ? `$${total.toFixed(4)}${data?.pricingVersion === 'partial' ? ' (partial — some runs unpriced)' : ''}`
-      : 'unavailable';
-  console.log(`Project ${projectId}: ${totalLabel} across ${data?.runCount ?? 0} run(s), ${data?.pricedRunCount ?? 0} priced.`);
+  console.log(`Project ${projectId}: ${usageTotalLabel(data)} across ${data?.runCount ?? 0} run(s), ${data?.pricedRunCount ?? 0} priced.`);
   for (const run of Array.isArray(data?.runs) ? data.runs : []) {
     const cost = typeof run.costUsd === 'number' ? `$${run.costUsd.toFixed(4)}` : 'unavailable';
     console.log(`  ${run.runId}  ${run.model ?? 'unknown model'}  ${cost}`);

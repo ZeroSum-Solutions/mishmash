@@ -1168,6 +1168,13 @@ export interface Dict {
   'homeHero.chip.videoNext': string;
   'homeHero.chip.audioNext': string;
   'homeHero.chip.webClonePromptSeed': string;
+  'homeHero.chip.templateDesc': string;
+  'homeHero.chip.scrollAnimations': string;
+  'homeHero.chip.scrollAnimationsDesc': string;
+  'homeHero.chip.scrollFilmNext': string;
+  'homeHero.chip.heroCreationNext': string;
+  'homeHero.chip.cloneRebrandNext': string;
+  'homeHero.chip.scrollAnimationsNext': string;
   'homeWorkingDir.trigger': string;
   'homeWorkingDir.pick': string;
   'homeWorkingDir.replace': string;

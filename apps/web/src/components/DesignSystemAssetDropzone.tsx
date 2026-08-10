@@ -491,7 +491,7 @@ export function DesignSystemAssetDropzone({
             onClick={onSelectFromLibrary}
           >
             <Icon name="layers-filled" size={14} />
-            Select from library
+            Select from Assets
           </button>
         </div>
       ) : null}

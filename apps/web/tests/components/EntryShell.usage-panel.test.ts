@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { formatUsageTotal, parseUsageProjectIdFromSearch } from '../../src/components/EntryShell';
+import {
+  formatUsageCredits,
+  formatUsageTotal,
+  parseUsageProjectIdFromSearch,
+} from '../../src/components/EntryShell';
 
 /**
  * C1-8: the home topbar's Usage panel reads the project id to query from a
@@ -53,5 +57,50 @@ describe('formatUsageTotal', () => {
     const text = formatUsageTotal({ totalCostUsd: 0.006, pricingVersion: 'partial' });
     expect(text).toMatch(/\$0\.006/);
     expect(text).toMatch(/partial/i);
+  });
+});
+
+/**
+ * C1-8 workspace aggregate (GET /api/usage): the Home topbar usage widget's
+ * only real case, since no project is ever open there. Credits is
+ * best-effort per registerUsageRoutes's GET /api/usage handler -- a wallet
+ * read failure degrades to null rather than blocking the cost aggregate, so
+ * this must render "unavailable" rather than a fake balance.
+ */
+describe('formatUsageCredits', () => {
+  it('renders a real balance with a currency marker', () => {
+    expect(
+      formatUsageCredits({
+        status: 'available',
+        profile: 'default',
+        user: null,
+        balanceUsd: '12.50',
+        updatedAt: null,
+        fetchedAt: '2026-01-01T00:00:00.000Z',
+        stale: false,
+        source: 'vela_api',
+      }),
+    ).toBe('$12.50');
+  });
+
+  it('renders "unavailable" when there is no credits snapshot', () => {
+    expect(formatUsageCredits(null)).toMatch(/unavailable/i);
+    expect(formatUsageCredits(undefined)).toMatch(/unavailable/i);
+  });
+
+  it('renders "unavailable" when the wallet has no balance figure', () => {
+    expect(
+      formatUsageCredits({
+        status: 'unavailable',
+        profile: 'default',
+        user: null,
+        balanceUsd: null,
+        updatedAt: null,
+        fetchedAt: '2026-01-01T00:00:00.000Z',
+        stale: false,
+        source: 'unavailable',
+        error: { code: 'network', message: 'timeout' },
+      }),
+    ).toMatch(/unavailable/i);
   });
 });

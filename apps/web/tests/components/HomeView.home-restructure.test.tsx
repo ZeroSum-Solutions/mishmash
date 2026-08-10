@@ -11,7 +11,7 @@
 // the Website-clone text prompt-example cards appearing.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { HomeView } from '../../src/components/HomeView';
 import { I18nProvider } from '../../src/i18n';
@@ -110,7 +110,11 @@ describe('Home studio-entrance restructure', () => {
     stubPlugins();
     renderHome();
 
-    const cloneCard = await screen.findByText('Clone + rebrand');
+    // Scoped to the featured row: the Home composer rail now also has its
+    // own "Clone + rebrand" chip (reusing the same "home.featured.tool.
+    // cloneRebrand.label" copy) rendered elsewhere on the page.
+    const featuredRow = await screen.findByTestId('featured-templates-row');
+    const cloneCard = within(featuredRow).getByText('Clone + rebrand');
     fireEvent.click(cloneCard.closest('button')!);
 
     // Same observable the HomeHero rail's web-clone click produces: the
