@@ -573,6 +573,7 @@ export async function materializeReferencedAsset(
     return { ok: false, reason: 'missing-source' };
   }
   const contentHash = contentHashForBytes(bytes);
+  let tmpTarget: string | undefined;
   try {
     const ext = extForMime(asset.mime, asset.relPath ? path.basename(asset.relPath) : undefined);
     const target = libraryObjectPath(libraryDir, contentHash, ext);
@@ -583,12 +584,30 @@ export async function materializeReferencedAsset(
     );
     // Content-addressed: if these exact bytes are already owned at this path
     // (a prior materialize pass, or another asset already landed here under
-    // the same hash), skip the copy — it would just reproduce the same bytes.
-    const alreadyPresent = await stat(target)
-      .then((info) => info.isFile())
+    // the same hash), skip the write — it would just reproduce the same
+    // bytes. Re-hash the TARGET's own bytes rather than trusting a stat-only
+    // existence check: a prior write that died mid-flight (process kill,
+    // disk full) can leave a truncated/corrupt object sitting at this
+    // content-addressed path, and a stat-only check would flip a LATER
+    // materialize's row to `owned` pointing at those corrupt bytes forever.
+    // Only a byte-for-byte hash match on the target's actual contents is a
+    // real skip; missing OR present-but-wrong both fall through to write.
+    const targetIsCorrect = await readFile(target)
+      .then((existing) => contentHashForBytes(existing) === contentHash)
       .catch(() => false);
-    if (!alreadyPresent) {
-      await destinationWrites.gateway.copyFile(destinationWrites.capability, sourcePath, target);
+    if (!targetIsCorrect) {
+      // Write the buffer already read + hashed above — never re-`copyFile`
+      // the source path here. Hash-then-copy is a TOCTOU: if the source
+      // changed between the `readFile` above and a second, separate copy,
+      // the wrong bytes would land under the hash computed from the earlier
+      // read. Write through a temp file + rename into place so nothing (a
+      // concurrent reader, or a later materialize's own target-hash check)
+      // can ever observe a partially-written object at `target` — the same
+      // atomic pattern `writeCover` uses (apps/daemon/src/covers/store.ts).
+      tmpTarget = `${target}.tmp-${process.pid}-${Date.now()}`;
+      await destinationWrites.gateway.writeFile(destinationWrites.capability, tmpTarget, bytes);
+      await destinationWrites.gateway.rename(destinationWrites.capability, tmpTarget, target);
+      tmpTarget = undefined;
     }
     // Only pass the recomputed hash through when it actually differs from
     // what the row already had — keeps the store write a no-op column change
@@ -601,11 +620,18 @@ export async function materializeReferencedAsset(
     );
     return { ok: true };
   } catch {
-    // Copy failed for a reason other than a missing source (permissions,
+    // Write failed for a reason other than a missing source (permissions,
     // disk full, a race with the directory removal). Must not throw into the
     // caller's delete flow -- degrade to the same "broken" state a missing
     // source produces rather than leaving the row silently pointing at bytes
-    // about to disappear.
+    // about to disappear. If a temp file was left behind by a failed
+    // write/rename, best-effort clean it up — never remove `target` itself,
+    // which may be a pre-existing, unrelated CA object under this hash.
+    if (tmpTarget) {
+      await destinationWrites.gateway
+        .rm(destinationWrites.capability, tmpTarget, { force: true })
+        .catch(() => {});
+    }
     markLibraryAssetBroken(db, asset.id, Date.now());
     return { ok: false, reason: 'copy-failed' };
   }

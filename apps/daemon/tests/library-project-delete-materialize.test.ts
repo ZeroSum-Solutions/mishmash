@@ -14,7 +14,7 @@
 
 import type http from 'node:http';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { register } from 'prom-client';
@@ -23,7 +23,7 @@ import Database from 'better-sqlite3';
 
 import { closeDatabase, insertProject, openDatabase } from '../src/db.js';
 import { getLibraryAsset, insertLibraryAsset, migrateLibrary } from '../src/library-store.js';
-import { materializeReferencedAsset } from '../src/library.js';
+import { libraryObjectPath, materializeReferencedAsset } from '../src/library.js';
 import { createFilesystemWriteGateway, type FilesystemWriteGateway } from '../src/filesystem/write-gateway.js';
 
 let daemon: http.Server | undefined;
@@ -217,12 +217,16 @@ it('marks every referenced row for the project broken when the whole materialize
 });
 
 // Adversarial finding #2/#5, unit-style: precisely inject a gateway whose
-// `copyFile` throws (mkdir still succeeds) and confirm `materializeReferencedAsset`
+// `writeFile` throws (mkdir still succeeds) and confirm `materializeReferencedAsset`
 // itself -- independent of the HTTP delete route -- returns `copy-failed` and
 // actually calls through to mark the row broken (not just count it, per
-// finding #2's original bug).
-describe('materializeReferencedAsset — copyFile throws', () => {
-  it('returns copy-failed and marks the row broken when the gateway copyFile call throws', async () => {
+// finding #2's original bug). materialize writes the already-hashed buffer
+// through `writeFile` + `rename` (never a second `copyFile` of the source --
+// see the TOCTOU note on `materializeReferencedAsset`), so this is the write
+// step the failure must be injected on to still exercise the same catch
+// block a corrupt/failed write would hit.
+describe('materializeReferencedAsset — writeFile throws', () => {
+  it('returns copy-failed and marks the row broken when the gateway writeFile call throws', async () => {
     const db = new Database(':memory:');
     migrateLibrary(db);
     const libraryDir = await mkdtemp(path.join(os.tmpdir(), 'od-library-materialize-copyfail-'));
@@ -257,11 +261,11 @@ describe('materializeReferencedAsset — copyFile throws', () => {
       // above via the HTTP route).
       const throwingGateway: FilesystemWriteGateway = {
         mkdir: realGateway.mkdir.bind(realGateway),
-        writeFile: realGateway.writeFile.bind(realGateway),
-        appendFile: realGateway.appendFile.bind(realGateway),
-        copyFile: async () => {
-          throw new Error('injected copyFile failure');
+        writeFile: async () => {
+          throw new Error('injected writeFile failure');
         },
+        appendFile: realGateway.appendFile.bind(realGateway),
+        copyFile: realGateway.copyFile.bind(realGateway),
         rename: realGateway.rename.bind(realGateway),
         rm: realGateway.rm.bind(realGateway),
         unlink: realGateway.unlink.bind(realGateway),
@@ -295,3 +299,158 @@ describe('materializeReferencedAsset — copyFile throws', () => {
     }
   });
 });
+
+// Residual finding (adversarial review round 2): the old `alreadyPresent`
+// check was stat-only -- it skipped the write whenever a file merely EXISTED
+// at the content-addressed target, regardless of what bytes it actually
+// held. A prior write that died mid-flight (process kill, disk full) can
+// leave a truncated/corrupt object at that path; a LATER materialize pass
+// must not treat that as "already owned" and flip the row over top of
+// corrupt bytes. These two cases pin the re-hash-the-target fix.
+describe('materializeReferencedAsset — target path already has a file on it', () => {
+  it('overwrites a corrupt/partial object already sitting at the content-addressed target path', async () => {
+    const db = new Database(':memory:');
+    migrateLibrary(db);
+    const libraryDir = await mkdtemp(path.join(os.tmpdir(), 'od-library-materialize-corrupt-'));
+    const unitProjectsDir = await mkdtemp(path.join(os.tmpdir(), 'od-library-materialize-corrupt-src-'));
+    try {
+      const originProjectId = 'corrupt-target-proj-1';
+      const relPath = 'render.png';
+      await mkdir(path.join(unitProjectsDir, originProjectId), { recursive: true });
+      await writeFile(path.join(unitProjectsDir, originProjectId, relPath), ASSET_BYTES);
+
+      const now = Date.now();
+      insertLibraryAsset(db, {
+        id: 'corrupt-target-asset-1',
+        kind: 'image',
+        storage: 'referenced',
+        capturedAt: now,
+        archivedDate: '2024-05-01',
+        contentHash: 'corrupt-target-hash-1',
+        tags: [],
+        originProjectId,
+        relPath,
+        mime: 'image/png',
+      });
+      const asset = getLibraryAsset(db, 'corrupt-target-asset-1')!;
+
+      // Seed a CORRUPT file at the exact CA path materialize will compute
+      // (wrong bytes under the correct hash's shard/filename) -- simulating
+      // a prior copy that died mid-write and left a truncated object behind.
+      const target = libraryObjectPath(libraryDir, REAL_CONTENT_HASH, '.png');
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, 'CORRUPT-partial-bytes-from-a-dead-write');
+
+      const gateway = createFilesystemWriteGateway({ runtimeDataRoot: libraryDir });
+      const capability = await gateway.runtimeData();
+
+      const result = await materializeReferencedAsset(db, asset, libraryDir, unitProjectsDir, {
+        gateway,
+        capability,
+      });
+
+      // This assertion is RED against the old stat-only `alreadyPresent`
+      // check: `stat(target)` finds a file and skips the write, leaving the
+      // row flipped to `owned` on top of the still-corrupt bytes below.
+      expect(result.ok).toBe(true);
+      const row = getLibraryAsset(db, 'corrupt-target-asset-1');
+      expect(row?.storage).toBe('owned');
+      expect(row?.broken).toBeFalsy();
+      expect(row?.contentHash).toBe(REAL_CONTENT_HASH);
+
+      const onDisk = await readFile(target, 'utf8');
+      expect(onDisk).toBe(ASSET_BYTES);
+    } finally {
+      db.close();
+      await rm(libraryDir, { recursive: true, force: true }).catch(() => {});
+      await rm(unitProjectsDir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it('skips the write and leaves bytes intact when the target already holds the correct content', async () => {
+    const db = new Database(':memory:');
+    migrateLibrary(db);
+    const libraryDir = await mkdtemp(path.join(os.tmpdir(), 'od-library-materialize-match-'));
+    const unitProjectsDir = await mkdtemp(path.join(os.tmpdir(), 'od-library-materialize-match-src-'));
+    try {
+      const originProjectId = 'match-target-proj-1';
+      const relPath = 'render.png';
+      await mkdir(path.join(unitProjectsDir, originProjectId), { recursive: true });
+      await writeFile(path.join(unitProjectsDir, originProjectId, relPath), ASSET_BYTES);
+
+      const now = Date.now();
+      insertLibraryAsset(db, {
+        id: 'match-target-asset-1',
+        kind: 'image',
+        storage: 'referenced',
+        capturedAt: now,
+        archivedDate: '2024-05-01',
+        contentHash: 'match-target-hash-1',
+        tags: [],
+        originProjectId,
+        relPath,
+        mime: 'image/png',
+      });
+      const asset = getLibraryAsset(db, 'match-target-asset-1')!;
+
+      // Seed the CORRECT bytes already at the target path.
+      const target = libraryObjectPath(libraryDir, REAL_CONTENT_HASH, '.png');
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, ASSET_BYTES);
+
+      const realGateway = createFilesystemWriteGateway({ runtimeDataRoot: libraryDir });
+      const realCapability = await realGateway.runtimeData();
+      // writeFile must NOT be called when the target already matches --
+      // inject a throwing writeFile so an incorrect (re-)write attempt fails
+      // the test instead of silently succeeding.
+      const noWriteGateway: FilesystemWriteGateway = {
+        mkdir: realGateway.mkdir.bind(realGateway),
+        writeFile: async () => {
+          throw new Error('writeFile should not be called when the target already matches');
+        },
+        appendFile: realGateway.appendFile.bind(realGateway),
+        copyFile: realGateway.copyFile.bind(realGateway),
+        rename: realGateway.rename.bind(realGateway),
+        rm: realGateway.rm.bind(realGateway),
+        unlink: realGateway.unlink.bind(realGateway),
+        createWriteStream: realGateway.createWriteStream.bind(realGateway),
+        runtimeData: realGateway.runtimeData.bind(realGateway),
+        managedProject: realGateway.managedProject.bind(realGateway),
+        importedProject: realGateway.importedProject.bind(realGateway),
+        backupDestination: realGateway.backupDestination.bind(realGateway),
+        mediaConfig: realGateway.mediaConfig.bind(realGateway),
+        temp: realGateway.temp.bind(realGateway),
+        externalTool: realGateway.externalTool.bind(realGateway),
+        cliOutput: realGateway.cliOutput.bind(realGateway),
+      } as unknown as FilesystemWriteGateway;
+
+      const result = await materializeReferencedAsset(db, asset, libraryDir, unitProjectsDir, {
+        gateway: noWriteGateway,
+        capability: realCapability,
+      });
+
+      expect(result.ok).toBe(true);
+      const row = getLibraryAsset(db, 'match-target-asset-1');
+      expect(row?.storage).toBe('owned');
+      expect(row?.broken).toBeFalsy();
+
+      const onDisk = await readFile(target, 'utf8');
+      expect(onDisk).toBe(ASSET_BYTES);
+    } finally {
+      db.close();
+      await rm(libraryDir, { recursive: true, force: true }).catch(() => {});
+      await rm(unitProjectsDir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+});
+
+// Reviewer's third gap (the `failed` counter incrementing when the backstop's
+// own `markLibraryAssetBroken` doesn't stick) is not covered here: exercising
+// it needs `materializeReferencedAsset` to throw past its own best-effort
+// catch AND the backstop's `markLibraryAssetBroken` call to fail on the SAME
+// row, in the same pass, without mocking the store module (this suite is
+// real-transport throughout, matching `library-file-sibling-serving.test.ts`
+// style). Forcing both failures at once needs either a store-level mock or a
+// second forbidden-write-root collision timed exactly at the backstop's own
+// write, either of which would be a real contortion in this harness. Left
+// for a dedicated store-level unit test if this gap gets picked up again.
