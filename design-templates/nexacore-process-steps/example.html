@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NexaCore — Process</title>
+<meta name="description" content="Process section: how NexaCore moves a program from planning through commissioning.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-page: #05010b;
+    --accent-a: rgb(28, 78, 255);
+    --accent-b: rgb(172, 36, 255);
+    --accent-c: rgb(254, 136, 27);
+    --accent-d: rgb(43, 167, 255);
+    --accent-e: rgb(202, 69, 255);
+    --icon-purple: rgb(200, 111, 255);
+    --muted-lavender: rgb(189, 174, 231);
+    --badge-bg: rgb(41, 31, 57);
+    --card-surface: rgba(10, 5, 20, 0.88);
+    --overlay-dark: rgba(10, 5, 20, 0.95);
+    --fade-white: rgb(255, 255, 255);
+    --focus-ring: rgb(172, 36, 255);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    background: var(--bg-page);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  img { display: block; max-width: 100%; }
+
+  /* ---- Section shell ---- */
+
+  .trusted-section {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    background-image: url("assets/bg-glow.webp");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    padding: clamp(100px, 12vw, 180px) clamp(16px, 4vw, 40px) clamp(100px, 12vw, 160px);
+    gap: 110px;
+  }
+
+  .trusted-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+    max-width: 1200px;
+    padding: 0 8px;
+    gap: 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .trusted-header h2 {
+    color: #fff;
+    font-weight: 500;
+    font-size: clamp(32px, 4vw, 56px);
+    line-height: 1.2;
+    margin: 0;
+  }
+
+  .gradient-text {
+    background-image: linear-gradient(90deg, var(--accent-d), var(--accent-e) 50%, var(--accent-c));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    display: inline;
+  }
+
+  .trusted-header p {
+    color: var(--muted-lavender);
+    font-size: clamp(14px, 1.25vw, 18px);
+    margin: 0;
+  }
+
+  /* ---- Cards grid ---- */
+
+  .cards-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+  }
+
+  @media (min-width: 640px) {
+    .cards-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (min-width: 1024px) {
+    .cards-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+
+  .service-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 36px;
+    cursor: pointer;
+    background-color: var(--card-surface);
+    backdrop-filter: blur(36px);
+    -webkit-backdrop-filter: blur(36px);
+    height: clamp(320px, 32vw, 500px);
+  }
+
+  .card-media {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    pointer-events: none;
+    user-select: none;
+    transition: all .5s;
+    height: 55%;
+    z-index: 1;
+    transform: translateY(-30%);
+    opacity: .7;
+  }
+
+  .service-card:hover .card-media,
+  .service-card:focus-within .card-media,
+  .service-card.is-touched .card-media {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  .card-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+  }
+
+  .card-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    user-select: none;
+    transition: all .5s;
+    height: 55%;
+    z-index: 1;
+    background: linear-gradient(to top, var(--overlay-dark) 60%, transparent);
+    transform: translateY(100%);
+    opacity: 0;
+  }
+
+  .service-card:hover .card-overlay,
+  .service-card:focus-within .card-overlay,
+  .service-card.is-touched .card-overlay {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  .card-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    z-index: 2;
+    padding: clamp(16px, 1.94vw, 32px) clamp(18px, 2.36vw, 36px);
+  }
+
+  .card-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    border-radius: 999px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    flex-shrink: 0;
+    background-color: var(--badge-bg);
+    padding: clamp(6px, 0.7vw, 12px) clamp(10px, 1.25vw, 20px);
+  }
+
+  .card-badge-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.11vw;
+    min-width: 14px;
+    height: 17px;
+  }
+
+  .card-badge-icon svg { width: 100%; height: 100%; }
+
+  .card-spacer { flex-grow: 1; }
+
+  .card-bottom {
+    display: flex;
+    flex-direction: column;
+    transition: all .5s;
+    gap: 16px;
+  }
+
+  .card-anim {
+    display: flex;
+    flex-direction: column;
+    transition: transform .5s;
+    gap: 16px;
+    transform: translateY(0);
+  }
+
+  .service-card:hover .card-anim,
+  .service-card:focus-within .card-anim,
+  .service-card.is-touched .card-anim {
+    transform: translateY(-8px);
+  }
+
+  .card-title {
+    color: #fff;
+    font-weight: 500;
+    line-height: 1.375;
+    font-size: clamp(16px, 1.7vw, 24px);
+    margin: 0;
+  }
+
+  .card-bullets {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .card-bullets li {
+    color: var(--muted-lavender);
+    font-size: clamp(12px, 1vw, 15px);
+    padding-left: clamp(22px, 1.8vw, 28px);
+    background-image: url("assets/bullet-check.svg");
+    background-repeat: no-repeat;
+    background-size: 18px;
+    background-position: 0% 50%;
+  }
+
+  .card-cta-wrap {
+    transition: all .5s;
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(20px);
+    pointer-events: none;
+  }
+
+  .service-card:hover .card-cta-wrap,
+  .service-card:focus-within .card-cta-wrap,
+  .service-card.is-touched .card-cta-wrap {
+    max-height: 80px;
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .card-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    border-radius: 12px;
+    color: #fff;
+    font-weight: 500;
+    text-decoration: none;
+    background: linear-gradient(90deg, var(--accent-a), var(--accent-b) 50%, var(--accent-c));
+    padding: clamp(10px, 0.9vw, 14px) 0;
+    font-size: clamp(13px, 1.1vw, 16px);
+    margin-bottom: clamp(6px, 0.5vw, 10px);
+  }
+
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .section-fade {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 180px;
+    background: linear-gradient(to bottom, transparent, var(--fade-white));
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card-media,
+    .card-overlay,
+    .card-bottom,
+    .card-anim,
+    .card-cta-wrap {
+      transition-duration: .01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<main>
+<section class="trusted-section">
+  <div class="trusted-header">
+    <h2>Relied on by enterprise teams<br>
+    <span class="gradient-text">from groundbreak to go-live.</span></h2>
+    <p>Built for operational clarity through constant change. Proven across 530+ MW of critical infrastructure.</p>
+  </div>
+
+  <ol class="cards-grid">
+    <li>
+      <article class="service-card">
+        <div class="card-media" aria-hidden="true">
+          <img src="assets/card-glow.png" alt="" loading="lazy">
+        </div>
+        <div class="card-overlay" aria-hidden="true"></div>
+        <div class="card-content">
+          <span class="card-badge">
+            <span class="card-badge-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 8C1 11.866 4.13401 15 8 15C11.866 15 15 11.866 15 8C15 4.13401 11.866 1 8 1C4.13401 1 1 4.13401 1 8ZM13.6 8C13.6 11.0928 11.0928 13.6 8 13.6C4.90721 13.6 2.4 11.0928 2.4 8C2.4 4.90721 4.90721 2.4 8 2.4C11.0928 2.4 13.6 4.90721 13.6 8Z" fill="var(--icon-purple)"/>
+              </svg>
+            </span>
+            <span class="card-badge-label">Planning</span>
+          </span>
+          <div class="card-spacer"></div>
+          <div class="card-bottom">
+            <div class="card-anim">
+              <h3 class="card-title">Turn new programs<br>into structured plans without the noise.</h3>
+              <ul class="card-bullets">
+                <li>Embedded program leads</li>
+                <li>Decision-ready roadmaps</li>
+              </ul>
+            </div>
+            <div class="card-cta-wrap">
+              <a class="card-cta" href="#">Learn more</a>
+            </div>
+          </div>
+        </div>
+      </article>
+    </li>
+    <li>
+      <article class="service-card">
+        <div class="card-media" aria-hidden="true">
+          <img src="assets/card-glow.png" alt="" loading="lazy">
+        </div>
+        <div class="card-overlay" aria-hidden="true"></div>
+        <div class="card-content">
+          <span class="card-badge">
+            <span class="card-badge-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0.970459 8C0.970459 11.866 4.10447 15 7.97046 15C11.8365 15 14.9705 11.866 14.9705 8C14.9705 4.13401 11.8365 1 7.97046 1C4.10447 1 0.970459 4.13401 0.970459 8ZM13.5705 8C13.5705 11.0928 11.0633 13.6 7.97046 13.6C4.87766 13.6 2.37046 11.0928 2.37046 8C2.37046 4.90721 4.87766 2.4 7.97046 2.4C11.0633 2.4 13.5705 4.90721 13.5705 8Z" fill="var(--icon-purple)"/>
+                <circle cx="2" cy="2" r="2" transform="matrix(-1 0 0 1 10 6)" fill="var(--icon-purple)"/>
+              </svg>
+            </span>
+            <span class="card-badge-label">Procurement</span>
+          </span>
+          <div class="card-spacer"></div>
+          <div class="card-bottom">
+            <div class="card-anim">
+              <h3 class="card-title">Source and qualify<br>vendors with far<br>less friction.</h3>
+              <ul class="card-bullets">
+                <li>Cross-org scope alignment</li>
+                <li>End-to-end accountability</li>
+              </ul>
+            </div>
+            <div class="card-cta-wrap">
+              <a class="card-cta" href="#">Learn more</a>
+            </div>
+          </div>
+        </div>
+      </article>
+    </li>
+    <li>
+      <article class="service-card">
+        <div class="card-media" aria-hidden="true">
+          <img src="assets/card-glow.png" alt="" loading="lazy">
+        </div>
+        <div class="card-overlay" aria-hidden="true"></div>
+        <div class="card-content">
+          <span class="card-badge">
+            <span class="card-badge-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0.970459 8C0.970459 11.866 4.10447 15 7.97046 15C11.8365 15 14.9705 11.866 14.9705 8C14.9705 4.13401 11.8365 1 7.97046 1C4.10447 1 0.970459 4.13401 0.970459 8ZM13.5705 8C13.5705 11.0928 11.0633 13.6 7.97046 13.6C4.87766 13.6 2.37046 11.0928 2.37046 8C2.37046 4.90721 4.87766 2.4 7.97046 2.4C11.0633 2.4 13.5705 4.90721 13.5705 8Z" fill="var(--icon-purple)"/>
+                <circle cx="3" cy="3" r="3" transform="matrix(-1 0 0 1 11 5)" fill="var(--icon-purple)"/>
+              </svg>
+            </span>
+            <span class="card-badge-label">Logistics</span>
+          </span>
+          <div class="card-spacer"></div>
+          <div class="card-bottom">
+            <div class="card-anim">
+              <h3 class="card-title">Move the right<br>materials on time<br>without surprises.</h3>
+              <ul class="card-bullets">
+                <li>Spec and fit validations</li>
+                <li>Change order ownership</li>
+              </ul>
+            </div>
+            <div class="card-cta-wrap">
+              <a class="card-cta" href="#">Learn more</a>
+            </div>
+          </div>
+        </div>
+      </article>
+    </li>
+    <li>
+      <article class="service-card">
+        <div class="card-media" aria-hidden="true">
+          <img src="assets/card-glow.png" alt="" loading="lazy">
+        </div>
+        <div class="card-overlay" aria-hidden="true"></div>
+        <div class="card-content">
+          <span class="card-badge">
+            <span class="card-badge-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0.970459 8C0.970459 11.866 4.10447 15 7.97046 15C11.8365 15 14.9705 11.866 14.9705 8C14.9705 4.13401 11.8365 1 7.97046 1C4.10447 1 0.970459 4.13401 0.970459 8ZM13.5705 8C13.5705 11.0928 11.0633 13.6 7.97046 13.6C4.87766 13.6 2.37046 11.0928 2.37046 8C2.37046 4.90721 4.87766 2.4 7.97046 2.4C11.0633 2.4 13.5705 4.90721 13.5705 8Z" fill="var(--icon-purple)"/>
+                <circle cx="4" cy="4" r="4" transform="matrix(-1 0 0 1 12 4)" fill="var(--icon-purple)"/>
+              </svg>
+            </span>
+            <span class="card-badge-label">Commissioning</span>
+          </span>
+          <div class="card-spacer"></div>
+          <div class="card-bottom">
+            <div class="card-anim">
+              <h3 class="card-title">Activate systems with complete context, not guesswork.</h3>
+              <ul class="card-bullets">
+                <li>Uninterrupted workflows</li>
+                <li>Verified clean handoffs</li>
+              </ul>
+            </div>
+            <div class="card-cta-wrap">
+              <a class="card-cta" href="#">Learn more</a>
+            </div>
+          </div>
+        </div>
+      </article>
+    </li>
+  </ol>
+  <div class="section-fade" aria-hidden="true"></div>
+</section>
+</main>
+<script>
+  (function () {
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.service-card'));
+
+    cards.forEach(function (card) {
+      card.addEventListener('touchstart', function () {
+        cards.forEach(function (other) {
+          if (other !== card) other.classList.remove('is-touched');
+        });
+        card.classList.toggle('is-touched');
+      }, { passive: true });
+    });
+
+    document.addEventListener('touchstart', function (event) {
+      if (!event.target.closest('.service-card')) {
+        cards.forEach(function (card) { card.classList.remove('is-touched'); });
+      }
+    }, { passive: true });
+  })();
+</script>
+</body>
+</html>

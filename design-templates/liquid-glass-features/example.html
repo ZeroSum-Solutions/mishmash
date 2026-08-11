@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Liquid Glass Features — Pro Features Section</title>
+<meta name="description" content="Liquid-glass features chess section on a solid black background: a centered badge and heading, then two alternating text/media rows introducing AI-driven design capabilities." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* ---------------------------------------------------------------------
+     Reset + base
+     --------------------------------------------------------------------- */
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    /* The one chromatic token this monochrome design carries: a focus ring
+       that never appears in the resting-state render, only on :focus-visible. */
+    --focus-ring: hsl(213 90% 65%);
+  }
+
+  body {
+    font-family: 'Barlow', sans-serif;
+    background: #000;
+    color: #fff;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: 'Instrument Serif', serif;
+    margin: 0;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  img,
+  video {
+    max-width: 100%;
+    display: block;
+  }
+
+  button {
+    font: inherit;
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .skip-link {
+    position: absolute;
+    left: 1rem;
+    top: -3rem;
+    background: #fff;
+    color: #000;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    z-index: 100;
+    transition: top 150ms ease;
+  }
+
+  .skip-link:focus-visible {
+    top: 1rem;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* ---------------------------------------------------------------------
+     Liquid glass surfaces (verbatim from the design spec)
+     --------------------------------------------------------------------- */
+  .liquid-glass {
+    background: rgba(255, 255, 255, 0.01);
+    background-blend-mode: luminosity;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: none;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .liquid-glass::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.4px;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.45) 0%,
+      rgba(255, 255, 255, 0.15) 20%,
+      rgba(255, 255, 255, 0) 40%,
+      rgba(255, 255, 255, 0) 60%,
+      rgba(255, 255, 255, 0.15) 80%,
+      rgba(255, 255, 255, 0.45) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .liquid-glass-strong {
+    background: rgba(255, 255, 255, 0.01);
+    background-blend-mode: luminosity;
+    backdrop-filter: blur(50px);
+    -webkit-backdrop-filter: blur(50px);
+    border: none;
+    box-shadow: 4px 4px 4px rgba(0, 0, 0, 0.05),
+      inset 0 1px 1px rgba(255, 255, 255, 0.15);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .liquid-glass-strong::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.4px;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.5) 0%,
+      rgba(255, 255, 255, 0.2) 20%,
+      rgba(255, 255, 255, 0) 40%,
+      rgba(255, 255, 255, 0) 60%,
+      rgba(255, 255, 255, 0.2) 80%,
+      rgba(255, 255, 255, 0.5) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* ---------------------------------------------------------------------
+     Page chrome — minimal, matches the section's own black backdrop
+     --------------------------------------------------------------------- */
+  main {
+    display: block;
+  }
+
+  /* ---------------------------------------------------------------------
+     Features chess section
+     --------------------------------------------------------------------- */
+  .features-chess {
+    padding: 6rem 1.5rem;
+  }
+
+  @media (min-width: 768px) {
+    .features-chess {
+      padding-left: 4rem;
+      padding-right: 4rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .features-chess {
+      padding-left: 6rem;
+      padding-right: 6rem;
+    }
+  }
+
+  .chess-header {
+    text-align: center;
+    margin-bottom: 5rem;
+  }
+
+  .chess-badge {
+    border-radius: 9999px;
+    padding: 0.25rem 0.875rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: #fff;
+    font-family: 'Barlow', sans-serif;
+    display: inline-block;
+    margin-bottom: 1rem;
+  }
+
+  .chess-heading {
+    font-size: 2.25rem;
+    font-style: italic;
+    color: #fff;
+    letter-spacing: -0.025em;
+    line-height: 0.9;
+  }
+
+  @media (min-width: 768px) {
+    .chess-heading {
+      font-size: 3rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .chess-heading {
+      font-size: 3.75rem;
+    }
+  }
+
+  .chess-rows {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .chess-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3rem;
+    margin-bottom: 6rem;
+  }
+
+  .chess-row:last-child {
+    margin-bottom: 0;
+  }
+
+  @media (min-width: 1024px) {
+    .chess-row {
+      flex-direction: row;
+      gap: 5rem;
+    }
+
+    .chess-row--reverse {
+      flex-direction: row-reverse;
+    }
+  }
+
+  .chess-side {
+    flex: 1 1 0%;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .chess-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .chess-row-heading {
+    font-size: 1.875rem;
+    font-style: italic;
+    color: #fff;
+    line-height: 0.9;
+    letter-spacing: -0.025em;
+  }
+
+  @media (min-width: 768px) {
+    .chess-row-heading {
+      font-size: 2.25rem;
+    }
+  }
+
+  .chess-body {
+    color: rgba(255, 255, 255, 0.7);
+    font-family: 'Barlow', sans-serif;
+    font-weight: 300;
+    line-height: 1.625;
+    font-size: 0.875rem;
+    max-width: 32rem;
+  }
+
+  @media (min-width: 768px) {
+    .chess-body {
+      font-size: 1rem;
+    }
+  }
+
+  .chess-btn {
+    border-radius: 9999px;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #fff;
+    font-family: 'Barlow', sans-serif;
+    display: inline-flex;
+    /* flex item of the column .chess-text, whose default align-items:stretch
+       overrides inline-flex and spans the button full width — the reference
+       shows a content-width pill */
+    align-self: flex-start;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .chess-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .chess-btn .icon-arrow {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+  }
+
+  .chess-media {
+    border-radius: 1rem;
+  }
+
+  .chess-media video {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chess-btn {
+      transition: none;
+    }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#features-heading">Skip to features</a>
+<h1 class="sr-only">Liquid Glass Features — Pro features, zero complexity</h1>
+<main>
+<section class="features-chess" aria-labelledby="features-heading">
+  <div class="chess-header">
+    <span class="chess-badge liquid-glass">Capabilities</span>
+    <h2 class="chess-heading" id="features-heading">Pro features. Zero complexity.</h2>
+  </div>
+
+  <ul class="chess-rows">
+    <li class="chess-row">
+      <div class="chess-side">
+        <div class="chess-text">
+          <h3 class="chess-row-heading">Designed to convert. Built to perform.</h3>
+          <p class="chess-body">Every pixel is intentional. Our AI studies what works across thousands of top sites—then builds yours to outperform them all.</p>
+          <button type="button" class="chess-btn liquid-glass-strong">
+            Learn more
+            <svg class="icon-arrow" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M7 7h10v10" />
+              <path d="M7 17 17 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="chess-side">
+        <div class="chess-media liquid-glass">
+          <video src="assets/feature-1.mp4" poster="assets/feature-1-poster.jpg" aria-label="AI-designed website preview" autoplay muted loop playsinline></video>
+        </div>
+      </div>
+    </li>
+
+    <li class="chess-row chess-row--reverse">
+      <div class="chess-side">
+        <div class="chess-text">
+          <h3 class="chess-row-heading">It gets smarter. Automatically.</h3>
+          <p class="chess-body">Your site evolves on its own. AI monitors every click, scroll, and conversion—then optimizes in real time. No manual updates. Ever.</p>
+          <button type="button" class="chess-btn liquid-glass-strong">
+            See how it works
+            <svg class="icon-arrow" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M7 7h10v10" />
+              <path d="M7 17 17 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="chess-side">
+        <div class="chess-media liquid-glass">
+          <video src="assets/feature-2.mp4" poster="assets/feature-2-poster.jpg" aria-label="Adaptive AI system" autoplay muted loop playsinline></video>
+        </div>
+      </div>
+    </li>
+  </ul>
+</section>
+</main>
+<script>
+  (function () {
+    var videos = Array.prototype.slice.call(document.querySelectorAll('.chess-media video'));
+    var reduceQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    function applyMotionPreference(reduce) {
+      videos.forEach(function (video) {
+        if (reduce) {
+          video.removeAttribute('autoplay');
+          video.removeAttribute('loop');
+          video.pause();
+          video.currentTime = 0;
+        } else {
+          video.setAttribute('autoplay', '');
+          video.setAttribute('loop', '');
+          video.play().catch(function () {
+            /* Autoplay can be blocked by the browser; the poster frame stands in. */
+          });
+        }
+      });
+    }
+
+    applyMotionPreference(reduceQuery.matches);
+
+    if (typeof reduceQuery.addEventListener === 'function') {
+      reduceQuery.addEventListener('change', function (event) {
+        applyMotionPreference(event.matches);
+      });
+    }
+  })();
+</script>
+</body>
+</html>

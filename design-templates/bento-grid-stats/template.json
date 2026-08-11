@@ -1,0 +1,12 @@
+{
+  "slug": "bento-grid-stats",
+  "name": "Bento Grid Stats — Why Us? Section",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css?family=DM+Sans:500,400"
+  ],
+  "source": "https://motionsites.ai/?prompt=bento-grid-stats",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}
