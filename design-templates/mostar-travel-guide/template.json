@@ -1,0 +1,12 @@
+{
+  "slug": "mostar-travel-guide",
+  "name": "Mostar — Cinematic Travel Guide",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;700;800&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=mostar-guide",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

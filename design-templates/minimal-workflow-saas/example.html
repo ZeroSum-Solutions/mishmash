@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Script — Guide Every Team Through Your Workflow</title>
+	<meta
+		name="description"
+		content="Script hero section: a full-bleed, pale cinematic video backdrop behind a light three-line headline, an auto-cycling glass task queue, and a dark gradient call-to-action for a workflow-training SaaS."
+	>
+	<link
+		rel="icon"
+		href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f172a'/%3E%3Cg transform='rotate(-15 16 16)'%3E%3Crect x='9' y='13' width='11' height='2' rx='1' fill='%23ffffff'/%3E%3Crect x='11' y='16' width='9' height='2' rx='1' fill='%23ffffff'/%3E%3Crect x='13' y='19' width='7' height='2' rx='1' fill='%2394a3b8'/%3E%3C/g%3E%3C/svg%3E"
+	>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+		rel="stylesheet"
+	>
+	<style>
+		:root {
+			--bg: #f8fafc;
+			--ink: #0f172a;
+			--ink-soft: #1e293b;
+			--muted: #64748b;
+			--nav-link: #475569;
+			--border: #e2e8f0;
+			--cta-from: #252a38;
+			--cta-to: #1a1e29;
+			--cta-hover-from: #1d212c;
+			--cta-hover-to: #12151e;
+			--glass-bg: rgba(15, 23, 42, 0.72);
+			--glass-border: rgba(255, 255, 255, 0.14);
+			--glass-highlight: rgba(255, 255, 255, 0.08);
+			--tagline: rgba(15, 23, 42, 0.48);
+			--wash: rgba(255, 255, 255, 0.05);
+			--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+			--ease-task: cubic-bezier(0.16, 1, 0.3, 1);
+			--font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html, body {
+			margin: 0;
+			padding: 0;
+		}
+
+		body {
+			background: var(--bg);
+			color: var(--ink-soft);
+			font-family: var(--font-sans);
+			-webkit-font-smoothing: antialiased;
+		}
+
+		.page {
+			position: relative;
+			min-height: 100vh;
+			overflow-x: hidden;
+			display: flex;
+			flex-direction: column;
+			background: var(--bg);
+		}
+
+		.bg-layer {
+			position: absolute;
+			inset: 0;
+			z-index: 0;
+			overflow: hidden;
+			pointer-events: none;
+		}
+
+		.bg-video,
+		.bg-video-fallback {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			object-position: center bottom;
+			opacity: 0.98;
+		}
+
+		.bg-video-fallback {
+			display: none;
+		}
+
+		.bg-wash {
+			position: absolute;
+			inset: 0;
+			background: var(--wash);
+			backdrop-filter: blur(2px);
+			-webkit-backdrop-filter: blur(2px);
+		}
+
+		.content {
+			position: relative;
+			z-index: 10;
+			flex: 1 1 auto;
+			display: flex;
+			flex-direction: column;
+		}
+
+		/* ---- Navbar ---- */
+		.navbar {
+			position: relative;
+			z-index: 50;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 1rem;
+			max-width: 80rem;
+			width: 100%;
+			margin: 0 auto;
+			padding: 1.25rem 1.5rem;
+			user-select: none;
+		}
+
+		.brand {
+			display: inline-flex;
+			align-items: center;
+			text-decoration: none;
+		}
+
+		.brand-name {
+			font-weight: 700;
+			font-size: 21px;
+			letter-spacing: -0.02em;
+			color: var(--ink);
+		}
+
+		.brand-mark {
+			display: inline-flex;
+			flex-direction: column;
+			gap: 2.5px;
+			margin-left: 6px;
+			transform: rotate(-15deg) translateY(1px);
+		}
+
+		.bar {
+			display: block;
+			height: 1.5px;
+			border-radius: 999px;
+			background: var(--ink);
+		}
+
+		.bar-1 { width: 14px; }
+		.bar-2 { width: 10px; transform: translateX(2px); }
+		.bar-3 { width: 12px; background: var(--muted); transform: translateX(4px); }
+
+		.nav-links {
+			display: none;
+			position: absolute;
+			left: 50%;
+			transform: translateX(-50%);
+			align-items: center;
+			gap: 2rem;
+			font-size: 13px;
+			font-weight: 500;
+			color: var(--nav-link);
+		}
+
+		.nav-links a {
+			color: inherit;
+			text-decoration: none;
+			transition: color 0.2s var(--ease-out);
+		}
+
+		.nav-links a:hover { color: var(--ink); }
+
+		.nav-cta {
+			padding: 6px 18px;
+			font-size: 12px;
+			font-weight: 500;
+			border: 1px solid var(--border);
+			border-radius: 999px;
+			background: rgba(255, 255, 255, 0.3);
+			backdrop-filter: blur(6px);
+			-webkit-backdrop-filter: blur(6px);
+			box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+			color: var(--ink-soft);
+			text-decoration: none;
+			transition: background 0.2s var(--ease-out);
+			white-space: nowrap;
+		}
+
+		.nav-cta:hover { background: rgba(255, 255, 255, 0.85); }
+
+		@media (min-width: 768px) {
+			.nav-links { display: flex; }
+		}
+
+		/* ---- Hero ---- */
+		main {
+			flex: 1 1 auto;
+			display: flex;
+		}
+
+		.hero {
+			flex: 1 1 auto;
+			width: 100%;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			text-align: center;
+			padding: 2.5rem 1.5rem 1.5rem;
+			user-select: none;
+		}
+
+		.hero-headline {
+			margin: 0 0 1.25rem;
+			max-width: 56rem;
+			font-size: clamp(2.25rem, 1.55rem + 3vw, 2.8125rem);
+			line-height: 1.12;
+			letter-spacing: -0.01em;
+			color: var(--ink);
+			font-weight: 400;
+			animation: fadeUp 0.8s var(--ease-out) both;
+		}
+
+		.hero-headline .line { display: block; }
+
+		.hero-subtext {
+			margin: 0 0 1.5rem;
+			max-width: 36rem;
+			font-size: clamp(0.75rem, 0.7rem + 0.2vw, 0.8125rem);
+			line-height: 1.625;
+			color: var(--muted);
+			font-weight: 400;
+			animation: fadeUp 0.8s var(--ease-out) 0.2s both;
+		}
+
+		.hero-cta-wrap {
+			margin-bottom: 3.5rem;
+			animation: fadeUp 0.8s var(--ease-out) 0.4s both;
+		}
+
+		.hero-cta {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+			padding: 8px 20px;
+			border-radius: 8px;
+			border: 1px solid rgba(15, 23, 42, 0.8);
+			font-size: 12px;
+			font-weight: 600;
+			font-family: inherit;
+			color: #fff;
+			background: linear-gradient(180deg, var(--cta-from), var(--cta-to));
+			box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.15);
+			cursor: pointer;
+			transition: transform 0.15s var(--ease-out), background 0.2s var(--ease-out);
+		}
+
+		.hero-cta:hover { background: linear-gradient(180deg, var(--cta-hover-from), var(--cta-hover-to)); }
+		.hero-cta:active { transform: scale(0.96); }
+
+		.hero-cta .chevron {
+			width: 14px;
+			height: 14px;
+			flex-shrink: 0;
+		}
+
+		/* ---- Animated task list ---- */
+		.task-widget {
+			width: 100%;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+		}
+
+		.task-list {
+			position: relative;
+			width: 100%;
+			max-width: 340px;
+			height: 220px;
+			overflow: hidden;
+			text-align: left;
+			margin: 0 auto;
+			animation: scaleIn 1s var(--ease-out) 0.6s both;
+		}
+
+		@media (min-width: 768px) {
+			.task-list { max-width: 420px; }
+		}
+
+		.task-glass {
+			position: absolute;
+			top: 0;
+			left: 0;
+			z-index: 0;
+			width: 100%;
+			height: 54px;
+			display: flex;
+			align-items: center;
+			padding-left: 1rem;
+			border-radius: 12px;
+			background: var(--glass-bg);
+			backdrop-filter: blur(14px);
+			-webkit-backdrop-filter: blur(14px);
+			border: 1px solid var(--glass-border);
+			box-shadow: inset 0 1px 1px var(--glass-highlight);
+			pointer-events: none;
+		}
+
+		.task-glass-icon {
+			width: 30px;
+			height: 30px;
+			flex-shrink: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: #fff;
+			border-radius: 8px;
+			border: 1px solid rgba(255, 255, 255, 0.4);
+			box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+		}
+
+		.mini-bars {
+			display: flex;
+			flex-direction: column;
+			gap: 1.5px;
+			transform: rotate(-15deg);
+		}
+
+		.mini-bar {
+			display: block;
+			height: 1.5px;
+			border-radius: 999px;
+			background: #0c101d;
+		}
+
+		.mini-bar-1 { width: 10px; }
+		.mini-bar-2 { width: 7.2px; transform: translateX(0.8px); }
+		.mini-bar-3 { width: 8.8px; background: #475569; transform: translateX(1.6px); }
+
+		.task-track {
+			position: absolute;
+			inset: 0;
+			z-index: 1;
+			width: 100%;
+			height: 100%;
+			pointer-events: none;
+		}
+
+		.task-item {
+			position: absolute;
+			left: 0;
+			width: 100%;
+			display: flex;
+			align-items: center;
+			padding-left: 58px;
+			will-change: transform, opacity, filter;
+			transition: transform 1s var(--ease-task), opacity 1s var(--ease-task), filter 1s var(--ease-task);
+		}
+
+		.task-item.is-active {
+			flex-direction: column;
+			align-items: flex-start;
+			justify-content: center;
+		}
+
+		.task-label {
+			display: none;
+			margin-bottom: 4px;
+			font-size: 7.5px;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+			line-height: 1;
+			color: rgba(255, 255, 255, 0.5);
+		}
+
+		.task-item.is-active .task-label {
+			display: block;
+		}
+
+		.task-item.is-active .task-text {
+			font-size: clamp(12.5px, 12.3px + 0.1vw, 13px);
+			font-weight: 500;
+			letter-spacing: -0.01em;
+			line-height: 1;
+			color: #fff;
+		}
+
+		.task-item:not(.is-active) .task-text {
+			font-size: clamp(11.5px, 11.3px + 0.1vw, 12px);
+			font-weight: 400;
+			letter-spacing: -0.01em;
+			line-height: 1;
+			color: rgba(255, 255, 255, 0.7);
+		}
+
+		.hero-tagline {
+			margin: 3.5rem 0 0;
+			font-size: 10px;
+			font-weight: 500;
+			letter-spacing: 0.02em;
+			color: var(--tagline);
+			animation: fadeIn 1s linear 1s both;
+		}
+
+		/* ---- Motion ---- */
+		@keyframes fadeUp {
+			from { opacity: 0; transform: translateY(20px); }
+			to { opacity: 1; transform: translateY(0); }
+		}
+
+		@keyframes fadeIn {
+			from { opacity: 0; }
+			to { opacity: 1; }
+		}
+
+		@keyframes scaleIn {
+			from { opacity: 0; transform: scale(0.95); }
+			to { opacity: 1; transform: scale(1); }
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.bg-video { display: none; }
+			.bg-video-fallback { display: block; }
+
+			.hero-headline,
+			.hero-subtext,
+			.hero-cta-wrap,
+			.task-list,
+			.hero-tagline {
+				animation: none;
+				opacity: 1;
+				transform: none;
+			}
+
+			.hero-cta { transition: none; }
+			.hero-cta:hover, .hero-cta:active { transform: none; }
+			.nav-links a, .nav-cta { transition: none; }
+			.task-item { transition: none; }
+		}
+	</style>
+</head>
+<body>
+	<div class="page">
+		<div class="bg-layer" aria-hidden="true">
+			<video class="bg-video" autoplay loop muted playsinline poster="assets/hero-poster.jpg">
+				<source src="assets/hero-bg.mp4" type="video/mp4">
+			</video>
+			<img class="bg-video-fallback" src="assets/hero-poster.jpg" alt="">
+			<div class="bg-wash"></div>
+		</div>
+
+		<div class="content">
+			<header class="navbar">
+				<a class="brand" href="#top" aria-label="Script home">
+					<span class="brand-name">Script</span>
+					<span class="brand-mark" aria-hidden="true">
+						<span class="bar bar-1"></span>
+						<span class="bar bar-2"></span>
+						<span class="bar bar-3"></span>
+					</span>
+				</a>
+
+				<nav class="nav-links" aria-label="Primary">
+					<a href="#resources">Resources</a>
+					<a href="#service">Service</a>
+					<a href="#support">Support</a>
+					<a href="#developers">Developers</a>
+					<a href="#updates">Updates</a>
+				</nav>
+
+				<a class="nav-cta" href="#join">Join us</a>
+			</header>
+
+			<main>
+				<section class="hero" id="top">
+					<h1 class="hero-headline">
+						<span class="line">Guide everyone on teams</span>
+						<span class="line">tech manuals</span>
+						<span class="line">— with a total ease of mind</span>
+					</h1>
+
+					<p class="hero-subtext">
+						Script offers the best path to register your workflow steps<br>
+						and optimize training on your setup systems
+					</p>
+
+					<div class="hero-cta-wrap">
+						<button class="hero-cta" type="button">
+							Register Now!
+							<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+								<path d="M9 18l6-6-6-6"></path>
+							</svg>
+						</button>
+					</div>
+
+					<div class="task-widget">
+						<div class="task-list" id="taskList" aria-hidden="true">
+							<div class="task-glass">
+								<span class="task-glass-icon">
+									<span class="mini-bars">
+										<span class="mini-bar mini-bar-1"></span>
+										<span class="mini-bar mini-bar-2"></span>
+										<span class="mini-bar mini-bar-3"></span>
+									</span>
+								</span>
+							</div>
+							<div class="task-track" id="taskTrack">
+								<div class="task-item" data-i="0" style="transform:translateY(-35px);height:30px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to code an app in Forge</span></div>
+								<div class="task-item" data-i="1" style="transform:translateY(-35px);height:30px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to build charts with data in Ledger</span></div>
+								<div class="task-item" data-i="2" style="transform:translateY(-35px);height:30px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to edit profile of users in DevHub</span></div>
+								<div class="task-item" data-i="3" style="transform:translateY(-35px);height:30px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to set up a custom task rule in Flowboard</span></div>
+								<div class="task-item" data-i="4" style="transform:translateY(-35px);height:30px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to design a form in Gridspace</span></div>
+								<div class="task-item" data-i="5" style="transform:translateY(-35px);height:30px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to build a custom webhook in Huddle</span></div>
+								<div class="task-item" data-i="6" style="transform:translateY(-35px);height:30px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to sync a dashboard in Ledger</span></div>
+								<div class="task-item" data-i="7" style="transform:translateY(-35px);height:30px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to create a team member in Palette</span></div>
+								<div class="task-item" data-i="8" style="transform:translateY(-35px);height:30px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to link a custom project page in Trackly</span></div>
+								<div class="task-item is-active" data-i="9" style="transform:translateY(0px);height:54px;opacity:1;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to code an app in Forge</span></div>
+								<div class="task-item" data-i="10" style="transform:translateY(68px);height:22px;opacity:0.55;filter:blur(0.2px);"><span class="task-label">Learn the step</span><span class="task-text">How to build charts with data in Ledger</span></div>
+								<div class="task-item" data-i="11" style="transform:translateY(90px);height:22px;opacity:0.36;filter:blur(0.4px);"><span class="task-label">Learn the step</span><span class="task-text">How to edit profile of users in DevHub</span></div>
+								<div class="task-item" data-i="12" style="transform:translateY(112px);height:22px;opacity:0.22;filter:blur(0.6px);"><span class="task-label">Learn the step</span><span class="task-text">How to set up a custom task rule in Flowboard</span></div>
+								<div class="task-item" data-i="13" style="transform:translateY(134px);height:22px;opacity:0.11;filter:blur(0.8px);"><span class="task-label">Learn the step</span><span class="task-text">How to design a form in Gridspace</span></div>
+								<div class="task-item" data-i="14" style="transform:translateY(156px);height:22px;opacity:0.04;filter:blur(1.1px);"><span class="task-label">Learn the step</span><span class="task-text">How to build a custom webhook in Huddle</span></div>
+								<div class="task-item" data-i="15" style="transform:translateY(178px);height:22px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to sync a dashboard in Ledger</span></div>
+								<div class="task-item" data-i="16" style="transform:translateY(200px);height:22px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to create a team member in Palette</span></div>
+								<div class="task-item" data-i="17" style="transform:translateY(222px);height:22px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to link a custom project page in Trackly</span></div>
+								<div class="task-item" data-i="18" style="transform:translateY(244px);height:22px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to code an app in Forge</span></div>
+								<div class="task-item" data-i="19" style="transform:translateY(266px);height:22px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to build charts with data in Ledger</span></div>
+								<div class="task-item" data-i="20" style="transform:translateY(288px);height:22px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to edit profile of users in DevHub</span></div>
+								<div class="task-item" data-i="21" style="transform:translateY(310px);height:22px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to set up a custom task rule in Flowboard</span></div>
+								<div class="task-item" data-i="22" style="transform:translateY(332px);height:22px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to design a form in Gridspace</span></div>
+								<div class="task-item" data-i="23" style="transform:translateY(354px);height:22px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to build a custom webhook in Huddle</span></div>
+								<div class="task-item" data-i="24" style="transform:translateY(376px);height:22px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to sync a dashboard in Ledger</span></div>
+								<div class="task-item" data-i="25" style="transform:translateY(398px);height:22px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to create a team member in Palette</span></div>
+								<div class="task-item" data-i="26" style="transform:translateY(420px);height:22px;opacity:0;filter:none;"><span class="task-label">Learn the step</span><span class="task-text">How to link a custom project page in Trackly</span></div>
+							</div>
+						</div>
+
+						<p class="hero-tagline">All people aligned.</p>
+					</div>
+				</section>
+			</main>
+		</div>
+	</div>
+
+	<script>
+		(function () {
+			var reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+			function setupVideo() {
+				var video = document.querySelector('.bg-video');
+				if (!video) return;
+				if (reduceMotionQuery.matches) {
+					video.pause();
+					video.removeAttribute('autoplay');
+					return;
+				}
+				var playPromise = video.play();
+				if (playPromise && typeof playPromise.catch === 'function') {
+					playPromise.catch(function () {});
+				}
+			}
+
+			var TASKS = [
+				'How to code an app in Forge',
+				'How to build charts with data in Ledger',
+				'How to edit profile of users in DevHub',
+				'How to set up a custom task rule in Flowboard',
+				'How to design a form in Gridspace',
+				'How to build a custom webhook in Huddle',
+				'How to sync a dashboard in Ledger',
+				'How to create a team member in Palette',
+				'How to link a custom project page in Trackly'
+			];
+			var N = TASKS.length;
+			var TOTAL = N * 3;
+
+			function styleForDistance(distance) {
+				if (distance === 0) return { y: 0, h: 54, op: 1, blur: 0 };
+				if (distance < 0) return { y: -35, h: 30, op: 0, blur: 0 };
+				if (distance === 1) return { y: 68, h: 22, op: 0.55, blur: 0.2 };
+				if (distance === 2) return { y: 90, h: 22, op: 0.36, blur: 0.4 };
+				if (distance === 3) return { y: 112, h: 22, op: 0.22, blur: 0.6 };
+				if (distance === 4) return { y: 134, h: 22, op: 0.11, blur: 0.8 };
+				if (distance === 5) return { y: 156, h: 22, op: 0.04, blur: 1.1 };
+				return { y: 68 + (distance - 1) * 22, h: 22, op: 0, blur: 0 };
+			}
+
+			function initTaskList() {
+				var track = document.getElementById('taskTrack');
+				if (!track) return;
+				var items = Array.prototype.slice.call(track.querySelectorAll('.task-item'));
+				var index = N;
+				var animate = true;
+				var timers = [];
+
+				function render() {
+					items.forEach(function (item, i) {
+						var distance = i - index;
+						var s = styleForDistance(distance);
+						item.classList.toggle('is-active', distance === 0);
+						item.style.transition = animate
+							? 'transform 1s var(--ease-task), opacity 1s var(--ease-task), filter 1s var(--ease-task)'
+							: 'none';
+						item.style.transform = 'translateY(' + s.y + 'px)';
+						item.style.height = s.h + 'px';
+						item.style.opacity = String(s.op);
+						item.style.filter = s.blur > 0 ? 'blur(' + s.blur + 'px)' : 'none';
+					});
+				}
+
+				function schedule() {
+					timers.push(setTimeout(function () {
+						if (index < TOTAL - N) { index++; }
+						render();
+						if (index === TOTAL - N) {
+							timers.push(setTimeout(function () {
+								animate = false;
+								index = N;
+								render();
+								timers.push(setTimeout(function () {
+									animate = true;
+									schedule();
+								}, 50));
+							}, 1000));
+						} else {
+							schedule();
+						}
+					}, 4500));
+				}
+
+				if (reduceMotionQuery.matches) {
+					render();
+					return;
+				}
+
+				schedule();
+
+				reduceMotionQuery.addEventListener('change', function (event) {
+					if (event.matches) {
+						timers.forEach(clearTimeout);
+					}
+				});
+			}
+
+			setupVideo();
+			initTaskList();
+		})();
+	</script>
+</body>
+</html>

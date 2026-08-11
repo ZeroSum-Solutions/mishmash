@@ -1,0 +1,12 @@
+{
+  "slug": "yacht-club-landing",
+  "name": "Meridian — Yacht Club Landing",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=yacht-club-hero",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

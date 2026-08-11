@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nimbus Grid — Platform Capabilities</title>
+<meta name="description" content="Nimbus Grid platform capabilities: a scroll-driven stack of four cards covering programmable infrastructure, data residency, elastic scaling, and unified visibility." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2317130d'/%3E%3Ctext x='16' y='22' font-family='IBM Plex Sans, sans-serif' font-size='16' font-weight='600' fill='%23ead09a' text-anchor='middle'%3EN%3C/text%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #17130d;
+    --ink: #fff4d5;
+    --muted: #dacaa1;
+    --line: rgba(255, 240, 199, 0.28);
+    --glass: rgba(255, 239, 199, 0.16);
+    --glass-strong: rgba(255, 239, 199, 0.24);
+    --accent: #ead09a;
+    --accent-2: #ffd879;
+    --deep: #4d3f24;
+    --radius: 8px;
+    --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.375;
+    letter-spacing: 0.0175rem;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  h1, h2, h3, h4, h5, h6, p {
+    margin-top: 0;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 4px;
+    border-radius: 2px;
+  }
+
+  /* ---- Page chrome: header ---- */
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: clamp(20px, 4vw, 32px) clamp(20px, 5vw, 72px);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .brand {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.08rem;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+
+  .header-context {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08rem;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ---- Page chrome: intro ---- */
+  .section-intro {
+    padding: clamp(64px, 12vw, 140px) clamp(20px, 5vw, 72px) clamp(48px, 8vw, 96px);
+    max-width: 720px;
+  }
+
+  .section-kicker {
+    display: block;
+    margin-bottom: 20px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08rem;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .section-intro h1 {
+    font-size: clamp(28px, 4vw, 48px);
+    font-weight: 400;
+    line-height: 1.15;
+    letter-spacing: 0.0125rem;
+    color: var(--ink);
+    margin-bottom: 20px;
+  }
+
+  .section-intro p {
+    max-width: 480px;
+    color: var(--muted);
+    font-size: clamp(15px, 1.4vw, 18px);
+    line-height: 1.55;
+    margin-bottom: 0;
+  }
+
+  .scroll-cue {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 40px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08rem;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .scroll-cue svg {
+    animation: scroll-cue-bounce 1.6s ease-in-out infinite;
+  }
+
+  @keyframes scroll-cue-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(4px); }
+  }
+
+  /* ---- Section: platform-accordion (fidelity-bound) ---- */
+  .platform-accordion {
+    position: relative;
+    min-height: 420svh;
+    border-top: 1px solid rgba(255, 240, 199, 0.1);
+    background:
+      radial-gradient(circle at 86% 30%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 24rem),
+      #050604;
+  }
+
+  .accordion-inner {
+    position: sticky;
+    top: 0;
+    display: grid;
+    grid-template-columns: minmax(160px, 0.22fr) minmax(0, 0.78fr);
+    gap: clamp(28px, 5vw, 72px);
+    height: 100svh;
+    padding: clamp(48px, 7vw, 86px) clamp(20px, 5vw, 72px);
+    overflow: hidden;
+  }
+
+  .accordion-nav {
+    align-self: start;
+    display: grid;
+    gap: 16px;
+    padding-top: 14px;
+  }
+
+  .accordion-tab {
+    position: relative;
+    border: 0;
+    background: transparent;
+    color: rgba(255, 247, 222, 0.38);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1rem;
+    letter-spacing: 0.08rem;
+    text-align: left;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 160ms ease, transform 160ms ease;
+  }
+
+  .accordion-tab::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 12px;
+    border-radius: 1px;
+    background: currentColor;
+    vertical-align: 1px;
+  }
+
+  .accordion-tab.active {
+    color: var(--accent);
+    transform: translateX(2px);
+  }
+
+  .accordion-stack {
+    position: relative;
+    height: min(80svh, 820px);
+    align-self: center;
+    overflow: hidden;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .accordion-stack > li {
+    display: contents;
+  }
+
+  .accordion-card {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: minmax(220px, 0.35fr) minmax(340px, 0.65fr);
+    border-top: 1px solid rgba(255, 247, 222, 0.2);
+    background: #050604;
+    transform: translateY(var(--card-y, 100%));
+    clip-path: inset(0 0 var(--card-clip-bottom, 0px) 0);
+    will-change: transform, clip-path;
+  }
+
+  .accordion-copy {
+    padding: 26px 30px 0 0;
+  }
+
+  .accordion-card h3 {
+    margin-bottom: 28px;
+    color: var(--ink);
+    font-size: clamp(24px, 2.2vw, 40px);
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: 0.0125rem;
+  }
+
+  .accordion-card p {
+    max-width: 340px;
+    margin-bottom: 0;
+    color: var(--muted);
+    font-size: clamp(15px, 1.4vw, 22px);
+    line-height: 1.55;
+  }
+
+  .accordion-visual {
+    min-height: 100%;
+    padding: clamp(34px, 5vw, 64px);
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--accent) 92%, transparent), rgba(106, 91, 52, 0.68)),
+      radial-gradient(circle at 15% 20%, rgba(255, 247, 222, 0.65), transparent 20rem);
+    overflow: hidden;
+  }
+
+  .code-window {
+    width: min(420px, 100%);
+    margin-inline: auto;
+    padding: 18px 20px 24px;
+    border-radius: 8px;
+    background: rgba(8, 10, 10, 0.88);
+    box-shadow: 0 28px 70px rgba(0, 0, 0, 0.34);
+  }
+
+  .metric-window {
+    margin-top: clamp(18px, 5vw, 70px);
+  }
+
+  [data-accordion-card="infra"] .code-window {
+    margin-top: 40px;
+  }
+
+  [data-accordion-card="visibility"] .metric-window {
+    margin-top: clamp(12px, 3.75vw, 52px);
+  }
+
+  .code-window > span {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 5px;
+    border-radius: 50%;
+    background: rgba(255, 247, 222, 0.56);
+  }
+
+  .code-window pre {
+    margin: 22px 0 0;
+    color: rgba(255, 247, 222, 0.82);
+    font-family: var(--font-mono);
+    font-size: clamp(11px, 1vw, 14px);
+    line-height: 1.55;
+    letter-spacing: 0;
+    white-space: pre-wrap;
+  }
+
+  @media (max-width: 820px) {
+    .platform-accordion {
+      min-height: 420svh;
+    }
+
+    .accordion-inner {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+      gap: 22px;
+      padding: 34px 20px;
+    }
+
+    .accordion-nav {
+      align-self: start;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding-top: 0;
+    }
+
+    .accordion-stack {
+      height: 78svh;
+      align-self: stretch;
+    }
+
+    .accordion-card {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+    }
+
+    .accordion-copy {
+      padding: 22px 0 24px;
+    }
+
+    .accordion-visual {
+      min-height: 0;
+      padding: 28px;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .accordion-nav {
+      grid-template-columns: 1fr;
+    }
+
+    .accordion-inner {
+      padding-inline: 18px;
+    }
+
+    .accordion-card h3 {
+      font-size: 26px;
+    }
+
+    .accordion-card p {
+      font-size: 14px;
+    }
+
+    .accordion-visual {
+      padding: 18px;
+    }
+  }
+
+  /* ---- Page chrome: footer ---- */
+  .page-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    padding: clamp(20px, 4vw, 32px) clamp(20px, 5vw, 72px);
+    border-top: 1px solid var(--line);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04rem;
+    color: var(--muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    .accordion-tab {
+      transition: none;
+    }
+
+    .scroll-cue svg {
+      animation: none;
+    }
+  }
+</style>
+</head>
+<body>
+<header class="page-header">
+  <span class="brand">Nimbus Grid</span>
+  <span class="header-context">Platform</span>
+</header>
+<main>
+  <div class="section-intro">
+    <span class="section-kicker">Platform</span>
+    <h1>One console behind every storage decision your team makes.</h1>
+    <p>Scroll to move through programmable infrastructure, data residency, elastic scaling, and unified visibility — the four systems Nimbus Grid runs on for every workspace.</p>
+    <span class="scroll-cue">
+      Scroll
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </span>
+  </div>
+<section class="platform-accordion" id="platform">
+  <h2 class="sr-only">Platform capabilities</h2>
+  <div class="accordion-inner">
+    <div class="accordion-nav" role="tablist" aria-label="Platform capabilities">
+      <button type="button" class="accordion-tab active" id="tab-infra" role="tab" aria-selected="true" aria-controls="panel-infra" data-accordion-tab="infra" tabindex="0">Programmable infra</button>
+      <button type="button" class="accordion-tab" id="tab-residency" role="tab" aria-selected="false" aria-controls="panel-residency" data-accordion-tab="residency" tabindex="-1">Data residency</button>
+      <button type="button" class="accordion-tab" id="tab-scaling" role="tab" aria-selected="false" aria-controls="panel-scaling" data-accordion-tab="scaling" tabindex="-1">Elastic scaling</button>
+      <button type="button" class="accordion-tab" id="tab-visibility" role="tab" aria-selected="false" aria-controls="panel-visibility" data-accordion-tab="visibility" tabindex="-1">Unified visibility</button>
+    </div>
+    <ul class="accordion-stack" aria-live="polite">
+      <li>
+        <article class="accordion-card active" id="panel-infra" role="tabpanel" aria-labelledby="tab-infra" data-accordion-card="infra">
+          <div class="accordion-copy">
+            <h3>Programmable infra</h3>
+            <p>Define storage pools, quotas, regions, and access policy in code so every workspace ships with the same controls.</p>
+          </div>
+          <div class="accordion-visual">
+            <div class="code-window">
+              <span></span><span></span><span></span>
+              <pre><code>01  storage_pool = {
+02    name      = "client-vault"
+03    region    = "eu-central"
+04    quota     = "24 TiB"
+05    policy    = encrypted_fast
+06  }</code></pre>
+            </div>
+          </div>
+        </article>
+      </li>
+      <li>
+        <article class="accordion-card" id="panel-residency" role="tabpanel" aria-labelledby="tab-residency" data-accordion-card="residency">
+          <div class="accordion-copy">
+            <h3>Data residency</h3>
+            <p>Pin departments and client workspaces to approved regions with retention and encryption rules attached from day one.</p>
+          </div>
+          <div class="accordion-visual">
+            <div class="code-window metric-window">
+              <span></span><span></span><span></span>
+              <pre><code>Region policy
+
+EU Central     locked
+US East        allowed
+AP Southeast   review
+Retention      7 years</code></pre>
+            </div>
+          </div>
+        </article>
+      </li>
+      <li>
+        <article class="accordion-card" id="panel-scaling" role="tabpanel" aria-labelledby="tab-scaling" data-accordion-card="scaling">
+          <div class="accordion-copy">
+            <h3>Elastic scaling</h3>
+            <p>Expand capacity before teams hit limits, route large transfers through faster lanes, and keep procurement predictable.</p>
+          </div>
+          <div class="accordion-visual">
+            <div class="code-window metric-window">
+              <span></span><span></span><span></span>
+              <pre><code>Capacity forecast
+
+Used       18.4 TiB
+Reserved   24 TiB
+Burst      ready
+Next tier  approved</code></pre>
+            </div>
+          </div>
+        </article>
+      </li>
+      <li>
+        <article class="accordion-card" id="panel-visibility" role="tabpanel" aria-labelledby="tab-visibility" data-accordion-card="visibility">
+          <div class="accordion-copy">
+            <h3>Unified visibility</h3>
+            <p>Track growth, usage pressure, inactive files, and compliance drift from a single operational surface.</p>
+          </div>
+          <div class="accordion-visual">
+            <div class="code-window metric-window">
+              <span></span><span></span><span></span>
+              <pre><code>Operations view
+
+Sync health       stable
+Cold data         14%
+Policy drift       0
+Audit export      live</code></pre>
+            </div>
+          </div>
+        </article>
+      </li>
+    </ul>
+  </div>
+</section>
+</main>
+<footer class="page-footer">
+  <span>© Nimbus Grid — storage infrastructure for growing teams.</span>
+  <span>Programmable. Resilient. Visible.</span>
+</footer>
+<script>
+  const accordionSection = document.querySelector(".platform-accordion");
+  const accordionTabs = Array.from(document.querySelectorAll("[data-accordion-tab]"));
+  const accordionCards = Array.from(document.querySelectorAll("[data-accordion-card]"));
+
+  function prefersReducedMotion() {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function activateAccordionPanel(panelName) {
+    accordionTabs.forEach((tab) => {
+      const isActive = tab.dataset.accordionTab === panelName;
+      tab.classList.toggle("active", isActive);
+      tab.setAttribute("aria-selected", String(isActive));
+    });
+    accordionCards.forEach((card) => {
+      card.classList.toggle("active", card.dataset.accordionCard === panelName);
+    });
+  }
+
+  function updateScrollAccordion() {
+    if (!accordionSection || !accordionCards.length) return;
+
+    const rect = accordionSection.getBoundingClientRect();
+    const scrollable = Math.max(1, rect.height - window.innerHeight);
+    const progress = Math.min(1, Math.max(0, -rect.top / scrollable));
+    const maxIndex = accordionCards.length - 1;
+    const rawIndex = progress * maxIndex;
+    const activeIndex = Math.min(maxIndex, Math.max(0, Math.round(rawIndex)));
+    const stack = document.querySelector(".accordion-stack");
+    const stackHeight = stack ? stack.clientHeight : window.innerHeight * 0.74;
+    const collapsedHeight = window.innerWidth <= 820 ? 96 : 84;
+
+    const cardPositions = accordionCards.map((_, index) => {
+      let y = 0;
+      if (index > 0) {
+        const segmentProgress = Math.min(1, Math.max(0, rawIndex - (index - 1)));
+        const startY = stackHeight + collapsedHeight;
+        const endY = index * collapsedHeight;
+        y = startY + (endY - startY) * segmentProgress;
+      }
+      return Math.round(y);
+    });
+
+    accordionCards.forEach((card, index) => {
+      const y = cardPositions[index];
+      const nextY = cardPositions[index + 1];
+      const visibleHeight = typeof nextY === "number"
+        ? Math.max(collapsedHeight, Math.min(stackHeight, nextY + 2))
+        : stackHeight;
+      const clipBottom = Math.max(0, stackHeight - visibleHeight);
+
+      card.style.setProperty("--card-y", `${Math.round(y)}px`);
+      card.style.setProperty("--card-clip-bottom", `${Math.round(clipBottom)}px`);
+      card.style.zIndex = String(index + 1);
+    });
+
+    const activeCard = accordionCards[activeIndex];
+    if (activeCard) activateAccordionPanel(activeCard.dataset.accordionCard);
+  }
+
+  // Roving tabindex: only the last-focused/activated tab sits in the Tab order.
+  function setRovingTabIndex(activeTab) {
+    accordionTabs.forEach((tab) => {
+      tab.tabIndex = tab === activeTab ? 0 : -1;
+    });
+  }
+
+  // Shared by mouse click and keyboard nav: scroll to the segment for a given panel.
+  function goToAccordionPanel(panelName) {
+    if (!accordionSection || !accordionCards.length) return;
+    const index = accordionCards.findIndex(
+      (card) => card.dataset.accordionCard === panelName
+    );
+    if (index === -1) return;
+    const maxIndex = accordionCards.length - 1;
+    const scrollable = accordionSection.offsetHeight - window.innerHeight;
+    const target = accordionSection.offsetTop + (index / maxIndex) * scrollable;
+    window.scrollTo({ top: target, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  }
+
+  accordionTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      setRovingTabIndex(tab);
+      goToAccordionPanel(tab.dataset.accordionTab);
+    });
+  });
+
+  const accordionNav = document.querySelector(".accordion-nav");
+  if (accordionNav) {
+    accordionNav.addEventListener("keydown", (event) => {
+      const currentIndex = accordionTabs.indexOf(document.activeElement);
+      if (currentIndex === -1) return;
+
+      let nextIndex = null;
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        nextIndex = Math.min(accordionTabs.length - 1, currentIndex + 1);
+      } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+        nextIndex = Math.max(0, currentIndex - 1);
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = accordionTabs.length - 1;
+      } else {
+        return;
+      }
+
+      event.preventDefault();
+      const nextTab = accordionTabs[nextIndex];
+      nextTab.focus();
+      setRovingTabIndex(nextTab);
+      goToAccordionPanel(nextTab.dataset.accordionTab);
+    });
+  }
+
+  window.addEventListener("scroll", updateScrollAccordion, { passive: true });
+  window.addEventListener("resize", updateScrollAccordion);
+  updateScrollAccordion();
+</script>
+</body>
+</html>

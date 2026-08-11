@@ -1,0 +1,13 @@
+{
+  "slug": "glassmorphic-feature-tabs",
+  "name": "Glassmorphic Feature Tabs — UI Rocket",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap",
+    "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=glassmorphic-feature-tabs",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

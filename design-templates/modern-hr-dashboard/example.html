@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Talvex — HR Dashboard</title>
+<meta name="description" content="Talvex is a fictional HR dashboard: activity, focus timer, onboarding, benefits, and team calendar in one warm, minimal workspace.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --accent:#FFD85F;
+  --dark:#303030;
+  --gray:#898989;
+  --bg-base:#E3E5E6;
+  --card-bg: rgba(255,255,255,0.6);
+  --card-shadow: 0 2px 20px rgba(0,0,0,0.06);
+  --profile-shadow: 0 2px 20px rgba(0,0,0,0.10);
+  --font-sans: 'Manrope', sans-serif;
+  --ease-out: cubic-bezier(0.23,1,0.32,1);
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:var(--font-sans);font-weight:500;-webkit-font-smoothing:antialiased;}
+html,body{height:100%;}
+body{background:var(--bg-base);color:var(--dark);overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#e5e5e5 transparent;}
+img{display:block;max-width:100%;}
+button{font-family:inherit;cursor:pointer;background:none;border:none;color:inherit;}
+a{color:inherit;text-decoration:none;}
+svg{display:block;}
+
+.bg-blob{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;}
+
+.app-shell{position:relative;z-index:10;max-width:1400px;margin:0 auto;padding:24px 16px;display:flex;flex-direction:column;min-height:100vh;}
+@media(min-width:640px){.app-shell{padding:24px;}}
+@media(min-width:1024px){.app-shell{height:100vh;overflow:hidden;padding:24px;}}
+@media(max-width:1023.98px){.app-shell{overflow-y:auto;}}
+
+.bottom-spacer{display:block;height:24px;flex-shrink:0;}
+@media(min-width:1024px){.bottom-spacer{display:none;}}
+
+/* NAVBAR */
+.navbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;position:relative;flex-shrink:0;}
+.navbar-brand{border:1px solid rgba(137,137,137,0.3);border-radius:999px;padding:8px 20px;font-size:1rem;color:var(--dark);user-select:none;white-space:nowrap;}
+.navbar-right{display:flex;align-items:center;gap:8px;}
+.nav-links{display:none;list-style:none;background:var(--card-bg);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(137,137,137,0.2);border-radius:999px;padding:4px;box-shadow:0 1px 2px rgba(0,0,0,0.05);}
+@media(min-width:1024px){.nav-links{display:flex;}}
+.nav-link{padding:8px 16px;border-radius:999px;font-size:0.875rem;color:var(--gray);background:transparent;transition:background-color .2s var(--ease-out),color .2s var(--ease-out);}
+.nav-link:hover{color:var(--dark);}
+.nav-link[aria-current="page"]{background:var(--dark);color:#fff;}
+
+.icon-pill{display:inline-flex;align-items:center;justify-content:center;background:var(--card-bg);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(137,137,137,0.2);border-radius:999px;box-shadow:0 1px 2px rgba(0,0,0,0.05);transition:background-color .2s var(--ease-out);}
+.icon-pill:hover{background:rgba(255,255,255,0.8);}
+.configs-btn{display:none;gap:6px;padding:10px 16px;font-size:0.875rem;color:var(--dark);}
+@media(min-width:640px){.configs-btn{display:inline-flex;}}
+.bell-btn{position:relative;width:40px;height:40px;}
+.bell-dot{position:absolute;top:6px;right:6px;width:8px;height:8px;background:var(--accent);border-radius:999px;}
+.profile-avatar{width:40px;height:40px;border-radius:999px;overflow:hidden;flex-shrink:0;border:none;padding:0;}
+.profile-avatar img{width:100%;height:100%;object-fit:cover;}
+.hamburger-btn{width:40px;height:40px;display:inline-flex;}
+@media(min-width:1024px){.hamburger-btn{display:none;}}
+.hamburger-btn .icon-x{display:none;}
+.hamburger-btn[aria-expanded="true"] .icon-menu{display:none;}
+.hamburger-btn[aria-expanded="true"] .icon-x{display:block;}
+
+.mobile-nav-dropdown{position:absolute;top:calc(100% + 8px);right:0;z-index:20;background:rgba(255,255,255,0.85);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(137,137,137,0.2);border-radius:16px;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);display:flex;flex-wrap:wrap;gap:4px;min-width:240px;list-style:none;}
+.mobile-nav-dropdown[hidden]{display:none;}
+@media(min-width:1024px){.mobile-nav-dropdown{display:none !important;}}
+
+/* WELCOME ROW */
+.welcome-row{width:100%;margin-bottom:16px;display:flex;flex-direction:column;gap:16px;flex-shrink:0;}
+@media(min-width:640px){.welcome-row{flex-direction:row;align-items:flex-end;justify-content:space-between;gap:32px;}}
+.welcome-left{flex:3 1 0%;min-width:0;}
+.welcome-greeting{font-size:1.875rem;line-height:1.15;letter-spacing:-0.02em;color:var(--dark);font-weight:500;margin-bottom:16px;}
+@media(min-width:640px){.welcome-greeting{font-size:2.25rem;}}
+@media(min-width:1024px){.welcome-greeting{font-size:3rem;}}
+
+.segment-bar{display:flex;gap:8px;align-items:flex-end;}
+.segment{display:flex;flex-direction:column;min-width:0;}
+.segment-label{font-size:0.75rem;color:var(--dark);margin-bottom:4px;overflow-wrap:break-word;line-height:1.2;}
+.segment-fill{border-radius:999px;padding:8px 12px;font-size:0.75rem;}
+@media(min-width:640px){.segment-fill{font-size:0.875rem;}}
+.segment[data-key="screenings"]{flex:15;}
+.segment[data-key="placed"]{flex:15;}
+.segment[data-key="sprint"]{flex:60;}
+.segment[data-key="return"]{flex:10;}
+.segment-fill.dark{background:var(--dark);color:#fff;}
+.segment-fill.accent{background:var(--accent);color:var(--dark);}
+.segment-fill.hatched{background-image:repeating-linear-gradient(-45deg,#e5e5e5 0px,#e5e5e5 2px,#f5f5f5 2px,#f5f5f5 10px);border:1px solid #ddd;color:var(--dark);}
+.segment-fill.outline{border:1px solid rgba(137,137,137,0.4);background:var(--card-bg);color:var(--dark);}
+
+.welcome-right{flex:2 1 0%;display:flex;gap:24px;justify-content:flex-start;}
+@media(min-width:640px){.welcome-right{justify-content:flex-end;}}
+.stat-block{display:flex;flex-direction:column;}
+.stat-icon-badge{width:fit-content;background:rgba(137,137,137,0.15);border-radius:8px;padding:6px;margin-bottom:4px;color:var(--gray);}
+.stat-number{font-size:1.875rem;line-height:1;color:var(--dark);font-weight:500;}
+@media(min-width:640px){.stat-number{font-size:2.25rem;}}
+@media(min-width:1024px){.stat-number{font-size:3rem;}}
+.stat-label{font-size:0.75rem;color:var(--dark);margin-top:4px;}
+
+/* DASHBOARD GRID */
+.dashboard-grid{display:flex;flex-direction:column;gap:12px;}
+@media(min-width:1024px){.dashboard-grid{flex:1;min-height:0;}}
+@media(min-width:768px) and (max-width:1023.98px){
+  /* Tablet order per spec: profile, progress, timer, accordion, then
+     calendar and onboarding each full-width. Reordered via `order` (DOM
+     order stays profile/progress/timer/onboarding/accordion/calendar to
+     match mobile+desktop) so the 2-column grid has no stranded gap cell. */
+  .dashboard-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:stretch;}
+  .card-profile{order:1;}
+  .card-progress{order:2;}
+  .card-timer{order:3;}
+  .card-accordion{order:4;}
+  .card-calendar{order:5;grid-column:span 2;}
+  .card-onboarding{order:6;grid-column:span 2;}
+}
+@media(min-width:1024px){
+  .dashboard-grid{display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:1fr 1fr;gap:4px;}
+  .card{height:100%;min-height:0;}
+  .card-profile{grid-column:1;grid-row:1;}
+  .card-progress{grid-column:2;grid-row:1;}
+  .card-timer{grid-column:3;grid-row:1;}
+  .card-onboarding{grid-column:4;grid-row:1/3;}
+  .card-accordion{grid-column:1;grid-row:2;}
+  .card-calendar{grid-column:2/4;grid-row:2;}
+}
+
+.card{background:var(--card-bg);backdrop-filter:blur(64px);-webkit-backdrop-filter:blur(64px);border-radius:24px;box-shadow:var(--card-shadow);}
+
+/* PROFILE CARD */
+.card-profile{position:relative;overflow:hidden;border-radius:24px;box-shadow:var(--profile-shadow);aspect-ratio:4/3;background:var(--card-bg);}
+@media(min-width:1024px){.card-profile{aspect-ratio:auto;}}
+.card-profile img{width:100%;height:100%;object-fit:cover;object-position:top;}
+.profile-blur-overlay{position:absolute;left:0;right:0;bottom:0;height:35%;backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);-webkit-mask-image:linear-gradient(to top,#000 40%,transparent 100%);mask-image:linear-gradient(to top,#000 40%,transparent 100%);background:linear-gradient(to top, rgba(0,0,0,0.28) 0%, transparent 100%);}
+.profile-info-bar{position:absolute;left:12px;right:12px;bottom:12px;display:flex;align-items:flex-end;justify-content:space-between;padding:12px 16px;border-radius:16px;gap:8px;}
+.profile-name{color:#fff;font-size:0.875rem;font-weight:500;}
+.profile-role{color:rgba(255,255,255,0.7);font-size:0.75rem;}
+.profile-salary{color:#fff;font-size:0.75rem;font-weight:500;border:1px solid rgba(255,255,255,0.35);border-radius:999px;padding:6px 12px;white-space:nowrap;}
+
+/* SHARED CARD BODY */
+.card-body{padding:20px;display:flex;flex-direction:column;gap:12px;height:100%;}
+.card-header-row{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.card-title{font-size:1.125rem;color:var(--dark);}
+.card-action-btn{width:32px;height:32px;border-radius:999px;background:#fff;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(0,0,0,0.05);flex-shrink:0;color:var(--dark);}
+
+.activity-stat-num{font-size:2.25rem;color:var(--dark);flex-shrink:0;}
+.activity-stat-label{font-size:0.75rem;color:var(--gray);line-height:1.4;flex-shrink:0;}
+
+.bar-chart{height:192px;display:flex;align-items:flex-end;gap:0;position:relative;flex-shrink:0;}
+@media(min-width:1024px){.bar-chart{flex:1;height:auto;min-height:60px;}}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;position:relative;}
+.bar-track{flex:1;display:flex;align-items:flex-end;width:100%;justify-content:center;}
+.bar{width:60%;max-width:28px;border-radius:6px;background:var(--dark);transition:height .5s var(--ease-out);}
+.bar.accent{background:var(--accent);}
+.bar-axis-label{font-size:11px;color:var(--gray);margin-top:8px;flex-shrink:0;}
+.bar-tooltip{position:absolute;bottom:calc(100% + 30px);left:50%;transform:translateX(-50%);background:var(--accent);color:var(--dark);font-size:0.75rem;border-radius:999px;padding:4px 12px;box-shadow:0 4px 6px rgba(0,0,0,.1);white-space:nowrap;}
+
+/* FOCUS TIMER */
+.timer-ring-wrap{display:flex;align-items:center;justify-content:center;flex:1;min-height:0;}
+.timer-ring-wrap svg{width:min(100%,180px);height:auto;}
+.timer-controls{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.timer-btn-group{display:flex;gap:8px;}
+.timer-btn{width:40px;height:40px;border-radius:999px;background:#fff;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(0,0,0,.05);color:var(--dark);}
+.timer-btn.reset{background:var(--dark);color:#fff;}
+.timer-btn[aria-pressed="true"]{box-shadow:0 0 0 2px var(--accent);}
+
+/* ONBOARDING COLUMN */
+.card-onboarding .card-body{gap:16px;}
+.onboarding-header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.onboarding-percent{font-size:2.25rem;color:var(--dark);}
+.stacked-bar{display:flex;gap:4px;flex-shrink:0;}
+.stacked-seg{display:flex;flex-direction:column;min-width:0;}
+.stacked-seg-label{font-size:0.75rem;color:var(--gray);margin-bottom:4px;}
+.stacked-seg-fill{height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:0.75rem;}
+.stacked-seg[data-w="30"]{flex:30;}
+.stacked-seg[data-w="25"]{flex:25;}
+.stacked-seg[data-w="20"]{flex:20;}
+.stacked-seg-fill.accent{background:var(--accent);color:var(--dark);}
+.stacked-seg-fill.dark{background:var(--dark);color:#fff;}
+.stacked-seg-fill.gray{background:var(--gray);color:#fff;}
+
+.task-panel{background:var(--dark);border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:8px;flex:1;min-height:0;}
+.task-panel-header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.task-panel-title{font-size:1.125rem;color:#fff;}
+.task-panel-count{font-size:1rem;color:var(--gray);}
+.task-list{list-style:none;display:flex;flex-direction:column;overflow-y:auto;min-height:0;}
+.task-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.task-row:last-child{border-bottom:none;}
+.task-icon-circle{width:32px;height:32px;border-radius:999px;background:rgba(255,255,255,0.1);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:rgba(255,255,255,0.6);}
+.task-text{flex:1;min-width:0;}
+.task-title{font-size:0.875rem;color:#fff;display:block;}
+.task-title.done{text-decoration:line-through;color:rgba(255,255,255,0.3);}
+.task-time{font-size:0.75rem;color:rgba(255,255,255,0.3);white-space:nowrap;display:block;}
+.task-checkbox{width:20px;height:20px;border-radius:999px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.2);background:transparent;color:var(--dark);}
+.task-checkbox.done{background:var(--accent);border:none;}
+
+/* ACCORDION */
+.card-accordion{overflow:hidden;}
+.accordion-list{display:flex;flex-direction:column;}
+.accordion-item{border-top:1px solid rgba(137,137,137,0.15);}
+.accordion-item:first-child{border-top:none;}
+.accordion-summary{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;cursor:pointer;list-style:none;transition:background-color .2s var(--ease-out);}
+.accordion-summary::-webkit-details-marker{display:none;}
+.accordion-summary:hover{background:rgba(137,137,137,0.08);}
+.accordion-title{font-size:0.9375rem;color:var(--dark);}
+.accordion-chevron{color:var(--gray);flex-shrink:0;transition:transform .2s var(--ease-out);}
+details[open] .accordion-chevron{transform:rotate(180deg);}
+.accordion-content{padding:16px 20px 16px;display:flex;align-items:center;gap:12px;border-top:1px solid rgba(137,137,137,0.15);}
+.accordion-thumb{width:48px;height:40px;border-radius:8px;overflow:hidden;flex-shrink:0;}
+.accordion-thumb img{width:100%;height:100%;object-fit:cover;}
+.accordion-content-text{min-width:0;}
+.accordion-content-title{font-size:0.875rem;color:var(--dark);display:block;}
+.accordion-content-sub{font-size:0.75rem;color:var(--gray);display:block;}
+.accordion-more-btn{margin-left:auto;color:var(--gray);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;flex-shrink:0;}
+.accordion-more-btn:hover{background:rgba(137,137,137,0.1);}
+
+/* CALENDAR */
+.card-calendar .card-body{gap:0;}
+.calendar-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0;}
+.calendar-month-prev{font-size:0.875rem;color:var(--gray);}
+.calendar-month-current{font-size:1rem;color:var(--dark);}
+.calendar-month-next{border:1px solid rgba(137,137,137,0.25);border-radius:999px;padding:4px 16px;font-size:0.875rem;color:var(--gray);}
+.calendar-days-header{display:flex;margin-left:56px;margin-bottom:8px;gap:0;flex-shrink:0;}
+@media(min-width:640px){.calendar-days-header{margin-left:64px;}}
+.calendar-day-head{flex:1;text-align:left;font-size:0.8125rem;color:var(--gray);}
+.calendar-day-head.today{color:var(--dark);font-weight:600;}
+.calendar-day-head .day-num{display:block;}
+
+.calendar-time-grid{display:flex;height:160px;position:relative;flex-shrink:0;}
+@media(min-width:1024px){.calendar-time-grid{flex:1;height:auto;min-height:120px;}}
+.calendar-times{width:56px;flex-shrink:0;display:flex;flex-direction:column;justify-content:space-between;font-size:0.75rem;color:var(--gray);padding:4px 0;}
+@media(min-width:640px){.calendar-times{width:64px;}}
+.calendar-columns{flex:1;position:relative;display:flex;}
+.calendar-col-line{flex:1;border-left:1px dashed rgba(137,137,137,0.2);}
+
+.calendar-event{position:absolute;border-radius:16px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;overflow:hidden;}
+.calendar-event.dark{background:var(--dark);color:#fff;}
+.calendar-event.light{background:#fff;border:1px solid rgba(137,137,137,0.25);color:var(--dark);}
+.calendar-event-text{min-width:0;}
+.calendar-event-title{font-size:0.8125rem;font-weight:500;display:block;}
+.calendar-event-sub{font-size:0.75rem;opacity:.7;display:none;}
+@media(min-width:640px){.calendar-event-sub{display:block;}}
+.avatar-group{display:flex;flex-shrink:0;}
+.avatar-group img{width:24px;height:24px;border-radius:999px;object-fit:cover;border:2px solid #fff;margin-left:-6px;}
+.avatar-group img:first-child{margin-left:0;}
+
+/* reveal animation on load */
+.reveal{opacity:0;transform:translateY(16px);animation:revealUp .6s var(--ease-out) forwards;}
+.reveal.d1{animation-delay:.05s;}
+.reveal.d2{animation-delay:.1s;}
+.reveal.d3{animation-delay:.15s;}
+.reveal.d4{animation-delay:.2s;}
+.reveal.d5{animation-delay:.25s;}
+.reveal.d6{animation-delay:.3s;}
+/* End state uses transform:none, not translateY(0) — a non-"none" transform,
+   even a no-op, permanently creates a new stacking context once the
+   animation settles. That trapped the navbar's z-index:20 mobile dropdown
+   under the later-painted welcome row until this was fixed. */
+@keyframes revealUp{to{opacity:1;transform:none;}}
+
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px;}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important;scroll-behavior:auto !important;}
+  .reveal{opacity:1;transform:none;}
+}
+</style>
+</head>
+<body>
+<!-- BG -->
+<svg class="bg-blob" viewBox="0 0 1280 832" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+  <rect x="0" y="0" width="1280" height="832" fill="#E3E5E6"/>
+  <g filter="url(#hr-blob-blur)">
+    <path fill="#FFD85F" d="M904 404C942.8 189.6 1234.83 123.333 1376 117V1093.5H-227V792.5C-161.5 706.167 0.5 556.6 124.5 649C248.5 741.4 473.833 727.5 571 709C665.833 696.667 865.2 618.4 904 404Z"/>
+  </g>
+  <defs>
+    <filter id="hr-blob-blur" x="-727" y="-383" width="2603" height="1976.5" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="250" result="effect1_foregroundBlur"/>
+    </filter>
+  </defs>
+</svg>
+<!-- /BG -->
+<div class="app-shell">
+<!-- NAVBAR -->
+<nav class="navbar reveal" aria-label="Primary">
+  <span class="navbar-brand">Talvex</span>
+  <div class="navbar-right">
+    <ul class="nav-links" role="list">
+      <li><button type="button" class="nav-link" data-nav="Dashboard" aria-current="page">Dashboard</button></li>
+      <li><button type="button" class="nav-link" data-nav="People">People</button></li>
+      <li><button type="button" class="nav-link" data-nav="Hiring">Hiring</button></li>
+      <li><button type="button" class="nav-link" data-nav="Devices">Devices</button></li>
+      <li><button type="button" class="nav-link" data-nav="Apps">Apps</button></li>
+      <li><button type="button" class="nav-link" data-nav="Salary">Salary</button></li>
+      <li><button type="button" class="nav-link" data-nav="Calendar">Calendar</button></li>
+      <li><button type="button" class="nav-link" data-nav="Reviews">Reviews</button></li>
+    </ul>
+    <button type="button" class="icon-pill configs-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:6px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Configs
+    </button>
+    <button type="button" class="icon-pill bell-btn" aria-label="Notifications">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="bell-dot" aria-hidden="true"></span>
+    </button>
+    <button type="button" class="profile-avatar" aria-label="Open profile menu">
+      <img src="assets/avatar-nav.jpg" alt="" width="80" height="80">
+    </button>
+    <button type="button" class="icon-pill hamburger-btn" id="hamburgerBtn" aria-label="Open navigation menu" aria-haspopup="true" aria-expanded="false" aria-controls="mobileNavDropdown">
+      <svg class="icon-menu" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+      <svg class="icon-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <ul class="mobile-nav-dropdown" id="mobileNavDropdown" role="list" hidden>
+      <li><button type="button" class="nav-link" data-nav-mobile="Dashboard" aria-current="page">Dashboard</button></li>
+      <li><button type="button" class="nav-link" data-nav-mobile="People">People</button></li>
+      <li><button type="button" class="nav-link" data-nav-mobile="Hiring">Hiring</button></li>
+      <li><button type="button" class="nav-link" data-nav-mobile="Devices">Devices</button></li>
+      <li><button type="button" class="nav-link" data-nav-mobile="Apps">Apps</button></li>
+      <li><button type="button" class="nav-link" data-nav-mobile="Salary">Salary</button></li>
+      <li><button type="button" class="nav-link" data-nav-mobile="Calendar">Calendar</button></li>
+      <li><button type="button" class="nav-link" data-nav-mobile="Reviews">Reviews</button></li>
+    </ul>
+  </div>
+</nav>
+<!-- /NAVBAR -->
+<!-- WELCOME -->
+<section class="welcome-row reveal d1" aria-label="Overview">
+  <div class="welcome-left">
+    <h1 class="welcome-greeting">Good morning, Kasven</h1>
+    <div class="segment-bar" role="group" aria-label="Pipeline segments">
+      <div class="segment" data-key="screenings">
+        <span class="segment-label">Screenings</span>
+        <span class="segment-fill dark">15%</span>
+      </div>
+      <div class="segment" data-key="placed">
+        <span class="segment-label">Placed</span>
+        <span class="segment-fill accent">15%</span>
+      </div>
+      <div class="segment" data-key="sprint">
+        <span class="segment-label">Sprint cycle</span>
+        <span class="segment-fill hatched">60%</span>
+      </div>
+      <div class="segment" data-key="return">
+        <span class="segment-label">Return</span>
+        <span class="segment-fill outline">10%</span>
+      </div>
+    </div>
+  </div>
+  <div class="welcome-right">
+    <div class="stat-block">
+      <span class="stat-icon-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <span class="stat-number">78</span>
+      <span class="stat-label">Members</span>
+    </div>
+    <div class="stat-block">
+      <span class="stat-icon-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <span class="stat-number">56</span>
+      <span class="stat-label">Openings</span>
+    </div>
+    <div class="stat-block">
+      <span class="stat-icon-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+      <span class="stat-number">203</span>
+      <span class="stat-label">Launches</span>
+    </div>
+  </div>
+</section>
+<!-- /WELCOME -->
+<!-- GRID -->
+<div class="dashboard-grid">
+
+  <article class="card card-profile reveal d2">
+    <img src="assets/profile-photo.jpg" alt="Nora Elliston, UI/UX Architect, smiling in a casual portrait" width="600" height="900">
+    <div class="profile-blur-overlay" aria-hidden="true"></div>
+    <div class="profile-info-bar">
+      <span>
+        <span class="profile-name">Nora Elliston</span><br>
+        <span class="profile-role">UI/UX Architect</span>
+      </span>
+      <span class="profile-salary">$1,200</span>
+    </div>
+  </article>
+
+  <article class="card card-progress reveal d2">
+    <div class="card-body">
+      <div class="card-header-row">
+        <h2 class="card-title">Activity</h2>
+        <button type="button" class="card-action-btn" aria-label="Open activity details">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+        </button>
+      </div>
+      <div>
+        <span class="activity-stat-num">6.1 h</span><br>
+        <span class="activity-stat-label">Logged hrs<br>this week</span>
+      </div>
+      <div class="bar-chart" id="activityChart" role="img" aria-label="Hours logged per day this week: Sunday 3.5, Monday 5.0, Tuesday 4.2, Wednesday 6.0, Thursday 4.8, Friday 7.2, Saturday 2.0">
+        <div class="bar-col" data-value="3.5">
+          <div class="bar-track"><div class="bar"></div></div>
+          <span class="bar-axis-label" aria-hidden="true">S</span>
+        </div>
+        <div class="bar-col" data-value="5.0">
+          <div class="bar-track"><div class="bar"></div></div>
+          <span class="bar-axis-label" aria-hidden="true">M</span>
+        </div>
+        <div class="bar-col" data-value="4.2">
+          <div class="bar-track"><div class="bar"></div></div>
+          <span class="bar-axis-label" aria-hidden="true">T</span>
+        </div>
+        <div class="bar-col" data-value="6.0">
+          <div class="bar-track"><div class="bar"></div></div>
+          <span class="bar-axis-label" aria-hidden="true">W</span>
+        </div>
+        <div class="bar-col" data-value="4.8">
+          <div class="bar-track"><div class="bar"></div></div>
+          <span class="bar-axis-label" aria-hidden="true">T</span>
+        </div>
+        <div class="bar-col" data-value="7.2">
+          <div class="bar-track"><span class="bar-tooltip" aria-hidden="true">5h 23m</span><div class="bar accent"></div></div>
+          <span class="bar-axis-label" aria-hidden="true">F</span>
+        </div>
+        <div class="bar-col" data-value="2.0">
+          <div class="bar-track"><div class="bar"></div></div>
+          <span class="bar-axis-label" aria-hidden="true">S</span>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <article class="card card-timer reveal d3">
+    <div class="card-body">
+      <div class="card-header-row">
+        <h2 class="card-title">Focus timer</h2>
+        <button type="button" class="card-action-btn" aria-label="Open focus timer details">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+        </button>
+      </div>
+      <div class="timer-ring-wrap">
+        <svg viewBox="0 0 180 180" role="img" aria-label="Deep Focus timer ring, 02 minutes 35 seconds remaining">
+          <circle cx="90" cy="90" r="68" fill="none" stroke="var(--accent)" stroke-width="10" stroke-linecap="round" stroke-dasharray="299 428" transform="rotate(-90 90 90)"/>
+          <g id="timerTicks" stroke="#898989" stroke-opacity="0.9" stroke-width="1.2" stroke-linecap="round"></g>
+          <text id="timerText" x="90" y="86" text-anchor="middle" font-size="22" fill="#303030" font-family="Manrope, sans-serif">02:35</text>
+          <text x="90" y="106" text-anchor="middle" font-size="10" fill="#898989" font-family="Manrope, sans-serif">Deep Focus</text>
+        </svg>
+      </div>
+      <div class="timer-controls">
+        <div class="timer-btn-group">
+          <button type="button" class="timer-btn" id="timerPlay" aria-label="Start focus timer" aria-pressed="false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+          </button>
+          <button type="button" class="timer-btn" id="timerPause" aria-label="Pause focus timer" aria-pressed="false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          </button>
+        </div>
+        <button type="button" class="timer-btn reset" id="timerReset" aria-label="Reset focus timer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        </button>
+      </div>
+    </div>
+  </article>
+
+  <article class="card card-onboarding reveal d3">
+    <div class="card-body">
+      <div class="onboarding-header">
+        <h2 class="card-title">Induction</h2>
+        <span class="onboarding-percent">18%</span>
+      </div>
+      <div class="stacked-bar" role="img" aria-label="Induction progress breakdown: 30 percent task, 25 percent in review, 20 percent remaining">
+        <div class="stacked-seg" data-w="30">
+          <span class="stacked-seg-label">30%</span>
+          <span class="stacked-seg-fill accent">Task</span>
+        </div>
+        <div class="stacked-seg" data-w="25">
+          <span class="stacked-seg-label">25%</span>
+          <span class="stacked-seg-fill dark"></span>
+        </div>
+        <div class="stacked-seg" data-w="20">
+          <span class="stacked-seg-label">20%</span>
+          <span class="stacked-seg-fill gray"></span>
+        </div>
+      </div>
+      <div class="task-panel">
+        <div class="task-panel-header">
+          <h3 class="task-panel-title">Pending Actions</h3>
+          <span class="task-panel-count">2/8</span>
+        </div>
+        <ul class="task-list">
+          <li class="task-row">
+            <span class="task-icon-circle" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+            <span class="task-text"><span class="task-title done">Screening</span><span class="task-time">Sep 13, 08:30</span></span>
+            <span class="task-checkbox done" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+          </li>
+          <li class="task-row">
+            <span class="task-icon-circle" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            <span class="task-text"><span class="task-title done">Sync Session</span><span class="task-time">Sep 13, 10:30</span></span>
+            <span class="task-checkbox done" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+          </li>
+          <li class="task-row">
+            <span class="task-icon-circle" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+            <span class="task-text"><span class="task-title">Sprint Recap</span><span class="task-time">Sep 13, 13:00</span></span>
+            <span class="task-checkbox" aria-hidden="true"></span>
+          </li>
+          <li class="task-row">
+            <span class="task-icon-circle" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
+            <span class="task-text"><span class="task-title">Set Q3 Targets</span><span class="task-time">Sep 13, 14:45</span></span>
+            <span class="task-checkbox" aria-hidden="true"></span>
+          </li>
+          <li class="task-row">
+            <span class="task-icon-circle" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+            <span class="task-text"><span class="task-title">Policy Walkthru</span><span class="task-time">Sep 13, 16:30</span></span>
+            <span class="task-checkbox" aria-hidden="true"></span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </article>
+
+  <article class="card card-accordion reveal d4">
+    <div class="accordion-list">
+      <details class="accordion-item">
+        <summary class="accordion-summary">
+          <span class="accordion-title">Retirement savings</span>
+          <svg class="accordion-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+      </details>
+      <details class="accordion-item" open>
+        <summary class="accordion-summary">
+          <span class="accordion-title">Hardware</span>
+          <svg class="accordion-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="accordion-content">
+          <span class="accordion-thumb"><img src="assets/hardware-thumb.jpg" alt="" width="120" height="80"></span>
+          <span class="accordion-content-text">
+            <span class="accordion-content-title">ThinkPad Pro</span>
+            <span class="accordion-content-sub">Edition X1</span>
+          </span>
+          <button type="button" class="accordion-more-btn" aria-label="More hardware options">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+          </button>
+        </div>
+      </details>
+      <details class="accordion-item">
+        <summary class="accordion-summary">
+          <span class="accordion-title">Earnings breakdown</span>
+          <svg class="accordion-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+      </details>
+      <details class="accordion-item">
+        <summary class="accordion-summary">
+          <span class="accordion-title">Perks &amp; Benefits</span>
+          <svg class="accordion-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+      </details>
+    </div>
+  </article>
+
+  <article class="card card-calendar reveal d4">
+    <div class="card-body">
+      <div class="calendar-header">
+        <span class="calendar-month-prev">July</span>
+        <span class="calendar-month-current">August 2024</span>
+        <span class="calendar-month-next">September</span>
+      </div>
+      <div class="calendar-days-header" aria-hidden="true">
+        <span class="calendar-day-head"><span class="day-num">Mon</span>22</span>
+        <span class="calendar-day-head"><span class="day-num">Tue</span>23</span>
+        <span class="calendar-day-head today"><span class="day-num">Wed</span>24</span>
+        <span class="calendar-day-head"><span class="day-num">Thu</span>25</span>
+        <span class="calendar-day-head"><span class="day-num">Fri</span>26</span>
+        <span class="calendar-day-head"><span class="day-num">Sat</span>27</span>
+      </div>
+      <div class="calendar-time-grid" role="img" aria-label="Week of August 22 to 27, 2024. Monthly All-Hands, recap milestones across squads, Monday 8am. Induction Briefing, orientation for new joiners, Thursday-Friday 9:24am.">
+        <div class="calendar-times" aria-hidden="true">
+          <span>8:00am</span>
+          <span>9:00am</span>
+          <span>10:00am</span>
+          <span>11:00am</span>
+        </div>
+        <div class="calendar-columns" aria-hidden="true">
+          <div class="calendar-col-line"></div>
+          <div class="calendar-col-line"></div>
+          <div class="calendar-col-line"></div>
+          <div class="calendar-col-line"></div>
+          <div class="calendar-col-line"></div>
+          <div class="calendar-col-line"></div>
+          <div class="calendar-event dark" style="left:16.66%;right:33%;top:4px;height:58px;">
+            <span class="calendar-event-text">
+              <span class="calendar-event-title">Monthly All-Hands</span>
+              <span class="calendar-event-sub">Recap milestones across squads</span>
+            </span>
+            <span class="avatar-group">
+              <img src="assets/avatar-cal-1.jpg" alt="" width="60" height="60">
+              <img src="assets/avatar-cal-2.jpg" alt="" width="60" height="60">
+              <img src="assets/avatar-cal-3.jpg" alt="" width="60" height="60">
+            </span>
+          </div>
+          <div class="calendar-event light" style="left:55%;right:0%;top:84px;height:56px;">
+            <span class="calendar-event-text">
+              <span class="calendar-event-title">Induction Briefing</span>
+              <span class="calendar-event-sub">Orientation for new joiners</span>
+            </span>
+            <span class="avatar-group">
+              <img src="assets/avatar-cal-1.jpg" alt="" width="60" height="60">
+              <img src="assets/avatar-cal-2.jpg" alt="" width="60" height="60">
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+
+</div>
+<!-- /GRID -->
+<div class="bottom-spacer" aria-hidden="true"></div>
+</div>
+<!-- SCRIPT -->
+<script>
+(function () {
+  "use strict";
+
+  /* ---- Reveal animation cleanup ----
+     animation-fill-mode:forwards keeps the animation's filled effect applied
+     after it ends. Chrome resolves that filled endpoint's transform:none to
+     a computed matrix(1,0,0,1,0,0) rather than the literal keyword "none" —
+     which still counts as "a transform other than none" and permanently
+     creates a stacking context. That trapped the navbar's z-index:20 mobile
+     dropdown behind the later-in-DOM welcome row. Dropping the whole
+     "reveal" class once each animation ends removes the filled effect (and
+     its base translateY/opacity rule) entirely, so the element settles back
+     to plain untransformed defaults instead of a lingering identity matrix. */
+  document.querySelectorAll('.reveal').forEach(function (el) {
+    el.addEventListener('animationend', function () {
+      el.classList.remove('reveal', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6');
+    }, { once: true });
+  });
+
+  /* ---- Activity bar chart: heights computed from track size, animated on load ---- */
+  var barChart = document.getElementById('activityChart');
+  var barsEnteredOnce = false;
+  function layoutBars() {
+    if (!barChart) return;
+    var cols = barChart.querySelectorAll('.bar-col');
+    var maxVal = 7.2;
+    cols.forEach(function (col) {
+      var track = col.querySelector('.bar-track');
+      var bar = col.querySelector('.bar');
+      var val = parseFloat(col.getAttribute('data-value'));
+      var trackHeight = track.clientHeight || 140;
+      var targetHeight = Math.max(4, Math.round((val / maxVal) * trackHeight));
+      /* CSS carries a persistent height transition (see .bar), so a resize
+         recalculation just glides to the new target. Only the very first
+         layout grows in from nothing — resetting to 0 on every resize would
+         flash each bar flat any time the window (or an automated screenshot
+         tool) fires a resize event. */
+      if (!barsEnteredOnce) bar.style.height = '0px';
+      requestAnimationFrame(function () {
+        bar.style.height = targetHeight + 'px';
+      });
+    });
+    barsEnteredOnce = true;
+  }
+  window.addEventListener('load', layoutBars);
+  var barResizeTimer;
+  window.addEventListener('resize', function () {
+    clearTimeout(barResizeTimer);
+    barResizeTimer = setTimeout(layoutBars, 150);
+  });
+
+  /* ---- Focus timer ring: 60 tick marks, hidden inside the 70% progress zone ---- */
+  var ticksGroup = document.getElementById('timerTicks');
+  if (ticksGroup) {
+    var cx = 90, cy = 90, r = 68;
+    var tickInner = r - 4, tickOuter = r + 4;
+    var totalTicks = 60;
+    var progressTicks = Math.round(0.7 * totalTicks);
+    for (var i = 0; i < totalTicks; i++) {
+      if (i < progressTicks) continue;
+      var angleDeg = -90 + i * (360 / totalTicks);
+      var angleRad = angleDeg * Math.PI / 180;
+      var x1 = cx + tickInner * Math.cos(angleRad);
+      var y1 = cy + tickInner * Math.sin(angleRad);
+      var x2 = cx + tickOuter * Math.cos(angleRad);
+      var y2 = cy + tickOuter * Math.sin(angleRad);
+      var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', x1.toFixed(2));
+      line.setAttribute('y1', y1.toFixed(2));
+      line.setAttribute('x2', x2.toFixed(2));
+      line.setAttribute('y2', y2.toFixed(2));
+      ticksGroup.appendChild(line);
+    }
+  }
+
+  /* ---- Focus timer countdown: real play / pause / reset state ---- */
+  var timerText = document.getElementById('timerText');
+  var playBtn = document.getElementById('timerPlay');
+  var pauseBtn = document.getElementById('timerPause');
+  var resetBtn = document.getElementById('timerReset');
+  var totalSeconds = 155; /* 02:35 */
+  var remaining = totalSeconds;
+  var intervalId = null;
+
+  function formatTime(sec) {
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
+  }
+  function renderTime() {
+    if (timerText) timerText.textContent = formatTime(remaining);
+  }
+  if (playBtn) playBtn.addEventListener('click', function () {
+    if (intervalId || remaining <= 0) return;
+    playBtn.setAttribute('aria-pressed', 'true');
+    if (pauseBtn) pauseBtn.setAttribute('aria-pressed', 'false');
+    intervalId = setInterval(function () {
+      remaining = Math.max(0, remaining - 1);
+      renderTime();
+      if (remaining === 0) {
+        clearInterval(intervalId);
+        intervalId = null;
+        playBtn.setAttribute('aria-pressed', 'false');
+      }
+    }, 1000);
+  });
+  if (pauseBtn) pauseBtn.addEventListener('click', function () {
+    if (!intervalId) return;
+    clearInterval(intervalId);
+    intervalId = null;
+    if (playBtn) playBtn.setAttribute('aria-pressed', 'false');
+    pauseBtn.setAttribute('aria-pressed', 'true');
+  });
+  if (resetBtn) resetBtn.addEventListener('click', function () {
+    if (intervalId) { clearInterval(intervalId); intervalId = null; }
+    remaining = totalSeconds;
+    renderTime();
+    if (playBtn) playBtn.setAttribute('aria-pressed', 'false');
+    if (pauseBtn) pauseBtn.setAttribute('aria-pressed', 'false');
+  });
+
+  /* ---- Mobile hamburger nav: toggles a dropdown, closes on outside click / Escape ---- */
+  var hamburgerBtn = document.getElementById('hamburgerBtn');
+  var mobileDropdown = document.getElementById('mobileNavDropdown');
+  function closeMobileNav() {
+    mobileDropdown.setAttribute('hidden', '');
+    hamburgerBtn.setAttribute('aria-expanded', 'false');
+    hamburgerBtn.setAttribute('aria-label', 'Open navigation menu');
+  }
+  if (hamburgerBtn && mobileDropdown) {
+    hamburgerBtn.addEventListener('click', function () {
+      var isOpen = hamburgerBtn.getAttribute('aria-expanded') === 'true';
+      if (isOpen) {
+        closeMobileNav();
+      } else {
+        mobileDropdown.removeAttribute('hidden');
+        hamburgerBtn.setAttribute('aria-expanded', 'true');
+        hamburgerBtn.setAttribute('aria-label', 'Close navigation menu');
+      }
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && hamburgerBtn.getAttribute('aria-expanded') === 'true') {
+        closeMobileNav();
+        hamburgerBtn.focus();
+      }
+    });
+    document.addEventListener('click', function (e) {
+      if (hamburgerBtn.getAttribute('aria-expanded') === 'true' &&
+          !mobileDropdown.contains(e.target) && !hamburgerBtn.contains(e.target)) {
+        closeMobileNav();
+      }
+    });
+  }
+
+  /* ---- Nav link active state, kept in sync between the desktop pill nav and mobile dropdown ---- */
+  var allNavLinks = document.querySelectorAll('.nav-link');
+  allNavLinks.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var label = btn.getAttribute('data-nav') || btn.getAttribute('data-nav-mobile');
+      allNavLinks.forEach(function (other) {
+        var otherLabel = other.getAttribute('data-nav') || other.getAttribute('data-nav-mobile');
+        if (otherLabel === label) other.setAttribute('aria-current', 'page');
+        else other.removeAttribute('aria-current');
+      });
+    });
+  });
+
+})();
+</script>
+<!-- /SCRIPT -->
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "slug": "media-card-carousel",
+  "name": "EngineTech — Media Card Carousel Video Stories",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;420;500;520;600;650;700;760&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=media-card-carousel",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

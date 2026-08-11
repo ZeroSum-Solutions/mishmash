@@ -1,0 +1,12 @@
+{
+  "slug": "conversion-hero",
+  "name": "Conversion Hero — Wireloop.Dev",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:ital,wght@0,900;1,900&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=conversion",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

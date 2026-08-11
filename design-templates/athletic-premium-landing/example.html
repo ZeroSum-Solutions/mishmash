@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IGNIS — Engineered Athletic Footwear</title>
+<meta name="description" content="IGNIS crafts next-generation athletic footwear engineered for elite performance, urban exploration, and everyday style." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23050505'/%3E%3Cpath d='M16 4 L23 16 L16 28 L9 16 Z M16 10 L19.5 16 L16 22 L12.5 16 Z' fill='%23da3a16' fill-rule='evenodd'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* ---- Tokens ---- */
+  :root {
+    --bg: #050505;
+    --ink: #f6fcff;
+    --ink-dim: rgba(246, 252, 255, 0.68);
+    --ink-faint: rgba(246, 252, 255, 0.42);
+    --accent: #da3a16;
+    --accent-warm: #ff9a52;
+    --accent-soft: rgba(218, 58, 22, 0.28);
+    --line: rgba(255, 255, 255, 0.12);
+    --rock-1: #131313;
+    --rock-2: #1e1e1e;
+    --rock-3: #0a0a0a;
+    --font-sans: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-serif: "Instrument Serif", Georgia, serif;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  /* ---- Reset & base ---- */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  img, svg { max-width: 100%; display: block; }
+  a { color: inherit; }
+  em, .serif {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* ---- Film grain overlay ---- */
+  .grain {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+  }
+
+  /* ---- Scenes (two full-bleed hero screens) ---- */
+  .scene {
+    position: relative;
+    width: 100%;
+    min-height: 100vh;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .scene-1 {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding-bottom: clamp(2.5rem, 7vw, 6rem);
+    background: var(--bg);
+  }
+  .scene-2 {
+    background: #000;
+    box-shadow: 0 -2.5rem 5rem rgba(0, 0, 0, 0.55);
+    padding: clamp(1.5rem, 4vw, 3rem);
+  }
+  .scene-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .scene-bg svg { width: 100%; height: 100%; display: block; }
+
+  /* Product photography revealed through a cursor-tracked spotlight, as the
+     source design does: a dimmed base plate with a full-brightness copy
+     masked to a radial pool around the pointer. */
+  .scene-photo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    filter: brightness(0.34) contrast(1.06);
+  }
+  .scene-photo.is-lit {
+    filter: none;
+    -webkit-mask-image: radial-gradient(circle var(--spot-r, 26vw) at var(--mx, 50%) var(--my, 56%), #000 0 40%, transparent 72%);
+    mask-image: radial-gradient(circle var(--spot-r, 26vw) at var(--mx, 50%) var(--my, 56%), #000 0 40%, transparent 72%);
+  }
+  .scene-2 .scene-photo.is-lit { --spot-r: 30vw; }
+  /* No pointer to track: open the pool up so the product still reads. */
+  @media (hover: none) {
+    .scene-photo { filter: brightness(0.5) contrast(1.04); }
+    .scene-photo.is-lit { --spot-r: 42vw; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scene-photo { filter: brightness(0.55) contrast(1.04); }
+    .scene-photo.is-lit { --spot-r: 38vw; }
+  }
+
+  .ambient-glow {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 68%, var(--accent-soft), transparent 60%);
+    mix-blend-mode: screen;
+    animation: glow-breathe 7s var(--ease-out) infinite alternate;
+  }
+  .scene-2 .ambient-glow {
+    background: radial-gradient(circle at 62% 42%, var(--accent-soft), transparent 55%);
+  }
+  @keyframes glow-breathe {
+    0% { opacity: 0.5; transform: scale(1); }
+    100% { opacity: 0.85; transform: scale(1.08); }
+  }
+
+  /* ---- Rock facet + glowing vein art ---- */
+  .rock-fill-1 { fill: var(--rock-1); }
+  .rock-fill-2 { fill: var(--rock-2); }
+  .rock-fill-3 { fill: var(--rock-3); }
+  .vein-glow {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 7;
+    stroke-linecap: round;
+    filter: url(#rockGlow);
+    opacity: 0.75;
+    animation: vein-pulse 4s var(--ease-out) infinite alternate;
+  }
+  .vein-core {
+    fill: none;
+    stroke: var(--accent-warm);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    opacity: 0.9;
+    animation: vein-pulse 4s var(--ease-out) infinite alternate;
+  }
+  .vein-glow:nth-of-type(2), .vein-core:nth-of-type(2) { animation-delay: 0.6s; }
+  .vein-glow:nth-of-type(3), .vein-core:nth-of-type(3) { animation-delay: 1.3s; }
+  @keyframes vein-pulse {
+    0% { opacity: 0.45; }
+    100% { opacity: 1; }
+  }
+
+  /* ---- Header / wordmark ---- */
+  .scene-1-header {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: clamp(2.5rem, 8vw, 7.5rem);
+  }
+  .wordmark {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--ink);
+    text-decoration: none;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    font-size: 0.95rem;
+  }
+  .wordmark .mark { width: 1.5rem; height: 1.5rem; color: var(--ink); }
+
+  /* ---- Bubble menu ---- */
+  .bubble-menu {
+    position: absolute;
+    top: clamp(1.25rem, 4vw, 2rem);
+    right: clamp(1.25rem, 4vw, 2rem);
+    z-index: 6;
+  }
+  .bubble {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    border: 1px solid var(--line);
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04));
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: transform 0.2s var(--ease-out), background 0.3s var(--ease-out);
+  }
+  .bubble:hover { transform: scale(1.06); }
+  .menu-line {
+    width: 20px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--ink);
+    display: block;
+    transition: transform 0.3s var(--ease-out), width 0.3s var(--ease-out), margin 0.3s var(--ease-out);
+  }
+  .menu-line.short { width: 14px; }
+  .bubble:hover .menu-line.short { width: 20px; }
+  .menu-toggle.is-open .menu-line:not(.short) { transform: translateY(4px) rotate(45deg); }
+  .menu-toggle.is-open .menu-line.short { transform: translateY(-4px) rotate(-45deg); width: 20px; }
+
+  .menu-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s var(--ease-out), visibility 0.3s var(--ease-out);
+  }
+  .menu-overlay.is-open { opacity: 1; visibility: visible; pointer-events: auto; }
+
+  .pill-list {
+    list-style: none;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 50rem;
+    padding: 0 1.5rem;
+    margin: 0;
+  }
+  .pill {
+    display: block;
+    padding: 1rem 2.1rem;
+    border-radius: 999px;
+    background: #fff;
+    color: #111;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: clamp(1rem, 2.4vw, 1.35rem);
+    border: 1px solid var(--line);
+    opacity: 0;
+    transform: scale(0.4) rotate(var(--item-rot, 0deg));
+    transition: transform 0.45s var(--ease-out), opacity 0.4s var(--ease-out), background 0.25s var(--ease-out), color 0.25s var(--ease-out);
+  }
+  .menu-overlay.is-open .pill { opacity: 1; transform: scale(1) rotate(var(--item-rot, 0deg)); }
+  .pill:nth-child(1) { transition-delay: 0s; }
+  .pill:nth-child(2) { transition-delay: 0.06s; }
+  .pill:nth-child(3) { transition-delay: 0.12s; }
+  .pill:nth-child(4) { transition-delay: 0.18s; }
+  .pill:nth-child(5) { transition-delay: 0.24s; }
+  .pill-drops:hover { background: #ef4444; color: #fff; }
+  .pill-innovation:hover { background: #3b82f6; color: #fff; }
+  .pill-collections:hover { background: #10b981; color: #fff; }
+  .pill-community:hover { background: var(--accent-warm); color: #1a0a00; }
+  .pill-stores:hover { background: #8b5cf6; color: #fff; }
+
+  /* ---- Energy-crystal emblem (original faceted artwork) ---- */
+  .crystal-parallax {
+    position: absolute;
+    z-index: 3;
+    right: 10%;
+    top: 16%;
+    width: min(22vw, 260px);
+  }
+  .crystal-figure {
+    margin: 0;
+    filter: drop-shadow(0 20px 30px rgba(0, 0, 0, 0.5));
+    animation: float-crystal 8s ease-in-out infinite;
+  }
+  @keyframes float-crystal {
+    0%, 100% { transform: translateY(0) rotate(-3deg); }
+    50% { transform: translateY(-16px) rotate(3deg); }
+  }
+
+  /* ---- Hero copy ---- */
+  .hero-copy { position: relative; z-index: 4; text-align: center; padding: 0 1rem; }
+  .hero-copy h1 { font-weight: 500; letter-spacing: -0.01em; }
+  .hero-copy .line {
+    display: block;
+    font-size: clamp(1.05rem, 3.3vw, 3.1rem);
+    line-height: 1.12;
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.8s var(--ease-out), transform 0.8s var(--ease-out);
+  }
+  .hero-copy .line.in-view { opacity: 1; transform: translateY(0); }
+  .hero-copy .line:nth-child(1) { transition-delay: 0.05s; }
+  .hero-copy .line:nth-child(2) { transition-delay: 0.15s; }
+  .hero-copy .line:nth-child(3) { transition-delay: 0.25s; }
+  .hero-copy .line:nth-child(4) { transition-delay: 0.35s; }
+
+  /* ---- Scene 2 layout ---- */
+  .stat-card {
+    position: absolute;
+    top: 18%;
+    left: 8%;
+    z-index: 4;
+    width: min(80vw, 320px);
+    padding: 1.5rem 1.75rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+  }
+  .stat-row { display: flex; align-items: flex-end; gap: 0.5rem; margin-bottom: 1rem; }
+  .stat-number {
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--accent);
+    font-size: clamp(2.4rem, 6vw, 4.2rem);
+    line-height: 1;
+  }
+  .stat-chart { width: 100px; height: 46px; overflow: visible; }
+  .stat-chart path {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 220;
+    stroke-dashoffset: 220;
+    transition: stroke-dashoffset 1.2s var(--ease-out);
+  }
+  .stat-card.in-view .stat-chart path { stroke-dashoffset: 0; }
+  .stat-card h3 {
+    margin: 0 0 0.5rem;
+    font-size: 0.82rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .stat-card p { margin: 0; font-size: 0.8rem; color: var(--ink-dim); }
+
+  .scene-2-copy { position: absolute; left: 8%; bottom: 12%; z-index: 4; max-width: 34rem; }
+  .scene-2-copy h2 { margin: 0; font-weight: 500; letter-spacing: -0.01em; }
+  .scene-2-copy .line {
+    display: block;
+    font-size: clamp(1.6rem, 4.6vw, 2.9rem);
+    line-height: 1.08;
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.8s var(--ease-out), transform 0.8s var(--ease-out);
+  }
+  .scene-2-copy .line.in-view { opacity: 1; transform: translateY(0); }
+  .scene-2-copy .line:nth-child(1) { transition-delay: 0.05s; }
+  .scene-2-copy .line:nth-child(2) { transition-delay: 0.15s; }
+  .scene-2-copy .line:nth-child(3) { transition-delay: 0.25s; }
+  .scene-2-copy .line:nth-child(4) { transition-delay: 0.35s; }
+
+  .badge-stack {
+    position: absolute;
+    right: 8%;
+    bottom: 12%;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.8s var(--ease-out) 0.2s, transform 0.8s var(--ease-out) 0.2s;
+  }
+  .badge-stack.in-view { opacity: 1; transform: translateY(0); }
+  .badge-label {
+    background: #fff;
+    color: #0a0a0a;
+    padding: 0.5rem 1.5rem;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+    text-align: center;
+    width: 11rem;
+  }
+  .badge-mark {
+    width: 11rem;
+    height: 6.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--accent), var(--accent-warm));
+  }
+  .badge-mark .mark { width: 3.2rem; height: 3.2rem; color: var(--ink); }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 760px) {
+    .scene-1 { justify-content: center; padding-top: 6rem; }
+    .crystal-parallax { position: relative; right: auto; top: auto; width: 42vw; margin: 1.5rem auto; }
+    .hero-copy { order: 2; }
+    .scene-2 {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2rem;
+      padding: 6rem 1.25rem 4rem;
+    }
+    .stat-card, .scene-2-copy, .badge-stack {
+      position: static;
+      width: auto;
+      max-width: 100%;
+      left: auto; right: auto; top: auto; bottom: auto;
+    }
+    .badge-stack { flex-direction: row; align-items: stretch; }
+    .badge-label, .badge-mark { width: auto; flex: 1; }
+  }
+
+  /* ---- Reduced motion ---- */
+  @media (prefers-reduced-motion: reduce) {
+    .ambient-glow,
+    .crystal-figure,
+    .vein-glow,
+    .vein-core {
+      animation: none !important;
+    }
+    .crystal-figure { transform: none; }
+    .hero-copy .line,
+    .scene-2-copy .line,
+    .badge-stack {
+      transition: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    .stat-chart path { transition: none !important; stroke-dashoffset: 0; }
+    .menu-overlay, .pill { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Shared symbol defs (wordmark + badge mark reuse this) -->
+  <svg style="display:none" aria-hidden="true">
+    <defs>
+      <symbol id="mark" viewBox="0 0 32 32">
+        <path d="M16 2 L29 16 L16 30 L3 16 Z M16 9 L22 16 L16 23 L10 16 Z" fill="currentColor" fill-rule="evenodd" />
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="grain" aria-hidden="true"></div>
+
+  <main id="top">
+
+    <!-- Scene 1: hero -->
+    <section class="scene scene-1" aria-label="Hero">
+      <div class="scene-bg" aria-hidden="true">
+        <img class="scene-photo" src="assets/summit-hero.webp" alt="" decoding="async">
+        <img class="scene-photo is-lit" src="assets/summit-hero.webp" alt="IGNIS performance sneaker suspended above a volcanic ridge lit by molten seams" decoding="async">
+      </div>
+      <div class="ambient-glow" aria-hidden="true"></div>
+
+      <header class="scene-1-header">
+        <a class="wordmark" href="#top">
+          <svg class="mark" aria-hidden="true"><use href="#mark"></use></svg>
+          IGNIS
+        </a>
+        <nav class="bubble-menu" aria-label="Main navigation">
+          <button type="button" class="bubble menu-toggle" id="menuToggle" aria-expanded="false" aria-controls="menuOverlay" aria-label="Toggle menu">
+            <span class="menu-line" aria-hidden="true"></span>
+            <span class="menu-line short" aria-hidden="true"></span>
+          </button>
+        </nav>
+      </header>
+
+      <div class="menu-overlay" id="menuOverlay" aria-hidden="true">
+        <ul class="pill-list">
+          <li><a class="pill pill-drops" href="#drops" style="--item-rot:-8deg">Drops</a></li>
+          <li><a class="pill pill-innovation" href="#innovation" style="--item-rot:8deg">Innovation</a></li>
+          <li><a class="pill pill-collections" href="#collections" style="--item-rot:8deg">Collections</a></li>
+          <li><a class="pill pill-community" href="#community" style="--item-rot:8deg">Community</a></li>
+          <li><a class="pill pill-stores" href="#stores" style="--item-rot:-8deg">Stores</a></li>
+        </ul>
+      </div>
+
+      <div class="crystal-parallax" aria-hidden="true">
+        <figure class="crystal-figure">
+          <svg viewBox="0 0 200 230">
+            <defs>
+              <radialGradient id="gemGlow" cx="50%" cy="42%" r="60%">
+                <stop offset="0%" stop-color="var(--accent-warm)" stop-opacity="0.9" />
+                <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
+              </radialGradient>
+            </defs>
+            <circle cx="100" cy="95" r="80" fill="url(#gemGlow)" opacity="0.55" />
+            <polygon points="100,10 100,220 30,95" fill="var(--ink)" opacity="0.24" />
+            <polygon points="100,10 170,95 100,220" fill="var(--accent)" opacity="0.32" />
+            <polygon points="100,10 170,95 100,220 30,95" fill="none" stroke="var(--ink)" stroke-width="2.5" opacity="0.9" />
+            <line x1="100" y1="10" x2="100" y2="220" stroke="var(--ink)" stroke-width="1.5" opacity="0.55" />
+            <line x1="30" y1="95" x2="170" y2="95" stroke="var(--ink)" stroke-width="1.5" opacity="0.4" />
+            <polygon points="100,10 118,50 82,50" fill="var(--ink)" opacity="0.15" />
+            <polygon points="100,220 118,180 82,180" fill="var(--accent)" opacity="0.2" />
+          </svg>
+        </figure>
+      </div>
+
+      <div class="hero-copy">
+        <h1>
+          <span class="line">Pure Momentum For</span>
+          <span class="line">Next-Generation Athletes. <em>We Forge</em></span>
+          <span class="line"><em>The Ultimate Footwear For Elite Performance,</em></span>
+          <span class="line"><em>Urban Exploration, Everyday Style.</em></span>
+        </h1>
+      </div>
+    </section>
+
+    <!-- Scene 2: engineering / cushioning -->
+    <section class="scene scene-2" aria-label="Engineering">
+      <div class="scene-bg" aria-hidden="true">
+        <img class="scene-photo" src="assets/ascent-detail.webp" alt="" decoding="async">
+        <img class="scene-photo is-lit" src="assets/ascent-detail.webp" alt="IGNIS sneaker in mid-air among floating basalt fragments with glowing magma edges" decoding="async">
+      </div>
+      <div class="ambient-glow" aria-hidden="true"></div>
+
+      <article class="stat-card">
+        <div class="stat-row">
+          <span class="stat-number">78%</span>
+          <svg class="stat-chart" viewBox="0 0 100 46">
+            <path d="M2,30 C10,30 14,36 20,40 C26,44 30,10 36,6 C42,2 46,32 54,20 C60,12 64,8 72,8 C80,8 84,30 92,30" />
+          </svg>
+        </div>
+        <h3>Next-Gen Cushioning Architecture</h3>
+        <p>Impact absorption and energy return, tuned for every stride.</p>
+      </article>
+
+      <div class="scene-2-copy">
+        <h2>
+          <span class="line">Bringing Aerospace-</span>
+          <span class="line">Grade Engineering</span>
+          <span class="line"><em>Directly To Your Everyday</em></span>
+          <span class="line"><em>Urban Exploration.</em></span>
+        </h2>
+      </div>
+
+      <div class="badge-stack">
+        <div class="badge-label">The Science Of Impact Control</div>
+        <div class="badge-mark">
+          <svg class="mark" aria-hidden="true"><use href="#mark"></use></svg>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      /* ---- Scroll reveals ---- */
+      var revealTargets = document.querySelectorAll(".hero-copy .line, .scene-2-copy .line, .stat-card, .badge-stack");
+      if (reduceMotion || !("IntersectionObserver" in window)) {
+        revealTargets.forEach(function (el) { el.classList.add("in-view"); });
+      } else {
+        var observer = new IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (entry) {
+              if (entry.isIntersecting) {
+                entry.target.classList.add("in-view");
+                observer.unobserve(entry.target);
+              }
+            });
+          },
+          { threshold: 0.15 }
+        );
+        revealTargets.forEach(function (el) { observer.observe(el); });
+      }
+
+      /* ---- Bubble menu ---- */
+      var toggle = document.getElementById("menuToggle");
+      var overlay = document.getElementById("menuOverlay");
+
+      function closeMenu() {
+        toggle.classList.remove("is-open");
+        overlay.classList.remove("is-open");
+        toggle.setAttribute("aria-expanded", "false");
+        overlay.setAttribute("aria-hidden", "true");
+      }
+
+      function openMenu() {
+        toggle.classList.add("is-open");
+        overlay.classList.add("is-open");
+        toggle.setAttribute("aria-expanded", "true");
+        overlay.setAttribute("aria-hidden", "false");
+      }
+
+      toggle.addEventListener("click", function () {
+        if (overlay.classList.contains("is-open")) {
+          closeMenu();
+        } else {
+          openMenu();
+        }
+      });
+
+      overlay.addEventListener("click", function (event) {
+        if (event.target === overlay) closeMenu();
+      });
+
+      overlay.querySelectorAll(".pill").forEach(function (pill) {
+        pill.addEventListener("click", closeMenu);
+      });
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" && overlay.classList.contains("is-open")) {
+          closeMenu();
+          toggle.focus();
+        }
+      });
+
+      /* ---- Spotlight reveal: the pointer drags a pool of full-brightness
+             product photography across each dimmed scene. Falls back to the
+             CSS-declared centred pool when there is no fine pointer. ---- */
+      if (window.matchMedia("(pointer: fine)").matches) {
+        Array.prototype.forEach.call(document.querySelectorAll(".scene"), function (scene) {
+          if (!scene.querySelector(".scene-photo")) return;
+          var pending = null;
+          scene.addEventListener("mousemove", function (event) {
+            if (pending) return;
+            pending = requestAnimationFrame(function () {
+              pending = null;
+              var rect = scene.getBoundingClientRect();
+              scene.style.setProperty("--mx", ((event.clientX - rect.left) / rect.width * 100).toFixed(2) + "%");
+              scene.style.setProperty("--my", ((event.clientY - rect.top) / rect.height * 100).toFixed(2) + "%");
+            });
+          });
+        });
+      }
+
+      /* ---- Subtle pointer parallax on the hero rock/product art ---- */
+      var fine = window.matchMedia("(pointer: fine)").matches;
+      if (!reduceMotion && fine) {
+        var heroScene = document.querySelector(".scene-1");
+        var crystal = document.querySelector(".crystal-parallax");
+        var rocks = heroScene ? heroScene.querySelector(".scene-bg .scene-photo") : null;
+        var targetX = 0, targetY = 0, curX = 0, curY = 0, raf = null;
+
+        heroScene && heroScene.addEventListener("mousemove", function (event) {
+          var rect = heroScene.getBoundingClientRect();
+          targetX = (event.clientX - rect.left) / rect.width - 0.5;
+          targetY = (event.clientY - rect.top) / rect.height - 0.5;
+          if (!raf) raf = requestAnimationFrame(tick);
+        });
+
+        function tick() {
+          curX += (targetX - curX) * 0.08;
+          curY += (targetY - curY) * 0.08;
+          if (crystal) crystal.style.transform = "translate(" + (curX * 16) + "px," + (curY * 12) + "px)";
+          if (rocks) rocks.style.transform = "translate(" + (curX * -8) + "px," + (curY * -6) + "px) scale(1.02)";
+          if (Math.abs(targetX - curX) > 0.001 || Math.abs(targetY - curY) > 0.001) {
+            raf = requestAnimationFrame(tick);
+          } else {
+            raf = null;
+          }
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

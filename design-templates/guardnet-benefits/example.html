@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Key Benefits — Guardnet</title>
+<meta name="description" content="Key Benefits section: preemptive risk scouting, sectoral awareness, and reaction defense platform capabilities.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #000000;
+    --card-bg: #0a0a0a;
+    --accent-blob: #1e3a8a;
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --focus-ring: var(--accent-blob);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Jost', system-ui, -apple-system, sans-serif;
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+  }
+
+  img, video { display: block; max-width: 100%; }
+
+  a, button {
+    font-family: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* ---- Page wrap ---- */
+  .page-wrap {
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  /* ---- BenefitsSection ---- */
+  .benefits {
+    position: relative;
+    width: 100%;
+    background: var(--bg);
+    padding: 48px 16px;
+  }
+
+  @media (min-width: 640px) {
+    .benefits { padding: 80px 24px; }
+  }
+
+  @media (min-width: 768px) {
+    .benefits { padding: 80px 40px; }
+  }
+
+  .benefits-heading {
+    color: var(--text-primary);
+    font-size: 30px;
+    font-weight: 300;
+    text-align: center;
+    letter-spacing: -0.04em;
+    margin: 0 0 48px;
+  }
+
+  @media (min-width: 640px) {
+    .benefits-heading { font-size: 36px; margin-bottom: 96px; }
+  }
+
+  @media (min-width: 768px) {
+    .benefits-heading { font-size: 48px; }
+  }
+
+  /* ---- Card grid ---- */
+  .benefits-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  @media (min-width: 640px) {
+    .benefits-grid { gap: 16px; }
+  }
+
+  @media (min-width: 768px) {
+    .benefits-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .benefit-card {
+    position: relative;
+    height: 380px;
+    border-radius: 16px;
+    background: var(--card-bg);
+    overflow: hidden;
+  }
+
+  @media (min-width: 640px) {
+    .benefit-card { height: 460px; }
+  }
+
+  .benefit-card--padded {
+    padding: 24px;
+  }
+
+  @media (min-width: 640px) {
+    .benefit-card--padded { padding: 32px; }
+  }
+
+  /* Blob glows (chromatic root token: --accent-blob) */
+  .benefit-blob {
+    position: absolute;
+    border-radius: 50%;
+    background: var(--accent-blob);
+    filter: blur(64px);
+    opacity: 0.4;
+  }
+
+  .benefit-blob--left {
+    top: 50%;
+    transform: translateY(-50%);
+    left: -420px;
+    height: 460px;
+    width: 460px;
+  }
+
+  .benefit-blob--right {
+    top: -112px;
+    right: -112px;
+    height: 224px;
+    width: 224px;
+  }
+
+  .benefit-content {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .benefit-card-heading {
+    color: var(--text-primary);
+    font-size: 20px;
+    font-weight: 300;
+    line-height: 1.25;
+    margin: 0;
+  }
+
+  @media (min-width: 640px) {
+    .benefit-card-heading { font-size: 24px; }
+  }
+
+  .benefit-copy {
+    font-size: 13px;
+    line-height: 1.625;
+    color: var(--text-secondary);
+    font-weight: 300;
+    margin: 0;
+  }
+
+  @media (min-width: 640px) {
+    .benefit-copy { font-size: 14px; }
+  }
+
+  .benefit-copy--mid {
+    margin-top: 48px;
+    max-width: 280px;
+  }
+
+  @media (min-width: 640px) {
+    .benefit-copy--mid { margin-top: 80px; }
+  }
+
+  .benefit-copy--bottom {
+    margin-top: auto;
+    max-width: 320px;
+  }
+
+  /* ---- Video card ---- */
+  .benefit-card--video {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .benefit-video-wrap {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    height: 75%;
+  }
+
+  .benefit-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .benefit-video-fallback {
+    display: none;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Additive, dignified static fallback: the source has no CSS keyframes to
+     neutralize (its only motion is the looping video), so the meaningful
+     reduced-motion accommodation is swapping the playing video for its
+     resting-frame poster. The JS below also pauses the underlying <video>. */
+  @media (prefers-reduced-motion: reduce) {
+    .benefit-video { display: none; }
+    .benefit-video-fallback { display: block; }
+  }
+
+  .benefit-video-fade {
+    pointer-events: none;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 128px;
+    background: linear-gradient(to bottom, transparent, var(--card-bg));
+  }
+
+  .benefit-video-text {
+    flex: 1 1 0%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 24px;
+  }
+
+  @media (min-width: 640px) {
+    .benefit-video-text { padding: 32px; }
+  }
+
+  .benefit-video-text .benefit-card-heading {
+    text-align: left;
+  }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <section class="benefits" aria-labelledby="benefits-heading">
+    <h1 id="benefits-heading" class="benefits-heading">Key Benefits</h1>
+    <ul class="benefits-grid">
+      <li class="benefit-card benefit-card--padded">
+        <div class="benefit-blob benefit-blob--left" aria-hidden="true"></div>
+        <div class="benefit-content">
+          <h2 class="benefit-card-heading">Preemptive Risks<br>Scouting and Reactions</h2>
+          <p class="benefit-copy benefit-copy--mid">Defense platforms constantly observe bandwidth streams, record files, and machine behaviors to uncover unusual patterns or outliers that could signal a defensive failure.</p>
+        </div>
+      </li>
+      <li class="benefit-card benefit-card--video">
+        <div class="benefit-video-wrap">
+          <video
+            class="benefit-video"
+            src="assets/guardnet-blob.mp4"
+            poster="assets/guardnet-blob-poster.jpg"
+            autoplay
+            loop
+            muted
+            playsinline
+            aria-hidden="true"
+          ></video>
+          <img class="benefit-video-fallback" src="assets/guardnet-blob-poster.jpg" alt="" aria-hidden="true">
+          <div class="benefit-video-fade" aria-hidden="true"></div>
+        </div>
+        <div class="benefit-video-text">
+          <h2 class="benefit-card-heading">Know-how and Sectoral<br>Awareness</h2>
+        </div>
+      </li>
+      <li class="benefit-card benefit-card--padded">
+        <div class="benefit-blob benefit-blob--right" aria-hidden="true"></div>
+        <div class="benefit-content">
+          <h2 class="benefit-card-heading">Preemptive Risks<br>Scouting and Reactions</h2>
+          <p class="benefit-copy benefit-copy--bottom">Defense platforms constantly observe bandwidth streams, record files, and machine behaviors to uncover unusual patterns or outliers that could signal a defensive failure.</p>
+        </div>
+      </li>
+    </ul>
+  </section>
+</div>
+<script>
+  // Additive prefers-reduced-motion fallback (FIDELITY.md deviation #7).
+  // The default markup autoplays/loops the card-2 video exactly as specified;
+  // under reduced motion we pause it on its resting frame instead of letting
+  // it keep looping. Nothing here alters the default (motion-on) appearance.
+  (function () {
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    var video = document.querySelector('.benefit-video');
+    if (!video) return;
+
+    function applyMotionPreference(matches) {
+      if (matches) {
+        video.pause();
+        video.removeAttribute('autoplay');
+        video.loop = false;
+        try { video.currentTime = 0; } catch (err) { /* not yet seekable */ }
+      } else {
+        video.loop = true;
+        video.play().catch(function () { /* autoplay may be blocked; poster covers this */ });
+      }
+    }
+
+    applyMotionPreference(reduceMotion.matches);
+    if (typeof reduceMotion.addEventListener === 'function') {
+      reduceMotion.addEventListener('change', function (event) {
+        applyMotionPreference(event.matches);
+      });
+    }
+  })();
+</script>
+</body>
+</html>

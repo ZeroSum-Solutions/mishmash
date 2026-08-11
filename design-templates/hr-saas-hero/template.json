@@ -1,0 +1,12 @@
+{
+  "slug": "hr-saas-hero",
+  "name": "Loopwork — HR SaaS Hero",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@1&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=16",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

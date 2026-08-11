@@ -1,0 +1,12 @@
+{
+  "slug": "pixel-grid-case-studies",
+  "name": "Pixel Grid Case Studies — Hover-Dissolve Projects Section",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=pixel-grid-hover",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

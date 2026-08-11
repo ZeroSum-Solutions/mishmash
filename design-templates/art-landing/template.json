@@ -1,0 +1,12 @@
+{
+  "slug": "art-landing",
+  "name": "S.P.D — Daily Automation Landing Page",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Italiana&family=Manrope:wght@400;600&family=Marck+Script&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=art-landing",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

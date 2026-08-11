@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Datacore — Your Networks. One Rapid Interface.</title>
+	<meta
+		name="description"
+		content="Datacore SaaS hero: a full-bleed dark video backdrop behind a glassmorphism badge, a large two-line headline with an italic serif accent, and dual call-to-action buttons."
+	>
+	<link
+		rel="icon"
+		href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237b39fc'/%3E%3Ccircle cx='11' cy='11' r='3.4' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Ccircle cx='21' cy='11' r='3.4' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Ccircle cx='11' cy='21' r='3.4' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Ccircle cx='21' cy='21' r='3.4' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Cpath d='M14.4 11H17.6M14.4 21H17.6M11 14.4V17.6M21 14.4V17.6' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E"
+	>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Cabin:wght@500;600&family=Instrument+Serif:ital@1&display=swap"
+		rel="stylesheet"
+	>
+	<style>
+		:root {
+			--bg: #05030a;
+			--fg: #ffffff;
+			--subhead: #c7c2d6;
+			--muted: #9b93ad;
+
+			--purple: #7b39fc;
+			--purple-hover: #6a2ce0;
+			--navy: #2b2344;
+			--navy-hover: #352b54;
+			--orange: #f87b52;
+
+			--glass-border: rgba(164, 132, 215, 0.5);
+			--glass-bg: rgba(85, 80, 110, 0.4);
+
+			--glow-a: rgba(123, 57, 252, 0.55);
+			--glow-b: rgba(123, 57, 252, 0);
+
+			--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html, body {
+			margin: 0;
+			padding: 0;
+			background: var(--bg);
+		}
+
+		body {
+			font-family: 'Manrope', 'Helvetica Neue', Arial, sans-serif;
+			-webkit-font-smoothing: antialiased;
+			overflow-x: hidden;
+		}
+
+		main {
+			display: block;
+		}
+
+		a, button {
+			font-family: inherit;
+		}
+
+		/* ---------- Hero shell ---------- */
+
+		.hero {
+			position: relative;
+			min-height: 100vh;
+			overflow: hidden;
+			display: flex;
+			flex-direction: column;
+			background: var(--bg);
+		}
+
+		.hero-bg,
+		.hero-bg-fallback {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			z-index: 0;
+		}
+
+		.hero-bg {
+			opacity: 0;
+			transition: opacity 900ms var(--ease-out);
+		}
+
+		.hero-bg.is-playing {
+			opacity: 1;
+		}
+
+		.hero-bg-fallback {
+			z-index: 1;
+			transition: opacity 900ms var(--ease-out);
+		}
+
+		.hero-bg.is-playing + .hero-bg-fallback {
+			opacity: 0;
+		}
+
+		.hero-overlay {
+			position: absolute;
+			inset: 0;
+			z-index: 2;
+			background: rgba(0, 0, 0, 0.6);
+		}
+
+		.hero-glow {
+			position: absolute;
+			left: 50%;
+			top: 46%;
+			z-index: 3;
+			width: min(70vw, 900px);
+			height: min(70vw, 900px);
+			transform: translate(-50%, -50%);
+			background: radial-gradient(circle, var(--glow-a) 0%, var(--glow-b) 68%);
+			filter: blur(10px);
+			pointer-events: none;
+		}
+
+		/* ---------- Navbar ---------- */
+
+		.navbar {
+			position: relative;
+			z-index: 20;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 1rem;
+			padding: 1.25rem clamp(1.25rem, 4vw, 3rem);
+		}
+
+		.brand {
+			display: flex;
+			align-items: center;
+			gap: 0.65rem;
+			text-decoration: none;
+			color: var(--fg);
+		}
+
+		.brand-mark {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 36px;
+			height: 36px;
+			border-radius: 9px;
+			background: #ffffff;
+			flex-shrink: 0;
+		}
+
+		.brand-mark svg {
+			width: 20px;
+			height: 20px;
+			stroke: var(--purple);
+		}
+
+		.brand-name {
+			font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+			font-weight: 600;
+			font-size: 1.05rem;
+			letter-spacing: -0.01em;
+		}
+
+		.nav-links {
+			display: flex;
+			align-items: center;
+			gap: 2rem;
+			list-style: none;
+			margin: 0;
+			padding: 0;
+		}
+
+		.nav-links a {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.35rem;
+			color: var(--subhead);
+			text-decoration: none;
+			font-size: 0.92rem;
+			font-weight: 500;
+			transition: color 200ms var(--ease-out);
+		}
+
+		.nav-links a:hover {
+			color: var(--fg);
+		}
+
+		.nav-links svg {
+			width: 15px;
+			height: 15px;
+			stroke: currentColor;
+			transition: transform 200ms var(--ease-out);
+		}
+
+		.nav-links a:hover svg {
+			transform: translateY(1px);
+		}
+
+		.nav-actions {
+			display: flex;
+			align-items: center;
+			gap: 0.75rem;
+		}
+
+		.btn {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.5rem;
+			padding: 0.65rem 1.35rem;
+			border-radius: 999px;
+			font-family: 'Cabin', 'Helvetica Neue', Arial, sans-serif;
+			font-weight: 600;
+			font-size: 0.9rem;
+			text-decoration: none;
+			border: 1px solid transparent;
+			cursor: pointer;
+			white-space: nowrap;
+			transition: background 220ms var(--ease-out), border-color 220ms var(--ease-out), transform 220ms var(--ease-out), box-shadow 220ms var(--ease-out);
+		}
+
+		.btn:active {
+			transform: scale(0.97);
+			transition-duration: 140ms;
+		}
+
+		.btn-glass {
+			background: var(--glass-bg);
+			border-color: var(--glass-border);
+			color: var(--fg);
+			backdrop-filter: blur(12px);
+			-webkit-backdrop-filter: blur(12px);
+		}
+
+		.btn-glass:hover {
+			background: rgba(85, 80, 110, 0.6);
+			transform: translateY(-1px);
+		}
+
+		.btn-purple {
+			background: var(--purple);
+			color: var(--fg);
+			box-shadow: 0 8px 24px -8px rgba(123, 57, 252, 0.7);
+		}
+
+		.btn-purple:hover {
+			background: var(--purple-hover);
+			transform: translateY(-1px);
+			box-shadow: 0 10px 28px -6px rgba(123, 57, 252, 0.85);
+		}
+
+		.btn-navy {
+			background: var(--navy);
+			color: var(--fg);
+			border-color: rgba(255, 255, 255, 0.08);
+		}
+
+		.btn-navy:hover {
+			background: var(--navy-hover);
+			transform: translateY(-1px);
+		}
+
+		.nav-toggle {
+			display: none;
+			align-items: center;
+			justify-content: center;
+			width: 40px;
+			height: 40px;
+			border-radius: 8px;
+			border: 1px solid var(--glass-border);
+			background: var(--glass-bg);
+			color: var(--fg);
+			cursor: pointer;
+		}
+
+		.nav-toggle svg {
+			width: 20px;
+			height: 20px;
+			stroke: currentColor;
+		}
+
+		/* ---------- Mobile overlay menu ---------- */
+
+		.mobile-menu {
+			position: fixed;
+			inset: 0;
+			z-index: 50;
+			background: rgba(5, 3, 10, 0.98);
+			display: flex;
+			flex-direction: column;
+			opacity: 0;
+			visibility: hidden;
+			transform: translateY(-8px);
+			transition: opacity 260ms var(--ease-out), transform 260ms var(--ease-out), visibility 260ms;
+		}
+
+		.mobile-menu.is-open {
+			opacity: 1;
+			visibility: visible;
+			transform: translateY(0);
+		}
+
+		.mobile-menu-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 1.25rem clamp(1.25rem, 4vw, 3rem);
+		}
+
+		.mobile-menu-close {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 40px;
+			height: 40px;
+			border-radius: 8px;
+			border: 1px solid var(--glass-border);
+			background: var(--glass-bg);
+			color: var(--fg);
+			cursor: pointer;
+		}
+
+		.mobile-menu-close svg {
+			width: 20px;
+			height: 20px;
+			stroke: currentColor;
+		}
+
+		.mobile-menu-links {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 1.75rem;
+			list-style: none;
+			margin: 0;
+			padding: 0 1.5rem 2rem;
+		}
+
+		.mobile-menu-links a {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.4rem;
+			color: var(--fg);
+			text-decoration: none;
+			font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+			font-weight: 500;
+			font-size: 1.6rem;
+		}
+
+		.mobile-menu-links svg {
+			width: 18px;
+			height: 18px;
+			stroke: currentColor;
+		}
+
+		.mobile-menu-actions {
+			display: flex;
+			flex-direction: column;
+			gap: 0.85rem;
+			padding: 0 1.75rem 2.5rem;
+		}
+
+		.mobile-menu-actions .btn {
+			width: 100%;
+			padding: 0.85rem 1.5rem;
+			font-size: 1rem;
+		}
+
+		/* ---------- Hero content ---------- */
+
+		.hero-content {
+			position: relative;
+			z-index: 10;
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			text-align: center;
+			padding: 2rem 1.25rem 4rem;
+			max-width: 56rem;
+			margin: 0 auto;
+		}
+
+		.badge {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.6rem;
+			padding: 0.4rem 0.55rem 0.4rem 0.4rem;
+			border-radius: 999px;
+			background: var(--glass-bg);
+			border: 1px solid var(--glass-border);
+			backdrop-filter: blur(12px);
+			-webkit-backdrop-filter: blur(12px);
+			opacity: 0;
+			animation: heroFadeUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.1s;
+		}
+
+		.badge-tag {
+			display: inline-flex;
+			align-items: center;
+			padding: 0.2rem 0.6rem;
+			border-radius: 999px;
+			background: var(--orange);
+			color: #1a0f08;
+			font-family: 'Cabin', 'Helvetica Neue', Arial, sans-serif;
+			font-weight: 600;
+			font-size: 0.72rem;
+			letter-spacing: 0.02em;
+		}
+
+		.badge-text {
+			font-family: 'Cabin', 'Helvetica Neue', Arial, sans-serif;
+			font-size: 0.85rem;
+			font-weight: 500;
+			color: var(--fg);
+			padding-right: 0.25rem;
+		}
+
+		.hero-headline {
+			margin: 1.5rem 0 0;
+			font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+			font-weight: 600;
+			font-size: clamp(2.4rem, 7vw, 4.75rem);
+			line-height: 1.08;
+			letter-spacing: -0.02em;
+			color: var(--fg);
+		}
+
+		.hero-headline .line {
+			display: block;
+			opacity: 0;
+			animation: heroFadeUp 800ms var(--ease-out) forwards;
+		}
+
+		.hero-headline .line:nth-of-type(1) {
+			animation-delay: 0.2s;
+		}
+
+		.hero-headline .line:nth-of-type(2) {
+			animation-delay: 0.3s;
+		}
+
+		.hero-headline .accent {
+			font-family: 'Instrument Serif', Georgia, serif;
+			font-style: italic;
+			font-weight: 400;
+		}
+
+		.hero-subhead {
+			margin: 1.5rem auto 0;
+			max-width: 34rem;
+			font-size: clamp(1rem, 2vw, 1.15rem);
+			line-height: 1.5;
+			color: var(--subhead);
+			font-weight: 400;
+			opacity: 0;
+			animation: heroFadeUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.4s;
+		}
+
+		.hero-actions {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			justify-content: center;
+			gap: 0.9rem;
+			margin-top: 2.25rem;
+			opacity: 0;
+			animation: heroFadeUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.5s;
+		}
+
+		.hero-actions .btn {
+			padding: 0.85rem 1.75rem;
+			font-size: 0.95rem;
+		}
+
+		@keyframes heroFadeUp {
+			from {
+				opacity: 0;
+				transform: translateY(22px);
+			}
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+
+		/* ---------- Responsive ---------- */
+
+		@media (max-width: 860px) {
+			.nav-links {
+				display: none;
+			}
+
+			.nav-actions .btn-glass {
+				display: none;
+			}
+
+			.nav-toggle {
+				display: inline-flex;
+			}
+		}
+
+		@media (min-width: 861px) {
+			.mobile-menu {
+				display: none;
+			}
+		}
+
+		@media (max-width: 480px) {
+			.nav-actions .btn-purple {
+				padding: 0.6rem 1.1rem;
+				font-size: 0.82rem;
+			}
+
+			.hero-subhead {
+				max-width: 100%;
+			}
+
+			.hero-actions {
+				flex-direction: column;
+				align-items: stretch;
+				width: 100%;
+			}
+
+			.hero-actions .btn {
+				width: 100%;
+			}
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.hero-bg,
+			.hero-bg.is-playing {
+				display: none;
+			}
+
+			.hero-bg-fallback,
+			.hero-bg.is-playing + .hero-bg-fallback {
+				opacity: 1;
+				display: block;
+			}
+
+			.hero-glow {
+				display: none;
+			}
+
+			.badge,
+			.hero-headline .line,
+			.hero-subhead,
+			.hero-actions {
+				animation: none;
+				opacity: 1;
+				transform: none;
+			}
+
+			.btn,
+			.nav-links a,
+			.nav-links svg,
+			.mobile-menu {
+				transition: none;
+			}
+
+			.btn:hover,
+			.btn:active {
+				transform: none;
+			}
+
+			.mobile-menu {
+				transform: none;
+			}
+		}
+	</style>
+</head>
+<body>
+	<main>
+		<section class="hero">
+			<video
+				class="hero-bg"
+				id="heroVideo"
+				autoplay
+				loop
+				muted
+				playsinline
+				poster="assets/hero-poster.jpg"
+				aria-hidden="true"
+			>
+				<source src="assets/hero-bg.mp4" type="video/mp4">
+			</video>
+			<img class="hero-bg-fallback" src="assets/hero-poster.jpg" alt="" aria-hidden="true">
+			<div class="hero-overlay" aria-hidden="true"></div>
+			<div class="hero-glow" aria-hidden="true"></div>
+
+			<nav class="navbar" aria-label="Primary">
+				<a href="#top" class="brand">
+					<span class="brand-mark" aria-hidden="true">
+						<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M9 3H7a2 2 0 0 0-2 2v2a2 2 0 0 1-2 2v0a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h2M15 3h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2v0a2 2 0 0 0-2 2v2a2 2 0 0 1-2 2h-2"/>
+						</svg>
+					</span>
+					<span class="brand-name">Datacore</span>
+				</a>
+
+				<ul class="nav-links">
+					<li><a href="#top">Home</a></li>
+					<li>
+						<a href="#services">
+							Services
+							<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+						</a>
+					</li>
+					<li><a href="#reviews">Reviews</a></li>
+					<li><a href="#contact">Contact us</a></li>
+				</ul>
+
+				<div class="nav-actions">
+					<a href="#signin" class="btn btn-glass">Sign In</a>
+					<a href="#get-started" class="btn btn-purple">Get Started</a>
+					<button type="button" class="nav-toggle" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu">
+						<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+					</button>
+				</div>
+			</nav>
+
+			<div class="hero-content" id="top">
+				<div class="badge">
+					<span class="badge-tag">New</span>
+					<span class="badge-text">Say Hello to Datacore v3.2</span>
+				</div>
+
+				<h1 class="hero-headline">
+					<span class="line">Your Networks.</span>
+					<span class="line">One Rapid <span class="accent">Interface.</span></span>
+				</h1>
+
+				<p class="hero-subhead">Platform helps admins control access, logs, and servers with purpose.</p>
+
+				<div class="hero-actions">
+					<a href="#demo" class="btn btn-purple">Book a Free Demo</a>
+					<a href="#get-started" class="btn btn-navy">Get Started Now</a>
+				</div>
+			</div>
+		</section>
+
+		<div class="mobile-menu" id="mobileMenu" aria-hidden="true">
+			<div class="mobile-menu-header">
+				<a href="#top" class="brand">
+					<span class="brand-mark" aria-hidden="true">
+						<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M9 3H7a2 2 0 0 0-2 2v2a2 2 0 0 1-2 2v0a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h2M15 3h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2v0a2 2 0 0 0-2 2v2a2 2 0 0 1-2 2h-2"/>
+						</svg>
+					</span>
+					<span class="brand-name">Datacore</span>
+				</a>
+				<button type="button" class="mobile-menu-close" id="menuClose" aria-label="Close menu">
+					<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+				</button>
+			</div>
+
+			<ul class="mobile-menu-links">
+				<li><a href="#top">Home</a></li>
+				<li>
+					<a href="#services">
+						Services
+						<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+					</a>
+				</li>
+				<li><a href="#reviews">Reviews</a></li>
+				<li><a href="#contact">Contact us</a></li>
+			</ul>
+
+			<div class="mobile-menu-actions">
+				<a href="#signin" class="btn btn-glass">Sign In</a>
+				<a href="#get-started" class="btn btn-purple">Get Started</a>
+			</div>
+		</div>
+	</main>
+
+	<script>
+		(function () {
+			var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+			var video = document.getElementById('heroVideo');
+
+			if (video) {
+				if (reduceMotion) {
+					video.removeAttribute('autoplay');
+					video.pause();
+				} else {
+					video.addEventListener('playing', function () {
+						video.classList.add('is-playing');
+					});
+					var playPromise = video.play();
+					if (playPromise && typeof playPromise.catch === 'function') {
+						playPromise.catch(function () {});
+					}
+				}
+			}
+
+			var toggle = document.getElementById('menuToggle');
+			var close = document.getElementById('menuClose');
+			var menu = document.getElementById('mobileMenu');
+
+			function openMenu() {
+				menu.classList.add('is-open');
+				menu.setAttribute('aria-hidden', 'false');
+				toggle.setAttribute('aria-expanded', 'true');
+				document.body.style.overflow = 'hidden';
+			}
+
+			function closeMenu() {
+				menu.classList.remove('is-open');
+				menu.setAttribute('aria-hidden', 'true');
+				toggle.setAttribute('aria-expanded', 'false');
+				document.body.style.overflow = '';
+			}
+
+			if (toggle && close && menu) {
+				toggle.addEventListener('click', openMenu);
+				close.addEventListener('click', closeMenu);
+				menu.querySelectorAll('a').forEach(function (link) {
+					link.addEventListener('click', closeMenu);
+				});
+				window.addEventListener('keydown', function (event) {
+					if (event.key === 'Escape') {
+						closeMenu();
+					}
+				});
+			}
+		})();
+	</script>
+</body>
+</html>

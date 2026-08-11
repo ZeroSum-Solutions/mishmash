@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>PureFlow One — Clean Air, Clear Mind. Anywhere.</title>
+	<meta
+		name="description"
+		content="PureFlow One hero section: a cursor-following spotlight parts a bare-faced portrait to reveal the same model wearing the product, over a faint drifting grid."
+	>
+	<link
+		rel="icon"
+		href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23111827'/%3E%3Ccircle cx='16' cy='17' r='8' fill='none' stroke='%23ffffff' stroke-width='1.6'/%3E%3Ccircle cx='16' cy='17' r='2.4' fill='%234ade80'/%3E%3C/svg%3E"
+	>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+		rel="stylesheet"
+	>
+	<style>
+		:root {
+			--bg: #ffffff;
+			--fg: #111827;
+			--fg-soft: #374151;
+			--eyebrow: #4b5563;
+			--nav-inactive: #d1d5db;
+			--grid-line: #64748b;
+			--accent: #4ade80;
+			--accent-soft: rgba(74, 222, 128, 0.35);
+			--accent-strong: rgba(74, 222, 128, 0.55);
+			--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html, body {
+			margin: 0;
+			padding: 0;
+			background: var(--bg);
+		}
+
+		body {
+			font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+			-webkit-font-smoothing: antialiased;
+			color: var(--fg);
+		}
+
+		button {
+			font-family: inherit;
+			border: none;
+			background: none;
+			cursor: pointer;
+		}
+
+		/* ---------- Header / nav ---------- */
+
+		.site-header {
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			z-index: 50;
+		}
+
+		.nav {
+			position: relative;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 1rem 1.25rem;
+		}
+
+		.nav-logo {
+			display: flex;
+			align-items: center;
+			line-height: 0;
+		}
+
+		.nav-pill {
+			display: none;
+			position: absolute;
+			left: 50%;
+			transform: translateX(-50%);
+			background: var(--fg);
+			border-radius: 999px;
+			padding: 0.375rem 0.5rem;
+			align-items: center;
+			gap: 0.25rem;
+		}
+
+		.nav-pill button {
+			color: var(--nav-inactive);
+			font-size: 0.875rem;
+			font-weight: 500;
+			padding: 0.375rem 1rem;
+			border-radius: 999px;
+			transition: color 200ms var(--ease-out);
+		}
+
+		.nav-pill button:hover {
+			color: #ffffff;
+		}
+
+		.nav-pill button.is-active {
+			background: #ffffff;
+			color: var(--fg);
+		}
+
+		.nav-pill button.is-active:hover {
+			color: var(--fg);
+		}
+
+		.nav-cta {
+			position: relative;
+			display: none;
+			align-items: center;
+			gap: 0.5rem;
+			background: var(--fg);
+			color: #ffffff;
+			font-size: 0.875rem;
+			font-weight: 500;
+			padding: 0.5rem 1.25rem;
+			border-radius: 999px;
+			transition: background 200ms var(--ease-out);
+		}
+
+		.nav-cta::before {
+			content: "";
+			position: absolute;
+			inset: -12px;
+			border-radius: 999px;
+			background: radial-gradient(circle, var(--accent-soft) 0%, transparent 70%);
+			opacity: 0;
+			filter: blur(10px);
+			z-index: -1;
+			transition: opacity 300ms var(--ease-out);
+			pointer-events: none;
+		}
+
+		.nav-cta:hover {
+			background: #374151;
+		}
+
+		.nav-cta:hover::before {
+			opacity: 1;
+			background: radial-gradient(circle, var(--accent-strong) 0%, transparent 70%);
+		}
+
+		.dot {
+			position: relative;
+			display: inline-block;
+			width: 8px;
+			height: 8px;
+			border-radius: 999px;
+			background: var(--accent);
+		}
+
+		.dot::after {
+			content: "";
+			position: absolute;
+			inset: -4px;
+			border-radius: 999px;
+			border: 1px solid var(--accent);
+			opacity: 0.6;
+			animation: dotPulse 2200ms ease-out infinite;
+		}
+
+		@keyframes dotPulse {
+			0% {
+				transform: scale(0.9);
+				opacity: 0.6;
+			}
+			70% {
+				transform: scale(1.9);
+				opacity: 0;
+			}
+			100% {
+				transform: scale(1.9);
+				opacity: 0;
+			}
+		}
+
+		.nav-toggle {
+			display: flex;
+			color: var(--fg);
+			padding: 0.25rem;
+		}
+
+		.nav-toggle svg {
+			width: 22px;
+			height: 22px;
+		}
+
+		.nav-toggle .icon-close {
+			display: none;
+		}
+
+		.nav-toggle.is-open .icon-menu {
+			display: none;
+		}
+
+		.nav-toggle.is-open .icon-close {
+			display: block;
+		}
+
+		.mobile-menu {
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			z-index: 40;
+			background: #ffffff;
+			padding: 4rem 1.25rem 1.5rem;
+			box-shadow: 0 10px 30px rgba(17, 24, 39, 0.12);
+			display: flex;
+			flex-direction: column;
+			gap: 0.25rem;
+			opacity: 0;
+			transform: translateY(-8px);
+			visibility: hidden;
+			pointer-events: none;
+			transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out), visibility 200ms;
+		}
+
+		.mobile-menu.is-open {
+			opacity: 1;
+			transform: translateY(0);
+			visibility: visible;
+			pointer-events: auto;
+			transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out), visibility 140ms;
+		}
+
+		.mobile-menu button {
+			color: #1f2937;
+			font-size: 1rem;
+			font-weight: 500;
+			padding: 0.75rem 0;
+			border-bottom: 1px solid #f3f4f6;
+			text-align: left;
+			transition: color 200ms var(--ease-out);
+		}
+
+		.mobile-menu button:hover {
+			color: #6b7280;
+		}
+
+		.mobile-cta {
+			margin-top: 1rem;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.5rem;
+			background: var(--fg);
+			color: #ffffff;
+			font-size: 0.875rem;
+			font-weight: 500;
+			padding: 0.75rem 1.25rem;
+			border-radius: 999px;
+			border-bottom: none;
+			transition: background 200ms var(--ease-out);
+		}
+
+		.mobile-cta:hover {
+			background: #374151;
+		}
+
+		@media (min-width: 768px) {
+			.nav-pill {
+				display: flex;
+			}
+
+			.nav-cta {
+				display: flex;
+			}
+
+			.nav-toggle {
+				display: none;
+			}
+
+			.mobile-menu {
+				display: none;
+			}
+		}
+
+		/* ---------- Hero ---------- */
+
+		.hero {
+			position: relative;
+			width: 100%;
+			height: 100vh;
+			min-height: 480px;
+			overflow: hidden;
+			--reveal-x: 50%;
+			--reveal-y: 50%;
+		}
+
+		.hero-grid {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			z-index: 0;
+			opacity: 0.1;
+			pointer-events: none;
+		}
+
+		.hero-bg,
+		.hero-reveal,
+		.hero-reveal-image {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			background-position: center 30%;
+			background-size: cover;
+			background-repeat: no-repeat;
+		}
+
+		.hero-bg {
+			z-index: 10;
+			background-image: url('assets/hero-face-bare.webp');
+		}
+
+		.hero-reveal {
+			z-index: 20;
+			pointer-events: none;
+		}
+
+		.hero-reveal-image {
+			background-image: url('assets/hero-face-masked.webp');
+			mask-image: radial-gradient(
+				circle 260px at var(--reveal-x) var(--reveal-y),
+				rgba(255, 255, 255, 1) 0%,
+				rgba(255, 255, 255, 1) 40%,
+				rgba(255, 255, 255, 0.75) 60%,
+				rgba(255, 255, 255, 0.4) 75%,
+				rgba(255, 255, 255, 0.12) 88%,
+				rgba(255, 255, 255, 0) 100%
+			);
+			-webkit-mask-image: radial-gradient(
+				circle 260px at var(--reveal-x) var(--reveal-y),
+				rgba(255, 255, 255, 1) 0%,
+				rgba(255, 255, 255, 1) 40%,
+				rgba(255, 255, 255, 0.75) 60%,
+				rgba(255, 255, 255, 0.4) 75%,
+				rgba(255, 255, 255, 0.12) 88%,
+				rgba(255, 255, 255, 0) 100%
+			);
+		}
+
+		.hero-text {
+			position: absolute;
+			z-index: 50;
+			left: 1.25rem;
+			bottom: 3rem;
+			max-width: 260px;
+		}
+
+		.eyebrow {
+			margin: 0 0 0.5rem;
+			font-size: 10px;
+			font-weight: 600;
+			letter-spacing: 0.18em;
+			text-transform: uppercase;
+			color: var(--eyebrow);
+			opacity: 0;
+			animation: heroFadeUp 700ms var(--ease-out) forwards;
+			animation-delay: 0.1s;
+		}
+
+		.hero-headline {
+			margin: 0 0 1rem;
+			font-size: 1.5rem;
+			font-weight: 700;
+			line-height: 1.25;
+			color: var(--fg);
+			opacity: 0;
+			animation: heroFadeUp 700ms var(--ease-out) forwards;
+			animation-delay: 0.2s;
+		}
+
+		.hero-actions {
+			display: flex;
+			align-items: center;
+			gap: 0.75rem;
+			opacity: 0;
+			animation: heroFadeUp 700ms var(--ease-out) forwards;
+			animation-delay: 0.3s;
+		}
+
+		.btn-primary {
+			background: var(--fg);
+			color: #ffffff;
+			font-size: 0.75rem;
+			font-weight: 500;
+			padding: 0.5rem 1rem;
+			border-radius: 999px;
+			transition: background 200ms var(--ease-out);
+		}
+
+		.btn-primary:hover {
+			background: #374151;
+		}
+
+		.btn-ghost {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			color: var(--fg-soft);
+			font-size: 0.75rem;
+			font-weight: 500;
+			transition: color 200ms var(--ease-out);
+		}
+
+		.btn-ghost:hover {
+			color: var(--fg);
+		}
+
+		.btn-ghost svg {
+			width: 12px;
+			height: 12px;
+			flex-shrink: 0;
+		}
+
+		@keyframes heroFadeUp {
+			from {
+				opacity: 0;
+				transform: translateY(16px);
+			}
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+
+		@media (min-width: 640px) {
+			.hero-text {
+				left: 2rem;
+				bottom: 3rem;
+				max-width: 320px;
+			}
+
+			.eyebrow {
+				font-size: 11px;
+				margin-bottom: 0.75rem;
+			}
+
+			.hero-headline {
+				font-size: 1.875rem;
+				margin-bottom: 1.5rem;
+			}
+
+			.hero-actions {
+				gap: 1rem;
+			}
+
+			.btn-primary,
+			.btn-ghost {
+				font-size: 0.875rem;
+			}
+
+			.btn-primary {
+				padding: 0.625rem 1.5rem;
+			}
+		}
+
+		@media (min-width: 768px) {
+			.hero-text {
+				left: 3rem;
+				bottom: 14rem;
+			}
+
+			.hero-headline {
+				font-size: 2.25rem;
+			}
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.dot::after {
+				animation: none;
+				opacity: 0;
+			}
+
+			.mobile-menu,
+			.mobile-menu.is-open {
+				transition: none;
+			}
+
+			.eyebrow,
+			.hero-headline,
+			.hero-actions {
+				animation: none;
+				opacity: 1;
+				transform: none;
+			}
+
+			.nav-cta,
+			.btn-primary,
+			.mobile-cta,
+			.nav-pill button {
+				transition: none;
+			}
+		}
+	</style>
+</head>
+<body>
+	<header class="site-header">
+		<nav class="nav" aria-label="Primary">
+			<a class="nav-logo" href="#hero" aria-label="PureFlow One home">
+				<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 256 256" fill="none" aria-hidden="true">
+					<path d="M 256 64 L 256 128 L 192.5 128 L 160 95 L 128 64 L 96 95 L 63.5 128 L 64 128 L 128 192 L 128 256 L 64.5 256 L 32 223 L 0 192 L 0 64 L 64 0 L 192 0 Z M 256 192 L 256 256 L 192.5 256 L 160 223 L 128 192 L 128 128 L 192 128 Z" fill="var(--fg)" />
+				</svg>
+			</a>
+
+			<div class="nav-pill" role="group" aria-label="Sections">
+				<button type="button" class="is-active">Device</button>
+				<button type="button">Real Stories</button>
+				<button type="button">Science</button>
+				<button type="button">Plans</button>
+				<button type="button">Reach Us</button>
+			</div>
+
+			<button type="button" class="nav-cta">
+				<span class="dot" aria-hidden="true"></span>
+				<span>Reserve Yours</span>
+			</button>
+
+			<button type="button" class="nav-toggle" id="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+				<svg class="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+					<line x1="3" y1="6" x2="21" y2="6"></line>
+					<line x1="3" y1="12" x2="21" y2="12"></line>
+					<line x1="3" y1="18" x2="21" y2="18"></line>
+				</svg>
+				<svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+					<line x1="5" y1="5" x2="19" y2="19"></line>
+					<line x1="19" y1="5" x2="5" y2="19"></line>
+				</svg>
+			</button>
+		</nav>
+
+		<div class="mobile-menu" id="mobile-menu" hidden>
+			<button type="button">Device</button>
+			<button type="button">Real Stories</button>
+			<button type="button">Science</button>
+			<button type="button">Plans</button>
+			<button type="button">Reach Us</button>
+			<button type="button" class="mobile-cta">
+				<span class="dot" aria-hidden="true"></span>
+				<span>Reserve Yours</span>
+			</button>
+		</div>
+	</header>
+
+	<main>
+		<section class="hero" id="hero" aria-label="PureFlow One introduction">
+			<svg class="hero-grid" aria-hidden="true">
+				<defs>
+					<pattern id="grid-pattern" width="48" height="48" patternUnits="userSpaceOnUse">
+						<path d="M 48 0 L 0 0 0 48" fill="none" stroke="var(--grid-line)" stroke-width="0.6" />
+					</pattern>
+				</defs>
+				<rect width="100%" height="100%" fill="url(#grid-pattern)" />
+			</svg>
+
+			<div class="hero-bg" aria-hidden="true"></div>
+
+			<div class="hero-reveal" aria-hidden="true">
+				<div class="hero-reveal-image"></div>
+			</div>
+
+			<div class="hero-text">
+				<p class="eyebrow">PureFlow One</p>
+				<h1 class="hero-headline">Clean Air, Clear<br>Mind. Anywhere.</h1>
+				<div class="hero-actions">
+					<button type="button" class="btn-primary">Discover</button>
+					<button type="button" class="btn-ghost">
+						<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+							<polygon points="5,3 20,12 5,21"></polygon>
+						</svg>
+						<span>View Specs</span>
+					</button>
+				</div>
+			</div>
+		</section>
+	</main>
+
+	<script>
+		(function () {
+			var hero = document.getElementById('hero');
+			var gridPattern = document.getElementById('grid-pattern');
+			var reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+			var mouse = { x: 0, y: 0 };
+			var smooth = { x: 0, y: 0 };
+			var gridOffset = { x: 0, y: 0 };
+			var rafId = null;
+
+			function centerPointer() {
+				var rect = hero.getBoundingClientRect();
+				mouse.x = smooth.x = rect.width / 2;
+				mouse.y = smooth.y = rect.height / 2;
+			}
+
+			function onPointerMove(event) {
+				var rect = hero.getBoundingClientRect();
+				mouse.x = event.clientX - rect.left;
+				mouse.y = event.clientY - rect.top;
+			}
+
+			function onPointerLeave() {
+				var rect = hero.getBoundingClientRect();
+				mouse.x = rect.width / 2;
+				mouse.y = rect.height / 2;
+			}
+
+			function tick() {
+				smooth.x += (mouse.x - smooth.x) * 0.1;
+				smooth.y += (mouse.y - smooth.y) * 0.1;
+
+				var rect = hero.getBoundingClientRect();
+				var cx = rect.width ? (smooth.x / rect.width - 0.5) : 0;
+				var cy = rect.height ? (smooth.y / rect.height - 0.5) : 0;
+
+				gridOffset.x += (cx * 16 - gridOffset.x) * 0.06;
+				gridOffset.y += (cy * 16 - gridOffset.y) * 0.06;
+
+				if (gridPattern) {
+					gridPattern.setAttribute('x', gridOffset.x.toFixed(2));
+					gridPattern.setAttribute('y', gridOffset.y.toFixed(2));
+				}
+
+				hero.style.setProperty('--reveal-x', smooth.x.toFixed(1) + 'px');
+				hero.style.setProperty('--reveal-y', smooth.y.toFixed(1) + 'px');
+
+				rafId = window.requestAnimationFrame(tick);
+			}
+
+			function startMotion() {
+				centerPointer();
+				hero.style.setProperty('--reveal-x', mouse.x.toFixed(1) + 'px');
+				hero.style.setProperty('--reveal-y', mouse.y.toFixed(1) + 'px');
+				hero.addEventListener('pointermove', onPointerMove);
+				hero.addEventListener('pointerleave', onPointerLeave);
+				rafId = window.requestAnimationFrame(tick);
+			}
+
+			function stopMotion() {
+				if (rafId) {
+					window.cancelAnimationFrame(rafId);
+					rafId = null;
+				}
+				hero.removeEventListener('pointermove', onPointerMove);
+				hero.removeEventListener('pointerleave', onPointerLeave);
+			}
+
+			function applyMotionPreference() {
+				stopMotion();
+				if (!reduceMotionQuery.matches) {
+					startMotion();
+				}
+			}
+
+			applyMotionPreference();
+			if (reduceMotionQuery.addEventListener) {
+				reduceMotionQuery.addEventListener('change', applyMotionPreference);
+			} else if (reduceMotionQuery.addListener) {
+				reduceMotionQuery.addListener(applyMotionPreference);
+			}
+
+			var navToggle = document.getElementById('nav-toggle');
+			var mobileMenu = document.getElementById('mobile-menu');
+
+			function closeMobileMenu() {
+				navToggle.setAttribute('aria-expanded', 'false');
+				navToggle.setAttribute('aria-label', 'Open menu');
+				navToggle.classList.remove('is-open');
+				mobileMenu.classList.remove('is-open');
+				window.setTimeout(function () {
+					if (!mobileMenu.classList.contains('is-open')) {
+						mobileMenu.hidden = true;
+					}
+				}, 160);
+			}
+
+			function openMobileMenu() {
+				mobileMenu.hidden = false;
+				window.requestAnimationFrame(function () {
+					navToggle.setAttribute('aria-expanded', 'true');
+					navToggle.setAttribute('aria-label', 'Close menu');
+					navToggle.classList.add('is-open');
+					mobileMenu.classList.add('is-open');
+				});
+			}
+
+			if (navToggle && mobileMenu) {
+				navToggle.addEventListener('click', function () {
+					var isOpen = navToggle.getAttribute('aria-expanded') === 'true';
+					if (isOpen) {
+						closeMobileMenu();
+					} else {
+						openMobileMenu();
+					}
+				});
+
+				mobileMenu.querySelectorAll('button').forEach(function (item) {
+					item.addEventListener('click', closeMobileMenu);
+				});
+			}
+		})();
+	</script>
+</body>
+</html>

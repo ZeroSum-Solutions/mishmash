@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard UI — Conference Dashboard</title>
+<meta name="description" content="Premium liquid-glassmorphism conference dashboard: room cards, weekly insights chart, screen-share strip, and a live participant bar over a swappable day/night video backdrop." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --glass-bg: rgba(255, 255, 255, 0.55);
+    --glass-border: rgba(255, 255, 255, 0.6);
+    --glass-blur: 8px;
+    --text-main: #1a1a1a;
+    --text-muted: #6b7280;
+    --accent: #000000;
+    --card-radius: 40px;
+    --transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    --accent-blue: #3b82f6;
+    --accent-red: #ff4545;
+    --accent-orange: #e05e36;
+    --card-solid-bg: #ffffff;
+    --card-glass-empty-bg: rgba(0, 0, 0, 0.18);
+  }
+
+  body.dark-mode {
+    --glass-bg: rgba(0, 0, 0, 0.45);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --text-main: #ffffff;
+    --text-muted: #b0b0b0;
+    --accent: #ffffff;
+    --card-solid-bg: rgba(26, 26, 26, 0.98);
+    --card-glass-empty-bg: rgba(255, 255, 255, 0.08);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    height: 100vh;
+    padding: 32px 40px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #000;
+    color: var(--text-main);
+    transition: var(--transition);
+    position: relative;
+  }
+
+  img { display: block; max-width: 100%; }
+  button {
+    font-family: inherit; cursor: pointer; border: none; background: none; color: inherit;
+    padding: 0; margin: 0; appearance: none; -webkit-appearance: none; text-align: inherit;
+  }
+  svg { display: block; }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .defs-svg { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+  /* ---------- Background video layer ---------- */
+  .bg-video {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; z-index: -1;
+  }
+  .bg-video-dark { display: none; }
+  body.dark-mode .bg-video-light { display: none; }
+  body.dark-mode .bg-video-dark { display: block; }
+
+  /* ---------- Top navigation ---------- */
+  .top-nav {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto auto;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+
+  .profile-btn { width: 48px; height: 48px; border-radius: 50%; overflow: hidden; flex-shrink: 0; }
+  .profile-btn img { width: 100%; height: 100%; object-fit: cover; }
+
+  .toggle-container { display: flex; align-items: center; gap: 12px; }
+
+  .mode-switch {
+    width: 88px; height: 48px; background: #fff; border-radius: 100px;
+    padding: 4px 6px; position: relative; transition: var(--transition);
+  }
+  .mode-track { display: block; width: 76px; height: 40px; background: var(--accent-blue); border-radius: 100px; position: relative; }
+  .mode-handle {
+    width: 32px; height: 32px; background: #fff; border-radius: 50%;
+    position: absolute; top: 4px; right: 4px;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  body.dark-mode .mode-handle { transform: translateX(-36px); }
+  .mode-icon {
+    position: absolute; top: 50%; left: 4px; transform: translateY(-50%);
+    font-size: 12px; line-height: 1; color: #fff; pointer-events: none;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  body.dark-mode .mode-icon { transform: translateY(-50%) translateX(42px); }
+
+  .settings-btn {
+    padding: 10px 24px; border-radius: 100px; background: rgba(0, 0, 0, 0.04);
+    backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+    color: #fff; font-size: 0.875rem; font-weight: 500; white-space: nowrap;
+    transition: var(--transition);
+  }
+
+  .meeting-alert {
+    justify-self: center; display: flex; align-items: center; gap: 12px;
+    background: #fff; border-radius: 100px; padding: 6px 6px 6px 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); transition: var(--transition);
+  }
+  .meeting-alert[hidden] { display: none; }
+  .meeting-alert-avatar { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; flex-shrink: 0; }
+  .meeting-alert-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .meeting-alert-label { font-size: 0.875rem; color: #1a1a1a; white-space: nowrap; }
+  .meeting-alert-time {
+    background: #f0f0f0; color: #6b7280; font-size: 0.75rem;
+    padding: 4px 10px; border-radius: 100px; white-space: nowrap;
+  }
+  .meeting-alert-close {
+    width: 32px; height: 32px; border-radius: 50%; position: relative;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .meeting-alert-close svg.ring { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .meeting-alert-close .icon-x { position: relative; width: 12px; height: 12px; color: #1a1a1a; }
+
+  .view-switcher { display: flex; background: rgba(0, 0, 0, 0.04); border-radius: 100px; padding: 4px; gap: 4px; }
+  .view-switcher button {
+    padding: 10px 20px; border-radius: 100px; font-size: 0.875rem; font-weight: 500;
+    color: #e5e7eb; transition: var(--transition); white-space: nowrap;
+  }
+  .view-switcher button[aria-checked="true"] {
+    background: #fff; color: #000; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .search-btn {
+    width: 48px; height: 48px; border-radius: 50%; background: rgba(0, 0, 0, 0.04);
+    backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+    display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0;
+  }
+  .search-btn svg { width: 20px; height: 20px; }
+
+  /* ---------- Dashboard grid ---------- */
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 24px;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .card {
+    padding: 28px 20px; display: flex; flex-direction: column;
+    border-radius: var(--card-radius); transition: var(--transition);
+    position: relative; overflow: hidden;
+  }
+  .card:hover { transform: translateY(-3px) scale(1.01); }
+
+  .card-glass-empty {
+    background: var(--card-glass-empty-bg);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 10px; color: #fff;
+  }
+  .card-glass-empty svg { width: 32px; height: 32px; }
+  .card-glass-empty span { font-size: 0.9375rem; font-weight: 500; }
+
+  .card-solid { background: var(--card-solid-bg); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0, 0, 0, 0.01); color: var(--text-main); }
+  body.dark-mode .card-solid { color: #fff; }
+
+  .card-glass {
+    background: var(--card-glass-empty-bg);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    color: #fff;
+  }
+  .card-glass::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    filter: url(#noise-filter); opacity: 0.06; mix-blend-mode: overlay;
+  }
+
+  .card-alt {
+    background: linear-gradient(to bottom, #f4f4f4 0%, #ffffff 50%, #ffffff 100%);
+    color: var(--text-main);
+  }
+
+  .card-icon { position: absolute; top: 28px; right: 20px; width: 16px; height: 16px; opacity: 0.5; }
+  .card-icon svg { width: 100%; height: 100%; }
+  .card-icon.icon-btn { background: none; padding: 0; opacity: 0.5; color: inherit; }
+  .card-icon.icon-btn:hover, .card-icon.icon-btn:focus-visible { opacity: 0.9; }
+
+  .card-title { font-size: 1.35rem; font-weight: 400; letter-spacing: -0.03em; margin: 0 0 4px; }
+  .card-subtitle { font-size: 0.875rem; color: var(--text-muted); margin: 0; }
+  .card-glass .card-subtitle, .card-glass-empty .card-subtitle { color: rgba(255, 255, 255, 0.72); }
+
+  .card-footer { margin-top: auto; display: flex; align-items: center; justify-content: space-between; padding-top: 16px; }
+  .avatar-stack { display: flex; align-items: center; }
+  .avatar-stack img {
+    width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
+    border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  }
+  .avatar-stack img + img { margin-left: -12px; }
+
+  .count-badge {
+    width: 38px; height: 38px; border-radius: 50%; background: rgba(0, 0, 0, 0.08);
+    display: flex; align-items: center; justify-content: center; font-size: 0.875rem;
+    flex-shrink: 0; color: inherit;
+  }
+  .count-badge.count-badge-alt { background: #F3F3F3; color: #1a1a1a; }
+
+  /* Card 3 — Weekly Insights */
+  .bar-chart { height: 60px; display: flex; align-items: flex-end; gap: 2px; margin-top: 16px; }
+  .bar { flex: 1 1 0; min-width: 2px; border-radius: 2px 2px 0 0; }
+  .bar-blue { background: var(--accent-blue); }
+  .bar-grey { background: #e5e7eb; }
+
+  .chart-markers { display: flex; justify-content: space-between; padding: 0 20px; margin: 12px 0 24px; }
+  .marker-group { display: flex; align-items: center; }
+  .marker-single img, .marker-group img {
+    width: 18px; height: 18px; border-radius: 50%; object-fit: cover; border: 1.5px solid #fff;
+  }
+  .marker-group img + img { margin-left: -8px; }
+
+  .play-btn {
+    width: 54px; height: 54px; border-radius: 50%; background: rgba(245, 245, 245, 0.85);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .play-btn svg { width: 20px; height: 20px; }
+
+  /* Card 8 — Screen Share */
+  .chip-row { display: flex; gap: 8px; }
+  .chip {
+    background: #fff; padding: 6px 14px; border-radius: 100px; font-size: 0.75rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06); font-weight: 500;
+  }
+  .chip-blue { color: var(--accent-blue); }
+  .chip-black { color: #000; }
+
+  .screen-scroll {
+    display: flex; gap: 12px; margin: 20px -20px 0; padding: 0 20px 16px;
+    overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; cursor: grab;
+  }
+  .screen-scroll::-webkit-scrollbar { display: none; }
+  .screen-scroll.dragging { cursor: grabbing; }
+  .screen-thumb-wrap { position: relative; flex-shrink: 0; }
+  .screen-thumb { width: 160px; height: 100px; border-radius: 16px; object-fit: cover; }
+  .alice-tag {
+    position: absolute; bottom: 8px; right: 8px; display: flex; align-items: center; gap: 4px;
+    background: var(--accent-orange); color: #fff; font-size: 0.65rem; padding: 2px 8px 2px 2px;
+    border-radius: 100px;
+  }
+  .alice-tag img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+
+  /* ---------- Page indicators ---------- */
+  .page-indicators { display: flex; justify-content: center; align-items: center; gap: 16px; margin: 24px 0 120px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: #fff; opacity: 0.3; }
+  .dot.active { opacity: 1; }
+
+  /* ---------- Bottom bar ---------- */
+  .bottom-bar {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 100px;
+    background: var(--glass-bg); backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
+    border: 1px solid var(--glass-border); z-index: 10;
+  }
+  .participant { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; position: relative; flex-shrink: 0; }
+  .participant-speaker { width: 44px; height: 44px; }
+  .participant-dim { opacity: 0.7; }
+  .voice-badge {
+    position: absolute; top: -2px; right: -2px; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    display: flex; align-items: center; justify-content: center; gap: 1.5px;
+  }
+  .voice-bar { width: 2px; height: 4px; background: #4b5563; border-radius: 1px; animation: voice-wave 1s ease-in-out infinite; }
+  .voice-bar:nth-child(2) { animation-delay: 0.2s; }
+  .voice-bar:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes voice-wave { 0%, 100% { height: 4px; } 50% { height: 10px; } }
+
+  .more-participants {
+    width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 255, 255, 0.25);
+    color: #fff; font-weight: 700; font-size: 0.875rem;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+
+  /* ---------- Components button ---------- */
+  .components-btn {
+    position: fixed; bottom: 32px; left: 32px; width: 44px; height: 44px; border-radius: 14px;
+    background: rgba(0, 0, 0, 0.04); backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr);
+    gap: 2px; padding: 6px; z-index: 10;
+  }
+  .components-btn img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+
+  /* ---------- Floating controls ---------- */
+  .floating-controls {
+    position: fixed; bottom: 32px; right: 32px; display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-radius: 100px; background: rgba(0, 0, 0, 0.04);
+    backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+    z-index: 10;
+  }
+  .control-btn {
+    width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; color: #fff; transition: var(--transition);
+  }
+  .control-btn:hover { transform: scale(1.08); }
+  .control-btn svg { width: 20px; height: 20px; }
+  .control-btn.is-off { background: var(--accent-red); }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 1200px) {
+    body { overflow-y: auto; overflow-x: hidden; height: auto; min-height: 100vh; }
+    .dashboard-grid { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(4, 280px); }
+  }
+
+  @media (max-width: 768px) {
+    body { padding: 16px; }
+    .dashboard-grid { grid-template-columns: 1fr; grid-template-rows: repeat(8, 280px); }
+    .top-nav { display: flex; flex-wrap: wrap; margin-bottom: 24px; }
+    .meeting-alert { display: none; }
+    .view-switcher { order: 10; flex-basis: 100%; justify-content: center; }
+    .bottom-bar { width: calc(100% - 32px); max-width: 420px; justify-content: center; }
+    .components-btn, .floating-controls { bottom: 80px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+    .card:hover, .control-btn:hover { transform: none; }
+  }
+</style>
+</head>
+<body>
+<video class="bg-video bg-video-light" autoplay muted loop playsinline poster="assets/bg-light-poster.jpg" aria-hidden="true">
+  <source src="assets/bg-light.mp4" type="video/mp4" />
+</video>
+<video class="bg-video bg-video-dark" autoplay muted loop playsinline poster="assets/bg-dark-poster.jpg" aria-hidden="true">
+  <source src="assets/bg-dark.mp4" type="video/mp4" />
+</video>
+
+<svg class="defs-svg" aria-hidden="true" focusable="false">
+  <filter id="noise-filter">
+    <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" result="noise" />
+    <feComposite operator="in" in="noise" in2="SourceGraphic" />
+  </filter>
+</svg>
+
+<nav class="top-nav" aria-label="Dashboard toolbar">
+  <button type="button" class="profile-btn" aria-label="Open profile menu">
+    <img src="assets/avatar-current-user.jpg" alt="" />
+  </button>
+
+  <div class="toggle-container">
+    <button type="button" class="mode-switch" id="mode-switch" role="switch" aria-checked="false" aria-label="Switch to dark mode">
+      <span class="mode-track">
+        <span class="mode-handle"></span>
+        <span class="mode-icon" id="mode-icon" aria-hidden="true">&#9788;</span>
+      </span>
+    </button>
+    <button type="button" class="settings-btn">Settings</button>
+  </div>
+
+  <div class="meeting-alert" id="meeting-alert">
+    <span class="meeting-alert-avatar"><img src="assets/avatar-meeting-host.jpg" alt="" /></span>
+    <span class="meeting-alert-label">Meeting is about to start</span>
+    <span class="meeting-alert-time">-5:23</span>
+    <button type="button" class="meeting-alert-close" id="meeting-alert-close" aria-label="Dismiss meeting alert">
+      <svg class="ring" viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="14" fill="none" stroke="#e5e7eb" stroke-width="2" />
+        <circle cx="16" cy="16" r="14" fill="none" stroke="#000" stroke-width="2"
+          stroke-dasharray="88" stroke-dashoffset="25" transform="rotate(-90 16 16)" />
+      </svg>
+      <svg class="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    </button>
+  </div>
+
+  <div class="view-switcher" role="radiogroup" aria-label="View">
+    <button type="button" role="radio" aria-checked="false" tabindex="-1" data-view="dashboard">Dashboard</button>
+    <button type="button" role="radio" aria-checked="true" tabindex="0" data-view="rooms">Rooms</button>
+  </div>
+
+  <button type="button" class="search-btn" aria-label="Search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  </button>
+</nav>
+<main class="dashboard-grid">
+  <button type="button" class="card card-glass-empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+    <span>Create a room</span>
+  </button>
+
+  <article class="card card-solid">
+    <button type="button" class="card-icon icon-btn" aria-label="Options for Subscription Growth Experiments">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+      </svg>
+    </button>
+    <h3 class="card-title">Subscription Growth Experiments</h3>
+    <p class="card-subtitle">Sprint Retrospective</p>
+    <div class="card-footer">
+      <span class="avatar-stack" aria-hidden="true">
+        <img src="assets/avatar-1.jpg" alt="" />
+        <img src="assets/avatar-2.jpg" alt="" />
+        <img src="assets/avatar-3.jpg" alt="" />
+      </span>
+      <span class="count-badge">9</span>
+    </div>
+  </article>
+
+  <article class="card card-solid">
+    <h3 class="card-title">Weekly Insights</h3>
+    <div class="bar-chart" id="bar-chart" aria-hidden="true"></div>
+    <div class="chart-markers" aria-hidden="true">
+      <span class="marker-single"><img src="assets/avatar-m1.jpg" alt="" /></span>
+      <span class="marker-group">
+        <img src="assets/avatar-m2.jpg" alt="" />
+        <img src="assets/avatar-m3.jpg" alt="" />
+      </span>
+      <span class="marker-group">
+        <img src="assets/avatar-m4.jpg" alt="" />
+        <img src="assets/avatar-m5.jpg" alt="" />
+      </span>
+    </div>
+    <div class="card-footer">
+      <span class="avatar-stack" aria-hidden="true">
+        <img src="assets/avatar-large1.jpg" alt="" />
+        <img src="assets/avatar-large2.jpg" alt="" />
+      </span>
+      <button type="button" class="play-btn" aria-label="Play weekly insights recap">
+        <svg viewBox="0 0 24 24" fill="#000" aria-hidden="true">
+          <polygon points="6 3 20 12 6 21 6 3" />
+        </svg>
+      </button>
+    </div>
+  </article>
+
+  <article class="card card-glass">
+    <button type="button" class="card-icon icon-btn" aria-label="Options for Product Strategy 2023">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
+      </svg>
+    </button>
+    <h3 class="card-title">Product Strategy 2023</h3>
+    <p class="card-subtitle">No upcoming meetings</p>
+    <div class="card-footer">
+      <span class="avatar-stack" aria-hidden="true">
+        <img src="assets/avatar-6.jpg" alt="" />
+      </span>
+      <span class="count-badge">32</span>
+    </div>
+  </article>
+  <article class="card card-solid">
+    <button type="button" class="card-icon icon-btn" aria-label="Options for User Onboarding Team">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    </button>
+    <h3 class="card-title">User Onboarding Team</h3>
+    <p class="card-subtitle">Sprint Planning</p>
+    <div class="card-footer">
+      <span class="avatar-stack" aria-hidden="true">
+        <img src="assets/avatar-7.jpg" alt="" />
+        <img src="assets/avatar-8.jpg" alt="" />
+        <img src="assets/avatar-9.jpg" alt="" />
+      </span>
+      <span class="count-badge">3</span>
+    </div>
+  </article>
+
+  <article class="card card-glass">
+    <button type="button" class="card-icon icon-btn" aria-label="Options for User &amp; Market Research">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
+      </svg>
+    </button>
+    <h3 class="card-title">User &amp; Market Research</h3>
+    <p class="card-subtitle">No upcoming meetings</p>
+    <div class="card-footer">
+      <span class="avatar-stack" aria-hidden="true">
+        <img src="assets/avatar-10.jpg" alt="" />
+      </span>
+      <span class="count-badge">6</span>
+    </div>
+  </article>
+
+  <article class="card card-solid">
+    <span class="card-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="23 7 16 12 23 17 23 7" />
+        <rect x="1" y="5" width="15" height="14" rx="2" />
+      </svg>
+    </span>
+    <h3 class="card-title">Core Product Team</h3>
+    <p class="card-subtitle">Core Product Team</p>
+    <div class="card-footer">
+      <span class="avatar-stack" aria-hidden="true">
+        <img src="assets/avatar-11.jpg" alt="" />
+        <img src="assets/avatar-12.jpg" alt="" />
+      </span>
+      <span class="count-badge">2</span>
+    </div>
+  </article>
+
+  <article class="card card-alt">
+    <div class="chip-row">
+      <span class="chip chip-blue">Screen Share</span>
+      <span class="chip chip-black">0:30</span>
+    </div>
+    <div class="screen-scroll" id="screen-scroll" tabindex="0" aria-label="Screen share previews, scroll for more" role="group">
+      <span class="screen-thumb-wrap">
+        <img class="screen-thumb" src="assets/screen-1.jpg" alt="Screen share preview 1" draggable="false" />
+      </span>
+      <span class="screen-thumb-wrap">
+        <img class="screen-thumb" src="assets/screen-2.jpg" alt="Screen share preview 2" draggable="false" />
+        <span class="alice-tag"><img src="assets/avatar-alice-av.jpg" alt="" />Alice</span>
+      </span>
+      <span class="screen-thumb-wrap">
+        <img class="screen-thumb" src="assets/screen-3.jpg" alt="Screen share preview 3" draggable="false" />
+      </span>
+      <span class="screen-thumb-wrap">
+        <img class="screen-thumb" src="assets/screen-4.jpg" alt="Screen share preview 4" draggable="false" />
+      </span>
+    </div>
+    <div class="card-footer">
+      <span class="avatar-stack" aria-hidden="true">
+        <img src="assets/avatar-13.jpg" alt="" />
+        <img src="assets/avatar-14.jpg" alt="" />
+      </span>
+      <span class="count-badge count-badge-alt">8</span>
+    </div>
+  </article>
+</main>
+<div class="page-indicators" aria-hidden="true">
+  <span class="dot active"></span>
+  <span class="dot"></span>
+  <span class="dot"></span>
+</div>
+
+<div class="bottom-bar" aria-label="Active participants">
+  <span class="participant participant-speaker" style="position:relative;">
+    <img class="participant" src="assets/avatar-speaker.jpg" alt="" style="width:100%;height:100%;position:static;" />
+    <span class="voice-badge" aria-hidden="true">
+      <span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span>
+    </span>
+  </span>
+  <img class="participant participant-dim" src="assets/avatar-p1.jpg" alt="" />
+  <span style="position:relative;display:inline-flex;">
+    <img class="participant" src="assets/avatar-p2.jpg" alt="" />
+    <span class="voice-badge" aria-hidden="true">
+      <span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span>
+    </span>
+  </span>
+  <img class="participant" src="assets/avatar-p3.jpg" alt="" />
+  <span class="more-participants">+17</span>
+  <span class="sr-only">4 visible participants and 17 more in this room</span>
+</div>
+
+<button type="button" class="components-btn" aria-label="Components">
+  <img src="assets/avatar-c1.jpg" alt="" />
+  <img src="assets/avatar-c2.jpg" alt="" />
+  <img src="assets/avatar-c3.jpg" alt="" />
+  <img src="assets/avatar-c4.jpg" alt="" />
+</button>
+
+<div class="floating-controls">
+  <button type="button" class="control-btn" id="video-toggle" aria-pressed="false" aria-label="Turn camera off">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polygon points="23 7 16 12 23 17 23 7" />
+      <rect x="1" y="5" width="15" height="14" rx="2" />
+    </svg>
+  </button>
+  <button type="button" class="control-btn" id="mic-toggle" aria-pressed="false" aria-label="Mute microphone">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  </button>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  /* ---------- Weekly Insights bar chart (exact prompt values) ---------- */
+  var BLUE_BAR_HEIGHTS = [35, 45, 30, 55, 40, 65, 50, 75, 60, 85, 70, 80, 65, 55, 45, 70, 60, 75, 55, 65, 50, 75, 60, 55];
+  var GREY_BAR_HEIGHTS = [45, 70, 60, 75, 55, 65, 50, 75, 60, 85, 70, 55, 45, 70, 60, 75, 55, 65, 50, 75, 60, 55, 45, 70, 60, 75, 55, 65, 50, 75, 60, 55, 45, 70, 60, 75];
+
+  function renderBarChart() {
+    var chart = document.getElementById('bar-chart');
+    if (!chart) return;
+    var frag = document.createDocumentFragment();
+    BLUE_BAR_HEIGHTS.forEach(function (h) {
+      var bar = document.createElement('span');
+      bar.className = 'bar bar-blue';
+      bar.style.height = h + '%';
+      frag.appendChild(bar);
+    });
+    GREY_BAR_HEIGHTS.forEach(function (h) {
+      var bar = document.createElement('span');
+      bar.className = 'bar bar-grey';
+      bar.style.height = h + '%';
+      frag.appendChild(bar);
+    });
+    chart.appendChild(frag);
+  }
+
+  /* ---------- Dark / light mode + background video swap ---------- */
+  var body = document.body;
+  var modeSwitch = document.getElementById('mode-switch');
+  var modeIcon = document.getElementById('mode-icon');
+  var lightVideo = document.querySelector('.bg-video-light');
+  var darkVideo = document.querySelector('.bg-video-dark');
+
+  function syncVideos() {
+    var isDark = body.classList.contains('dark-mode');
+    var active = isDark ? darkVideo : lightVideo;
+    var inactive = isDark ? lightVideo : darkVideo;
+    if (inactive) inactive.pause();
+    if (active && !reduceMotion.matches) {
+      var playPromise = active.play();
+      if (playPromise && playPromise.catch) playPromise.catch(function () {});
+    }
+  }
+
+  function setDarkMode(isDark) {
+    body.classList.toggle('dark-mode', isDark);
+    modeSwitch.setAttribute('aria-checked', String(isDark));
+    modeSwitch.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+    modeIcon.innerHTML = isDark ? '&#9789;' : '&#9788;';
+    syncVideos();
+  }
+
+  if (modeSwitch) {
+    modeSwitch.addEventListener('click', function () {
+      setDarkMode(!body.classList.contains('dark-mode'));
+    });
+  }
+  syncVideos();
+
+  /* ---------- View switcher (Dashboard / Rooms) ---------- */
+  var viewSwitcher = document.querySelector('.view-switcher');
+  if (viewSwitcher) {
+    var viewButtons = Array.prototype.slice.call(viewSwitcher.querySelectorAll('[role="radio"]'));
+
+    function selectView(btn) {
+      viewButtons.forEach(function (b) {
+        var selected = b === btn;
+        b.setAttribute('aria-checked', String(selected));
+        b.tabIndex = selected ? 0 : -1;
+      });
+      btn.focus();
+    }
+
+    viewButtons.forEach(function (btn, i) {
+      btn.addEventListener('click', function () { selectView(btn); });
+      btn.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          var next = e.key === 'ArrowRight' ? (i + 1) % viewButtons.length : (i - 1 + viewButtons.length) % viewButtons.length;
+          selectView(viewButtons[next]);
+        }
+      });
+    });
+  }
+
+  /* ---------- Meeting alert dismiss ---------- */
+  var meetingAlert = document.getElementById('meeting-alert');
+  var meetingAlertClose = document.getElementById('meeting-alert-close');
+  if (meetingAlertClose && meetingAlert) {
+    meetingAlertClose.addEventListener('click', function () {
+      meetingAlert.hidden = true;
+    });
+  }
+
+  /* ---------- Screen-share strip: drag-to-scroll ---------- */
+  var scroller = document.getElementById('screen-scroll');
+  if (scroller) {
+    var isDown = false;
+    var startX = 0;
+    var scrollLeft = 0;
+
+    scroller.addEventListener('mousedown', function (e) {
+      isDown = true;
+      scroller.classList.add('dragging');
+      startX = e.pageX - scroller.offsetLeft;
+      scrollLeft = scroller.scrollLeft;
+    });
+    ['mouseleave', 'mouseup'].forEach(function (evt) {
+      scroller.addEventListener(evt, function () {
+        isDown = false;
+        scroller.classList.remove('dragging');
+      });
+    });
+    scroller.addEventListener('mousemove', function (e) {
+      if (!isDown) return;
+      e.preventDefault();
+      var x = e.pageX - scroller.offsetLeft;
+      var walk = x - startX;
+      scroller.scrollLeft = scrollLeft - walk;
+    });
+  }
+
+  /* ---------- Video / mic toggle controls ---------- */
+  var videoToggle = document.getElementById('video-toggle');
+  var micToggle = document.getElementById('mic-toggle');
+
+  var VIDEO_ON_ICON = '<polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2"></rect>';
+  var VIDEO_OFF_ICON = '<path d="M16 16v2a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2.5"></path><path d="M9.5 4H14a2 2 0 0 1 2 2v6.5"></path><polygon points="23 7 16 12 23 17 23 7"></polygon><line x1="1" y1="1" x2="23" y2="23"></line>';
+  var MIC_ON_ICON = '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line>';
+  var MIC_OFF_ICON = '<path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2"></path><path d="M19 10v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line><line x1="1" y1="1" x2="23" y2="23"></line>';
+
+  function wireToggle(btn, onIcon, offIcon, onLabel, offLabel) {
+    if (!btn) return;
+    var svg = btn.querySelector('svg');
+    btn.addEventListener('click', function () {
+      var isOff = btn.getAttribute('aria-pressed') !== 'true';
+      btn.setAttribute('aria-pressed', String(isOff));
+      btn.classList.toggle('is-off', isOff);
+      btn.setAttribute('aria-label', isOff ? onLabel : offLabel);
+      svg.innerHTML = isOff ? offIcon : onIcon;
+    });
+  }
+
+  wireToggle(videoToggle, VIDEO_ON_ICON, VIDEO_OFF_ICON, 'Turn camera on', 'Turn camera off');
+  wireToggle(micToggle, MIC_ON_ICON, MIC_OFF_ICON, 'Unmute microphone', 'Mute microphone');
+
+  renderBarChart();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#29bee4" />
+<title>AVALEA — Coast Homes</title>
+<meta name="description" content="AVALEA — a Mediterranean-inspired coastal residence collection. Stay, own, rent, or list along the shoreline." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Iosevka+Charon:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* ===== Design tokens ===== */
+  :root {
+    --sky: #29bee4;
+    --sky-deep: #1496be;
+    --ink: #0d2b3a;
+    --terracotta: #c9705f;
+    --nav-glass: rgba(255, 255, 255, 0.22);
+    --nav-glass-border: rgba(255, 255, 255, 0.45);
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+    --dur-open: 0.55s;
+    --dur-close: 0.35s;
+    --leaf: clamp(230px, 30vw, 470px);
+    --sky-glass: rgba(41, 190, 228, 0.95);
+    --sky-deep-glass: rgba(20, 150, 190, 0.95);
+    --ink-glass: rgba(13, 43, 58, 0.94);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    /* clip, not hidden: the parallax leaves poke past the viewport edge by
+       design; `hidden` keeps a programmatically-scrollable overflow region
+       (body.scrollWidth grows as they drift), `clip` removes it outright. */
+    overflow-x: clip;
+    max-width: 100%;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: #fff;
+    color: var(--ink);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  img {
+    user-select: none;
+    -webkit-user-drag: none;
+    max-width: 100%;
+  }
+
+  a { text-decoration: none; color: inherit; }
+  button { font: inherit; }
+
+  /* .page is the leaves' containing block — clip here so their designed
+     off-canvas spill never grows the page's scrollable width. */
+  .page { position: relative; overflow-x: clip; }
+
+  /* ===== Hero ===== */
+  .hero {
+    position: relative;
+    height: 100vh;
+    height: 100svh;
+    overflow: hidden;
+    background: var(--sky);
+    isolation: isolate;
+  }
+
+  .hero__sky {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+    z-index: 0;
+  }
+
+  .hero__wordmark {
+    position: absolute;
+    top: 13%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 88%;
+    z-index: 1;
+    overflow: visible;
+  }
+
+  .hero__wordmark text {
+    font-family: "Iosevka Charon", "Archivo Black", "Arial Black", sans-serif;
+    font-weight: 700;
+    font-size: 280px;
+    letter-spacing: -0.01em;
+    fill: #fff;
+  }
+
+  .hero__building {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: -7vw;
+    width: 100%;
+    z-index: 2;
+  }
+
+  @media (min-aspect-ratio: 2/1) {
+    .hero__building { width: auto; height: 98svh; bottom: -6svh; }
+  }
+
+  .hero__fade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 34%;
+    z-index: 3;
+    background: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.35) 32%,
+      rgba(255, 255, 255, 0.78) 58%,
+      rgba(255, 255, 255, 0.96) 80%,
+      #fff 100%
+    );
+  }
+
+  /* ===== Nav ===== */
+  .nav {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: calc(26px + env(safe-area-inset-top, 0px)) 40px 26px;
+    pointer-events: none;
+  }
+
+  .nav > * { pointer-events: auto; }
+
+  .nav__logo {
+    font-family: "Iosevka Charon", "Archivo Black", "Arial Black", sans-serif;
+    font-weight: 700;
+    font-size: 28px;
+    letter-spacing: -0.02em;
+    color: #fff;
+    white-space: nowrap;
+  }
+
+  .nav__links {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    list-style: none;
+    margin: 0 auto;
+    padding: 0;
+  }
+
+  .nav__pill,
+  .nav__cta {
+    display: inline-flex;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: #fff;
+    background: var(--nav-glass);
+    border: 1px solid var(--nav-glass-border);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-radius: 999px;
+    padding: 11px 26px;
+    transition: background var(--ease-out) 0.2s;
+    white-space: nowrap;
+  }
+
+  .nav__pill:hover { background: rgba(255, 255, 255, 0.4); }
+
+  .nav__pill.is-active,
+  .nav__cta {
+    background: rgba(255, 255, 255, 0.96);
+    border-color: transparent;
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .nav__pill.is-active:hover,
+  .nav__cta:hover { background: rgba(255, 255, 255, 0.88); }
+
+  .nav__cta { flex-shrink: 0; }
+
+  .burger {
+    display: none;
+    width: 46px;
+    height: 46px;
+    border-radius: 999px;
+    background: var(--nav-glass);
+    border: 1px solid var(--nav-glass-border);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .burger__bar {
+    position: absolute;
+    left: 13px;
+    width: 20px;
+    height: 2px;
+    background: #fff;
+    border-radius: 2px;
+    transition: transform var(--dur-open) var(--ease-out), opacity var(--dur-open) var(--ease-out);
+    transition-delay: 0.14s, 0.14s;
+  }
+
+  .burger__bar:nth-child(1) { top: 16px; }
+  .burger__bar:nth-child(2) { top: 22px; }
+  .burger__bar:nth-child(3) { top: 28px; }
+
+  body.is-open .burger__bar {
+    transition: transform var(--dur-close) var(--ease-in), opacity var(--dur-close) var(--ease-in);
+    transition-delay: 0s, 0s;
+  }
+
+  body.is-open .burger__bar:nth-child(1) { transform: translate(0, 6px) rotate(45deg); }
+  body.is-open .burger__bar:nth-child(2) { opacity: 0; transform: scale(0.2, 1); }
+  body.is-open .burger__bar:nth-child(3) { transform: translate(0, -6px) rotate(-45deg); }
+
+  @media (max-width: 1100px) {
+    .nav { padding: 20px 28px; gap: 16px; }
+    .nav__pill, .nav__cta { font-size: 13px; padding: 10px 20px; }
+  }
+
+  @media (max-width: 900px) {
+    .nav { padding: 18px 20px; }
+    .nav__pill, .nav__cta { font-size: 12px; padding: 9px 16px; }
+  }
+
+  @media (max-width: 780px) {
+    .nav__links, .nav > .nav__cta { display: none; }
+    .burger { display: block; }
+    .nav__logo { font-size: 18px; }
+  }
+
+  /* ===== Mobile menu ===== */
+  .menu {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--dur-close) var(--ease-in), visibility var(--dur-close) var(--ease-in);
+  }
+
+  @media (max-width: 780px) {
+    .menu { display: flex; }
+  }
+
+  body.is-open .menu {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity var(--dur-open) var(--ease-out), visibility var(--dur-open) var(--ease-out);
+  }
+
+  .menu__bg {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(158deg, var(--sky-glass), var(--sky-deep-glass), var(--ink-glass));
+    backdrop-filter: blur(26px) saturate(150%);
+    -webkit-backdrop-filter: blur(26px) saturate(150%);
+    transform: scale(1.12);
+    transition: transform var(--dur-close) var(--ease-in);
+  }
+
+  body.is-open .menu__bg {
+    transform: scale(1);
+    transition: transform 0.7s var(--ease-out);
+  }
+
+  .menu__inner {
+    position: relative;
+    z-index: 1;
+    margin: auto;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+    padding: 24px;
+  }
+
+  .menu__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+  }
+
+  .menu__list li {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 0.5s var(--ease-in), transform 0.5s var(--ease-in);
+  }
+
+  body.is-open .menu__list li {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.5s var(--ease-out), transform 0.65s var(--ease-out);
+    transition-delay: calc(var(--i) * 55ms + 140ms);
+  }
+
+  .menu__link {
+    font-size: clamp(26px, 7.5vw, 34px);
+    font-weight: 600;
+    color: #fff;
+    display: inline-block;
+    transition: transform 0.15s var(--ease-out);
+  }
+
+  .menu__link:active { transform: translateX(6px); }
+
+  .menu__cta {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 0.5s var(--ease-in), transform 0.5s var(--ease-in);
+  }
+
+  body.is-open .menu__cta {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.5s var(--ease-out), transform 0.65s var(--ease-out);
+    transition-delay: 420ms;
+  }
+
+  /* ===== Leaves ===== */
+  .leaf {
+    position: absolute;
+    top: 100svh;
+    top: 100vh;
+    width: var(--leaf);
+    z-index: 5;
+    pointer-events: none;
+    will-change: transform;
+    --parallax-x: 0px;
+    --parallax-y: 0px;
+  }
+
+  .leaf--left {
+    left: -2%;
+    transform: translate3d(var(--parallax-x), calc(-50% + var(--parallax-y)), 0);
+  }
+
+  .leaf--right {
+    right: -2%;
+    transform: translate3d(var(--parallax-x), calc(-50% + var(--parallax-y)), 0) rotate(180deg);
+  }
+
+  /* ===== Intro ===== */
+  .intro {
+    background: #fff;
+    min-height: 68svh;
+    min-height: 68vh;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: clamp(96px, 17vh, 190px) 24px clamp(80px, 12vh, 150px);
+  }
+
+  .intro__eyebrow {
+    margin: 0 0 18px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--terracotta);
+  }
+
+  .intro__title {
+    margin: 0;
+    max-width: 16ch;
+    font-weight: 300;
+    font-size: clamp(32px, 5.6vw, 68px);
+    line-height: 1.12;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+
+  .intro__title strong {
+    font-family: "Archivo Black", "Arial Black", sans-serif;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+  }
+
+  /* ===== Responsive: hero + leaves ===== */
+  @media (max-width: 780px) {
+    .hero__wordmark { top: 34%; width: 74%; }
+    .hero__building { width: auto; height: 68svh; height: 68vh; bottom: -3svh; bottom: -3vh; }
+    .hero__fade { height: 30%; }
+    :root { --leaf: clamp(150px, 42vw, 260px); }
+    .intro__title { max-width: 13ch; }
+  }
+
+  @media (max-width: 420px) {
+    .hero__wordmark { top: 36%; width: 82%; }
+    .hero__building { height: 62svh; height: 62vh; }
+    :root { --leaf: 40vw; }
+  }
+
+  @media (max-height: 500px) and (orientation: landscape) {
+    .hero__wordmark { top: 18%; width: 70%; }
+    .hero__building { width: auto; height: 86svh; height: 86vh; bottom: -4svh; bottom: -4vh; }
+    :root { --leaf: 26vw; }
+  }
+
+  /* ===== Reduced motion ===== */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .burger__bar,
+    .menu,
+    .menu__bg,
+    .menu__list li,
+    .menu__cta,
+    .menu__link,
+    .nav__pill {
+      transition-duration: 0.01ms !important;
+      transition-delay: 0s !important;
+    }
+    .leaf { transform: translate3d(0, -50%, 0) !important; }
+    .leaf--right { transform: translate3d(0, -50%, 0) rotate(180deg) !important; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <section class="hero">
+    <img class="hero__sky" src="assets/hero-sky.jpg" alt="" aria-hidden="true" />
+    <svg class="hero__wordmark" viewBox="0 0 1300 300" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <text x="650" y="260" text-anchor="middle">AVALEA</text>
+    </svg>
+    <img class="hero__building" src="assets/hero-building.webp" alt="AVALEA luxury Mediterranean resort residence" />
+    <div class="hero__fade"></div>
+    <nav class="nav">
+      <a class="nav__logo" href="#">AVALEA</a>
+      <ul class="nav__links">
+        <li><a class="nav__pill is-active" href="#" aria-current="page">Stay</a></li>
+        <li><a class="nav__pill" href="#">Broker</a></li>
+        <li><a class="nav__pill" href="#">Own/Rent</a></li>
+        <li><a class="nav__pill" href="#">List</a></li>
+        <li><a class="nav__pill" href="#">Ask Broker</a></li>
+      </ul>
+      <a class="nav__cta" href="#">Reserve Now</a>
+      <button class="burger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+        <span class="burger__bar"></span>
+        <span class="burger__bar"></span>
+        <span class="burger__bar"></span>
+      </button>
+    </nav>
+    <div class="menu" id="mobile-menu">
+      <div class="menu__bg"></div>
+      <div class="menu__inner">
+        <ul class="menu__list">
+          <li style="--i:0"><a class="menu__link" href="#">Stay</a></li>
+          <li style="--i:1"><a class="menu__link" href="#">Broker</a></li>
+          <li style="--i:2"><a class="menu__link" href="#">Own/Rent</a></li>
+          <li style="--i:3"><a class="menu__link" href="#">List</a></li>
+          <li style="--i:4"><a class="menu__link" href="#">Ask Broker</a></li>
+        </ul>
+        <a class="nav__cta menu__cta" href="#">Reserve Now</a>
+      </div>
+    </div>
+  </section>
+  <img class="leaf leaf--left" src="assets/leaf.webp" alt="" aria-hidden="true" />
+  <img class="leaf leaf--right" src="assets/leaf.webp" alt="" aria-hidden="true" />
+  <section class="intro">
+    <p class="intro__eyebrow">Riviera Living Style</p>
+    <h2 class="intro__title">Where the shoreline<br />becomes <strong>calm</strong></h2>
+  </section>
+</div>
+<script>
+  (function () {
+    'use strict';
+
+    var burger = document.querySelector('.burger');
+    var menu = document.getElementById('mobile-menu');
+    var menuInner = menu.querySelector('.menu__inner');
+    var menuLinks = menu.querySelectorAll('.menu__link');
+
+    function isOpen() { return document.body.classList.contains('is-open'); }
+
+    function openMenu() {
+      document.body.classList.add('is-open');
+      document.body.style.overflow = 'hidden';
+      burger.setAttribute('aria-label', 'Close menu');
+      burger.setAttribute('aria-expanded', 'true');
+    }
+
+    function closeMenu(refocus) {
+      document.body.classList.remove('is-open');
+      document.body.style.overflow = '';
+      burger.setAttribute('aria-label', 'Open menu');
+      burger.setAttribute('aria-expanded', 'false');
+      if (refocus) burger.focus();
+    }
+
+    burger.addEventListener('click', function () {
+      if (isOpen()) closeMenu(false); else openMenu();
+    });
+
+    menuLinks.forEach(function (link) {
+      link.addEventListener('click', function () { closeMenu(false); });
+    });
+
+    menu.addEventListener('click', function (event) {
+      if (!menuInner.contains(event.target)) closeMenu(false);
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && isOpen()) closeMenu(true);
+    });
+
+    var desktopQuery = window.matchMedia('(min-width: 781px)');
+    function forceCloseOnDesktop() {
+      if (desktopQuery.matches && isOpen()) closeMenu(false);
+    }
+    if (desktopQuery.addEventListener) {
+      desktopQuery.addEventListener('change', forceCloseOnDesktop);
+    } else if (desktopQuery.addListener) {
+      desktopQuery.addListener(forceCloseOnDesktop);
+    }
+    window.addEventListener('resize', forceCloseOnDesktop);
+
+    // ---- Leaf scroll parallax ----
+    var reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    var leafLeft = document.querySelector('.leaf--left');
+    var leafRight = document.querySelector('.leaf--right');
+    var ticking = false;
+
+    function updateParallax() {
+      ticking = false;
+      if (reduceMotionQuery.matches) return;
+      var scrollY = window.scrollY || window.pageYOffset || 0;
+      leafLeft.style.setProperty('--parallax-y', (scrollY * -0.28) + 'px');
+      leafLeft.style.setProperty('--parallax-x', (scrollY * -0.06) + 'px');
+      leafRight.style.setProperty('--parallax-y', (scrollY * -0.48) + 'px');
+      leafRight.style.setProperty('--parallax-x', (scrollY * 0.08) + 'px');
+    }
+
+    function onScroll() {
+      if (reduceMotionQuery.matches || ticking) return;
+      ticking = true;
+      requestAnimationFrame(updateParallax);
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    updateParallax();
+  })();
+</script>
+</body>
+</html>

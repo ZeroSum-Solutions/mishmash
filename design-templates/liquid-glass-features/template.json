@@ -1,0 +1,12 @@
+{
+  "slug": "liquid-glass-features",
+  "name": "Liquid Glass Features",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Barlow:wght@300;400;500;600&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=liquid-glass-features",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Arceage Ag — Harvesting Services</title>
+<meta name="description" content="Services section for Arceage Ag, a farm harvesting and machinery services partner: sustainable crop care, advanced machinery, and smart pest management." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* Chromatic accent: this design is a monochrome black/white/photo
+       treatment with no brand color of its own. This token is not part
+       of the resting-state render — it is scoped solely to the keyboard
+       focus ring below, so MishMash's recolor pass has a genuine
+       chromatic custom property to act on without altering the default
+       look. */
+    --accent: #4e85bf;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    background: #000000;
+    color: #ffffff;
+    font-family: "Barlow", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .font-accent {
+    font-family: "Instrument Serif", serif;
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  /* ---------- Section shell ---------- */
+  .services-section {
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  .bg-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+  .bg-layer img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .content-container {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    margin-inline: auto;
+    padding: 2rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  @media (min-width: 768px) {
+    .content-container {
+      padding: 6rem 3rem;
+      gap: 6rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .content-container {
+      padding-left: 120px;
+      padding-right: 120px;
+    }
+  }
+
+  /* ---------- Top content: headline + button ---------- */
+  .top-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 3rem;
+    width: 100%;
+    align-items: end;
+  }
+  @media (min-width: 768px) {
+    .top-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4rem;
+    }
+  }
+
+  .headline-block {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  }
+  .headline-block.in-view {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  @media (min-width: 768px) {
+    .headline-block {
+      grid-column: span 2 / span 2;
+    }
+  }
+
+  .headline {
+    font-size: clamp(1.5rem, 4vw, 3.5rem);
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+    margin: 0 0 1.5rem;
+    line-height: 1.1;
+    max-width: 800px;
+  }
+
+  .subheadline {
+    margin: 0;
+    font-size: 1.125rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 300;
+    letter-spacing: 0.025em;
+  }
+  @media (min-width: 768px) {
+    .subheadline {
+      font-size: 24px;
+    }
+  }
+
+  .btn-desktop-wrap {
+    display: none;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    transition-delay: 100ms;
+  }
+  .btn-desktop-wrap.in-view {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  @media (min-width: 768px) {
+    .btn-desktop-wrap {
+      display: flex;
+      justify-content: flex-end;
+      width: 100%;
+      max-width: 421px;
+      padding-bottom: 0.25rem;
+    }
+  }
+
+  .schedule-btn {
+    padding: 0.625rem 1.5rem;
+    border-radius: 9999px;
+    background: #ffffff;
+    color: #000000;
+    border: none;
+    font-family: inherit;
+    font-size: 0.875rem;
+    letter-spacing: 0.025em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s, color 0.3s;
+  }
+  .schedule-btn:hover {
+    background: #000000;
+    color: #ffffff;
+  }
+  .schedule-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* ---------- Bottom content: 3 feature columns ---------- */
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 3rem;
+    width: 100%;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  @media (min-width: 768px) {
+    .bottom-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4rem;
+      margin-top: 200px;
+    }
+  }
+
+  .feature-col {
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    transition-delay: 100ms;
+  }
+  .feature-col.in-view {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .feature-col-1,
+  .feature-col-2 {
+    max-width: 420px;
+  }
+  .feature-col-3 {
+    max-width: 421px;
+  }
+
+  .feature-icon {
+    width: 3rem;
+    height: 3rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .feature-icon svg {
+    width: 48px;
+    height: 48px;
+    stroke: #ffffff;
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Ambient loop motion translating each source Lottie's internal
+     animation (wind-blown leaves / rotating wheels / scurrying legs)
+     into vanilla CSS. Exact Lottie keyframe curves are not part of the
+     prompt text and are not portable; these are a tasteful equivalent. */
+  .icon-leaf-cluster {
+    transform-origin: 50% 60%;
+    animation: leaf-sway 3s ease-in-out infinite;
+  }
+  @keyframes leaf-sway {
+    0%, 100% { transform: rotate(-6deg); }
+    50% { transform: rotate(6deg); }
+  }
+  .icon-tractor {
+    animation: tractor-bob 2s ease-in-out infinite;
+  }
+  @keyframes tractor-bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
+  .icon-beetle {
+    transform-origin: 50% 50%;
+    animation: beetle-scurry 1.2s ease-in-out infinite;
+  }
+  @keyframes beetle-scurry {
+    0%, 100% { transform: rotate(-3deg); }
+    50% { transform: rotate(3deg); }
+  }
+
+  .divider-line {
+    width: 100%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.2);
+    margin-bottom: 1.5rem;
+    transform-origin: left;
+  }
+
+  .feature-title {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: #ffffff;
+    margin: 0 0 0.75rem;
+  }
+
+  .feature-desc {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.625;
+    max-width: 340px;
+    margin: 0;
+  }
+
+  /* ---------- Mobile-only button ---------- */
+  .btn-mobile-wrap {
+    display: flex;
+    justify-content: flex-start;
+    width: 100%;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    transition-delay: 200ms;
+  }
+  .btn-mobile-wrap.in-view {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  @media (min-width: 768px) {
+    .btn-mobile-wrap {
+      display: none;
+    }
+  }
+
+  /* ---------- Typewriter character reveal ---------- */
+  .tw-char {
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
+  }
+  .tw-char.visible {
+    opacity: 1;
+  }
+
+  /* ---------- Reduced motion ---------- */
+  @media (prefers-reduced-motion: reduce) {
+    .headline-block,
+    .btn-desktop-wrap,
+    .feature-col,
+    .btn-mobile-wrap,
+    .tw-char,
+    .icon-leaf-cluster,
+    .icon-tractor,
+    .icon-beetle {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+    .headline-block,
+    .btn-desktop-wrap,
+    .feature-col,
+    .btn-mobile-wrap {
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    .tw-char {
+      opacity: 1 !important;
+    }
+    .icon-leaf-cluster,
+    .icon-tractor,
+    .icon-beetle {
+      animation: none !important;
+      transform: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+<h1 class="sr-only">Arceage Ag — Harvesting Services</h1>
+<section id="services" class="services-section">
+  <div class="bg-layer" aria-hidden="true">
+    <img src="assets/agriculture-field.jpg" alt="" />
+  </div>
+
+  <div class="content-container">
+    <div class="top-grid">
+      <div class="headline-block" id="headlineBlock">
+        <h2 class="headline">
+          <span class="tw-visual" id="headlineVisual1" aria-hidden="true"></span><span class="font-accent"><span class="tw-visual" id="headlineVisual2" aria-hidden="true"></span></span><span class="sr-only">A Highly Efficient, Precision-Driven Harvesting Process Built For Maximum Yield</span>
+        </h2>
+        <p class="subheadline">
+          <span class="tw-visual" id="subheadVisual" aria-hidden="true"></span><span class="sr-only">Precision in every pass.</span>
+        </p>
+      </div>
+
+      <div class="btn-desktop-wrap" id="btnDesktopWrap">
+        <button type="button" class="schedule-btn" id="scheduleBtnDesktop">Schedule Service</button>
+      </div>
+    </div>
+    <ul class="bottom-grid" role="list">
+      <li class="feature-col feature-col-1" id="featureCol1">
+        <div class="feature-icon">
+          <svg class="icon-leaf-cluster" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 12C10.2 10.6 9.4 8.7 10 6.3c2.3.7 3.7 2.2 4 4.4" transform="rotate(0 12 12)" />
+            <path d="M12 12C10.2 10.6 9.4 8.7 10 6.3c2.3.7 3.7 2.2 4 4.4" transform="rotate(72 12 12)" />
+            <path d="M12 12C10.2 10.6 9.4 8.7 10 6.3c2.3.7 3.7 2.2 4 4.4" transform="rotate(144 12 12)" />
+            <path d="M12 12C10.2 10.6 9.4 8.7 10 6.3c2.3.7 3.7 2.2 4 4.4" transform="rotate(216 12 12)" />
+            <path d="M12 12C10.2 10.6 9.4 8.7 10 6.3c2.3.7 3.7 2.2 4 4.4" transform="rotate(288 12 12)" />
+          </svg>
+        </div>
+        <div class="divider-line" id="divider1" aria-hidden="true"></div>
+        <h3 class="feature-title"><span class="tw-visual" id="col1TitleVisual" aria-hidden="true"></span><span class="sr-only">Sustainable Crop Care</span></h3>
+        <p class="feature-desc"><span class="tw-visual" id="col1DescVisual" aria-hidden="true"></span><span class="sr-only">Nurturing your fields with eco-friendly practices to ensure healthy growth and robust yields.</span></p>
+      </li>
+
+      <li class="feature-col feature-col-2" id="featureCol2">
+        <div class="feature-icon">
+          <svg class="icon-tractor" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m10 11 11 .9a1 1 0 0 1 .8 1.1l-.665 4.158a1 1 0 0 1-.988.842H20" />
+            <path d="M16 18h-5" />
+            <path d="M18 5a1 1 0 0 0-1 1v5.573" />
+            <path d="M3 4h8.129a1 1 0 0 1 .99.863L13 11.246" />
+            <path d="M4 11V4" />
+            <path d="M7 15h.01" />
+            <path d="M8 10.1V4" />
+            <circle cx="18" cy="18" r="2" />
+            <circle cx="7" cy="15" r="5" />
+          </svg>
+        </div>
+        <div class="divider-line" id="divider2" aria-hidden="true"></div>
+        <h3 class="feature-title"><span class="tw-visual" id="col2TitleVisual" aria-hidden="true"></span><span class="sr-only">Advanced Machinery</span></h3>
+        <p class="feature-desc"><span class="tw-visual" id="col2DescVisual" aria-hidden="true"></span><span class="sr-only">Deploying state-of-the-art tractors and harvesters for maximum efficiency and speed.</span></p>
+      </li>
+
+      <li class="feature-col feature-col-3" id="featureCol3">
+        <div class="feature-icon">
+          <svg class="icon-beetle" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 20v-9" />
+            <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" />
+            <path d="M14.12 3.88 16 2" />
+            <path d="M21 21a4 4 0 0 0-3.81-4" />
+            <path d="M21 5a4 4 0 0 1-3.55 3.97" />
+            <path d="M22 13h-4" />
+            <path d="M3 21a4 4 0 0 1 3.81-4" />
+            <path d="M3 5a4 4 0 0 0 3.55 3.97" />
+            <path d="M6 13H2" />
+            <path d="m8 2 1.88 1.88" />
+            <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13" />
+          </svg>
+        </div>
+        <div class="divider-line" id="divider3" aria-hidden="true"></div>
+        <h3 class="feature-title"><span class="tw-visual" id="col3TitleVisual" aria-hidden="true"></span><span class="sr-only">Smart Pest Management</span></h3>
+        <p class="feature-desc"><span class="tw-visual" id="col3DescVisual" aria-hidden="true"></span><span class="sr-only">Protecting your harvest by monitoring and managing field ecosystems with precision.</span></p>
+      </li>
+    </ul>
+
+    <div class="btn-mobile-wrap" id="btnMobileWrap">
+      <button type="button" class="schedule-btn" id="scheduleBtnMobile">Schedule Service</button>
+    </div>
+  </div>
+</section>
+<script>
+(function () {
+  "use strict";
+
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Character-by-character reveal, ported from the source design's
+  // Typewriter component: parent staggerChildren = speed (seconds/char),
+  // delayChildren = delay (seconds); each child fades opacity 0 -> 1.
+  function typeChars(el, text, delayMs, speedMs) {
+    if (!el) return;
+    el.textContent = "";
+    if (reduceMotion) {
+      el.textContent = text;
+      return;
+    }
+    var frag = document.createDocumentFragment();
+    var spans = [];
+    for (var i = 0; i < text.length; i++) {
+      var span = document.createElement("span");
+      span.className = "tw-char";
+      span.textContent = text[i];
+      span.style.transitionDelay = (delayMs + i * speedMs) + "ms";
+      frag.appendChild(span);
+      spans.push(span);
+    }
+    el.appendChild(frag);
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        for (var j = 0; j < spans.length; j++) {
+          spans[j].classList.add("visible");
+        }
+      });
+    });
+  }
+
+  var headlineBlock = document.getElementById("headlineBlock");
+  var btnDesktopWrap = document.getElementById("btnDesktopWrap");
+  var featureCol1 = document.getElementById("featureCol1");
+  var featureCol2 = document.getElementById("featureCol2");
+  var featureCol3 = document.getElementById("featureCol3");
+  var btnMobileWrap = document.getElementById("btnMobileWrap");
+  var revealEls = [headlineBlock, btnDesktopWrap, featureCol1, featureCol2, featureCol3, btnMobileWrap];
+
+  function playReveal() {
+    for (var i = 0; i < revealEls.length; i++) {
+      if (revealEls[i]) revealEls[i].classList.add("in-view");
+    }
+
+    typeChars(document.getElementById("headlineVisual1"), "A Highly Efficient, Precision-Driven Harvesting Process Built For ", 0, 12);
+    typeChars(document.getElementById("headlineVisual2"), "Maximum Yield", 800, 12);
+    typeChars(document.getElementById("subheadVisual"), "Precision in every pass.", 100, 12);
+
+    typeChars(document.getElementById("col1TitleVisual"), "Sustainable Crop Care", 0, 15);
+    typeChars(document.getElementById("col1DescVisual"), "Nurturing your fields with eco-friendly practices to ensure healthy growth and robust yields.", 0, 15);
+    typeChars(document.getElementById("col2TitleVisual"), "Advanced Machinery", 0, 15);
+    typeChars(document.getElementById("col2DescVisual"), "Deploying state-of-the-art tractors and harvesters for maximum efficiency and speed.", 0, 15);
+    typeChars(document.getElementById("col3TitleVisual"), "Smart Pest Management", 0, 15);
+    typeChars(document.getElementById("col3DescVisual"), "Protecting your harvest by monitoring and managing field ecosystems with precision.", 0, 15);
+  }
+
+  var sectionEl = document.getElementById("services");
+  var observer = new IntersectionObserver(
+    function (entries) {
+      if (entries[0] && entries[0].isIntersecting) {
+        playReveal();
+        observer.disconnect();
+      }
+    },
+    { threshold: 0, rootMargin: "-100px 0px -100px 0px" }
+  );
+  observer.observe(sectionEl);
+
+  // "Schedule Service" scrolls to #contact in the source design. This
+  // standalone section page has no #contact section of its own, so the
+  // handler is a guarded no-op rather than a fabricated destination.
+  function scrollToContact() {
+    var target = document.getElementById("contact");
+    if (target) {
+      target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+    }
+  }
+  var btnDesktop = document.getElementById("scheduleBtnDesktop");
+  var btnMobile = document.getElementById("scheduleBtnMobile");
+  if (btnDesktop) btnDesktop.addEventListener("click", scrollToContact);
+  if (btnMobile) btnMobile.addEventListener("click", scrollToContact);
+})();
+</script>
+</body>
+</html>

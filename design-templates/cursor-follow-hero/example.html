@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orbis.Nft</title>
+<meta
+	name="description"
+	content="Orbis.Nft hero section: moving the cursor left and right drifts a generative starfield beyond a receding planet, with an orbiting Nft-collection ring, a neon cursor-follow glow, bold Anton display type, and a Condiment cursive accent."
+>
+<meta name="theme-color" content="#010828">
+<link
+	rel="icon"
+	href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23010828'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23eff4ff' stroke-width='1.4' stroke-dasharray='2 3'/%3E%3Ccircle cx='23' cy='11' r='2.6' fill='%236fff00'/%3E%3C/svg%3E"
+>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link
+	href="https://fonts.googleapis.com/css2?family=Anton&family=Condiment&display=swap"
+	rel="stylesheet"
+>
+<style>
+	:root {
+		--bg: #010828;
+		--bg-deep: #000210;
+		--cream: #eff4ff;
+		--accent: #6fff00;
+		--accent-soft: hsl(84 100% 74%);
+		--accent-dim: hsl(84 85% 32%);
+		--accent-glow: hsl(84 100% 55% / 0.32);
+		--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+	}
+
+	* {
+		box-sizing: border-box;
+	}
+
+	html, body {
+		margin: 0;
+		padding: 0;
+		background: var(--bg);
+	}
+
+	body {
+		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+		-webkit-font-smoothing: antialiased;
+		color: var(--cream);
+		overflow-x: hidden;
+	}
+
+	button {
+		font-family: inherit;
+		border: none;
+		background: none;
+		cursor: pointer;
+	}
+
+	a {
+		text-decoration: none;
+		color: inherit;
+	}
+
+	/* ---------- Header / nav ---------- */
+
+	.site-header {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 50;
+	}
+
+	.nav {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 1rem 1.25rem;
+	}
+
+	@media (min-width: 640px) {
+		.nav {
+			padding: 1.25rem 2rem;
+		}
+	}
+
+	.nav-logo {
+		display: flex;
+		align-items: center;
+		line-height: 0;
+	}
+
+	.nav-pill {
+		display: none;
+		position: absolute;
+		left: 50%;
+		transform: translateX(-50%);
+		background: #111827;
+		border-radius: 999px;
+		padding: 0.375rem 0.5rem;
+		align-items: center;
+		gap: 0.25rem;
+	}
+
+	.nav-pill button {
+		color: #d1d5db;
+		font-size: 0.875rem;
+		font-weight: 500;
+		padding: 0.375rem 1rem;
+		border-radius: 999px;
+		transition: color 200ms var(--ease-out);
+	}
+
+	.nav-pill button:hover {
+		color: #ffffff;
+	}
+
+	.nav-pill button.is-active {
+		background: #ffffff;
+		color: #111827;
+	}
+
+	.nav-pill button.is-active:hover {
+		color: #111827;
+	}
+
+	.nav-cta {
+		position: relative;
+		display: none;
+		align-items: center;
+		gap: 0.5rem;
+		background: #111827;
+		color: #ffffff;
+		font-size: 0.875rem;
+		font-weight: 500;
+		padding: 0.5rem 1.25rem;
+		border-radius: 999px;
+		transition: background 200ms var(--ease-out);
+	}
+
+	.nav-cta::before {
+		content: "";
+		position: absolute;
+		inset: -12px;
+		border-radius: 999px;
+		background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+		opacity: 0;
+		filter: blur(10px);
+		z-index: -1;
+		transition: opacity 300ms var(--ease-out);
+		pointer-events: none;
+	}
+
+	.nav-cta:hover {
+		background: #374151;
+	}
+
+	.nav-cta:hover::before {
+		opacity: 1;
+	}
+
+	.dot {
+		position: relative;
+		display: inline-block;
+		width: 8px;
+		height: 8px;
+		border-radius: 999px;
+		background: var(--accent);
+	}
+
+	.dot::after {
+		content: "";
+		position: absolute;
+		inset: -4px;
+		border-radius: 999px;
+		border: 1px solid var(--accent);
+		opacity: 0.6;
+		animation: dotPulse 2200ms ease-out infinite;
+	}
+
+	@keyframes dotPulse {
+		0% { transform: scale(0.9); opacity: 0.6; }
+		70% { transform: scale(1.9); opacity: 0; }
+		100% { transform: scale(1.9); opacity: 0; }
+	}
+
+	.nav-toggle {
+		display: flex;
+		padding: 0.25rem;
+	}
+
+	.nav-toggle svg {
+		width: 22px;
+		height: 22px;
+	}
+
+	.nav-toggle .icon-menu {
+		color: var(--cream);
+	}
+
+	.nav-toggle .icon-close {
+		display: none;
+		color: #111827;
+	}
+
+	.nav-toggle.is-open .icon-menu {
+		display: none;
+	}
+
+	.nav-toggle.is-open .icon-close {
+		display: block;
+	}
+
+	.mobile-menu {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 40;
+		background: #ffffff;
+		padding: 4rem 1.25rem 1.5rem;
+		box-shadow: 0 10px 30px rgba(1, 8, 40, 0.35);
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		opacity: 0;
+		transform: translateY(-8px);
+		visibility: hidden;
+		pointer-events: none;
+		transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out), visibility 200ms;
+	}
+
+	.mobile-menu.is-open {
+		opacity: 1;
+		transform: translateY(0);
+		visibility: visible;
+		pointer-events: auto;
+		transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out), visibility 140ms;
+	}
+
+	.mobile-menu button {
+		color: #1f2937;
+		font-size: 1rem;
+		font-weight: 500;
+		padding: 0.75rem 0;
+		border-bottom: 1px solid #f3f4f6;
+		text-align: left;
+		transition: color 200ms var(--ease-out);
+	}
+
+	.mobile-menu button:hover {
+		color: #6b7280;
+	}
+
+	.mobile-cta {
+		margin-top: 1rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		background: #111827;
+		color: #ffffff;
+		font-size: 0.875rem;
+		font-weight: 500;
+		padding: 0.75rem 1.25rem;
+		border-radius: 999px;
+		border-bottom: none;
+		transition: background 200ms var(--ease-out);
+	}
+
+	.mobile-cta:hover {
+		background: #374151;
+	}
+
+	@media (min-width: 768px) {
+		.nav-pill { display: flex; }
+		.nav-cta { display: flex; }
+		.nav-toggle { display: none; }
+		.mobile-menu { display: none; }
+	}
+
+	/* ---------- Hero scene ---------- */
+
+	.hero {
+		position: relative;
+		width: 100%;
+		height: 100vh;
+		min-height: 520px;
+		overflow: hidden;
+		background: var(--bg);
+		--progress: 0.3;
+	}
+
+	.scene-layer {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		opacity: 0;
+		animation: sceneFadeIn 1200ms var(--ease-out) forwards;
+	}
+
+	.hero-scene {
+		z-index: 0;
+		width: 100%;
+		height: 100%;
+		display: block;
+	}
+
+	.hero-nebula {
+		z-index: 1;
+		animation-delay: 60ms;
+		background: radial-gradient(
+			ellipse 62% 46% at calc(66% + var(--progress) * 8%) 28%,
+			var(--accent-glow),
+			transparent 72%
+		);
+		opacity: 0.65;
+	}
+
+	.hero-orbits {
+		z-index: 2;
+		width: min(74vw, 820px);
+		height: min(74vw, 820px);
+		top: -8%;
+		right: -16%;
+		left: auto;
+		bottom: auto;
+		inset: auto;
+		animation-delay: 140ms;
+		opacity: 0.6;
+	}
+
+	.hero-orbits ellipse {
+		fill: none;
+		stroke: var(--cream);
+		stroke-opacity: 0.16;
+		stroke-width: 1;
+		stroke-dasharray: 2 8;
+	}
+
+	.orbit-rotor {
+		transform-origin: 300px 300px;
+		transform: rotate(calc(var(--progress) * 140deg));
+	}
+
+	.orbit-node {
+		fill: var(--accent);
+		filter: drop-shadow(0 0 7px var(--accent));
+	}
+
+	.hero-planet {
+		z-index: 3;
+		position: absolute;
+		left: -10%;
+		bottom: calc(-20% - (var(--progress) * 6%));
+		width: min(62vw, 640px);
+		aspect-ratio: 1 / 1;
+		border-radius: 50%;
+		background: radial-gradient(circle at 34% 30%, var(--cream) 0%, #0c1c46 42%, #020814 74%);
+		box-shadow:
+			inset -18px -12px 60px rgba(0, 0, 0, 0.55),
+			0 0 130px 12px var(--accent-glow);
+		transform: scale(calc(1 - var(--progress) * 0.22));
+		animation-delay: 100ms;
+		opacity: 0;
+	}
+
+	.hero-planet::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		border-radius: 50%;
+		background: conic-gradient(from 200deg at 50% 50%, transparent 0deg, var(--accent-glow) 18deg, transparent 40deg);
+		mix-blend-mode: screen;
+		opacity: 0.7;
+	}
+
+	.hero-scrim {
+		z-index: 4;
+		background: linear-gradient(180deg, transparent 28%, var(--bg) 88%);
+		animation-delay: 0ms;
+		opacity: 1;
+		animation: none;
+	}
+
+	@keyframes sceneFadeIn {
+		from { opacity: 0; transform: scale(1.03); }
+		to { opacity: 1; transform: scale(1); }
+	}
+
+	.cursor-orb {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 180px;
+		height: 180px;
+		border-radius: 50%;
+		background: radial-gradient(circle, var(--accent) 0%, var(--accent-soft) 32%, transparent 68%);
+		mix-blend-mode: screen;
+		opacity: 0;
+		filter: blur(4px);
+		pointer-events: none;
+		z-index: 45;
+		transform: translate(-50%, -50%);
+		transition: opacity 320ms var(--ease-out);
+		will-change: transform;
+	}
+
+	.cursor-orb.is-active {
+		opacity: 0.55;
+	}
+
+	.pointer-hint {
+		position: absolute;
+		z-index: 10;
+		right: 1.5rem;
+		bottom: 1.25rem;
+		margin: 0;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--cream);
+		opacity: 0.45;
+		transition: opacity 500ms var(--ease-out);
+	}
+
+	.pointer-hint.is-dismissed {
+		opacity: 0;
+	}
+
+	@media (max-width: 767px) {
+		.pointer-hint { display: none; }
+	}
+
+	/* ---------- Hero text ---------- */
+
+	.hero-content {
+		position: relative;
+		z-index: 10;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+	}
+
+	.hero-text-row {
+		flex: 1;
+		display: flex;
+		align-items: flex-end;
+		padding: 0 1.5rem 4rem;
+	}
+
+	@media (min-width: 640px) {
+		.hero-text-row { padding-bottom: 5rem; }
+	}
+
+	@media (min-width: 1024px) {
+		.hero-text-row { padding: 0 3rem 6rem; }
+	}
+
+	.hero-text-inner {
+		position: relative;
+		max-width: 780px;
+	}
+
+	@media (min-width: 1024px) {
+		.hero-text-inner { margin-left: 3rem; }
+	}
+
+	.hero-heading-wrap {
+		position: relative;
+		display: inline-block;
+	}
+
+	.hero-heading {
+		margin: 0;
+		font-family: 'Anton', sans-serif;
+		font-size: clamp(40px, 11px + 7.7vw, 90px);
+		line-height: 1.05;
+		text-transform: uppercase;
+		color: var(--cream);
+		opacity: 0;
+		animation: heroFadeUp 800ms var(--ease-out) forwards;
+		animation-delay: 0.15s;
+	}
+
+	@media (min-width: 640px) {
+		.hero-heading { line-height: 1; }
+	}
+
+	.hero-script {
+		position: absolute;
+		right: -1rem;
+		top: 0;
+		font-family: 'Condiment', cursive;
+		font-size: clamp(24px, 10px + 3.7vw, 48px);
+		color: var(--accent);
+		transform: rotate(-1deg);
+		opacity: 0;
+		mix-blend-mode: exclusion;
+		animation: scriptFadeIn 800ms var(--ease-out) forwards;
+		animation-delay: 0.4s;
+		white-space: nowrap;
+	}
+
+	@media (min-width: 640px) {
+		.hero-script { right: 0; top: 0.5rem; }
+	}
+
+	@media (min-width: 768px) {
+		.hero-script { right: 1rem; top: 1rem; }
+	}
+
+	@keyframes heroFadeUp {
+		from { opacity: 0; transform: translateY(28px); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+
+	@keyframes scriptFadeIn {
+		from { opacity: 0; transform: rotate(-1deg) translateY(10px); }
+		to { opacity: 0.9; transform: rotate(-1deg) translateY(0); }
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.scene-layer,
+		.hero-planet {
+			animation: none !important;
+			opacity: 1 !important;
+			transform: none !important;
+		}
+
+		.hero-heading,
+		.hero-script {
+			animation: none !important;
+			opacity: 1 !important;
+			transform: none !important;
+		}
+
+		.hero-script {
+			transform: rotate(-1deg) !important;
+		}
+
+		.hero-planet {
+			transform: scale(calc(1 - var(--progress) * 0.22)) !important;
+		}
+
+		.dot::after {
+			animation: none;
+			opacity: 0;
+		}
+
+		.cursor-orb {
+			display: none !important;
+		}
+
+		.pointer-hint {
+			display: none !important;
+		}
+
+		.mobile-menu,
+		.mobile-menu.is-open {
+			transition: none;
+		}
+
+		.nav-cta,
+		.mobile-cta,
+		.nav-pill button {
+			transition: none;
+		}
+	}
+</style>
+</head>
+<body>
+	<header class="site-header">
+		<nav class="nav" aria-label="Primary">
+			<a class="nav-logo" href="#hero" aria-label="Orbis.Nft home">
+				<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 256 256" fill="none" aria-hidden="true">
+					<path d="M 256 64 L 256 128 L 192.5 128 L 160 95 L 128 64 L 96 95 L 63.5 128 L 64 128 L 128 192 L 128 256 L 64.5 256 L 32 223 L 0 192 L 0 64 L 64 0 L 192 0 Z M 256 192 L 256 256 L 192.5 256 L 160 223 L 128 192 L 128 128 L 192 128 Z" fill="var(--cream)" />
+				</svg>
+			</a>
+
+			<div class="nav-pill" role="group" aria-label="Sections">
+				<button type="button" class="is-active">Device</button>
+				<button type="button">Real Stories</button>
+				<button type="button">Science</button>
+				<button type="button">Plans</button>
+				<button type="button">Reach Us</button>
+			</div>
+
+			<button type="button" class="nav-cta">
+				<span class="dot" aria-hidden="true"></span>
+				<span>Reserve Yours</span>
+			</button>
+
+			<button type="button" class="nav-toggle" id="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+				<svg class="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+					<line x1="3" y1="6" x2="21" y2="6"></line>
+					<line x1="3" y1="12" x2="21" y2="12"></line>
+					<line x1="3" y1="18" x2="21" y2="18"></line>
+				</svg>
+				<svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+					<line x1="5" y1="5" x2="19" y2="19"></line>
+					<line x1="19" y1="5" x2="5" y2="19"></line>
+				</svg>
+			</button>
+		</nav>
+
+		<div class="mobile-menu" id="mobile-menu" hidden>
+			<button type="button">Device</button>
+			<button type="button">Real Stories</button>
+			<button type="button">Science</button>
+			<button type="button">Plans</button>
+			<button type="button">Reach Us</button>
+			<button type="button" class="mobile-cta">
+				<span class="dot" aria-hidden="true"></span>
+				<span>Reserve Yours</span>
+			</button>
+		</div>
+	</header>
+
+	<main>
+		<section class="hero" id="hero" aria-label="Orbis.Nft introduction">
+			<canvas class="scene-layer hero-scene" id="scene" aria-hidden="true"></canvas>
+			<div class="scene-layer hero-nebula" aria-hidden="true"></div>
+			<div class="scene-layer hero-planet" aria-hidden="true"></div>
+
+			<svg class="scene-layer hero-orbits" viewBox="0 0 600 600" aria-hidden="true">
+				<g class="orbit-rotor">
+					<ellipse cx="300" cy="300" rx="120" ry="44" />
+					<ellipse cx="300" cy="300" rx="192" ry="70" />
+					<ellipse cx="300" cy="300" rx="264" ry="96" />
+					<circle class="orbit-node" cx="420" cy="300" r="5"></circle>
+					<circle class="orbit-node" cx="108" cy="300" r="4"></circle>
+					<circle class="orbit-node" cx="300" cy="204" r="4.5"></circle>
+				</g>
+			</svg>
+
+			<div class="scene-layer hero-scrim" aria-hidden="true"></div>
+
+			<div class="hero-content">
+				<div class="hero-text-row">
+					<div class="hero-text-inner">
+						<div class="hero-heading-wrap">
+							<h1 class="hero-heading">Beyond earth<br>and ( its ) familiar<br>boundaries</h1>
+							<span class="hero-script">Nft collection</span>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<p class="pointer-hint" id="pointer-hint" aria-hidden="true">Move your cursor to drift through orbit</p>
+		</section>
+	</main>
+
+	<div class="cursor-orb" id="cursor-orb" aria-hidden="true"></div>
+
+	<script>
+	(function () {
+		'use strict';
+
+		var hero = document.getElementById('hero');
+		var canvas = document.getElementById('scene');
+		var ctx = canvas.getContext('2d');
+		var orb = document.getElementById('cursor-orb');
+		var hint = document.getElementById('pointer-hint');
+
+		var reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+		var finePointerQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
+
+		var SENSITIVITY = 0.8;
+		var PROGRESS_EASE = 0.09;
+		var ORB_EASE = 0.18;
+		var DEFAULT_PROGRESS = 0.3;
+		var STAR_COUNT = 220;
+		var LAYER_SPEED = [0.10, 0.22, 0.40];
+
+		var progress = { target: DEFAULT_PROGRESS, current: DEFAULT_PROGRESS };
+		var prevX = null;
+		var userEngaged = false;
+		var rafId = null;
+		var dpr = Math.min(window.devicePixelRatio || 1, 2);
+		var pointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+		var orbPos = { x: pointer.x, y: pointer.y, active: false };
+		var stars = [];
+
+		function clamp(value, min, max) {
+			return Math.max(min, Math.min(max, value));
+		}
+
+		function buildStars() {
+			stars = [];
+			for (var i = 0; i < STAR_COUNT; i++) {
+				var layer = i % 3;
+				stars.push({
+					x: Math.random(),
+					y: Math.random(),
+					r: (layer === 2 ? 1.5 : layer === 1 ? 1.05 : 0.65) * (0.7 + Math.random() * 0.7),
+					base: 0.22 + Math.random() * 0.5,
+					phase: Math.random() * Math.PI * 2,
+					layer: layer
+				});
+			}
+		}
+
+		function resizeCanvas() {
+			var rect = hero.getBoundingClientRect();
+			canvas.width = Math.max(1, Math.round(rect.width * dpr));
+			canvas.height = Math.max(1, Math.round(rect.height * dpr));
+		}
+
+		function drawStars(t, time, reduced) {
+			var w = canvas.width;
+			var h = canvas.height;
+			if (!w || !h) return;
+			ctx.clearRect(0, 0, w, h);
+			for (var i = 0; i < stars.length; i++) {
+				var s = stars[i];
+				var speed = LAYER_SPEED[s.layer];
+				var ox = ((s.x + (t - 0.5) * speed) % 1 + 1) % 1;
+				var twinkle = reduced ? s.base : s.base * (0.5 + 0.5 * Math.sin(time * 0.0015 + s.phase));
+				ctx.globalAlpha = clamp(twinkle, 0, 1);
+				ctx.fillStyle = '#eff4ff';
+				ctx.beginPath();
+				ctx.arc(ox * w, s.y * h, s.r * dpr * (0.75 + s.layer * 0.35), 0, Math.PI * 2);
+				ctx.fill();
+			}
+			ctx.globalAlpha = 1;
+		}
+
+		function applyProgress(p) {
+			hero.style.setProperty('--progress', p.toFixed(4));
+		}
+
+		function positionOrb(x, y) {
+			orb.style.transform = 'translate(' + x.toFixed(1) + 'px, ' + y.toFixed(1) + 'px) translate(-50%, -50%)';
+		}
+
+		function onPointerMove(event) {
+			var nx = event.clientX / window.innerWidth;
+			if (prevX !== null) {
+				var delta = nx - prevX;
+				progress.target = clamp(progress.target + delta * SENSITIVITY, 0, 1);
+			}
+			prevX = nx;
+			userEngaged = true;
+			pointer.x = event.clientX;
+			pointer.y = event.clientY;
+			if (!orbPos.active) {
+				orbPos.x = pointer.x;
+				orbPos.y = pointer.y;
+				orbPos.active = true;
+				orb.classList.add('is-active');
+			}
+			if (hint) hint.classList.add('is-dismissed');
+		}
+
+		function tick(time) {
+			var finePointer = finePointerQuery.matches;
+
+			if (!finePointer || !userEngaged) {
+				// No fine pointer (touch) or the visitor hasn't moved the mouse
+				// yet: drift the scene on a slow autonomous cycle so the page
+				// still reads as alive instead of frozen on a single frame.
+				progress.target = 0.5 + 0.34 * Math.sin(time * 0.00016);
+			}
+
+			progress.current += (progress.target - progress.current) * PROGRESS_EASE;
+			applyProgress(progress.current);
+			drawStars(progress.current, time, false);
+
+			if (orbPos.active) {
+				orbPos.x += (pointer.x - orbPos.x) * ORB_EASE;
+				orbPos.y += (pointer.y - orbPos.y) * ORB_EASE;
+				positionOrb(orbPos.x, orbPos.y);
+			}
+
+			rafId = window.requestAnimationFrame(tick);
+		}
+
+		function startMotion() {
+			resizeCanvas();
+			buildStars();
+			applyProgress(progress.current);
+			drawStars(progress.current, 0, false);
+			window.addEventListener('mousemove', onPointerMove, { passive: true });
+			rafId = window.requestAnimationFrame(tick);
+		}
+
+		function stopMotion() {
+			if (rafId) {
+				window.cancelAnimationFrame(rafId);
+				rafId = null;
+			}
+			window.removeEventListener('mousemove', onPointerMove);
+		}
+
+		function paintStaticFrame() {
+			resizeCanvas();
+			buildStars();
+			applyProgress(progress.current);
+			drawStars(progress.current, 0, true);
+		}
+
+		function applyMotionPreference() {
+			stopMotion();
+			orb.classList.remove('is-active');
+			orbPos.active = false;
+			if (reduceMotionQuery.matches) {
+				paintStaticFrame();
+			} else {
+				startMotion();
+			}
+		}
+
+		applyMotionPreference();
+		if (reduceMotionQuery.addEventListener) {
+			reduceMotionQuery.addEventListener('change', applyMotionPreference);
+		} else if (reduceMotionQuery.addListener) {
+			reduceMotionQuery.addListener(applyMotionPreference);
+		}
+
+		var resizeTimer = null;
+		window.addEventListener('resize', function () {
+			window.clearTimeout(resizeTimer);
+			resizeTimer = window.setTimeout(function () {
+				dpr = Math.min(window.devicePixelRatio || 1, 2);
+				resizeCanvas();
+				if (reduceMotionQuery.matches) drawStars(progress.current, 0, true);
+			}, 120);
+		});
+
+		// ---- Nav ----
+		var navToggle = document.getElementById('nav-toggle');
+		var mobileMenu = document.getElementById('mobile-menu');
+
+		function closeMobileMenu() {
+			navToggle.setAttribute('aria-expanded', 'false');
+			navToggle.setAttribute('aria-label', 'Open menu');
+			navToggle.classList.remove('is-open');
+			mobileMenu.classList.remove('is-open');
+			window.setTimeout(function () {
+				if (!mobileMenu.classList.contains('is-open')) mobileMenu.hidden = true;
+			}, 160);
+		}
+
+		function openMobileMenu() {
+			mobileMenu.hidden = false;
+			window.requestAnimationFrame(function () {
+				navToggle.setAttribute('aria-expanded', 'true');
+				navToggle.setAttribute('aria-label', 'Close menu');
+				navToggle.classList.add('is-open');
+				mobileMenu.classList.add('is-open');
+			});
+		}
+
+		if (navToggle && mobileMenu) {
+			navToggle.addEventListener('click', function () {
+				var isOpen = navToggle.getAttribute('aria-expanded') === 'true';
+				if (isOpen) {
+					closeMobileMenu();
+				} else {
+					openMobileMenu();
+				}
+			});
+
+			var mobileButtons = mobileMenu.querySelectorAll('button');
+			for (var i = 0; i < mobileButtons.length; i++) {
+				mobileButtons[i].addEventListener('click', closeMobileMenu);
+			}
+		}
+	})();
+	</script>
+</body>
+</html>

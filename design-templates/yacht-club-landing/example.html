@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Meridian — Yacht Club</title>
+<meta name="description" content="Meridian Yacht Club — an exclusive sailing society for open-water explorers and sunset cruisers alike." />
+<meta name="theme-color" content="#0b0c0d" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b0c0d'/%3E%3Cpath d='M32 12 L45 47 L32 40 L19 47 Z' fill='%2393c5fd'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<style>
+  /* ============================= Tokens ============================= */
+  :root{
+    --background:#0b0c0d;
+    --background-2:#050607;
+    --foreground:#f7f6f2;
+    --menu-panel:#161616;
+    --line: rgba(247,246,242,.16);
+
+    /* chromatic — genuinely parseable colors so the recolor pass can shift them */
+    --accent:#93c5fd;       /* water-glass blue, matches the design's own rgba(147,197,253,…) glow */
+    --accent-deep:#123047;  /* deep hull-teal, gradient partner for --accent */
+    --accent-gold:#c9a463;  /* brass / gold detailing, luxury trim */
+
+    --ease: cubic-bezier(0.23, 1, 0.32, 1);
+    --dur-slot: 500ms;
+    --dur-panel: 650ms;
+    --dur-fleet-col: 1560ms;
+    --dur-blur-in: 1560ms;
+    --dur-blur-out: 1300ms;
+  }
+
+  /* ============================= Reset ============================= */
+  *,*::before,*::after{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  html{
+    background:var(--background);
+    color:var(--foreground);
+    overflow-x:hidden;
+    -webkit-text-size-adjust:100%;
+  }
+  body{
+    overflow-x:hidden;
+    overflow-y:auto;
+    font-family:'Instrument Serif', ui-serif, Georgia, serif;
+    font-weight:400;
+    line-height:1.15;
+    text-transform:uppercase;
+    letter-spacing:.02em;
+    -webkit-font-smoothing:antialiased;
+  }
+  img,video{ max-width:100%; display:block; }
+  button{ font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; text-transform:inherit; letter-spacing:inherit; }
+  a{ color:inherit; text-decoration:none; }
+  ul,dl,dd{ margin:0; padding:0; list-style:none; }
+  em{ font-style:italic; }
+  .visually-hidden{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+
+  /* ============================= Ocean backdrop ============================= */
+  /* Vimeo iframe from the source spec is not vendorable (external host / not a
+     downloadable file) and iframes to third-party hosts are disallowed here.
+     Translated to a layered-gradient + slow CSS drift backdrop instead. */
+  .ocean-bg{ position:fixed; inset:0; z-index:0; overflow:hidden; filter:blur(0px); transition:filter var(--dur-blur-out) var(--ease); }
+  body.fleet-open .ocean-bg{ filter:blur(100px); transition-duration:var(--dur-blur-in); }
+
+  .ocean-base{
+    position:absolute; inset:0;
+    background:linear-gradient(165deg, var(--background-2) 0%, var(--accent-deep) 34%, var(--background) 68%, var(--background-2) 100%);
+  }
+  .ocean-glow{
+    position:absolute; inset:-15%;
+    mix-blend-mode:screen;
+    opacity:.4;
+    filter:blur(6px);
+    will-change:transform;
+    animation:drift 28s var(--ease) infinite alternate;
+  }
+  .ocean-glow-a{ background:radial-gradient(42% 46% at 22% 18%, var(--accent), transparent 70%); }
+  .ocean-glow-b{ background:radial-gradient(46% 50% at 82% 86%, var(--accent-gold), transparent 68%); animation-delay:-9s; animation-duration:34s; }
+  .ocean-sheen{
+    position:absolute; inset:-20% -60%;
+    opacity:.05;
+    mix-blend-mode:overlay;
+    background:repeating-linear-gradient(115deg, transparent 0 60px, var(--accent) 60px 62px, transparent 62px 220px);
+    animation:sheen 46s linear infinite;
+  }
+  .grain{
+    position:fixed; inset:0; z-index:1; pointer-events:none;
+    opacity:.05; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  @keyframes drift{
+    0%{ transform:translate3d(0,0,0) scale(1); }
+    50%{ transform:translate3d(2.5%,-3%,0) scale(1.08); }
+    100%{ transform:translate3d(-2%,2%,0) scale(1); }
+  }
+  @keyframes sheen{ to{ background-position:600px 0; } }
+
+  /* ============================= Liquid cursor trail ============================= */
+  .liquid-defs{ position:absolute; width:0; height:0; overflow:hidden; }
+  .ripple-field{ position:fixed; inset:0; z-index:3; pointer-events:none; }
+  .ripple{
+    position:absolute; top:0; left:0;
+    width:0; height:0; border-radius:50%;
+    opacity:0; transform:translate3d(-50%,-50%,0);
+    background:rgba(255,255,255,.05);
+    -webkit-backdrop-filter:url(#liquid-trail) blur(1px);
+    backdrop-filter:url(#liquid-trail) blur(1px);
+    box-shadow:inset 0 0 30px rgba(255,255,255,.1), 0 0 15px rgba(147,197,253,.15);
+    will-change:transform, opacity, width, height, top, left;
+  }
+  .no-cursor-fx .ripple-field{ display:none; }
+
+  /* ============================= Header ============================= */
+  .site-header{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:20px clamp(20px, 4vw, 40px);
+    pointer-events:none;
+  }
+  .site-header > *{ pointer-events:auto; }
+  .wordmark{ display:flex; flex-direction:column; gap:2px; }
+  .wordmark-name{ font-size:15px; letter-spacing:.28em; }
+  .wordmark-sub{ font-size:9px; letter-spacing:.32em; opacity:.6; font-style:italic; text-transform:uppercase; }
+
+  .menu-trigger{ display:flex; align-items:center; gap:12px; color:var(--foreground); }
+  .hamburger{ position:relative; width:20px; height:20px; flex:none; transition:transform 420ms var(--ease); }
+  .hamburger span{
+    position:absolute; left:50%; top:50%; background:currentColor;
+    transform:translate(-50%,-50%);
+  }
+  .hamburger span:first-child{ width:20px; height:1.5px; }
+  .hamburger span:last-child{ width:1.5px; height:20px; }
+  .menu-trigger.is-open .hamburger{ transform:rotate(225deg); }
+
+  .menu-label{ display:inline-block; height:1em; overflow:hidden; vertical-align:top; font-size:12px; letter-spacing:.28em; }
+  .menu-label-track{ display:flex; flex-direction:column; transition:transform var(--dur-slot) var(--ease); }
+  .menu-trigger.is-open .menu-label-track{ transform:translateY(-50%); }
+
+  /* ============================= Hero ============================= */
+  .hero{ position:relative; z-index:2; min-height:100vh; }
+  .hero-copy{ position:absolute; top:96px; left:20px; }
+  .hero-title{ margin:0; font-weight:400; }
+  .hero-title .line{
+    display:block;
+    font-size:clamp(3rem, 3rem + 5vw, 8.75rem);
+    line-height:.94;
+    opacity:0; transform:translateY(40px);
+    transition:opacity 960ms var(--ease), transform 960ms var(--ease);
+  }
+  .loaded .hero-title .line{ opacity:1; transform:translateY(0); }
+  .hero-title .line{ transition-delay:calc(var(--d, 0) * 120ms + 80ms); }
+
+  .hero-subtext{
+    margin:28px 0 0;
+    width:260px;
+    font-size:clamp(.625rem, .55rem + .3vw, .75rem);
+    letter-spacing:.18em;
+    line-height:1.7;
+    color:rgb(247 246 242 / 74%);
+    --tx:0px; --ty:40px;
+    opacity:0; transform:translate(var(--tx), var(--ty));
+    transition:opacity 960ms var(--ease) 560ms, transform 960ms var(--ease) 560ms;
+  }
+  .loaded .hero-subtext{ opacity:1; --ty:0px; }
+
+  .cta-float{
+    position:fixed; bottom:32px; right:32px; z-index:50;
+    display:inline-flex; align-items:center; gap:10px;
+    padding:16px 26px;
+    border:1px solid var(--line);
+    border-radius:999px;
+    font-size:12px; letter-spacing:.24em;
+    background:rgb(11 12 13 / 55%);
+    -webkit-backdrop-filter:blur(18px);
+    backdrop-filter:blur(18px);
+    transition:transform 640ms var(--ease), border-color 300ms var(--ease), background 300ms var(--ease);
+    opacity:0; transform:translateY(24px);
+  }
+  .loaded .cta-float{ opacity:1; transform:translateY(0); transition:opacity 960ms var(--ease) 900ms, transform 960ms var(--ease) 900ms, border-color 300ms var(--ease), background 300ms var(--ease); }
+  .cta-float:hover{ border-color:var(--accent); background:rgb(11 12 13 / 78%); }
+  @media (min-width:768px){
+    body.menu-open .cta-float{ transform:translateX(calc(-1 * clamp(260px, 38vw, 420px))); }
+    body.loaded.menu-open .cta-float{ transition:transform 480ms var(--ease); }
+  }
+
+  .site-footer{
+    position:fixed; bottom:32px; left:20px; z-index:2;
+    font-size:9px; letter-spacing:.24em; color:rgb(247 246 242 / 46%);
+    opacity:0; transition:opacity 960ms var(--ease) 1080ms;
+  }
+  .loaded .site-footer{ opacity:1; }
+
+  @media (min-width:768px){
+    .hero-copy{ left:96px; }
+    .hero-subtext{ --tx:100px; }
+    .site-footer{ left:96px; }
+  }
+
+  /* ============================= Off-canvas menu ============================= */
+  .menu-prelayers{ position:fixed; inset:0; z-index:60; pointer-events:none; }
+  .prelayer{
+    position:absolute; top:0; right:0; height:100%;
+    width:clamp(320px, 34vw, 460px);
+    transform:translateX(100%);
+    transition:transform 560ms var(--ease);
+  }
+  .prelayer:nth-child(1){ background:var(--accent-gold); width:6px; transition-delay:0ms; }
+  .prelayer:nth-child(2){ background:var(--menu-panel); transition-delay:70ms; }
+  body.menu-open .prelayer{ transform:translateX(0); }
+
+  .offcanvas-menu{
+    position:fixed; top:0; right:0; bottom:0; z-index:65;
+    width:clamp(320px, 34vw, 460px);
+    display:flex; flex-direction:column; justify-content:space-between;
+    padding:clamp(96px, 12vh, 140px) clamp(28px, 4vw, 48px) 48px;
+    background:var(--menu-panel);
+    transform:translateX(100%);
+    transition:transform var(--dur-panel) var(--ease) 130ms;
+  }
+  body.menu-open .offcanvas-menu{ transform:translateX(0); }
+
+  .menu-items li{
+    overflow:hidden;
+  }
+  .menu-items a, .menu-items button{
+    display:inline-block;
+    font-size:clamp(1.75rem, 3vw, 2.4rem);
+    padding:8px 0;
+    transform:translateY(60%) rotate(10deg);
+    transform-origin:0% 100%;
+    opacity:0;
+    transition:transform 560ms var(--ease), opacity 560ms var(--ease), color 220ms var(--ease);
+  }
+  body.menu-open .menu-items a, body.menu-open .menu-items button{
+    transform:translateY(0) rotate(0deg); opacity:1;
+  }
+  .menu-items li:nth-child(1) a{ transition-delay:220ms; }
+  .menu-items li:nth-child(2) button{ transition-delay:320ms; }
+  .menu-items li:nth-child(3) a{ transition-delay:420ms; }
+  .menu-items li:nth-child(4) a{ transition-delay:520ms; }
+  .menu-items li:nth-child(5) a{ transition-delay:620ms; }
+  .menu-items li:nth-child(6) a{ transition-delay:720ms; }
+  .menu-items a:hover, .menu-items a:focus-visible, .menu-items button:hover, .menu-items button:focus-visible{ color:var(--accent); }
+
+  .menu-social{
+    display:flex; gap:20px; flex-wrap:wrap;
+    padding-top:32px; border-top:1px solid var(--line);
+    opacity:0; transition:opacity 560ms var(--ease) 760ms;
+  }
+  body.menu-open .menu-social{ opacity:1; }
+  .menu-social a{ font-size:10px; letter-spacing:.22em; opacity:.7; }
+  .menu-social a:hover, .menu-social a:focus-visible{ opacity:1; color:var(--accent); }
+
+  /* ============================= Fleet overlay ============================= */
+  .fleet-overlay{
+    position:fixed; inset:0; z-index:80;
+    display:flex; flex-direction:column;
+    background:var(--background-2);
+    opacity:0; pointer-events:none;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    transition:opacity 300ms var(--ease);
+  }
+  @media (min-width:768px){ .fleet-overlay{ overflow-y:hidden; } }
+  body.fleet-open .fleet-overlay{ opacity:1; pointer-events:auto; }
+
+  .fleet-close{
+    position:absolute; top:24px; right:clamp(20px, 4vw, 40px); z-index:2;
+    font-size:11px; letter-spacing:.26em;
+    color:var(--foreground);
+    padding:10px 0;
+  }
+  .fleet-close:hover, .fleet-close:focus-visible{ color:var(--accent); }
+
+  .fleet-columns{ flex:1; display:flex; flex-direction:column; }
+  @media (min-width:768px){ .fleet-columns{ flex-direction:row; } }
+
+  .fleet-col{
+    position:relative; overflow:hidden;
+    width:100%; height:85vh;
+    border-bottom:2px solid var(--line);
+    text-align:left;
+    transform:translateX(0);
+    opacity:1;
+  }
+  @media (min-width:768px){
+    .fleet-col{ height:100%; flex:1; border-bottom:0; border-right:2px solid var(--line); }
+    .fleet-col:last-child{ border-right:0; }
+  }
+  body.fleet-open .fleet-col{ transition:transform var(--dur-fleet-col) var(--ease); }
+  body:not(.fleet-open) .fleet-col{ transform:translateX(100vw); transition:none; }
+  .fleet-col[data-i="0"]{ transition-delay:0ms; }
+  .fleet-col[data-i="1"]{ transition-delay:100ms; }
+  .fleet-col[data-i="2"]{ transition-delay:200ms; }
+
+  .fleet-video{
+    position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+    transform:scale(1); transition:transform 700ms var(--ease);
+  }
+  .fleet-col:hover .fleet-video, .fleet-col:focus-within .fleet-video, .fleet-col.is-revealed .fleet-video{ transform:scale(1.05); }
+
+  .fleet-tint{ position:absolute; inset:0; background:rgb(0 0 0 / 20%); transition:background 700ms var(--ease); }
+  .fleet-col:hover .fleet-tint, .fleet-col:focus-within .fleet-tint, .fleet-col.is-revealed .fleet-tint{ background:rgb(0 0 0 / 52%); }
+
+  .fleet-content{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; justify-content:flex-end;
+    padding:clamp(24px, 3vw, 40px);
+  }
+  .fleet-content h3{
+    margin:0 0 clamp(20px, 3vw, 48px);
+    font-size:clamp(2.2rem, 4.4vw, 4.4rem);
+    line-height:.98;
+    opacity:0; transform:translateY(28px);
+    transition:opacity 480ms var(--ease), transform 480ms var(--ease);
+  }
+  .fleet-col:hover h3, .fleet-col:focus-within h3, .fleet-col.is-revealed h3{ opacity:1; transform:translateY(0); }
+
+  .fleet-specs{ display:flex; flex-direction:column; gap:10px; margin-bottom:24px; }
+  .fleet-specs div{ display:flex; justify-content:space-between; gap:16px; border-top:1px solid rgb(247 246 242 / 18%); padding-top:8px; }
+  .fleet-specs dt, .fleet-specs dd{ font-size:10px; letter-spacing:.14em; color:rgb(247 246 242 / 70%); margin:0; }
+  .fleet-specs dd{ text-align:right; color:var(--foreground); }
+  .fleet-specs div{
+    opacity:0; transform:translateY(20px);
+    transition:opacity 420ms var(--ease), transform 420ms var(--ease);
+  }
+  .fleet-col:hover .fleet-specs div, .fleet-col:focus-within .fleet-specs div, .fleet-col.is-revealed .fleet-specs div{ opacity:1; transform:translateY(0); }
+  .fleet-specs div:nth-child(1){ transition-delay:60ms; }
+  .fleet-specs div:nth-child(2){ transition-delay:110ms; }
+  .fleet-specs div:nth-child(3){ transition-delay:160ms; }
+  .fleet-specs div:nth-child(4){ transition-delay:210ms; }
+  .fleet-specs div:nth-child(5){ transition-delay:260ms; }
+
+  .fleet-view{
+    align-self:flex-start;
+    padding:12px 24px;
+    font-size:11px; letter-spacing:.26em;
+    background:rgb(255 255 255 / 5%);
+    border:1px solid var(--line);
+    -webkit-backdrop-filter:blur(24px);
+    backdrop-filter:blur(24px);
+    opacity:0; transform:translateY(16px);
+    transition:opacity 420ms var(--ease) 260ms, transform 420ms var(--ease) 260ms, border-color 220ms var(--ease);
+  }
+  .fleet-col:hover .fleet-view, .fleet-col:focus-within .fleet-view, .fleet-col.is-revealed .fleet-view{ opacity:1; transform:translateY(0); border-color:var(--accent); }
+
+  /* ============================= Reduced motion ============================= */
+  @media (prefers-reduced-motion: reduce){
+    .ocean-glow, .ocean-sheen{ animation:none; }
+    .hero-title .line, .hero-subtext, .cta-float, .site-footer,
+    .prelayer, .offcanvas-menu, .menu-items a, .menu-items button, .menu-social,
+    .fleet-col, .fleet-video, .fleet-tint, .fleet-content h3, .fleet-specs div, .fleet-view,
+    .hamburger, .menu-label-track, .ocean-bg{
+      transition-duration:1ms !important;
+      transition-delay:0ms !important;
+      animation-duration:1ms !important;
+    }
+    .ripple-field{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="ocean-bg" id="oceanBg" aria-hidden="true">
+    <div class="ocean-base"></div>
+    <div class="ocean-glow ocean-glow-a"></div>
+    <div class="ocean-glow ocean-glow-b"></div>
+    <div class="ocean-sheen"></div>
+  </div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg class="liquid-defs" aria-hidden="true">
+    <filter id="liquid-trail">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" result="noise" />
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="30" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </svg>
+  <div class="ripple-field" id="rippleField" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="wordmark" href="#top">
+      <span class="wordmark-name">MERIDIAN</span>
+      <span class="wordmark-sub">Yacht Club</span>
+    </a>
+    <button class="menu-trigger" id="menuTrigger" type="button" aria-expanded="false" aria-controls="offcanvasMenu">
+      <span class="hamburger" aria-hidden="true"><span></span><span></span></span>
+      <span class="menu-label" aria-hidden="true"><span class="menu-label-track"><span>Menu</span><span>Close</span></span></span>
+      <span class="visually-hidden">Toggle navigation menu</span>
+    </button>
+  </header>
+
+  <main>
+    <section class="hero" id="top" aria-label="Meridian Yacht Club">
+      <div class="hero-copy">
+        <h1 class="hero-title">
+          <span class="line" style="--d:0">Master the</span>
+          <span class="line" style="--d:1"><em>Elements.</em></span>
+          <span class="line" style="--d:2">Embrace the</span>
+          <span class="line" style="--d:3"><em>Ocean</em></span>
+        </h1>
+        <p class="hero-subtext">Join an exclusive community of sailors. Whether you crave the thrill of the open sea or the serenity of a sunset cruise, your next great adventure starts here.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Meridian Yacht Club — Monaco · Portofino · Miami</p>
+  </footer>
+
+  <button class="cta-float" id="ctaFloat" type="button">
+    Join the <em>Club</em>
+  </button>
+
+  <div class="menu-prelayers" aria-hidden="true">
+    <span class="prelayer"></span>
+    <span class="prelayer"></span>
+  </div>
+
+  <nav class="offcanvas-menu" id="offcanvasMenu" aria-label="Primary" inert>
+    <ul class="menu-items">
+      <li><a href="#top" data-close-menu>Home</a></li>
+      <li><button type="button" id="fleetTrigger">Our Fleet</button></li>
+      <li><a href="#membership" data-close-menu>Membership</a></li>
+      <li><a href="#regattas" data-close-menu>Regattas &amp; Events</a></li>
+      <li><a href="#academy" data-close-menu>Academy</a></li>
+      <li><a href="#contact" data-close-menu>Contact</a></li>
+    </ul>
+    <div class="menu-social">
+      <a href="#" rel="noopener">Instagram</a>
+      <a href="#" rel="noopener">Facebook</a>
+      <a href="#" rel="noopener">Twitter</a>
+    </div>
+  </nav>
+
+  <div class="fleet-overlay" id="fleetOverlay" role="dialog" aria-modal="true" aria-label="Our Fleet" inert>
+    <button class="fleet-close" id="fleetClose" type="button">Close ✕</button>
+    <div class="fleet-columns">
+
+      <button class="fleet-col" type="button" data-i="0" aria-label="Ocean Eclipse — view specifications">
+        <video class="fleet-video" muted loop playsinline preload="none" poster="assets/fleet-ocean-eclipse-poster.jpg" aria-hidden="true">
+          <source src="assets/fleet-ocean-eclipse.mp4" type="video/mp4" />
+        </video>
+        <div class="fleet-tint"></div>
+        <div class="fleet-content">
+          <h3>Ocean<br />Eclipse</h3>
+          <dl class="fleet-specs">
+            <div><dt>Length</dt><dd>28 M (92 FT)</dd></div>
+            <div><dt>Cruising Speed</dt><dd>22 Knots</dd></div>
+            <div><dt>Guests</dt><dd>Up to 12 Guests</dd></div>
+            <div><dt>Cabins</dt><dd>4 En-Suite Cabins</dd></div>
+            <div><dt>Special Feature</dt><dd>Advanced Gyro Stabilization</dd></div>
+          </dl>
+          <span class="fleet-view" aria-hidden="true">View</span>
+        </div>
+      </button>
+
+      <button class="fleet-col" type="button" data-i="1" aria-label="Black Sovereign — view specifications">
+        <video class="fleet-video" muted loop playsinline preload="none" poster="assets/fleet-black-sovereign-poster.jpg" aria-hidden="true">
+          <source src="assets/fleet-black-sovereign.mp4" type="video/mp4" />
+        </video>
+        <div class="fleet-tint"></div>
+        <div class="fleet-content">
+          <h3>Black<br />Sovereign</h3>
+          <dl class="fleet-specs">
+            <div><dt>Length</dt><dd>24 M (78 FT)</dd></div>
+            <div><dt>Top Speed</dt><dd>45 Knots</dd></div>
+            <div><dt>Hull</dt><dd>Carbon Fiber &amp; Kevlar</dd></div>
+            <div><dt>Engines</dt><dd>Twin V12 2000 HP</dd></div>
+            <div><dt>Special Feature</dt><dd>Bespoke Design With Gold Detailing</dd></div>
+          </dl>
+          <span class="fleet-view" aria-hidden="true">View</span>
+        </div>
+      </button>
+
+      <button class="fleet-col" type="button" data-i="2" aria-label="Azure Horizon — view specifications">
+        <video class="fleet-video" muted loop playsinline preload="none" poster="assets/fleet-azure-horizon-poster.jpg" aria-hidden="true">
+          <source src="assets/fleet-azure-horizon.mp4" type="video/mp4" />
+        </video>
+        <div class="fleet-tint"></div>
+        <div class="fleet-content">
+          <h3>Azure<br />Horizon</h3>
+          <dl class="fleet-specs">
+            <div><dt>Length</dt><dd>32 M (105 FT)</dd></div>
+            <div><dt>Range</dt><dd>1,500 Nautical Miles</dd></div>
+            <div><dt>Guests</dt><dd>14 Guests + 5 Crew</dd></div>
+            <div><dt>Deck</dt><dd>Spacious Sun Deck With Jacuzzi</dd></div>
+            <div><dt>Special Feature</dt><dd>Full Water Toys Garage</dd></div>
+          </dl>
+          <span class="fleet-view" aria-hidden="true">View</span>
+        </div>
+      </button>
+
+    </div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  var body = document.body;
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var hoverCapable = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+  /* ---------- initial reveal ---------- */
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){ body.classList.add('loaded'); });
+  });
+
+  /* ---------- off-canvas menu ---------- */
+  var menuTrigger = document.getElementById('menuTrigger');
+  var offcanvasMenu = document.getElementById('offcanvasMenu');
+  var fleetTrigger = document.getElementById('fleetTrigger');
+  var lastFocused = null;
+
+  function setMenuOpen(open){
+    body.classList.toggle('menu-open', open);
+    menuTrigger.classList.toggle('is-open', open);
+    menuTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    offcanvasMenu.inert = !open;
+    if (open){
+      lastFocused = document.activeElement;
+      var firstLink = offcanvasMenu.querySelector('a, button');
+      if (firstLink) window.setTimeout(function(){ firstLink.focus(); }, reduceMotion ? 0 : 260);
+    } else if (lastFocused && document.contains(lastFocused)){
+      lastFocused.focus();
+    }
+  }
+
+  menuTrigger.addEventListener('click', function(){
+    setMenuOpen(!body.classList.contains('menu-open'));
+  });
+
+  offcanvasMenu.querySelectorAll('[data-close-menu]').forEach(function(link){
+    link.addEventListener('click', function(){ setMenuOpen(false); });
+  });
+
+  /* ---------- fleet overlay ---------- */
+  var fleetOverlay = document.getElementById('fleetOverlay');
+  var fleetClose = document.getElementById('fleetClose');
+  var fleetCols = Array.prototype.slice.call(document.querySelectorAll('.fleet-col'));
+  var fleetLastFocused = null;
+
+  function safePlay(video){
+    var p = video.play();
+    if (p && typeof p.then === 'function') p.catch(function(){ /* ignore interrupted play() */ });
+  }
+  function safePause(video){
+    try { video.pause(); } catch (e){ /* no-op */ }
+  }
+
+  function setFleetOpen(open){
+    body.classList.toggle('fleet-open', open);
+    fleetOverlay.inert = !open;
+    if (open){
+      fleetLastFocused = document.activeElement;
+      setMenuOpen(false);
+      window.setTimeout(function(){ fleetClose.focus(); }, reduceMotion ? 0 : 200);
+    } else {
+      fleetCols.forEach(function(col){
+        col.classList.remove('is-revealed');
+        var v = col.querySelector('video');
+        if (v) safePause(v);
+      });
+      if (fleetLastFocused && document.contains(fleetLastFocused)) fleetLastFocused.focus();
+    }
+  }
+
+  fleetTrigger.addEventListener('click', function(){ setFleetOpen(true); });
+  fleetClose.addEventListener('click', function(){ setFleetOpen(false); });
+
+  fleetCols.forEach(function(col){
+    var video = col.querySelector('video');
+
+    col.addEventListener('click', function(){
+      var willReveal = !col.classList.contains('is-revealed');
+      col.classList.toggle('is-revealed', willReveal);
+      if (willReveal) safePlay(video); else safePause(video);
+    });
+
+    if (hoverCapable){
+      col.addEventListener('mouseenter', function(){
+        col.classList.add('is-revealed');
+        safePlay(video);
+      });
+      col.addEventListener('mouseleave', function(){
+        col.classList.remove('is-revealed');
+        safePause(video);
+      });
+    }
+  });
+
+  /* ---------- escape closes whichever overlay is open ---------- */
+  document.addEventListener('keydown', function(ev){
+    if (ev.key !== 'Escape') return;
+    if (body.classList.contains('fleet-open')) setFleetOpen(false);
+    else if (body.classList.contains('menu-open')) setMenuOpen(false);
+  });
+
+  /* ---------- liquid cursor trail ----------
+     Vanilla DOM/CSS translation of the source spec's ripple pool: an SVG
+     feTurbulence + feDisplacementMap filter driving backdrop-filter on a
+     rotating pool of divs, stepped every frame with rAF. Pool size reduced
+     from the spec's 80 to 40 — the ring grows to ~300px in diameter as it
+     ages, and 80 simultaneous large backdrop-filter regions was heavier than
+     the visual needed; all spawn/age/opacity math is kept exact. */
+  if (!reduceMotion && hoverCapable){
+    body.classList.remove('no-cursor-fx');
+    var POOL_SIZE = 40;
+    var SPAWN_DIST = 25;
+    var AGE_STEP = 0.012;
+    var field = document.getElementById('rippleField');
+    var frag = document.createDocumentFragment();
+    var ripples = [];
+    for (var i = 0; i < POOL_SIZE; i++){
+      var el = document.createElement('div');
+      el.className = 'ripple';
+      frag.appendChild(el);
+      ripples.push({ el: el, x: 0, y: 0, age: 0, active: false });
+    }
+    field.appendChild(frag);
+
+    var idx = 0, lastX = null, lastY = null;
+    window.addEventListener('mousemove', function(ev){
+      if (lastX === null){ lastX = ev.clientX; lastY = ev.clientY; return; }
+      var dx = ev.clientX - lastX, dy = ev.clientY - lastY;
+      if (Math.sqrt(dx * dx + dy * dy) > SPAWN_DIST){
+        var r = ripples[idx];
+        r.x = ev.clientX; r.y = ev.clientY; r.age = 0; r.active = true;
+        idx = (idx + 1) % POOL_SIZE;
+        lastX = ev.clientX; lastY = ev.clientY;
+      }
+    }, { passive: true });
+
+    function step(){
+      for (var j = 0; j < ripples.length; j++){
+        var r = ripples[j];
+        if (!r.active) continue;
+        r.age += AGE_STEP;
+        if (r.age >= 1){
+          r.active = false;
+          r.el.style.opacity = 0;
+          r.el.style.width = '0px';
+          r.el.style.height = '0px';
+          continue;
+        }
+        var size = 20 + r.age * 280;
+        var opacity = 1 - Math.pow(r.age, 1.2);
+        r.el.style.left = r.x + 'px';
+        r.el.style.top = r.y + 'px';
+        r.el.style.width = size + 'px';
+        r.el.style.height = size + 'px';
+        r.el.style.opacity = String(opacity);
+      }
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  } else {
+    body.classList.add('no-cursor-fx');
+  }
+})();
+</script>
+</body>
+</html>

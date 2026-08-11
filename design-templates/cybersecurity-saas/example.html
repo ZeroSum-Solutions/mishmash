@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Korvid Lab — Tracing the Unseen</title>
+	<meta
+		name="description"
+		content="Korvid Lab cybersecurity hero: a full-bleed dark abstract video backdrop behind a giant scan-lined headline, a live anomaly-count dashboard card, and a magenta demo CTA."
+	>
+	<link
+		rel="icon"
+		href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a0a0a'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23a6439e' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23a6439e'/%3E%3C/svg%3E"
+	>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+		rel="stylesheet"
+	>
+	<style>
+		:root {
+			--bg: #0a0a0a;
+			--fg: #ffffff;
+			--fg-muted-60: rgba(255, 255, 255, 0.6);
+			--fg-muted-70: rgba(255, 255, 255, 0.7);
+			--fg-muted-80: rgba(255, 255, 255, 0.8);
+			--fg-muted-90: rgba(255, 255, 255, 0.9);
+			--card-border: rgba(255, 255, 255, 0.85);
+			--accent: #a6439e;
+			--accent-hover: #b854b0;
+			--accent-glow-soft: rgba(166, 67, 158, 0.28);
+			--accent-glow-strong: rgba(166, 67, 158, 0.4);
+			--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+			--nav-h: 88px;
+			--pad-x: 1.5rem;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html, body {
+			margin: 0;
+			padding: 0;
+			background: var(--bg);
+		}
+
+		body {
+			font-family: 'JetBrains Mono', 'Courier New', monospace;
+			-webkit-font-smoothing: antialiased;
+			color: var(--fg);
+		}
+
+		a {
+			text-decoration: none;
+		}
+
+		button {
+			font-family: inherit;
+		}
+
+		.page {
+			position: relative;
+			min-height: 100vh;
+			width: 100%;
+			overflow: hidden;
+			background: var(--bg);
+		}
+
+		.hero-bg,
+		.hero-bg-fallback {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			z-index: 0;
+		}
+
+		.hero-bg-fallback {
+			display: none;
+		}
+
+		/* ---------------------------------------------------------------- */
+		/* Navbar                                                           */
+		/* ---------------------------------------------------------------- */
+
+		.topbar {
+			position: relative;
+			z-index: 30;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 1.25rem var(--pad-x);
+		}
+
+		@media (min-width: 640px) {
+			.page { --pad-x: 2rem; }
+		}
+
+		@media (min-width: 768px) {
+			.page { --pad-x: 4rem; }
+			.topbar { padding-top: 1.5rem; padding-bottom: 1.5rem; }
+		}
+
+		.logo {
+			font-weight: 700;
+			color: var(--fg);
+			font-size: 1.125rem;
+			letter-spacing: -0.02em;
+		}
+
+		.nav-links {
+			display: none;
+			align-items: center;
+			gap: 2.5rem;
+			font-size: 0.875rem;
+			color: var(--fg-muted-80);
+		}
+
+		.nav-links a {
+			color: inherit;
+			transition: color 200ms var(--ease-out);
+		}
+
+		.nav-links a:hover {
+			color: var(--fg);
+		}
+
+		.nav-cta {
+			display: none;
+			background: transparent;
+			border: none;
+			color: var(--fg-muted-80);
+			font-size: 0.875rem;
+			cursor: pointer;
+			transition: color 200ms var(--ease-out);
+		}
+
+		.nav-cta:hover {
+			color: var(--fg);
+		}
+
+		@media (min-width: 768px) {
+			.nav-links,
+			.nav-cta {
+				display: flex;
+			}
+		}
+
+		.menu-toggle {
+			display: block;
+			position: relative;
+			z-index: 50;
+			color: var(--fg);
+			background: transparent;
+			border: none;
+			padding: 0.25rem;
+			cursor: pointer;
+			width: 32px;
+			height: 32px;
+		}
+
+		@media (min-width: 768px) {
+			.menu-toggle {
+				display: none;
+			}
+		}
+
+		.menu-toggle svg {
+			position: absolute;
+			top: 4px;
+			left: 4px;
+			transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out);
+		}
+
+		.menu-toggle .icon-x {
+			opacity: 0;
+			transform: rotate(-90deg) scale(0.75);
+		}
+
+		.menu-toggle.is-open .icon-menu {
+			opacity: 0;
+			transform: rotate(90deg) scale(0.75);
+		}
+
+		.menu-toggle.is-open .icon-x {
+			opacity: 1;
+			transform: rotate(0deg) scale(1);
+		}
+
+		/* ---------------------------------------------------------------- */
+		/* Mobile menu overlay                                              */
+		/* ---------------------------------------------------------------- */
+
+		.mobile-menu {
+			position: fixed;
+			inset: 0;
+			z-index: 20;
+			background: rgba(10, 10, 10, 0.95);
+			backdrop-filter: blur(12px);
+			-webkit-backdrop-filter: blur(12px);
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 260ms var(--ease-out);
+		}
+
+		.mobile-menu.is-open {
+			opacity: 1;
+			pointer-events: auto;
+		}
+
+		@media (min-width: 768px) {
+			.mobile-menu {
+				display: none;
+			}
+		}
+
+		.mobile-menu-content {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			height: 100%;
+			gap: 2rem;
+			opacity: 0;
+			transform: translateY(-20px);
+			transition: opacity 260ms var(--ease-out) 60ms, transform 260ms var(--ease-out) 60ms;
+		}
+
+		.mobile-menu.is-open .mobile-menu-content {
+			opacity: 1;
+			transform: translateY(0);
+		}
+
+		.mobile-menu-content a {
+			font-size: 1.5rem;
+			color: var(--fg-muted-90);
+			transition: color 200ms var(--ease-out);
+		}
+
+		.mobile-menu-content a:hover {
+			color: var(--fg);
+		}
+
+		.mobile-menu-divider {
+			width: 3rem;
+			border: none;
+			border-top: 1px solid rgba(255, 255, 255, 0.2);
+			margin: 0.5rem 0;
+		}
+
+		.mobile-menu-content .mobile-cta {
+			font-size: 1.125rem;
+			color: var(--fg-muted-70);
+		}
+
+		/* ---------------------------------------------------------------- */
+		/* Hero                                                             */
+		/* ---------------------------------------------------------------- */
+
+		.hero {
+			position: relative;
+			z-index: 10;
+			display: flex;
+			flex-direction: column;
+			align-items: flex-start;
+			justify-content: space-between;
+			gap: 3rem;
+			padding: 2rem var(--pad-x) 4rem;
+			min-height: calc(100vh - var(--nav-h));
+		}
+
+		@media (min-width: 768px) {
+			.hero {
+				padding-top: 3.5rem;
+				padding-bottom: 5rem;
+			}
+		}
+
+		@media (min-width: 1024px) {
+			.hero {
+				flex-direction: row;
+				align-items: flex-start;
+			}
+		}
+
+		.hero-copy {
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			max-width: 42rem;
+		}
+
+		.hero-heading {
+			margin: 0;
+			font-family: 'DM Sans', 'Helvetica Neue', Arial, sans-serif;
+			font-weight: 700;
+			line-height: 0.72;
+			letter-spacing: -0.029em;
+			color: var(--fg);
+			font-size: 3.75rem;
+		}
+
+		@media (min-width: 640px) {
+			.hero-heading { font-size: 4.5rem; }
+		}
+
+		@media (min-width: 768px) {
+			.hero-heading { font-size: 9.2rem; }
+		}
+
+		@media (min-width: 1024px) {
+			.hero-heading { font-size: 11rem; }
+		}
+
+		.hero-heading .line {
+			display: block;
+			opacity: 0;
+			transform: translateY(28px);
+			animation: heroFadeUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.1s;
+		}
+
+		.hero-heading .line + .line {
+			animation-delay: 0.2s;
+		}
+
+		.reg-mark {
+			display: inline-block;
+			vertical-align: top;
+			color: var(--fg-muted-60);
+			font-size: 0.22em;
+			font-weight: 400;
+			margin-top: 0.35em;
+		}
+
+		.line-mask {
+			position: relative;
+			background: repeating-linear-gradient(
+				to bottom,
+				#ffffff 0px,
+				#ffffff 4px,
+				transparent 4px,
+				transparent 9px
+			);
+			background-size: 100% 18px;
+			-webkit-background-clip: text;
+			background-clip: text;
+			color: transparent;
+			-webkit-text-fill-color: transparent;
+			animation: scanShift 1.4s linear infinite;
+		}
+
+		@keyframes scanShift {
+			from { background-position-y: 0; }
+			to { background-position-y: 18px; }
+		}
+
+		.hero-sub {
+			font-family: 'JetBrains Mono', 'Courier New', monospace;
+			color: var(--fg-muted-60);
+			font-size: 0.875rem;
+			line-height: 1.6;
+			margin: 2rem 0 0;
+			max-width: 38rem;
+			opacity: 0;
+			transform: translateY(28px);
+			animation: heroFadeUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.3s;
+		}
+
+		@media (min-width: 768px) {
+			.hero-sub { font-size: 1rem; margin-top: 2.5rem; }
+		}
+
+		.cta {
+			position: relative;
+			margin-top: 2rem;
+			width: fit-content;
+			padding: 0.75rem 1.5rem;
+			background: var(--accent);
+			border: none;
+			color: var(--fg);
+			font-size: 0.875rem;
+			font-weight: 500;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			cursor: pointer;
+			opacity: 0;
+			transform: translateY(28px);
+			animation: heroFadeUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.4s;
+			transition: background-color 200ms var(--ease-out), transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
+		}
+
+		.cta::before {
+			content: "";
+			position: absolute;
+			inset: -20px;
+			border-radius: 999px;
+			background: radial-gradient(circle, var(--accent-glow-strong) 0%, transparent 70%);
+			opacity: 0;
+			filter: blur(18px);
+			z-index: -1;
+			transition: opacity 200ms var(--ease-out);
+			pointer-events: none;
+		}
+
+		.cta:hover {
+			background: var(--accent-hover);
+			transform: translateY(-2px);
+			box-shadow: 0 8px 24px var(--accent-glow-soft);
+		}
+
+		.cta:hover::before {
+			opacity: 1;
+		}
+
+		.cta:active {
+			transform: translateY(0);
+			transition-duration: 140ms;
+		}
+
+		@media (min-width: 768px) {
+			.cta { padding: 1rem 2rem; margin-top: 2.5rem; }
+		}
+
+		/* ---------------------------------------------------------------- */
+		/* Stat cards                                                       */
+		/* ---------------------------------------------------------------- */
+
+		.hero-stats {
+			position: relative;
+			flex-shrink: 0;
+			width: 100%;
+			margin-top: 1rem;
+		}
+
+		@media (min-width: 1024px) {
+			.hero-stats {
+				width: auto;
+				margin-top: 0;
+				margin-left: 4rem;
+			}
+		}
+
+		.stat-card {
+			margin: 0;
+			border: 2px solid var(--card-border);
+			background: rgba(0, 0, 0, 0.55);
+			backdrop-filter: blur(6px);
+			-webkit-backdrop-filter: blur(6px);
+			border-radius: 0.5rem;
+			opacity: 0;
+			transform: translateY(28px);
+			animation: heroFadeUp 800ms var(--ease-out) forwards;
+		}
+
+		.stat-card--small {
+			position: absolute;
+			top: -2.25rem;
+			right: 0;
+			z-index: 20;
+			padding: 0.6rem 1.1rem;
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			animation-delay: 0.5s;
+		}
+
+		@media (min-width: 640px) {
+			.stat-card--small {
+				top: -2.5rem;
+				right: -1rem;
+			}
+		}
+
+		.risk-chevrons {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			color: var(--fg);
+			animation: pulseGlow 1.8s ease-in-out infinite;
+		}
+
+		.risk-chevrons svg:last-child {
+			margin-top: -6px;
+		}
+
+		@keyframes pulseGlow {
+			0%, 100% { opacity: 0.55; }
+			50% { opacity: 1; }
+		}
+
+		.stat-card--small dt,
+		.stat-card--small dd {
+			margin: 0;
+			font-size: 0.7rem;
+			font-weight: 400;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			line-height: 1.35;
+		}
+
+		.stat-card--large {
+			position: relative;
+			z-index: 10;
+			padding: 1.25rem 1.5rem;
+			min-width: 0;
+			animation-delay: 0.4s;
+		}
+
+		@media (min-width: 640px) {
+			.stat-card--large {
+				min-width: 280px;
+				padding: 1.5rem 2rem;
+			}
+		}
+
+		.stat-card--large dt {
+			font-size: 0.7rem;
+			color: var(--fg-muted-70);
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+			margin: 0 0 0.5rem;
+		}
+
+		.stat-card--large dd {
+			margin: 0;
+			font-size: 2.25rem;
+			font-weight: 700;
+			letter-spacing: -0.02em;
+			color: var(--fg);
+		}
+
+		@media (min-width: 640px) {
+			.stat-card--large dd { font-size: 3rem; }
+		}
+
+		@media (min-width: 768px) {
+			.stat-card--large dd { font-size: 3.75rem; }
+		}
+
+		.stat-divider {
+			border: none;
+			border-top: 1px dashed rgba(255, 255, 255, 0.3);
+			margin: 1rem 0;
+		}
+
+		.stat-footer {
+			font-size: 0.7rem;
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			color: var(--fg);
+		}
+
+		@keyframes heroFadeUp {
+			from {
+				opacity: 0;
+				transform: translateY(28px);
+			}
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+
+		/* ---------------------------------------------------------------- */
+		/* Reduced motion                                                   */
+		/* ---------------------------------------------------------------- */
+
+		@media (prefers-reduced-motion: reduce) {
+			.hero-bg {
+				display: none;
+			}
+
+			.hero-bg-fallback {
+				display: block;
+			}
+
+			.hero-heading .line,
+			.hero-sub,
+			.cta,
+			.stat-card {
+				animation: none !important;
+				opacity: 1 !important;
+				transform: none !important;
+			}
+
+			.line-mask {
+				animation: none;
+				background-position-y: 0;
+			}
+
+			.risk-chevrons {
+				animation: none;
+				opacity: 1;
+			}
+
+			.cta,
+			.menu-toggle svg,
+			.mobile-menu,
+			.mobile-menu-content,
+			.nav-links a,
+			.nav-cta {
+				transition: none;
+			}
+
+			.cta:hover,
+			.cta:active {
+				transform: none;
+			}
+
+			.cta::before {
+				display: none;
+			}
+		}
+	</style>
+</head>
+<body>
+	<div class="page">
+		<video
+			class="hero-bg"
+			autoplay
+			muted
+			loop
+			playsinline
+			poster="assets/hero-poster.jpg"
+			aria-hidden="true"
+		>
+			<source src="assets/hero-bg.mp4" type="video/mp4">
+		</video>
+		<img class="hero-bg-fallback" src="assets/hero-poster.jpg" alt="" aria-hidden="true">
+
+		<header>
+			<nav class="topbar" aria-label="Primary">
+				<a class="logo" href="#top">KORVID LAB</a>
+				<div class="nav-links">
+					<a href="#platform">Platform</a>
+					<a href="#outcomes">Outcomes</a>
+					<a href="#research">Research</a>
+					<a href="#deploy">Deploy</a>
+				</div>
+				<button class="nav-cta" type="button">Request demo</button>
+
+				<button
+					id="menu-toggle"
+					class="menu-toggle"
+					type="button"
+					aria-label="Toggle menu"
+					aria-expanded="false"
+					aria-controls="mobile-menu"
+				>
+					<svg class="icon-menu" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+					<svg class="icon-x" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+				</button>
+			</nav>
+		</header>
+
+		<div id="mobile-menu" class="mobile-menu">
+			<nav class="mobile-menu-content" aria-label="Mobile">
+				<a href="#platform">Platform</a>
+				<a href="#outcomes">Outcomes</a>
+				<a href="#research">Research</a>
+				<a href="#deploy">Deploy</a>
+				<hr class="mobile-menu-divider">
+				<a class="mobile-cta" href="#">Request demo</a>
+			</nav>
+		</div>
+
+		<main id="top">
+			<section class="hero" aria-label="Introduction">
+				<div class="hero-copy">
+					<h1 class="hero-heading">
+						<span class="line">Tracing<sup class="reg-mark" aria-hidden="true">&reg;</sup></span>
+						<span class="line">the&nbsp;<span class="line-mask">unseen</span></span>
+					</h1>
+
+					<p class="hero-sub">We distill fragmented data into sharp awareness, arming operators with live context to detect and neutralize with accuracy.</p>
+
+					<button type="button" class="cta">Request demo</button>
+				</div>
+
+				<div class="hero-stats">
+					<dl class="stat-card stat-card--small" aria-label="Risk surface status">
+						<div class="risk-chevrons" aria-hidden="true">
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+						</div>
+						<div>
+							<dt>Risk surface</dt>
+							<dd>Critical</dd>
+						</div>
+					</dl>
+
+					<dl class="stat-card stat-card--large" aria-label="Captured events counter">
+						<dt>Captured events:</dt>
+						<dd><span id="event-count" data-count-to="187941">0</span></dd>
+						<hr class="stat-divider">
+						<div class="stat-footer">
+							<span>Verified anomaly flagged .</span>
+							<span aria-hidden="true">/</span>
+						</div>
+					</dl>
+				</div>
+			</section>
+		</main>
+	</div>
+
+	<script>
+		(function () {
+			var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+			// Background video: skip autoplay under reduced motion, fall back to poster.
+			var video = document.querySelector('.hero-bg');
+			if (video) {
+				if (reduceMotion) {
+					video.removeAttribute('autoplay');
+					video.pause();
+				} else {
+					var playPromise = video.play();
+					if (playPromise && typeof playPromise.catch === 'function') {
+						playPromise.catch(function () {});
+					}
+				}
+			}
+
+			// Mobile menu toggle.
+			var toggle = document.getElementById('menu-toggle');
+			var menu = document.getElementById('mobile-menu');
+			var open = false;
+
+			function setMenu(next) {
+				open = next;
+				toggle.classList.toggle('is-open', open);
+				toggle.setAttribute('aria-expanded', String(open));
+				menu.classList.toggle('is-open', open);
+			}
+
+			if (toggle && menu) {
+				toggle.addEventListener('click', function () {
+					setMenu(!open);
+				});
+				menu.querySelectorAll('a').forEach(function (link) {
+					link.addEventListener('click', function () {
+						setMenu(false);
+					});
+				});
+			}
+
+			// Captured-events counter: rAF count-up, triggered once on scroll into view.
+			var counter = document.getElementById('event-count');
+			if (counter) {
+				var target = parseInt(counter.getAttribute('data-count-to'), 10) || 0;
+
+				if (reduceMotion) {
+					counter.textContent = target.toLocaleString('en-US');
+				} else if ('IntersectionObserver' in window) {
+					var duration = 1400;
+					var counted = false;
+
+					var runCount = function () {
+						if (counted) return;
+						counted = true;
+						var start = null;
+
+						function tick(timestamp) {
+							if (start === null) start = timestamp;
+							var progress = Math.min((timestamp - start) / duration, 1);
+							var eased = 1 - Math.pow(1 - progress, 3);
+							counter.textContent = Math.floor(eased * target).toLocaleString('en-US');
+							if (progress < 1) {
+								requestAnimationFrame(tick);
+							} else {
+								counter.textContent = target.toLocaleString('en-US');
+							}
+						}
+
+						requestAnimationFrame(tick);
+					};
+
+					var observer = new IntersectionObserver(function (entries) {
+						entries.forEach(function (entry) {
+							if (entry.isIntersecting) {
+								runCount();
+								observer.disconnect();
+							}
+						});
+					}, { threshold: 0.4 });
+
+					observer.observe(counter);
+				} else {
+					counter.textContent = target.toLocaleString('en-US');
+				}
+			}
+		})();
+	</script>
+</body>
+</html>

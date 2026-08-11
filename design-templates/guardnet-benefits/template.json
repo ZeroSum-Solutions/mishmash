@@ -1,0 +1,12 @@
+{
+  "slug": "guardnet-benefits",
+  "name": "Guardnet — Key Benefits",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Jost:wght@300&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=guardnet-benefits",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

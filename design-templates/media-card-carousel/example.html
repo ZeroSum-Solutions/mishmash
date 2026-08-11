@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Video Stories — EngineTech Program Rail</title>
+<meta name="description" content="A horizontally-scrolling rail of video story cards for an aerospace propulsion program." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;420;500;520;600;650;700;760&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --hero-max-width: 1820px;
+    --bg: #f7f8f8;
+    --ink: #111111;
+    --ink-soft: #252b2b;
+    --muted: #697272;
+    --muted-2: #858d8d;
+    --muted-3: #7a8282;
+    --divider: #cfd4d4;
+    --video-bg: #dfe5e6;
+    /* Design is genuinely monochrome (SPEC-BATCH3 §4): --accent is scoped
+       exclusively to the :focus-visible outline, never injected into the
+       resting render. */
+    --accent: #2f6fed;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Geist", "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+  }
+
+  .video-stories {
+    position: relative;
+    z-index: 90;
+    min-height: 100vh;
+    padding: clamp(46px, 5vw, 88px) 0 clamp(44px, 4vw, 74px);
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  .video-stories__header {
+    width: min(100% - 96px, 900px);
+    margin: 0 auto clamp(38px, 4vw, 74px);
+  }
+
+  .video-stories__header h2 {
+    margin: 0;
+    color: var(--ink);
+    font-size: clamp(38px, 4.4vw, 76px);
+    font-weight: 300;
+    letter-spacing: 0;
+    line-height: 1.08;
+  }
+
+  .video-stories__header p {
+    max-width: 720px;
+    margin: 22px 0 0;
+    color: var(--muted);
+    font-size: clamp(16px, 1.25vw, 21px);
+    font-weight: 420;
+    line-height: 1.55;
+  }
+
+  /* Additive: real prev/next controls (SPEC-BATCH2 §4). Does not alter the
+     header's own rendered appearance — a separate row below it. */
+  .video-stories__controls {
+    width: min(100% - 96px, 900px);
+    margin: 0 auto clamp(20px, 2vw, 32px);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  .video-stories__nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    border: 1px solid var(--divider);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    padding: 0;
+    transition: background-color 200ms cubic-bezier(0.23, 1, 0.32, 1), border-color 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .video-stories__nav-btn:hover {
+    background: rgba(17, 17, 17, 0.05);
+    border-color: #b7bebe;
+  }
+
+  .video-stories__nav-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .video-stories__nav-btn svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+  }
+
+  .video-stories__rail {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(520px, 34vw);
+    gap: clamp(28px, 3vw, 54px);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    padding: 0 max(48px, calc((100vw - var(--hero-max-width)) / 2 + 48px)) 36px;
+    scrollbar-width: none;
+  }
+
+  .video-stories__rail::-webkit-scrollbar { display: none; }
+
+  .video-stories__rail:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  .story-card {
+    scroll-snap-align: center;
+    min-width: 0;
+    opacity: 0.54;
+    transform: translateY(10px);
+    transition: opacity 260ms ease, transform 260ms ease;
+  }
+
+  .story-card:hover,
+  .story-card:focus {
+    opacity: 1;
+    transform: none;
+  }
+
+  .story-card:focus { outline: none; }
+
+  .story-card:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 4px;
+  }
+
+  .story-card__media {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    background: var(--video-bg);
+    object-fit: cover;
+    object-position: center;
+    box-shadow: 0 18px 48px rgb(21 34 34 / 0.1);
+  }
+
+  /* Manufacturing Floor card: the licensed source clip for this slot showed
+     an identifiable real spacecraft (name markings + a national flag decal)
+     across its entire duration, so it is replaced with a vendored abstract
+     precision-inspection graphic (SPEC.md's styled-poster fallback for an
+     infeasible asset) plus a slow CSS drift for parity with the other
+     autoplaying cards. */
+  .story-card__media--poster-wrap {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .story-card__media--poster-wrap img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    animation: posterDrift 22s ease-in-out infinite alternate;
+  }
+
+  @keyframes posterDrift {
+    0% { transform: scale(1.02) translate(0, 0); }
+    100% { transform: scale(1.07) translate(-1.5%, 1%); }
+  }
+
+  .story-card__content { padding: 24px 28px 0; }
+
+  .story-card__tag {
+    margin: 0 0 12px;
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 760;
+    line-height: 1;
+  }
+
+  .story-card__content h3 {
+    max-width: 680px;
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: clamp(18px, 1.22vw, 24px);
+    font-weight: 520;
+    letter-spacing: 0;
+    line-height: 1.38;
+  }
+
+  .story-card__meta {
+    display: block;
+    margin-top: 14px;
+    color: var(--muted-2);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .video-stories__footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: min(100% - 96px, 900px);
+    margin: 28px auto 0;
+  }
+
+  .video-stories__footer .bar {
+    display: block;
+    width: 56px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--divider);
+  }
+
+  .video-stories__footer .bar.is-active {
+    width: 320px;
+    background: var(--ink);
+  }
+
+  .video-stories__footer strong {
+    margin-left: 18px;
+    color: var(--muted-3);
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+  }
+
+  @media (max-width: 860px) {
+    .video-stories__header,
+    .video-stories__footer,
+    .video-stories__controls {
+      width: min(100% - 48px, 900px);
+    }
+
+    .video-stories__rail {
+      grid-auto-columns: minmax(320px, 82vw);
+      padding: 0 24px 30px;
+    }
+
+    .story-card {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .video-stories__header,
+    .video-stories__footer,
+    .video-stories__controls {
+      width: min(100% - 32px, 900px);
+    }
+
+    .story-card__content { padding: 18px 4px 0; }
+
+    .video-stories__footer .bar.is-active { width: 150px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+
+    .story-card {
+      transition: none;
+      opacity: 1;
+      transform: none;
+    }
+
+    .video-stories__rail { scroll-behavior: auto; }
+
+    .video-stories__nav-btn { transition: none; }
+
+    .story-card__media--poster-wrap img { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <section class="video-stories" aria-labelledby="video-stories-heading">
+    <div class="video-stories__header">
+      <h2 id="video-stories-heading">Program stories from the people building flight-ready power.</h2>
+      <p>Short field notes from integration leads, test engineers, and manufacturing teams moving advanced propulsion systems from requirement reviews to repeatable flight hardware.</p>
+    </div>
+
+    <div class="video-stories__controls">
+      <button type="button" class="video-stories__nav-btn" id="story-prev" aria-label="Previous story">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button type="button" class="video-stories__nav-btn" id="story-next" aria-label="Next story">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+    <div class="video-stories__rail" id="story-rail" tabindex="0" role="region" aria-label="EngineTech video previews">
+      <article class="story-card">
+        <video class="story-card__media" src="assets/story-integration-review.mp4" autoplay muted loop playsinline aria-hidden="true" tabindex="-1"></video>
+        <div class="story-card__content">
+          <p class="story-card__tag">Integration Review</p>
+          <h3>How a reusable upper-stage program moved from thermal risk to stable qualification.</h3>
+          <span class="story-card__meta">Reusable systems · 04:20</span>
+        </div>
+      </article>
+
+      <article class="story-card">
+        <video class="story-card__media" src="assets/story-hotfire-campaign.mp4" autoplay muted loop playsinline aria-hidden="true" tabindex="-1"></video>
+        <div class="story-card__content">
+          <p class="story-card__tag">Hot-Fire Campaign</p>
+          <h3>Inside the test cell where telemetry, vibration, and injector response converge.</h3>
+          <span class="story-card__meta">Validation · 03:45</span>
+        </div>
+      </article>
+
+      <article class="story-card">
+        <div class="story-card__media story-card__media--poster-wrap">
+          <img src="assets/story-manufacturing-floor-poster.svg" alt="" aria-hidden="true" loading="lazy" />
+        </div>
+        <div class="story-card__content">
+          <p class="story-card__tag">Manufacturing Floor</p>
+          <h3>Why sub-micron inspection changes the way aerospace teams plan reliability.</h3>
+          <span class="story-card__meta">Precision build · 05:10</span>
+        </div>
+      </article>
+
+      <article class="story-card">
+        <video class="story-card__media" src="assets/story-integration-review.mp4" autoplay muted loop playsinline aria-hidden="true" tabindex="-1"></video>
+        <div class="story-card__content">
+          <p class="story-card__tag">Hydrogen Pathway</p>
+          <h3>Designing feed systems and ignition envelopes for hydrogen-ready propulsion.</h3>
+          <span class="story-card__meta">H2 systems · 04:55</span>
+        </div>
+      </article>
+
+      <article class="story-card">
+        <video class="story-card__media" src="assets/story-hotfire-campaign.mp4" autoplay muted loop playsinline aria-hidden="true" tabindex="-1"></video>
+        <div class="story-card__content">
+          <p class="story-card__tag">Mission Support</p>
+          <h3>The operational cadence behind launch-window support and post-test analysis.</h3>
+          <span class="story-card__meta">Field readiness · 03:30</span>
+        </div>
+      </article>
+    </div>
+
+    <div class="video-stories__footer" aria-hidden="true">
+      <span class="bar"></span>
+      <span class="bar"></span>
+      <span class="bar is-active"></span>
+      <strong>05 / 05</strong>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      var section = document.querySelector('.video-stories');
+      var rail = document.getElementById('story-rail');
+      var controls = document.querySelector('.video-stories__controls');
+      var cards = Array.prototype.slice.call(rail.querySelectorAll('.story-card'));
+      var prevBtn = document.getElementById('story-prev');
+      var nextBtn = document.getElementById('story-next');
+      var reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      var AUTO_ADVANCE_MS = 4000;
+
+      var index = 0;
+      var timer = null;
+      var hovering = false;
+      var focusWithin = false;
+
+      function reducedMotion() {
+        return reducedMotionQuery.matches;
+      }
+
+      // Auto-advance runs only when none of these hold. Recomputed live on
+      // every state change instead of a pause-flag + delayed-resume pair,
+      // so a stale timer can never clobber an active hover/focus pause.
+      function shouldAutoAdvance() {
+        return !reducedMotion() && !hovering && !focusWithin;
+      }
+
+      function goTo(i) {
+        index = ((i % cards.length) + cards.length) % cards.length;
+        cards[index].scrollIntoView({
+          behavior: reducedMotion() ? 'auto' : 'smooth',
+          inline: 'center',
+          block: 'nearest'
+        });
+      }
+
+      function next() {
+        goTo(index + 1);
+      }
+
+      function prev() {
+        goTo(index - 1);
+      }
+
+      function stopAuto() {
+        if (timer) {
+          window.clearInterval(timer);
+          timer = null;
+        }
+      }
+
+      // Re-evaluate whether the timer should be running and (re)start its
+      // countdown from now. Called after every state change and every
+      // manual navigation, so a manual action pushes the next auto-advance
+      // out by a fresh interval instead of firing right away.
+      function restartTimer() {
+        stopAuto();
+        if (shouldAutoAdvance()) {
+          timer = window.setInterval(function () {
+            if (shouldAutoAdvance()) next();
+          }, AUTO_ADVANCE_MS);
+        }
+      }
+
+      prevBtn.addEventListener('click', function () {
+        prev();
+        restartTimer();
+      });
+
+      nextBtn.addEventListener('click', function () {
+        next();
+        restartTimer();
+      });
+
+      rail.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          next();
+          restartTimer();
+        } else if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          prev();
+          restartTimer();
+        } else if (event.key === 'Home') {
+          event.preventDefault();
+          goTo(0);
+          restartTimer();
+        } else if (event.key === 'End') {
+          event.preventDefault();
+          goTo(cards.length - 1);
+          restartTimer();
+        }
+      });
+
+      // Hover-pause is scoped to the rail and its controls, not the full
+      // section: the section fills the viewport with no chrome around the
+      // rail, so binding hover to it would mean "the mouse is anywhere on
+      // the page" and auto-advance could never resume without the pointer
+      // leaving the browser window entirely.
+      [rail, controls].forEach(function (el) {
+        el.addEventListener('mouseenter', function () {
+          hovering = true;
+          restartTimer();
+        });
+        el.addEventListener('mouseleave', function () {
+          hovering = false;
+          restartTimer();
+        });
+      });
+
+      section.addEventListener('focusin', function () {
+        focusWithin = true;
+        restartTimer();
+      });
+      section.addEventListener('focusout', function (event) {
+        if (!section.contains(event.relatedTarget)) {
+          focusWithin = false;
+          restartTimer();
+        }
+      });
+
+      reducedMotionQuery.addEventListener('change', restartTimer);
+
+      restartTimer();
+    })();
+  </script>
+</body>
+</html>

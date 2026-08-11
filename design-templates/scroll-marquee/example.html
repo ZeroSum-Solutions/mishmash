@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scroll Marquee — Kinetic Image Rows</title>
+<meta name="description" content="A dark, scroll-driven two-row image marquee where each row parallaxes in an opposite horizontal direction as the page scrolls." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0c0c0c;
+    --panel: #151515;
+    --border: rgba(255, 255, 255, 0.08);
+    --text: #f5f5f5;
+    --text-dim: rgba(245, 245, 245, 0.6);
+    --accent: #7c5cfc;
+    --accent-a: #7c5cfc;
+    --accent-b: #22d3ee;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    background: var(--bg);
+    font-family: "Kanit", sans-serif;
+    color: var(--text);
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  img,
+  video {
+    max-width: 100%;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent-b);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  /* ---------- Top bar (page chrome, not part of the licensed section) ---------- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 22px clamp(20px, 5vw, 64px);
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .topbar .wordmark {
+    font-family: "Kanit", sans-serif;
+    font-weight: 700;
+    font-size: 19px;
+    letter-spacing: 0.02em;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .topbar .wordmark span {
+    color: var(--text-dim);
+    font-weight: 300;
+  }
+
+  .topbar .cta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "Kanit", sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    color: #0c0c0c;
+    background: linear-gradient(90deg, var(--accent-a), var(--accent-b));
+    border-radius: 999px;
+    padding: 10px 20px;
+    text-decoration: none;
+    transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1), opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .topbar .cta-pill:hover {
+    transform: translateY(-1px);
+    opacity: 0.92;
+  }
+
+  /* ---------- Scroll Marquee section (the licensed design, fidelity-locked) ---------- */
+  .marquee-section {
+    width: 100%;
+    overflow: hidden;
+    background: #0c0c0c;
+    padding-top: 96px;
+    padding-bottom: 40px;
+  }
+
+  @media (min-width: 640px) {
+    .marquee-section {
+      padding-top: 128px;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .marquee-section {
+      padding-top: 160px;
+    }
+  }
+
+  .marquee-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .marquee-row {
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .marquee-track {
+    display: flex;
+    gap: 12px;
+    width: max-content;
+    will-change: transform;
+  }
+
+  .marquee-card {
+    flex-shrink: 0;
+    width: 420px;
+    height: 270px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--panel);
+  }
+
+  .marquee-card video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* ---------- Bottom spacer (page chrome — scroll room to observe the parallax) ---------- */
+  .scroll-spacer {
+    background: var(--bg);
+    min-height: 70vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .scroll-spacer p {
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track {
+      transition: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+<h1 class="sr-only">Scroll marquee — kinetic image rows</h1>
+
+<header class="topbar">
+  <a class="wordmark" href="#top">Nova<span>Loop</span></a>
+  <a class="cta-pill" href="#">View the work</a>
+</header>
+
+<main id="top">
+  <section class="marquee-section" aria-label="Scrolling showcase of project previews">
+    <div class="marquee-rows">
+      <div class="marquee-row" data-direction="right">
+        <div class="marquee-track" data-row="1">
+          <div class="marquee-card"><video src="assets/hero-space-voyage-preview-eECLH3Yc.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-codenest-preview-Cgppc2qV.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-vex-ventures-preview-BczMFIiw.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-stellar-ai-v2-preview-DjvxjG3C.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-asme-preview-B_nGDnTP.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-transform-data-preview-Cx5OU29N.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-vitara-preview-Cjz2QYyU.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-terra-preview-BFjrCr7T.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-skyelite-preview-DHaZIgUv.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-aethera-preview-DknSlcTa.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-designpro-preview-D8c5_een.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-space-voyage-preview-eECLH3Yc.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-codenest-preview-Cgppc2qV.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-vex-ventures-preview-BczMFIiw.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-stellar-ai-v2-preview-DjvxjG3C.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-asme-preview-B_nGDnTP.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-transform-data-preview-Cx5OU29N.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-vitara-preview-Cjz2QYyU.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-terra-preview-BFjrCr7T.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-skyelite-preview-DHaZIgUv.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-aethera-preview-DknSlcTa.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-designpro-preview-D8c5_een.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-space-voyage-preview-eECLH3Yc.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-codenest-preview-Cgppc2qV.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-vex-ventures-preview-BczMFIiw.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-stellar-ai-v2-preview-DjvxjG3C.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-asme-preview-B_nGDnTP.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-transform-data-preview-Cx5OU29N.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-vitara-preview-Cjz2QYyU.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-terra-preview-BFjrCr7T.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-skyelite-preview-DHaZIgUv.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-aethera-preview-DknSlcTa.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-designpro-preview-D8c5_een.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+        </div>
+      </div>
+      <div class="marquee-row" data-direction="left">
+        <div class="marquee-track" data-row="2">
+          <div class="marquee-card"><video src="assets/hero-stellar-ai-preview-D3HL6bw1.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-xportfolio-preview-D4A8maiC.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-orbit-web3-preview-BXt4OttD.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-nexora-preview-cx5HmUgo.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-evr-ventures-preview-DZxeVFEX.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-planet-orbit-preview-DWAP8Z1P.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-new-era-preview-CocuDUm9.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-wealth-preview-B70idl_u.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-luminex-preview-CxOP7ce6.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-celestia-preview-0yO3jXO8.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-stellar-ai-preview-D3HL6bw1.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-xportfolio-preview-D4A8maiC.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-orbit-web3-preview-BXt4OttD.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-nexora-preview-cx5HmUgo.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-evr-ventures-preview-DZxeVFEX.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-planet-orbit-preview-DWAP8Z1P.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-new-era-preview-CocuDUm9.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-wealth-preview-B70idl_u.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-luminex-preview-CxOP7ce6.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-celestia-preview-0yO3jXO8.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-stellar-ai-preview-D3HL6bw1.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-xportfolio-preview-D4A8maiC.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-orbit-web3-preview-BXt4OttD.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-nexora-preview-cx5HmUgo.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-evr-ventures-preview-DZxeVFEX.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-planet-orbit-preview-DWAP8Z1P.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-new-era-preview-CocuDUm9.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-wealth-preview-B70idl_u.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-luminex-preview-CxOP7ce6.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+          <div class="marquee-card"><video src="assets/hero-celestia-preview-0yO3jXO8.mp4" muted loop playsinline preload="auto" aria-hidden="true"></video></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="scroll-spacer">
+  <p>Scroll to drive the parallax</p>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var section = document.querySelector(".marquee-section");
+  var row1 = document.querySelector('.marquee-track[data-row="1"]');
+  var row2 = document.querySelector('.marquee-track[data-row="2"]');
+  var reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  function setInitialPositions() {
+    row1.style.transform = "translateX(-200px)";
+    row2.style.transform = "translateX(200px)";
+  }
+
+  setInitialPositions();
+  row1.style.willChange = "transform";
+  row2.style.willChange = "transform";
+
+  function handleScroll() {
+    var rect = section.getBoundingClientRect();
+    var sectionTop = rect.top + window.scrollY;
+    var scrolled = window.scrollY - sectionTop + window.innerHeight;
+    var offset = scrolled * 0.3;
+    row1.style.transform = "translateX(" + (offset - 200) + "px)";
+    row2.style.transform = "translateX(" + -(offset - 200) + "px)";
+  }
+
+  if (!reduceMotionQuery.matches) {
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+  }
+
+  /* Decorative preview videos: play only when motion is not reduced.
+     A dignified static fallback (first frame) is shown otherwise. */
+  var videos = document.querySelectorAll(".marquee-card video");
+  function applyVideoMotionState() {
+    videos.forEach(function (video) {
+      if (reduceMotionQuery.matches) {
+        video.pause();
+      } else {
+        var playPromise = video.play();
+        if (playPromise && typeof playPromise.catch === "function") {
+          playPromise.catch(function () {});
+        }
+      }
+    });
+  }
+  applyVideoMotionState();
+  if (typeof reduceMotionQuery.addEventListener === "function") {
+    reduceMotionQuery.addEventListener("change", applyVideoMotionState);
+  }
+})();
+</script>
+</body>
+</html>

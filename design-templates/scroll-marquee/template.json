@@ -1,0 +1,12 @@
+{
+  "slug": "scroll-marquee",
+  "name": "Scroll Marquee — Scroll-Driven Parallax Image Rows",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800;900&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=scroll-marquee",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

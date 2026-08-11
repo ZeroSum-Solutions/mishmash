@@ -1,0 +1,12 @@
+{
+  "slug": "solace-sign-in",
+  "name": "Solace — Liquid Glass Sign-In",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=solace-sign-in",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

@@ -1,0 +1,12 @@
+{
+  "slug": "coastal-estate-realty",
+  "name": "AVALEA — Coast Homes",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Iosevka+Charon:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=coastal-estate",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Step Into Wonder</title>
+<meta name="description" content="Step Into Wonder — an immersive scroll journey through a curtained portal into nine dreamlike worlds.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Viaoda+Libre&family=Imprima&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-void:#0a0608;
+    --ink-cream:#fff8f0;
+    --ink-soft:rgba(255,245,235,.88);
+    --accent-amber:#ffd9ac;
+    --accent-rose:#f3cdd6;
+    --accent-meadow:#dcedc2;
+    --accent-sky:#c3e3f4;
+    --accent-gold:#f0e4c0;
+    --accent-violet:#dcd2f2;
+    --ease-out:cubic-bezier(0.23,1,0.32,1);
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; }
+
+  html,body{
+    margin:0;
+    background:var(--bg-void);
+    scroll-behavior:auto;
+  }
+  body{
+    font-family:'Imprima', sans-serif;
+    -webkit-font-smoothing:antialiased;
+    color:var(--ink-cream);
+    overflow-x:hidden;
+  }
+  html{ scrollbar-gutter:stable; }
+
+  h1,h2,h3,p{ margin:0; }
+  ul{ margin:0; padding:0; list-style:none; }
+  a{ text-decoration:none; }
+  img{ max-width:none; }
+
+  @keyframes bobUp{
+    0%,100%{ transform:translateY(0); }
+    50%{ transform:translateY(-6px); }
+  }
+
+  @keyframes fadeUp{
+    from{ opacity:0; transform:translateY(28px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+
+  /* ---------------------------------------------------------------
+     Experience shell
+  --------------------------------------------------------------- */
+  .experience{
+    position:relative;
+    height:480vh;
+    background:var(--bg-void);
+  }
+  .viewport{
+    position:sticky;
+    top:0;
+    width:100%;
+    height:100vh;
+    overflow:hidden;
+    background:var(--bg-void);
+  }
+  .hero-frame{
+    position:relative;
+    width:100%;
+    height:100vh;
+    overflow:hidden;
+  }
+
+  .layer{
+    position:absolute;
+    top:0; left:0;
+    width:100%;
+    height:100vh;
+    object-fit:cover;
+    display:block;
+    will-change:transform;
+  }
+  .layer-world{ z-index:0; }
+  .layer-clouds{
+    position:absolute;
+    bottom:0; left:0; right:0;
+    top:auto; height:auto;
+    width:100%;
+    z-index:10;
+    will-change:transform;
+  }
+  .portal-wrap{
+    position:absolute;
+    inset:0;
+    z-index:15;
+    will-change:transform,opacity;
+  }
+  .layer-portal{ position:absolute; inset:0; height:100%; z-index:1; }
+  .portal-glow{
+    position:absolute; inset:0;
+    background:radial-gradient(circle at 52% 38%, var(--accent-amber) 0%, transparent 55%);
+    opacity:.35;
+    mix-blend-mode:screen;
+    pointer-events:none;
+    z-index:2;
+  }
+  .bottom-fade{
+    position:absolute; left:0; right:0; bottom:0; height:40%;
+    background:linear-gradient(to top, rgba(0,0,0,.45) 0%, transparent 100%);
+    pointer-events:none;
+    z-index:16;
+  }
+  .layer-curtain-left{ z-index:16; object-position:right center; transition:transform 1.8s cubic-bezier(0.16,1,0.3,1); }
+  .layer-curtain-right{ z-index:16; object-position:left center; transition:transform 1.8s cubic-bezier(0.16,1,0.3,1); }
+  .top-fade{
+    position:absolute; left:0; right:0; top:0; height:42vh;
+    background:linear-gradient(to bottom, rgba(0,0,0,.45) 0%, transparent 100%);
+    pointer-events:none;
+    z-index:45;
+  }
+
+  /* ---------------------------------------------------------------
+     Nav
+  --------------------------------------------------------------- */
+  .site-nav{
+    position:absolute; top:0; left:0; right:0;
+    z-index:50;
+    padding:18px 20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .nav-group{ display:flex; align-items:center; gap:24px; }
+  .site-nav a{
+    font-family:'Imprima', sans-serif;
+    font-size:11px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:#fff;
+    opacity:.9;
+  }
+  .site-nav span{
+    font-family:'Imprima', sans-serif;
+    font-size:11px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:#fff;
+    opacity:.9;
+  }
+  .nav-logo{ display:flex; }
+  .nav-mobile{ display:flex; align-items:center; justify-content:space-between; width:100%; }
+  .nav-desktop{ display:none; align-items:center; justify-content:space-between; width:100%; }
+
+  @media (min-width:1280px){
+    .site-nav{ padding:22px 48px; }
+    .site-nav a, .site-nav span{ font-size:12px; }
+    .nav-group{ gap:36px; }
+    .nav-mobile{ display:none; }
+    .nav-desktop{ display:flex; }
+  }
+
+  /* ---------------------------------------------------------------
+     Reveal / entrance animation
+  --------------------------------------------------------------- */
+  .reveal{
+    opacity:0;
+    transform:translateY(28px);
+    transition:opacity .9s ease, transform .9s ease;
+  }
+  .scene-1.ui-visible .reveal{
+    opacity:1;
+    transform:translateY(0);
+  }
+
+  /* ---------------------------------------------------------------
+     Scene 1
+  --------------------------------------------------------------- */
+  .scene-1{
+    position:absolute; inset:0;
+    z-index:20;
+    transition:opacity .1s linear;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:88px 20px 96px;
+    gap:22px;
+  }
+
+  .scene1-copy{
+    max-width:320px;
+    transition-delay:.3s;
+  }
+  .scene1-copy h1{
+    font-family:'Viaoda Libre', serif;
+    color:#fff;
+    line-height:1.05;
+    text-shadow:0 2px 24px rgba(0,0,0,.7), 0 1px 4px rgba(0,0,0,.9);
+  }
+  .scene1-copy .line1{
+    display:block;
+    font-size:clamp(26px, 6vw, 44px);
+    letter-spacing:.04em;
+    line-height:1.1;
+  }
+  .scene1-copy .line1 .chevron{ color:var(--accent-amber); font-size:.8em; }
+  .scene1-copy .line1 em{ font-style:italic; }
+  .scene1-copy .line2{
+    display:block;
+    font-size:clamp(52px, 14vw, 86px);
+    letter-spacing:-.02em;
+    line-height:.95;
+  }
+  .scene1-copy p{
+    font-family:'Imprima', sans-serif;
+    font-size:15px;
+    line-height:1.65;
+    color:var(--ink-soft);
+    text-shadow:0 1px 12px rgba(0,0,0,.8);
+    max-width:280px;
+    margin:16px auto 0;
+  }
+
+  .scene1-cards{
+    display:flex;
+    justify-content:center;
+    gap:12px;
+    padding:0 24px;
+    transition-delay:.3s;
+  }
+  .mini-card{
+    position:relative;
+    width:140px; height:140px;
+    border-radius:22px;
+    overflow:hidden;
+    background-size:cover;
+    background-position:center;
+    box-shadow:0 8px 32px rgba(0,0,0,.5);
+    display:flex;
+    align-items:flex-end;
+    flex:0 0 auto;
+  }
+  .mini-card::before{
+    content:"";
+    position:absolute; left:0; right:0; bottom:0; height:60%;
+    background:linear-gradient(to top, rgba(0,0,0,.72) 0%, transparent 100%);
+  }
+  .mini-card::after{
+    content:"";
+    position:absolute; left:0; right:0; bottom:0; height:44%;
+    -webkit-backdrop-filter:blur(6px);
+    backdrop-filter:blur(6px);
+    -webkit-mask-image:linear-gradient(to top, black 40%, transparent 100%);
+    mask-image:linear-gradient(to top, black 40%, transparent 100%);
+    display:none;
+  }
+  .mini-card-content{
+    position:relative;
+    z-index:1;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:12px;
+    width:100%;
+  }
+  .mini-card-play{
+    width:26px; height:26px;
+    border-radius:50%;
+    background:rgba(255,255,255,.88);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex:0 0 auto;
+  }
+  .mini-card-number{
+    font-family:'Viaoda Libre', serif;
+    font-size:28px;
+    color:#fff;
+    line-height:1;
+    text-shadow:0 2px 10px rgba(0,0,0,.4);
+    flex:0 0 auto;
+  }
+  .mini-card-label{
+    font-family:'Imprima', sans-serif;
+    font-size:13px;
+    color:#fff;
+    line-height:1.3;
+  }
+  .scene1-cards li:nth-child(n+2){ display:none; }
+
+  .scene1-dots{
+    position:absolute;
+    bottom:28px; left:50%;
+    transform:translateX(-50%);
+    display:flex;
+    gap:7px;
+    transition-delay:.8s;
+  }
+  .scene1-dots .dot{ width:14px; height:4px; border-radius:2px; background:rgba(255,255,255,.35); }
+  .scene1-dots .dot.active{ width:28px; background:rgba(255,255,255,.9); }
+
+  .scene1-cue{
+    position:absolute;
+    bottom:36px; left:50%;
+    transform:translateX(-50%);
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    transition-delay:.9s;
+  }
+  .scene1-cue span{
+    font-family:'Imprima', sans-serif;
+    font-size:10px;
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.6);
+  }
+  .cue-chevron{
+    width:34px; height:34px;
+    border-radius:50%;
+    border:1.5px solid rgba(255,255,255,.5);
+    background:transparent;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    animation:bobUp 1.8s ease-in-out infinite;
+    padding:0;
+  }
+
+  @media (min-width:768px){
+    .scene1-copy{ max-width:420px; }
+    .scene1-cards{ gap:14px; }
+    .mini-card{ width:140px; height:140px; border-radius:22px; }
+    .scene1-cards li:nth-child(n+2){ display:flex; }
+    .mini-card::after{ display:block; }
+    .mini-card::before{ background:linear-gradient(to top, rgba(0,0,0,.72) 0%, rgba(0,0,0,.18) 60%, transparent 100%); }
+  }
+
+  @media (min-width:1280px){
+    .scene-1{
+      display:block;
+      padding:0;
+      gap:0;
+    }
+    .scene1-copy{
+      position:absolute;
+      left:60px; right:auto; top:46%;
+      max-width:440px;
+      padding:0;
+      text-align:left;
+      transform:translateY(-50%);
+    }
+    .scene1-copy .line1{ font-size:clamp(32px, 4.5vw, 54px); letter-spacing:.04em; }
+    .scene1-copy .line2{ font-size:clamp(50px, 7.5vw, 88px); letter-spacing:-.02em; }
+    .scene1-copy p{
+      font-size:18px;
+      max-width:300px;
+      text-align:left;
+      margin:18px 0 0;
+    }
+    .scene1-cards{
+      position:absolute;
+      right:40px; top:50%;
+      transform:translateY(-50%);
+      padding:0;
+      justify-content:flex-end;
+      transition-delay:.55s;
+    }
+    .mini-card{ width:158px; height:158px; border-radius:28px; box-shadow:0 8px 32px rgba(0,0,0,.45); }
+    .mini-card-play{ width:30px; height:30px; }
+    .mini-card-label{ font-size:18px; }
+    .mini-card-number{ font-size:36px; }
+    .scene1-dots{ left:60px; bottom:40px; transform:none; }
+    .scene1-cue{ display:flex; }
+  }
+
+  /* ---------------------------------------------------------------
+     Scene 2 (header) + arc card slider
+  --------------------------------------------------------------- */
+  .scene-2{
+    position:absolute; inset:0;
+    z-index:46;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    text-align:center;
+    padding:8vh 20px 0;
+    opacity:0;
+  }
+  .scene-2 h2{
+    font-family:'Viaoda Libre', serif;
+    color:#fff;
+    font-size:clamp(28px, 8vw, 44px);
+    letter-spacing:.03em;
+    line-height:1.05;
+    text-shadow:0 2px 20px rgba(0,0,0,.4);
+  }
+  .scene-2 p{
+    font-family:'Imprima', sans-serif;
+    color:rgba(255,255,255,.82);
+    font-size:14px;
+    line-height:1.6;
+    letter-spacing:-.01em;
+    margin-top:12px;
+    max-width:260px;
+  }
+  @media (min-width:768px){
+    .scene-2{ padding-top:12vh; }
+    .scene-2 h2{ font-size:clamp(38px, 6.5vw, 78px); }
+    .scene-2 p{ font-size:20px; max-width:480px; }
+  }
+
+  .arc-slider{
+    position:absolute;
+    inset:0;
+    z-index:9;
+    display:flex;
+    align-items:flex-end;
+    justify-content:center;
+    overflow:visible;
+    opacity:0;
+    pointer-events:none;
+  }
+  .arc-card{
+    position:absolute;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    border-radius:18px;
+    box-shadow:0 8px 40px rgba(80,40,60,.18);
+    padding:12px;
+    overflow:hidden;
+    will-change:transform,left,bottom;
+  }
+  .arc-badge{
+    align-self:flex-end;
+    width:24px; height:24px;
+    border-radius:50%;
+    border:1.5px solid rgba(80,50,60,.3);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'Imprima', sans-serif;
+    font-size:10px;
+    color:rgba(80,50,60,.6);
+  }
+  .arc-card h3{
+    font-family:'Viaoda Libre', serif;
+    color:#3a2530;
+    font-size:22px;
+    line-height:1.15;
+    margin-bottom:4px;
+  }
+  .arc-card p{
+    font-family:'Imprima', sans-serif;
+    color:rgba(58,37,48,.65);
+    font-size:12px;
+    line-height:1.5;
+  }
+  @media (min-width:768px){
+    .arc-card{ border-radius:26px; padding:18px 16px; }
+    .arc-card h3{ font-size:30px; margin-bottom:8px; }
+    .arc-card p{ font-size:15px; }
+  }
+
+  /* ---------------------------------------------------------------
+     Reduced motion: dignified static fallback.
+     Kills the pinned scrollytelling mechanic entirely and lays the
+     same content out as three plain stacked blocks: hero, scene-2
+     heading, and a static grid of the nine destination cards.
+  --------------------------------------------------------------- */
+  @media (prefers-reduced-motion: reduce){
+    .experience{ height:auto; }
+    .viewport{ position:relative; height:auto; overflow:visible; }
+    .layer-curtain-left, .layer-curtain-right, .portal-glow{ display:none; }
+    .layer-world, .layer-clouds, .portal-wrap{ transform:none !important; opacity:1 !important; }
+
+    .reveal{ opacity:1 !important; transform:none !important; transition:none !important; }
+    .cue-chevron{ animation:none; }
+
+    .scene-2, .arc-slider{
+      position:static;
+      opacity:1 !important;
+      pointer-events:auto !important;
+    }
+    .scene-2{ padding:64px 20px 0; }
+    .arc-slider{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:center;
+      gap:16px;
+      padding:32px 16px 64px;
+      inset:auto;
+    }
+    .arc-card{
+      position:static !important;
+      transform:none !important;
+      width:200px;
+      min-height:190px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<section class="experience" aria-label="Step Into Wonder — an immersive scroll journey">
+  <div class="viewport" id="viewport">
+
+    <div class="hero-frame">
+      <img class="layer layer-world" id="world" src="assets/world-bg.jpg" alt="">
+      <img class="layer layer-clouds" id="clouds" src="assets/bottom-clouds.webp" alt="">
+
+      <div class="portal-wrap" id="portalWrap">
+        <img class="layer-portal" src="assets/portal-bg.webp" alt="">
+        <div class="portal-glow"></div>
+      </div>
+      <div class="bottom-fade"></div>
+      <img class="layer layer-curtain-left" id="curtainLeft" src="assets/curtain-left.webp" alt="">
+      <img class="layer layer-curtain-right" id="curtainRight" src="assets/curtain-right.webp" alt="">
+      <div class="top-fade"></div>
+
+      <nav class="site-nav" aria-label="Primary">
+        <div class="nav-desktop">
+          <div class="nav-group">
+            <a href="#">Worlds</a>
+            <a href="#">Atelier</a>
+            <a href="#">Immersions</a>
+          </div>
+          <a href="#top" class="nav-logo" aria-label="Step Into Wonder — home">
+            <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true" focusable="false">
+              <path d="M14 2l2.09 6.42H23l-5.45 3.96 2.09 6.42L14 14.84l-5.64 4.06 2.09-6.42L4.96 8.42h6.95L14 2z" fill="#fff" opacity="0.9"/>
+              <circle cx="14" cy="24" r="1.5" fill="#fff" opacity="0.6"/>
+              <circle cx="6" cy="6" r="1" fill="#fff" opacity="0.4"/>
+              <circle cx="22" cy="6" r="1" fill="#fff" opacity="0.4"/>
+            </svg>
+          </a>
+          <div class="nav-group">
+            <a href="#">Craft</a>
+            <a href="#">Codex</a>
+            <a href="#">Connect</a>
+          </div>
+        </div>
+        <div class="nav-mobile">
+          <span>Explore</span>
+          <a href="#top" class="nav-logo" aria-label="Step Into Wonder — home">
+            <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true" focusable="false">
+              <path d="M14 2l2.09 6.42H23l-5.45 3.96 2.09 6.42L14 14.84l-5.64 4.06 2.09-6.42L4.96 8.42h6.95L14 2z" fill="#fff" opacity="0.9"/>
+              <circle cx="14" cy="24" r="1.5" fill="#fff" opacity="0.6"/>
+              <circle cx="6" cy="6" r="1" fill="#fff" opacity="0.4"/>
+              <circle cx="22" cy="6" r="1" fill="#fff" opacity="0.4"/>
+            </svg>
+          </a>
+          <span>Connect</span>
+        </div>
+      </nav>
+
+      <div class="scene-1" id="scene1">
+        <div class="scene1-copy reveal">
+          <h1>
+            <span class="line1">FALL <span class="chevron">&rsaquo;</span> <em>INTO</em></span>
+            <span class="line2">REVERIE</span>
+          </h1>
+          <p>Crafting boundless digital worlds where the edge between AI, vision, and living myth dissolves.</p>
+        </div>
+
+        <ul class="scene1-cards reveal">
+          <li class="mini-card" style="background-image:url('assets/card-hidden-realms.webp')">
+            <span class="mini-card-content">
+              <span class="mini-card-play" aria-hidden="true">
+                <svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true" focusable="false"><path d="M1 1l8 5-8 5V1z" fill="#1a0a00"/></svg>
+              </span>
+              <span class="mini-card-label">View Reel</span>
+            </span>
+          </li>
+          <li class="mini-card" style="background-image:url('assets/card-wild-solitudes.webp')">
+            <span class="mini-card-content">
+              <span class="mini-card-number">32</span>
+              <span class="mini-card-label">World Patrons</span>
+            </span>
+          </li>
+          <li class="mini-card" style="background-image:url('assets/card-silent-havens.webp')">
+            <span class="mini-card-content">
+              <span class="mini-card-play" aria-hidden="true">
+                <svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true" focusable="false"><path d="M1 1l8 5-8 5V1z" fill="#1a0a00"/></svg>
+              </span>
+              <span class="mini-card-label">View Reel</span>
+            </span>
+          </li>
+        </ul>
+
+        <div class="scene1-dots reveal" aria-hidden="true">
+          <span class="dot active"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+
+        <div class="scene1-cue reveal">
+          <span>Descend</span>
+          <button type="button" class="cue-chevron" id="cueBtn" aria-label="Scroll to continue">
+            <svg width="12" height="8" viewBox="0 0 12 8" aria-hidden="true" focusable="false"><path d="M1 1.5l5 4.5 5-4.5" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="scene-2" id="scene2">
+      <h2>Forge Beyond the Real</h2>
+      <p>Singular voyages to astonishing destinations, shaped for those who seek beauty beyond the ordinary and the known.</p>
+    </div>
+
+    <ul class="arc-slider" id="arcSlider">
+      <li class="arc-card" style="background-color:var(--accent-rose)"><span class="arc-badge">01</span><div><h3>Hidden Realms</h3><p>Luminous sanctuaries unseen by wandering eyes</p></div></li>
+      <li class="arc-card" style="background-color:var(--accent-meadow)"><span class="arc-badge">02</span><div><h3>Wild Solitudes</h3><p>Dissolve into untamed horizons and deep calm</p></div></li>
+      <li class="arc-card" style="background-color:var(--accent-sky)"><span class="arc-badge">03</span><div><h3>Silent Havens</h3><p>Remote escapes far beyond ordinary reach</p></div></li>
+      <li class="arc-card" style="background-color:var(--accent-gold)"><span class="arc-badge">04</span><div><h3>Bespoke Quests</h3><p>Journeys shaped around your vision and soul</p></div></li>
+      <li class="arc-card" style="background-color:var(--accent-violet)"><span class="arc-badge">05</span><div><h3>Vivid Drifts</h3><p>Surreal passages through breathtaking terrain</p></div></li>
+      <li class="arc-card" style="background-color:var(--accent-rose)"><span class="arc-badge">06</span><div><h3>Mystic Crests</h3><p>Timeless ridgelines wrapped in cloud and myth</p></div></li>
+      <li class="arc-card" style="background-color:var(--accent-sky)"><span class="arc-badge">07</span><div><h3>Deep Currents</h3><p>Glowing depths alive with uncharted wonder</p></div></li>
+      <li class="arc-card" style="background-color:var(--accent-gold)"><span class="arc-badge">08</span><div><h3>Gilded Dusk</h3><p>Amber horizons that stretch past all reason</p></div></li>
+      <li class="arc-card" style="background-color:var(--accent-meadow)"><span class="arc-badge">09</span><div><h3>Glassy Tides</h3><p>Calm waters holding skies of pure stillness</p></div></li>
+    </ul>
+
+  </div>
+</section>
+
+<script>
+(function(){
+  "use strict";
+
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var experienceEl = document.querySelector('.experience');
+  var worldEl = document.getElementById('world');
+  var cloudsEl = document.getElementById('clouds');
+  var portalWrapEl = document.getElementById('portalWrap');
+  var curtainLeftEl = document.getElementById('curtainLeft');
+  var curtainRightEl = document.getElementById('curtainRight');
+  var scene1El = document.getElementById('scene1');
+  var scene2El = document.getElementById('scene2');
+  var arcSliderEl = document.getElementById('arcSlider');
+  var arcCards = Array.prototype.slice.call(document.querySelectorAll('.arc-card'));
+  var cueBtn = document.getElementById('cueBtn');
+
+  if (cueBtn){
+    cueBtn.addEventListener('click', function(){
+      window.scrollBy({ top: window.innerHeight * 0.9, behavior: reducedMotion ? 'auto' : 'smooth' });
+    });
+  }
+
+  if (reducedMotion){
+    // Reduced-motion fallback: CSS alone re-flows the pinned scrollytelling
+    // scene into three plain stacked blocks (hero, scene-2 heading, static
+    // card grid) and forces every reveal element visible. No scroll/mouse
+    // listeners, no rAF loop, no per-frame transforms — nothing here needs
+    // to run.
+    return;
+  }
+
+  function clamp(v, min, max){ return Math.min(max, Math.max(min, v)); }
+  function lerp(a, b, t){ return a + (b - a) * t; }
+  function easeInOut(t){ return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
+
+  var PARALLAX = { world: 6, clouds: 9, portal: 7, curtain: 14 };
+  var LERP_FACTOR = 0.07;
+
+  var raw = { x: 0, y: 0 };
+  var smooth = { x: 0, y: 0 };
+  var scrollProgress = 0;
+  var curtainsOpen = false;
+  var entranceDone = false;
+
+  function isMobileView(){ return window.innerWidth < 768; }
+
+  function layoutArcCards(){
+    var mobile = isMobileView();
+    var w = mobile ? 160 : 220;
+    var h = mobile ? 175 : 230;
+    arcCards.forEach(function(el){
+      el.style.width = w + 'px';
+      el.style.height = h + 'px';
+    });
+  }
+
+  function positionArcCards(rotationOffset){
+    var mobile = isMobileView();
+    var spacing = mobile ? 12 : 9;
+    var centerIndex = 4;
+    var radius = mobile ? 700 : 1100;
+    var w = mobile ? 160 : 220;
+    var bottomBase = mobile ? 140 : 200;
+
+    arcCards.forEach(function(el, i){
+      var baseDeg = (i - centerIndex) * spacing;
+      var deg = baseDeg - rotationOffset + centerIndex * spacing;
+      var rad = deg * Math.PI / 180;
+      var x = Math.sin(rad) * radius;
+      var y = radius - Math.cos(rad) * radius;
+      el.style.bottom = (-y + bottomBase) + 'px';
+      el.style.left = 'calc(50% + ' + x + 'px - ' + (w / 2) + 'px)';
+      el.style.transform = 'rotate(' + deg + 'deg)';
+      el.style.transformOrigin = (w / 2) + 'px ' + radius + 'px';
+    });
+  }
+
+  function onMouseMove(e){
+    raw.x = (e.clientX / window.innerWidth - 0.5) * 2;
+    raw.y = (e.clientY / window.innerHeight - 0.5) * 2;
+  }
+
+  function onScroll(){
+    var max = experienceEl.offsetHeight - window.innerHeight;
+    scrollProgress = max > 0 ? clamp(window.scrollY / max, 0, 1) : 0;
+  }
+
+  function runEntrance(){
+    setTimeout(function(){ curtainsOpen = true; }, 100);
+    setTimeout(function(){ scene1El.classList.add('ui-visible'); }, 600);
+    setTimeout(function(){
+      entranceDone = true;
+      curtainLeftEl.style.transition = 'none';
+      curtainRightEl.style.transition = 'none';
+    }, 2200);
+  }
+
+  function tick(){
+    smooth.x = lerp(smooth.x, raw.x, LERP_FACTOR);
+    smooth.y = lerp(smooth.y, raw.y, LERP_FACTOR);
+    var rx = -smooth.x, ry = -smooth.y;
+    var p = scrollProgress;
+    var ep = easeInOut(p);
+
+    var worldScale = lerp(1, 1.18, ep);
+    worldEl.style.transform = 'scale(' + worldScale + ') translate(' + (rx * PARALLAX.world) + 'px, ' + (ry * PARALLAX.world) + 'px)';
+
+    var cloudsScale = lerp(1, 1.4, ep);
+    cloudsEl.style.transform = 'scale(' + cloudsScale + ') translate(' + (rx * PARALLAX.clouds) + 'px, ' + (ry * PARALLAX.clouds * 0.4) + 'px)';
+
+    var portalScale = lerp(1, 7.5, ep);
+    portalWrapEl.style.transformOrigin = '52% 38%';
+    portalWrapEl.style.transform = 'scale(' + portalScale + ') translate(' + (rx * PARALLAX.portal) + 'px, ' + (ry * PARALLAX.portal) + 'px)';
+
+    var shift = (curtainsOpen ? 62 : 0) + lerp(0, 150, ep);
+    var curtainScale = lerp(1, 1.3, ep);
+    curtainLeftEl.style.transformOrigin = 'left center';
+    curtainLeftEl.style.transform = 'translateX(calc(-' + shift + '% + ' + (rx * PARALLAX.curtain) + 'px)) translateY(' + (ry * PARALLAX.curtain * 0.3) + 'px) scale(' + curtainScale + ')';
+    curtainRightEl.style.transformOrigin = 'right center';
+    curtainRightEl.style.transform = 'translateX(calc(' + shift + '% + ' + (rx * PARALLAX.curtain) + 'px)) translateY(' + (ry * PARALLAX.curtain * 0.3) + 'px) scale(' + curtainScale + ')';
+
+    var portalOpacity = p < 0.65 ? 1 : clamp(1 - (p - 0.65) / 0.2, 0, 1);
+    var cloudsOpacity = p < 0.05 ? lerp(0.7, 1, p / 0.05) : 1;
+    var scene1Opacity = clamp(1 - p / 0.22, 0, 1);
+    var scene2Opacity = clamp((p - 0.68) / 0.16, 0, 1);
+
+    portalWrapEl.style.opacity = portalOpacity;
+    cloudsEl.style.opacity = cloudsOpacity;
+    scene1El.style.opacity = scene1Opacity;
+    scene1El.style.pointerEvents = scene1Opacity < 0.05 ? 'none' : '';
+    scene2El.style.opacity = scene2Opacity;
+    scene2El.style.pointerEvents = scene2Opacity < 0.05 ? 'none' : '';
+    arcSliderEl.style.opacity = scene2Opacity;
+    arcSliderEl.style.pointerEvents = scene2Opacity < 0.05 ? 'none' : '';
+
+    var arcSweepDeg = 80;
+    var rotationOffset = lerp(0, arcSweepDeg, clamp((p - 0.70) / 0.30, 0, 1));
+    positionArcCards(rotationOffset);
+
+    requestAnimationFrame(tick);
+  }
+
+  layoutArcCards();
+  positionArcCards(0);
+  onScroll();
+  runEntrance();
+
+  window.addEventListener('mousemove', onMouseMove, { passive: true });
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', layoutArcCards);
+
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

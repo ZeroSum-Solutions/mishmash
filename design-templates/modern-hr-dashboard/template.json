@@ -1,0 +1,12 @@
+{
+  "slug": "modern-hr-dashboard",
+  "name": "Modern HR Dashboard — Talvex",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=modern-hr-dashboard",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

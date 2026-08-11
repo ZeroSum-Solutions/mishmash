@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Projects — Selected Work</title>
+<meta name="description" content="A sticky, stacking project catalog: three case studies scale and layer behind each other as the page scrolls." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0C0C0C;
+    --ink: #D7E2EA;
+    --heading-grad-start: #646973;
+    --heading-grad-end: #BBCCD7;
+    /* Genuinely chromatic accent — the source design is monochrome (grayscale-on-black).
+       Reserved ONLY for the keyboard focus ring; never appears in the resting render. */
+    --accent: #4C8DFF;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    font-family: 'Kanit', sans-serif;
+    padding-bottom: clamp(80px, 10vw, 160px);
+  }
+  img { display: block; max-width: 100%; }
+  a { color: inherit; }
+
+  /* ---- Minimal page chrome ----
+     The prompt's section overlaps "the previous white section" with a
+     negative top margin and rounded top corners. This white strip is the
+     minimum backdrop needed for that overlap to read; it is deliberately
+     content-free. */
+  .chrome-top {
+    background: #ffffff;
+    height: clamp(140px, 20vw, 220px);
+    width: 100%;
+  }
+
+  /* ---- Section container ---- */
+  .projects {
+    background: var(--bg);
+    position: relative;
+    z-index: 10;
+    padding: 20px;
+    border-top-left-radius: 40px;
+    border-top-right-radius: 40px;
+    margin-top: -40px;
+  }
+  @media (min-width: 640px) {
+    .projects {
+      padding-left: 32px;
+      padding-right: 32px;
+      border-top-left-radius: 50px;
+      border-top-right-radius: 50px;
+      margin-top: -48px;
+    }
+  }
+  @media (min-width: 768px) {
+    .projects {
+      padding-left: 40px;
+      padding-right: 40px;
+      border-top-left-radius: 60px;
+      border-top-right-radius: 60px;
+      margin-top: -56px;
+    }
+  }
+
+  /* ---- Heading ---- */
+  .projects-heading-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 80px;
+    padding-bottom: 80px;
+  }
+  @media (min-width: 640px) {
+    .projects-heading-wrap { padding-top: 96px; padding-bottom: 96px; }
+  }
+  @media (min-width: 768px) {
+    .projects-heading-wrap { padding-top: 128px; padding-bottom: 128px; }
+  }
+
+  .projects-heading {
+    font-weight: 900;
+    text-transform: uppercase;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    text-align: center;
+    width: 100%;
+    font-size: clamp(3rem, 12vw, 160px);
+    background: linear-gradient(180deg, var(--heading-grad-start) 0%, var(--heading-grad-end) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    margin: 0;
+    opacity: 0;
+    transform: translateY(40px);
+    transition: opacity 0.7s cubic-bezier(0.25, 0.1, 0.25, 1),
+                transform 0.7s cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+  .projects-heading.in-view {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ---- Stacking card list ---- */
+  .project-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .project-sticky {
+    height: 85vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    position: sticky;
+    top: 24px;
+  }
+  @media (min-width: 768px) {
+    .project-sticky { top: 32px; }
+  }
+
+  .project-card {
+    position: absolute;
+    width: 100%;
+    max-width: 1760px;
+    transform-origin: top;
+    background: var(--bg);
+    border: 2px solid var(--ink);
+    border-radius: 40px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    will-change: transform;
+  }
+  @media (min-width: 640px) {
+    .project-card { border-radius: 50px; padding: 24px; gap: 32px; }
+  }
+  @media (min-width: 768px) {
+    .project-card { border-radius: 60px; padding: 32px; gap: 40px; }
+  }
+  /* Vertical offset per card (index * 28px) so earlier cards peek above the
+     one currently in front — the "so they peek behind each other" stagger. */
+  .project-card[data-index="0"] { top: 0px; }
+  .project-card[data-index="1"] { top: 28px; }
+  .project-card[data-index="2"] { top: 56px; }
+
+  /* ---- Card top row ---- */
+  .card-top {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  @media (min-width: 640px) {
+    .card-top {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+  }
+
+  .card-left {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  @media (min-width: 640px) { .card-left { gap: 32px; } }
+  @media (min-width: 768px) { .card-left { gap: 40px; } }
+
+  .card-number {
+    color: var(--ink);
+    font-weight: 900;
+    text-transform: uppercase;
+    line-height: 1;
+    font-size: clamp(3rem, 10vw, 140px);
+    margin: 0;
+  }
+
+  .card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  @media (min-width: 640px) { .card-meta { gap: 16px; } }
+  @media (min-width: 768px) { .card-meta { gap: 24px; } }
+
+  .card-category {
+    color: var(--ink);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: clamp(1rem, 2.2vw, 2.1rem);
+    margin: 0;
+  }
+  .card-name {
+    color: var(--ink);
+    font-weight: 300;
+    letter-spacing: 0.02em;
+    font-size: clamp(0.9rem, 2vw, 2rem);
+    margin: 0;
+  }
+
+  /* ---- Live Project button ---- */
+  .live-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 2px solid var(--ink);
+    background: transparent;
+    padding: 12px 32px;
+    color: var(--ink);
+    font-family: inherit;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.875rem;
+    text-decoration: none;
+    transition: background-color 200ms;
+    white-space: nowrap;
+  }
+  @media (min-width: 640px) {
+    .live-btn { padding: 14px 40px; font-size: 1rem; }
+  }
+  .live-btn:hover { background: rgba(215, 226, 234, 0.1); }
+  .live-btn:active { background: rgba(215, 226, 234, 0.2); }
+  .live-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  /* ---- Image grid ---- */
+  .card-images {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+  }
+  @media (min-width: 768px) {
+    .card-images { flex-direction: row; gap: 20px; }
+  }
+
+  .card-images-left {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+  }
+  @media (min-width: 768px) {
+    .card-images-left { gap: 20px; width: 40%; }
+  }
+
+  .card-img-1 {
+    width: 100%;
+    object-fit: cover;
+    border-radius: 40px;
+    height: clamp(130px, 16vw, 230px);
+  }
+  @media (min-width: 640px) { .card-img-1 { border-radius: 50px; } }
+  @media (min-width: 768px) { .card-img-1 { border-radius: 60px; } }
+
+  .card-img-2 {
+    width: 100%;
+    object-fit: cover;
+    border-radius: 30px;
+    height: clamp(160px, 22vw, 340px);
+  }
+  @media (min-width: 640px) { .card-img-2 { border-radius: 40px; } }
+  @media (min-width: 768px) { .card-img-2 { border-radius: 60px; } }
+
+  .card-img-right {
+    width: 100%;
+    object-fit: cover;
+    border-radius: 30px;
+    align-self: stretch;
+  }
+  @media (min-width: 640px) { .card-img-right { border-radius: 40px; } }
+  @media (min-width: 768px) {
+    .card-img-right { border-radius: 60px; width: 60%; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .projects-heading {
+      transition: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    .project-card { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="chrome-top" aria-hidden="true"></div>
+
+<main>
+<section class="projects" aria-labelledby="projects-heading">
+  <div class="projects-heading-wrap">
+    <h1 id="projects-heading" class="projects-heading">Project</h1>
+  </div>
+
+  <ol class="project-list">
+    <li class="project-sticky" style="z-index:1;">
+      <article class="project-card" data-index="0" data-target-scale="0.94">
+        <div class="card-top">
+          <div class="card-left">
+            <p class="card-number" aria-hidden="true">01</p>
+            <div class="card-meta">
+              <p class="card-category">Client</p>
+              <h2 class="card-name">Nextlevel Studio</h2>
+            </div>
+          </div>
+          <a class="live-btn" href="#" data-noop-link>Live Project</a>
+        </div>
+        <div class="card-images">
+          <div class="card-images-left">
+            <img class="card-img-1" src="assets/nextlevel-studio-1.webp" alt="Nextlevel Studio — orange and violet dahlias and larkspur in a garden bed" loading="lazy" width="900" height="672" />
+            <img class="card-img-2" src="assets/nextlevel-studio-2.webp" alt="Nextlevel Studio — magenta zinnias and purple veronica massed together" loading="lazy" width="900" height="672" />
+          </div>
+          <img class="card-img-right" src="assets/nextlevel-studio-3.webp" alt="Nextlevel Studio — sunlit forest clearing with wildflowers and drifting pollen" loading="lazy" width="900" height="672" />
+        </div>
+      </article>
+    </li>
+    <li class="project-sticky" style="z-index:2;">
+      <article class="project-card" data-index="1" data-target-scale="0.97">
+        <div class="card-top">
+          <div class="card-left">
+            <p class="card-number" aria-hidden="true">02</p>
+            <div class="card-meta">
+              <p class="card-category">Personal</p>
+              <h2 class="card-name">Aura Brand Identity</h2>
+            </div>
+          </div>
+          <a class="live-btn" href="#" data-noop-link>Live Project</a>
+        </div>
+        <div class="card-images">
+          <div class="card-images-left">
+            <img class="card-img-1" src="assets/aura-brand-identity-1.webp" alt="Aura Brand Identity — lavender field on a dirt path at dusk" loading="lazy" width="900" height="672" />
+            <img class="card-img-2" src="assets/aura-brand-identity-2.webp" alt="Aura Brand Identity — violet-toned lavender rows beside a still lake" loading="lazy" width="900" height="672" />
+          </div>
+          <img class="card-img-right" src="assets/aura-brand-identity-3.webp" alt="Aura Brand Identity — mountain lake at dusk ringed by a violet sunflower field" loading="lazy" width="900" height="672" />
+        </div>
+      </article>
+    </li>
+    <li class="project-sticky" style="z-index:3;">
+      <article class="project-card" data-index="2" data-target-scale="1">
+        <div class="card-top">
+          <div class="card-left">
+            <p class="card-number" aria-hidden="true">03</p>
+            <div class="card-meta">
+              <p class="card-category">Client</p>
+              <h2 class="card-name">Solaris Digital</h2>
+            </div>
+          </div>
+          <a class="live-btn" href="#" data-noop-link>Live Project</a>
+        </div>
+        <div class="card-images">
+          <div class="card-images-left">
+            <img class="card-img-1" src="assets/solaris-digital-1.webp" alt="Solaris Digital — sunflower field beside a lake with hazy hills behind" loading="lazy" width="900" height="672" />
+            <img class="card-img-2" src="assets/solaris-digital-2.webp" alt="Solaris Digital — sunflower field with layered hills fading into haze" loading="lazy" width="900" height="672" />
+          </div>
+          <img class="card-img-right" src="assets/solaris-digital-3.webp" alt="Solaris Digital — golden-hour sunflower field with mountains at sunset" loading="lazy" width="900" height="672" />
+        </div>
+      </article>
+    </li>
+  </ol>
+</section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- Heading fade-in (FadeIn: delay 0, y:40, duration 0.7s) ---- */
+  var heading = document.getElementById('projects-heading');
+  if (heading) {
+    if (reduceMotion) {
+      heading.classList.add('in-view');
+    } else {
+      var headingObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            heading.classList.add('in-view');
+            headingObserver.disconnect();
+          }
+        });
+      }, { threshold: 0, rootMargin: '50px' });
+      headingObserver.observe(heading);
+    }
+  }
+
+  /* ---- Sticky stacking cards: scroll-linked scale ----
+     Mirrors the source's framer-motion useScroll(offset:['start start','end end'])
+     driving useTransform per card: targetScale = 1 - (totalCards-1-index)*0.03,
+     interpolated over [index/totalCards, 1]. */
+  var section = document.querySelector('.projects');
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.project-card'));
+  var totalCards = cards.length;
+
+  function clamp01(n) {
+    return Math.min(1, Math.max(0, n));
+  }
+
+  function updateScales() {
+    var rect = section.getBoundingClientRect();
+    var top = window.scrollY + rect.top;
+    var height = rect.height;
+    var viewportH = window.innerHeight;
+    var progress = clamp01((window.scrollY - top) / (height - viewportH));
+
+    cards.forEach(function (card) {
+      var index = Number(card.getAttribute('data-index'));
+      var targetScale = Number(card.getAttribute('data-target-scale'));
+      var rangeStart = index / totalCards;
+      var t = clamp01((progress - rangeStart) / (1 - rangeStart));
+      var scale = 1 + t * (targetScale - 1);
+      card.style.transform = 'scale(' + scale + ')';
+    });
+  }
+
+  if (!reduceMotion && section && cards.length) {
+    var ticking = false;
+    function onScroll() {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(function () {
+          updateScales();
+          ticking = false;
+        });
+      }
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    updateScales();
+  }
+
+  /* ---- "Live Project" links point to '#' by design (no live destination) —
+     intercept so the click doesn't jump-scroll the page. ---- */
+  document.querySelectorAll('[data-noop-link]').forEach(function (link) {
+    link.addEventListener('click', function (event) {
+      event.preventDefault();
+    });
+  });
+})();
+</script>
+</body>
+</html>

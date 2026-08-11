@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wireloop.Dev — Push. Route. Deploy.</title>
+<meta name="description" content="Wireloop.Dev — full mesh data streams, automatic UDP hole punching, and granular controls for your network. Push, route, deploy." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234CAF50'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' font-style='italic' font-weight='700' fill='white' text-anchor='middle'%3EW%3C/text%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:ital,wght@0,900;1,900&display=swap" rel="stylesheet" />
+<style>
+  /* ---------------------------------------------------------------
+     Tokens — recolor-compatible. --accent / --accent-dark are the
+     genuinely chromatic root tokens; every gradient below that sits
+     on a brand surface reads its stops through var(). Neutral ink
+     and surface tokens stay literal by design.
+  ----------------------------------------------------------------- */
+  :root {
+    --accent: #4caf50;
+    --accent-dark: #43a047;
+    --accent-ring: rgba(76, 175, 80, 0.35);
+
+    --ink: #111827;
+    --ink-soft: #374151;
+    --ink-mute: #4b5563;
+    --ink-faint: rgba(17, 24, 39, 0.55);
+
+    --surface: #ffffff;
+    --surface-glass: rgba(255, 255, 255, 0.95);
+    --border: rgba(17, 24, 39, 0.12);
+
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden; /* the whole page IS the fullscreen hero */
+    background: var(--surface);
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  img, video { max-width: 100%; display: block; }
+
+  a { color: inherit; text-decoration: none; }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* ---------------------------------------------------------------
+     Hero shell
+  ----------------------------------------------------------------- */
+  .hero {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .bg-video,
+  .bg-poster {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .bg-poster { display: none; }
+
+  .hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.6) 0%,
+      rgba(255, 255, 255, 0.18) 32%,
+      rgba(255, 255, 255, 0.42) 68%,
+      rgba(255, 255, 255, 0.88) 100%
+    );
+    pointer-events: none;
+  }
+
+  .content-layer {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  /* ---------------------------------------------------------------
+     Nav
+  ----------------------------------------------------------------- */
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: clamp(1rem, 0.85rem + 0.6vw, 1.25rem) clamp(1.25rem, 0.6rem + 3.4vw, 4rem);
+    opacity: 0;
+    animation: nav-fade-down 0.6s var(--ease-out-expo) 0.1s forwards;
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 0.15em;
+    font-size: clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem);
+    font-weight: 700;
+  }
+
+  .brand-mark {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 900;
+    font-style: italic;
+    color: var(--ink);
+  }
+
+  .brand-suffix {
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    color: var(--ink-mute);
+  }
+
+  .nav-links {
+    display: none;
+    align-items: center;
+    gap: 2rem;
+  }
+
+  .nav-links a {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    transition: color 0.2s var(--ease-out);
+  }
+
+  .nav-links a:hover { color: var(--ink-mute); }
+
+  .nav-actions {
+    display: none;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .lang-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+  }
+
+  .lang-swatch {
+    width: 20px;
+    height: 16px;
+    border-radius: 3px;
+    background: #000;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: 0.02em;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.65rem 1.25rem;
+    border-radius: 999px;
+    transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), filter 0.2s var(--ease-out);
+    box-shadow: 0 6px 16px -6px var(--accent-ring);
+  }
+
+  .btn-primary:hover {
+    filter: brightness(1.05);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary svg { width: 16px; height: 16px; }
+
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+  }
+
+  .nav-toggle:hover { background: rgba(17, 24, 39, 0.05); }
+
+  .nav-toggle-icons {
+    position: relative;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .nav-toggle-icons svg {
+    position: absolute;
+    inset: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    transition: opacity 0.3s var(--ease-out), transform 0.3s var(--ease-out);
+  }
+
+  .icon-menu { opacity: 1; transform: rotate(0deg); }
+  .icon-close { opacity: 0; transform: rotate(-90deg); }
+
+  .nav-toggle.is-open .icon-menu { opacity: 0; transform: rotate(90deg); }
+  .nav-toggle.is-open .icon-close { opacity: 1; transform: rotate(0deg); }
+
+  /* ---------------------------------------------------------------
+     Mobile menu
+  ----------------------------------------------------------------- */
+  .mobile-menu {
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: var(--surface-glass);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 12px 30px -12px rgba(17, 24, 39, 0.25);
+  }
+
+  .mobile-menu[hidden] { display: none; }
+
+  .mobile-menu.mobile-menu-enter { animation: menu-slide-down 0.35s var(--ease-out-expo) both; }
+  .mobile-menu.mobile-menu-exit { animation: menu-slide-up 0.18s var(--ease-out-expo) both; }
+
+  .mobile-menu-inner {
+    display: flex;
+    flex-direction: column;
+    padding: 0.75rem 1.25rem 1.25rem;
+  }
+
+  .mobile-menu-inner > a {
+    padding: 0.75rem 0.25rem;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mobile-menu-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-top: 1rem;
+  }
+
+  .mobile-menu.mobile-menu-enter .mobile-menu-inner > *:nth-child(1) { animation: menu-item-in 0.4s var(--ease-out-expo) 0.06s both; }
+  .mobile-menu.mobile-menu-enter .mobile-menu-inner > *:nth-child(2) { animation: menu-item-in 0.4s var(--ease-out-expo) 0.1s both; }
+  .mobile-menu.mobile-menu-enter .mobile-menu-inner > *:nth-child(3) { animation: menu-item-in 0.4s var(--ease-out-expo) 0.14s both; }
+  .mobile-menu.mobile-menu-enter .mobile-menu-inner > *:nth-child(4) { animation: menu-item-in 0.4s var(--ease-out-expo) 0.18s both; }
+  .mobile-menu.mobile-menu-enter .mobile-menu-inner > *:nth-child(5) { animation: menu-item-in 0.4s var(--ease-out-expo) 0.22s both; }
+
+  /* ---------------------------------------------------------------
+     Hero content
+  ----------------------------------------------------------------- */
+  .hero-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: clamp(5rem, 4.4rem + 2.4vw, 6rem) 1rem 2rem;
+    text-align: center;
+  }
+
+  .hero-heading {
+    opacity: 0;
+    animation: hero-fade-up 0.8s var(--ease-out-expo) 0.2s forwards;
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    line-height: 0.95;
+    color: var(--ink);
+    font-size: clamp(2.5rem, 1.15rem + 6.3vw, 6.875rem);
+  }
+
+  .hero-subtitle {
+    opacity: 0;
+    animation: hero-fade-up 0.8s var(--ease-out-expo) 0.45s forwards;
+    margin: clamp(1rem, 0.85rem + 0.7vw, 1.75rem) 0 0;
+    max-width: 42rem;
+    padding: 0 0.5rem;
+    color: var(--ink-soft);
+    font-weight: 500;
+    line-height: 1.6;
+    font-size: clamp(0.875rem, 0.8rem + 0.35vw, 1.25rem);
+  }
+
+  .hero-qr {
+    opacity: 0;
+    animation: hero-fade-up 0.8s var(--ease-out-expo) 0.7s forwards;
+    margin-top: clamp(1.5rem, 1.2rem + 1.4vw, 2.5rem);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .qr-card {
+    border-radius: 1rem;
+    padding: 0.4rem;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    background: linear-gradient(160deg, var(--accent), var(--accent-dark));
+    box-shadow: 0 16px 36px -14px var(--accent-ring);
+  }
+
+  .qr-card img {
+    border-radius: 0.7rem;
+    object-fit: cover;
+    width: clamp(7rem, 5.6rem + 6vw, 10rem);
+    height: clamp(7rem, 5.6rem + 6vw, 10rem);
+    background: #fff;
+  }
+
+  .qr-card figcaption {
+    color: #fff;
+    font-size: clamp(0.6875rem, 0.65rem + 0.1vw, 0.75rem);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin: 0.4rem 0 0.15rem;
+  }
+
+  /* ---------------------------------------------------------------
+     Scroll indicator
+  ----------------------------------------------------------------- */
+  .scroll-indicator {
+    position: absolute;
+    bottom: clamp(1rem, 0.8rem + 0.6vw, 1.5rem);
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--ink-mute);
+    display: inline-flex;
+    animation: chevron-bounce 1.6s var(--ease-out) infinite;
+  }
+
+  .scroll-indicator svg {
+    width: clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem);
+    height: clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem);
+  }
+
+  /* ---------------------------------------------------------------
+     Keyframes
+  ----------------------------------------------------------------- */
+  @keyframes nav-fade-down {
+    from { opacity: 0; transform: translateY(-20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes hero-fade-up {
+    from { opacity: 0; transform: translateY(30px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes menu-slide-down {
+    from { opacity: 0; transform: translateY(-12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes menu-slide-up {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(-12px); }
+  }
+
+  @keyframes menu-item-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes chevron-bounce {
+    0%, 100% { transform: translate(-50%, 0); }
+    50%      { transform: translate(-50%, -8px); }
+  }
+
+  /* ---------------------------------------------------------------
+     Breakpoints
+  ----------------------------------------------------------------- */
+  @media (min-width: 768px) {
+    .nav-links, .nav-actions { display: flex; }
+    .nav-toggle { display: none; }
+  }
+
+  @media (max-width: 767px) {
+    .mobile-menu { display: block; }
+  }
+
+  @media (min-width: 768px) {
+    .mobile-menu { display: none !important; }
+  }
+
+  /* ---------------------------------------------------------------
+     Reduced motion
+  ----------------------------------------------------------------- */
+  @media (prefers-reduced-motion: reduce) {
+    .bg-video { display: none; }
+    .bg-poster { display: block; }
+
+    .nav, .hero-heading, .hero-subtitle, .hero-qr {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+
+    .scroll-indicator { animation: none !important; }
+
+    .mobile-menu.mobile-menu-enter,
+    .mobile-menu.mobile-menu-exit,
+    .mobile-menu-inner > * {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+
+    .nav-toggle-icons svg { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<section class="hero">
+  <video class="bg-video" autoplay muted loop playsinline poster="assets/hero-bg-poster.jpg" aria-hidden="true">
+    <source src="assets/hero-bg.mp4" type="video/mp4" />
+  </video>
+  <img class="bg-poster" src="assets/hero-bg-poster.jpg" alt="" aria-hidden="true" />
+  <div class="hero-overlay" aria-hidden="true"></div>
+
+  <div class="content-layer">
+    <header class="nav">
+      <a class="brand" href="#top" aria-label="Wireloop.Dev home">
+        <span class="brand-mark">Wireloop.</span><span class="brand-suffix">Dev</span>
+      </a>
+
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#overview">Overview</a>
+        <a href="#docs">Docs</a>
+        <a href="#team">Our Team</a>
+        <a href="#upgrade">Upgrade</a>
+      </nav>
+
+      <div class="nav-actions">
+        <span class="lang-indicator" aria-hidden="true">
+          <span class="lang-swatch">DE</span>
+          <span>EN</span>
+        </span>
+        <a class="btn-primary" href="#try-now">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Get It Today
+        </a>
+      </div>
+
+      <button type="button" class="nav-toggle" id="menu-toggle" aria-haspopup="true" aria-controls="mobile-menu" aria-expanded="false" aria-label="Toggle menu">
+        <span class="nav-toggle-icons">
+          <svg class="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="4" y1="12" x2="20" y2="12"></line>
+            <line x1="4" y1="6" x2="20" y2="6"></line>
+            <line x1="4" y1="18" x2="20" y2="18"></line>
+          </svg>
+          <svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </span>
+      </button>
+    </header>
+
+    <div class="mobile-menu" id="mobile-menu" hidden>
+      <div class="mobile-menu-inner">
+        <a href="#overview">Overview</a>
+        <a href="#docs">Docs</a>
+        <a href="#team">Our Team</a>
+        <a href="#upgrade">Upgrade</a>
+        <div class="mobile-menu-actions">
+          <span class="lang-indicator" aria-hidden="true">
+            <span class="lang-swatch">DE</span>
+            <span>EN</span>
+          </span>
+          <a class="btn-primary" href="#try-now">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Get It Today
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <main class="hero-main" id="top">
+      <h1 class="hero-heading">Push.Route.Deploy</h1>
+      <p class="hero-subtitle">Get Full Mesh Data Streams, Automatic UDP Hole Punching, Granular Controls, And Many More Cool Tricks!</p>
+
+      <figure class="hero-qr" id="try-now">
+        <div class="qr-card">
+          <img src="assets/qr-code.png" alt="QR code linking to the Wireloop.Dev download page" width="160" height="160" />
+          <figcaption>Try Now</figcaption>
+        </div>
+      </figure>
+    </main>
+
+    <a class="scroll-indicator" href="#top" aria-label="Scroll for more">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    </a>
+  </div>
+</section>
+
+<script>
+(function () {
+  var toggle = document.getElementById('menu-toggle');
+  var menu = document.getElementById('mobile-menu');
+  var menuLinks = menu.querySelectorAll('a');
+  var isOpen = false;
+
+  function openMenu() {
+    isOpen = true;
+    menu.hidden = false;
+    void menu.offsetWidth; /* force reflow so the enter animation restarts */
+    menu.classList.remove('mobile-menu-exit');
+    menu.classList.add('mobile-menu-enter');
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.classList.add('is-open');
+  }
+
+  function closeMenu(returnFocus) {
+    if (!isOpen) return;
+    isOpen = false;
+    menu.classList.remove('mobile-menu-enter');
+    menu.classList.add('mobile-menu-exit');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.classList.remove('is-open');
+
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) {
+      menu.hidden = true;
+      menu.classList.remove('mobile-menu-exit');
+    } else {
+      var onEnd = function () {
+        menu.hidden = true;
+        menu.classList.remove('mobile-menu-exit');
+        menu.removeEventListener('animationend', onEnd);
+      };
+      menu.addEventListener('animationend', onEnd);
+    }
+    if (returnFocus) toggle.focus();
+  }
+
+  toggle.addEventListener('click', function () {
+    if (isOpen) { closeMenu(true); } else { openMenu(); }
+  });
+
+  menuLinks.forEach(function (a) {
+    a.addEventListener('click', function () { closeMenu(false); });
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && isOpen) closeMenu(true);
+  });
+
+  document.addEventListener('click', function (e) {
+    if (isOpen && !menu.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
+      closeMenu(false);
+    }
+  });
+
+  /* Background video vs. static poster, honoring prefers-reduced-motion. */
+  var video = document.querySelector('.bg-video');
+  var motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  function applyMotionPreference(query) {
+    if (query.matches) {
+      video.pause();
+    } else {
+      video.play().catch(function () {});
+    }
+  }
+
+  applyMotionPreference(motionQuery);
+  if (motionQuery.addEventListener) {
+    motionQuery.addEventListener('change', applyMotionPreference);
+  }
+})();
+</script>
+</body>
+</html>

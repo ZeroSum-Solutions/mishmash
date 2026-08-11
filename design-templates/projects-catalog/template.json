@@ -1,0 +1,12 @@
+{
+  "slug": "projects-catalog",
+  "name": "Projects Catalog — Sticky Stacking Case Studies",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800;900&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=projects-catalog",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}
