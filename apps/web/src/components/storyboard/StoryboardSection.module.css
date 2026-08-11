@@ -108,6 +108,31 @@
   background: var(--bg-panel);
 }
 
+/* MM-017: canvas (shot list) + persistent right-docked inspector rail,
+   side by side. The rail (ShotInspectorRail.module.css's .rail) supplies
+   its own fixed width and sticky positioning; the canvas column takes
+   whatever width is left — "the canvas gets the entire remaining width,
+   uninterrupted" (no modal ever covers it). Stacks on narrow viewports,
+   matching the rail's own responsive fallback. */
+.workspace {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: 0;
+}
+.canvasColumn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+@media (max-width: 900px) {
+  .workspace {
+    flex-direction: column;
+  }
+}
+
 /* --- mood lane --- */
 
 .moodLane {
@@ -253,7 +278,7 @@
   flex-wrap: wrap;
 }
 
-/* --- shot editor (ShotCard.tsx, rendered inside ShotDetailsDrawer) --- */
+/* --- shot editor (ShotCard.tsx, rendered inside ShotInspectorRail) --- */
 
 .shotCard {
   display: flex;
@@ -377,30 +402,40 @@
   resize: vertical;
 }
 
-/* Grok design critique e3: model used to sit next to duration in one row
-   and truncated mid-token ("seedance-2.0 1080p |") — it now gets its own
-   full-width row, with duration + Render on a second row underneath. */
-.renderControls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.modelSelect {
-  width: 100%;
-  height: 30px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-panel);
-  color: var(--text);
+/* MM-017: small uppercase section labels grouping the rail's content into
+   Keyframes / Parameters / Settings blocks (Higgsfield rail-content
+   pattern), matching the existing .shotFrameSlotLabel treatment. */
+.sectionLabel {
+  display: block;
   font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
-.durationRenderRow {
+.sectionHeadRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sectionHint {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+/* Key parameters as side-by-side chips, ahead of the free-text settings
+   below — model no longer needs its own full-width row now that duration
+   sits beside it instead of beside Render (which moved to the pinned
+   footer below). */
+.paramsChipsRow {
   display: flex;
   gap: 6px;
-  align-items: center;
 }
-.durationRenderRow select {
-  flex: 0 0 72px;
+.paramsChipsRow select {
+  flex: 1;
+  min-width: 0;
   height: 30px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -408,8 +443,27 @@
   color: var(--text);
   font-size: 11px;
 }
-.durationRenderRow button {
+.modelSelect {
+  flex: 2;
+}
+.durationSelect {
   flex: 1;
+}
+
+/* Pinned commit action: sticky to the bottom of whichever ancestor
+   scrolls (the inspector rail's own scroll region, which supplies its own
+   bottom padding via .renderFooter rather than its container — see
+   ShotInspectorRail.module.css's .body) — full-width, high-contrast,
+   always reachable without scrolling past it. */
+.renderFooter {
+  position: sticky;
+  bottom: 0;
+  margin-top: 4px;
+  padding: 10px 0;
+  background: var(--bg-elevated, var(--bg-panel));
+}
+.renderFooter button {
+  width: 100%;
 }
 
 .shotStatusLine {

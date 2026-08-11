@@ -1,8 +1,8 @@
-// One storyboard shot's full editor: start/end keyframe slots, a
-// motion-only prompt, and render controls. Rendered as the body of
-// ShotDetailsDrawer.tsx (opened per shot from its compact ShotRow.tsx summary
-// row) — shot-level actions that don't need the full editor (move,
-// duplicate, delete) live on ShotRow instead, not here. Data
+// One storyboard shot's full editor: keyframes, key parameters as chips,
+// remaining settings, and a pinned render bar (MM-017 rail-content order).
+// Rendered as the body of ShotInspectorRail.tsx (opened per shot from its
+// compact ShotRow.tsx summary row) — shot-level actions that don't need the
+// full editor (move, duplicate, delete) live on ShotRow instead, not here. Data
 // fetching/persistence lives in the parent (StoryboardEditor) — this
 // component only renders state and calls back up, which keeps the
 // enablement/gating state machine (see shot-editor-state.ts) testable
@@ -169,6 +169,16 @@ export function ShotCard(props: ShotCardProps) {
 
   return (
     <article className={styles.shotCard} data-testid="shot-card" data-shot-status={shot.status}>
+      {/* MM-017: Keyframes first (art the shot is built from), then the key
+          parameters as side-by-side chips, then the remaining settings, then
+          a render bar pinned to the bottom of the rail's own scroll region —
+          the Higgsfield mixed-media rail-content pattern applied to this
+          shot's fields. The upload constraint is stated once, inline, for
+          both slots below rather than repeated per slot. */}
+      <div className={styles.sectionHeadRow}>
+        <span className={styles.sectionLabel}>{t('storyboard.keyframesHeading')}</span>
+        <span className={styles.sectionHint}>{t('storyboard.uploadConstraintHint')}</span>
+      </div>
       <div className={styles.shotFrames}>
         <div
           className={`${styles.shotFrameSlot}${dragOverSlot === 'start' ? ` ${styles.shotFrameSlotDragOver}` : ''}`}
@@ -347,18 +357,12 @@ export function ShotCard(props: ShotCardProps) {
         </div>
       </div>
 
-      <textarea
-        className={styles.motionPromptInput}
-        placeholder={t('storyboard.motionPromptPlaceholder')}
-        value={shot.motionPrompt}
-        onChange={(e) => onFieldChange({ motionPrompt: e.target.value })}
-        data-testid="motion-prompt-input"
-      />
-
-      <div className={styles.renderControls}>
-        {/* Model gets its own full-width row — squeezed next to duration it
-            was truncating mid-token (grok design critique e3); labels like
-            "seedance-2.0 1080p (OR) (needs API key)" need the room. */}
+      {/* Key parameters as side-by-side chips (Higgsfield rail-content
+          pattern) — model and duration together, ahead of the free-text
+          settings below; resolution is implied by the model (see
+          resolutionForModelId) so it isn't a separate control. */}
+      <span className={styles.sectionLabel}>{t('storyboard.parametersHeading')}</span>
+      <div className={styles.paramsChipsRow}>
         <select
           className={styles.modelSelect}
           value={shot.model}
@@ -385,28 +389,27 @@ export function ShotCard(props: ShotCardProps) {
             <option key={m.id} value={m.id}>{modelLabel(m, configured, t)}</option>
           ))}
         </select>
-        <div className={styles.durationRenderRow}>
-          <select
-            value={shot.durationSec}
-            onChange={(e) => onFieldChange({ durationSec: Number(e.target.value) })}
-            aria-label={t('storyboard.duration')}
-          >
-            {STORYBOARD_DURATION_OPTIONS.map((sec) => (
-              <option key={sec} value={sec}>{sec}s</option>
-            ))}
-          </select>
-          <Button
-            type="button"
-            variant="primary"
-            disabled={!state.canRender || busy}
-            onClick={onRender}
-            data-testid="render-shot-button"
-            title={state.renderDisabledReason ?? undefined}
-          >
-            {renderLabel}
-          </Button>
-        </div>
+        <select
+          className={styles.durationSelect}
+          value={shot.durationSec}
+          onChange={(e) => onFieldChange({ durationSec: Number(e.target.value) })}
+          aria-label={t('storyboard.duration')}
+        >
+          {STORYBOARD_DURATION_OPTIONS.map((sec) => (
+            <option key={sec} value={sec}>{sec}s</option>
+          ))}
+        </select>
       </div>
+
+      {/* Settings: the remaining field(s) — just the motion prompt today. */}
+      <span className={styles.sectionLabel}>{t('storyboard.settingsHeading')}</span>
+      <textarea
+        className={styles.motionPromptInput}
+        placeholder={t('storyboard.motionPromptPlaceholder')}
+        value={shot.motionPrompt}
+        onChange={(e) => onFieldChange({ motionPrompt: e.target.value })}
+        data-testid="motion-prompt-input"
+      />
 
       {shot.status === 'rendering' ? (
         <p className={styles.shotStatusLine}>{t('storyboard.rendering')}</p>
@@ -415,6 +418,22 @@ export function ShotCard(props: ShotCardProps) {
       ) : shot.status === 'done' && shot.output ? (
         <video className={styles.shotVideoPreview} src={frameUrl(shot.output)} controls muted loop />
       ) : null}
+
+      {/* Pinned commit action (Higgsfield rail-content pattern): sticky to
+          the bottom of whichever ancestor actually scrolls (the inspector
+          rail's body when rendered there), full-width, high-contrast. */}
+      <div className={styles.renderFooter}>
+        <Button
+          type="button"
+          variant="primary"
+          disabled={!state.canRender || busy}
+          onClick={onRender}
+          data-testid="render-shot-button"
+          title={state.renderDisabledReason ?? undefined}
+        >
+          {renderLabel}
+        </Button>
+      </div>
     </article>
   );
 }

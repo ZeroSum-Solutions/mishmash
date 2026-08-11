@@ -1,0 +1,159 @@
+/* MM-017: persistent right-docked inspector rail — replaces the modal
+   ShotDetailsDrawer. Normal document flow (no backdrop, no fixed
+   positioning), so the canvas beside it is never covered/dimmed; it stays
+   visually pinned to the viewport as the canvas scrolls via
+   position: sticky rather than a portal/overlay. */
+.rail {
+  flex: 0 0 340px;
+  width: 340px;
+  min-width: 0;
+  align-self: flex-start;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 24px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--bg-elevated);
+}
+
+.idle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.navButton {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.navButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.navButton:not(:disabled):hover {
+  border-color: var(--text-soft);
+}
+
+/* The "selected shot" card (Higgsfield rail-content pattern: art + title +
+   one-line description), flanked by the prev/next "Change" affordance. */
+.summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.summaryThumb {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm, 6px);
+  object-fit: cover;
+  background: var(--bg-muted);
+}
+.summaryThumbEmpty {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px dashed var(--border);
+  background: var(--bg-muted);
+}
+.summaryText {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.summaryTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.summaryTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.summaryStatus {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.summaryStatus[data-status='done'] { color: var(--green); }
+.summaryStatus[data-status='failed'] { color: var(--red); }
+.summaryStatus[data-status='generating'],
+.summaryStatus[data-status='queued'] { color: var(--blue); }
+.summaryPrompt {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.summaryPromptPlaceholder {
+  font-style: italic;
+}
+
+.closeButton {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.closeButton:hover {
+  border-color: var(--text-soft);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 16px 0;
+}
+
+@media (max-width: 900px) {
+  .rail {
+    flex: 1 1 auto;
+    width: auto;
+    position: static;
+    max-height: none;
+  }
+}

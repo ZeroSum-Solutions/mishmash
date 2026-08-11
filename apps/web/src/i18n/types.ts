@@ -57,6 +57,22 @@ export interface Dict {
   'library.assetCount': string;
   'library.loadMore': string;
   'library.loadingMore': string;
+  'library.rail.allAssets': string;
+  'library.rail.types': string;
+  'library.rail.searchPlaceholder': string;
+  'library.rail.collections': string;
+  'library.rail.collectionsEmpty': string;
+  'library.rail.newCollection': string;
+  'library.rail.collectionsUnavailable': string;
+  'library.sizeSlider': string;
+  'library.expandGrid': string;
+  'library.collapseRail': string;
+  'library.composer.attach': string;
+  'library.composer.removeAttachment': string;
+  'library.composer.promptPlaceholder': string;
+  'library.composer.generate': string;
+  'library.composer.generating': string;
+  'library.composer.error': string;
   'common.save': string;
   'common.close': string;
   'common.clear': string;
@@ -4620,4 +4636,13 @@ export interface Dict {
   'storyboard.moodLaneTeaser': string;
   'storyboard.flowHint': string;
   'storyboard.rowActionsMenu': string;
+  // Shot inspector rail (right-docked, persistent — replaces the modal
+  // details drawer; see ShotInspectorRail.tsx)
+  'storyboard.keyframesHeading': string;
+  'storyboard.uploadConstraintHint': string;
+  'storyboard.parametersHeading': string;
+  'storyboard.settingsHeading': string;
+  'storyboard.previousShot': string;
+  'storyboard.nextShot': string;
+  'storyboard.selectShotHint': string;
 }

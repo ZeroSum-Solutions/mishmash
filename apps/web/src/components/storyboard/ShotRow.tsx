@@ -2,11 +2,11 @@
 // shot rows"): frame thumbnails, a prompt snippet, the current model, an
 // at-a-glance generation-status badge (outcome 3: queued/generating/failed
 // with a retry affordance/done), a Render/Retry/Fix-in-details action, and
-// an Edit button that opens the full editor in ShotDetailsDrawer.tsx. Shot
-// editing itself (frame generation/upload/derive, motion prompt,
-// model+duration) lives in ShotCard.tsx, rendered inside that drawer — this
-// component never edits shot state directly, it only surfaces it and calls
-// back up.
+// an Edit button that selects this shot in the persistent inspector rail
+// (ShotInspectorRail.tsx). Shot editing itself (frame generation/upload/
+// derive, motion prompt, model+duration) lives in ShotCard.tsx, rendered
+// inside that rail — this component never edits shot state directly, it
+// only surfaces it and calls back up.
 //
 // Memoized (react review R3): a status flip on one shot during a 15-25 min
 // render poll must not re-render every OTHER row. That only holds if every
