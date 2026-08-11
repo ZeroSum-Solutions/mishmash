@@ -41,17 +41,24 @@
   /* ---------- stage ---------- */
   .stage {
     position: fixed; inset: 0; overflow: hidden;
-    background-image: url("assets/storm-background.jpg");
-    background-size: cover;
-    background-position: center 25%;
-    background-repeat: no-repeat;
+    background-image:
+      url("assets/storm-background-field.jpg"),
+      url("assets/storm-background.jpg");
+    background-size:
+      100% 39%,
+      cover;
+    background-position:
+      center bottom,
+      center 62%;
+    background-repeat: no-repeat, no-repeat;
+    filter: brightness(1.16) saturate(1.22) contrast(1.04);
   }
   .stage::after {
     content: ""; position: absolute; inset: 0; pointer-events: none;
     background-image:
-      linear-gradient(105deg, rgba(4,16,24,.34) 0%, rgba(4,16,24,.20) 40%, rgba(4,16,24,.06) 78%, transparent 100%),
-      linear-gradient(180deg, rgba(4,16,24,.12) 0%, transparent 22%),
-      linear-gradient(0deg, rgba(4,16,24,.07), rgba(4,16,24,.07));
+      linear-gradient(105deg, rgba(4,16,24,.24) 0%, rgba(4,16,24,.14) 40%, rgba(4,16,24,.04) 78%, transparent 100%),
+      linear-gradient(180deg, rgba(4,16,24,.10) 0%, transparent 22%),
+      linear-gradient(0deg, rgba(4,16,24,.05), rgba(4,16,24,.05));
   }
 
   /* ---------- sidebar ---------- */
@@ -237,7 +244,7 @@
   @keyframes sheen { from { transform: translate3d(-150%,0,0) skewX(-18deg); } to { transform: translate3d(260%,0,0) skewX(-18deg); } }
 
   /* ---------- focus ---------- */
-  :focus-visible { outline: calc(2*var(--u)) solid var(--accent); outline-offset: calc(2*var(--u)); border-radius: inherit; }
+  :focus-visible { outline: calc(2*var(--u)) solid #fff; outline-offset: calc(2*var(--u)); border-radius: inherit; }
 
   /* ---------- reduced motion ---------- */
   @media (prefers-reduced-motion: reduce) {
@@ -302,7 +309,7 @@
 <header class="header">
   <div class="header__id">
     <p class="header__hello">Welcome</p>
-    <p class="header__who">Raka Mahendra</p>
+    <p class="header__who">Calfin Danang</p>
   </div>
   <div class="header__tools">
     <button type="button" class="tool" aria-label="Add location"><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg></button>
@@ -310,7 +317,7 @@
     <button type="button" class="tool" aria-label="Notifications"><svg class="icon" aria-hidden="true"><use href="#i-bell"></use></svg></button>
     <button type="button" class="tool tool--avatar" aria-label="Account">
       <svg class="icon" aria-hidden="true"><use href="#i-avatar"></use></svg>
-      <img src="assets/avatar.jpg" alt="Raka Mahendra" loading="eager" decoding="async" onerror="this.remove()">
+      <img src="assets/avatar-calfin-danang.jpg" alt="Calfin Danang" loading="eager" decoding="async" onerror="this.remove()">
     </button>
   </div>
 </header>

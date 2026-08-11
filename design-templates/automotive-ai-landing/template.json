@@ -1,0 +1,12 @@
+{
+  "slug": "automotive-ai-landing",
+  "name": "AUREN — Private AI Driver Landing",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Orbitron:wght@400&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=automotive-ai",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

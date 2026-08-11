@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Jessica — Yoga Coach</title>
+<meta name="description" content="Full-viewport landing page for fictional yoga coach Jessica: a video hero that plays on click and slides into a three-pose class collection." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #060606;
+    --paper: #ffffff;
+    --hero-overlay: rgba(0, 0, 0, 0.1);
+    --accent-soft: #d5effd;
+    --accent-mid: #aedcf9;
+    --accent: #8cd0f7;
+    --focus: #8cd0f7;
+    --font-anton: "Anton", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body { font-family: var(--font-anton); }
+
+  img, video { max-width: 100%; display: block; }
+
+  button { font-family: inherit; }
+
+  .stage {
+    position: relative;
+    width: 100vw;
+    height: 100svh;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--ink);
+  }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .hero-poster,
+  .hero-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .hero-poster { z-index: 1; }
+
+  .hero-video {
+    z-index: 2;
+    opacity: 0;
+    transform: scale(1.08) translate(0, 0);
+    transform-origin: center;
+    will-change: transform;
+    transition: opacity 1000ms ease-in-out;
+  }
+
+  .hero-video.is-loaded { opacity: 1; }
+
+  .hero-tint {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background: var(--hero-overlay);
+    pointer-events: none;
+  }
+
+  .hero-ui {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 1.5rem;
+    pointer-events: none;
+  }
+  @media (min-width: 640px) { .hero-ui { padding: 3rem; } }
+  @media (min-width: 768px) { .hero-ui { padding: 4rem; } }
+
+  .slogan {
+    max-width: 20rem;
+    overflow: hidden;
+    pointer-events: auto;
+  }
+  @media (min-width: 640px) { .slogan { max-width: 24rem; } }
+  @media (min-width: 768px) { .slogan { max-width: 28rem; } }
+
+  .slogan p {
+    margin: 0;
+    color: #fff;
+    font-size: 1.25rem;
+    line-height: 0.95;
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+    transform: translateY(0);
+    opacity: 1;
+    transition: transform 1s cubic-bezier(0.16, 1, 0.3, 1), opacity 1s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @media (min-width: 640px) { .slogan p { font-size: 1.5rem; } }
+  @media (min-width: 768px) { .slogan p { font-size: 1.875rem; } }
+  @media (min-width: 1024px) { .slogan p { font-size: 2.2rem; } }
+
+  .hero.is-playing .slogan p { transform: translateY(250px); opacity: 0; }
+
+  .hero-bottom {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  @media (min-width: 768px) {
+    .hero-bottom { flex-direction: row; align-items: flex-end; justify-content: space-between; gap: 2rem; }
+  }
+
+  .title-left, .title-right { overflow: hidden; pointer-events: auto; }
+  .title-right { text-align: left; }
+  @media (min-width: 768px) { .title-right { text-align: right; } }
+
+  .title-left h1,
+  .title-right p {
+    margin: 0;
+    color: #fff;
+    font-size: 3rem;
+    line-height: 1;
+    letter-spacing: -0.025em;
+    text-transform: uppercase;
+    transform: translateY(0);
+    opacity: 1;
+    transition: transform 1.1s cubic-bezier(0.16, 1, 0.3, 1), opacity 1.1s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @media (min-width: 640px)  { .title-left h1, .title-right p { font-size: 4.5rem; } }
+  @media (min-width: 768px)  { .title-left h1, .title-right p { font-size: 6rem; } }
+  @media (min-width: 1024px) { .title-left h1, .title-right p { font-size: 10rem; } }
+  @media (min-width: 1280px) { .title-left h1, .title-right p { font-size: 11rem; } }
+
+  .hero.is-playing .title-left h1,
+  .hero.is-playing .title-right p { transform: translateY(150%); opacity: 0; }
+
+  .start-btn {
+    position: absolute;
+    left: 50%;
+    bottom: 15%;
+    transform: translateX(-50%);
+    z-index: 20;
+    pointer-events: auto;
+    width: 7rem;
+    height: 7rem;
+    border-radius: 9999px;
+    background: rgba(0, 0, 0, 0.9);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    cursor: pointer;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    overflow: hidden;
+    transition:
+      transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 0.8s cubic-bezier(0.34, 1.56, 0.64, 1),
+      background 0.3s ease, border-color 0.3s ease;
+  }
+  @media (min-width: 640px) { .start-btn { width: 8rem; height: 8rem; font-size: 0.875rem; } }
+  @media (min-width: 768px) { .start-btn { width: 9rem; height: 9rem; bottom: 0.5rem; } }
+
+  .start-btn:hover { background: #000; border-color: rgba(255, 255, 255, 0.4); }
+  .start-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+
+  .hero.is-playing .start-btn { transform: translateX(-50%) scale(0); opacity: 0; pointer-events: none; }
+
+  .start-btn-glow {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.1), transparent);
+    opacity: 0.6;
+    transition: opacity 0.3s ease;
+  }
+  .start-btn:hover .start-btn-glow { opacity: 1; }
+  .start-btn-label { position: relative; z-index: 1; font-weight: 700; }
+
+  /* ---------- Collection screen ---------- */
+  .collection {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 1.5rem;
+    padding-top: 6rem;
+    background: linear-gradient(to bottom, var(--accent-soft), var(--accent-mid), var(--accent));
+    transform: translateY(100%);
+    transition: none;
+  }
+  @media (min-width: 640px) { .collection { padding: 3rem; padding-top: 6rem; } }
+  @media (min-width: 768px) { .collection { padding: 4rem; padding-top: 6rem; } }
+
+  .collection.is-visible { transform: translateY(0); }
+
+  .back-btn {
+    position: absolute;
+    top: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    color: #000;
+    font-size: 1.125rem;
+    text-transform: uppercase;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    padding: 0.75rem 2rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    cursor: pointer;
+    transition: color 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
+  }
+  @media (min-width: 640px) { .back-btn { font-size: 1.25rem; } }
+  .back-btn:hover { color: rgba(0, 0, 0, 0.7); border-color: rgba(0, 0, 0, 0.4); transform: translateX(-50%) scale(1.05); }
+  .back-btn:active { transform: translateX(-50%) scale(0.95); }
+  .back-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+
+  .collection-body {
+    width: 100%;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    margin-top: 5rem;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  @media (min-width: 640px) { .collection-body { margin-top: 4rem; } }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .giant-text {
+    text-transform: uppercase;
+    font-size: 13.5vw;
+    line-height: 1;
+    text-align: center;
+    width: 100%;
+    position: absolute;
+    z-index: 1;
+    white-space: nowrap;
+    background: linear-gradient(to bottom, #fff, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    transform: translateY(1rem);
+    filter: drop-shadow(0 2px 15px rgba(255, 255, 255, 0.1));
+    pointer-events: none;
+  }
+  @media (min-width: 640px) { .giant-text { font-size: 16.9vw; } }
+
+  .card-deck {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 64rem;
+    margin-top: 1.5rem;
+  }
+
+  .yoga-card {
+    position: relative;
+    display: block;
+    border: 6px solid #fff;
+    padding: 0;
+    background: #fff;
+    border-radius: 1.5rem;
+    overflow: hidden;
+    aspect-ratio: 9 / 16;
+    width: 18rem;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.22);
+    cursor: pointer;
+    transform-origin: bottom;
+    -webkit-tap-highlight-color: transparent;
+  }
+  @media (min-width: 640px) { .yoga-card { width: 21rem; border-width: 8px; } }
+  @media (min-width: 768px) { .yoga-card { width: 24rem; } }
+
+  .card-left  { z-index: 20; margin-right: -3.5rem; }
+  .card-center{ z-index: 30; }
+  .card-right { z-index: 20; margin-left: -3.5rem; }
+  @media (min-width: 640px) { .card-left { margin-right: -5.5rem; } .card-right { margin-left: -5.5rem; } }
+  @media (min-width: 768px) { .card-left { margin-right: -7rem; } .card-right { margin-left: -7rem; } }
+  @media (min-width: 1024px){ .card-left { margin-right: -8rem; } .card-right { margin-left: -8rem; } }
+
+  .yoga-card.is-active { z-index: 40; }
+
+  .yoga-card:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+
+  .yoga-card video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 1rem;
+    pointer-events: none;
+    display: block;
+  }
+
+  .yoga-card-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 1rem;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+    pointer-events: none;
+  }
+
+  /* ---------- Reduced motion ---------- */
+  @media (prefers-reduced-motion: reduce) {
+    .hero-video,
+    .slogan p,
+    .title-left h1,
+    .title-right p,
+    .start-btn,
+    .back-btn,
+    .yoga-card {
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<main class="stage">
+  <section class="hero" id="hero" aria-label="Jessica, yoga coach">
+    <img class="hero-poster" src="assets/poster.jpg" alt="Jessica standing in a sunlit meadow holding a rolled yoga mat, ready to begin a session." />
+    <video class="hero-video" id="heroVideo" poster="assets/poster.jpg" muted playsinline preload="auto">
+      <source src="assets/hero.mp4" type="video/mp4" />
+    </video>
+    <div class="hero-tint" aria-hidden="true"></div>
+
+    <div class="hero-ui">
+      <div class="slogan">
+        <p>Find your focus,<br />arrange private<br />yoga sessions, and live<br />the mindful way</p>
+      </div>
+
+      <div class="hero-bottom">
+        <div class="title-left">
+          <h1>Hey, I am<br />Jessica</h1>
+        </div>
+        <div class="title-right">
+          <p>Yoga<br />Coach</p>
+        </div>
+      </div>
+
+      <button type="button" class="start-btn" id="startBtn">
+        <span class="start-btn-glow" aria-hidden="true"></span>
+        <span class="start-btn-label">Let&rsquo;s start</span>
+      </button>
+    </div>
+  </section>
+
+  <section class="collection" id="collection" aria-label="Jessica's class collection">
+    <button type="button" class="back-btn" id="backBtn">Back to start</button>
+
+    <div class="collection-body">
+      <h2 class="visually-hidden">Collection #451 &mdash; three private session styles</h2>
+      <p class="giant-text" aria-hidden="true">Collection #451</p>
+
+      <div class="card-deck">
+        <button
+          type="button"
+          class="yoga-card card-left"
+          id="cardLeft"
+          style="transform: rotate(-8deg);"
+          data-rotate="-8" data-hover-x="-60" data-hover-y="-25" data-hover-rotate="-12" data-hover-scale="1.04"
+        >
+          <span class="visually-hidden">Preview the Side Stretch Flow session</span>
+          <video src="assets/card1.mp4" poster="assets/card1-poster.jpg" muted loop playsinline preload="metadata"></video>
+          <span class="yoga-card-ring" aria-hidden="true"></span>
+        </button>
+
+        <button
+          type="button"
+          class="yoga-card card-center"
+          id="cardCenter"
+          style="transform: rotate(0deg);"
+          data-rotate="0" data-hover-x="0" data-hover-y="-15" data-hover-rotate="0" data-hover-scale="1.08"
+        >
+          <span class="visually-hidden">Preview the Standing Prayer Flow session</span>
+          <video src="assets/card2.mp4" poster="assets/card2-poster.jpg" muted loop playsinline preload="metadata"></video>
+          <span class="yoga-card-ring" aria-hidden="true"></span>
+        </button>
+
+        <button
+          type="button"
+          class="yoga-card card-right"
+          id="cardRight"
+          style="transform: rotate(8deg);"
+          data-rotate="8" data-hover-x="60" data-hover-y="-25" data-hover-rotate="12" data-hover-scale="1.04"
+        >
+          <span class="visually-hidden">Preview the Seated Twist Flow session</span>
+          <video src="assets/card3.mp4" poster="assets/card3-poster.jpg" muted loop playsinline preload="metadata"></video>
+          <span class="yoga-card-ring" aria-hidden="true"></span>
+        </button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var hero = document.getElementById("hero");
+  var heroVideo = document.getElementById("heroVideo");
+  var startBtn = document.getElementById("startBtn");
+  var backBtn = document.getElementById("backBtn");
+  var collection = document.getElementById("collection");
+
+  /* ---------- Damped-spring driver (mass 1) ----------
+     Ports the same displacement/velocity integration Motion's
+     springs use: stiffness pulls the value toward the target,
+     damping bleeds velocity, both accumulated over real frame time. */
+  function createSpring(stiffness, damping, mass) {
+    mass = mass || 1;
+    var REST_DISPLACEMENT = 0.001;
+    var REST_VELOCITY = 0.001;
+    return function animate(fromValue, toValue, onUpdate, onComplete) {
+      var position = fromValue;
+      var velocity = 0;
+      var lastTime = null;
+      var rafId = null;
+
+      function step(now) {
+        if (lastTime === null) lastTime = now;
+        var dt = Math.min((now - lastTime) / 1000, 1 / 30);
+        lastTime = now;
+
+        var displacement = position - toValue;
+        var springForce = -stiffness * displacement;
+        var dampingForce = -damping * velocity;
+        var acceleration = (springForce + dampingForce) / mass;
+
+        velocity += acceleration * dt;
+        position += velocity * dt;
+
+        onUpdate(position);
+
+        if (Math.abs(position - toValue) < REST_DISPLACEMENT && Math.abs(velocity) < REST_VELOCITY) {
+          onUpdate(toValue);
+          if (onComplete) onComplete();
+          return;
+        }
+        rafId = requestAnimationFrame(step);
+      }
+
+      rafId = requestAnimationFrame(step);
+      return function cancel() {
+        if (rafId !== null) cancelAnimationFrame(rafId);
+      };
+    };
+  }
+
+  /* ---------- Hero: poster -> video, parallax, play/reset ---------- */
+  function markLoaded() { heroVideo.classList.add("is-loaded"); }
+  heroVideo.addEventListener("loadeddata", markLoaded);
+  heroVideo.addEventListener("playing", markLoaded);
+
+  if (!reducedMotion) {
+    hero.addEventListener("mousemove", function (e) {
+      var w = window.innerWidth, h = window.innerHeight;
+      var x = (e.clientX - w / 2) / (w / 2);
+      var y = (e.clientY - h / 2) / (h / 2);
+      heroVideo.style.transform = "scale(1.08) translate(" + (x * 20).toFixed(2) + "px, " + (y * 20).toFixed(2) + "px)";
+    });
+  }
+
+  /* Collection slide: spring(stiffness 220, damping 32), same constants
+     the prompt specifies for the second-screen transition. */
+  var collectionSpring = createSpring(220, 32);
+  var cancelCollectionAnim = null;
+  var secondScreenVisible = false;
+
+  function showCollection() {
+    if (cancelCollectionAnim) cancelCollectionAnim();
+    secondScreenVisible = true;
+    collection.classList.add("is-visible");
+    if (reducedMotion) {
+      collection.style.transform = "translateY(0)";
+      backBtn.focus();
+      return;
+    }
+    var startY = window.innerHeight;
+    cancelCollectionAnim = collectionSpring(startY, 0, function (y) {
+      collection.style.transform = "translateY(" + y + "px)";
+    }, function () {
+      backBtn.focus();
+    });
+  }
+
+  function hideCollection() {
+    if (cancelCollectionAnim) cancelCollectionAnim();
+    secondScreenVisible = false;
+    if (reducedMotion) {
+      collection.classList.remove("is-visible");
+      collection.style.transform = "";
+      startBtn.focus();
+      return;
+    }
+    var endY = window.innerHeight;
+    cancelCollectionAnim = collectionSpring(0, endY, function (y) {
+      collection.style.transform = "translateY(" + y + "px)";
+    }, function () {
+      collection.classList.remove("is-visible");
+      collection.style.transform = "";
+      startBtn.focus();
+    });
+  }
+
+  function playHero() {
+    hero.classList.add("is-playing");
+    heroVideo.play().catch(function () {});
+  }
+
+  function resetHero() {
+    heroVideo.pause();
+    try { heroVideo.currentTime = 0; } catch (err) {}
+    heroVideo.classList.remove("is-loaded");
+    hero.classList.remove("is-playing");
+    hideCollection();
+  }
+
+  startBtn.addEventListener("click", playHero);
+  heroVideo.addEventListener("ended", function () {
+    hero.classList.remove("is-playing");
+    showCollection();
+  });
+  backBtn.addEventListener("click", resetHero);
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && secondScreenVisible) resetHero();
+  });
+
+  /* ---------- Yoga cards: shared hover spring (stiffness 200, damping 20) ----------
+     Every animated property (x, y, rotate, scale) starts at rest with zero
+     velocity and shares the same stiffness/damping, so one normalized 0->1
+     spring can drive all four via linear interpolation — mathematically the
+     same result as springing each value independently. */
+  var cardSpringDriver = createSpring(200, 20);
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  Array.prototype.forEach.call(document.querySelectorAll(".yoga-card"), function (card) {
+    var video = card.querySelector("video");
+    var baseRotate = parseFloat(card.getAttribute("data-rotate"));
+    var hx = parseFloat(card.getAttribute("data-hover-x"));
+    var hy = parseFloat(card.getAttribute("data-hover-y"));
+    var hRotate = parseFloat(card.getAttribute("data-hover-rotate"));
+    var hScale = parseFloat(card.getAttribute("data-hover-scale"));
+
+    var progress = 0;
+    var cancelAnim = null;
+
+    function applyTransform(p) {
+      var x = lerp(0, hx, p);
+      var y = lerp(0, hy, p);
+      var rot = lerp(baseRotate, hRotate, p);
+      var scale = lerp(1, hScale, p);
+      card.style.transform = "translate(" + x.toFixed(2) + "px, " + y.toFixed(2) + "px) rotate(" + rot.toFixed(2) + "deg) scale(" + scale.toFixed(3) + ")";
+    }
+
+    function animateTo(target) {
+      if (cancelAnim) cancelAnim();
+      if (reducedMotion) {
+        progress = target;
+        applyTransform(progress);
+        return;
+      }
+      cancelAnim = cardSpringDriver(progress, target, function (p) {
+        progress = p;
+        applyTransform(p);
+      });
+    }
+
+    function activate() {
+      card.classList.add("is-active");
+      animateTo(1);
+      if (video) {
+        try { video.currentTime = 0; } catch (err) {}
+        video.play().catch(function () {});
+      }
+    }
+
+    function deactivate() {
+      card.classList.remove("is-active");
+      animateTo(0);
+      if (video) {
+        video.pause();
+        try { video.currentTime = 0; } catch (err) {}
+      }
+    }
+
+    card.addEventListener("mouseenter", activate);
+    card.addEventListener("mouseleave", deactivate);
+    card.addEventListener("focus", activate);
+    card.addEventListener("blur", deactivate);
+    card.addEventListener("touchstart", function (e) {
+      e.preventDefault();
+      var isActive = card.classList.contains("is-active");
+      Array.prototype.forEach.call(document.querySelectorAll(".yoga-card.is-active"), function (other) {
+        if (other !== card) other.dispatchEvent(new Event("mouseleave"));
+      });
+      if (isActive) { deactivate(); } else { activate(); }
+    }, { passive: false });
+  });
+})();
+</script>
+</body>
+</html>

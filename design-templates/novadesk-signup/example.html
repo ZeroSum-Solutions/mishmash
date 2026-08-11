@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="NovaDesk full-screen sign-up page with a looping ambient video background, a dark glass-panel form card, and social sign-in shortcuts." />
+<title>NovaDesk — Sign up</title>
+<style>
+  :root {
+    --accent: #DA3F23;
+    --accent-glow: rgba(218, 63, 35, 0.35);
+    --card-dark: rgba(10, 10, 10, 0.92);
+    --panel-glass: rgba(255, 255, 255, 0.05);
+    --panel-glass-border: rgba(255, 255, 255, 0.08);
+    --input-bg: rgba(39, 39, 42, 0.7);
+    --input-bg-hover: rgba(63, 63, 70, 0.6);
+    --divider: rgba(63, 63, 70, 0.6);
+    --text-white: #ffffff;
+    --text-zinc-200: #e4e4e7;
+    --text-zinc-300: #d4d4d8;
+    --text-zinc-400: #a1a1aa;
+    --text-zinc-500: #71717a;
+    --text-zinc-600: #52525b;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #000;
+    color: var(--text-white);
+  }
+
+  .page {
+    position: relative;
+    min-height: 100vh;
+    width: 100vw;
+    overflow-x: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    padding: 1.5rem 0;
+  }
+
+  @media (min-width: 640px) {
+    .page {
+      height: 100vh;
+      overflow: hidden;
+      padding: 0;
+    }
+  }
+
+  .bg-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+  }
+
+  .bg-fallback {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+    display: none;
+  }
+
+  /* Card */
+  .card {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 56rem;
+    margin: 0 1rem;
+    border-radius: 1rem;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  }
+
+  @media (min-width: 640px) {
+    .card {
+      flex-direction: row;
+      height: 660px;
+    }
+  }
+
+  /* Left column: form */
+  .panel-form {
+    background: var(--card-dark);
+    padding: 2rem 1.5rem 2.5rem;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  @media (min-width: 640px) {
+    .panel-form {
+      width: 50%;
+      padding: 2.5rem 2.5rem;
+    }
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+  }
+
+  .brand-name {
+    color: var(--accent);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    font-size: 1.125rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    margin-top: 2rem;
+  }
+
+  @media (min-width: 640px) {
+    .form-group {
+      margin-top: auto;
+    }
+  }
+
+  .form-heading {
+    color: var(--text-white);
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  .form-subtext {
+    color: var(--text-zinc-400);
+    font-size: 0.875rem;
+    margin: 0.375rem 0 0;
+    line-height: 1.6;
+  }
+
+  .field {
+    position: relative;
+  }
+
+  .field-input {
+    width: 100%;
+    background: var(--input-bg);
+    color: var(--text-white);
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    border: none;
+    padding: 0.625rem 1rem;
+    font-family: inherit;
+    transition: background-color 150ms ease-out;
+  }
+
+  .field-input::placeholder {
+    color: var(--text-zinc-500);
+  }
+
+  .field-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 1px var(--text-zinc-500);
+  }
+
+  .field-input.has-toggle {
+    padding-right: 2.75rem;
+  }
+
+  .password-toggle {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    display: flex;
+    color: var(--text-zinc-500);
+    cursor: pointer;
+    transition: color 150ms ease-out;
+  }
+
+  .password-toggle:hover,
+  .password-toggle:focus-visible {
+    color: var(--text-zinc-300);
+  }
+
+  .terms-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .checkbox-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin-top: 1px;
+    display: block;
+    cursor: pointer;
+  }
+
+  .checkbox-wrap input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .checkbox-box {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid var(--text-zinc-600);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 150ms ease-out, border-color 150ms ease-out;
+  }
+
+  .checkbox-wrap input:checked + .checkbox-box {
+    background: var(--text-white);
+    border-color: var(--text-white);
+  }
+
+  .checkbox-box svg {
+    width: 11px;
+    height: 11px;
+    opacity: 0;
+    transition: opacity 100ms ease-out;
+  }
+
+  .checkbox-wrap input:checked + .checkbox-box svg {
+    opacity: 1;
+  }
+
+  .checkbox-wrap input:focus-visible + .checkbox-box {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .terms-text {
+    color: var(--text-zinc-400);
+    font-size: 0.75rem;
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  .terms-text a {
+    color: var(--text-zinc-200);
+    text-decoration: underline;
+    transition: color 150ms ease-out;
+  }
+
+  .terms-text a:hover,
+  .terms-text a:focus-visible {
+    color: var(--text-white);
+  }
+
+  .btn-submit {
+    width: 100%;
+    background: var(--text-white);
+    color: #000;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.625rem 0;
+    cursor: pointer;
+    transition: background-color 150ms ease-out;
+    font-family: inherit;
+  }
+
+  .btn-submit:hover { background: #f4f4f5; }
+  .btn-submit:active { background: #e4e4e7; }
+  .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-submit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .divider-line {
+    flex: 1;
+    height: 1px;
+    background: var(--divider);
+  }
+
+  .divider-text {
+    color: var(--text-zinc-500);
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+
+  .social-row {
+    display: flex;
+    gap: 0.625rem;
+  }
+
+  .btn-social {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    background: rgba(39, 39, 42, 0.6);
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0;
+    color: var(--text-zinc-300);
+    font-size: 0.875rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background-color 150ms ease-out, color 150ms ease-out;
+  }
+
+  .btn-social:hover,
+  .btn-social:focus-visible {
+    background: rgba(63, 63, 70, 0.6);
+    color: var(--text-white);
+  }
+
+  .btn-social:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .btn-social svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+  .footer-line {
+    color: var(--text-zinc-500);
+    font-size: 0.75rem;
+    text-align: center;
+    margin: 0;
+  }
+
+  .footer-line a {
+    color: var(--text-zinc-200);
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 150ms ease-out;
+  }
+
+  .footer-line a:hover,
+  .footer-line a:focus-visible {
+    color: var(--text-white);
+  }
+
+  /* Success state */
+  .success-state {
+    display: none;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+
+  @media (min-width: 640px) {
+    .success-state { margin-top: auto; margin-bottom: auto; }
+  }
+
+  .success-state.is-visible { display: flex; }
+  .form-group.is-hidden { display: none; }
+
+  .success-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .success-icon svg { width: 22px; height: 22px; color: #fff; }
+
+  .success-heading {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  .success-text {
+    color: var(--text-zinc-400);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  .success-text strong { color: var(--text-zinc-200); font-weight: 500; }
+
+  .btn-secondary {
+    background: var(--input-bg);
+    color: var(--text-white);
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background-color 150ms ease-out;
+  }
+
+  .btn-secondary:hover { background: var(--input-bg-hover); }
+  .btn-secondary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Right column: glass panel */
+  .panel-glass {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 50%;
+    background: var(--panel-glass);
+    border: 1px solid var(--panel-glass-border);
+  }
+
+  @media (min-width: 640px) {
+    .panel-glass { display: flex; }
+  }
+
+  .panel-glass .brand-mark {
+    width: 34px;
+    height: 34px;
+    margin-top: -70px;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <video class="bg-video" id="bgVideo" autoplay muted loop playsinline poster="assets/bg-poster.jpg" aria-hidden="true">
+    <source src="assets/bg-loop.mp4" type="video/mp4" />
+  </video>
+  <img class="bg-fallback" id="bgFallback" src="assets/bg-poster.jpg" alt="" aria-hidden="true" />
+
+  <main class="card">
+    <section class="panel-form" aria-label="Sign up">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 256 256" aria-hidden="true">
+          <path fill="#DA3F23" d="M 256 64 L 256 128 L 192.5 128 L 160 95 L 128 64 L 96 95 L 63.5 128 L 64 128 L 128 192 L 128 256 L 64.5 256 L 32 223 L 0 192 L 0 64 L 64 0 L 192 0 Z M 256 192 L 256 256 L 192.5 256 L 160 223 L 128 192 L 128 128 L 192 128 Z" />
+        </svg>
+        <span class="brand-name">NovaDesk</span>
+      </div>
+
+      <form class="form-group" id="signupForm" novalidate>
+        <div>
+          <h1 class="form-heading">Join us</h1>
+          <p class="form-subtext">Set up your profile and jump in right now.</p>
+        </div>
+
+        <div class="field">
+          <label class="sr-only" for="email">Email</label>
+          <input class="field-input" type="email" id="email" name="email" placeholder="Input Email" autocomplete="email" required />
+        </div>
+
+        <div class="field">
+          <label class="sr-only" for="password">Password</label>
+          <input class="field-input has-toggle" type="password" id="password" name="password" placeholder="Choose Password" autocomplete="new-password" minlength="8" required />
+          <button class="password-toggle" type="button" id="passwordToggle" aria-label="Show password" aria-pressed="false" aria-controls="password">
+            <svg id="eyeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="terms-row">
+          <label class="checkbox-wrap">
+            <input type="checkbox" id="agree" name="agree" required />
+            <span class="checkbox-box" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.5 12 13 4.5" /></svg>
+            </span>
+          </label>
+          <label class="terms-text" for="agree">I Agree On The <a href="#rules">Rules</a> &amp; <a href="#privacy">Privacy Notice</a></label>
+        </div>
+
+        <button class="btn-submit" type="submit" id="submitBtn">Launch Account</button>
+
+        <div class="divider" role="separator">
+          <span class="divider-line"></span>
+          <span class="divider-text">or join us via</span>
+          <span class="divider-line"></span>
+        </div>
+
+        <div class="social-row">
+          <button class="btn-social" type="button" data-provider="Google">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><line x1="21.17" y1="8" x2="12" y2="8" /><line x1="3.95" y1="6.06" x2="8.54" y2="14" /><line x1="10.88" y1="21.94" x2="15.46" y2="14" /></svg>
+            <span>Google</span>
+          </button>
+          <button class="btn-social" type="button" data-provider="Apple">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 1.44S9.22 5 7 5a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z" /><path d="M10 5c1-1.5 1-4 1-4s-2.13-.5-3.5 1S6 5.5 6 5.5 8.5 6 10 5Z" /></svg>
+            <span>Apple</span>
+          </button>
+          <button class="btn-social" type="button" data-provider="Twitter">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3Z" /></svg>
+            <span>Twitter</span>
+          </button>
+        </div>
+
+        <p class="footer-line">Already Hold An Account? <a href="#login">Enter</a></p>
+      </form>
+
+      <div class="success-state" id="successState" role="status" aria-live="polite">
+        <div class="success-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+        </div>
+        <div>
+          <h1 class="success-heading">You're in</h1>
+          <p class="success-text">Account launched for <strong id="successEmail">your inbox</strong>. Welcome to NovaDesk.</p>
+        </div>
+        <button class="btn-secondary" type="button" id="resetBtn">Back to sign up</button>
+      </div>
+    </section>
+
+    <aside class="panel-glass" aria-hidden="true">
+      <svg class="brand-mark" viewBox="0 0 256 256">
+        <path fill="#DA3F23" d="M 256 64 L 256 128 L 192.5 128 L 160 95 L 128 64 L 96 95 L 63.5 128 L 64 128 L 128 192 L 128 256 L 64.5 256 L 32 223 L 0 192 L 0 64 L 64 0 L 192 0 Z M 256 192 L 256 256 L 192.5 256 L 160 223 L 128 192 L 128 128 L 192 128 Z" />
+      </svg>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var video = document.getElementById("bgVideo");
+  var fallback = document.getElementById("bgFallback");
+  if (video) {
+    video.addEventListener("error", function () {
+      video.style.display = "none";
+      if (fallback) fallback.style.display = "block";
+    });
+
+    // Respect prefers-reduced-motion: stop the looping background video and
+    // rest on its static poster frame instead of autoplaying ambient motion.
+    var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    var applyMotionPreference = function (matches) {
+      if (matches) {
+        video.pause();
+        video.removeAttribute("autoplay");
+        video.currentTime = 0;
+      } else if (video.paused) {
+        video.play().catch(function () {});
+      }
+    };
+    applyMotionPreference(reducedMotion.matches);
+    if (reducedMotion.addEventListener) {
+      reducedMotion.addEventListener("change", function (e) {
+        applyMotionPreference(e.matches);
+      });
+    }
+  }
+
+  var passwordInput = document.getElementById("password");
+  var passwordToggle = document.getElementById("passwordToggle");
+  var eyeIcon = document.getElementById("eyeIcon");
+
+  var EYE_OPEN =
+    '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>';
+  var EYE_OFF =
+    '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/>';
+
+  if (passwordToggle && passwordInput && eyeIcon) {
+    passwordToggle.addEventListener("click", function () {
+      var showing = passwordInput.type === "text";
+      passwordInput.type = showing ? "password" : "text";
+      passwordToggle.setAttribute("aria-pressed", String(!showing));
+      passwordToggle.setAttribute(
+        "aria-label",
+        showing ? "Show password" : "Hide password"
+      );
+      eyeIcon.innerHTML = showing ? EYE_OPEN : EYE_OFF;
+    });
+  }
+
+  var form = document.getElementById("signupForm");
+  var successState = document.getElementById("successState");
+  var successEmail = document.getElementById("successEmail");
+  var resetBtn = document.getElementById("resetBtn");
+  var emailInput = document.getElementById("email");
+  var agreeInput = document.getElementById("agree");
+
+  if (form) {
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      if (!emailInput.checkValidity() || !passwordInput.checkValidity() || !agreeInput.checked) {
+        form.reportValidity();
+        return;
+      }
+      if (successEmail) successEmail.textContent = emailInput.value;
+      form.classList.add("is-hidden");
+      if (successState) successState.classList.add("is-visible");
+      if (resetBtn) resetBtn.focus();
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener("click", function () {
+      if (form) {
+        form.reset();
+        form.classList.remove("is-hidden");
+      }
+      if (successState) successState.classList.remove("is-visible");
+      if (emailInput) emailInput.focus();
+    });
+  }
+
+  var socialButtons = document.querySelectorAll(".btn-social");
+  socialButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      btn.setAttribute("data-clicked", "true");
+    });
+  });
+})();
+</script>
+</body>
+</html>

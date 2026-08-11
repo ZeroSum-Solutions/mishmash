@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Core Features — AI Image Generator</title>
+<meta name="description" content="Core Features section for an AI image generator product: smart prompt suggestions, API access, and a project library, each shown in a gradient card." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f172a'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23F5C344'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --c1-badge-1: #F5C344;
+    --c1-badge-2: #F28482;
+    --c1-badge-3: #B567C2;
+    --c1-orange: #FFB347;
+    --c1-yellow: #F9ED96;
+    --c1-purple: #E5A1F5;
+    --c1-pink: #F8ACA0;
+    --c1-neutral-bg: #F4F8F9;
+    --accent: #B567C2;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #ffffff;
+    padding: 80px 20px;
+    display: flex;
+    justify-content: center;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .c1-container {
+    max-width: 1100px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .c1-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    background: linear-gradient(90deg, var(--c1-badge-1), var(--c1-badge-2), var(--c1-badge-3));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    margin-bottom: 16px;
+  }
+
+  .c1-title {
+    font-size: 2.75rem;
+    font-weight: 500;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+  }
+
+  .c1-subtitle {
+    font-size: 1.125rem;
+    color: #64748b;
+    line-height: 1.5;
+    margin-bottom: 50px;
+  }
+
+  .c1-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+
+  .c1-card {
+    border-radius: 20px;
+    height: 340px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    position: relative;
+    overflow: hidden;
+    text-align: left;
+    background: var(--c1-neutral-bg);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
+  }
+
+  .c1-card h3 {
+    position: relative;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #1e293b;
+    padding: 24px;
+    z-index: 2;
+  }
+
+  /* Card 1 — Smart Prompt Suggestions */
+  .c1-card-1 {
+    background: radial-gradient(circle at 50% 0%, var(--c1-orange) 0%, var(--c1-yellow) 30%, var(--c1-neutral-bg) 60%, var(--c1-neutral-bg) 100%);
+  }
+
+  .c1-prompt-box {
+    position: absolute;
+    top: 30px;
+    left: 24px;
+    right: 24px;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 0.8rem;
+    color: #475569;
+    line-height: 1.6;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
+  }
+
+  .c1-blur-text {
+    background: linear-gradient(90deg, var(--c1-orange), var(--c1-purple));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    font-weight: 600;
+  }
+
+  .c1-add-details {
+    position: absolute;
+    top: 180px;
+    left: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #ffffff;
+    border: 1px solid #000000;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #1e293b;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  }
+
+  .c1-add-details .c1-sparkle {
+    color: #a855f7;
+    font-size: 1rem;
+  }
+
+  .c1-cursor {
+    position: absolute;
+    top: 205px;
+    left: 110px;
+    width: 24px;
+    height: 24px;
+    z-index: 10;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.2));
+  }
+
+  /* Card 2 — API Access */
+  .c1-card-2 {
+    background: radial-gradient(circle at 50% 0%, var(--c1-purple) 0%, var(--c1-pink) 30%, var(--c1-neutral-bg) 60%, var(--c1-neutral-bg) 100%);
+  }
+
+  .c1-api-visual {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 24px;
+  }
+
+  .c1-network-img {
+    width: 100%;
+    height: 180px;
+    object-fit: contain;
+    margin-top: 20px;
+  }
+
+  /* Card 3 — Project Library */
+  .c1-card-3 {
+    background: radial-gradient(circle at 50% 0%, var(--c1-yellow) 0%, var(--c1-purple) 30%, var(--c1-neutral-bg) 60%, var(--c1-neutral-bg) 100%);
+  }
+
+  .c1-mesh {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.8) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.8) 1px, transparent 1px);
+    background-size: 16px 16px;
+    -webkit-mask-image: radial-gradient(circle at center top, black 0%, transparent 80%);
+    mask-image: radial-gradient(circle at center top, black 0%, transparent 80%);
+  }
+
+  .c1-folder {
+    position: absolute;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 170px;
+    filter: drop-shadow(0 15px 25px rgba(0, 0, 0, 0.08));
+  }
+
+  .c1-search {
+    position: absolute;
+    top: 220px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    background: #ffffff;
+    border: 1px solid #000000;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #1e293b;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+  }
+
+  .c1-search svg {
+    flex-shrink: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 900px) {
+    .c1-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 600px) {
+    .c1-grid {
+      grid-template-columns: 1fr;
+    }
+    .c1-title {
+      font-size: 2.25rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+<section class="c1-container">
+  <p class="c1-badge">Core Features</p>
+  <h2 class="c1-title">Built for Speed &amp; Quality</h2>
+  <p class="c1-subtitle">Everything you need to go<br />from idea to image</p>
+
+  <div class="c1-grid">
+    <article class="c1-card c1-card-1">
+      <div class="c1-prompt-box" aria-hidden="true">
+        A bright, high-resolution 3D illustration of a
+        <span class="c1-blur-text">cheerful cartoon</span> of a
+        <span class="c1-blur-text">girl character</span>
+        <span class="c1-blur-text">centred against a</span> smooth blue
+        background
+      </div>
+      <div class="c1-add-details" aria-hidden="true">
+        <span class="c1-sparkle">&#10022;</span> Add more details
+      </div>
+      <svg class="c1-cursor" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 2L20 11L11 13L9 22L4 2Z" fill="#0f172a" stroke="#ffffff" stroke-width="1" stroke-linejoin="round" />
+      </svg>
+      <h3>Smart Prompt Suggestions</h3>
+    </article>
+    <article class="c1-card c1-card-2">
+      <div class="c1-api-visual" aria-hidden="true">
+        <img class="c1-network-img" src="assets/network.svg" alt="" loading="lazy" />
+      </div>
+      <h3>API Access</h3>
+    </article>
+    <article class="c1-card c1-card-3">
+      <div class="c1-mesh" aria-hidden="true"></div>
+      <img class="c1-folder" src="assets/library-icon.svg" alt="" loading="lazy" aria-hidden="true" />
+      <div class="c1-search" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="11" cy="11" r="8" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        Search in library
+      </div>
+      <h3>Project Library</h3>
+    </article>
+  </div>
+</section>
+</body>
+</html>

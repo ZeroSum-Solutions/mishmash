@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Apex Program — Course Curriculum</title>
+<meta name="description" content="A single-open accordion presenting a four-module AI design curriculum, wrapped in a mouse-tracked spotlight border on a near-black canvas." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<style>
+  /* ---- Tokens ---- */
+  :root {
+    --bg: #000000;
+    --card-bg: #161616;
+    --fg: #f5f6f7;
+    --fg-85: rgba(245, 246, 247, 0.85);
+    --fg-70: rgba(245, 246, 247, 0.7);
+    --fg-50: rgba(245, 246, 247, 0.5);
+    --fg-80: rgba(245, 246, 247, 0.8);
+    --surface: rgba(255, 255, 255, 0.10);
+    --border-10: rgba(255, 255, 255, 0.10);
+    --border-15: rgba(255, 255, 255, 0.15);
+    --border-20: rgba(255, 255, 255, 0.20);
+    --fill-04: rgba(255, 255, 255, 0.04);
+    --fill-06: rgba(255, 255, 255, 0.06);
+    /* genuinely monochrome design: accent is scoped to :focus-visible only, per FIDELITY + SPEC-BATCH3 §4 */
+    --accent: #4e9eff;
+    --ease-out-motion: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  a { color: inherit; }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* ---- Page chrome ---- */
+  .page-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem 1.5rem 0;
+    max-width: 1080px;
+    margin: 0 auto;
+  }
+  .page-nav .mark {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, var(--fg-80), var(--fg-50));
+    display: inline-block;
+  }
+  .page-nav .wordmark {
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-70);
+  }
+
+  .page-shell {
+    padding: 3rem 0 6rem;
+  }
+
+  /* ---- Icons ---- */
+  .m-icon {
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal;
+    font-style: normal;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- Curriculum section ---- */
+  .curriculum-section {
+    position: relative;
+    width: 100%;
+    background: var(--bg);
+    padding: 3rem 0;
+  }
+  @media (min-width: 640px) {
+    .curriculum-section { padding: 4rem 0; }
+  }
+  .curriculum-inner {
+    margin: 0 auto;
+    max-width: 1080px;
+    padding: 0 1rem;
+  }
+  @media (min-width: 640px) {
+    .curriculum-inner { padding: 0 1.5rem; }
+  }
+
+  .curriculum-header {
+    margin-bottom: 3rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .curriculum-badge {
+    margin-bottom: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border-10);
+    padding: 0.25rem 0.75rem;
+    font-size: 12px;
+    color: var(--fg-80);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .curriculum-badge .dot {
+    height: 6px;
+    width: 6px;
+    border-radius: 999px;
+    background: var(--fg-70);
+  }
+  .curriculum-heading {
+    font-size: 1.875rem;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    color: var(--fg);
+    margin: 0;
+  }
+  @media (min-width: 640px) {
+    .curriculum-heading { font-size: 2.25rem; }
+  }
+
+  /* ---- Spotlight border wrapper ---- */
+  .spotlight {
+    position: relative;
+    margin: 0 auto;
+    width: 100%;
+    border-radius: 16px;
+    padding: 1px;
+    --spot-x: -200px;
+    --spot-y: -200px;
+    background: radial-gradient(520px circle at var(--spot-x) var(--spot-y), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 60%), var(--border-10);
+  }
+  .spotlight-glow {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  .curriculum-card {
+    border-radius: 16px;
+    border: 1px solid var(--border-10);
+    padding: 0 1.5rem;
+    background-color: var(--card-bg);
+  }
+  @media (min-width: 640px) {
+    .curriculum-card { padding: 0 2rem; }
+  }
+
+  /* ---- Fade-up scroll reveal ---- */
+  .fade-up {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s var(--ease-out-motion), transform 0.6s var(--ease-out-motion);
+  }
+  .fade-up.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ---- Module accordion ---- */
+  .module-accordion {
+    border-bottom: 1px solid var(--border-10);
+  }
+  .module-accordion:last-of-type {
+    border-bottom: none;
+  }
+  .module-accordion summary {
+    list-style: none;
+    cursor: pointer;
+  }
+  .module-accordion summary::-webkit-details-marker {
+    display: none;
+  }
+  .module-summary {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.5rem 0;
+    text-align: left;
+  }
+  .module-eyebrow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--fg-50);
+  }
+  .module-subtitle {
+    margin-top: 0.5rem;
+    font-size: 1.125rem;
+    font-weight: 400;
+    color: var(--fg);
+  }
+  @media (min-width: 640px) {
+    .module-subtitle { font-size: 1.25rem; }
+  }
+  .module-chevron {
+    display: flex;
+    height: 36px;
+    width: 36px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid var(--border-15);
+    background: var(--fill-04);
+    transition: transform 300ms var(--ease-out-motion);
+  }
+  .module-accordion.is-open .module-chevron {
+    transform: rotate(180deg);
+  }
+  .module-chevron .m-icon {
+    color: var(--fg-80);
+  }
+
+  .accordion-body {
+    height: 0;
+    opacity: 0;
+    overflow: hidden;
+  }
+  .module-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 1.5rem;
+  }
+  .lesson-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-top: 1px solid var(--border-10);
+    padding: 1rem 0;
+    font-size: 14px;
+    color: var(--fg-85);
+  }
+  .lesson-check {
+    display: flex;
+    height: 20px;
+    width: 20px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid var(--border-20);
+    background: var(--fill-06);
+  }
+  .lesson-check .m-icon {
+    color: var(--fg);
+  }
+
+  /* ---- Reduced motion ---- */
+  @media (prefers-reduced-motion: reduce) {
+    .fade-up {
+      transition: opacity 0.01ms;
+      transform: none;
+    }
+    .module-chevron,
+    .accordion-body {
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* ---- Small screens ---- */
+  @media (max-width: 375px) {
+    .curriculum-card { padding: 0 1rem; }
+  }
+</style>
+</head>
+<body>
+<nav class="page-nav" aria-label="Apex Program">
+  <span class="mark" aria-hidden="true"></span>
+  <span class="wordmark">Apex Program</span>
+</nav>
+
+<div class="page-shell">
+<section class="curriculum-section" aria-labelledby="curriculum-heading">
+  <div class="curriculum-inner">
+    <div class="curriculum-header">
+      <span class="curriculum-badge fade-up" data-delay="0">
+        <span class="dot" aria-hidden="true"></span>
+        Course Curriculum
+      </span>
+      <h2 id="curriculum-heading" class="curriculum-heading fade-up" data-delay="0.1">A fully modern curriculum.</h2>
+    </div>
+
+    <div class="spotlight" data-spotlight>
+      <span class="spotlight-glow" aria-hidden="true"></span>
+      <div class="curriculum-card">
+
+        <details class="module-accordion is-open fade-up" data-delay="0" open name="curriculum-modules">
+          <summary class="module-summary">
+            <span>
+              <span class="module-eyebrow">Module 1</span>
+              <span class="module-subtitle">Foundations of AI Design</span>
+            </span>
+            <span class="module-chevron">
+              <span class="m-icon" aria-hidden="true" style="font-size:16px;width:16px;height:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">expand_more</span>
+            </span>
+          </summary>
+          <div class="accordion-body">
+            <ul class="module-list">
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                Intro to The Future of Design and Building, how it started and where it's going.
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                AI Design Philosophy / Why and what makes good AI design
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                What is Nova and 10+ other best AI tools for design
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                Setting up Nova
+              </li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="module-accordion fade-up" data-delay="0.15" name="curriculum-modules">
+          <summary class="module-summary">
+            <span>
+              <span class="module-eyebrow">Module 2</span>
+              <span class="module-subtitle">Building with AI</span>
+            </span>
+            <span class="module-chevron">
+              <span class="m-icon" aria-hidden="true" style="font-size:16px;width:16px;height:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">expand_more</span>
+            </span>
+          </summary>
+          <div class="accordion-body">
+            <ul class="module-list">
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                Creating the Branding/Logo with AI
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                Pitch Deck Build
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                Landing Page wireframes
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                Design a Landing Page with AI
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                Building High-end web app
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                GitHub &amp; Vercel Deploy
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                Creating social media design with AI
+              </li>
+            </ul>
+          </div>
+        </details>
+
+
+        <details class="module-accordion fade-up" data-delay="0.3" name="curriculum-modules">
+          <summary class="module-summary">
+            <span>
+              <span class="module-eyebrow">Module 3</span>
+              <span class="module-subtitle">Launch &amp; Growth</span>
+            </span>
+            <span class="module-chevron">
+              <span class="m-icon" aria-hidden="true" style="font-size:16px;width:16px;height:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">expand_more</span>
+            </span>
+          </summary>
+          <div class="accordion-body">
+            <ul class="module-list">
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                Getting Seen, Launch Videos
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                Building a portfolio
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                X (Twitter) Strategy for Designers
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                Making money selling digital products as a designer
+              </li>
+            </ul>
+          </div>
+        </details>
+
+
+        <details class="module-accordion fade-up" data-delay="0.45" name="curriculum-modules">
+          <summary class="module-summary">
+            <span>
+              <span class="module-eyebrow">Module 4</span>
+              <span class="module-subtitle">Making Money as an AI Designer</span>
+            </span>
+            <span class="module-chevron">
+              <span class="m-icon" aria-hidden="true" style="font-size:16px;width:16px;height:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">expand_more</span>
+            </span>
+          </summary>
+          <div class="accordion-body">
+            <ul class="module-list">
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                Finding Clients + Making Money
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                How to Make Clients Find You
+              </li>
+              <li class="lesson-row">
+                <span class="lesson-check"><span class="m-icon" aria-hidden="true" style="font-size:12px;width:12px;height:12px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">check</span></span>
+                Selling AI Powered templates
+              </li>
+            </ul>
+          </div>
+        </details>
+
+
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+<script>
+(function () {
+  'use strict';
+
+  var reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  function prefersReducedMotion() {
+    return reduceMotionQuery.matches;
+  }
+
+  // ---- Fade-up scroll reveal: fires once per element at 30% visibility ----
+  function initFadeUp() {
+    var targets = document.querySelectorAll('.fade-up');
+    if (!('IntersectionObserver' in window)) {
+      targets.forEach(function (el) { el.classList.add('is-visible'); });
+      return;
+    }
+    var observer = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            var el = entry.target;
+            var delay = parseFloat(el.getAttribute('data-delay') || '0');
+            el.style.transitionDelay = delay + 's';
+            el.classList.add('is-visible');
+            observer.unobserve(el);
+          }
+        });
+      },
+      { threshold: 0.3 }
+    );
+    targets.forEach(function (el) { observer.observe(el); });
+  }
+
+  // ---- Spotlight border: mouse-tracked radial gradient ring ----
+  function initSpotlight() {
+    var spot = document.querySelector('[data-spotlight]');
+    if (!spot) return;
+    window.addEventListener(
+      'mousemove',
+      function (event) {
+        var rect = spot.getBoundingClientRect();
+        var x = event.clientX - rect.left;
+        var y = event.clientY - rect.top;
+        spot.style.setProperty('--spot-x', x + 'px');
+        spot.style.setProperty('--spot-y', y + 'px');
+      },
+      { passive: true }
+    );
+  }
+
+  // ---- Module accordion: single-open, animated height + opacity, 300ms ease-in-out ----
+  function initAccordion() {
+    var items = Array.prototype.slice.call(document.querySelectorAll('.module-accordion'));
+
+    function clearInlineTransition(body) {
+      body.style.transition = '';
+    }
+
+    function expand(details) {
+      var body = details.querySelector('.accordion-body');
+      details.open = true;
+      details.classList.add('is-open');
+      if (prefersReducedMotion()) {
+        body.style.height = 'auto';
+        body.style.opacity = '1';
+        return;
+      }
+      var target = body.scrollHeight;
+      body.style.transition = '';
+      body.style.height = '0px';
+      body.style.opacity = '0';
+      // Force reflow so the browser registers the 0px start state before animating.
+      void body.offsetHeight;
+      requestAnimationFrame(function () {
+        body.style.transition = 'height 300ms ease-in-out, opacity 300ms ease-in-out';
+        body.style.height = target + 'px';
+        body.style.opacity = '1';
+      });
+      body.addEventListener('transitionend', function onEnd(ev) {
+        if (ev.propertyName !== 'height') return;
+        body.style.height = 'auto';
+        clearInlineTransition(body);
+        body.removeEventListener('transitionend', onEnd);
+      });
+    }
+
+    function collapse(details) {
+      var body = details.querySelector('.accordion-body');
+      details.classList.remove('is-open');
+      if (prefersReducedMotion()) {
+        details.open = false;
+        body.style.height = '0px';
+        body.style.opacity = '0';
+        return;
+      }
+      var current = body.scrollHeight;
+      body.style.transition = '';
+      body.style.height = current + 'px';
+      body.style.opacity = '1';
+      void body.offsetHeight;
+      requestAnimationFrame(function () {
+        body.style.transition = 'height 300ms ease-in-out, opacity 300ms ease-in-out';
+        body.style.height = '0px';
+        body.style.opacity = '0';
+      });
+      body.addEventListener('transitionend', function onEnd(ev) {
+        if (ev.propertyName !== 'height') return;
+        details.open = false;
+        clearInlineTransition(body);
+        body.removeEventListener('transitionend', onEnd);
+      });
+    }
+
+    items.forEach(function (details) {
+      var summary = details.querySelector('summary');
+      summary.addEventListener('click', function (event) {
+        event.preventDefault();
+        var isOpen = details.classList.contains('is-open');
+        if (isOpen) {
+          collapse(details);
+          return;
+        }
+        items.forEach(function (other) {
+          if (other !== details && other.classList.contains('is-open')) {
+            collapse(other);
+          }
+        });
+        expand(details);
+      });
+    });
+
+    // Module 1 starts open on first render: set the resting accordion-body state
+    // to match the `open`/`is-open` markup already on the first module.
+    items.forEach(function (details) {
+      var body = details.querySelector('.accordion-body');
+      if (details.classList.contains('is-open')) {
+        body.style.height = 'auto';
+        body.style.opacity = '1';
+      } else {
+        body.style.height = '0px';
+        body.style.opacity = '0';
+      }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    initFadeUp();
+    initSpotlight();
+    initAccordion();
+  });
+})();
+</script>
+</body>
+</html>

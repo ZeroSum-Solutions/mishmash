@@ -1,0 +1,12 @@
+{
+  "slug": "ai-image-generator-ui",
+  "name": "AI Image Generator UI — Core Features",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=ai-image-generator-ui",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

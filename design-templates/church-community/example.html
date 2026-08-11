@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kindred Family Church — App Showcase</title>
+<meta name="description" content="Mobile app showcase for Kindred Family Church: three iPhone screens covering a member testimonial, a welcoming hero, and upcoming sermons and events.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --page-bg:#5A4C41;
+    --dark:#1D191A;
+    --accent:#F1E5C6;
+    --white:#FFFFFF;
+    --offwhite:#F5F0E8;
+    --ink:#1a1a1a;
+    --muted:#888888;
+    --muted-2:#999999;
+    --frame-border:#2a2a2a;
+    --ease-out:cubic-bezier(0.23,1,0.32,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--page-bg);
+    font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    font-weight:400;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  img{max-width:none;}
+  button{font-family:inherit;}
+  a{color:inherit;}
+
+  .showcase-wrap{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:40px;
+    overflow-x:auto;
+  }
+  .showcase{
+    display:flex;
+    gap:48px;
+    align-items:flex-start;
+  }
+
+  @media (max-width:900px){
+    .showcase-wrap{padding:20px; overflow-x:hidden; align-items:flex-start; justify-content:center;}
+    .showcase{flex-direction:column; align-items:center; gap:32px;}
+  }
+
+  .phone-wrap{ }
+
+  .phone-shell{
+    position:relative;
+    width:403px; height:840px;
+    background:#000;
+    border-radius:54px;
+    border:2px solid var(--frame-border);
+    padding:14px;
+    box-shadow:0 12px 24px rgba(0,0,0,.3);
+    transform-origin:top center;
+  }
+
+  .phone-screen{
+    position:relative;
+    width:375px; height:812px;
+    border-radius:40px;
+    overflow:hidden;
+    background:var(--dark);
+    opacity:0;
+    transform:translateY(14px);
+    transition:opacity .6s var(--ease-out), transform .6s var(--ease-out);
+  }
+  .phone-screen.in-view{opacity:1; transform:translateY(0);}
+
+  .dynamic-island{
+    position:absolute; top:11px; left:50%; transform:translateX(-50%);
+    width:126px; height:36px; background:#000; border-radius:18px; z-index:20;
+  }
+  .home-indicator{
+    position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
+    width:134px; height:5px; border-radius:3px; background:rgba(255,255,255,.3); z-index:20;
+  }
+
+  .app-header{
+    position:relative; z-index:10;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:48px 19px 0;
+  }
+  .app-header.is-overlay{position:absolute; top:0; left:0; right:0;}
+
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand img{width:24px; height:24px; display:block;}
+  .brand-name{font-size:17px; line-height:20px; font-weight:400; color:#fff;}
+
+  .hamburger{appearance:none; background:none; border:0; padding:6px; display:flex; flex-direction:column; gap:5px; cursor:pointer;}
+  .hamburger span{display:block; height:2px; background:#fff; border-radius:1px;}
+  .hamburger span:nth-child(1){width:22px;}
+  .hamburger span:nth-child(2){width:22px;}
+  .hamburger span:nth-child(3){width:14px;}
+
+  .hamburger:focus-visible,
+  .close-btn:focus-visible,
+  .s1-card-link:focus-visible,
+  .s2-cta:focus-visible,
+  .s3-play:focus-visible,
+  .menu-nav button:focus-visible{
+    outline:2px solid var(--accent);
+    outline-offset:4px;
+  }
+
+  /* screen 1 — testimonial */
+  .s1-portrait{width:100%; height:300px; margin-top:16px; overflow:hidden;}
+  .s1-portrait img{width:100%; height:100%; object-fit:cover; display:block;}
+
+  .sidebar-rotated{
+    position:absolute; left:9px; top:130px; height:200px; z-index:7;
+    writing-mode:vertical-rl; transform:rotate(180deg);
+    display:flex; align-items:baseline; gap:6px;
+    pointer-events:none;
+  }
+  .sidebar-rotated span{font-size:14px; letter-spacing:1.2px; color:rgba(255,255,255,.5); white-space:nowrap;}
+  .sidebar-rotated .sr-name{font-weight:500;}
+  .sidebar-rotated .sr-role{font-weight:400;}
+
+  .s1-quote-icon{width:28px; height:24px; margin:24px 0 12px 19px; display:block; opacity:.9;}
+  .s1-quote{padding:0 19px; font-size:20px; line-height:27px; font-weight:400; color:rgba(255,255,255,.77); max-width:336px; min-height:81px;}
+
+  .s1-card{
+    position:absolute; left:0; right:0; bottom:0; height:245px;
+    background:var(--offwhite); padding:24px; z-index:5;
+  }
+  .s1-card h2{font-size:30px; font-weight:500; letter-spacing:-.5px; color:var(--ink); line-height:1.15; max-width:250px;}
+  .s1-card p{margin-top:8px; font-size:17px; color:var(--muted); font-weight:400;}
+  .s1-card-link{position:absolute; left:24px; bottom:24px; display:inline-flex; align-items:center; gap:6px; font-size:16px; color:var(--ink); text-decoration:none; font-weight:500; background:none; border:0; cursor:pointer;}
+  .s1-card-link img{width:14px; height:14px;}
+  .s1-card-star{position:absolute; right:20px; bottom:20px; width:48px; height:48px;}
+
+  /* screen 2 — hero landing */
+  .s2-hero{position:relative; width:100%; height:472px; overflow:hidden;}
+  .s2-hero > img{width:100%; height:100%; object-fit:cover; display:block;}
+  .s2-hero::after{content:""; position:absolute; inset:0; background:rgba(0,0,0,.15);}
+  .s2-avatars{position:absolute; left:19px; bottom:-26px; width:149px; height:53px; z-index:8;}
+  .s2-avatars img{width:100%; height:100%; object-fit:contain; display:block;}
+
+  .s2-body{position:relative; background:var(--dark); height:340px; display:flex; flex-direction:column; padding:44px 19px 32px;}
+  .s2-body h1{font-weight:300; font-size:52px; line-height:52px; letter-spacing:-2.5px; color:var(--accent); min-height:104px;}
+  .s2-sub{margin-top:14px; font-size:21px; line-height:27px; font-weight:400; color:rgba(255,255,255,.6); min-height:54px;}
+  .s2-cta{margin-top:auto; height:52px; border-radius:26px; background:var(--accent); border:0; width:100%; display:flex; align-items:center; justify-content:center; gap:8px; font-size:21px; font-weight:500; color:var(--ink); cursor:pointer; text-decoration:none;}
+  .s2-cta img{width:16px; height:16px;}
+
+  /* screen 3 — sermons / events */
+  .s3-hero{position:relative; width:100%; height:340px; overflow:hidden;}
+  .s3-hero > img{width:100%; height:100%; object-fit:cover; display:block;}
+  .s3-hero::after{content:""; position:absolute; inset:0; background:rgba(0,0,0,.3);}
+  .s3-play{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:65px; height:65px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; border:0; cursor:pointer; z-index:6;}
+  .s3-play img{width:20px; height:20px; margin-left:3px;}
+
+  .s3-body{position:relative; background:var(--white); height:472px; overflow:hidden;}
+  .s3-band{background:var(--dark); padding:24px 0 0;}
+  .s3-band h2{padding:0 19px; font-size:38px; font-weight:400; letter-spacing:-.8px; color:#fff; min-height:46px;}
+
+  .event-row{display:flex; align-items:flex-start; gap:16px; padding:0 19px;}
+  .s3-band .event-row{margin-top:20px; padding-bottom:20px;}
+  .event-list .event-row{margin-top:22px;}
+  .event-row.is-faded{opacity:.5;}
+
+  .date-card{flex:0 0 auto; width:68px; height:90px; border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center;}
+  .date-card.card-white{background:var(--white); color:var(--ink);}
+  .date-card.card-cream{background:var(--accent); color:var(--ink);}
+  .date-card .day{font-size:30px; font-weight:500; line-height:1;}
+  .date-card .month{font-size:16px; font-weight:400;}
+
+  .event-info{padding-top:8px;}
+  .event-info h3{font-size:20px; font-weight:400; line-height:26px; color:var(--ink); min-height:26px;}
+  .event-time{margin-top:2px; font-size:16px; color:var(--muted-2); font-weight:400;}
+
+  /* menu overlay */
+  .menu-overlay{
+    position:absolute; inset:0; z-index:100; background:var(--dark);
+    display:flex; flex-direction:column; padding:48px 19px 32px;
+    opacity:0; visibility:hidden;
+    transition:opacity .2s var(--ease-out);
+  }
+  .menu-overlay[data-open="true"]{opacity:1; visibility:visible;}
+  .menu-overlay .close-btn{appearance:none; background:none; border:0; width:32px; height:32px; position:relative; cursor:pointer;}
+  .menu-overlay .close-btn span{position:absolute; left:4px; top:15px; width:24px; height:2px; background:#fff; border-radius:1px;}
+  .menu-overlay .close-btn span:nth-child(1){transform:rotate(45deg);}
+  .menu-overlay .close-btn span:nth-child(2){transform:rotate(-45deg);}
+  .menu-nav{margin-top:64px; display:flex; flex-direction:column; gap:22px;}
+  .menu-nav button{appearance:none; background:none; border:0; text-align:left; font-size:36px; font-weight:300; letter-spacing:-.8px; color:#fff; cursor:pointer; padding:0;}
+  .menu-cta{margin-top:auto; height:52px; border-radius:26px; background:var(--accent); border:0; font-size:18px; font-weight:500; color:var(--ink); cursor:pointer;}
+
+  .sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;}
+
+  @media (prefers-reduced-motion:reduce){
+    .phone-screen{transition:none !important; opacity:1 !important; transform:none !important;}
+    .menu-overlay{transition:none !important;}
+    *{animation-duration:.01ms !important; animation-iteration-count:1 !important;}
+  }
+</style>
+</head>
+<body>
+<div class="showcase-wrap">
+  <div class="showcase" id="showcase">
+
+    <!-- Phone 1: Testimonial -->
+    <div class="phone-wrap" data-phone-wrap>
+      <div class="phone-shell" data-phone-shell>
+        <section class="phone-screen" id="screen1" aria-label="Kindred Family Church app — member testimonial screen">
+          <div class="dynamic-island" aria-hidden="true"></div>
+
+          <header class="app-header">
+            <div class="brand">
+              <img src="assets/logo-cross.png" alt="" aria-hidden="true">
+              <span class="brand-name">Kindred Family<br>Church</span>
+            </div>
+            <button class="hamburger" type="button" aria-expanded="false" aria-controls="menu1" data-menu-open="menu1">
+              <span></span><span></span><span></span>
+              <span class="sr-only">Open menu</span>
+            </button>
+          </header>
+
+          <div class="sidebar-rotated" aria-hidden="true">
+            <span class="sr-name">Anna Miller</span>
+            <span class="sr-role">Community Member</span>
+          </div>
+
+          <div class="s1-portrait">
+            <img src="assets/portrait.png" alt="Anna Miller, a member of the Kindred Family Church community, smiling while holding an open book.">
+          </div>
+
+          <img class="s1-quote-icon" src="assets/quote-icon.png" alt="" aria-hidden="true">
+          <p class="s1-quote" data-typewriter data-speed="16">&ldquo;We want to be a family where people can connect and benefit from friendships in Christ.&rdquo;</p>
+
+          <div class="s1-card">
+            <h2>Sunday Worship Service</h2>
+            <p>Dec 7th, 10-11:30am</p>
+            <a class="s1-card-link" href="#screen1">Learn more <img src="assets/arrow-icon.png" alt=""></a>
+            <img class="s1-card-star" src="assets/star-icon.png" alt="">
+          </div>
+
+          <div class="home-indicator" aria-hidden="true"></div>
+
+          <div class="menu-overlay" id="menu1" role="dialog" aria-modal="true" aria-label="Kindred Family Church navigation menu" data-open="false" data-menu-for="screen1">
+            <header class="app-header">
+              <div class="brand">
+                <img src="assets/logo-cross.png" alt="" aria-hidden="true">
+                <span class="brand-name">Kindred Family<br>Church</span>
+              </div>
+              <button class="close-btn" type="button" data-menu-close="menu1">
+                <span></span><span></span>
+                <span class="sr-only">Close menu</span>
+              </button>
+            </header>
+            <nav class="menu-nav" aria-label="Primary">
+              <button type="button" data-menu-close="menu1">Home</button>
+              <button type="button" data-menu-close="menu1">About</button>
+              <button type="button" data-menu-close="menu1">Events</button>
+              <button type="button" data-menu-close="menu1">Sermons</button>
+              <button type="button" data-menu-close="menu1">Contact</button>
+            </nav>
+            <button class="menu-cta" type="button" data-menu-close="menu1">Join us</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Phone 2: Hero / landing -->
+    <div class="phone-wrap" data-phone-wrap>
+      <div class="phone-shell" data-phone-shell>
+        <section class="phone-screen" id="screen2" aria-label="Kindred Family Church app — welcome screen">
+          <div class="dynamic-island" aria-hidden="true"></div>
+
+          <div class="s2-hero">
+            <img src="assets/hero-worship.png" alt="A worshiper standing in a sunlit sanctuary, light streaming through tall windows over the pews.">
+            <header class="app-header is-overlay" style="z-index:9;">
+              <div class="brand">
+                <img src="assets/logo-cross.png" alt="" aria-hidden="true">
+                <span class="brand-name">Kindred Family<br>Church</span>
+              </div>
+              <button class="hamburger" type="button" aria-expanded="false" aria-controls="menu2" data-menu-open="menu2">
+                <span></span><span></span><span></span>
+                <span class="sr-only">Open menu</span>
+              </button>
+            </header>
+            <div class="s2-avatars">
+              <img src="assets/avatars.png" alt="Portraits of two community members alongside a circle inviting more people to join.">
+            </div>
+          </div>
+
+          <div class="s2-body">
+            <h1 data-typewriter data-speed="30">Take a step toward the light</h1>
+            <p class="s2-sub" data-typewriter data-speed="14">Discover faith, hope, and a home for your soul</p>
+            <a class="s2-cta" href="#screen2">Join us <img src="assets/arrow-icon.png" alt=""></a>
+          </div>
+
+          <div class="home-indicator" aria-hidden="true"></div>
+
+          <div class="menu-overlay" id="menu2" role="dialog" aria-modal="true" aria-label="Kindred Family Church navigation menu" data-open="false" data-menu-for="screen2">
+            <header class="app-header">
+              <div class="brand">
+                <img src="assets/logo-cross.png" alt="" aria-hidden="true">
+                <span class="brand-name">Kindred Family<br>Church</span>
+              </div>
+              <button class="close-btn" type="button" data-menu-close="menu2">
+                <span></span><span></span>
+                <span class="sr-only">Close menu</span>
+              </button>
+            </header>
+            <nav class="menu-nav" aria-label="Primary">
+              <button type="button" data-menu-close="menu2">Home</button>
+              <button type="button" data-menu-close="menu2">About</button>
+              <button type="button" data-menu-close="menu2">Events</button>
+              <button type="button" data-menu-close="menu2">Sermons</button>
+              <button type="button" data-menu-close="menu2">Contact</button>
+            </nav>
+            <button class="menu-cta" type="button" data-menu-close="menu2">Join us</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Phone 3: Sermons / events -->
+    <div class="phone-wrap" data-phone-wrap>
+      <div class="phone-shell" data-phone-shell>
+        <section class="phone-screen" id="screen3" aria-label="Kindred Family Church app — sermons and upcoming events screen">
+          <div class="dynamic-island" aria-hidden="true"></div>
+
+          <div class="s3-hero">
+            <img src="assets/hero-preacher.png" alt="An overhead view of a small group gathered around a table, hands resting on open books during a discussion.">
+            <button class="s3-play" type="button" aria-label="Play latest sermon recording">
+              <img src="assets/play-icon.png" alt="">
+            </button>
+            <header class="app-header is-overlay" style="z-index:9;">
+              <div class="brand">
+                <img src="assets/logo-cross.png" alt="" aria-hidden="true">
+                <span class="brand-name">Kindred Family<br>Church</span>
+              </div>
+              <button class="hamburger" type="button" aria-expanded="false" aria-controls="menu3" data-menu-open="menu3">
+                <span></span><span></span><span></span>
+                <span class="sr-only">Open menu</span>
+              </button>
+            </header>
+          </div>
+
+          <div class="s3-body">
+            <div class="s3-band">
+              <h2 data-typewriter data-speed="22">Upcoming</h2>
+              <div class="event-row">
+                <div class="date-card card-white">
+                  <span class="day">14</span>
+                  <span class="month">Dec</span>
+                </div>
+                <div class="event-info">
+                  <p class="event-time">6:30 - 8:00 pm</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="event-list">
+              <div class="event-row">
+                <div class="date-card card-cream">
+                  <span class="day">21</span>
+                  <span class="month">Dec</span>
+                </div>
+                <div class="event-info">
+                  <h3>Romans 15 | Living For Christ Alone</h3>
+                  <p class="event-time">8:30 - 10:00 am</p>
+                </div>
+              </div>
+              <div class="event-row">
+                <div class="date-card card-cream">
+                  <span class="day">28</span>
+                  <span class="month">Dec</span>
+                </div>
+                <div class="event-info">
+                  <h3>Romans 9 | The Sovereignty Of God</h3>
+                  <p class="event-time">5:30 - 7:00 pm</p>
+                </div>
+              </div>
+              <div class="event-row is-faded">
+                <div class="date-card card-cream">
+                  <span class="day">4</span>
+                  <span class="month">Jan</span>
+                </div>
+                <div class="event-info">
+                  <h3>John 3 | Born Again</h3>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="home-indicator" aria-hidden="true"></div>
+
+          <div class="menu-overlay" id="menu3" role="dialog" aria-modal="true" aria-label="Kindred Family Church navigation menu" data-open="false" data-menu-for="screen3">
+            <header class="app-header">
+              <div class="brand">
+                <img src="assets/logo-cross.png" alt="" aria-hidden="true">
+                <span class="brand-name">Kindred Family<br>Church</span>
+              </div>
+              <button class="close-btn" type="button" data-menu-close="menu3">
+                <span></span><span></span>
+                <span class="sr-only">Close menu</span>
+              </button>
+            </header>
+            <nav class="menu-nav" aria-label="Primary">
+              <button type="button" data-menu-close="menu3">Home</button>
+              <button type="button" data-menu-close="menu3">About</button>
+              <button type="button" data-menu-close="menu3">Events</button>
+              <button type="button" data-menu-close="menu3">Sermons</button>
+              <button type="button" data-menu-close="menu3">Contact</button>
+            </nav>
+            <button class="menu-cta" type="button" data-menu-close="menu3">Join us</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  /* ---- Fade-in per phone frame (IntersectionObserver), then typewriter ---- */
+  var screens = Array.prototype.slice.call(document.querySelectorAll('.phone-screen'));
+
+  function typewrite(el) {
+    var text = el.textContent;
+    var speed = parseInt(el.getAttribute('data-speed'), 10) || 20;
+    if (reduceMotion.matches) {
+      el.textContent = text;
+      return;
+    }
+    el.textContent = '';
+    var i = 0;
+    (function step() {
+      el.textContent = text.slice(0, i);
+      i++;
+      if (i <= text.length) {
+        window.setTimeout(step, speed);
+      }
+    })();
+  }
+
+  function revealScreen(screen) {
+    if (screen.dataset.revealed === 'true') return;
+    screen.dataset.revealed = 'true';
+    screen.classList.add('in-view');
+    var typers = screen.querySelectorAll('[data-typewriter]');
+    var delay = reduceMotion.matches ? 0 : 500;
+    typers.forEach(function (el, idx) {
+      window.setTimeout(function () {
+        typewrite(el);
+      }, delay + idx * 150);
+    });
+  }
+
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          revealScreen(entry.target);
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15 });
+    screens.forEach(function (screen) { io.observe(screen); });
+  } else {
+    screens.forEach(revealScreen);
+  }
+
+  /* ---- Menu overlays: open, close, focus management, Escape, backdrop-free ---- */
+  var openButtons = Array.prototype.slice.call(document.querySelectorAll('[data-menu-open]'));
+  var closeButtons = Array.prototype.slice.call(document.querySelectorAll('[data-menu-close]'));
+
+  function openMenu(id, opener) {
+    var menu = document.getElementById(id);
+    if (!menu) return;
+    menu.setAttribute('data-open', 'true');
+    menu.__opener = opener;
+    if (opener) opener.setAttribute('aria-expanded', 'true');
+    var firstClose = menu.querySelector('.close-btn');
+    if (firstClose) firstClose.focus();
+  }
+
+  function closeMenu(id) {
+    var menu = document.getElementById(id);
+    if (!menu) return;
+    menu.setAttribute('data-open', 'false');
+    var opener = menu.__opener;
+    if (opener) {
+      opener.setAttribute('aria-expanded', 'false');
+      opener.focus();
+    }
+  }
+
+  openButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      openMenu(btn.getAttribute('data-menu-open'), btn);
+    });
+  });
+
+  closeButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      closeMenu(btn.getAttribute('data-menu-close'));
+    });
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var openMenuEl = document.querySelector('.menu-overlay[data-open="true"]');
+    if (openMenuEl) closeMenu(openMenuEl.id);
+  });
+
+  /* ---- Mobile scale-to-fit: phones stack and shrink to the viewport width ---- */
+  var wraps = Array.prototype.slice.call(document.querySelectorAll('[data-phone-wrap]'));
+  var SHELL_W = 403, SHELL_H = 840, BREAKPOINT = 900, MOBILE_PADDING = 20;
+
+  function fitPhones() {
+    var isMobile = window.innerWidth < BREAKPOINT;
+    wraps.forEach(function (wrap) {
+      var shell = wrap.querySelector('[data-phone-shell]');
+      if (!isMobile) {
+        shell.style.transform = '';
+        wrap.style.width = '';
+        wrap.style.height = '';
+        return;
+      }
+      var available = window.innerWidth - MOBILE_PADDING * 2;
+      var scale = Math.min(1, available / SHELL_W);
+      shell.style.transform = 'scale(' + scale + ')';
+      wrap.style.width = (SHELL_W * scale) + 'px';
+      wrap.style.height = (SHELL_H * scale) + 'px';
+    });
+  }
+
+  fitPhones();
+  window.addEventListener('resize', fitPhones);
+})();
+</script>
+</body>
+</html>

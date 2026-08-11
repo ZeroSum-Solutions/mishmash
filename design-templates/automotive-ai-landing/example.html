@@ -1,0 +1,1023 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auren</title>
+  <meta name="description" content="Your car. Its mind." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Orbitron:wght@400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --font-orbitron: "Orbitron", sans-serif;
+      --font-sans: "Inter Tight", Arial, Helvetica, sans-serif;
+      --font-mono: "JetBrains Mono", monospace;
+
+      /* Recolor-compatible chromatic accent tokens (hold the prompt's exact
+         original hero-gradient colors; plumbing only, see FIDELITY.md #8). */
+      --accent-a: #03070A;
+      --accent-b: #AAC2CE;
+
+      --hero-heading-size: clamp(40px, 8.16vw, 120px);
+      --hero-pad-left: clamp(20px, 2.72vw, 40px);
+      --hero-pad-bottom: clamp(28px, 7.7vh, 64px);
+      --hero-block-width: clamp(300px, 54.6vw, 803px);
+      --hero-gap: clamp(8px, 1.1vw, 16px);
+
+      --hero-media-w: clamp(140px, 13.13vw, 193px);
+      --hero-media-aspect: 193 / 108;
+      --hero-logo-w: clamp(30px, 2.72vw, 40px);
+      --hero-logo-aspect: 40 / 14;
+      --hero-logo-left: calc(50% - var(--hero-media-w) / 2 - var(--hero-logo-w));
+      --hero-logo-top: calc(
+        50% - (var(--hero-media-w) / (var(--hero-media-aspect))) / 2 -
+        (var(--hero-logo-w) / (var(--hero-logo-aspect))) +
+        var(--hero-center-shift, 0px)
+      );
+      --hero-title-offset-x: clamp(40px, 6.6vw, 97px);
+      --hero-title-offset-y: clamp(28px, 6.5vh, 54px);
+      --hero-title-size: clamp(30px, 5.44vw, 80px);
+      --hero-title-width: clamp(220px, 34.4vw, 506px);
+      --hero-desc-width: clamp(220px, 25.65vw, 377px);
+      --hero-title-left: calc(50% + var(--hero-title-offset-x));
+      --hero-title-top: calc(50% + var(--hero-title-offset-y));
+      --hero-title-align: left;
+
+      --header-pad-x: clamp(20px, 2.72vw, 40px);
+      --header-pad-y: clamp(16px, 2.18vw, 32px);
+
+      --story-word-size: clamp(48px, 9vw, 168px);
+      --story-block-width: clamp(300px, 42vw, 560px);
+
+      --mega-wordmark-size: clamp(64px, 12.24vw, 180px);
+      --mega-wordmark-bottom: var(--header-pad-y);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #0c0d0f;
+      color: #f0f1f3;
+      font-family: var(--font-sans);
+      overscroll-behavior: none;
+    }
+
+    body { overflow-x: hidden; }
+
+    .hero-textblock { display: contents; }
+
+    @media (max-width: 640px) {
+      :root {
+        --hero-pad-left: 16px;
+        --header-pad-x: 16px;
+        --hero-title-align: center;
+        --hero-center-shift: -80px;
+        --hero-title-width: 100%;
+        --hero-desc-width: 100%;
+        --story-word-size: clamp(30px, 11vw, 60px);
+        --story-block-width: min(560px, calc(100vw - 32px));
+        --mega-wordmark-size: clamp(44px, 14vw, 60px);
+        --mega-wordmark-bottom: 116px;
+      }
+
+      .hero-textblock {
+        position: absolute;
+        top: calc(
+          50% + (var(--hero-media-w) / (var(--hero-media-aspect))) / 2 + 32px +
+          var(--hero-center-shift, 0px)
+        );
+        left: 16px;
+        right: 16px;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .hero-textblock > * {
+        position: static !important;
+        inset: auto !important;
+      }
+
+      .nav-links { display: none !important; }
+      .email-block { right: 16px; }
+      .email-input { width: auto !important; flex: 1; }
+    }
+
+    /* —— Header —— */
+    .site-header {
+      position: fixed;
+      inset: 0 0 auto 0;
+      z-index: 50;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      padding-left: var(--header-pad-x);
+      padding-right: var(--header-pad-x);
+      padding-top: var(--header-pad-y);
+      padding-bottom: 0;
+      pointer-events: none;
+    }
+
+    .site-header * { pointer-events: auto; }
+
+    .glass-pill {
+      border-radius: 8px;
+      background: rgba(240, 241, 243, 0.15);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .logo-pill { display: flex; align-items: center; padding: 4px 16px; }
+
+    .header-right { display: flex; align-items: center; gap: 16px; }
+    .header-nav-group { display: flex; align-items: center; }
+
+    .nav-links {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 16px;
+    }
+
+    @media (min-width: 640px) {
+      .nav-links { display: flex; }
+    }
+
+    .nav-text {
+      font-weight: 400;
+      font-size: 14px;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: #F0F1F3;
+      text-align: center;
+    }
+
+    .menu-btn {
+      display: flex;
+      align-items: center;
+      padding: 4px 16px;
+      border: none;
+      cursor: pointer;
+      background: rgba(240, 241, 243, 0.15);
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .login-btn {
+      display: flex;
+      align-items: center;
+      border: none;
+      cursor: pointer;
+      border-radius: 8px;
+      background: #F0F1F3;
+      padding: 9px 16px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .login-btn span {
+      font-size: 14px;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: #0C0D0F;
+    }
+
+    .menu-btn:focus-visible,
+    .login-btn:focus-visible,
+    .email-input:focus-visible,
+    .email-send:focus-visible {
+      outline: 2px solid var(--accent-b);
+      outline-offset: 2px;
+    }
+
+    /* —— Scroll stage / pin —— */
+    .scroll-stage {
+      position: relative;
+      height: 2200vh;
+    }
+
+    /* —— Hero —— */
+    .hero {
+      position: sticky;
+      top: 0;
+      width: 100%;
+      overflow: hidden;
+      height: 100dvh;
+      background: linear-gradient(180deg, var(--accent-a) 0%, var(--accent-b) 100%);
+      perspective: 1000px;
+    }
+
+    .media-wrap {
+      pointer-events: none;
+      position: absolute;
+      z-index: 20;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.4);
+      top: 0;
+      left: 0;
+      width: var(--hero-media-w);
+      aspect-ratio: var(--hero-media-aspect);
+      border-radius: 12px;
+      opacity: 0;
+      will-change: top, left, width, height, border-radius;
+    }
+
+    .media-wrap.mega { z-index: 5; }
+
+    .media-wrap video {
+      height: 100%;
+      width: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .corner-logo {
+      pointer-events: none;
+      position: absolute;
+      z-index: 2;
+      width: var(--hero-logo-w);
+      aspect-ratio: var(--hero-logo-aspect);
+      left: var(--hero-logo-left);
+      top: var(--hero-logo-top);
+      transform-origin: center;
+      will-change: transform, opacity, filter;
+    }
+
+    .corner-logo svg { height: 100%; width: 100%; display: block; }
+
+    .hero-title {
+      pointer-events: none;
+      position: absolute;
+      z-index: 2;
+      margin: 0;
+      font-family: var(--font-orbitron);
+      font-weight: 400;
+      text-transform: uppercase;
+      line-height: 100%;
+      letter-spacing: -0.04em;
+      color: #F0F1F3;
+      font-size: var(--hero-title-size);
+      left: var(--hero-title-left);
+      top: var(--hero-title-top);
+      width: var(--hero-title-width);
+      text-align: var(--hero-title-align);
+      transform-origin: center;
+      will-change: transform, opacity, filter;
+    }
+
+    .hero-desc {
+      pointer-events: none;
+      position: absolute;
+      z-index: 10;
+      margin: 0;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1.3;
+      letter-spacing: -0.02em;
+      color: #F0F1F3;
+      left: var(--hero-pad-left);
+      top: var(--hero-logo-top);
+      width: var(--hero-desc-width);
+      will-change: opacity;
+    }
+
+    .email-block {
+      position: absolute;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 13px;
+      left: var(--hero-pad-left);
+      bottom: var(--header-pad-y);
+      will-change: opacity;
+    }
+
+    .email-form { display: flex; flex-direction: row; align-items: center; }
+
+    .email-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+    .email-input {
+      height: 32px;
+      width: 185px;
+      border: none;
+      border-radius: 8px;
+      background: rgba(240, 241, 243, 0.15);
+      padding: 9px 16px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: #F0F1F3;
+      outline: none;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .email-input::placeholder { color: rgba(240, 241, 243, 0.7); }
+
+    .email-send {
+      display: flex;
+      height: 32px;
+      align-items: center;
+      border: none;
+      border-radius: 8px;
+      background: #F0F1F3;
+      padding: 9px 16px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: #0C0D0F;
+      cursor: pointer;
+      transition: transform 150ms ease-out;
+    }
+
+    .email-send:active { transform: scale(0.97); }
+    .email-send:disabled { cursor: default; opacity: 0.85; }
+
+    .email-caption {
+      margin: 0;
+      max-width: 628px;
+      font-size: 14px;
+      line-height: 1.3;
+      letter-spacing: -0.02em;
+      color: rgba(240, 241, 243, 0.8);
+    }
+
+    .mega-wordmark {
+      pointer-events: none;
+      position: absolute;
+      z-index: 10;
+      margin: 0;
+      font-family: var(--font-orbitron);
+      font-weight: 400;
+      text-transform: uppercase;
+      line-height: 0.8;
+      letter-spacing: -0.04em;
+      color: #F0F1F3;
+      font-size: var(--mega-wordmark-size);
+      right: var(--hero-pad-left);
+      bottom: var(--mega-wordmark-bottom);
+      text-align: right;
+      transform-origin: 100% 100%;
+      will-change: transform, opacity, filter;
+    }
+
+    .feature-caption {
+      pointer-events: none;
+      position: absolute;
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 19px;
+      opacity: 0;
+      left: var(--hero-pad-left);
+      bottom: 40px;
+      width: min(377px, calc(100% - 2 * var(--hero-pad-left)));
+      will-change: transform, opacity;
+    }
+
+    .feature-dot {
+      height: 16px;
+      width: 16px;
+      border-radius: 9999px;
+      background: #FFFFFF;
+    }
+
+    .feature-caption p {
+      margin: 0;
+      width: 100%;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1.3;
+      letter-spacing: -0.02em;
+      color: #FFFFFF;
+    }
+
+    .video-slot {
+      pointer-events: none;
+      position: absolute;
+      visibility: hidden;
+      width: var(--hero-media-w);
+      aspect-ratio: var(--hero-media-aspect);
+      left: calc(50% - var(--hero-media-w) / 2);
+      top: calc(50% - (var(--hero-media-w) / (var(--hero-media-aspect))) / 2 + var(--hero-center-shift, 0px));
+    }
+
+    .story-scrim {
+      pointer-events: none;
+      position: absolute;
+      inset: 0;
+      z-index: 25;
+      opacity: 0;
+      background: linear-gradient(
+        180deg,
+        rgba(12, 13, 15, 0.72) 0%,
+        rgba(12, 13, 15, 0.15) 32%,
+        rgba(12, 13, 15, 0.15) 62%,
+        rgba(12, 13, 15, 0.78) 100%
+      );
+    }
+
+    .story-beat {
+      pointer-events: none;
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      perspective: 1000px;
+    }
+
+    .story-word {
+      font-family: var(--font-orbitron);
+      font-weight: 400;
+      text-align: center;
+      text-transform: uppercase;
+      line-height: 0.9;
+      letter-spacing: -0.04em;
+      color: #F0F1F3;
+      font-size: var(--story-word-size);
+      opacity: 0;
+      will-change: transform, opacity, filter;
+    }
+
+    .viz {
+      pointer-events: none;
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      will-change: transform, opacity;
+    }
+
+    .viz svg {
+      height: auto;
+      width: var(--story-block-width);
+      display: block;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      /* The scroll-scrubbed hero timeline itself is neutralized in JS (see
+         the `reduced` flag in the inline <script>): no scale, no blur, no
+         3D translateZ flyby, no back-ease overshoot, checkpoints and the
+         route-draw fade in place instead of animating. This block covers
+         the one remaining CSS-driven transition. */
+      .email-send {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="logo-pill glass-pill">
+      <svg width="98" height="24" viewBox="0 0 98 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Auren">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M27 5C34.5425 5 38.3141 4.99987 40.6572 5.81997C43.0004 6.64007 43 7.96014 43 10.6V13.4C43 16.0399 43.0004 17.3599 40.6572 18.18C38.3141 19.0001 34.5425 19 27 19H19C11.4575 19 7.68592 19.0001 5.34277 18.18C2.99963 17.3599 3 16.0399 3 13.4V10.6C3 7.96014 2.99963 6.64007 5.34277 5.81997C7.68592 4.99987 11.4575 5 19 5H27ZM23 9.9C19.6863 9.9 17 10.8402 17 12C17 13.1598 19.6863 14.1 23 14.1C26.3137 14.1 29 13.1598 29 12C29 10.8402 26.3137 9.9 23 9.9Z" fill="#F0F1F3"/>
+        <path d="M50 17.04V8.85C50 8.50467 50.084 8.18733 50.252 7.898C50.42 7.60867 50.6487 7.38 50.938 7.212C51.2273 7.044 51.5447 6.96 51.89 6.96H58.19C58.5353 6.96 58.848 7.044 59.128 7.212C59.4173 7.38 59.646 7.60867 59.814 7.898C59.9913 8.18733 60.08 8.50467 60.08 8.85V17.04H58.386V13.582H51.68V17.04H50ZM51.68 11.902H58.386V8.906C58.386 8.83133 58.358 8.77067 58.302 8.724C58.2553 8.67733 58.1993 8.654 58.134 8.654H51.932C51.8667 8.654 51.806 8.67733 51.75 8.724C51.7033 8.77067 51.68 8.83133 51.68 8.906V11.902Z" fill="#F0F1F3"/>
+        <path d="M62.9491 17.04C62.6038 17.04 62.2865 16.956 61.9971 16.788C61.7171 16.6107 61.4931 16.382 61.3251 16.102C61.1571 15.822 61.0731 15.5093 61.0731 15.164V8.92H62.7391V15.108C62.7391 15.1827 62.7625 15.248 62.8091 15.304C62.8651 15.3507 62.9305 15.374 63.0051 15.374H67.3871C67.4618 15.374 67.5225 15.3507 67.5691 15.304C67.6251 15.248 67.6531 15.1827 67.6531 15.108V8.92H69.3191V15.164C69.3191 15.5093 69.2351 15.822 69.0671 16.102C68.8991 16.382 68.6751 16.6107 68.3951 16.788C68.1151 16.956 67.7978 17.04 67.4431 17.04H62.9491Z" fill="#F0F1F3"/>
+        <path d="M70.2335 17.04V10.796C70.2335 10.4507 70.3175 10.138 70.4855 9.858C70.6628 9.578 70.8915 9.354 71.1715 9.186C71.4608 9.00867 71.7735 8.92 72.1095 8.92H76.6315V10.586H72.1655C72.0908 10.586 72.0255 10.614 71.9695 10.67C71.9228 10.7167 71.8995 10.7773 71.8995 10.852V17.04H70.2335Z" fill="#F0F1F3"/>
+        <path d="M78.8636 17.04C78.5183 17.04 78.2056 16.956 77.9256 16.788C77.6456 16.6107 77.417 16.382 77.2396 16.102C77.0716 15.822 76.9876 15.5093 76.9876 15.164V10.796C76.9876 10.4507 77.0716 10.138 77.2396 9.858C77.417 9.578 77.6456 9.354 77.9256 9.186C78.2056 9.00867 78.5183 8.92 78.8636 8.92H83.3576C83.7123 8.92 84.0296 9.00867 84.3096 9.186C84.5896 9.354 84.8136 9.578 84.9816 9.858C85.1496 10.138 85.2336 10.4507 85.2336 10.796V13.82H78.6536V15.108C78.6536 15.1827 78.677 15.248 78.7236 15.304C78.7796 15.3507 78.845 15.374 78.9196 15.374H85.2336V17.04H78.8636ZM78.6536 12.294H83.5676V10.852C83.5676 10.7773 83.5396 10.7167 83.4836 10.67C83.437 10.614 83.3763 10.586 83.3016 10.586H78.9196C78.845 10.586 78.7796 10.614 78.7236 10.67C78.677 10.7167 78.6536 10.7773 78.6536 10.852V12.294Z" fill="#F0F1F3"/>
+        <path d="M86.163 17.04V8.92H92.547C92.883 8.92 93.191 9.00867 93.471 9.186C93.7603 9.354 93.989 9.578 94.157 9.858C94.325 10.138 94.409 10.4507 94.409 10.796V17.04H92.743V10.852C92.743 10.7773 92.715 10.7167 92.659 10.67C92.6123 10.614 92.5563 10.586 92.491 10.586H88.095C88.0296 10.586 87.969 10.614 87.913 10.67C87.857 10.7167 87.829 10.7773 87.829 10.852V17.04H86.163Z" fill="#F0F1F3"/>
+      </svg>
+    </div>
+
+    <div class="header-right">
+      <div class="header-nav-group">
+        <nav class="nav-links glass-pill" aria-label="Site sections">
+          <span class="nav-text">Service</span>
+          <span class="nav-text">About</span>
+          <span class="nav-text">Contact</span>
+        </nav>
+        <button type="button" class="menu-btn" aria-label="Open menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M7.5 9H21.75V10.5H7.5V9Z" fill="#F0F1F3"/>
+            <path d="M2.25 13.5H21.75V15H2.25V13.5Z" fill="#F0F1F3"/>
+          </svg>
+        </button>
+      </div>
+      <button type="button" class="login-btn"><span>Log In</span></button>
+    </div>
+  </header>
+
+  <div class="scroll-stage" id="scroll-stage">
+  <section class="hero" id="hero">
+    <!-- Mega video -->
+    <div class="media-wrap mega" id="mega-wrap">
+      <video
+        id="mega-video"
+        src="assets/mega-loop.mp4"
+        muted
+        playsinline
+        preload="auto"
+      ></video>
+    </div>
+
+    <div class="corner-logo" id="corner-logo" aria-hidden="true">
+      <svg viewBox="0 0 40 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M24 0C31.5425 0 35.3141 -0.000130236 37.6572 0.819971C40.0004 1.64007 40 2.96014 40 5.6V8.4C40 11.0399 40.0004 12.3599 37.6572 13.18C35.3141 14.0001 31.5425 14 24 14H16C8.45753 14 4.68592 14.0001 2.34277 13.18C-0.000371695 12.3599 0 11.0399 0 8.4V5.6C0 2.96014 -0.000371933 1.64007 2.34277 0.819971C4.68592 -0.000130117 8.45753 0 16 0H24ZM20 4.9C16.6863 4.9 14 5.8402 14 7C14 8.1598 16.6863 9.1 20 9.1C23.3137 9.1 26 8.1598 26 7C26 5.8402 23.3137 4.9 20 4.9Z" fill="#F0F1F3"/>
+      </svg>
+    </div>
+
+    <div class="hero-textblock">
+      <h1 class="hero-title" id="hero-title">Hands<br />Off.</h1>
+      <p class="hero-desc" id="hero-desc">
+        A private AI driver that learns the way you move — your routes, your routine, your time of day. It settles into the car you already drive and quietly takes the wheel, so less of every trip depends on you.
+      </p>
+    </div>
+
+    <div class="email-block" id="email-block">
+      <form class="email-form" id="waitlist-form">
+        <label class="email-label" for="waitlist-email">Email</label>
+        <input class="email-input" id="waitlist-email" type="email" placeholder="Email" autocomplete="email" required />
+        <button class="email-send" type="submit">Send</button>
+      </form>
+      <p class="email-caption" id="email-caption">
+        Join the waitlist and be first to let your car do the driving. No spam, just the road ahead.
+      </p>
+      <div class="sr-only" role="status" aria-live="polite" id="waitlist-status"></div>
+    </div>
+
+    <h1 class="mega-wordmark" id="wordmark" aria-label="Auren">Auren</h1>
+
+    <div class="feature-caption" id="caption1">
+      <span class="feature-dot" aria-hidden="true"></span>
+      <p>Just speak. Ask for a warmer cabin, a quieter route, a stop for coffee — the car listens and takes care of the rest while you ride.</p>
+    </div>
+    <div class="feature-caption" id="caption2">
+      <span class="feature-dot" aria-hidden="true"></span>
+      <p>Drop a few points on the map and it strings them together — every turn, every stop, driven in order while you sit back and watch.</p>
+    </div>
+
+    <div class="video-slot" id="video-slot" aria-hidden="true"></div>
+
+    <!-- Hero video -->
+    <div class="media-wrap" id="hero-wrap">
+      <video
+        id="hero-video"
+        src="assets/hero-loop.mp4"
+        muted
+        playsinline
+        preload="auto"
+      ></video>
+    </div>
+
+    <div class="story-scrim" data-story="scrim" aria-hidden="true"></div>
+
+    <div class="story-beat" data-story="beat1">
+      <span class="story-word" data-story="beat1-word">Effortless.</span>
+    </div>
+    <div class="story-beat" data-story="beat2">
+      <span class="story-word" data-story="beat2-word">Anywhere.</span>
+    </div>
+
+    <div class="viz" id="waveform" data-viz="waveform" aria-hidden="true">
+      <svg id="waveform-svg" viewBox="0 0 600 200" fill="none"></svg>
+    </div>
+
+    <div class="viz" id="route" data-viz="route" aria-hidden="true">
+      <svg viewBox="0 0 620 240" fill="none">
+        <path
+          data-route-path
+          d="M 40 170 C 160 170 210 84 310 84 C 410 84 460 170 580 170"
+          stroke="#F0F1F3"
+          stroke-width="8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <g data-checkpoint style="opacity:0">
+          <circle cx="40" cy="170" r="26" fill="#F0F1F3"/>
+          <path d="M 30 171 L 37 178 L 51 163" stroke="#0C0D0F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </g>
+        <g data-checkpoint style="opacity:0">
+          <circle cx="310" cy="84" r="26" fill="#F0F1F3"/>
+          <path d="M 300 85 L 307 92 L 321 77" stroke="#0C0D0F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </g>
+        <g data-checkpoint style="opacity:0">
+          <circle cx="580" cy="170" r="26" fill="#F0F1F3"/>
+          <path d="M 570 171 L 577 178 L 591 163" stroke="#0C0D0F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </g>
+      </svg>
+    </div>
+  </section>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      // Vanilla port of the source's GSAP + ScrollTrigger scroll-scrubbed
+      // hero timeline. The pin is done with `position: sticky` on `.hero`
+      // inside a `.scroll-stage` spacer (2200vh, matching the source's
+      // MEGA_VH + EXPAND_VH + CONTENT_VH scroll runway) instead of
+      // ScrollTrigger's pin-spacer. All easing curves, durations, offsets,
+      // and constants below are ported exactly from the source timeline.
+
+      var reducedMotionMQ = window.matchMedia("(prefers-reduced-motion: reduce)");
+      var reduced = reducedMotionMQ.matches;
+
+      // ---- timeline constants (verbatim) ----
+      var MEGA_VH = 1000;
+      var EXPAND_VH = 160;
+      var CONTENT_VH = 1040;
+      var MAX_BLUR = 24;
+      var HERO_INSET = 0;
+      var HERO_RADIUS = 16;
+
+      var total = MEGA_VH + EXPAND_VH + CONTENT_VH; // 2200
+      var megaFraction = MEGA_VH / total;
+      var heroSpan = 1 - megaFraction;
+      var expandFraction = EXPAND_VH / (EXPAND_VH + CONTENT_VH);
+      var B = 1 - expandFraction;
+      var phaseAStart = megaFraction;
+      var expandDur = expandFraction * heroSpan;
+      var phaseBStart = megaFraction + expandFraction * heroSpan;
+      var heroBDur = B * heroSpan;
+      function at(local_) { return megaFraction + (expandFraction + local_ * B) * heroSpan; }
+      function dur(span) { return span * B * heroSpan; }
+
+      var M_PLAY_END = 0.5;
+      var M_COLLAPSE_END = 0.7;
+      var M_AUREN_END = 0.66;
+      var M_LOGO_IN = 0.72;
+      var M_TITLE_IN = 0.75;
+      var M_ASSEMBLE_END = 0.9;
+      function mAt(l) { return l * megaFraction; }
+      function mDur(s) { return s * megaFraction; }
+
+      // ---- GSAP-equivalent easing ----
+      function clamp01(t) { return t < 0 ? 0 : t > 1 ? 1 : t; }
+      function p1in(t) { return t * t; }
+      function p1out(t) { return 1 - (1 - t) * (1 - t); }
+      function p2in(t) { return t * t * t; }
+      function p2out(t) { return 1 - Math.pow(1 - t, 3); }
+      function p2inOut(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+      function backOut(t, s) {
+        s = s === undefined ? 1.70158 : s;
+        var t1 = t - 1;
+        return 1 + (s + 1) * t1 * t1 * t1 + s * t1 * t1;
+      }
+      function local(p, start, spanDur) {
+        if (spanDur <= 0) return p >= start ? 1 : 0;
+        return clamp01((p - start) / spanDur);
+      }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function setFilter(el, px) {
+        el.style.filter = px > 0.01 ? "blur(" + px.toFixed(2) + "px)" : "none";
+      }
+
+      // ---- DOM refs ----
+      var stage = document.getElementById("scroll-stage");
+      var section = document.getElementById("hero");
+      var media = document.getElementById("hero-wrap");
+      var megaMedia = document.getElementById("mega-wrap");
+      var video = document.getElementById("hero-video");
+      var megaVideo = document.getElementById("mega-video");
+      var title = document.getElementById("hero-title");
+      var cornerLogo = document.getElementById("corner-logo");
+      var description = document.getElementById("hero-desc");
+      var emailBlock = document.getElementById("email-block");
+      var caption1 = document.getElementById("caption1");
+      var caption2 = document.getElementById("caption2");
+      var waveform = document.getElementById("waveform");
+      var route = document.getElementById("route");
+      var slot = document.getElementById("video-slot");
+      var wordmark = document.getElementById("wordmark");
+      var scrim = section.querySelector('[data-story="scrim"]');
+      var word1El = section.querySelector('[data-story="beat1-word"]');
+      var word2El = section.querySelector('[data-story="beat2-word"]');
+      var routePath = section.querySelector("[data-route-path]");
+      var checkpoints = Array.prototype.slice.call(section.querySelectorAll("[data-checkpoint]"));
+
+      // ---- waveform bars (ported verbatim) ----
+      var BAR_COUNT = 27;
+      var VIEW_W = 600;
+      var VIEW_H = 200;
+      var BAR_W = 8;
+      var GAP = (VIEW_W - BAR_COUNT * BAR_W) / (BAR_COUNT - 1);
+      var MAX_BAR_H = VIEW_H * 0.9;
+      var waveSvg = document.getElementById("waveform-svg");
+      var bars = [];
+      for (var i = 0; i < BAR_COUNT; i++) {
+        var tFrac = i / (BAR_COUNT - 1);
+        var h = 0.18 + 0.82 * Math.sin(tFrac * Math.PI);
+        var barH = h * MAX_BAR_H;
+        var x = i * (BAR_W + GAP);
+        var y = (VIEW_H - barH) / 2;
+        var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute("x", String(x));
+        rect.setAttribute("y", String(y));
+        rect.setAttribute("width", String(BAR_W));
+        rect.setAttribute("height", String(barH));
+        rect.setAttribute("rx", String(BAR_W / 2));
+        rect.setAttribute("fill", "#F0F1F3");
+        rect.style.transformBox = "fill-box";
+        rect.style.transformOrigin = "center";
+        rect.style.transform = "scaleY(0)";
+        waveSvg.appendChild(rect);
+        bars.push(rect);
+      }
+
+      var routeLen = routePath ? routePath.getTotalLength() : 0;
+      if (routePath) {
+        routePath.style.strokeDasharray = String(routeLen);
+        routePath.style.strokeDashoffset = String(routeLen);
+      }
+
+      // ---- rect helpers (recomputed live every frame, no caching, so the
+      // layout stays correct across resize without a manual refresh step) ----
+      function startRect() {
+        var s = section.getBoundingClientRect();
+        var r = slot.getBoundingClientRect();
+        return { top: r.top - s.top, left: r.left - s.left, width: r.width, height: r.height };
+      }
+      function endRect() {
+        var s = section.getBoundingClientRect();
+        var inset = HERO_INSET;
+        return { top: inset, left: inset, width: s.width - inset * 2, height: s.height - inset * 2 };
+      }
+
+      // ---- video hold-first-frame / warm-decoder / seek-gated scrubber ----
+      function holdFirstFrame(v) {
+        return function () {
+          try {
+            v.pause();
+            if (v.currentTime < 0.001) v.currentTime = 0.001;
+          } catch (e) {}
+        };
+      }
+      var showFirstFrame = holdFirstFrame(video);
+      var showMegaFirstFrame = holdFirstFrame(megaVideo);
+      video.addEventListener("loadedmetadata", showFirstFrame);
+      megaVideo.addEventListener("loadedmetadata", showMegaFirstFrame);
+      if (video.readyState >= 1) showFirstFrame();
+      if (megaVideo.readyState >= 1) showMegaFirstFrame();
+
+      function warmDecoder(v) {
+        var done = false;
+        function run() {
+          if (done || !v.duration || isNaN(v.duration)) return;
+          done = true;
+          v.removeEventListener("canplay", run);
+          function restore() {
+            v.removeEventListener("seeked", restore);
+            try {
+              if (v.currentTime > 0.05) v.currentTime = 0.001;
+            } catch (e) {}
+          }
+          v.addEventListener("seeked", restore);
+          try {
+            v.currentTime = Math.min(0.12, v.duration * 0.03);
+          } catch (e) {
+            done = false;
+          }
+        }
+        v.addEventListener("canplay", run);
+        if (v.readyState >= 3) run();
+      }
+      warmDecoder(video);
+      warmDecoder(megaVideo);
+
+      function makeScrubber(v) {
+        var pending = null;
+        function applyNext() {
+          if (pending === null) return;
+          var t = pending;
+          pending = null;
+          if (Math.abs(v.currentTime - t) < 0.01) return;
+          try { v.currentTime = t; } catch (e) {}
+        }
+        v.addEventListener("seeked", applyNext);
+        return {
+          scrub: function (frac) {
+            var d = v.duration;
+            if (!d || isNaN(d) || v.readyState < 1) return;
+            if (!v.paused) v.pause();
+            var target = Math.min(d, Math.max(0, frac * d));
+            if (!v.seeking && Math.abs(v.currentTime - target) < 0.03) return;
+            pending = target;
+            if (!v.seeking) applyNext();
+          },
+        };
+      }
+      var heroScrubber = makeScrubber(video);
+      var megaScrubber = makeScrubber(megaVideo);
+
+      // ---- assembled title/corner-logo: emerge during the mega phase,
+      // then fade back out over hero Phase A (sequential, never overlapping) ----
+      function renderAssembled(el, mergeStartLocal, mergeEndLocal) {
+        var p = window.__auren_p || 0;
+        if (p < phaseAStart) {
+          var s = mAt(mergeStartLocal);
+          var d = mDur(mergeEndLocal - mergeStartLocal);
+          var t = local(p, s, d);
+          var eT = reduced ? p1out(t) : backOut(t, 1.2);
+          el.style.opacity = String(eT);
+          el.style.transform = "scale(" + (reduced ? 1 : lerp(0.4, 1, eT)) + ")";
+          setFilter(el, reduced ? 0 : lerp(12, 0, p2out(t)));
+        } else {
+          var fT = local(p, phaseAStart, expandDur);
+          el.style.opacity = String(1 - fT);
+          el.style.transform = "scale(" + (reduced ? 1 : lerp(1, 0.82, fT)) + ")";
+          setFilter(el, reduced ? 0 : lerp(0, MAX_BLUR, fT));
+        }
+      }
+
+      function renderFadeOutOnly(el, p) {
+        if (p < phaseAStart) {
+          el.style.opacity = "1";
+        } else {
+          el.style.opacity = String(1 - local(p, phaseAStart, expandDur));
+        }
+      }
+
+      function flyby(el, p, enterStart, enterD, exitD) {
+        var enterAbsStart = at(enterStart);
+        var exitAbsStart = at(enterStart + enterD);
+        var opacity, scale, z, blurPx;
+        if (p < enterAbsStart) {
+          opacity = 0; scale = reduced ? 1 : 0.9; z = reduced ? 0 : -120; blurPx = reduced ? 0 : 12;
+        } else if (p < exitAbsStart) {
+          var tin = p1out(local(p, enterAbsStart, dur(enterD)));
+          opacity = tin; scale = reduced ? 1 : lerp(0.9, 1, tin); z = reduced ? 0 : lerp(-120, 0, tin); blurPx = reduced ? 0 : lerp(12, 0, tin);
+        } else {
+          var tout = p1in(local(p, exitAbsStart, dur(exitD)));
+          opacity = 1 - tout; scale = 1; z = reduced ? 0 : lerp(0, 200, tout); blurPx = reduced ? 0 : lerp(0, 12, tout);
+        }
+        el.style.opacity = String(opacity);
+        el.style.transform = reduced ? "none" : "translateZ(" + z.toFixed(2) + "px) scale(" + scale.toFixed(4) + ")";
+        setFilter(el, blurPx);
+      }
+
+      function captionState(el, p, inStart, inSpan, outStart, outSpan) {
+        var tin = p1out(local(p, at(inStart), dur(inSpan)));
+        if (outStart === null) {
+          el.style.opacity = String(tin);
+          el.style.transform = reduced ? "none" : "translateY(" + lerp(20, 0, tin).toFixed(2) + "px)";
+          return;
+        }
+        var outAbsStart = at(outStart);
+        if (p < outAbsStart) {
+          el.style.opacity = String(tin);
+          el.style.transform = reduced ? "none" : "translateY(" + lerp(20, 0, tin).toFixed(2) + "px)";
+        } else {
+          var tout = p1in(local(p, outAbsStart, dur(outSpan)));
+          el.style.opacity = String(1 - tout);
+          el.style.transform = reduced ? "none" : "translateY(" + lerp(0, 20, tout).toFixed(2) + "px)";
+        }
+      }
+
+      function render(p) {
+        p = clamp01(p);
+        window.__auren_p = p;
+        var eR = endRect();
+        var sR = startRect();
+
+        // —— MEGA: play + hold fullscreen + collapse to the video-slot ——
+        megaScrubber.scrub(local(p, 0, mDur(M_PLAY_END)));
+        var collapseStart = mAt(M_PLAY_END);
+        var collapseT = p2inOut(local(p, collapseStart, mDur(M_COLLAPSE_END - M_PLAY_END)));
+        megaMedia.style.top = lerp(eR.top, sR.top, collapseT) + "px";
+        megaMedia.style.left = lerp(eR.left, sR.left, collapseT) + "px";
+        megaMedia.style.width = lerp(eR.width, sR.width, collapseT) + "px";
+        megaMedia.style.height = lerp(eR.height, sR.height, collapseT) + "px";
+        megaMedia.style.borderRadius = lerp(HERO_RADIUS, 12, collapseT) + "px";
+        megaMedia.style.opacity = "1";
+
+        // —— wordmark fade/blur out ——
+        var wmT = p2in(local(p, collapseStart, mDur(M_AUREN_END - M_PLAY_END)));
+        wordmark.style.opacity = String(1 - wmT);
+        wordmark.style.transform = "scale(" + (reduced ? 1 : lerp(1, 0.55, wmT)) + ")";
+        setFilter(wordmark, reduced ? 0 : lerp(0, MAX_BLUR, wmT));
+
+        // —— corner logo + title: emerge, then fade with hero Phase A ——
+        renderAssembled(cornerLogo, M_LOGO_IN, M_ASSEMBLE_END - 0.03);
+        renderAssembled(title, M_TITLE_IN, M_ASSEMBLE_END);
+        renderFadeOutOnly(description, p);
+        renderFadeOutOnly(emailBlock, p);
+
+        // —— HERO Phase A: expand from the slot to fullscreen ——
+        if (p >= phaseAStart) {
+          var phaseAT = local(p, phaseAStart, expandDur);
+          media.style.top = lerp(sR.top, eR.top, phaseAT) + "px";
+          media.style.left = lerp(sR.left, eR.left, phaseAT) + "px";
+          media.style.width = lerp(sR.width, eR.width, phaseAT) + "px";
+          media.style.height = lerp(sR.height, eR.height, phaseAT) + "px";
+          media.style.borderRadius = lerp(12, HERO_RADIUS, phaseAT) + "px";
+          media.style.opacity = "1";
+        } else {
+          media.style.opacity = "0";
+        }
+
+        // —— HERO Phase B: scrub-play, story beats, waveform, route ——
+        heroScrubber.scrub(local(p, phaseBStart, heroBDur));
+        scrim.style.opacity = String(p1out(local(p, at(0), dur(0.06))));
+
+        flyby(word1El, p, 0.02, 0.1, 0.1);
+        flyby(word2El, p, 0.52, 0.1, 0.1);
+
+        var waveP = local(p, at(0.16), dur(0.28));
+        var EDGE = 0.22;
+        var envelope = waveP < EDGE ? waveP / EDGE : waveP > 1 - EDGE ? (1 - waveP) / EDGE : 1;
+        waveform.style.opacity = String(Math.min(1, envelope * 1.6));
+        for (var bi = 0; bi < bars.length; bi++) {
+          var dance = reduced ? 1 : 0.5 + 0.5 * Math.abs(Math.sin(waveP * Math.PI * 3 + bi * 0.5));
+          bars[bi].style.transform = "scaleY(" + (envelope * dance).toFixed(4) + ")";
+        }
+
+        captionState(caption1, p, 0.2, 0.08, 0.38, 0.08);
+        captionState(caption2, p, 0.72, 0.08, null, null);
+
+        route.style.opacity = String(p1out(local(p, at(0.68), dur(0.08))));
+        if (routePath) {
+          var drawT = local(p, at(0.7), dur(0.28));
+          routePath.style.strokeDashoffset = reduced ? "0" : String(routeLen * (1 - drawT));
+        }
+        var cpBase = at(0.75);
+        var cpStagger = dur(0.1);
+        var cpDur = dur(0.05);
+        checkpoints.forEach(function (cp, idx) {
+          var rawT = local(p, cpBase + idx * cpStagger, cpDur);
+          var eT = reduced ? rawT : backOut(rawT, 1.7);
+          cp.style.opacity = String(eT);
+          cp.style.transform = "scale(" + (reduced ? 1 : eT) + ")";
+        });
+      }
+
+      // ---- scroll wiring ----
+      function computeProgress() {
+        var rect = stage.getBoundingClientRect();
+        var scrollable = stage.offsetHeight - window.innerHeight;
+        if (scrollable <= 0) return 1;
+        return clamp01(-rect.top / scrollable);
+      }
+      var ticking = false;
+      function onScroll() {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(function () {
+          render(computeProgress());
+          ticking = false;
+        });
+      }
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onScroll);
+      if (reducedMotionMQ.addEventListener) {
+        reducedMotionMQ.addEventListener("change", function (e) {
+          reduced = e.matches;
+          render(computeProgress());
+        });
+      }
+      render(computeProgress());
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { render(computeProgress()); });
+      }
+
+      // ---- waitlist form: intercept submit, no live endpoint, inline
+      // success state (additive accessibility per SPEC-BATCH2 §4) ----
+      var form = document.getElementById("waitlist-form");
+      var emailInput = document.getElementById("waitlist-email");
+      var emailCaption = document.getElementById("email-caption");
+      var waitlistStatus = document.getElementById("waitlist-status");
+      var sendBtn = form.querySelector(".email-send");
+      form.addEventListener("submit", function (evt) {
+        evt.preventDefault();
+        if (!emailInput.checkValidity()) {
+          emailInput.reportValidity();
+          return;
+        }
+        sendBtn.disabled = true;
+        sendBtn.textContent = "Added";
+        emailCaption.textContent = "You're on the list — we'll be in touch before Auren opens up.";
+        waitlistStatus.textContent = "Thanks — you have been added to the Auren waitlist.";
+        emailInput.value = "";
+        emailInput.disabled = true;
+      });
+    })();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Meridian Circuit — Driver Profile</title>
+<meta name="description" content="Racing driver profile page for Meridian Circuit: fictional driver Mateo Rourke of Solstice Racing, built as a self-contained bottom-anchored photo hero with blur-mask fade, season stats and a roster filter." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #111111;
+    --hero-scrim: rgba(15, 15, 15, 0.6);
+    --fg: #ffffff;
+    --fg-muted: rgba(255, 255, 255, 0.68);
+    --fg-faint: rgba(255, 255, 255, 0.4);
+    --accent: #EDB40B;
+    --accent-deep: #a8720a;
+    --surface: #1a1a1a;
+    --surface-2: rgba(255, 255, 255, 0.06);
+    --border: rgba(255, 255, 255, 0.16);
+    --flag-a: #1b2a4a;
+    --flag-b: #EDB40B;
+    --flag-c: #b3242b;
+    --wash-crimson: rgba(179, 36, 43, 0.35);
+    --wash-gold: rgba(237, 180, 11, 0.12);
+
+    /* Hero photo mechanic — mobile/base values ported verbatim from the source spec */
+    --photo-width: 140%;
+    --photo-bottom: -20px;
+    --container-top: 100px;
+    --blur-height: 50%;
+    --blur-amount: 6px;
+    --mask-start: 0%;
+    --mask-end: 50%;
+    --photo-shift: -50%;
+    --photo-left: 50%;
+
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    overflow-x: hidden;
+    min-height: 100svh;
+  }
+
+  h1, h2, h3 {
+    font-family: 'Barlow Condensed', 'Inter', sans-serif;
+    font-weight: 700;
+  }
+
+  a { color: inherit; }
+
+  img { display: block; max-width: 100%; }
+
+  button { font: inherit; color: inherit; }
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  /* ---------- Top navigation ---------- */
+  .site-nav {
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 22px clamp(20px, 4vw, 56px);
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    font-family: 'Barlow Condensed', sans-serif;
+    letter-spacing: 0.02em;
+  }
+
+  .brand-mark { display: block; }
+
+  .brand-word {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+  }
+
+  .brand-season {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--bg);
+    background: var(--accent);
+    padding: 2px 6px;
+    border-radius: 3px;
+    line-height: 1.4;
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: clamp(18px, 3vw, 36px);
+    list-style: none;
+  }
+
+  .nav-links a {
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--fg-muted);
+    position: relative;
+    padding: 4px 2px;
+    transition: color 200ms var(--ease-out);
+  }
+
+  .nav-links a::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 100%;
+    bottom: -2px;
+    height: 1px;
+    background: var(--accent);
+    transition: right 200ms var(--ease-out);
+  }
+
+  .nav-links a:hover,
+  .nav-links a:focus-visible {
+    color: var(--fg);
+  }
+
+  .nav-links a:hover::after,
+  .nav-links a:focus-visible::after {
+    right: 0;
+  }
+
+  @media (max-width: 640px) {
+    .nav-links { display: none; }
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    border-radius: 999px;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
+  }
+
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+    color: #1a1300;
+    box-shadow: 0 8px 20px -8px rgba(237, 180, 11, 0.6);
+  }
+
+  .btn-ghost {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--fg);
+    border: 1px solid var(--border);
+  }
+
+  .icon { width: 15px; height: 15px; flex: none; }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative;
+    width: 100%;
+    height: 100svh;
+    min-height: 560px;
+    overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 78% 8%, var(--wash-crimson), transparent 55%),
+      radial-gradient(140% 100% at 15% 100%, var(--wash-gold), transparent 60%),
+      var(--bg);
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--hero-scrim);
+    z-index: 1;
+  }
+
+  .ghost-number {
+    position: absolute;
+    top: 26%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800;
+    font-size: min(40vw, 44svh);
+    line-height: 1;
+    color: transparent;
+    -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.08);
+    letter-spacing: -0.04em;
+    z-index: 1;
+    pointer-events: none;
+    user-select: none;
+    animation: ghost-breathe 9s ease-in-out infinite;
+  }
+
+  @media (min-width: 900px) {
+    .ghost-number { top: 6%; font-size: min(30vw, 62svh); left: 40%; }
+  }
+
+  /* Photo container — mechanic ported verbatim from the source mobile spec */
+  .photo-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: var(--container-top);
+    overflow: hidden;
+    z-index: 2;
+  }
+
+  .photo-container img {
+    position: absolute;
+    bottom: var(--photo-bottom);
+    left: var(--photo-left);
+    transform: translateX(var(--photo-shift));
+    width: var(--photo-width);
+    max-width: none;
+    height: auto;
+  }
+
+  .blur-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--blur-height);
+    pointer-events: none;
+    backdrop-filter: blur(var(--blur-amount));
+    -webkit-backdrop-filter: blur(var(--blur-amount));
+    -webkit-mask-image: linear-gradient(to bottom, transparent var(--mask-start), black var(--mask-end));
+    mask-image: linear-gradient(to bottom, transparent var(--mask-start), black var(--mask-end));
+    z-index: 3;
+  }
+
+  @media (min-width: 900px) {
+    :root {
+      --photo-width: 46%;
+      --photo-bottom: -20px;
+      --container-top: 118px;
+      --photo-left: 64%;
+    }
+  }
+
+  /* ---------- Location / circuit heading ---------- */
+  .location-block {
+    position: absolute;
+    left: clamp(20px, 4vw, 56px);
+    top: clamp(96px, 16svh, 168px);
+    z-index: 10;
+    max-width: 60vw;
+  }
+
+  .location-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+    margin-bottom: 10px;
+  }
+
+  .flag-icon { width: 20px; height: 14px; border-radius: 2px; overflow: hidden; flex: none; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); }
+
+  .circuit-name {
+    font-size: clamp(28px, 5vw, 46px);
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+  }
+
+  /* ---------- Circuit map ---------- */
+  .circuit-map {
+    position: absolute;
+    right: clamp(16px, 4vw, 56px);
+    top: clamp(96px, 15svh, 150px);
+    z-index: 10;
+    width: clamp(120px, 15vw, 190px);
+    opacity: 0.9;
+  }
+
+  @media (max-width: 640px) {
+    .circuit-map { display: none; }
+  }
+
+  .track-pulse {
+    animation: pulse-glow 2.4s ease-in-out infinite;
+    transform-origin: center;
+  }
+
+  /* ---------- Driver footer: roster + name ---------- */
+  .driver-footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0 clamp(20px, 4vw, 56px) clamp(20px, 4vh, 40px);
+    z-index: 10;
+    color: var(--fg);
+  }
+
+  .roster {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: clamp(14px, 2.5vh, 22px);
+  }
+
+  .roster-crest {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    flex: none;
+  }
+
+  .roster-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    background: var(--surface);
+    color: var(--fg);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: transform 160ms var(--ease-out), border-color 160ms var(--ease-out), background 160ms var(--ease-out);
+  }
+
+  .roster-avatar:hover { transform: translateY(-2px); }
+
+  .roster-avatar[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: rgba(237, 180, 11, 0.16);
+  }
+
+  .roster-all {
+    width: auto;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #1a1300;
+    border-color: var(--accent);
+    font-size: 12px;
+  }
+
+  .roster-all[aria-pressed="true"] {
+    background: var(--accent);
+    color: #1a1300;
+  }
+
+  .roster-all[aria-pressed="false"] {
+    background: transparent;
+    color: var(--fg-muted);
+    border-color: var(--border);
+  }
+
+  .driver-name {
+    font-size: min(19vw, 12svh);
+    font-weight: 600;
+    line-height: 0.82;
+    letter-spacing: -0.05em;
+  }
+
+  /* ---------- Stats ---------- */
+  .stats-block {
+    position: absolute;
+    right: clamp(20px, 4vw, 56px);
+    bottom: clamp(24px, 5svh, 48px);
+    z-index: 10;
+    text-align: right;
+  }
+
+  .stats-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+    margin-bottom: 4px;
+  }
+
+  .stats-label .icon { width: 13px; height: 13px; opacity: 0.75; }
+
+  .stat-tier {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    line-height: 0.86;
+    letter-spacing: -0.03em;
+  }
+
+  .stat-1 { font-size: clamp(28px, 4.4vw, 48px); color: rgba(255, 255, 255, 0.28); }
+  .stat-2 { font-size: clamp(34px, 5.4vw, 60px); color: rgba(255, 255, 255, 0.55); }
+  .stat-3 { font-size: clamp(42px, 7vw, 78px); color: var(--accent); }
+
+  @media (max-width: 640px) {
+    .stats-block { display: none; }
+  }
+
+  /* ---------- Reveal-on-load motion ---------- */
+  .reveal {
+    opacity: 0;
+    animation: fade-up 0.8s var(--ease-out) forwards;
+  }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes ghost-breathe {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.55; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.35); }
+  }
+
+  /* ---------- Sign-in popover ---------- */
+  .signin-popover {
+    position: absolute;
+    top: 68px;
+    right: clamp(20px, 4vw, 56px);
+    z-index: 40;
+    width: min(300px, 84vw);
+    background: #161616;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.6);
+    transform-origin: top right;
+    transform: scale(0.94);
+    opacity: 0;
+    transition: transform 200ms var(--ease-out), opacity 200ms var(--ease-out);
+  }
+
+  .signin-popover[data-open="true"] {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .signin-popover[hidden] { display: block; visibility: hidden; pointer-events: none; }
+
+  .signin-popover h2 {
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .signin-popover p.hint {
+    font-size: 12px;
+    color: var(--fg-muted);
+    margin-bottom: 14px;
+  }
+
+  .field { margin-bottom: 12px; }
+
+  .field label {
+    display: block;
+    font-size: 12px;
+    color: var(--fg-muted);
+    margin-bottom: 6px;
+  }
+
+  .field input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 11px;
+    color: var(--fg);
+    font-size: 14px;
+  }
+
+  .field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .signin-form .btn { width: 100%; justify-content: center; margin-top: 4px; }
+
+  .signin-success {
+    font-size: 13px;
+    color: var(--fg);
+    background: rgba(237, 180, 11, 0.12);
+    border: 1px solid rgba(237, 180, 11, 0.4);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  .signin-success[hidden] { display: none; }
+  .signin-form[hidden] { display: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+    .reveal { opacity: 1; transform: none; }
+    .ghost-number { animation: none; opacity: 0.8; }
+    .track-pulse { animation: none; opacity: 0.85; }
+  }
+</style>
+</head>
+<body>
+<main>
+<section class="hero" id="top" aria-label="Mateo Rourke — driver profile">
+
+  <header class="site-nav reveal" style="animation-delay:0.05s">
+    <a class="brand" href="#top" aria-label="Apex GP — back to top">
+      <svg class="brand-mark" width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+        <path d="M2 20 L10 6 L14 6 L9 15 L15 15 L11 20 Z" fill="var(--accent)"/>
+        <path d="M13 20 L19 8 L23 8 L18.5 16.5 L24 16.5 L17.5 20 Z" fill="#ffffff" opacity="0.9"/>
+      </svg>
+      <span class="brand-word">APEX</span>
+      <span class="brand-season">GP</span>
+    </a>
+
+    <nav aria-label="Profile sections">
+      <ul class="nav-links">
+        <li><a href="#bio">Biography</a></li>
+        <li><a href="#stats">Statistics</a></li>
+        <li><a href="#career">Career</a></li>
+      </ul>
+    </nav>
+
+    <button type="button" class="btn btn-ghost" id="signinToggle" aria-haspopup="dialog" aria-expanded="false" aria-controls="signinPopover">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Sign in
+    </button>
+  </header>
+
+  <p class="ghost-number" aria-hidden="true">08</p>
+
+  <div class="photo-container" id="photoContainer">
+    <img
+      src="assets/driver-portrait.jpg"
+      alt="Mateo Rourke standing arms-crossed in his Solstice Racing suit, looking off-camera"
+      id="driverPhoto"
+    />
+    <div class="blur-overlay" aria-hidden="true"></div>
+  </div>
+
+  <div class="location-block reveal" style="animation-delay:0.15s">
+    <p class="location-flag">
+      <span class="flag-icon" aria-hidden="true">
+        <svg width="20" height="14" viewBox="0 0 20 14" xmlns="http://www.w3.org/2000/svg">
+          <rect width="20" height="14" fill="var(--flag-a)"/>
+          <rect y="4.6" width="20" height="4.8" fill="var(--flag-b)"/>
+          <rect y="9.4" width="20" height="4.6" fill="var(--flag-c)"/>
+        </svg>
+      </span>
+      Solmara
+    </p>
+    <h2 class="circuit-name">Meridian<br>Circuit</h2>
+  </div>
+
+  <div class="circuit-map" aria-hidden="true">
+    <svg viewBox="0 0 190 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M18 30 L18 100 Q18 118 36 118 L70 118 Q84 118 88 106 L100 78 Q104 68 116 68 L150 68 Q168 68 168 50 L168 30 Q168 18 150 18 L92 18 L82 34 L52 34 L44 18 L36 18 Q18 18 18 30 Z"
+        stroke="rgba(255,255,255,0.55)" stroke-width="2.4" stroke-linejoin="round"/>
+      <path class="track-pulse" d="M88 106 L100 78" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="18" cy="30" r="3" fill="#fff"/>
+      <circle cx="18" cy="100" r="3" fill="#fff"/>
+      <circle cx="70" cy="118" r="3" fill="#fff"/>
+      <circle cx="150" cy="18" r="3" fill="#fff"/>
+      <circle cx="168" cy="50" r="3" fill="#fff"/>
+      <circle cx="116" cy="68" r="3" fill="#fff"/>
+      <rect x="30" y="16" width="4" height="6" fill="#fff" opacity="0.85"/>
+    </svg>
+  </div>
+
+  <div class="driver-footer reveal" id="bio" style="animation-delay:0.25s">
+    <div class="roster" role="group" aria-label="Filter by Solstice Racing driver">
+      <span class="roster-crest" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 1 L14 4 V9 C14 12 11.3 14.3 8 15 C4.7 14.3 2 12 2 9 V4 Z" fill="var(--flag-c)" stroke="rgba(255,255,255,0.5)" stroke-width="0.6"/>
+        </svg>
+      </span>
+      <button type="button" class="roster-avatar" aria-pressed="true" data-driver="mateo">MR</button>
+      <button type="button" class="roster-avatar" aria-pressed="false" data-driver="ana">AK</button>
+      <button type="button" class="roster-avatar" aria-pressed="false" data-driver="theo">TN</button>
+      <button type="button" class="roster-avatar roster-all" aria-pressed="false" data-driver="all">All</button>
+    </div>
+    <h1 class="driver-name">Mateo<br>Rourke</h1>
+  </div>
+
+  <div class="stats-block reveal" id="stats" style="animation-delay:0.35s">
+    <p class="stats-label">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 L14.5 8.5 L21.5 9 L16 13.3 L18 20.2 L12 16.3 L6 20.2 L8 13.3 L2.5 9 L9.5 8.5 Z" fill="currentColor"/></svg>
+      Season Points
+    </p>
+    <p class="stat-tier stat-1">96</p>
+    <p class="stat-tier stat-2">154</p>
+    <p class="stat-tier stat-3">2,238</p>
+  </div>
+
+  <div class="signin-popover" id="signinPopover" role="dialog" aria-label="Sign in" aria-modal="false" hidden>
+    <form class="signin-form" id="signinForm">
+      <h2>Sign in to Apex GP</h2>
+      <p class="hint">Track Mateo Rourke's season across every session.</p>
+      <div class="field">
+        <label for="signinEmail">Email address</label>
+        <input type="email" id="signinEmail" name="email" autocomplete="email" required />
+      </div>
+      <button type="submit" class="btn btn-primary">Continue</button>
+    </form>
+    <p class="signin-success" id="signinSuccess" hidden role="status">You're in — a sign-in link is on its way to your inbox.</p>
+  </div>
+
+</section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- Sign-in popover ---------- */
+  var toggle = document.getElementById('signinToggle');
+  var popover = document.getElementById('signinPopover');
+  var form = document.getElementById('signinForm');
+  var success = document.getElementById('signinSuccess');
+  var emailInput = document.getElementById('signinEmail');
+
+  function openPopover() {
+    popover.hidden = false;
+    requestAnimationFrame(function () { popover.setAttribute('data-open', 'true'); });
+    toggle.setAttribute('aria-expanded', 'true');
+    emailInput.focus();
+    document.addEventListener('keydown', onKeydown);
+    document.addEventListener('click', onOutsideClick, true);
+  }
+
+  function closePopover() {
+    popover.removeAttribute('data-open');
+    toggle.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('keydown', onKeydown);
+    document.removeEventListener('click', onOutsideClick, true);
+    window.setTimeout(function () { popover.hidden = true; }, 200);
+    toggle.focus();
+  }
+
+  function onKeydown(e) {
+    if (e.key === 'Escape') closePopover();
+  }
+
+  function onOutsideClick(e) {
+    if (!popover.contains(e.target) && e.target !== toggle) closePopover();
+  }
+
+  toggle.addEventListener('click', function () {
+    var isOpen = toggle.getAttribute('aria-expanded') === 'true';
+    if (isOpen) closePopover(); else openPopover();
+  });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!emailInput.value) return;
+    form.hidden = true;
+    success.hidden = false;
+  });
+
+  /* ---------- Roster filter (roving toggle group) ---------- */
+  var roster = document.querySelectorAll('.roster-avatar');
+  roster.forEach(function (btn, i) {
+    btn.setAttribute('tabindex', btn.getAttribute('aria-pressed') === 'true' ? '0' : '-1');
+
+    btn.addEventListener('click', function () {
+      roster.forEach(function (b) { b.setAttribute('aria-pressed', 'false'); b.setAttribute('tabindex', '-1'); });
+      btn.setAttribute('aria-pressed', 'true');
+      btn.setAttribute('tabindex', '0');
+    });
+
+    btn.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      e.preventDefault();
+      var next = e.key === 'ArrowRight' ? i + 1 : i - 1;
+      if (next < 0) next = roster.length - 1;
+      if (next >= roster.length) next = 0;
+      roster[next].focus();
+    });
+  });
+})();
+</script>
+</body>
+</html>

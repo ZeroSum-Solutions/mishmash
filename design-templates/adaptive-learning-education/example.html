@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LEARNIQ Hero</title>
+<meta name="description" content="LEARNIQ — an adaptive-learning EdTech hero landing page. Intelligent pathways to growth and mastery." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ===== Design tokens ===== */
+  :root {
+    --bg: #fafafa;
+    --ink: #000000;
+    --white: #ffffff;
+    --neutral-100: #f5f5f5;
+    --neutral-300: #d4d4d4;
+    --neutral-400: #a3a3a3;
+    --neutral-500: #737373;
+    --neutral-600: #525252;
+    --neutral-700: #404040;
+    --neutral-800: #262626;
+    --bar-bg: rgba(240, 240, 240, 0.75);
+    --bar-border: rgba(212, 212, 212, 0.5);
+    /* Genuinely monochrome design (no purple gradients, no cream theme —
+       prompt is explicit). --accent stays scoped to the focus-visible
+       outline only; it never touches the resting render. */
+    --accent: #2f6fed;
+    --poster-fallback: url('assets/hero-dna-poster.jpg');
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  a, button { font-family: inherit; }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  img, video { max-width: 100%; display: block; }
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ===== Hero section ===== */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    width: 100%;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .hero-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  /* ===== Nav ===== */
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 20px;
+  }
+  @media (min-width: 640px) { .nav { padding: 24px 32px; } }
+  @media (min-width: 1024px) { .nav { padding: 24px 48px; } }
+
+  .nav-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  @media (min-width: 640px) { .nav-left { gap: 24px; } }
+
+  .brand {
+    color: var(--ink);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-decoration: none;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: default;
+  }
+  @media (min-width: 640px) { .brand { font-size: 18px; } }
+
+  .menu-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink);
+    font-size: 14px;
+    background: none;
+    border: none;
+    padding: 4px 2px;
+    cursor: pointer;
+    transition: opacity 200ms ease;
+  }
+  .menu-trigger:hover { opacity: 0.7; }
+  .menu-trigger-label { display: none; }
+  @media (min-width: 640px) { .menu-trigger-label { display: inline; } }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  @media (min-width: 640px) { .nav-right { gap: 16px; } }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink);
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    transition: opacity 200ms ease;
+  }
+  .icon-btn:hover { opacity: 0.7; }
+
+  /* ===== Spacer ===== */
+  .hero-spacer { flex: 1 1 auto; }
+
+  /* ===== Main content ===== */
+  .hero-main {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 32px;
+    padding: 0 20px 24px;
+    width: 100%;
+  }
+  @media (min-width: 640px) { .hero-main { padding: 0 32px 32px; } }
+  @media (min-width: 768px) { .hero-main { flex-direction: row; gap: 48px; } }
+  @media (min-width: 1024px) { .hero-main { padding: 0 48px 32px; } }
+
+  .hero-col-left {
+    flex: 1 1 0%;
+    max-width: 384px;
+  }
+
+  .hero-col-right {
+    flex: 1 1 0%;
+    max-width: 320px;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--neutral-500);
+    margin: 0 0 12px;
+  }
+  @media (min-width: 640px) { .eyebrow { margin-bottom: 16px; } }
+
+  .hero-h1 {
+    font-size: 30px;
+    font-weight: 300;
+    line-height: 1.1;
+    color: var(--ink);
+    letter-spacing: -0.025em;
+    margin: 0;
+  }
+  @media (min-width: 640px) { .hero-h1 { font-size: 36px; } }
+  @media (min-width: 1024px) { .hero-h1 { font-size: 48px; } }
+  @media (min-width: 1280px) { .hero-h1 { font-size: 3.4rem; } }
+
+  .cta-outline {
+    display: inline-block;
+    margin-top: 40px;
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    background: transparent;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    padding: 12px 24px;
+    border-radius: 9999px;
+    transition: background-color 300ms ease, color 300ms ease;
+  }
+  @media (min-width: 640px) { .cta-outline { margin-top: 56px; padding: 14px 28px; } }
+  .cta-outline:hover { background: var(--ink); color: var(--white); }
+
+  .hero-copy {
+    font-size: 14px;
+    line-height: 1.625;
+    color: var(--neutral-700);
+    margin: 0;
+  }
+  @media (min-width: 1024px) { .hero-copy { font-size: 15px; } }
+  .hero-copy .soft-break { display: none; }
+  @media (min-width: 640px) { .hero-copy .soft-break { display: block; content: ""; } }
+
+  .cta-filled {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 40px;
+    background: var(--neutral-800);
+    color: var(--white);
+    font-size: 12px;
+    letter-spacing: 0.025em;
+    text-decoration: none;
+    padding: 12px 24px;
+    border-radius: 9999px;
+    transition: background-color 300ms ease;
+  }
+  @media (min-width: 640px) { .cta-filled { margin-top: 56px; } }
+  .cta-filled:hover { background: var(--ink); }
+
+  /* ===== Bottom frosted bar ===== */
+  .info-bar-outer {
+    margin-top: auto;
+    padding: 0 16px;
+  }
+  @media (min-width: 640px) { .info-bar-outer { padding: 0 24px; } }
+  @media (min-width: 1024px) { .info-bar-outer { padding: 0 32px; } }
+
+  .info-bar {
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    background: var(--bar-bg);
+    border: 1px solid var(--bar-border);
+    border-bottom: 0;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .info-bar-inner {
+    padding: 24px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  @media (min-width: 640px) { .info-bar-inner { padding: 32px 32px; } }
+  @media (min-width: 768px) {
+    .info-bar-inner { flex-direction: row; align-items: flex-start; justify-content: space-between; gap: 48px; }
+  }
+  @media (min-width: 1024px) { .info-bar-inner { padding: 40px 48px; gap: 64px; } }
+
+  .info-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  @media (min-width: 640px) { .info-left { gap: 24px; } }
+  @media (min-width: 1024px) { .info-left { gap: 32px; } }
+
+  .info-number {
+    font-size: 36px;
+    font-weight: 200;
+    color: var(--ink);
+    line-height: 1;
+    margin: 0;
+  }
+  @media (min-width: 640px) { .info-number { font-size: 48px; } }
+  @media (min-width: 1024px) { .info-number { font-size: 60px; } }
+
+  .info-date {
+    font-size: 12px;
+    color: var(--neutral-500);
+    margin: 0 0 6px;
+  }
+
+  .info-h2 {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.375;
+    max-width: 220px;
+    margin: 0;
+  }
+  @media (min-width: 640px) { .info-h2 { font-size: 18px; } }
+  @media (min-width: 1024px) { .info-h2 { font-size: 20px; } }
+
+  .info-right {
+    flex: 1 1 auto;
+    max-width: 576px;
+  }
+
+  .info-para {
+    font-size: 14px;
+    line-height: 1.625;
+    color: var(--neutral-600);
+    margin: 0;
+  }
+
+  /* ===== Mobile / slide-in menu ===== */
+  .menu-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    visibility: hidden;
+    transition: visibility 0s linear 500ms;
+  }
+  .menu-overlay.is-open {
+    visibility: visible;
+    transition-delay: 0s;
+  }
+
+  .menu-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    opacity: 0;
+    transition: opacity 500ms ease-in-out;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+  .menu-overlay.is-open .menu-backdrop { opacity: 1; }
+
+  .menu-panel {
+    position: absolute;
+    top: 0; left: 0;
+    height: 100%;
+    width: 100%;
+    background: var(--white);
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+    transform: translateX(-100%);
+    transition: transform 500ms cubic-bezier(0.22,1,0.36,1);
+    display: flex;
+    flex-direction: column;
+  }
+  @media (min-width: 640px) { .menu-panel { width: 380px; } }
+  .menu-overlay.is-open .menu-panel { transform: translateX(0); }
+
+  .menu-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 20px;
+  }
+  @media (min-width: 640px) { .menu-header { padding: 24px 32px; } }
+
+  .menu-close {
+    display: inline-flex;
+    color: var(--ink);
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    transition: opacity 200ms ease;
+  }
+  .menu-close:hover { opacity: 0.7; }
+
+  .menu-links {
+    list-style: none;
+    margin: 0;
+    padding: 0 20px;
+    overflow-y: auto;
+  }
+  @media (min-width: 640px) { .menu-links { padding: 0 32px; } }
+
+  .menu-link {
+    display: block;
+    padding: 14px 0;
+    font-size: 24px;
+    font-weight: 300;
+    color: var(--ink);
+    letter-spacing: -0.025em;
+    text-decoration: none;
+    border-bottom: 1px solid var(--neutral-100);
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 500ms ease-out, transform 500ms ease-out;
+    transition-delay: 0ms;
+  }
+  @media (min-width: 640px) { .menu-link { font-size: 30px; } }
+  .menu-overlay.is-open .menu-link { opacity: 1; transform: translateY(0); }
+
+  .menu-footer {
+    position: absolute;
+    bottom: 0; left: 0;
+    width: 100%;
+    padding: 20px;
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 500ms ease-out, transform 500ms ease-out;
+    transition-delay: 0ms;
+  }
+  @media (min-width: 640px) { .menu-footer { padding: 32px; width: 380px; } }
+  .menu-overlay.is-open .menu-footer { opacity: 1; transform: translateY(0); transition-delay: 500ms; }
+
+  .menu-footer-label {
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--neutral-400);
+    margin: 0 0 16px;
+  }
+
+  .menu-footer-email {
+    font-size: 14px;
+    color: var(--neutral-600);
+    margin: 0;
+    text-decoration: none;
+    display: inline-block;
+  }
+
+  body.menu-lock { overflow: hidden; }
+
+  /* ===== Reduced motion ===== */
+  @media (prefers-reduced-motion: reduce) {
+    .hero-video { display: none; }
+    .hero { background-image: var(--poster-fallback); background-size: cover; background-position: center; }
+    .cta-outline, .cta-filled, .menu-trigger, .icon-btn, .menu-close,
+    .menu-overlay, .menu-backdrop, .menu-panel, .menu-link, .menu-footer {
+      transition-duration: 0.01ms !important;
+    }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<section class="hero">
+  <video
+    class="hero-video"
+    src="assets/hero-dna-video.mp4"
+    poster="assets/hero-dna-poster.jpg"
+    autoplay
+    loop
+    muted
+    playsinline
+    aria-hidden="true"
+  ></video>
+
+  <div class="hero-content">
+    <nav class="nav" aria-label="Primary">
+      <div class="nav-left">
+        <span class="brand">LEARNIQ</span>
+        <button
+          type="button"
+          class="menu-trigger"
+          id="menuTrigger"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-controls="menuOverlay"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/>
+          </svg>
+          <span class="menu-trigger-label">Menu</span>
+        </button>
+      </div>
+      <div class="nav-right">
+        <button type="button" class="icon-btn" aria-label="Search">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+        </button>
+        <button type="button" class="icon-btn" aria-label="Account">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+        </button>
+      </div>
+    </nav>
+
+    <div class="hero-spacer"></div>
+
+    <div class="hero-main">
+      <div class="hero-col-left">
+        <p class="eyebrow">Vision of LEARNIQ</p>
+        <h1 class="hero-h1">Intelligent<br>pathways to<br>Growth &amp;<br>Mastery</h1>
+        <a href="#" class="cta-outline">Start Your Journey</a>
+      </div>
+      <div class="hero-col-right">
+        <p class="hero-copy">
+          Realize your strengths.<span class="soft-break"></span>
+          Understand your unique style,<span class="soft-break"></span>
+          and receive tailored guidance<span class="soft-break"></span>
+          to help you learn, adapt, and<span class="soft-break"></span>
+          excel faster.
+        </p>
+        <a href="#" class="cta-filled">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>
+          </svg>
+          Dive in deeper
+        </a>
+      </div>
+    </div>
+
+    <div class="info-bar-outer">
+      <div class="info-bar">
+        <div class="info-bar-inner">
+          <div class="info-left">
+            <p class="info-number">01</p>
+            <div>
+              <p class="info-date">2024-08-30</p>
+              <h2 class="info-h2">Reshaping Learning With Adaptive Science</h2>
+            </div>
+          </div>
+          <div class="info-right">
+            <p class="info-para">
+              LEARNIQ is a worldwide EdTech platform committed to transforming education through adaptive, science-backed methods. Working alongside top researchers and learning experts, LEARNIQ delivers meaningful insights that enable students at every level to unlock peak performance. Available internationally since May 2024.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="menu-overlay" id="menuOverlay" role="dialog" aria-modal="true" aria-label="Site menu">
+    <button type="button" class="menu-backdrop" id="menuBackdrop" aria-label="Close menu"></button>
+    <div class="menu-panel" id="menuPanel">
+      <div class="menu-header">
+        <span class="brand">LEARNIQ</span>
+        <button type="button" class="menu-close" id="menuClose" aria-label="Close menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+          </svg>
+        </button>
+      </div>
+      <ul class="menu-links" id="menuLinks">
+        <li><a class="menu-link" href="#" data-delay="75">Home</a></li>
+        <li><a class="menu-link" href="#" data-delay="150">Evaluations</a></li>
+        <li><a class="menu-link" href="#" data-delay="225">Our Mission</a></li>
+        <li><a class="menu-link" href="#" data-delay="300">The Process</a></li>
+        <li><a class="menu-link" href="#" data-delay="375">Insights</a></li>
+        <li><a class="menu-link" href="#" data-delay="450">Contact</a></li>
+      </ul>
+      <div class="menu-footer" id="menuFooter">
+        <p class="menu-footer-label">Reach out now</p>
+        <a class="menu-footer-email" href="mailto:hello@learniq.co">hello@learniq.co</a>
+      </div>
+    </div>
+  </div>
+</section>
+<script>
+(function () {
+  'use strict';
+
+  var trigger = document.getElementById('menuTrigger');
+  var overlay = document.getElementById('menuOverlay');
+  var backdrop = document.getElementById('menuBackdrop');
+  var panel = document.getElementById('menuPanel');
+  var closeBtn = document.getElementById('menuClose');
+  var links = Array.prototype.slice.call(document.querySelectorAll('.menu-link'));
+  var footer = document.getElementById('menuFooter');
+  var reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  var focusables = [closeBtn].concat(links, [document.querySelector('.menu-footer-email')]);
+  var isOpen = false;
+
+  function applyDelays(open) {
+    var reduce = reduceMotionQuery.matches;
+    links.forEach(function (link) {
+      link.style.transitionDelay = open && !reduce ? link.getAttribute('data-delay') + 'ms' : '0ms';
+    });
+    footer.style.transitionDelay = open && !reduce ? '500ms' : '0ms';
+  }
+
+  function openMenu() {
+    isOpen = true;
+    overlay.classList.add('is-open');
+    trigger.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('menu-lock');
+    applyDelays(true);
+    window.setTimeout(function () {
+      closeBtn.focus();
+    }, reduceMotionQuery.matches ? 0 : 50);
+    document.addEventListener('keydown', onKeydown, true);
+  }
+
+  function closeMenu() {
+    isOpen = false;
+    overlay.classList.remove('is-open');
+    trigger.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('menu-lock');
+    applyDelays(false);
+    document.removeEventListener('keydown', onKeydown, true);
+    trigger.focus();
+  }
+
+  function onKeydown(e) {
+    if (!isOpen) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMenu();
+      return;
+    }
+    if (e.key === 'Tab') {
+      var first = focusables[0];
+      var last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+
+  trigger.addEventListener('click', function () {
+    isOpen ? closeMenu() : openMenu();
+  });
+  closeBtn.addEventListener('click', closeMenu);
+  backdrop.addEventListener('click', closeMenu);
+  links.forEach(function (link) {
+    link.addEventListener('click', function (e) {
+      e.preventDefault();
+      closeMenu();
+    });
+  });
+
+  reduceMotionQuery.addEventListener('change', function () {
+    if (isOpen) applyDelays(true);
+  });
+
+  // Background video: pause under prefers-reduced-motion so the dignified
+  // static poster/fallback (CSS) governs instead of a moving loop.
+  var video = document.querySelector('.hero-video');
+  function syncMotion() {
+    if (!video) return;
+    if (reduceMotionQuery.matches) {
+      video.pause();
+    } else {
+      video.play().catch(function () {});
+    }
+  }
+  syncMotion();
+  reduceMotionQuery.addEventListener('change', syncMotion);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rocket Pricing — Pricing Section</title>
+<meta name="description" content="Dark-themed two-tier pricing section with cursor-tracked spotlight card borders and staggered scroll-reveal motion.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+<style>
+:root {
+  --background: #000000;
+  --foreground: #ffffff;
+  --foreground-85: rgba(255, 255, 255, 0.85);
+  --foreground-80: rgba(255, 255, 255, 0.8);
+  --foreground-70: rgba(255, 255, 255, 0.7);
+  --foreground-60: rgba(255, 255, 255, 0.6);
+  --foreground-50: rgba(255, 255, 255, 0.5);
+  --foreground-40: rgba(255, 255, 255, 0.4);
+  --landing-surface: rgba(255, 255, 255, 0.10);
+  --landing-surface-hover: rgba(255, 255, 255, 0.16);
+  --landing-border: rgba(255, 255, 255, 0.10);
+  --hairline-15: rgba(255, 255, 255, 0.15);
+  --hairline-20: rgba(255, 255, 255, 0.20);
+  --card-1-bg: #161616;
+  --card-2-bg: #252525;
+  --accent: #4e85bf;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+img, svg { display: block; max-width: 100%; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+h1, h2, h3, p, ul { margin: 0; }
+ul { padding: 0; list-style: none; }
+
+.page {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+/* ---- Pricing section ---- */
+.pricing-section {
+  width: 100%;
+  background: var(--background);
+  padding-block: 48px;
+}
+@media (min-width: 640px) {
+  .pricing-section { padding-block: 64px; }
+}
+.pricing-container {
+  max-width: 1080px;
+  margin-inline: auto;
+  padding-inline: 16px;
+}
+@media (min-width: 640px) {
+  .pricing-container { padding-inline: 24px; }
+}
+
+/* ---- Header ---- */
+.pricing-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 40px;
+  margin-bottom: 56px;
+}
+@media (min-width: 1024px) {
+  .pricing-header { flex-direction: row; align-items: flex-end; justify-content: space-between; }
+}
+.pricing-header-left { max-width: 672px; }
+.pricing-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-radius: 9999px;
+  background: var(--landing-surface);
+  border: 1px solid var(--landing-border);
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--foreground-80);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.pricing-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--foreground-70);
+  flex-shrink: 0;
+}
+.pricing-heading {
+  font-size: 30px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--foreground);
+}
+@media (min-width: 640px) {
+  .pricing-heading { font-size: 36px; }
+}
+.pricing-heading br { display: none; }
+@media (min-width: 640px) {
+  .pricing-heading br { display: block; }
+}
+.pricing-header-right {
+  max-width: 384px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--foreground-60);
+}
+@media (min-width: 640px) {
+  .pricing-header-right { font-size: 16px; }
+}
+
+/* ---- Cards grid ---- */
+.pricing-grid {
+  max-width: 768px;
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+@media (min-width: 768px) {
+  .pricing-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---- Card outer (SpotlightBorder) ---- */
+.pricing-card-outer {
+  position: relative;
+  height: 100%;
+  border-radius: 16px;
+  border: 1px solid var(--landing-border);
+  padding: 8px;
+}
+@media (min-width: 640px) {
+  .pricing-card-outer { padding: 12px; }
+}
+.pricing-card {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  border: 1px solid var(--landing-border);
+  padding: 28px;
+}
+@media (min-width: 640px) {
+  .pricing-card { padding: 32px; }
+}
+
+/* ---- Best Value badge ---- */
+.pricing-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  border-radius: 9999px;
+  border: 1px solid var(--hairline-15);
+  background: #ffffff;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #000000;
+}
+
+/* ---- Card content ---- */
+.pricing-card-eyebrow {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--foreground-60);
+}
+.pricing-card-divider {
+  margin-top: 12px;
+  border-top: 1px solid var(--landing-border);
+}
+.pricing-card-price {
+  margin-top: 40px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.price-current {
+  font-size: 44px;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+.price-original {
+  font-size: 18px;
+  color: var(--foreground-40);
+  text-decoration: line-through;
+}
+.pricing-card-desc {
+  margin-top: 16px;
+  font-size: 14px;
+  line-height: 1.625;
+  color: var(--foreground-60);
+}
+.pricing-card-cta { margin-top: 28px; }
+.pricing-card-features {
+  margin-top: 28px;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+}
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-block: 16px;
+  font-size: 14px;
+}
+.feature-item:not(:first-child) { border-top: 1px solid var(--landing-border); }
+.feature-item.included { color: var(--foreground-85); }
+.feature-item.excluded { color: var(--foreground-40); }
+.feature-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+}
+.feature-item.included .feature-icon {
+  border-color: var(--hairline-20);
+  background: rgba(255, 255, 255, 0.06);
+}
+.feature-item.excluded .feature-icon {
+  border-color: var(--landing-border);
+  background: transparent;
+}
+.feature-icon .material-symbols-outlined { font-size: 12px; line-height: 1; }
+.feature-item.included .feature-icon .material-symbols-outlined { color: var(--foreground); }
+.feature-item.excluded .feature-icon .material-symbols-outlined { color: var(--foreground-50); }
+.feature-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding-inline: 16px;
+  border-radius: 9999px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  transition: background-color 0.15s var(--ease-out), border-color 0.15s var(--ease-out);
+}
+.btn-primary { background: rgba(255, 255, 255, 0.8); color: #000000; }
+.btn-primary:hover { background: #ffffff; }
+.btn-secondary {
+  background: var(--landing-surface);
+  border: 1px solid var(--landing-border);
+  color: var(--foreground);
+  backdrop-filter: blur(2.5px);
+  -webkit-backdrop-filter: blur(2.5px);
+}
+.btn-secondary:hover { background: var(--landing-surface-hover); }
+.btn-text-wrap { display: inline-block; height: 1em; overflow: hidden; }
+.btn-text-inner {
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s var(--ease-out);
+}
+.btn:hover .btn-text-inner { transform: translateY(-50%); }
+.btn-text-row { line-height: 1; height: 1em; }
+
+/* ---- Spotlight ring (cursor-tracked 1px gradient border) ---- */
+.spotlight { position: relative; }
+.spotlight-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  padding: 1px;
+  background: radial-gradient(var(--spot-size, 520px) circle at var(--spot-x, -9999px) var(--spot-y, -9999px), rgba(255, 255, 255, var(--spot-intensity, 0.5)), rgba(255, 255, 255, 0) 60%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* ---- Scroll reveal (FadeUp) ---- */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s var(--ease-out), transform 0.6s var(--ease-out);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---- Focus visibility (additive; chromatic accent lives only here) ---- */
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---- Reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    transition: opacity 0.01ms linear;
+    transform: none;
+    opacity: 1;
+  }
+  .btn-text-inner,
+  .spotlight-ring {
+    transition: none !important;
+  }
+}
+</style>
+</head>
+<body>
+<main class="page">
+<!-- SECTION_START -->
+<section id="pricing" class="pricing-section">
+  <div class="pricing-container">
+    <header class="pricing-header">
+      <div class="pricing-header-left">
+        <div class="pricing-pill reveal" style="transition-delay:0s">
+          <span class="pricing-pill-dot" aria-hidden="true"></span>
+          Pricing
+        </div>
+        <h2 class="pricing-heading reveal" style="transition-delay:0.1s">Clear pricing plans<br> that scale with you.</h2>
+      </div>
+      <p class="pricing-header-right reveal" style="transition-delay:0.2s">One-time payment. Lifetime access. Pick the plan that fits how far you want to go.</p>
+    </header>
+<!-- GRID_START -->
+    <div class="pricing-grid">
+<!-- CARD_1_START -->
+      <div class="pricing-card-outer spotlight" style="--spot-size:460px;--spot-intensity:0.5;">
+        <span class="spotlight-ring" aria-hidden="true"></span>
+        <div class="pricing-card" style="background-color:#161616;">
+          <div class="pricing-card-eyebrow reveal" style="transition-delay:0s">Course</div>
+          <div class="pricing-card-divider"></div>
+          <div class="pricing-card-price reveal" style="transition-delay:0.1s">
+            <span class="price-current">$159</span><span class="price-original">$497</span>
+          </div>
+          <p class="pricing-card-desc reveal" style="transition-delay:0.2s">Once. Lifetime. 68% off.</p>
+          <div class="pricing-card-cta reveal" style="transition-delay:0.3s">
+            <a class="btn btn-secondary" href="/auth?mode=signup">
+              <span class="btn-text-wrap"><span class="btn-text-inner"><span class="btn-text-row">Get Started</span><span class="btn-text-row" aria-hidden="true">Get Started</span></span></span>
+            </a>
+          </div>
+          <ul class="pricing-card-features reveal" style="transition-delay:0.4s">
+            <li class="feature-item included">
+              <span class="feature-icon" aria-hidden="true"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">check</span></span>
+              <span class="feature-status">Included:</span>All courses and videos
+            </li>
+            <li class="feature-item included">
+              <span class="feature-icon" aria-hidden="true"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">check</span></span>
+              <span class="feature-status">Included:</span>All modules. Lifetime access.
+            </li>
+            <li class="feature-item included">
+              <span class="feature-icon" aria-hidden="true"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">check</span></span>
+              <span class="feature-status">Included:</span>AI Builder
+            </li>
+            <li class="feature-item excluded">
+              <span class="feature-icon" aria-hidden="true"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">close</span></span>
+              <span class="feature-status">Not included:</span>Unlimited Templates
+            </li>
+            <li class="feature-item excluded">
+              <span class="feature-icon" aria-hidden="true"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">close</span></span>
+              <span class="feature-status">Not included:</span>Unlimited Motion Videos
+            </li>
+          </ul>
+        </div>
+      </div>
+<!-- CARD_1_END -->
+<!-- CARD_2_START -->
+      <div class="pricing-card-outer spotlight" style="--spot-size:460px;--spot-intensity:0.5;">
+        <span class="spotlight-ring" aria-hidden="true"></span>
+        <div class="pricing-badge">Best Value</div>
+        <div class="pricing-card" style="background-color:#252525;">
+          <div class="pricing-card-eyebrow reveal" style="transition-delay:0s">Course + Lovable Templates</div>
+          <div class="pricing-card-divider"></div>
+          <div class="pricing-card-price reveal" style="transition-delay:0.1s">
+            <span class="price-current">$239</span><span class="price-original">$697</span>
+          </div>
+          <p class="pricing-card-desc reveal" style="transition-delay:0.2s">Once. Lifetime. Best deal.</p>
+          <div class="pricing-card-cta reveal" style="transition-delay:0.3s">
+            <a class="btn btn-primary" href="/auth?mode=signup">
+              <span class="btn-text-wrap"><span class="btn-text-inner"><span class="btn-text-row">Get Started</span><span class="btn-text-row" aria-hidden="true">Get Started</span></span></span>
+            </a>
+          </div>
+          <ul class="pricing-card-features reveal" style="transition-delay:0.4s">
+            <li class="feature-item included">
+              <span class="feature-icon" aria-hidden="true"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">check</span></span>
+              <span class="feature-status">Included:</span>All courses and videos
+            </li>
+            <li class="feature-item included">
+              <span class="feature-icon" aria-hidden="true"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">check</span></span>
+              <span class="feature-status">Included:</span>All modules. Lifetime access.
+            </li>
+            <li class="feature-item included">
+              <span class="feature-icon" aria-hidden="true"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">check</span></span>
+              <span class="feature-status">Included:</span>AI Builder
+            </li>
+            <li class="feature-item included">
+              <span class="feature-icon" aria-hidden="true"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">check</span></span>
+              <span class="feature-status">Included:</span>Unlimited Templates
+            </li>
+            <li class="feature-item included">
+              <span class="feature-icon" aria-hidden="true"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">check</span></span>
+              <span class="feature-status">Included:</span>Unlimited Motion Videos
+            </li>
+          </ul>
+        </div>
+      </div>
+<!-- CARD_2_END -->
+    </div>
+<!-- GRID_END -->
+  </div>
+</section>
+<!-- SECTION_END -->
+</main>
+<!-- SCRIPT_START -->
+<script>
+(function () {
+  'use strict';
+
+  var reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  function prefersReducedMotion() { return reduceMotionQuery.matches; }
+
+  function initSpotlight(el) {
+    el.addEventListener('pointermove', function (e) {
+      var rect = el.getBoundingClientRect();
+      el.style.setProperty('--spot-x', (e.clientX - rect.left) + 'px');
+      el.style.setProperty('--spot-y', (e.clientY - rect.top) + 'px');
+    });
+    el.addEventListener('pointerleave', function () {
+      el.style.setProperty('--spot-x', '-9999px');
+      el.style.setProperty('--spot-y', '-9999px');
+    });
+  }
+  document.querySelectorAll('.spotlight').forEach(initSpotlight);
+
+  var revealEls = Array.prototype.slice.call(document.querySelectorAll('.reveal'));
+  if (prefersReducedMotion()) {
+    revealEls.forEach(function (el) { el.classList.add('is-visible'); });
+  } else {
+    var revealObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.3 });
+    revealEls.forEach(function (el) { revealObserver.observe(el); });
+  }
+})();
+</script>
+<!-- SCRIPT_END -->
+</body>
+</html>

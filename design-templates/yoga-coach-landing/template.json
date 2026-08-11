@@ -1,12 +1,12 @@
 {
-  "slug": "mouse-trail-cta",
-  "name": "Mouse Trail CTA",
+  "slug": "yoga-coach-landing",
+  "name": "Jessica — Yoga Coach",
   "family": "motionsites",
   "kind": "baked-html",
   "cdn_fonts": [
-    "https://fonts.googleapis.com/css2?family=Instrument+Serif&display=swap"
+    "https://fonts.googleapis.com/css2?family=Anton&display=swap"
   ],
-  "source": "https://motionsites.ai/?prompt=mouse-trail-cta",
+  "source": "https://motionsites.ai/?prompt=yoga-coach",
   "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
   "remote_dependencies": []
 }

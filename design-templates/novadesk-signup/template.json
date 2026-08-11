@@ -1,0 +1,10 @@
+{
+  "slug": "novadesk-signup",
+  "name": "NovaDesk — Sign Up",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [],
+  "source": "https://motionsites.ai/?prompt=novadesk-signup",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

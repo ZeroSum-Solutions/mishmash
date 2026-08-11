@@ -1,0 +1,13 @@
+{
+  "slug": "rocket-pricing-tiers",
+  "name": "Rocket Pricing — Two-Tier Pricing Section",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap",
+    "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
+  ],
+  "source": "https://motionsites.ai/?prompt=rocket-pricing",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}
