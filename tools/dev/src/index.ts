@@ -11,6 +11,7 @@ import {
   SIDECAR_MESSAGES,
   SIDECAR_SOURCES,
   type DaemonStatusSnapshot,
+  type DesktopStatusSnapshot,
   type WebStatusSnapshot,
 } from "@open-design/sidecar-proto";
 import { createSidecarLaunchEnv, requestJsonIpc } from "@open-design/sidecar";
@@ -55,6 +56,7 @@ import {
   inspectDesktopRuntime,
   inspectWebRuntime,
   waitForDaemonRuntime,
+  waitForDesktopRuntime,
   waitForWebRuntime,
 } from "./sidecar-client.js";
 import { rewriteCliArgsForDefaultStart } from "./cli-args.js";
@@ -383,7 +385,7 @@ async function assertNoStaleActiveProcess(config: ToolDevConfig, appName: ToolDe
 }
 
 async function spawnSidecarRuntime(request: {
-  appName: typeof APP_KEYS.DAEMON | typeof APP_KEYS.WEB;
+  appName: typeof APP_KEYS.DAEMON | typeof APP_KEYS.DESKTOP | typeof APP_KEYS.WEB;
   config: ToolDevConfig;
   env: NodeJS.ProcessEnv;
   logHandle: FileHandle;
@@ -474,6 +476,30 @@ async function spawnWebRuntime(config: ToolDevConfig, options: CliOptions): Prom
         ...(options.prod === true
           ? { NODE_ENV: "production", OD_WEB_OUTPUT_MODE: "server", OD_WEB_PROD: "1" }
           : {}),
+      },
+      logHandle,
+    });
+  } finally {
+    await logHandle.close();
+  }
+}
+
+async function spawnDesktopRuntime(config: ToolDevConfig, options: CliOptions): Promise<{ pid: number }> {
+  // The renderer's baseHref-scoped asset requests target the daemon's own
+  // HTTP origin at render time, so daemon must already be up. Unlike
+  // daemon/web it has no HTTP listener of its own -- no port to allocate or
+  // thread through.
+  const daemonStatus = await waitForDaemonRuntime(runtimeLookup(config));
+  if (daemonStatus.url == null) throw new Error("daemon must be running before the desktop renderer starts");
+
+  const logHandle = await openAppLog(config, APP_KEYS.DESKTOP);
+  try {
+    await logHandle.write(`\n[tools-dev] launching desktop renderer at ${new Date().toISOString()}\n`);
+    return await spawnSidecarRuntime({
+      appName: APP_KEYS.DESKTOP,
+      config,
+      env: {
+        ...(options.parentPid == null ? {} : { [TOOLS_DEV_PARENT_PID_ENV]: String(options.parentPid) }),
       },
       logHandle,
     });
@@ -669,6 +695,31 @@ async function startWeb(config: ToolDevConfig, options: CliOptions) {
   }
 }
 
+async function startDesktop(config: ToolDevConfig, options: CliOptions) {
+  const existing = await inspectDesktopRuntime(runtimeLookup(config));
+  if (existing?.state === "running") {
+    return { app: APP_KEYS.DESKTOP, created: false, logPath: config.apps.desktop.latestLogPath, status: existing };
+  }
+  await assertNoStaleActiveProcess(config, APP_KEYS.DESKTOP);
+
+  const spawned = await spawnDesktopRuntime(config, options);
+  try {
+    const status = await waitForDesktopRuntime(runtimeLookup(config));
+    return {
+      app: APP_KEYS.DESKTOP,
+      created: true,
+      logPath: config.apps.desktop.latestLogPath,
+      pid: spawned.pid,
+      status,
+    };
+  } catch (error) {
+    const logPath = config.apps.desktop.latestLogPath;
+    const lines = await readLogTail(logPath, 80).catch(() => []);
+    await stopApp(config, APP_KEYS.DESKTOP).catch(() => undefined);
+    throw appendStartupLogDiagnostics(error, APP_KEYS.DESKTOP, createStartupLogDiagnostics(logPath, lines));
+  }
+}
+
 async function startApp(
   config: ToolDevConfig,
   appName: ToolDevAppName,
@@ -680,6 +731,8 @@ async function startApp(
       return await startDaemon(config, options, {
         refreshWebOrigin: context.targets?.includes(APP_KEYS.WEB) === true,
       });
+    case APP_KEYS.DESKTOP:
+      return await startDesktop(config, options);
     case APP_KEYS.WEB:
       return await startWeb(config, options);
   }
@@ -745,6 +798,19 @@ async function inspectAppStatus(config: ToolDevConfig, appName: ToolDevAppName) 
       state: active.pids.length > 0 ? "starting" : "idle",
       url: null,
     } satisfies DaemonStatusSnapshot;
+  }
+
+  if (appName === APP_KEYS.DESKTOP) {
+    const status = await inspectDesktopRuntime(runtimeLookup(config));
+    if (status != null) return status;
+    const active = await findAppProcessTree(config, appName);
+    // DesktopRuntimeState has no "starting" member (unlike daemon/web's
+    // ServiceRuntimeState) -- "unknown" is the closest fit for "a stamped
+    // process exists but IPC hasn't answered yet".
+    return {
+      pid: active.rootPids[0] ?? null,
+      state: active.pids.length > 0 ? "unknown" : "idle",
+    } satisfies DesktopStatusSnapshot;
   }
 
   const status = await inspectWebRuntime(runtimeLookup(config));
@@ -860,6 +926,10 @@ async function inspect(config: ToolDevConfig, appName: string, target: string | 
   if (appName === APP_KEYS.WEB) {
     if (target != null && target !== "status") throw new Error(`unsupported web inspect target: ${target}`);
     return (await inspectWebRuntime(runtimeLookup(config), 1000)) ?? ({ state: "idle", url: null } satisfies WebStatusSnapshot);
+  }
+  if (appName === APP_KEYS.DESKTOP) {
+    if (target != null && target !== "status") throw new Error(`unsupported desktop inspect target: ${target}`);
+    return (await inspectDesktopRuntime(runtimeLookup(config), 1000)) ?? ({ state: "idle" } satisfies DesktopStatusSnapshot);
   }
   throw new Error(`unsupported tools-dev app: ${appName}`);
 }

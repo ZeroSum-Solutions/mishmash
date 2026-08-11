@@ -22,10 +22,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const WORKSPACE_ROOT = path.resolve(__dirname, "../../..");
 
-export const ALL_APPS = [APP_KEYS.DAEMON, APP_KEYS.WEB] as const;
-export const DEFAULT_START_APPS = [APP_KEYS.DAEMON, APP_KEYS.WEB] as const;
-export const DEFAULT_RUN_APPS = [APP_KEYS.DAEMON, APP_KEYS.WEB] as const;
-export const DEFAULT_STOP_APPS = [APP_KEYS.WEB, APP_KEYS.DAEMON] as const;
+export const ALL_APPS = [APP_KEYS.DAEMON, APP_KEYS.DESKTOP, APP_KEYS.WEB] as const;
+// Desktop (the headless renderer, MM-005) needs the daemon's HTTP origin
+// reachable for its baseHref-scoped asset requests once a render actually
+// runs, so it starts after daemon and before web -- and stops before daemon
+// so no in-flight render is caught mid-fetch when the daemon goes down.
+export const DEFAULT_START_APPS = [APP_KEYS.DAEMON, APP_KEYS.DESKTOP, APP_KEYS.WEB] as const;
+export const DEFAULT_RUN_APPS = [APP_KEYS.DAEMON, APP_KEYS.DESKTOP, APP_KEYS.WEB] as const;
+export const DEFAULT_STOP_APPS = [APP_KEYS.WEB, APP_KEYS.DESKTOP, APP_KEYS.DAEMON] as const;
 
 export type ToolDevAppName = (typeof ALL_APPS)[number];
 
@@ -48,6 +52,9 @@ export type ToolDevAppConfig = {
 export type ToolDevConfig = {
   apps: {
     daemon: ToolDevAppConfig & {
+      sidecarEntryPath: string;
+    };
+    desktop: ToolDevAppConfig & {
       sidecarEntryPath: string;
     };
     web: ToolDevAppConfig & {
@@ -103,7 +110,8 @@ export function resolveTargetApps(appName: string | undefined, defaults: readonl
 export function resolveStartApps(appName: string | undefined): ToolDevAppName[] {
   if (appName == null) return [...DEFAULT_START_APPS];
   if (!isToolDevAppName(appName)) throw unsupportedAppError(appName);
-  if (appName === APP_KEYS.WEB) return [APP_KEYS.DAEMON, APP_KEYS.WEB];
+  if (appName === APP_KEYS.WEB) return [APP_KEYS.DAEMON, APP_KEYS.DESKTOP, APP_KEYS.WEB];
+  if (appName === APP_KEYS.DESKTOP) return [APP_KEYS.DAEMON, APP_KEYS.DESKTOP];
   return [APP_KEYS.DAEMON];
 }
 
@@ -115,7 +123,8 @@ export function resolveRunApps(appName: string | undefined): ToolDevAppName[] {
 export function resolveStopApps(appName: string | undefined): ToolDevAppName[] {
   if (appName == null) return [...DEFAULT_STOP_APPS];
   if (!isToolDevAppName(appName)) throw unsupportedAppError(appName);
-  if (appName === APP_KEYS.WEB) return [APP_KEYS.WEB, APP_KEYS.DAEMON];
+  if (appName === APP_KEYS.WEB) return [APP_KEYS.WEB, APP_KEYS.DESKTOP, APP_KEYS.DAEMON];
+  if (appName === APP_KEYS.DESKTOP) return [APP_KEYS.DESKTOP];
   return [APP_KEYS.DAEMON];
 }
 
@@ -143,6 +152,7 @@ export function resolveToolDevConfig(options: ToolDevOptions = {}): ToolDevConfi
   });
   const namespaceRoot = resolveNamespaceRoot({ base: toolsDevRoot, namespace, contract: OPEN_DESIGN_SIDECAR_CONTRACT });
   const daemon = resolveAppConfig({ app: APP_KEYS.DAEMON, namespace, namespaceRoot, toolsDevRoot });
+  const desktop = resolveAppConfig({ app: APP_KEYS.DESKTOP, namespace, namespaceRoot, toolsDevRoot });
   const web = resolveAppConfig({ app: APP_KEYS.WEB, namespace, namespaceRoot, toolsDevRoot });
 
   return {
@@ -150,6 +160,10 @@ export function resolveToolDevConfig(options: ToolDevOptions = {}): ToolDevConfi
       daemon: {
         ...daemon,
         sidecarEntryPath: path.join(WORKSPACE_ROOT, "apps/daemon/src/sidecar/index.ts"),
+      },
+      desktop: {
+        ...desktop,
+        sidecarEntryPath: path.join(WORKSPACE_ROOT, "apps/daemon/src/sidecar/desktop-renderer/index.ts"),
       },
       web: {
         ...web,
