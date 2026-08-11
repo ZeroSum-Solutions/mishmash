@@ -175,10 +175,22 @@ export const COPYRIGHT_GUARDRAIL_BULLET =
   "- Don't recreate copyrighted designs (other companies' distinctive UI patterns, branded visual elements). Help the user build something original instead.";
 export const WEB_CLONE_COPYRIGHT_GUARDRAIL_BULLET =
   '- This is a Website Clone run: the user explicitly asked for a faithful local reproduction of an existing site (evaluation / prototyping use). Reproduce its layout, visuals, assets, fonts, and copy faithfully — do NOT silently swap in placeholder branding or original artwork. Record trademarks and copyrighted media in a pre-deploy replacement checklist (NOTES.md) so the user decides what to replace before publishing.';
+// Template-derived runs (project metadata `kind: 'template'`) swap it out too:
+// the whole design-templates catalogue is 100% MIT-licensed, so the blanket
+// "don't recreate copyrighted designs" guardrail was telling the agent not to
+// copy the very MIT template the user asked to build from — producing a
+// generic AI one-shot instead of a template-derived build (ledger MM-004-A).
+export const TEMPLATE_COPYRIGHT_GUARDRAIL_BULLET =
+  "- This project was started from an MIT-licensed template (design-templates catalogue): build directly from its markup, styling, and assets — don't avoid reproducing them.";
 
 export interface RenderOfficialDesignerPromptOptions {
   // True for runs whose project metadata carries `intent: 'web-clone'`.
   webCloneFidelity?: boolean;
+  // True for runs whose project metadata carries `kind: 'template'`. See
+  // TEMPLATE_COPYRIGHT_GUARDRAIL_BULLET. Ignored when webCloneFidelity is
+  // also true (web-clone's swap wins — the two are mutually exclusive in
+  // practice since web-clone projects are never kind: 'template').
+  templateSourceExemption?: boolean;
 }
 
 export function renderOfficialDesignerPrompt(
@@ -196,7 +208,11 @@ export function renderOfficialDesignerPrompt(
   const rendered = OFFICIAL_DESIGNER_PROMPT
     .replace(EXECUTION_CONTEXT_PLACEHOLDER, executionContext)
     .replace(WORKFLOW_HANDOFF_PLACEHOLDER, workflowHandoff);
-  return options.webCloneFidelity === true
-    ? rendered.replace(COPYRIGHT_GUARDRAIL_BULLET, WEB_CLONE_COPYRIGHT_GUARDRAIL_BULLET)
-    : rendered;
+  if (options.webCloneFidelity === true) {
+    return rendered.replace(COPYRIGHT_GUARDRAIL_BULLET, WEB_CLONE_COPYRIGHT_GUARDRAIL_BULLET);
+  }
+  if (options.templateSourceExemption === true) {
+    return rendered.replace(COPYRIGHT_GUARDRAIL_BULLET, TEMPLATE_COPYRIGHT_GUARDRAIL_BULLET);
+  }
+  return rendered;
 }

@@ -883,6 +883,10 @@ export function composeSystemPrompt({
         ...(streamFormat === 'plain' ? [API_MODE_OVERRIDE, '\n\n---\n\n'] : []),
         renderSlimCoreCharter(
           executionProfile ?? executionProfileFromStreamFormat(streamFormat),
+          // Template-derived runs get the same copyright-guardrail exemption
+          // as the classic head — see TEMPLATE_COPYRIGHT_GUARDRAIL_CLAUSE
+          // (MM-004-A).
+          { templateSourceExemption: metadata?.kind === 'template' },
         ),
         '\n\n---\n\n',
       ]
@@ -1062,6 +1066,10 @@ export function composeSystemPrompt({
         // see WEB_CLONE_COPYRIGHT_GUARDRAIL_BULLET. Stable per project, so
         // the stable-prompt fingerprint stays cacheable.
         webCloneFidelity: metadata?.intent === 'web-clone',
+        // Template-derived runs get the same exemption — see
+        // TEMPLATE_COPYRIGHT_GUARDRAIL_BULLET (MM-004-A). Also stable per
+        // project.
+        templateSourceExemption: metadata?.kind === 'template',
       }),
     );
   }

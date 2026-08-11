@@ -350,7 +350,13 @@ export function composeSystemPrompt({
     // daemon prompt so API/BYOK-backed web-clone runs behave identically.
     parts.push(
       '# Identity and workflow charter (background)\n\n',
-      renderOfficialDesignerPrompt({ webCloneFidelity: metadata?.intent === 'web-clone' }),
+      renderOfficialDesignerPrompt({
+        webCloneFidelity: metadata?.intent === 'web-clone',
+        // Template-derived runs get the same exemption — see
+        // TEMPLATE_COPYRIGHT_GUARDRAIL_BULLET (MM-004-A). Mirrors
+        // apps/daemon/src/prompts/system.ts for API/BYOK parity.
+        templateSourceExemption: metadata?.kind === 'template',
+      }),
     );
   }
 

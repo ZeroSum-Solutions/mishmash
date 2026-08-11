@@ -142,22 +142,42 @@ export const COPYRIGHT_GUARDRAIL_BULLET =
   "- Don't recreate copyrighted designs (other companies' distinctive UI patterns, branded visual elements). Help the user build something original instead.";
 export const WEB_CLONE_COPYRIGHT_GUARDRAIL_BULLET =
   '- This is a Website Clone run: the user explicitly asked for a faithful local reproduction of an existing site (evaluation / prototyping use). Reproduce its layout, visuals, assets, fonts, and copy faithfully — do NOT silently swap in placeholder branding or original artwork. Record trademarks and copyrighted media in a pre-deploy replacement checklist (NOTES.md) so the user decides what to replace before publishing.';
+// Template-derived runs (project metadata `kind: 'template'`) swap it out too:
+// the whole design-templates catalogue is 100% MIT-licensed, so the blanket
+// "don't recreate copyrighted designs" guardrail was telling the agent not to
+// copy the very MIT template the user asked to build from — producing a
+// generic AI one-shot instead of a template-derived build (ledger MM-004-A).
+// Mirrors `apps/daemon/src/prompts/official-system.ts`; must stay
+// byte-identical to that copy.
+export const TEMPLATE_COPYRIGHT_GUARDRAIL_BULLET =
+  "- This project was started from an MIT-licensed template (design-templates catalogue): build directly from its markup, styling, and assets — don't avoid reproducing them.";
 
 export interface RenderOfficialDesignerPromptOptions {
   // True for runs whose project metadata carries `intent: 'web-clone'`.
   webCloneFidelity?: boolean;
+  // True for runs whose project metadata carries `kind: 'template'`. See
+  // TEMPLATE_COPYRIGHT_GUARDRAIL_BULLET. Ignored when webCloneFidelity is
+  // also true.
+  templateSourceExemption?: boolean;
 }
 
 // API/BYOK counterpart of the daemon renderer. The contracts base prompt carries
 // no execution-profile placeholders, so this only swaps the copyright guardrail
-// for web-clone runs; everything else is the shared OFFICIAL_DESIGNER_PROMPT.
+// for web-clone/template runs; everything else is the shared OFFICIAL_DESIGNER_PROMPT.
 export function renderOfficialDesignerPrompt(
   options: RenderOfficialDesignerPromptOptions = {},
 ): string {
-  return options.webCloneFidelity === true
-    ? OFFICIAL_DESIGNER_PROMPT.replace(
-        COPYRIGHT_GUARDRAIL_BULLET,
-        WEB_CLONE_COPYRIGHT_GUARDRAIL_BULLET,
-      )
-    : OFFICIAL_DESIGNER_PROMPT;
+  if (options.webCloneFidelity === true) {
+    return OFFICIAL_DESIGNER_PROMPT.replace(
+      COPYRIGHT_GUARDRAIL_BULLET,
+      WEB_CLONE_COPYRIGHT_GUARDRAIL_BULLET,
+    );
+  }
+  if (options.templateSourceExemption === true) {
+    return OFFICIAL_DESIGNER_PROMPT.replace(
+      COPYRIGHT_GUARDRAIL_BULLET,
+      TEMPLATE_COPYRIGHT_GUARDRAIL_BULLET,
+    );
+  }
+  return OFFICIAL_DESIGNER_PROMPT;
 }

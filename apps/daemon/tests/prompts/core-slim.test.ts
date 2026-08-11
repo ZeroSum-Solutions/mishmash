@@ -8,6 +8,7 @@ import {
   PLATFORM_CONTRACTS_BLOCK,
   renderSlimCoreCharter,
 } from '../../src/prompts/core-slim.js';
+import { COPYRIGHT_GUARDRAIL_BULLET } from '../../src/prompts/official-system.js';
 import { composeSystemPrompt } from '../../src/prompts/system.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -342,6 +343,53 @@ describe('composeSystemPrompt — promptCoreVariant switch', () => {
     expect(out).toContain('## Active skill — test-skill');
     expect(out).toContain('# Slide deck — fixed framework');
     expect(out).toContain('## Media generation (if asked)');
+  });
+});
+
+// MM-004-A: the design-templates catalogue is 100% MIT-licensed, so
+// template-derived runs (metadata.kind === 'template') must never be told
+// not to recreate copyrighted designs — that guardrail was silently telling
+// the agent not to copy the very MIT template the user asked to build from,
+// producing a generic AI one-shot instead of a template-derived build.
+// Covers both composer heads: classic (renderOfficialDesignerPrompt, embeds
+// the "- Don't recreate copyrighted designs…" bullet) and slim
+// (renderSlimCoreCharter, embeds the same rule as a Conduct-section clause).
+describe('composeSystemPrompt — template-kind copyright guardrail exemption (MM-004-A)', () => {
+  it('classic: a plain (non-template) run still carries the copyright guardrail bullet', () => {
+    const out = composeSystemPrompt({ sessionMode: 'plan', metadata: { kind: 'prototype' } });
+    expect(out).toContain(COPYRIGHT_GUARDRAIL_BULLET);
+  });
+
+  it('classic: a template-kind run does NOT carry the copyright guardrail bullet', () => {
+    const out = composeSystemPrompt({ sessionMode: 'plan', metadata: { kind: 'template' } });
+    expect(out).not.toContain(COPYRIGHT_GUARDRAIL_BULLET);
+  });
+
+  it('classic: a web-clone run keeps its existing (unrelated) swap behavior', () => {
+    const out = composeSystemPrompt({
+      sessionMode: 'plan',
+      metadata: { kind: 'prototype', intent: 'web-clone' },
+    });
+    expect(out).not.toContain(COPYRIGHT_GUARDRAIL_BULLET);
+    expect(out).toContain('This is a Website Clone run');
+  });
+
+  it('slim: a plain (non-template) run still carries the Conduct-section copyright clause', () => {
+    const out = composeSystemPrompt({
+      sessionMode: 'plan',
+      metadata: { kind: 'prototype' },
+      promptCoreVariant: 'slim',
+    });
+    expect(out).toContain("Don't recreate copyrighted designs.");
+  });
+
+  it('slim: a template-kind run does NOT carry the Conduct-section copyright clause', () => {
+    const out = composeSystemPrompt({
+      sessionMode: 'plan',
+      metadata: { kind: 'template' },
+      promptCoreVariant: 'slim',
+    });
+    expect(out).not.toContain("Don't recreate copyrighted designs.");
   });
 });
 
