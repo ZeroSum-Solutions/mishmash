@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SkyRunner Co. — In The Clouds</title>
+<meta name="description" content="SkyRunner Co. (SKR) hero landing: a floating pearlescent sneaker suspended over pastel cloudscape footage." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* Neutral scaffolding — the resting design is intentionally monochrome (white chrome + black ink). */
+    --paper: #ffffff;
+    --ink: #000000;
+    /* Genuinely chromatic token, scoped ONLY to the focus-visible ring per the monochrome-design rule —
+       never injected into the resting render, gradients, or fills. */
+    --accent: #ec9dc0;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+  }
+  img, video { max-width: 100%; display: block; }
+  button { font-family: inherit; cursor: pointer; }
+  a { color: inherit; text-decoration: none; }
+  ul { list-style: none; margin: 0; padding: 0; }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ---------- Nav ---------- */
+  .nav {
+    position: relative;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    background: var(--paper);
+  }
+  @media (min-width: 640px) {
+    .nav { padding: 24px 32px; }
+  }
+
+  .nav-logo {
+    font-size: 1.125rem;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    color: var(--ink);
+  }
+
+  .nav-links {
+    display: none;
+    align-items: center;
+    gap: 32px;
+  }
+  @media (min-width: 768px) {
+    .nav-links { display: flex; }
+  }
+  .nav-links a {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    color: var(--ink);
+    transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .nav-links a:hover { opacity: 0.6; }
+
+  .nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  @media (min-width: 640px) {
+    .nav-actions { gap: 20px; }
+  }
+  .icon-btn {
+    background: none;
+    border: none;
+    padding: 4px;
+    display: inline-flex;
+    color: var(--ink);
+    transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .icon-btn:hover { opacity: 0.6; }
+  .icon-btn svg { width: 20px; height: 20px; }
+
+  .cart-wrap { position: relative; }
+  .cart-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 9px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  /* Hamburger (mobile only) */
+  .hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: none;
+    border: none;
+    padding: 0;
+    position: relative;
+  }
+  @media (min-width: 768px) {
+    .hamburger { display: none; }
+  }
+  .hamburger-bar {
+    position: absolute;
+    left: 8px;
+    width: 20px;
+    height: 1.5px;
+    background: var(--ink);
+    transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .hamburger-bar.top { transform: translateY(-3.5px); }
+  .hamburger-bar.bottom { transform: translateY(3.5px); }
+  .hamburger[aria-expanded="true"] .hamburger-bar.top { transform: rotate(45deg); }
+  .hamburger[aria-expanded="true"] .hamburger-bar.bottom { transform: rotate(-45deg); }
+
+  /* ---------- Mobile full-screen menu ---------- */
+  .mobile-menu {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: var(--paper);
+    clip-path: circle(0% at calc(100% - 2.5rem) 2.5rem);
+    pointer-events: none;
+    transition: clip-path 500ms cubic-bezier(0.76, 0, 0.24, 1);
+    display: flex;
+    flex-direction: column;
+  }
+  @media (min-width: 768px) {
+    .mobile-menu { display: none; }
+  }
+  .mobile-menu.is-open {
+    clip-path: circle(150% at calc(100% - 2.5rem) 2.5rem);
+    pointer-events: auto;
+  }
+  .mobile-menu-links {
+    margin-top: 112px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0 32px;
+  }
+  .mobile-menu-links a {
+    display: block;
+    font-size: 1.875rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: -0.025em;
+    color: var(--ink);
+    padding: 12px 0;
+    transform: translateY(100%);
+    opacity: 0;
+    transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 500ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .mobile-menu.is-open .mobile-menu-links a {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  .mobile-menu-tagline {
+    margin-top: auto;
+    padding: 0 32px 40px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transition: opacity 300ms ease 500ms;
+  }
+  .mobile-menu.is-open .mobile-menu-tagline { opacity: 1; }
+
+  /* ---------- Media stage ---------- */
+  .stage {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+    border-radius: 32px 32px 0 0;
+    background: #000;
+  }
+  @media (min-width: 640px) {
+    .stage { border-radius: 48px 48px 0 0; }
+  }
+
+  .stage-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+  }
+
+  .stage-title {
+    position: absolute;
+    left: 50%;
+    top: 14%;
+    transform: translateX(-50%);
+    width: 100%;
+    text-align: center;
+    pointer-events: none;
+    user-select: none;
+    z-index: 5;
+    margin: 0;
+    text-transform: uppercase;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    font-size: 16vw;
+    background: linear-gradient(to bottom, #ffffff 0%, rgba(255, 255, 255, 0.7) 55%, transparent 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  @media (min-width: 640px) {
+    .stage-title { top: 16%; font-size: 13vw; }
+  }
+
+  .stage-label {
+    position: absolute;
+    z-index: 10;
+    color: #ffffff;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .stage-label--left {
+    left: 16px;
+    top: 32%;
+    font-size: 10px;
+    letter-spacing: 0.35em;
+  }
+  @media (min-width: 640px) {
+    .stage-label--left { left: 48px; top: 34%; font-size: 0.875rem; }
+  }
+  .stage-label--right {
+    right: 16px;
+    top: 12%;
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    text-align: right;
+  }
+  @media (min-width: 640px) {
+    .stage-label--right { right: 48px; top: 14%; font-size: 0.75rem; }
+  }
+  .stage-label--right span {
+    font-weight: 400;
+    opacity: 0.8;
+  }
+
+  .stage-shoe {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 40px 60px rgba(0, 0, 0, 0.35));
+    animation: float 4s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+  }
+
+  .stage-cta {
+    position: absolute;
+    right: 16px;
+    top: 40%;
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 20px;
+    border-radius: 9999px;
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 11px;
+    font-weight: 600;
+    border: none;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15), 0 4px 6px -4px rgba(0, 0, 0, 0.15);
+    transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  @media (min-width: 640px) {
+    .stage-cta { right: 56px; top: 38%; padding: 12px 28px; font-size: 0.875rem; }
+  }
+  .stage-cta:hover { transform: scale(1.05); }
+
+  .stage-play {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: none;
+    border: none;
+    padding: 0;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15), 0 4px 6px -4px rgba(0, 0, 0, 0.15);
+    transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  @media (min-width: 640px) {
+    .stage-play { bottom: 24px; width: 48px; height: 48px; }
+  }
+  .stage-play:hover { transform: translateX(-50%) scale(1.1); }
+  .stage-play svg { width: 100%; height: 100%; display: block; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage-shoe { animation: none; }
+    .mobile-menu,
+    .mobile-menu-links a,
+    .mobile-menu-tagline,
+    .hamburger-bar,
+    .stage-cta,
+    .stage-play {
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<header class="nav">
+  <a class="nav-logo" href="#" aria-label="SkyRunner Co. — home">SKR</a>
+
+  <nav class="nav-links" aria-label="Primary">
+    <a href="#">Latest Drops</a>
+    <a href="#">Him</a>
+    <a href="#">Femme</a>
+    <a href="#">Tots</a>
+    <a href="#">Design It</a>
+  </nav>
+
+  <div class="nav-actions">
+    <button class="icon-btn" type="button" aria-label="Account">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+    </button>
+    <div class="cart-wrap">
+      <button class="icon-btn" type="button" aria-label="Cart, 0 items">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+          <path d="M3 6h18" />
+          <path d="M16 10a4 4 0 0 1-8 0" />
+        </svg>
+      </button>
+      <span class="cart-badge" aria-hidden="true">0</span>
+    </div>
+    <button class="hamburger" type="button" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu">
+      <span class="hamburger-bar top"></span>
+      <span class="hamburger-bar bottom"></span>
+    </button>
+  </div>
+</header>
+<div class="mobile-menu" id="mobileMenu" role="dialog" aria-modal="true" aria-label="Site menu" aria-hidden="true">
+  <nav class="mobile-menu-links" aria-label="Mobile">
+    <a href="#" style="transition-delay:0ms">Latest Drops</a>
+    <a href="#" style="transition-delay:0ms">Him</a>
+    <a href="#" style="transition-delay:0ms">Femme</a>
+    <a href="#" style="transition-delay:0ms">Tots</a>
+    <a href="#" style="transition-delay:0ms">Design It</a>
+  </nav>
+  <p class="mobile-menu-tagline">SKR — In The Clouds</p>
+</div>
+<section class="stage" aria-label="SkyRunner Co. — In The Clouds">
+  <video class="stage-video" id="bgVideo" src="assets/bg-clouds.mp4" poster="assets/bg-clouds-poster.jpg" autoplay muted loop playsinline aria-hidden="true"></video>
+
+  <h1 class="stage-title">In The Clouds</h1>
+
+  <p class="stage-label stage-label--left">Aftershock</p>
+  <p class="stage-label stage-label--right">Statement Men&rsquo;s <span>Kick</span></p>
+
+  <img class="stage-shoe" src="assets/shoe-floating.png" alt="SKR Aftershock sneaker, a pearlescent pink and lavender running shoe with a modular sole, floating above the clouds" />
+
+  <a class="stage-cta" href="#">Step Inside</a>
+
+  <button class="stage-play" type="button" id="playToggle" aria-label="Pause background video" aria-pressed="true">
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <defs>
+        <mask id="playMask">
+          <rect x="0" y="0" width="48" height="48" fill="white" />
+          <path id="playTriangle" d="M20 16 L33 24 L20 32 Z" fill="black" />
+        </mask>
+      </defs>
+      <circle cx="24" cy="24" r="24" fill="#ffffff" mask="url(#playMask)" />
+    </svg>
+  </button>
+</section>
+<script>
+(function () {
+  'use strict';
+
+  var reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  /* ---------- Mobile menu ---------- */
+  var toggle = document.getElementById('menuToggle');
+  var menu = document.getElementById('mobileMenu');
+  var menuLinks = menu.querySelectorAll('a');
+  var isOpen = false;
+
+  function setStagger(opening) {
+    menuLinks.forEach(function (link, i) {
+      link.style.transitionDelay = opening ? (150 + i * 60) + 'ms' : '0ms';
+    });
+  }
+
+  function openMenu() {
+    isOpen = true;
+    setStagger(true);
+    menu.classList.add('is-open');
+    menu.setAttribute('aria-hidden', 'false');
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.setAttribute('aria-label', 'Close menu');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeMenu() {
+    isOpen = false;
+    setStagger(false);
+    menu.classList.remove('is-open');
+    menu.setAttribute('aria-hidden', 'true');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', 'Open menu');
+    document.body.style.overflow = '';
+  }
+
+  toggle.addEventListener('click', function () {
+    if (isOpen) { closeMenu(); } else { openMenu(); }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && isOpen) {
+      closeMenu();
+      toggle.focus();
+    }
+  });
+
+  menuLinks.forEach(function (link) {
+    link.addEventListener('click', function (e) {
+      e.preventDefault();
+      closeMenu();
+    });
+  });
+
+  /* Non-routing placeholder links elsewhere on the page (nav, CTA) */
+  document.querySelectorAll('.nav-links a, .stage-cta').forEach(function (link) {
+    link.addEventListener('click', function (e) { e.preventDefault(); });
+  });
+
+  /* ---------- Background video play/pause toggle ---------- */
+  var video = document.getElementById('bgVideo');
+  var playToggle = document.getElementById('playToggle');
+
+  function syncPlayState() {
+    var playing = !video.paused;
+    playToggle.setAttribute('aria-pressed', String(playing));
+    playToggle.setAttribute('aria-label', playing ? 'Pause background video' : 'Play background video');
+  }
+
+  playToggle.addEventListener('click', function () {
+    if (video.paused) { video.play().catch(function () {}); } else { video.pause(); }
+    syncPlayState();
+  });
+
+  /* Respect reduced motion: do not autoplay the looping cloudscape, show the poster frame at rest. */
+  function applyMotionPreference() {
+    if (reduceMotionQuery.matches) {
+      video.pause();
+      video.currentTime = 0;
+    } else if (video.paused && video.currentTime === 0) {
+      video.play().catch(function () {});
+    }
+    syncPlayState();
+  }
+
+  applyMotionPreference();
+  if (reduceMotionQuery.addEventListener) {
+    reduceMotionQuery.addEventListener('change', applyMotionPreference);
+  }
+})();
+</script>
+</body>
+</html>

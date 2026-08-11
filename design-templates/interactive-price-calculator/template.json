@@ -1,0 +1,12 @@
+{
+  "slug": "interactive-price-calculator",
+  "name": "Webfluin Studio — Interactive Price Calculator",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=price-calculator",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

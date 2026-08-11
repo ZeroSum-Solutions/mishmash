@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EngineTech — Technical Specifications</title>
+<meta name="description" content="Technical specifications stats section for EngineTech, an aerospace propulsion company: a four-tab data switcher driving an animated horizontal bar chart.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --hero-max-width: 1820px;
+    --hero-blue: #7191d0;
+    --hero-blue-soft: #aab8d5;
+    --hero-blue-fill: #8fb0ef;
+    --hero-blue-pale: #d6e3ff;
+    --hero-blue-a05: rgb(113 145 208 / 0.05);
+    --hero-blue-a18: rgb(113 145 208 / 0.18);
+    --hero-blue-a24: rgb(113 145 208 / 0.24);
+    --hero-blue-a62: rgb(113 145 208 / 0.62);
+    --hero-blue-soft-a11: rgb(170 184 213 / 0.11);
+    --hero-blue-soft-a14: rgb(170 184 213 / 0.14);
+    --hero-blue-soft-a22: rgb(170 184 213 / 0.22);
+    --hero-blue-soft-a62: rgb(170 184 213 / 0.62);
+    --hero-blue-pale-a42: rgb(214 227 255 / 0.42);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: #111414;
+    font-family: "Geist", "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+  }
+
+  /* ---- Minimal page chrome ---- */
+  .page-nav {
+    background: #111414;
+    border-bottom: 1px solid rgb(255 255 255 / 0.08);
+    padding: 18px clamp(16px, 3.8vw, 72px);
+  }
+  .page-nav__mark {
+    color: #f7f8f8;
+    font-size: 14px;
+    font-weight: 680;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* ---- Section container ---- */
+  .stats {
+    position: relative;
+    z-index: 80;
+    min-height: 100vh;
+    padding: clamp(44px, 5vw, 86px) clamp(16px, 3.8vw, 72px) clamp(54px, 5vw, 90px);
+    color: #f7f8f8;
+    background:
+      radial-gradient(circle at 78% 18%, var(--hero-blue-a18), transparent 34%),
+      radial-gradient(circle at 18% 88%, var(--hero-blue-soft-a11), transparent 28%),
+      linear-gradient(180deg, #111414 0%, #171a1a 100%);
+  }
+
+  /* ---- Header ---- */
+  .stats__header {
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.72fr);
+    gap: clamp(32px, 6vw, 120px);
+    max-width: var(--hero-max-width);
+    margin: 0 auto clamp(34px, 4.5vw, 72px);
+  }
+  .stats__title-wrap h2 {
+    max-width: 920px;
+    margin: 0;
+    color: #f7f8f8;
+    font-size: clamp(29px, 3.2vw, 54px);
+    font-weight: 300;
+    letter-spacing: 0;
+    line-height: 1.08;
+  }
+  .stats__summary {
+    align-self: start;
+    margin: 0;
+    color: rgb(247 248 248 / 0.8);
+    font-size: clamp(18px, 1.65vw, 28px);
+    font-weight: 360;
+    line-height: 1.34;
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 420ms ease, transform 420ms ease;
+  }
+  .stats__summary.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* ---- Tab bar ---- */
+  .stats__tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    max-width: var(--hero-max-width);
+    margin: 0 auto;
+    border-bottom: 1px solid rgb(255 255 255 / 0.14);
+  }
+  .statstab {
+    position: relative;
+    min-height: 58px;
+    padding: 0 20px 18px 0;
+    border: 0;
+    background: transparent;
+    color: rgb(247 248 248 / 0.5);
+    font: inherit;
+    font-size: clamp(14px, 1.22vw, 22px);
+    font-weight: 430;
+    text-align: left;
+    cursor: pointer;
+    transition: color 220ms ease;
+  }
+  .statstab:hover { color: rgb(247 248 248 / 0.78); }
+  .statstab.is-active { color: #ffffff; }
+  .statstab::after {
+    content: "";
+    position: absolute;
+    right: 16px;
+    bottom: -1px;
+    left: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--hero-blue), var(--hero-blue-soft));
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .statstab.is-active::after { transform: scaleX(1); }
+  .statstab:focus-visible {
+    outline: 2px solid var(--hero-blue);
+    outline-offset: 3px;
+  }
+
+  /* ---- Chart container ---- */
+  .statschart {
+    position: relative;
+    max-width: var(--hero-max-width);
+    min-height: clamp(520px, 58vh, 680px);
+    margin: clamp(28px, 3vw, 48px) auto 0;
+    padding: 0 0 22px;
+    overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 0.08);
+    border-radius: 20px;
+    background-color: rgb(255 255 255 / 0.025);
+    background-image: repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(10% - 1px),
+      rgb(255 255 255 / 0.07) calc(10% - 1px),
+      rgb(255 255 255 / 0.07) 10%
+    );
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 24px 70px rgb(0 0 0 / 0.18);
+  }
+  .statschart:focus-visible {
+    outline: 2px solid var(--hero-blue);
+    outline-offset: -2px;
+  }
+
+  .statschart-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 24px;
+    padding: clamp(18px, 2vw, 28px);
+    border-bottom: 1px solid rgb(255 255 255 / 0.08);
+    background: rgb(255 255 255 / 0.025);
+  }
+  .statschart-head-title {
+    color: #ffffff;
+    font-size: clamp(12px, 0.86vw, 14px);
+    font-weight: 760;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .statschart-head-label {
+    color: rgb(247 248 248 / 0.48);
+    font-size: clamp(12px, 0.86vw, 14px);
+    font-weight: 620;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* ---- Bars ---- */
+  .statsbars {
+    display: grid;
+    gap: clamp(16px, 2vh, 26px);
+    padding: clamp(26px, 3vw, 48px) clamp(24px, 2.4vw, 42px) 0;
+  }
+  .stats__bar-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.27fr) minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(18px, 2vw, 34px);
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  .statschart.is-ready .stats__bar-row {
+    animation: stats-row-in 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: var(--bar-delay);
+  }
+
+  .statsbar-label-title {
+    display: block;
+    color: #ffffff;
+    font-size: clamp(15px, 1.1vw, 19px);
+    font-weight: 680;
+    line-height: 1.2;
+  }
+  .statsbar-label-note {
+    display: block;
+    margin-top: 5px;
+    color: rgb(247 248 248 / 0.48);
+    font-size: clamp(12px, 0.86vw, 14px);
+    line-height: 1.35;
+  }
+
+  .statstrack {
+    position: relative;
+    height: clamp(48px, 5.4vh, 64px);
+    overflow: hidden;
+    border-radius: 0;
+    background: rgb(255 255 255 / 0.055);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.075), 0 12px 32px rgb(0 0 0 / 0.16);
+  }
+
+  .statsrange {
+    position: absolute;
+    top: 9px;
+    bottom: 9px;
+    left: var(--range-start);
+    width: var(--range-width);
+    border: 1px solid var(--hero-blue-soft-a22);
+    background: linear-gradient(90deg, var(--hero-blue-a05), var(--hero-blue-soft-a14), var(--hero-blue-a05));
+    opacity: 0;
+    transform: scaleX(0.6);
+    transform-origin: left;
+  }
+  .statschart.is-ready .statsrange {
+    animation: stats-range-in 620ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(var(--bar-delay) + 60ms);
+  }
+
+  .statsbar {
+    position: relative;
+    z-index: 1;
+    width: var(--bar-value);
+    height: 100%;
+    background: linear-gradient(90deg, var(--hero-blue-a62) 0%, var(--hero-blue-fill) 62%, var(--hero-blue-pale) 100%);
+    box-shadow: 0 0 34px var(--hero-blue-a24);
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  .statschart.is-ready .statsbar {
+    animation: stats-fill 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(var(--bar-delay) + 110ms);
+  }
+
+  .statsvalue {
+    position: absolute;
+    z-index: 3;
+    top: 50%;
+    right: 18px;
+    transform: translateY(-50%);
+    color: #ffffff;
+    font-size: clamp(14px, 1vw, 18px);
+    font-weight: 740;
+  }
+
+  .statstrace {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .statspoint {
+    position: absolute;
+    left: var(--point-x);
+    top: var(--point-y);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgb(255 255 255 / 0.95) 0 8%, var(--hero-blue-pale-a42) 9% 22%, transparent 58%);
+    filter: blur(0.1px);
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2);
+    --spark-rotate: 0deg;
+  }
+  .statspoint--1 { width: 14px; height: 14px; --spark-rotate: 22deg; }
+  .statspoint--2 { width: 11px; height: 11px; --spark-rotate: -18deg; }
+  .statspoint::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 24px;
+    height: 1px;
+    transform: translate(-50%, -50%) rotate(var(--spark-rotate));
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.72), transparent);
+  }
+  .statspoint::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1px;
+    height: 18px;
+    transform: translate(-50%, -50%) rotate(var(--spark-rotate));
+    background: linear-gradient(180deg, transparent, var(--hero-blue-soft-a62), transparent);
+  }
+  .statschart.is-ready .statspoint {
+    animation: stats-point-in 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: calc(var(--bar-delay) + 260ms + var(--point-delay));
+  }
+
+  /* ---- Axis ---- */
+  .statsaxis {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.27fr) minmax(0, 1fr);
+    gap: clamp(18px, 2vw, 34px);
+    padding: 14px clamp(24px, 2.4vw, 42px) 0;
+    color: rgb(247 248 248 / 0.42);
+    font-size: clamp(11px, 0.84vw, 14px);
+  }
+  .statsaxis-spacer { display: block; }
+  .statsaxis-ticks {
+    display: grid;
+    grid-template-columns: repeat(11, minmax(0, 1fr));
+  }
+  .statsaxis-ticks span { text-align: center; }
+  .statsaxis-ticks span:first-child { text-align: left; }
+  .statsaxis-ticks span:last-child { text-align: right; }
+
+  /* ---- Keyframes ---- */
+  @keyframes stats-row-in {
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes stats-fill {
+    to { transform: scaleX(1); }
+  }
+  @keyframes stats-range-in {
+    to { opacity: 1; transform: scaleX(1); }
+  }
+  @keyframes stats-point-in {
+    to { opacity: 0.86; transform: translate(-50%, -50%) scale(1); }
+  }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 980px) {
+    .stats__header { grid-template-columns: 1fr; }
+    .stats__tabs {
+      display: flex;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+    .statstab { flex: 0 0 min(260px, 76vw); }
+    .stats__bar-row { grid-template-columns: 1fr; gap: 10px; }
+    .statsaxis { grid-template-columns: 1fr; }
+    .statsaxis-spacer { display: none; }
+  }
+
+  @media (max-width: 620px) {
+    .stats__title-wrap h2 { font-size: clamp(26px, 8vw, 42px); }
+    .statschart { min-height: auto; padding-bottom: 46px; }
+    .statsaxis-ticks { grid-template-columns: repeat(6, 1fr); }
+    .statsaxis-ticks span:nth-child(even) { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stats__summary { transition: none; }
+    .stats__summary.is-visible { opacity: 1; transform: none; }
+    .stats__bar-row,
+    .statsrange,
+    .statsbar,
+    .statspoint {
+      animation: none !important;
+      transition: none !important;
+    }
+    .statschart.is-ready .stats__bar-row { opacity: 1; transform: none; }
+    .statschart.is-ready .statsrange { opacity: 1; transform: scaleX(1); }
+    .statschart.is-ready .statsbar { transform: scaleX(1); }
+    .statschart.is-ready .statspoint { opacity: 0.86; transform: translate(-50%, -50%) scale(1); }
+  }
+</style>
+</head>
+<body>
+<header class="page-nav">
+  <span class="page-nav__mark">EngineTech</span>
+</header>
+<main>
+<section class="stats" aria-labelledby="stats-heading">
+
+  <div class="stats__header">
+    <div class="stats__title-wrap">
+      <h2 id="stats-heading">Unmatched propulsion data across every flight-critical layer.</h2>
+    </div>
+    <p class="stats__summary" id="stats-summary">Distributed aerospace infrastructure needs engines that can test, relight, and recover across dense launch corridors and remote operating bases.</p>
+  </div>
+
+  <div class="stats__tabs" role="tablist" aria-label="Technical specification categories">
+    <button type="button" class="statstab is-active" id="stats-tab-cities" role="tab" aria-selected="true" aria-controls="stats-panel" tabindex="0" data-stats-tab="cities">Cities &amp; Infrastructure</button>
+    <button type="button" class="statstab" id="stats-tab-materials" role="tab" aria-selected="false" aria-controls="stats-panel" tabindex="-1" data-stats-tab="materials">Materials &amp; Manufacturing</button>
+    <button type="button" class="statstab" id="stats-tab-fuels" role="tab" aria-selected="false" aria-controls="stats-panel" tabindex="-1" data-stats-tab="fuels">Fuels &amp; Upstream</button>
+    <button type="button" class="statstab" id="stats-tab-hydrogen" role="tab" aria-selected="false" aria-controls="stats-panel" tabindex="-1" data-stats-tab="hydrogen">H2 Hydrogen</button>
+  </div>
+
+  <div class="statschart" role="tabpanel" id="stats-panel" aria-live="polite" aria-labelledby="stats-tab-cities" tabindex="0" data-stats-chart>
+    <div class="statschart-head">
+      <span class="statschart-head-title">Cities &amp; Infrastructure</span>
+      <span class="statschart-head-label">Operating envelope</span>
+    </div>
+
+    <div class="statsbars">
+      <div class="stats__bar-row" role="group" aria-label="Mobile integration bays: 82%, deployment coverage. Target 88%. Operating range 58% to 91%." style="--bar-value:82%; --range-start:58%; --range-width:33%; --bar-delay:0ms;">
+        <div class="statsbar-label">
+          <span class="statsbar-label-title">Mobile integration bays</span>
+          <span class="statsbar-label-note">deployment coverage</span>
+        </div>
+        <div class="statstrack">
+          <div class="statsrange"></div>
+          <div class="statsbar" aria-hidden="true"></div>
+          <span class="statsvalue" aria-hidden="true">82%</span>
+          <div class="statstrace" aria-hidden="true">
+            <span class="statspoint" style="--point-x:28%; --point-y:34%; --point-delay:0ms;"></span>
+            <span class="statspoint statspoint--1" style="--point-x:42%; --point-y:62%; --point-delay:70ms;"></span>
+            <span class="statspoint statspoint--2" style="--point-x:57%; --point-y:34%; --point-delay:140ms;"></span>
+            <span class="statspoint" style="--point-x:63%; --point-y:62%; --point-delay:210ms;"></span>
+            <span class="statspoint statspoint--1" style="--point-x:74%; --point-y:34%; --point-delay:280ms;"></span>
+            <span class="statspoint statspoint--2" style="--point-x:82%; --point-y:62%; --point-delay:350ms;"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats__bar-row" role="group" aria-label="Airport-adjacent service cells: 68%, qualified workflows. Target 74%. Operating range 44% to 79%." style="--bar-value:68%; --range-start:44%; --range-width:35%; --bar-delay:90ms;">
+        <div class="statsbar-label">
+          <span class="statsbar-label-title">Airport-adjacent service cells</span>
+          <span class="statsbar-label-note">qualified workflows</span>
+        </div>
+        <div class="statstrack">
+          <div class="statsrange"></div>
+          <div class="statsbar" aria-hidden="true"></div>
+          <span class="statsvalue" aria-hidden="true">68%</span>
+          <div class="statstrace" aria-hidden="true">
+            <span class="statspoint" style="--point-x:18%; --point-y:34%; --point-delay:0ms;"></span>
+            <span class="statspoint statspoint--1" style="--point-x:36%; --point-y:62%; --point-delay:70ms;"></span>
+            <span class="statspoint statspoint--2" style="--point-x:41%; --point-y:34%; --point-delay:140ms;"></span>
+            <span class="statspoint" style="--point-x:55%; --point-y:62%; --point-delay:210ms;"></span>
+            <span class="statspoint statspoint--1" style="--point-x:61%; --point-y:34%; --point-delay:280ms;"></span>
+            <span class="statspoint statspoint--2" style="--point-x:68%; --point-y:62%; --point-delay:350ms;"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats__bar-row" role="group" aria-label="Remote launch support: 54%, field readiness. Target 63%. Operating range 30% to 70%." style="--bar-value:54%; --range-start:30%; --range-width:40%; --bar-delay:180ms;">
+        <div class="statsbar-label">
+          <span class="statsbar-label-title">Remote launch support</span>
+          <span class="statsbar-label-note">field readiness</span>
+        </div>
+        <div class="statstrack">
+          <div class="statsrange"></div>
+          <div class="statsbar" aria-hidden="true"></div>
+          <span class="statsvalue" aria-hidden="true">54%</span>
+          <div class="statstrace" aria-hidden="true">
+            <span class="statspoint" style="--point-x:14%; --point-y:34%; --point-delay:0ms;"></span>
+            <span class="statspoint statspoint--1" style="--point-x:24%; --point-y:62%; --point-delay:70ms;"></span>
+            <span class="statspoint statspoint--2" style="--point-x:39%; --point-y:34%; --point-delay:140ms;"></span>
+            <span class="statspoint" style="--point-x:43%; --point-y:62%; --point-delay:210ms;"></span>
+            <span class="statspoint statspoint--1" style="--point-x:48%; --point-y:34%; --point-delay:280ms;"></span>
+            <span class="statspoint statspoint--2" style="--point-x:54%; --point-y:62%; --point-delay:350ms;"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats__bar-row" role="group" aria-label="Thermal recovery loops: 76%, heat reuse potential. Target 81%. Operating range 50% to 84%." style="--bar-value:76%; --range-start:50%; --range-width:34%; --bar-delay:270ms;">
+        <div class="statsbar-label">
+          <span class="statsbar-label-title">Thermal recovery loops</span>
+          <span class="statsbar-label-note">heat reuse potential</span>
+        </div>
+        <div class="statstrack">
+          <div class="statsrange"></div>
+          <div class="statsbar" aria-hidden="true"></div>
+          <span class="statsvalue" aria-hidden="true">76%</span>
+          <div class="statstrace" aria-hidden="true">
+            <span class="statspoint" style="--point-x:26%; --point-y:34%; --point-delay:0ms;"></span>
+            <span class="statspoint statspoint--1" style="--point-x:38%; --point-y:62%; --point-delay:70ms;"></span>
+            <span class="statspoint statspoint--2" style="--point-x:49%; --point-y:34%; --point-delay:140ms;"></span>
+            <span class="statspoint" style="--point-x:66%; --point-y:62%; --point-delay:210ms;"></span>
+            <span class="statspoint statspoint--1" style="--point-x:72%; --point-y:34%; --point-delay:280ms;"></span>
+            <span class="statspoint statspoint--2" style="--point-x:76%; --point-y:62%; --point-delay:350ms;"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="statsaxis">
+      <span class="statsaxis-spacer"></span>
+      <div class="statsaxis-ticks">
+        <span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>60</span><span>70</span><span>80</span><span>90</span><span>100</span>
+      </div>
+    </div>
+  </div>
+
+</section>
+</main>
+<script>
+(function () {
+  "use strict";
+
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var DATA = {
+    cities: {
+      title: "Cities & Infrastructure",
+      summary: "Distributed aerospace infrastructure needs engines that can test, relight, and recover across dense launch corridors and remote operating bases.",
+      bars: [
+        { label: "Mobile integration bays", value: 82, target: 88, rangeStart: 58, rangeEnd: 91, unit: "%", note: "deployment coverage", trace: [28, 42, 57, 63, 74, 82] },
+        { label: "Airport-adjacent service cells", value: 68, target: 74, rangeStart: 44, rangeEnd: 79, unit: "%", note: "qualified workflows", trace: [18, 36, 41, 55, 61, 68] },
+        { label: "Remote launch support", value: 54, target: 63, rangeStart: 30, rangeEnd: 70, unit: "%", note: "field readiness", trace: [14, 24, 39, 43, 48, 54] },
+        { label: "Thermal recovery loops", value: 76, target: 81, rangeStart: 50, rangeEnd: 84, unit: "%", note: "heat reuse potential", trace: [26, 38, 49, 66, 72, 76] }
+      ]
+    },
+    materials: {
+      title: "Materials & Manufacturing",
+      summary: "EngineTech combines high-temperature alloys, additive tooling, and inspection data to compress the path from design lock to certified hardware.",
+      bars: [
+        { label: "Nickel superalloy margin", value: 91, target: 94, rangeStart: 68, rangeEnd: 96, unit: "%", note: "thermal headroom", trace: [44, 61, 70, 79, 86, 91] },
+        { label: "Additive chamber tooling", value: 72, target: 80, rangeStart: 48, rangeEnd: 86, unit: "%", note: "lead-time reduction", trace: [19, 34, 48, 53, 67, 72] },
+        { label: "Sub-micron inspection yield", value: 96, target: 97, rangeStart: 82, rangeEnd: 99, unit: "%", note: "accepted components", trace: [71, 77, 84, 89, 94, 96] },
+        { label: "Reusable test article cycles", value: 84, target: 88, rangeStart: 62, rangeEnd: 91, unit: "%", note: "qualification depth", trace: [36, 52, 64, 71, 79, 84] }
+      ]
+    },
+    fuels: {
+      title: "Fuels & Upstream",
+      summary: "Fuel-path analysis links propellant availability, storage constraints, and injector behavior before a program commits to flight architecture.",
+      bars: [
+        { label: "Methane supply compatibility", value: 78, target: 83, rangeStart: 52, rangeEnd: 88, unit: "%", note: "regional availability", trace: [22, 31, 46, 58, 69, 78] },
+        { label: "Kerosene retrofit readiness", value: 64, target: 70, rangeStart: 40, rangeEnd: 74, unit: "%", note: "legacy platforms", trace: [28, 35, 39, 52, 57, 64] },
+        { label: "Cryogenic storage stability", value: 88, target: 92, rangeStart: 66, rangeEnd: 95, unit: "%", note: "validated envelopes", trace: [45, 56, 68, 74, 83, 88] },
+        { label: "Injector response confidence", value: 92, target: 94, rangeStart: 70, rangeEnd: 97, unit: "%", note: "hot-fire data", trace: [48, 62, 73, 85, 89, 92] }
+      ]
+    },
+    hydrogen: {
+      title: "H2 Hydrogen",
+      summary: "Hydrogen programs require tight coordination between tankage, feed systems, ignition stability, and ultra-low-temperature operations.",
+      bars: [
+        { label: "Hydrogen-ready turbopumps", value: 86, target: 90, rangeStart: 62, rangeEnd: 93, unit: "%", note: "design maturity", trace: [30, 46, 60, 71, 79, 86] },
+        { label: "LH2 feedline conditioning", value: 74, target: 82, rangeStart: 47, rangeEnd: 86, unit: "%", note: "ground systems", trace: [18, 29, 44, 58, 66, 74] },
+        { label: "Ignition stability range", value: 93, target: 95, rangeStart: 72, rangeEnd: 98, unit: "%", note: "transient control", trace: [54, 68, 75, 84, 90, 93] },
+        { label: "Zero-carbon flight pathway", value: 81, target: 87, rangeStart: 56, rangeEnd: 90, unit: "%", note: "program fit", trace: [24, 39, 55, 68, 76, 81] }
+      ]
+    }
+  };
+
+  var ORDER = ["cities", "materials", "fuels", "hydrogen"];
+  var BAR_DELAYS = [0, 90, 180, 270];
+  var VARIANT_CLASS = ["", " statspoint--1", " statspoint--2"];
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function buildTraceHtml(trace) {
+    var out = "";
+    for (var i = 0; i < trace.length; i++) {
+      var y = i % 2 === 0 ? "34%" : "62%";
+      out += '<span class="statspoint' + VARIANT_CLASS[i % 3] + '" style="--point-x:' + trace[i] + '%; --point-y:' + y + '; --point-delay:' + (i * 70) + 'ms;"></span>';
+    }
+    return out;
+  }
+
+  function buildRowHtml(bar, index) {
+    var rangeWidth = bar.rangeEnd - bar.rangeStart;
+    var label = escapeHtml(bar.label);
+    var note = escapeHtml(bar.note);
+    var groupLabel = escapeHtml(
+      bar.label + ": " + bar.value + bar.unit + ", " + bar.note + ". Target " + bar.target + bar.unit +
+      ". Operating range " + bar.rangeStart + bar.unit + " to " + bar.rangeEnd + bar.unit + "."
+    );
+    return (
+      '<div class="stats__bar-row" role="group" aria-label="' + groupLabel + '" style="--bar-value:' + bar.value + '%; --range-start:' + bar.rangeStart + '%; --range-width:' + rangeWidth + '%; --bar-delay:' + BAR_DELAYS[index] + 'ms;">' +
+        '<div class="statsbar-label">' +
+          '<span class="statsbar-label-title">' + label + '</span>' +
+          '<span class="statsbar-label-note">' + note + '</span>' +
+        '</div>' +
+        '<div class="statstrack">' +
+          '<div class="statsrange"></div>' +
+          '<div class="statsbar" aria-hidden="true"></div>' +
+          '<span class="statsvalue" aria-hidden="true">' + bar.value + bar.unit + '</span>' +
+          '<div class="statstrace" aria-hidden="true">' + buildTraceHtml(bar.trace) + '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function buildChartHtml(key) {
+    var d = DATA[key];
+    var rows = "";
+    for (var i = 0; i < d.bars.length; i++) {
+      rows += buildRowHtml(d.bars[i], i);
+    }
+    return (
+      '<div class="statschart-head">' +
+        '<span class="statschart-head-title">' + escapeHtml(d.title) + '</span>' +
+        '<span class="statschart-head-label">Operating envelope</span>' +
+      '</div>' +
+      '<div class="statsbars">' + rows + '</div>' +
+      '<div class="statsaxis">' +
+        '<span class="statsaxis-spacer"></span>' +
+        '<div class="statsaxis-ticks">' +
+          '<span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>60</span><span>70</span><span>80</span><span>90</span><span>100</span>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.statstab[role="tab"]'));
+  var summary = document.getElementById("stats-summary");
+  var chart = document.querySelector('[data-stats-chart]');
+  var currentKey = "cities";
+  var switchTimer = null;
+
+  function switchTab(key, opts) {
+    opts = opts || {};
+    if (switchTimer !== null) { window.clearTimeout(switchTimer); switchTimer = null; }
+    if (key === currentKey && !opts.force) {
+      return;
+    }
+    currentKey = key;
+
+    tabs.forEach(function (btn) {
+      var active = btn.getAttribute("data-stats-tab") === key;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+      btn.tabIndex = active ? 0 : -1;
+      if (active) {
+        chart.setAttribute("aria-labelledby", btn.id);
+      }
+    });
+
+    if (reduceMotion) {
+      summary.textContent = DATA[key].summary;
+      chart.innerHTML = buildChartHtml(key);
+      summary.classList.add("is-visible");
+      chart.classList.add("is-ready");
+      return;
+    }
+
+    summary.classList.remove("is-visible");
+    chart.classList.remove("is-ready");
+
+    switchTimer = window.setTimeout(function () {
+      summary.textContent = DATA[key].summary;
+      chart.innerHTML = buildChartHtml(key);
+      requestAnimationFrame(function () {
+        summary.classList.add("is-visible");
+        chart.classList.add("is-ready");
+      });
+    }, 140);
+  }
+
+  tabs.forEach(function (btn, i) {
+    btn.addEventListener("click", function () {
+      switchTab(btn.getAttribute("data-stats-tab"));
+      btn.focus();
+    });
+    btn.addEventListener("keydown", function (e) {
+      var next = null;
+      if (e.key === "ArrowRight") { next = (i + 1) % tabs.length; }
+      else if (e.key === "ArrowLeft") { next = (i - 1 + tabs.length) % tabs.length; }
+      else if (e.key === "Home") { next = 0; }
+      else if (e.key === "End") { next = tabs.length - 1; }
+      if (next === null) { return; }
+      e.preventDefault();
+      var nextBtn = tabs[next];
+      switchTab(nextBtn.getAttribute("data-stats-tab"));
+      nextBtn.focus();
+    });
+  });
+
+  requestAnimationFrame(function () {
+    summary.classList.add("is-visible");
+    chart.classList.add("is-ready");
+  });
+})();
+</script>
+</body>
+</html>

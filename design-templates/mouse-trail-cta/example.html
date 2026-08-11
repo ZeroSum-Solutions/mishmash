@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Partner with us — Mouse Trail CTA</title>
+<meta name="description" content="A large rounded white CTA card with a giant serif heading and an interactive mouse-trail effect that drops fading, rotated project thumbnails wherever the cursor moves." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23051A24'/%3E%3Ctext x='32' y='44' font-family='Georgia,serif' font-size='34' fill='%23F6FCFF' text-anchor='middle'%3EV%3C/text%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #051A24;
+    --ink-2: #0D212C;
+    --paper: #F6FCFF;
+    --mute: #E0EBF0;
+    --page-bg: #EEF2F4;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 0;
+  }
+
+  .partner {
+    width: 100%;
+    padding: 3rem 1.5rem;
+  }
+
+  .partner-card {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 12rem 0;
+    background: var(--paper);
+    border-radius: 40px;
+    box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.05), 0 4px 30px rgba(0, 0, 0, 0.08);
+  }
+
+  .trail-demo-trigger {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    z-index: 20;
+  }
+
+  .trail-demo-trigger:focus-visible {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0.6rem 1.1rem;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 9999px;
+    box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.05), 0 4px 30px rgba(0, 0, 0, 0.08);
+    outline: 3px solid var(--ink);
+    outline-offset: 3px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  .partner-content {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 0 1.5rem;
+    pointer-events: none;
+  }
+
+  .partner-heading {
+    margin: 0 0 3rem;
+    font-family: 'Fraunces', serif;
+    font-weight: 400;
+    font-size: 48px;
+    line-height: 1.1;
+    letter-spacing: -0.025em;
+    color: var(--ink-2);
+  }
+
+  @media (min-width: 768px) {
+    .partner-heading { font-size: 64px; }
+  }
+
+  @media (min-width: 1024px) {
+    .partner-heading { font-size: 80px; }
+  }
+
+  .partner-cta {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1.5rem;
+    background: var(--ink);
+    color: #fff;
+    border: 0;
+    border-radius: 9999px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow:
+      0 1px 2px 0 rgba(5, 26, 36, 0.1),
+      0 4px 4px 0 rgba(5, 26, 36, 0.09),
+      0 9px 6px 0 rgba(5, 26, 36, 0.05),
+      0 17px 7px 0 rgba(5, 26, 36, 0.01),
+      0 26px 7px 0 rgba(5, 26, 36, 0),
+      inset 0 2px 8px 0 rgba(255, 255, 255, 0.5);
+    transition: background-color 200ms;
+  }
+
+  .partner-cta:hover { background: var(--ink-2); }
+
+  .partner-cta:focus-visible {
+    outline: 3px solid var(--ink);
+    outline-offset: 3px;
+  }
+
+  .partner-cta:disabled { cursor: default; }
+
+  .partner-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: none;
+  }
+
+  .partner-status {
+    position: relative;
+    z-index: 10;
+    min-height: 1.25rem;
+    margin-top: 1rem;
+    font-size: 0.8125rem;
+    color: var(--ink-2);
+    opacity: 0;
+    transition: opacity 200ms;
+    pointer-events: none;
+  }
+
+  .partner-status.is-visible { opacity: 1; }
+
+  .trail-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .trail-thumb-wrap {
+    position: absolute;
+    width: 96px;
+    will-change: transform, opacity;
+  }
+
+  .trail-thumb-wrap img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  }
+
+  .animate-fade-in-up {
+    animation: fadeInUp 0.8s ease-out forwards;
+    opacity: 0;
+  }
+
+  .opacity-0 { opacity: 0; }
+
+  @keyframes fadeInUp {
+    0%   { opacity: 0; transform: translateY(30px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-in-up {
+      animation-duration: 0.01ms;
+      animation-iteration-count: 1;
+    }
+    .partner-cta,
+    .partner-status {
+      transition-duration: 0.01ms;
+    }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <section class="partner" id="partnerSection" aria-labelledby="partnerHeading">
+    <div class="partner-card" id="partnerCard">
+      <button type="button" class="trail-demo-trigger" id="trailDemoTrigger">
+        Preview the hover-trail effect (project thumbnails animate across the card)
+      </button>
+
+      <div class="partner-content">
+        <h2 class="partner-heading opacity-0" id="partnerHeading">Partner with us</h2>
+        <button type="button" class="partner-cta opacity-0" id="ctaButton">
+          <img class="partner-avatar" src="assets/avatar.jpg" alt="" />
+          <span>Start chat with Viktor</span>
+        </button>
+        <p class="partner-status" id="ctaStatus" role="status" aria-live="polite"></p>
+      </div>
+
+      <div class="trail-layer" id="trailLayer" aria-hidden="true"></div>
+    </div>
+  </section>
+</main>
+<script>
+(function () {
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var section = document.getElementById('partnerSection');
+  var heading = document.getElementById('partnerHeading');
+  var cta = document.getElementById('ctaButton');
+  var card = document.getElementById('partnerCard');
+  var trailLayer = document.getElementById('trailLayer');
+  var demoTrigger = document.getElementById('trailDemoTrigger');
+  var ctaStatus = document.getElementById('ctaStatus');
+
+  /* ---- Scroll reveal (ports useInViewAnimation: IntersectionObserver, threshold 0.1, sticky once true) ---- */
+  function revealIn() {
+    heading.classList.remove('opacity-0');
+    heading.classList.add('animate-fade-in-up');
+    heading.style.animationDelay = reduceMotion ? '0s' : '0.1s';
+    cta.classList.remove('opacity-0');
+    cta.classList.add('animate-fade-in-up');
+    cta.style.animationDelay = reduceMotion ? '0s' : '0.2s';
+  }
+
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      if (entries[0] && entries[0].isIntersecting) {
+        revealIn();
+        io.disconnect();
+      }
+    }, { threshold: 0.1 });
+    io.observe(section);
+  } else {
+    revealIn();
+  }
+
+  /* ---- Mouse-trail CTA: exact port of the prompt's spawn/fade math ---- */
+  var IMAGES = [
+    'assets/thumb-dashboard.svg',
+    'assets/thumb-portfolio.svg',
+    'assets/thumb-commerce.svg',
+    'assets/thumb-analytics.svg',
+    'assets/thumb-mobile.svg',
+    'assets/thumb-brand.svg',
+    'assets/thumb-network.svg',
+    'assets/thumb-editorial.svg'
+  ];
+
+  var SPAWN_INTERVAL_MS = 80;   // throttle: ignore spawns closer together than this
+  var CLEANUP_INTERVAL_MS = 50; // sweep cadence that removes expired trail items
+  var TRAIL_LIFETIME_MS = 1000; // age at which an item is fully faded and removed
+
+  var trailImages = []; // { id, x, y, timestamp, src, rotation, el }
+  var isHovered = false;
+  var lastSpawnTime = 0;
+  var imageIdCounter = 0;
+  var rafId = null;
+
+  function spawnTrailImage(x, y, force) {
+    var now = Date.now();
+    if (!force && now - lastSpawnTime < SPAWN_INTERVAL_MS) return;
+    lastSpawnTime = now;
+
+    var src = IMAGES[Math.floor(Math.random() * IMAGES.length)];
+    var rotation = (Math.random() - 0.5) * 20; // -10deg .. +10deg
+    var id = imageIdCounter++;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'trail-thumb-wrap';
+    var img = document.createElement('img');
+    img.src = src;
+    img.alt = '';
+    img.loading = 'lazy';
+    wrap.appendChild(img);
+    trailLayer.appendChild(wrap);
+
+    trailImages.push({ id: id, x: x, y: y, timestamp: now, src: src, rotation: rotation, el: wrap });
+
+    if (rafId === null) rafId = requestAnimationFrame(tick);
+  }
+
+  function tick() {
+    var now = Date.now();
+    for (var i = 0; i < trailImages.length; i++) {
+      var t = trailImages[i];
+      var age = now - t.timestamp;
+      var progress = Math.min(age / TRAIL_LIFETIME_MS, 1);
+      var opacity = 1 - progress;
+      var scale = 1 - progress * 0.15;
+      t.el.style.left = (t.x - 50) + 'px';
+      t.el.style.top = (t.y - 50) + 'px';
+      t.el.style.opacity = String(opacity);
+      t.el.style.transform = 'scale(' + scale + ') rotate(' + t.rotation + 'deg)';
+    }
+    rafId = trailImages.length > 0 ? requestAnimationFrame(tick) : null;
+  }
+
+  setInterval(function () {
+    var now = Date.now();
+    var kept = [];
+    for (var i = 0; i < trailImages.length; i++) {
+      var t = trailImages[i];
+      if (now - t.timestamp > TRAIL_LIFETIME_MS) {
+        t.el.remove();
+      } else {
+        kept.push(t);
+      }
+    }
+    trailImages = kept;
+  }, CLEANUP_INTERVAL_MS);
+
+  function pointFromEvent(clientX, clientY) {
+    var rect = card.getBoundingClientRect();
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  }
+
+  if (!reduceMotion) {
+    card.addEventListener('mouseenter', function () { isHovered = true; });
+    card.addEventListener('mouseleave', function () { isHovered = false; });
+    card.addEventListener('mousemove', function (e) {
+      if (!isHovered) return;
+      var p = pointFromEvent(e.clientX, e.clientY);
+      spawnTrailImage(p.x, p.y);
+    });
+
+    /* Touch path: dragging a finger across the card is the touch equivalent
+       of hovering with a mouse — same spawn function, same throttle. */
+    card.addEventListener('touchmove', function (e) {
+      var touch = e.touches[0];
+      if (!touch) return;
+      var p = pointFromEvent(touch.clientX, touch.clientY);
+      spawnTrailImage(p.x, p.y);
+    }, { passive: true });
+
+    /* Keyboard path: a visually-hidden control (visible on focus) plays the
+       same trail as a preset arc, so a non-pointer user reaches the same
+       decorative content the hover effect reveals. */
+    demoTrigger.addEventListener('click', function () {
+      var rect = card.getBoundingClientRect();
+      var cx = rect.width / 2;
+      var cy = rect.height / 2;
+      var steps = 6;
+      for (var i = 0; i < steps; i++) {
+        (function (i) {
+          setTimeout(function () {
+            var angle = (i / steps) * Math.PI * 2;
+            var radius = Math.min(rect.width, rect.height) * 0.22;
+            spawnTrailImage(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, true);
+          }, i * SPAWN_INTERVAL_MS);
+        })(i);
+      }
+    });
+  } else {
+    /* Fully still reduced-motion state: no pointer, touch, or keyboard path
+       spawns the decorative trail; the hidden trigger is removed from the
+       tab order instead of being left as a dead control. */
+    demoTrigger.disabled = true;
+  }
+
+  /* ---- CTA click feedback (no live endpoint; inline status only) ---- */
+  var ctaTimer = null;
+  cta.addEventListener('click', function () {
+    if (cta.disabled) return;
+    ctaStatus.textContent = 'Chat request sent — Viktor will reply shortly.';
+    ctaStatus.classList.add('is-visible');
+    cta.disabled = true;
+    clearTimeout(ctaTimer);
+    ctaTimer = setTimeout(function () {
+      cta.disabled = false;
+      ctaStatus.classList.remove('is-visible');
+      ctaStatus.textContent = '';
+    }, 2600);
+  });
+})();
+</script>
+</body>
+</html>

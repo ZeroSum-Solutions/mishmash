@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="mf-title">
+  <title id="mf-title">Abstract precision-inspection diagram over a dark technical panel</title>
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#454e55"/>
+      <stop offset="100%" stop-color="#2c333a"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#panel)"/>
+  <rect width="1280" height="720" fill="url(#grid)"/>
+
+  <g stroke="#c7ced1" stroke-opacity="0.55" fill="none" stroke-width="1.5">
+    <circle cx="640" cy="360" r="150"/>
+    <circle cx="640" cy="360" r="150" stroke-dasharray="4 10"/>
+    <circle cx="640" cy="360" r="220"/>
+    <circle cx="640" cy="360" r="3.5" fill="#c7ced1" stroke="none"/>
+  </g>
+
+  <g stroke="#8a9296" stroke-width="1" fill="none">
+    <line x1="640" y1="120" x2="640" y2="600"/>
+    <line x1="380" y1="360" x2="900" y2="360"/>
+  </g>
+
+  <g stroke="#eef1f2" stroke-opacity="0.8" stroke-width="1.5" fill="none">
+    <path d="M240 200 h90 M285 200 v-24"/>
+    <path d="M1000 520 h-90 M955 520 v24"/>
+    <path d="M980 190 l40 40 M1020 190 l-40 40"/>
+  </g>
+
+  <g fill="#eef1f2" fill-opacity="0.9" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="15">
+    <text x="248" y="192">Δ 0.4µm</text>
+    <text x="912" y="512">Δ 0.6µm</text>
+  </g>
+</svg>
