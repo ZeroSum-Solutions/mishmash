@@ -233,6 +233,7 @@ import {
 import { useIframeKeepAlivePool } from './IframeKeepAlivePool';
 import {
   decideAutoOpenAfterWrite,
+  resolveAutoOpenArtifactOptions,
   selectAutoOpenProducedArtifact,
   selectAutoOpenTurnArtifact,
 } from './auto-open-file';
@@ -1406,12 +1407,11 @@ export function ProjectView({
     detailedProject && detailedProject.updatedAt >= project.updatedAt ? detailedProject : project;
   const projectDesignSystemId = resolveProjectDesignSystemId(currentProject);
   const projectIsDesignSystemProject = isDesignSystemProject(currentProject);
-  // Website-clone turns reproduce a whole multi-page site; auto-open should
-  // land on the site entry (index.html), not the last-written subpage. See
-  // `SelectAutoOpenOptions.preferSiteEntry`.
-  const autoOpenArtifactOptions = {
-    preferSiteEntry: currentProject.metadata?.intent === 'web-clone',
-  };
+  // Website-clone and template-seeded turns reproduce a whole faithful
+  // clone; auto-open should land on the site entry (index.html), not the
+  // last-written subpage or an agent's later exploratory variant. See
+  // `resolveAutoOpenArtifactOptions` / `SelectAutoOpenOptions.preferSiteEntry`.
+  const autoOpenArtifactOptions = resolveAutoOpenArtifactOptions(currentProject.metadata);
   const designSystemBrandId = projectIsDesignSystemProject
     ? currentProject.metadata?.brandId?.trim() || null
     : null;

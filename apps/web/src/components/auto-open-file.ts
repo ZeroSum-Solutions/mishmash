@@ -144,6 +144,29 @@ export interface SelectAutoOpenOptions {
   readonly preferSiteEntry?: boolean;
 }
 
+// Project metadata fields that decide `SelectAutoOpenOptions.preferSiteEntry`.
+// Kept as a narrow structural type (not the full contracts `ProjectMetadata`)
+// so this module stays free of a `packages/contracts` dependency.
+export interface AutoOpenProjectMetadataLike {
+  readonly intent?: string;
+  readonly kind?: string;
+}
+
+// MM-004-B: a project whose files are a faithful clone of something else
+// (a website-clone turn, or a "New from template" project seeded from a
+// template's own files) must auto-open its entry point (`index.html`) even
+// when a later exploratory file lands with a newer mtime — the newest-mtime
+// tie-break otherwise surfaces an invented page instead of the faithful
+// clone the user asked for. Both intents behave identically once the entry
+// wins, so this is the single place that decides which projects qualify.
+export function resolveAutoOpenArtifactOptions(
+  metadata: AutoOpenProjectMetadataLike | null | undefined,
+): SelectAutoOpenOptions {
+  return {
+    preferSiteEntry: metadata?.intent === 'web-clone' || metadata?.kind === 'template',
+  };
+}
+
 export interface SelectAutoOpenTurnOptions extends SelectAutoOpenOptions {
   // Epoch ms when the turn started. When set, files whose mtime lands at or
   // after this instant (minus a filesystem-precision grace) count as touched

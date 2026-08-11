@@ -1683,10 +1683,32 @@ function AppInner() {
       // sendMessage(pendingPrompt) once on mount instead of just
       // pre-filling the composer. Scoped to sessionStorage so a page
       // reload after the run has started does not refire.
+      //
+      // `derivedPendingPrompt` only sees what the client sent — a guided
+      // create `brief` (Templates gallery, MM-001 #2) is folded into the
+      // starting prompt server-side (routes/project/index.ts), so a
+      // brief-only create has no client-known prompt at all even though the
+      // daemon composed one. `result.project.pendingPrompt` is the daemon's
+      // truthful post-fold value, so check it too instead of trusting only
+      // what the client guessed before the request went out.
+      //
+      // Both sides must be trimmed and non-empty before they arm anything —
+      // startProjectFromTemplate now always sends `autoSendFirstMessage:
+      // true` (MM-001 #2), so an empty/whitespace-only derivation (e.g. a
+      // caller passing `pendingPrompt: ''`) must NOT arm auto-send on its
+      // own; only attachments or an actual non-empty prompt may.
+      const derivedPendingPromptTrimmed =
+        typeof derivedPendingPrompt === 'string' ? derivedPendingPrompt.trim() : '';
+      const resultPendingPrompt =
+        typeof result.project.pendingPrompt === 'string'
+          ? result.project.pendingPrompt.trim()
+          : '';
       if (
         !workingDirHandoffFailed &&
         input.autoSendFirstMessage &&
-        (derivedPendingPrompt !== undefined || firstMessageAttachments.length > 0)
+        (derivedPendingPromptTrimmed.length > 0 ||
+          resultPendingPrompt.length > 0 ||
+          firstMessageAttachments.length > 0)
       ) {
         try {
           window.sessionStorage.setItem(
@@ -1958,6 +1980,40 @@ function AppInner() {
       fileName: null,
     });
   }, [beginProjectListRequest, rememberLocalProject, reconcileFetchedProjects]);
+
+  // Design Library "Use as template" / "Use as reference" (MM-008):
+  // startDesignLibraryProject already built the project daemon-side —
+  // including any guided-create brief folded into `pendingPrompt` — so this
+  // is the same post-create bookkeeping handleCreateProject does after its
+  // own daemon call: land the real record in the client cache (flushSync, so
+  // the route resolves to it immediately instead of the placeholder Untitled
+  // project and flashing a dead canvas) and arm auto-send when a prompt
+  // actually exists, before routing.
+  const handleOpenProjectFromDesignLibrary = useCallback(
+    (project: Project, conversationId?: string, entryFile?: string) => {
+      const prompt =
+        typeof project.pendingPrompt === 'string' ? project.pendingPrompt.trim() : '';
+      if (prompt) {
+        try {
+          window.sessionStorage.setItem(`od:auto-send-first:${project.id}`, '1');
+        } catch {
+          // If sessionStorage is unavailable, the project still opens with
+          // the pending prompt ready for the user to send manually.
+        }
+      }
+      rememberLocalProject(project.id);
+      flushSync(() => {
+        setProjects((curr) => [project, ...curr.filter((p) => p.id !== project.id)]);
+      });
+      navigate({
+        kind: 'project',
+        projectId: project.id,
+        conversationId: conversationId ?? null,
+        fileName: entryFile ?? null,
+      });
+    },
+    [rememberLocalProject],
+  );
 
   const handleOpenProject = useCallback(async (id: string, fileName?: string): Promise<boolean> => {
     const routeFileName = fileName ?? null;
@@ -2540,6 +2596,7 @@ function AppInner() {
         onImportFolder={handleImportFolder}
         onImportFolderResponse={handleImportFolderResponse}
         onOpenProject={handleOpenProject}
+        onOpenProjectFromDesignLibrary={handleOpenProjectFromDesignLibrary}
         onOpenLiveArtifact={handleOpenLiveArtifact}
         onDeleteProject={handleDeleteProject}
         onDuplicateProject={handleDuplicateProject}

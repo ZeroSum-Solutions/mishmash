@@ -2250,6 +2250,7 @@ export async function startServer({
     readAvailableDesignSystemPackageInfo,
     readAvailableDesignSystemStaticFile,
     readDesignSystemWorkspaceTextFile,
+    resolveSkillDir,
     validateProjectDesignSystemId,
     validateProjectSkillId,
   } = designSystemServices;
@@ -3100,7 +3101,7 @@ export async function startServer({
     EmptyTranscriptError,
     redactSecrets,
   };
-  const validationDeps = { isSafeId, validateExternalApiBaseUrl, validateBaseUrl, validateProjectDesignSystemId, validateProjectSkillId };
+  const validationDeps = { isSafeId, validateExternalApiBaseUrl, validateBaseUrl, validateProjectDesignSystemId, validateProjectSkillId, resolveSkillDir };
   const agentDeps = {
     listProviderModels,
     testProviderConnection,
@@ -3217,6 +3218,7 @@ export async function startServer({
     appConfig: appConfigDeps,
     agents: agentDeps,
     validation: validationDeps,
+    filesystem: { create: createRouteFilesystemWriteGateway },
   });
   registerTerminalRoutes(app, {
     db,

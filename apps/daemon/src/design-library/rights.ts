@@ -3,7 +3,7 @@ import { createReadStream } from 'node:fs';
 import { lstat, readFile, readdir, readlink, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { DesignLibraryAllowedUse, DesignLibraryGroup, DesignLibraryItem } from '@open-design/contracts';
-import { isDesignLibraryPrivateMetadataName } from './private-metadata.js';
+import { isDesignLibraryJunkFileName, isDesignLibraryPrivateMetadataName } from './private-metadata.js';
 
 const RIGHTS_LEDGER = /<!-- OD_RIGHTS_SOURCE_LEDGER_V1\n(?<json>.*?)\nOD_RIGHTS_SOURCE_LEDGER_V1 -->/s;
 const ALLOWED_USES = new Set<DesignLibraryAllowedUse>([
@@ -77,8 +77,9 @@ function framed(hash: Hash, value: string | Buffer): void {
 }
 
 /**
- * Hashes the complete item tree, excluding only private Design Library
- * metadata. The framing matches the external catalog builder exactly.
+ * Hashes the complete item tree, excluding private Design Library metadata
+ * and OS-generated junk files (`.DS_Store`; MM-014). The framing matches the
+ * external catalog builder exactly.
  */
 export async function designLibraryTreeSha256(
   root: string,
@@ -94,6 +95,7 @@ export async function designLibraryTreeSha256(
     entries.sort((left, right) => Buffer.compare(Buffer.from(left.name), Buffer.from(right.name)));
     for (const entry of entries) {
       if (isDesignLibraryPrivateMetadataName(entry.name)) continue;
+      if (isDesignLibraryJunkFileName(entry.name)) continue;
       if (entry.isDirectory() && excluded(options.excludedDirNames, entry.name)) continue;
       if (!entry.isDirectory() && excluded(options.excludedFileNames, entry.name)) continue;
       const absolute = path.join(directory, entry.name);

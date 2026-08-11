@@ -136,6 +136,21 @@ export function migrateLibrary(db: SqliteDb): void {
       created_at INTEGER NOT NULL
     );
   `);
+  // Forward-compatible column add for databases created before broken/
+  // missing_since (MM-021): SQLite has no ADD COLUMN IF NOT EXISTS, so check
+  // pragma_table_info first, matching the pattern in db.ts. `broken` marks a
+  // referenced row whose origin project is gone or whose resolved bytes path
+  // is missing on disk; `missing_since` is when the sweep (or a project
+  // delete's failed materialize attempt) first observed that. Both are
+  // MARK-only — nothing in this codebase deletes a row or its bytes because
+  // of them.
+  const assetCols = db.prepare(`PRAGMA table_info(library_assets)`).all() as Array<{ name: string }>;
+  if (!assetCols.some((c) => c.name === 'broken')) {
+    db.exec(`ALTER TABLE library_assets ADD COLUMN broken INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (!assetCols.some((c) => c.name === 'missing_since')) {
+    db.exec(`ALTER TABLE library_assets ADD COLUMN missing_since INTEGER`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -149,8 +164,8 @@ const ASSET_COLS = `id, kind, storage, source_url AS sourceUrl,
   rel_path AS relPath, mime, width, height, size,
   content_hash AS contentHash, caption, ocr_text AS ocrText,
   palette_json AS paletteJson, tags_json AS tagsJson,
-  metadata_json AS metadataJson, created_at AS createdAt,
-  updated_at AS updatedAt`;
+  metadata_json AS metadataJson, broken, missing_since AS missingSince,
+  created_at AS createdAt, updated_at AS updatedAt`;
 
 interface RawAssetRow {
   id: string;
@@ -174,6 +189,8 @@ interface RawAssetRow {
   paletteJson: string | null;
   tagsJson: string | null;
   metadataJson: string | null;
+  broken: number;
+  missingSince: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -225,6 +242,8 @@ function normalizeAsset(raw: RawAssetRow, sources: LibraryAssetSource[]): Librar
   if (raw.originProjectId != null) asset.originProjectId = raw.originProjectId;
   if (raw.relPath != null) asset.relPath = raw.relPath;
   if (raw.filePath != null) asset.filePath = raw.filePath;
+  if (raw.broken) asset.broken = true;
+  if (raw.missingSince != null) asset.missingSince = Number(raw.missingSince);
   return asset;
 }
 
@@ -377,6 +396,140 @@ export function hasDesignSystemSource(db: SqliteDb, designSystemId: string): boo
 
 export function deleteLibraryAsset(db: SqliteDb, id: string): void {
   db.prepare(`DELETE FROM library_assets WHERE id = ?`).run(id);
+}
+
+/** Every `referenced` row whose bytes live inside the given project — the set
+ * a project delete must materialize (or mark broken) before the directory
+ * goes away (MM-021). */
+export function listReferencedAssetsByOriginProject(
+  db: SqliteDb,
+  originProjectId: string,
+): LibraryAssetRecord[] {
+  const raws = db
+    .prepare(
+      `SELECT ${ASSET_COLS} FROM library_assets
+        WHERE storage = 'referenced' AND origin_project_id = ?`,
+    )
+    .all(originProjectId) as RawAssetRow[];
+  if (raws.length === 0) return [];
+  const sourcesByAsset = listLibraryAssetSourcesFor(db, raws.map((r) => r.id));
+  return raws.map((raw) => normalizeAsset(raw, sourcesByAsset.get(raw.id) ?? []));
+}
+
+/** Every not-yet-broken `referenced` row — the candidate set the reconcile
+ * sweep checks each pass for a vanished origin project or missing bytes
+ * (MM-021). Excludes rows already marked so a large library stays cheap to
+ * re-scan; a row is never un-marked by the sweep, so this set only shrinks. */
+export function listUnbrokenReferencedAssets(db: SqliteDb): LibraryAssetRecord[] {
+  const raws = db
+    .prepare(
+      `SELECT ${ASSET_COLS} FROM library_assets
+        WHERE storage = 'referenced' AND (broken IS NULL OR broken = 0)`,
+    )
+    .all() as RawAssetRow[];
+  if (raws.length === 0) return [];
+  const sourcesByAsset = listLibraryAssetSourcesFor(db, raws.map((r) => r.id));
+  return raws.map((raw) => normalizeAsset(raw, sourcesByAsset.get(raw.id) ?? []));
+}
+
+/**
+ * Mark a row `broken` (missing source, or a materialize copy that failed) —
+ * never removes the row or any bytes. Idempotent: a row already marked is
+ * left untouched (its original `missingSince` survives) and this returns
+ * `false`, so a caller counting "rows newly marked this pass" gets an
+ * honest number across repeat runs.
+ */
+export function markLibraryAssetBroken(db: SqliteDb, id: string, missingSince: number): boolean {
+  const row = db.prepare(`SELECT broken FROM library_assets WHERE id = ?`).get(id) as
+    | { broken: number }
+    | undefined;
+  if (!row || row.broken) return false;
+  db.prepare(`UPDATE library_assets SET broken = 1, missing_since = ?, updated_at = ? WHERE id = ?`).run(
+    missingSince,
+    Date.now(),
+    id,
+  );
+  return true;
+}
+
+/**
+ * Every `broken` `referenced` row — the candidate set the reconcile sweep
+ * re-checks each pass for self-healing (MM-021 adversarial follow-up,
+ * finding #4): a row previously marked from a transient failure (or one
+ * whose source file genuinely came back) can have its mark undone once its
+ * origin project still exists and its bytes are readable again. UPDATE-only
+ * from the caller's side — this is a read, `clearLibraryAssetBroken` is the
+ * write.
+ */
+export function listBrokenReferencedAssets(db: SqliteDb): LibraryAssetRecord[] {
+  const raws = db
+    .prepare(
+      `SELECT ${ASSET_COLS} FROM library_assets
+        WHERE storage = 'referenced' AND broken = 1`,
+    )
+    .all() as RawAssetRow[];
+  if (raws.length === 0) return [];
+  const sourcesByAsset = listLibraryAssetSourcesFor(db, raws.map((r) => r.id));
+  return raws.map((raw) => normalizeAsset(raw, sourcesByAsset.get(raw.id) ?? []));
+}
+
+/**
+ * Undo a prior `markLibraryAssetBroken` — clears `broken`/`missing_since` on
+ * a row whose bytes are readable again. UPDATE-only, same as every other
+ * write in this module: never deletes the row or touches its bytes. This is
+ * the recovery half of MM-021's mark-only contract — a false-positive mark
+ * (a transient stat error that used to be treated as permanent, or a source
+ * file that came back) is now recoverable instead of sticking forever.
+ * Idempotent: a row that is not currently broken is left untouched and this
+ * returns `false`.
+ */
+export function clearLibraryAssetBroken(db: SqliteDb, id: string): boolean {
+  const row = db.prepare(`SELECT broken FROM library_assets WHERE id = ?`).get(id) as
+    | { broken: number }
+    | undefined;
+  if (!row || !row.broken) return false;
+  db.prepare(`UPDATE library_assets SET broken = 0, missing_since = NULL, updated_at = ? WHERE id = ?`).run(
+    Date.now(),
+    id,
+  );
+  return true;
+}
+
+/**
+ * Flip a `referenced` row to `owned` once its bytes have been copied into
+ * library-owned content-addressed storage at `filePath` (MM-021 project-
+ * delete materialize). Clears the origin pointer — the row no longer depends
+ * on the source project existing. Also clears `broken`/`missing_since`: a row
+ * that successfully materializes has, by definition, just had its bytes read
+ * and copied, so any prior "missing source" mark from an earlier sweep/delete
+ * attempt is stale (adversarial review finding #6).
+ *
+ * `contentHash`, when supplied, replaces the row's stored content hash —
+ * materialize re-hashes the actual source bytes rather than trusting the
+ * possibly-stale value the row was indexed with (finding #5); the caller
+ * passes the freshly computed hash whenever it differs from `asset.contentHash`.
+ */
+export function materializeLibraryAssetToOwned(
+  db: SqliteDb,
+  id: string,
+  filePath: string,
+  contentHash?: string,
+): void {
+  if (contentHash) {
+    db.prepare(
+      `UPDATE library_assets
+         SET storage = 'owned', file_path = ?, content_hash = ?, origin_project_id = NULL,
+             rel_path = NULL, broken = 0, missing_since = NULL, updated_at = ?
+       WHERE id = ?`,
+    ).run(filePath, contentHash, Date.now(), id);
+    return;
+  }
+  db.prepare(
+    `UPDATE library_assets
+       SET storage = 'owned', file_path = ?, origin_project_id = NULL, rel_path = NULL,
+           broken = 0, missing_since = NULL, updated_at = ?
+     WHERE id = ?`,
+  ).run(filePath, Date.now(), id);
 }
 
 /** Builds the shared WHERE clause for asset list/count so the page and its

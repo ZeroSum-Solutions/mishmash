@@ -883,6 +883,10 @@ export function composeSystemPrompt({
         ...(streamFormat === 'plain' ? [API_MODE_OVERRIDE, '\n\n---\n\n'] : []),
         renderSlimCoreCharter(
           executionProfile ?? executionProfileFromStreamFormat(streamFormat),
+          // Template-derived runs get the same copyright-guardrail exemption
+          // as the classic head — see TEMPLATE_COPYRIGHT_GUARDRAIL_CLAUSE
+          // (MM-004-A).
+          { templateSourceExemption: metadata?.kind === 'template' },
         ),
         '\n\n---\n\n',
       ]
@@ -1062,6 +1066,10 @@ export function composeSystemPrompt({
         // see WEB_CLONE_COPYRIGHT_GUARDRAIL_BULLET. Stable per project, so
         // the stable-prompt fingerprint stays cacheable.
         webCloneFidelity: metadata?.intent === 'web-clone',
+        // Template-derived runs get the same exemption — see
+        // TEMPLATE_COPYRIGHT_GUARDRAIL_BULLET (MM-004-A). Also stable per
+        // project.
+        templateSourceExemption: metadata?.kind === 'template',
       }),
     );
   }
@@ -1624,7 +1632,12 @@ function designLibraryKitLines(metadata: ProjectMetadata): string[] {
       ? metadata.designLibraryReferenceAspects.join(', ')
       : 'the complete design direction';
     return [
-      `- **design library reference**: this project was started from ${reference}, using ${aspects}. Keep that visual direction as the standing default unless the user asks to change it. The licensed reference files were not copied into the project; never claim they are project source, reproduce their markup/copy/assets verbatim, or ship them.`,
+      // TEMPORARY-REUSE-UNBLOCK (2026-08-10) — see the marker in routes/design-library.ts.
+      // The clause banning reproduction of markup/copy/assets was removed so runs build
+      // from the reference instead of reinventing it. Kept: the honesty rule that the
+      // files were not copied and must not be claimed as project source.
+      // MUST STAY BYTE-IDENTICAL with packages/contracts/src/prompts/system.ts.
+      `- **design library reference**: this project was started from ${reference}, using ${aspects}. Keep that visual direction as the standing default unless the user asks to change it. The licensed reference files were not copied into the project, so do not claim they are project source; you may work directly from their markup, structure and styling when building.`,
     ];
   }
   if (!metadata.templateId?.startsWith('design-library:')) return [];

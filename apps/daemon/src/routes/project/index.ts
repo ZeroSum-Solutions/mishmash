@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { Express, Response } from 'express';
@@ -56,10 +57,28 @@ import {
 import { auditDesignSystemPackage } from '../../tools-connectors-cli.js';
 import { parseOrchestratorWorkspace } from '../../workspace-contract.js';
 import { buildGuidedBriefSection, foldGuidedBriefIntoPrompt, normalizeGuidedBrief } from '../../prompts/guided-brief.js';
+import { copyDirectoryContents, type CopyDirectoryState } from '../../copy-directory.js';
+import {
+  detectEntryFile,
+  START_PROJECT_EXCLUDED_DIR_NAMES,
+  START_PROJECT_EXCLUDED_FILE_NAMES,
+  startProjectMaxBytes,
+  startProjectMaxFiles,
+} from '../design-library.js';
 import { registerProjectConversationRoutes } from './conversations.js';
 import { cancelRunsOwnedBy } from './cancel-owned-runs.js';
+import { markAllReferencedProjectAssetsBroken, materializeProjectLibraryAssets } from '../../library.js';
+import { designLibraryRoot } from '../../design-library/root.js';
+import type { createFilesystemWriteGateway } from '../../filesystem/write-gateway.js';
 
-export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {}
+export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {
+  // Optional (not part of `ServerContext`, unlike RegisterLibraryRoutesDeps's
+  // required `filesystem` — route-context-contract.ts asserts `ServerContext`
+  // satisfies every route Deps type in its union, and this one is in that
+  // union) even though the real registration call in server.ts always
+  // supplies it; `createWriteGateway` below fails fast if it's ever missing.
+  filesystem?: { create: typeof createFilesystemWriteGateway };
+}
 
 function projectDetailResolvedDir(
   projectsRoot: string,
@@ -1228,7 +1247,19 @@ const RESERVED_PROJECT_IDS = new Set(['storyboard-media']);
 export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDeps) {
   const { db, design } = ctx;
   const { sendApiError, createSseResponse } = ctx.http;
-  const { DESIGN_SYSTEMS_DIR, PROJECTS_DIR, SKILLS_DIR, BRANDS_DIR, USER_DESIGN_SYSTEMS_DIR } = ctx.paths;
+  const { DESIGN_SYSTEMS_DIR, PROJECTS_DIR, SKILLS_DIR, BRANDS_DIR, USER_DESIGN_SYSTEMS_DIR, LIBRARY_DIR } = ctx.paths;
+  const createWriteGateway = () => {
+    if (!ctx.filesystem) {
+      // Only reachable if a caller assembles RegisterProjectRoutesDeps by
+      // hand without the `filesystem` factory server.ts always supplies —
+      // see the interface's own comment for why the field is optional.
+      throw new Error('registerProjectRoutes requires ctx.filesystem to materialize referenced Library assets on project delete');
+    }
+    return ctx.filesystem.create({
+      runtimeDataRoot: ctx.paths.RUNTIME_DATA_DIR,
+      forbiddenWriteRoots: [designLibraryRoot()],
+    });
+  };
   const { readAppConfig, writeAppConfig } = ctx.appConfig;
   const { insertProject, validateLinkedDirs, getProject, updateProject, dbDeleteProject, removeProjectDir } = ctx.projectStore;
   const { writeProjectFile, readProjectFile, ensureProject, listFiles, listTabs, setTabs, resolveProjectDir } = ctx.projectFiles;
@@ -1237,7 +1268,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   const { listLatestProjectRunStatuses, listProjectsAwaitingInput, normalizeProjectDisplayStatus, composeProjectDisplayStatus, listProjects } = ctx.status;
   const { subscribeFileEvents, activeProjectEventSinks } = ctx.events;
   const { randomId } = ctx.ids;
-  const { validateProjectDesignSystemId, validateProjectSkillId } = ctx.validation;
+  const { validateProjectDesignSystemId, validateProjectSkillId, resolveSkillDir } = ctx.validation;
   async function loadPluginRegistryView() {
     const [skills, designSystems] = await Promise.all([
       listSkills(SKILLS_DIR),
@@ -1844,6 +1875,64 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           }
         }
       }
+      // Templates gallery — EntryShell.startProjectFromTemplate (via
+      // metadataForSkill) pins the chosen design-templates catalogue skill
+      // as this project's skillId and stamps kind:'template', but carries no
+      // metadata.templateId (that field belongs to the unrelated
+      // "save this project as a template" Share-menu feature handled by the
+      // block above). Without this, a catalogue-started project's files
+      // never reach disk and the canvas opens empty (MM-001 #1 / MM-007).
+      // Copy the resolved skill's assets/ directory into the new project
+      // folder, mirroring routes/design-library.ts's kit-starter copy
+      // (copyDirectoryContents + detectEntryFile) so the canvas knows what
+      // file to open.
+      if (
+        metadata &&
+        typeof metadata === 'object' &&
+        metadata.kind === 'template' &&
+        typeof metadata.templateId !== 'string' &&
+        typeof normalizedSkillId === 'string'
+      ) {
+        try {
+          const skillDir = await resolveSkillDir(normalizedSkillId);
+          if (typeof skillDir === 'string') {
+            const assetsDir: string = path.join(skillDir, 'assets');
+            if (existsSync(assetsDir)) {
+              const projectRoot = await ensureProject(PROJECTS_DIR, id, projectMetadata);
+              const state: CopyDirectoryState = {
+                copiedFiles: 0,
+                copiedBytes: 0,
+                skippedFiles: 0,
+                warnings: [],
+              };
+              await copyDirectoryContents(assetsDir, projectRoot, state, {
+                excludedDirNames: START_PROJECT_EXCLUDED_DIR_NAMES,
+                excludedFileNames: START_PROJECT_EXCLUDED_FILE_NAMES,
+                limits: { maxFiles: startProjectMaxFiles(), maxBytes: startProjectMaxBytes() },
+                onIncomplete: (reason, relPath) => {
+                  throw new Error(`template asset copy incomplete: ${reason} (${relPath})`);
+                },
+              });
+              const entryFile = await detectEntryFile(projectRoot);
+              if (entryFile) {
+                const updated = updateProject(db, id, {
+                  metadata: { ...projectMetadata, entryFile },
+                });
+                if (updated) project = updated;
+              }
+            }
+          }
+        } catch (err) {
+          // Best-effort, same spirit as the saved-template snapshot above —
+          // the agent still has the skill body embedded in the system
+          // prompt even if the on-disk copy fails partway (e.g. a symlink
+          // or cap breach inside a malformed catalogue entry).
+          console.warn(
+            `[projects] template asset copy failed for skill ${normalizedSkillId}:`,
+            err,
+          );
+        }
+      }
       /** @type {import('@open-design/contracts').CreateProjectResponse} */
       const body = {
         project: resolvedSnapshot?.ok ? getProject(db, id) ?? project : project,
@@ -2306,6 +2395,42 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       // are removed, otherwise the CLI subprocess is orphaned — it keeps
       // billing and writes into a directory that no longer exists (#5468).
       await cancelRunsOwnedBy(design.runs, { projectId: req.params.id });
+      // MM-021: a `referenced` Library row resolves its bytes through
+      // PROJECTS_DIR/<originProjectId>/<relPath> (library.ts's
+      // resolveAssetBytesPath); once the directory below is gone those rows
+      // 404 forever on /raw and /file. Copy each one's bytes into
+      // library-owned storage BEFORE the directory is removed, flipping the
+      // row to `owned`. Best-effort per row: a copy failure (or an
+      // already-missing source file) marks that row `broken` instead.
+      //
+      // Everything from acquiring the write gateway through the materialize
+      // call is one best-effort unit (adversarial findings #1/#3): a missing
+      // `ctx.filesystem` dep, a failed `gateway.runtimeData()` mint, or the
+      // materialize call rejecting as a WHOLE (its own store call throwing,
+      // not a per-row failure it already handles) used to either 500 the
+      // whole delete or silently leave every referenced row for this
+      // project pointing at bytes about to be removed — the exact orphan
+      // class MM-021 exists to close. On total failure here, fall back to
+      // marking every referenced row for this project broken directly
+      // (bypassing materialize) instead. The delete itself must proceed
+      // either way.
+      try {
+        const gateway = createWriteGateway();
+        const capability = await gateway.runtimeData();
+        await materializeProjectLibraryAssets(
+          db,
+          req.params.id,
+          LIBRARY_DIR,
+          PROJECTS_DIR,
+          { gateway, capability },
+        );
+      } catch (err) {
+        const marked = markAllReferencedProjectAssetsBroken(db, req.params.id);
+        console.warn(
+          `[project-delete] MM-021 materialize failed entirely for project ${req.params.id}; marked ${marked} referenced row(s) broken instead`,
+          err,
+        );
+      }
       dbDeleteProject(db, req.params.id);
       await removeProjectDir(PROJECTS_DIR, req.params.id).catch(() => {});
       /** @type {import('@open-design/contracts').OkResponse} */

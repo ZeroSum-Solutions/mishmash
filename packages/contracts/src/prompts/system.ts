@@ -350,7 +350,13 @@ export function composeSystemPrompt({
     // daemon prompt so API/BYOK-backed web-clone runs behave identically.
     parts.push(
       '# Identity and workflow charter (background)\n\n',
-      renderOfficialDesignerPrompt({ webCloneFidelity: metadata?.intent === 'web-clone' }),
+      renderOfficialDesignerPrompt({
+        webCloneFidelity: metadata?.intent === 'web-clone',
+        // Template-derived runs get the same exemption — see
+        // TEMPLATE_COPYRIGHT_GUARDRAIL_BULLET (MM-004-A). Mirrors
+        // apps/daemon/src/prompts/system.ts for API/BYOK parity.
+        templateSourceExemption: metadata?.kind === 'template',
+      }),
     );
   }
 
@@ -750,7 +756,12 @@ function designLibraryKitLines(metadata: ProjectMetadata): string[] {
       ? metadata.designLibraryReferenceAspects.join(', ')
       : 'the complete design direction';
     return [
-      `- **design library reference**: this project was started from ${reference}, using ${aspects}. Keep that visual direction as the standing default unless the user asks to change it. The licensed reference files were not copied into the project; never claim they are project source, reproduce their markup/copy/assets verbatim, or ship them.`,
+      // TEMPORARY-REUSE-UNBLOCK (2026-08-10) — see the marker in apps/daemon/src/routes/design-library.ts.
+      // The clause banning reproduction of markup/copy/assets was removed so runs build
+      // from the reference instead of reinventing it. Kept: the honesty rule that the
+      // files were not copied and must not be claimed as project source.
+      // MUST STAY BYTE-IDENTICAL with apps/daemon/src/prompts/system.ts.
+      `- **design library reference**: this project was started from ${reference}, using ${aspects}. Keep that visual direction as the standing default unless the user asks to change it. The licensed reference files were not copied into the project, so do not claim they are project source; you may work directly from their markup, structure and styling when building.`,
     ];
   }
   if (!metadata.templateId?.startsWith('design-library:')) return [];

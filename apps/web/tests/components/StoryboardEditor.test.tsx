@@ -60,11 +60,11 @@ afterEach(() => {
 });
 
 /**
- * Shot editing (frame slots, dialogs, motion prompt) now lives in
- * ShotDetailsDrawer, opened per shot from ShotRow's "Details" toggle (PRD C4
- * outcome 1) — tests that used to find those elements inline on the page
- * must open the drawer first. `nth` selects which shot's row to open when a
- * test has more than one.
+ * Shot editing (frame slots, dialogs, motion prompt) lives in the persistent
+ * ShotInspectorRail (MM-017), selected per shot from ShotRow's "Edit" toggle
+ * (PRD C4 outcome 1) — tests that used to find those elements inline on the
+ * page must select the shot first. `nth` selects which shot's row to open
+ * when a test has more than one.
  */
 function openShotDetails(nth = 0) {
   fireEvent.click(screen.getAllByTestId('shot-details-toggle')[nth]!);
@@ -133,9 +133,9 @@ describe('StoryboardEditor upload flows', () => {
     const input = screen.getByTestId('add-shots-from-images-input') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [fileA, fileB] } });
 
-    // One compact row per shot (ShotCard/the drawer only mounts for
-    // whichever single shot has its details open, if any — see
-    // ShotRow.tsx/ShotDetailsDrawer.tsx).
+    // One compact row per shot (ShotCard only renders inside the inspector
+    // rail for whichever single shot is selected, if any — see
+    // ShotRow.tsx/ShotInspectorRail.tsx).
     await waitFor(() => {
       expect(screen.getAllByTestId('shot-row')).toHaveLength(2);
     });
@@ -225,8 +225,8 @@ describe('StoryboardEditor frame-generation failure (review finding #7)', () => 
   });
 });
 
-describe('StoryboardEditor shot details drawer (PRD C4 outcome 1)', () => {
-  it('opens ShotCard inside the drawer on Details, and closes it on the close button', async () => {
+describe('StoryboardEditor shot inspector rail (PRD C4 outcome 1, MM-017)', () => {
+  it('selects a shot into the persistent rail on Edit, and deselects it on the close button', async () => {
     render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
     expect(screen.queryByTestId('shot-card')).toBeNull();
 
@@ -236,16 +236,18 @@ describe('StoryboardEditor shot details drawer (PRD C4 outcome 1)', () => {
     expect(screen.getByTestId('shot-details-toggle')).toHaveAttribute('aria-expanded', 'true');
 
     fireEvent.click(screen.getByTestId('shot-details-close'));
-    // aria-expanded flips immediately (openShotId clears synchronously);
-    // the drawer itself stays mounted a little longer to play its exit
-    // animation (react review R8/R9) before it actually unmounts.
+    // The rail is not a modal (MM-017: no backdrop, no exit-animation lag)
+    // — deselecting drops back to its idle state synchronously.
     expect(screen.getByTestId('shot-details-toggle')).toHaveAttribute('aria-expanded', 'false');
-    await waitFor(() => expect(screen.queryByTestId('shot-card')).toBeNull());
+    expect(screen.queryByTestId('shot-card')).toBeNull();
+    // The rail itself stays docked (not unmounted) even with nothing
+    // selected — see ShotInspectorRail.tsx's idle state.
+    expect(screen.getByTestId('shot-details-drawer')).toBeTruthy();
   });
 
-  // React review R7: deleting the shot whose drawer is open must not leave
-  // openShotId pointing at a shot that no longer exists.
-  it('self-heals and closes the drawer if its shot is deleted while open', async () => {
+  // React review R7: deleting the shot currently selected in the rail must
+  // not leave selectedShotId pointing at a shot that no longer exists.
+  it('self-heals and deselects if the selected shot is deleted', async () => {
     render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
     openShotDetails();
     expect(screen.getByTestId('shot-card')).toBeTruthy();
@@ -255,6 +257,25 @@ describe('StoryboardEditor shot details drawer (PRD C4 outcome 1)', () => {
 
     await waitFor(() => expect(screen.queryByTestId('shot-card')).toBeNull());
     expect(screen.queryAllByTestId('shot-row')).toHaveLength(0);
+  });
+
+  it('moves the selection between shots via the rail\'s prev/next "Change" navigation', () => {
+    const doc = baseDoc({
+      shots: [baseShot({ motionPrompt: 'shot one' }), baseShot({ id: 'shot-2', order: 1, motionPrompt: 'shot two' })],
+    });
+    render(<StoryboardEditor storyboard={doc} configured={{}} onBack={() => {}} />);
+
+    openShotDetails(0);
+    expect(screen.getByTestId('shot-inspector-prev')).toBeDisabled();
+    expect(screen.getByTestId('shot-inspector-next')).not.toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('shot-inspector-next'));
+    expect(screen.getAllByTestId('shot-details-toggle')[1]).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getAllByTestId('shot-details-toggle')[0]).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('shot-inspector-next')).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('shot-inspector-prev'));
+    expect(screen.getAllByTestId('shot-details-toggle')[0]).toHaveAttribute('aria-expanded', 'true');
   });
 });
 

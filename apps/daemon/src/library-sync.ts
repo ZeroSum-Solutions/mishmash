@@ -22,11 +22,18 @@ import path from 'node:path';
 import { lstat, readFile, realpath, stat } from 'node:fs/promises';
 import type Database from 'better-sqlite3';
 import type { LibraryAssetKind, LibrarySourceKind } from '@open-design/contracts';
-import { listConversations, listMessages, listProjects } from './db.js';
+import { getProject, listConversations, listMessages, listProjects } from './db.js';
 import { listDesignSystems } from './design-systems/index.js';
 import { listFiles, resolveProjectDir } from './projects.js';
-import { registerLibraryAsset } from './library.js';
-import { findReferencedAssetByOrigin, hasDesignSystemSource } from './library-store.js';
+import { registerLibraryAsset, resolveAssetBytesPath } from './library.js';
+import {
+  clearLibraryAssetBroken,
+  findReferencedAssetByOrigin,
+  hasDesignSystemSource,
+  listBrokenReferencedAssets,
+  listUnbrokenReferencedAssets,
+  markLibraryAssetBroken,
+} from './library-store.js';
 
 type SqliteDb = Database.Database;
 
@@ -43,6 +50,22 @@ export interface ReconcileLibraryResult {
   projectAssets: number;
   /** Referenced rows skipped because their origin file was already indexed. */
   deduped: number;
+  /**
+   * Referenced rows newly marked `broken` this pass — origin project gone,
+   * or the resolved bytes path missing on disk with DEFINITIVE evidence
+   * (MM-021). Mark-only: never removes the row or any bytes. Idempotent — a
+   * row already broken is left alone and not recounted, so running the
+   * sweep twice marks it once.
+   */
+  markedBroken: number;
+  /**
+   * Previously-broken referenced rows whose mark was undone this pass —
+   * their origin project still exists and their bytes are readable again
+   * (adversarial finding #4). Self-healing, so a false-positive mark (a
+   * transient stat error from an earlier build that treated it as
+   * permanent, or a source file that came back) doesn't stick forever.
+   */
+  cleared: number;
   /** designSystems + projectAssets. */
   total: number;
 }
@@ -319,9 +342,108 @@ async function reconcileProjects(
 }
 
 /**
+ * Mark referenced rows whose origin project no longer exists, or whose
+ * resolved bytes path is DEFINITIVELY missing on disk (MM-021) — a row can go
+ * orphaned this way without a project delete ever running the materialize
+ * step in `library.ts` (e.g. it predates that fix, or its file was removed
+ * without the project itself being deleted). MARK-only: never removes the
+ * row or any bytes, matching `markLibraryAssetBroken`'s own contract.
+ * Idempotent — a row already `broken` is skipped by
+ * `listUnbrokenReferencedAssets`'s query, so a second pass marks nothing new
+ * for it. Best-effort per row so one bad `stat` can't abort the sweep.
+ *
+ * "Definitive" (adversarial finding #4) means the origin project row is
+ * gone, there is no resolvable bytes path at all, or `stat` failed with
+ * `ENOENT`/`ENOTDIR` — the file (or a path component) genuinely does not
+ * exist. Any OTHER `stat` failure (`EACCES`, `EIO`, an AV lock, a transient
+ * network-mount hiccup, ...) is NOT evidence the source is gone, so the row
+ * is skipped this round rather than marked — a transient error must not
+ * become a permanent mark.
+ */
+async function reconcileBrokenReferencedAssets(
+  db: SqliteDb,
+  paths: ReconcileLibraryPaths,
+  result: ReconcileLibraryResult,
+): Promise<void> {
+  let candidates: ReturnType<typeof listUnbrokenReferencedAssets>;
+  try {
+    candidates = listUnbrokenReferencedAssets(db);
+  } catch {
+    candidates = [];
+  }
+  for (const asset of candidates) {
+    try {
+      const originGone = Boolean(asset.originProjectId) && !getProject(db, asset.originProjectId!);
+      let bytesMissing = false;
+      if (!originGone) {
+        const abs = resolveAssetBytesPath(asset, paths.PROJECTS_DIR);
+        if (!abs) {
+          // No resolvable path at all — definitive, same as ENOENT.
+          bytesMissing = true;
+        } else {
+          try {
+            const info = await stat(abs);
+            bytesMissing = !info.isFile();
+          } catch (err) {
+            const code = (err as NodeJS.ErrnoException | undefined)?.code;
+            // Only a path component genuinely not existing counts as
+            // definitive evidence. Everything else is transient — skip the
+            // row this round instead of marking it.
+            bytesMissing = code === 'ENOENT' || code === 'ENOTDIR';
+          }
+        }
+      }
+      if ((originGone || bytesMissing) && markLibraryAssetBroken(db, asset.id, Date.now())) {
+        result.markedBroken += 1;
+      }
+    } catch {
+      // best-effort per row
+    }
+  }
+  await reconcileSelfHealBrokenReferencedAssets(db, paths, result);
+}
+
+/**
+ * Self-healing half of the MM-021 broken-row sweep (adversarial finding #4):
+ * a row already marked `broken` whose origin project still exists and whose
+ * bytes are readable again gets its mark cleared. Never touches a row whose
+ * origin project is gone — that is permanent, clearing only undoes a
+ * FALSE-POSITIVE mark, it never resurrects a row whose source really is
+ * gone. Still UPDATE-only (`clearLibraryAssetBroken`); nothing here deletes
+ * a row or any bytes. Best-effort per row.
+ */
+async function reconcileSelfHealBrokenReferencedAssets(
+  db: SqliteDb,
+  paths: ReconcileLibraryPaths,
+  result: ReconcileLibraryResult,
+): Promise<void> {
+  let candidates: ReturnType<typeof listBrokenReferencedAssets>;
+  try {
+    candidates = listBrokenReferencedAssets(db);
+  } catch {
+    return;
+  }
+  for (const asset of candidates) {
+    try {
+      if (!asset.originProjectId || !getProject(db, asset.originProjectId)) continue;
+      const abs = resolveAssetBytesPath(asset, paths.PROJECTS_DIR);
+      if (!abs) continue;
+      const info = await stat(abs).catch(() => null);
+      if (info?.isFile() && clearLibraryAssetBroken(db, asset.id)) {
+        result.cleared += 1;
+      }
+    } catch {
+      // best-effort per row
+    }
+  }
+}
+
+/**
  * Reconcile design systems + agent project deliverables into the Library as
- * referenced assets. Idempotent and best-effort; never throws. Returns what was
- * newly indexed this pass (counts the UI / CLI surface back to the user).
+ * referenced assets, and mark rows orphaned by a gone origin project or
+ * missing bytes as `broken` (never removed). Idempotent and best-effort;
+ * never throws. Returns what was newly indexed/marked this pass (counts the
+ * UI / CLI surface back to the user).
  */
 export async function reconcileLibrary(
   db: SqliteDb,
@@ -331,6 +453,8 @@ export async function reconcileLibrary(
     designSystems: 0,
     projectAssets: 0,
     deduped: 0,
+    markedBroken: 0,
+    cleared: 0,
     total: 0,
   };
   try {
@@ -343,6 +467,19 @@ export async function reconcileLibrary(
   } catch {
     // best-effort
   }
+  try {
+    await reconcileBrokenReferencedAssets(db, paths, result);
+  } catch {
+    // best-effort
+  }
   result.total = result.designSystems + result.projectAssets;
+  // The only durable record of how many LIVE rows this pass marked broken
+  // (and cleared) — read this after a restart / forced sync to see the
+  // counts without a direct DB query (see the PR report for MM-021).
+  if (result.markedBroken > 0 || result.cleared > 0) {
+    console.warn(
+      `[library-sync] reconcile marked ${result.markedBroken} referenced asset(s) broken (gone origin project or missing bytes), cleared ${result.cleared}`,
+    );
+  }
   return result;
 }

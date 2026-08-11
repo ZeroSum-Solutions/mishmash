@@ -60,12 +60,34 @@ describe('LibrarySection accessibility', () => {
     cleanup();
   });
 
-  it('gives the library filter selects accessible names', async () => {
+  it('gives the rail and the remaining source select accessible names', async () => {
     render(<LibrarySection active onOpenProject={() => {}} />);
 
     await screen.findByText('A photo');
 
-    expect(screen.getByRole('combobox', { name: 'Filter by kind' })).toBeTruthy();
+    // The kind filter is now the rail's "Types" section (navigation
+    // landmark), not a <select> — the source filter is preserved as-is.
+    expect(screen.getByRole('navigation', { name: 'All Assets' })).toBeTruthy();
     expect(screen.getByRole('combobox', { name: 'Filter by source' })).toBeTruthy();
+  });
+
+  it('gives every rail type bucket an accessible, count-carrying name', async () => {
+    render(<LibrarySection active onOpenProject={() => {}} />);
+
+    await screen.findByText('A photo');
+
+    expect(screen.getByRole('button', { name: /^All Assets \(/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Image \(/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Generated \(/ })).toBeTruthy();
+  });
+
+  it('gives the composer generate control an accessible, stateful name', async () => {
+    render(<LibrarySection active onOpenProject={() => {}} />);
+
+    await screen.findByText('A photo');
+
+    const generateBtn = screen.getByRole('button', { name: 'Generate' });
+    expect(generateBtn).toBeTruthy();
+    expect(generateBtn.hasAttribute('disabled')).toBe(true); // empty prompt
   });
 });

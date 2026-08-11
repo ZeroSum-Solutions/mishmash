@@ -223,6 +223,21 @@ export function createDesignSystemServerServices({
     return { ok: true, id: resolved.id };
   }
 
+  // Resolves a *validated* skill id (i.e. one that already passed
+  // validateProjectSkillId) to its on-disk directory. Reuses the same
+  // multi-root scan (ALL_SKILL_LIKE_ROOTS) so a design-templates catalogue
+  // entry resolves identically to how /api/skills/:id/example finds it —
+  // see routes/static-resource.ts. Used by the catalogue "start from
+  // template" project-creation flow to copy the skill's assets/ into the
+  // new project directory.
+  async function resolveSkillDir(id: string): Promise<string | null> {
+    if (typeof id !== 'string' || !id) return null;
+    const allSkills = await listAllSkillLikeEntries();
+    const resolved = skills.findSkillById(allSkills, id);
+    const dir = resolved ? (resolved as { dir?: unknown }).dir : undefined;
+    return typeof dir === 'string' ? dir : null;
+  }
+
   function userDesignSystemWorkspaceProjectId(id: string) {
     if (typeof id !== 'string' || !id.startsWith('user:')) return null;
     const dirId = id.slice('user:'.length);
@@ -379,6 +394,7 @@ export function createDesignSystemServerServices({
     readAvailableDesignSystemPackageInfo,
     readAvailableDesignSystemStaticFile,
     readDesignSystemWorkspaceTextFile,
+    resolveSkillDir,
     validateProjectDesignSystemId,
     validateProjectSkillId,
   };

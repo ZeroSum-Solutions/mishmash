@@ -1,6 +1,10 @@
 .root {
   display: flex;
   flex-direction: column;
+  /* Same container width as the Templates gallery (TemplatesSection) so the
+     4-per-row, wider-card grid below yields identical column math. */
+  width: min(1240px, 100%);
+  margin: 0 auto;
 }
 
 .headerMeta {
@@ -136,8 +140,33 @@
   gap: 16px;
 }
 
+/* Standardized card height (MM-011): thumb keeps a fixed aspect ratio, and
+   .meta reserves a fixed budget for the always-visible fields (1-line title,
+   2-line clamped description, one meta line) regardless of which of those a
+   given item actually has. Domain tags and the suggested-stack line — the
+   two variable-length blocks that used to make card height inconsistent —
+   no longer sit on the card body:
+     - the suggested-stack line moved to the hover panel (DesignLibraryHoverPanel)
+       AND stays in the full detail dialog (unchanged);
+     - domain tags were removed from the card ONLY and are NOT on the hover
+       panel — the hover panel's scope per spec is title/description/
+       suggested-stack/carry-forward, not every catalog field. Domains still
+       render in the full detail dialog (unchanged) and the domain filter
+       select, so they are not lost, just not part of either skim surface.
+   The one accepted exception is a referenceable item's AspectSelector (rare
+   — only catalog items that ship a `reference`), which still renders inline
+   and may add height beyond this budget. */
 .card {
   margin: 0;
+  /* Explicit grid-stretch: a CSS Grid item's default align-self is already
+     `stretch` (row height = tallest item in the row, every item stretched to
+     match), but height: 100% states that plainly instead of relying on the
+     default going unnoticed. Combined with .meta's fixed field budget and
+     .cardActions' fixed action-row budget below, every "standard" card (no
+     AspectSelector — see that exception noted on .meta) ends up the same
+     height, both within a row (grid stretch) and across rows (equal content
+     budgets producing equal natural/row heights). */
+  height: 100%;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
@@ -252,20 +281,31 @@
   max-height: 88vh;
   overflow: auto;
 }
-.previewImageWrap {
-  aspect-ratio: 16 / 10;
-  min-height: 240px;
+/* MM-012#1 preview pane: always fills its slot — the live entry page in an
+   iframe (reusing the same preview-asset serving path Explore Kit uses,
+   scrollable by default), or a full-bleed image for a plain gallery example.
+   Never letterboxed the way the old contain-fit hero used to be. */
+.previewPane {
+  position: relative;
+  min-height: 420px;
   background: var(--bg-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   overflow: hidden;
 }
-.previewImage {
-  max-width: 100%;
-  max-height: 64vh;
-  object-fit: contain;
+.previewFrame {
   display: block;
+  width: 100%;
+  height: 420px;
+  border: 0;
+}
+.previewImageScroll {
+  width: 100%;
+  height: 420px;
+  overflow-y: auto;
+}
+.previewImage {
+  display: block;
+  width: 100%;
+  height: auto;
   opacity: 0;
   transition: opacity 200ms var(--ease-out);
 }
@@ -276,6 +316,45 @@
   min-height: 240px;
   padding: 32px;
   font-size: 13px;
+}
+.previewNav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg-panel) 85%, transparent);
+  color: var(--text);
+  cursor: pointer;
+}
+.previewNav:hover {
+  background: var(--bg-panel);
+}
+.previewNavPrev {
+  left: 10px;
+}
+.previewNavNext {
+  right: 10px;
+}
+.previewCounter {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg-panel) 85%, transparent);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .previewMeta {
   padding: 14px 16px 16px;
@@ -332,6 +411,17 @@
   flex-direction: column;
   gap: 4px;
   padding: 10px 12px 4px;
+  /* Fixed budget for the always-visible fields (title-area block below +
+     the kind/files/size line) so every standard card matches height. */
+  min-height: 88px;
+}
+.titleArea {
+  position: relative;
+  border-radius: 6px;
+}
+.titleArea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .label {
   margin: 0;
@@ -360,6 +450,81 @@
   color: var(--text-soft);
 }
 .stackLine span {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* MM-011 hover panel: read-only orientation, surfaces over the title/
+   description area on hover/focus without a click. Repeats the title and an
+   expanded description and adds whatever the catalog carries toward "what
+   would this look like" — suggested stack and carry-forward aspects, shown
+   as inert text, never as a picker.
+
+   Occlusion fix: the panel commonly grows taller than .titleArea's own box
+   (expanded description + stack + carry-forward vs. the clamped preview) and
+   can visually overlap .detail / AspectSelector / .cardActions below it in
+   the same card. `pointer-events: none` takes the panel out of hit-testing
+   entirely, so (a) a click always reaches the real control underneath
+   regardless of the panel's paint order, and (b) mouseenter/mouseleave on
+   the trigger stay driven purely by the trigger's own (small, fixed)
+   geometry — the panel can never "catch" the pointer and keep itself open.
+   `.card`'s own `overflow: hidden` (see .card) additionally clips the panel
+   at the card edge so it can never bleed into a neighboring card.
+
+   Truncation fix: because `pointer-events: none` rules out `overflow: auto`
+   (nothing can scroll a surface that can't receive pointer events), an
+   earlier version bounded the panel with one `max-height` + `overflow:
+   hidden` on the whole box — a blind cut that could chop whatever section
+   happened to sit at the 220px line, mid-sentence, with no ellipsis or other
+   cue. That box-level limit is gone. Instead, EACH section below clamps
+   itself with `-webkit-line-clamp` (a native, visible ellipsis), so every
+   section always shows at least a readable summary, and the panel's overall
+   height is bounded by construction — the sum of already-bounded parts —
+   rather than by an arbitrary outer cut. */
+.hoverPanel {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  left: -1px;
+  right: -1px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 10px;
+  background: var(--bg-elevated, var(--bg-panel));
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.18));
+  pointer-events: none;
+}
+.hoverPanelTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.hoverPanelDescription {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.hoverPanelSection {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.hoverPanelLabel {
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -416,13 +581,35 @@
   white-space: nowrap;
 }
 
+/* Buttons along the bottom with room (MM-011): the card stacks a secondary
+   row (Open file, Open live preview) above a full-width primary row (Start
+   project) instead of squeezing up to three buttons into one line — the
+   defect this replaces was literally buttons that didn't fit. The detail
+   dialog has more width to work with, so `.previewActions` below overrides
+   back to a single flexible row for that surface. */
 .cardActions {
   display: flex;
+  flex-direction: column;
   gap: 8px;
   padding: 8px 12px 12px;
   margin-top: auto;
+  /* Fixed action-row budget (2 rows of 30px buttons + 8px gap + padding), so
+     a card with only the secondary row (no Start project button — e.g. a
+     blocked-pending-license item) reserves the exact same height as a card
+     with both rows, instead of finishing shorter. */
+  min-height: 88px;
+}
+.cardActionsSecondary {
+  display: flex;
+  gap: 8px;
+}
+.cardActionsPrimary {
+  display: flex;
 }
 .previewActions {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
   padding: 14px 0 0;
 }
 .openFolderBtn {
@@ -497,44 +684,6 @@
   margin: 4px 0 0;
   font-size: 11.5px;
   color: var(--text-faint);
-}
-
-/* Detail-view preview strip (t6): browsable thumbnails below the hero that
-   swap it without reloading the dialog. Absent entirely for a single-image
-   item — see galleryImages() in DesignLibrarySection.tsx. */
-.stripRow {
-  display: flex;
-  gap: 8px;
-  padding: 10px 16px 0;
-  overflow-x: auto;
-}
-.stripItem {
-  flex: 0 0 auto;
-  width: 64px;
-  height: 40px;
-  padding: 0;
-  border: 1.5px solid var(--border);
-  border-radius: 7px;
-  overflow: hidden;
-  background: var(--bg-subtle);
-  cursor: pointer;
-  transition: border-color 140ms var(--ease-out);
-}
-.stripItem img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.stripItem:hover {
-  border-color: var(--border-strong);
-}
-.stripItem[aria-pressed='true'] {
-  border-color: var(--accent);
-}
-.stripItem:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
 }
 
 .previewBadges {
@@ -640,7 +789,8 @@
   }
   .search,
   .select,
-  .cardActions > * {
+  .cardActionsSecondary > *,
+  .cardActionsPrimary > * {
     min-height: 44px;
   }
   .previewBackdrop {
@@ -679,7 +829,7 @@
   .useAsTemplateBtn,
   .thumbImg,
   .previewImage,
-  .stripItem,
+  .previewNav,
   .viewportToggle button {
     transition: none;
   }

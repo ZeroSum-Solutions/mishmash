@@ -40,4 +40,14 @@ describe('official designer prompt', () => {
     expect(rendered).toContain(WEB_CLONE_COPYRIGHT_GUARDRAIL_BULLET);
     expect(rendered).not.toContain('Help the user build something original instead');
   });
+
+  it('exempts template-derived runs from the copyright guardrail (MM-004-A)', () => {
+    // The design-templates catalogue is 100% MIT-licensed. Telling a
+    // template-derived run (metadata.kind === 'template') not to recreate
+    // copyrighted designs told the agent not to copy the very MIT template
+    // the user asked to build from, producing a generic AI one-shot instead.
+    const rendered = renderOfficialDesignerPrompt('filesystem', { templateSourceExemption: true });
+    expect(rendered).not.toContain(COPYRIGHT_GUARDRAIL_BULLET);
+    expect(rendered).not.toContain('Help the user build something original instead');
+  });
 });

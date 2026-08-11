@@ -13,7 +13,7 @@
 // loopback binding + same-origin middleware like the rest of `/api`.
 
 import { createReadStream } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { Express, Request, Response } from 'express';
@@ -26,6 +26,7 @@ import type {
 } from '@open-design/contracts';
 import { LIBRARY_UPLOAD_MAX_BYTES, isLibraryUploadMimeAllowed } from '@open-design/contracts';
 import type { RouteDeps } from '../server-context.js';
+import { SANDBOXED_PREVIEW_CSP } from '../http/sandboxed-preview-csp.js';
 import {
   addLibraryAssetSource,
   clampLibraryListOffset,
@@ -48,7 +49,7 @@ import {
 } from '../library.js';
 import { reconcileLibrary, type ReconcileLibraryResult } from '../library-sync.js';
 import { fetchExternalBrandAsset } from '../brands/safe-fetch.js';
-import { ensureProjectSubdir } from '../projects.js';
+import { ensureProjectSubdir, mimeFor } from '../projects.js';
 import {
   confirmPairing,
   libraryConnectionStatus,
@@ -362,6 +363,8 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     designSystems: 0,
     projectAssets: 0,
     deduped: 0,
+    markedBroken: 0,
+    cleared: 0,
     total: 0,
   };
   async function runReconcile(force: boolean): Promise<ReconcileLibraryResult> {
@@ -896,6 +899,89 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
       );
     } catch {
       return sendApiError(res, 404, 'NOT_FOUND', 'no element markup for this asset');
+    }
+  });
+
+  // --- sibling file serving (HTML/design-system relative resources) --------
+  // `/raw` above serves exactly the one file an asset is registered under.
+  // A captured HTML page/design-system export that references siblings by
+  // relative URL (`href="assets/aura.css"`, `src="assets/subject-lateral.jpg"`)
+  // 404s on every one of those references when loaded through `/raw`, so the
+  // page renders unstyled. This route resolves any requested path against the
+  // asset's own PARENT DIRECTORY instead of the one registered file, so an
+  // iframe pointed at `/file/<entry-basename>` sees the entry file's siblings
+  // resolve the same way a same-origin static server would resolve them. The
+  // entry file itself is reachable the same way, at `/file/<its own
+  // basename>` -- there is no special-casing; it is just the one file that
+  // already lives directly inside its own parent directory.
+  //
+  // `owned` (clipper-captured `html`) and `referenced` (design-system /
+  // project-synced) assets share `resolveAssetBytesPath` as the base; for
+  // `referenced` storage the parent directory is a real project/design-system
+  // folder that can hold a full sibling tree, which is exactly the case this
+  // route exists for.
+  //
+  // Devin approved external https egress for this sandboxed consumer-iframe
+  // preview surface 2026-08-10 (MM-019/MM-020): agent-generated captures
+  // style themselves via CDN runtime JIT (cdn.tailwindcss.com) and pull
+  // external fonts/images, so the strict, network-free CSP `/raw` and the
+  // rest of this file's reads use would still leave them unstyled even with
+  // the siblings resolvable. Scoped to this route only -- `/raw` stays
+  // untouched (and network-free) for every non-HTML consumer.
+  //
+  // `connect-src` deliberately excludes `'self'`: CSP is computed from the
+  // DOCUMENT URL, not the iframe's opaque sandbox origin, so `'self'` here
+  // would let a scripted `fetch('/api/...')` inside agent-generated HTML
+  // reach this loopback daemon's own API. Sibling subresources (CSS/img/
+  // script/font) load via their own `-src` directives, none of which need
+  // `connect-src`, so dropping it costs nothing for the styling fix.
+  const libraryFileAssetCsp = SANDBOXED_PREVIEW_CSP;
+  app.get('/api/library/assets/:id/file/*splat', requireLocalDaemonRequest, async (req, res) => {
+    const asset = getLibraryAsset(db, req.params.id);
+    if (!asset) return sendApiError(res, 404, 'NOT_FOUND', 'asset not found');
+    const abs = resolveAssetBytesPath(asset, PROJECTS_DIR);
+    if (!abs) return sendApiError(res, 404, 'NOT_FOUND', 'asset bytes not available');
+    const parentDir = path.dirname(abs);
+
+    const splatParam = (req.params as { splat?: string | string[] }).splat;
+    const relPath = Array.isArray(splatParam) ? splatParam.join('/') : String(splatParam || '');
+    if (!relPath || path.isAbsolute(relPath)) {
+      return sendApiError(res, 404, 'NOT_FOUND', 'asset bytes not available');
+    }
+    const target = path.resolve(parentDir, relPath);
+    if (target !== parentDir && !target.startsWith(parentDir + path.sep)) {
+      return sendApiError(res, 404, 'NOT_FOUND', 'asset bytes not available');
+    }
+
+    // Symlink-aware re-validation: the lexical prefix check above is fooled by
+    // a symlink INSIDE parentDir pointing outside it -- the literal path
+    // stays under parentDir but the OS follows the link at open() time. Same
+    // technique GET /api/skills/:id/assets/*splat uses.
+    let parentReal: string;
+    let targetReal: string;
+    try {
+      parentReal = await realpath(parentDir);
+      targetReal = await realpath(target);
+    } catch {
+      return sendApiError(res, 404, 'NOT_FOUND', 'asset bytes not available');
+    }
+    if (targetReal !== parentReal && !targetReal.startsWith(parentReal + path.sep)) {
+      return sendApiError(res, 404, 'NOT_FOUND', 'asset bytes not available');
+    }
+
+    try {
+      const info = await stat(targetReal);
+      if (!info.isFile()) return sendApiError(res, 404, 'NOT_FOUND', 'asset bytes not available');
+      res.setHeader('Content-Type', mimeFor(targetReal));
+      res.setHeader('Content-Length', String(info.size));
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Security-Policy', libraryFileAssetCsp);
+      streamAssetFileToResponse(targetReal, res, () =>
+        sendApiError(res, 404, 'NOT_FOUND', 'asset bytes not available'),
+      );
+    } catch {
+      return sendApiError(res, 404, 'NOT_FOUND', 'asset bytes not available');
     }
   });
 

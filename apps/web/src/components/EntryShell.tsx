@@ -491,6 +491,14 @@ interface Props {
   onImportFolder?: (baseDir: string) => Promise<void> | void;
   onImportFolderResponse?: (response: OpenDesignHostProjectImportSuccess) => Promise<void> | void;
   onOpenProject: (id: string, fileName?: string) => Promise<boolean> | boolean | void;
+  /** See EntryView.tsx — MM-008: Design Library's own create response already
+   *  carries the full `Project`, so it routes through this instead of
+   *  `onOpenProject`, which only takes an id. */
+  onOpenProjectFromDesignLibrary?: (
+    project: Project,
+    conversationId?: string,
+    entryFile?: string,
+  ) => void;
   onOpenLiveArtifact: (projectId: string, artifactId: string) => void;
   onDeleteProject: (id: string) => Promise<boolean | void> | boolean | void;
   onDuplicateProject?: (id: string) => Promise<void> | void;
@@ -596,6 +604,7 @@ export function EntryShell({
   onImportFolder,
   onImportFolderResponse,
   onOpenProject,
+  onOpenProjectFromDesignLibrary,
   onOpenLiveArtifact,
   onDeleteProject,
   onDuplicateProject,
@@ -792,6 +801,10 @@ export function EntryShell({
   // stay open and show an error instead of closing on a failed create.
   // `brief` carries the guided create flow's answers (PRD C8), gathered by
   // TemplatesSection's GuidedCreateDialog immediately before this call.
+  // `autoSendFirstMessage` (MM-001 #2): the daemon composes a starting
+  // prompt from `brief` server-side (routes/project/index.ts folds it into
+  // `pendingPrompt`), so this must ask App to auto-send it — the client
+  // never sees the composed prompt text itself.
   function startProjectFromTemplate(template: SkillSummary, brief?: GuidedCreateBrief) {
     return Promise.resolve(
       onCreateProject({
@@ -799,6 +812,7 @@ export function EntryShell({
         skillId: template.id,
         designSystemId: null,
         metadata: metadataForSkill(template),
+        autoSendFirstMessage: true,
         ...(brief ? { brief } : {}),
       }),
     );
@@ -1331,7 +1345,19 @@ export function EntryShell({
             <div data-testid="entry-view-design-library" data-active={view === 'design-library' ? 'true' : 'false'} {...inactiveViewProps(view === 'design-library')}>
               <DesignLibrarySection
                 active={view === 'design-library'}
-                onOpenProject={(projectId, conversationId, entryFile) =>
+                onOpenProject={(projectId, conversationId, entryFile, project) => {
+                  // MM-008: startDesignLibraryProject already built the full
+                  // project daemon-side, so route it through the same
+                  // client-cache-insert + auto-send bookkeeping
+                  // handleCreateProject uses (App.tsx's
+                  // onOpenProjectFromDesignLibrary) instead of navigating
+                  // straight to a project the client cache has never seen —
+                  // that used to land on a placeholder "Untitled" project
+                  // (dead canvas) until an async re-fetch caught up.
+                  if (project && onOpenProjectFromDesignLibrary) {
+                    onOpenProjectFromDesignLibrary(project, conversationId, entryFile);
+                    return;
+                  }
                   navigate({
                     kind: 'project',
                     projectId,
@@ -1340,8 +1366,8 @@ export function EntryShell({
                     // the page "Open live preview" just showed rather than
                     // whatever the generic primary-file heuristic ranks first.
                     fileName: entryFile ?? null,
-                  })
-                }
+                  });
+                }}
               />
             </div>
             <div data-testid="entry-view-templates" data-active={view === 'templates' ? 'true' : 'false'} {...inactiveViewProps(view === 'templates')}>

@@ -9,7 +9,7 @@
 //   - the pass is idempotent (re-running indexes nothing new).
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -20,7 +20,7 @@ import {
   openDatabase,
   upsertMessage,
 } from '../src/db.js';
-import { listLibraryAssets } from '../src/library-store.js';
+import { insertLibraryAsset, listLibraryAssets } from '../src/library-store.js';
 import { reconcileLibrary } from '../src/library-sync.js';
 import type Database from 'better-sqlite3';
 
@@ -232,5 +232,147 @@ describe('reconcileLibrary', () => {
 
     expect(result.designSystems).toBe(0);
     expect(listLibraryAssets(db, {}).filter((asset) => asset.kind === 'design-system')).toEqual([]);
+  });
+});
+
+// MM-021: a referenced Library row can go orphaned without a project delete
+// ever running (it predates the delete-time materialize fix in library.ts,
+// or its file was removed without the project itself being deleted). The
+// sweep marks it `broken` instead of deleting it — never removes a row or
+// bytes — and is idempotent so re-running it on every Library open doesn't
+// re-mark or double-count what a previous pass already found.
+describe('reconcileLibrary — MM-021 broken-row sweep', () => {
+  it('marks a referenced row broken when its origin project no longer exists, idempotently', async () => {
+    const now = Date.now();
+    insertLibraryAsset(db, {
+      id: 'orphan-asset-1',
+      kind: 'image',
+      storage: 'referenced',
+      capturedAt: now,
+      archivedDate: '2024-05-01',
+      contentHash: 'orphan-hash-1',
+      tags: [],
+      originProjectId: 'ghost-project-does-not-exist',
+      relPath: 'render.png',
+      mime: 'image/png',
+    });
+
+    const first = await reconcileLibrary(db, paths());
+    expect(first.markedBroken).toBe(1);
+
+    const marked = listLibraryAssets(db, {}).find((a) => a.id === 'orphan-asset-1');
+    expect(marked?.broken).toBe(true);
+    expect(marked?.missingSince).toBeGreaterThan(0);
+    // Mark-only: the row (and its pointer) survives.
+    expect(marked?.storage).toBe('referenced');
+
+    // Idempotent — a second pass finds nothing new to mark for this row.
+    const second = await reconcileLibrary(db, paths());
+    expect(second.markedBroken).toBe(0);
+    expect(listLibraryAssets(db, {}).filter((a) => a.broken).length).toBe(1);
+  });
+
+  it('marks a referenced row broken when its origin project exists but the file itself is missing', async () => {
+    await seedProject();
+    const now = Date.now();
+    insertLibraryAsset(db, {
+      id: 'missing-file-asset-1',
+      kind: 'image',
+      storage: 'referenced',
+      capturedAt: now,
+      archivedDate: '2024-05-01',
+      contentHash: 'missing-file-hash-1',
+      tags: [],
+      originProjectId: PROJECT_ID,
+      relPath: 'does-not-exist.png',
+      mime: 'image/png',
+    });
+
+    const result = await reconcileLibrary(db, paths());
+
+    expect(result.markedBroken).toBeGreaterThanOrEqual(1);
+    const marked = listLibraryAssets(db, {}).find((a) => a.id === 'missing-file-asset-1');
+    expect(marked?.broken).toBe(true);
+  });
+
+  // Adversarial finding #4(a): only DEFINITIVE evidence (origin project gone,
+  // or `stat` failing with ENOENT/ENOTDIR) may mark a row broken. A
+  // permission-denied `stat` — simulated here via a directory with its
+  // permission bits stripped, so path resolution into it fails with EACCES —
+  // is transient, not proof the source is gone, and must be skipped instead.
+  it('does not mark a referenced row broken on a transient (non-ENOENT) stat error', async () => {
+    await seedProject();
+    const lockedDir = path.join(projectsDir, PROJECT_ID, 'locked');
+    await mkdir(lockedDir, { recursive: true });
+    const relPath = 'locked/secret.png';
+    await writeFile(path.join(lockedDir, 'secret.png'), pngBytes('locked'));
+
+    const now = Date.now();
+    insertLibraryAsset(db, {
+      id: 'transient-error-asset-1',
+      kind: 'image',
+      storage: 'referenced',
+      capturedAt: now,
+      archivedDate: '2024-05-01',
+      contentHash: 'transient-error-hash-1',
+      tags: [],
+      originProjectId: PROJECT_ID,
+      relPath,
+      mime: 'image/png',
+    });
+
+    await chmod(lockedDir, 0o000);
+    try {
+      const result = await reconcileLibrary(db, paths());
+      expect(result.markedBroken).toBe(0);
+    } finally {
+      // Restore permissions before the shared afterEach tries to rm() dataDir.
+      await chmod(lockedDir, 0o755);
+    }
+
+    const row = listLibraryAssets(db, {}).find((a) => a.id === 'transient-error-asset-1');
+    expect(row?.broken).toBeFalsy();
+  });
+
+  // Adversarial finding #4(b): self-healing. A row already marked `broken`
+  // (from an earlier build's permanent-on-any-error behavior, or a genuinely
+  // missing file that later reappeared) must be recoverable once its origin
+  // project still exists and its bytes are readable again — mark-only never
+  // meant "broken forever" for a false positive.
+  it('clears a broken row once its origin project still exists and its bytes are readable again', async () => {
+    await seedProject();
+    const relPath = 'comeback.png';
+    const now = Date.now();
+    insertLibraryAsset(db, {
+      id: 'comeback-asset-1',
+      kind: 'image',
+      storage: 'referenced',
+      capturedAt: now,
+      archivedDate: '2024-05-01',
+      contentHash: 'comeback-hash-1',
+      tags: [],
+      originProjectId: PROJECT_ID,
+      relPath,
+      mime: 'image/png',
+    });
+
+    // First pass: the file doesn't exist yet — definitive ENOENT, gets marked.
+    const first = await reconcileLibrary(db, paths());
+    expect(first.markedBroken).toBeGreaterThanOrEqual(1);
+    let row = listLibraryAssets(db, {}).find((a) => a.id === 'comeback-asset-1');
+    expect(row?.broken).toBe(true);
+
+    // The file comes back (restored, regenerated, ...) — a later sweep must
+    // self-heal the mark instead of leaving it broken forever.
+    await writeFile(path.join(projectsDir, PROJECT_ID, relPath), pngBytes('comeback'));
+
+    const second = await reconcileLibrary(db, paths());
+    expect(second.cleared).toBe(1);
+
+    row = listLibraryAssets(db, {}).find((a) => a.id === 'comeback-asset-1');
+    expect(row?.broken).toBeFalsy();
+    expect(row?.missingSince).toBeUndefined();
+    // Still mark-only — clearing the flag never materializes the row.
+    expect(row?.storage).toBe('referenced');
   });
 });

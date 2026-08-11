@@ -1,4 +1,4 @@
-// OD Library tab — the global asset registry grid.
+// OD Assets tab — the global asset registry grid.
 //
 // Shows every asset that has entered the system (clipper capture, manual
 // upload, agent task, design-system staging, AI generation) with a source
@@ -7,16 +7,26 @@
 // zero-config — it connects automatically whenever Open Design is running
 // locally, so there is no pairing step here.
 //
+// MM-016 restructure: a permanent left rail (search, All Assets, per-kind
+// counts, a distinct "Generated" entry, and a Collections placeholder)
+// replaces the old kind-filter <select>; the main grid groups by day with a
+// per-day bulk-select checkbox; a floating composer at the bottom lets a user
+// generate an image without leaving the page. Structure only, per the brief —
+// every visual comes from this app's existing tokens/classes, not the
+// Higgsfield reference used to plan the layout. See `library/` for the
+// extracted sub-components this file composes.
+//
 // Each card thumbnail is kind-aware (image / video / html / font / color) and
 // opens a full-size, kind-aware preview (LibraryPreviewModal) on click. Cards
 // are also multi-selectable — checkbox, Cmd/Ctrl+click, Shift+click range, a
-// rubber-band box drag, Cmd/Ctrl+A — and the selection can be bulk-deleted from
-// the action bar or with Delete / Backspace.
+// rubber-band box drag, Cmd/Ctrl+A, and now a per-day group checkbox — and the
+// selection can be bulk-deleted from the action bar or with Delete / Backspace.
 //
-// Copy is intentionally inline (not yet i18n-keyed) — localization of the
-// Library surface is a tracked follow-up.
+// Copy is intentionally inline (not yet i18n-keyed) for pre-existing strings —
+// localization of the Library surface is a tracked follow-up. New strings this
+// restructure introduces (rail, composer) DO go through the typed i18n dict.
 
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ChatAttachment, DesignSystemSummary, LibraryAsset } from '@open-design/contracts';
 import {
   applyLibraryAsset,
@@ -27,34 +37,43 @@ import {
   fetchLibraryAsset,
   fetchLibraryAssetsPage,
   fetchLibraryAssetAsFile,
+  generateProjectMedia,
   libraryAssetRawUrl,
+  readFileAsDataUrl,
   syncLibrary,
+  waitForMediaTask,
   type LibraryAssetQuery,
 } from '../providers/registry';
-import { useInView } from './plugins-home/useInView';
+import { createProject } from '../state/projects';
 import { navigate } from '../router';
 import { setPendingDesignSystemCreateEntry } from '../analytics/ds-create-entry';
 import { setComposerSeed, setDesignSystemAssetSeed, setHomeComposerAssetSeed } from '../state/libraryHandoff';
 import { Button, Dialog, DialogDescription, DialogFooter, DialogTitle } from '@open-design/components';
 import { Icon } from './Icon';
 import { useT } from '../i18n';
-import {
-  KindIcon,
-  SOURCE_LABELS,
-  assetTitle,
-  badgeKind,
-  fontFamilyFor,
-  kindLabel,
-  kindTint,
-  matchesKindFilter,
-  originDesignSystemId,
-  originProjectId,
-  primarySource,
-  type KindFilterValue,
-} from './LibraryAssetMeta';
+import { fontFamilyFor, matchesKindFilter, type BadgeKind, type KindFilterValue } from './LibraryAssetMeta';
 import { LibraryPreviewModal } from './LibraryPreviewModal';
 import { LibraryUploadModal } from './LibraryUploadModal';
+import { LibraryCard } from './library/LibraryCard';
+import { LibraryRail } from './library/LibraryRail';
+import { LibraryGrid } from './library/LibraryGrid';
+import { LibraryComposer, type LibraryComposerGenerateInput } from './library/LibraryComposer';
+import {
+  cardIdsInBand,
+  computeRailCounts,
+  mergeIngestedAssets,
+  parseEventAssetId,
+  snapshotCardRects,
+  toggleGroupInSelection,
+  type Band,
+  type CardRect,
+} from './library/library-utils';
 import styles from './LibrarySection.module.css';
+
+// Re-exported so existing tests importing these pure helpers from
+// `./LibrarySection` (their original home) keep working unchanged.
+export { cardIdsInBand, mergeIngestedAssets, parseEventAssetId, snapshotCardRects };
+export type { Band, CardRect };
 
 interface Props {
   active: boolean;
@@ -62,432 +81,20 @@ interface Props {
   onOpenProject: (projectId: string, fileName?: string) => void;
 }
 
-// `value` is matched against an asset's `badgeKind` (not its raw storage kind),
-// so `element` isolates clipper element-pick captures and `image` excludes them.
-const KIND_FILTERS: Array<{ value: string; label: string }> = [
-  { value: '', label: 'All kinds' },
-  { value: 'image', label: 'Images' },
-  { value: 'element', label: 'Elements' },
-  { value: 'design-system', label: 'Design systems' },
-  { value: 'video', label: 'Video' },
-  { value: 'html', label: 'HTML' },
-  { value: 'font', label: 'Fonts' },
-  { value: 'color', label: 'Colors' },
-  { value: 'text', label: 'Text' },
-  { value: 'url', label: 'Links' },
-];
-
 const SOURCE_FILTERS: Array<{ value: string; label: string }> = [
   { value: '', label: 'All sources' },
   { value: 'clipper', label: 'Clipper' },
   { value: 'manual-upload', label: 'Upload' },
   { value: 'agent-task', label: 'Agent' },
   { value: 'design-system', label: 'Design system' },
-  { value: 'generated', label: 'Generated' },
+  // 'generated' lives in the rail as its own entry now (see LibraryRail) —
+  // not duplicated here.
 ];
 
-/** Local `YYYY-MM-DD` for a Date — matches the daemon's `archivedDate` bucket. */
-function ymdLocal(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-/** The day bucket an asset belongs to (prefers the daemon's archive date). */
-function dayKeyOf(asset: LibraryAsset): string {
-  return asset.archivedDate || ymdLocal(new Date(asset.capturedAt));
-}
-
-/** Human heading for a `YYYY-MM-DD` day bucket — Today / Yesterday / a date. */
-function dayHeading(key: string): string {
-  const today = ymdLocal(new Date());
-  const yesterday = ymdLocal(new Date(Date.now() - 86_400_000));
-  if (key === today) return 'Today';
-  if (key === yesterday) return 'Yesterday';
-  const [y, m, d] = key.split('-').map(Number);
-  if (!y || !m || !d) return key;
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-// Image / video / html / design-system thumbnail with a shimmer-until-loaded
-// skeleton, mirroring the clipper's "Select images to save" picker
-// (clipper/content.js → `.thumb.shim`). The skeleton fills the 4:3 box and
-// animates only while the bytes are in flight; the media fades in over it on
-// `load`, then the skeleton unmounts. On `error` the skeleton also clears so a
-// broken asset doesn't shimmer forever, and a cached image that finished
-// loading before React attached `onLoad` is caught via the `complete` probe on
-// mount. Because heavy kinds are gated by {@link LibraryThumb} (which only
-// mounts in view) and `.card` carries `content-visibility:auto`, no off-screen
-// card runs the shimmer animation.
-function MediaThumb({ asset }: { asset: LibraryAsset }) {
-  const [loaded, setLoaded] = useState(false);
-  const rawUrl = libraryAssetRawUrl(asset.id);
-  const title = assetTitle(asset);
-  const imgRef = useRef<HTMLImageElement>(null);
-
-  useEffect(() => {
-    const img = imgRef.current;
-    if (img && img.complete && img.naturalWidth > 0) setLoaded(true);
-  }, []);
-
-  const flag = loaded ? 'true' : 'false';
-  let media: React.ReactNode;
-  if (asset.kind === 'video') {
-    media = (
-      <>
-        <video
-          className={styles.thumbImg}
-          src={rawUrl}
-          muted
-          preload="metadata"
-          playsInline
-          data-loaded={flag}
-          onLoadedData={() => setLoaded(true)}
-          onError={() => setLoaded(true)}
-        />
-        <span className={styles.playGlyph} aria-hidden>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <path d="M8 5v14l11-7z" />
-          </svg>
-        </span>
-      </>
-    );
-  } else if (asset.kind === 'html' || asset.kind === 'design-system') {
-    // Static (no scripts) sandboxed render — a faithful, lightweight preview
-    // of the captured page. The modal re-renders it with scripts for motion.
-    media = (
-      <iframe
-        className={styles.thumbFrame}
-        src={rawUrl}
-        sandbox=""
-        scrolling="no"
-        loading="lazy"
-        tabIndex={-1}
-        aria-hidden
-        title={title}
-        data-loaded={flag}
-        onLoad={() => setLoaded(true)}
-      />
-    );
-  } else {
-    media = (
-      <img
-        ref={imgRef}
-        className={styles.thumbImg}
-        src={rawUrl}
-        alt={title}
-        loading="lazy"
-        decoding="async"
-        data-loaded={flag}
-        onLoad={() => setLoaded(true)}
-        onError={() => setLoaded(true)}
-      />
-    );
-  }
-
-  return (
-    <>
-      {loaded ? null : <span className={styles.thumbSkeleton} aria-hidden />}
-      {media}
-    </>
-  );
-}
-
-/** Kind-aware thumbnail. Stays fetch-free so the grid scrolls cheaply. */
-function Thumb({ asset }: { asset: LibraryAsset }) {
-  switch (asset.kind) {
-    case 'image':
-    case 'video':
-    case 'design-system':
-    case 'html':
-      return <MediaThumb asset={asset} />;
-    case 'font':
-      return (
-        <div className={styles.thumbFont} style={{ fontFamily: `"${fontFamilyFor(asset.id)}", sans-serif` }}>
-          Ag
-        </div>
-      );
-    case 'color': {
-      const swatch = asset.palette?.find((c) => typeof c === 'string' && c.trim());
-      return swatch ? (
-        <div className={styles.thumbColor} style={{ background: swatch }} />
-      ) : (
-        <div className={styles.thumbGlyph}>
-          <KindIcon kind="color" size={34} />
-        </div>
-      );
-    }
-    case 'text':
-    case 'url':
-    default:
-      return (
-        <div className={styles.thumbGlyph}>
-          <KindIcon kind={asset.kind} size={34} />
-        </div>
-      );
-  }
-}
-
-// Kinds whose thumbnail does real off-screen work — a network fetch (image,
-// video, font face) or a whole browsing context (html `<iframe>`). These mount
-// lazily; cheap kinds (color swatch / text / url glyph) render immediately.
-const LAZY_THUMB_KINDS = new Set<string>(['image', 'video', 'design-system', 'html', 'font']);
-
-// Wraps {@link Thumb} so the heavy content (full-bytes `<img>`/`<video>`, the
-// `<iframe>` html preview, or an injected `@font-face` specimen) only mounts
-// once the card scrolls near the viewport. Until then a faint kind glyph holds
-// the 4:3 box. `once: true` keeps it mounted after first reveal so scrolling
-// back does not tear down and recreate an iframe browsing context. The wrapper
-// fills the `.thumb` box without changing the card's outer dimensions, so the
-// flat `index` and box-select rects stay stable whether or not it has mounted.
-function LibraryThumb({ asset }: { asset: LibraryAsset }) {
-  const lazy = LAZY_THUMB_KINDS.has(asset.kind);
-  const { ref, inView } = useInView<HTMLDivElement>({ once: true, rootMargin: '300px' });
-  if (!lazy) return <Thumb asset={asset} />;
-  return (
-    <div ref={ref} className={styles.thumbLazy}>
-      {inView ? (
-        <Thumb asset={asset} />
-      ) : (
-        <div className={styles.thumbGlyph} aria-hidden>
-          <KindIcon kind={badgeKind(asset)} size={34} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Merge freshly-fetched library assets into the current list for an incremental
- * SSE update. Assets already present are refreshed in place (a dedup re-ingest
- * does NOT bump `created_at`, so it must not reorder); genuinely new assets are
- * prepended, latest-first, to match the server's `created_at DESC` order.
- */
-export function mergeIngestedAssets(prev: LibraryAsset[], fetched: LibraryAsset[]): LibraryAsset[] {
-  if (fetched.length === 0) return prev;
-  const byId = new Map(fetched.map((a) => [a.id, a]));
-  const present = new Set(prev.map((a) => a.id));
-  const merged = prev.map((a) => byId.get(a.id) ?? a);
-  const fresh = [...byId.values()].filter((a) => !present.has(a.id)).reverse();
-  return fresh.length ? [...fresh, ...merged] : merged;
-}
-
-/** Parse `{ assetId }` out of a library SSE `data:` payload, or null. */
-export function parseEventAssetId(data: unknown): string | null {
-  if (typeof data !== 'string') return null;
-  try {
-    const parsed = JSON.parse(data) as { assetId?: unknown };
-    return typeof parsed.assetId === 'string' ? parsed.assetId : null;
-  } catch {
-    return null;
-  }
-}
-
-/** A card's viewport-space box, snapshotted for hit-testing during a drag. */
-export interface CardRect {
-  id: string;
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-}
-
-/** Snapshot every rendered card's viewport rect (id + bounds) under `grid`. */
-export function snapshotCardRects(grid: HTMLElement | null): CardRect[] {
-  const out: CardRect[] = [];
-  if (!grid) return out;
-  grid.querySelectorAll<HTMLElement>('[data-asset-card]').forEach((el) => {
-    const id = el.dataset.assetId;
-    if (!id) return;
-    const r = el.getBoundingClientRect();
-    out.push({ id, left: r.left, top: r.top, right: r.right, bottom: r.bottom });
-  });
-  return out;
-}
-
-/** Ids of cards whose snapshotted rect intersects the band rectangle. */
-export function cardIdsInBand(rects: CardRect[], band: Band): string[] {
-  const left = band.x;
-  const top = band.y;
-  const right = band.x + band.w;
-  const bottom = band.y + band.h;
-  const ids: string[] = [];
-  for (const r of rects) {
-    if (r.left < right && r.right > left && r.top < bottom && r.bottom > top) ids.push(r.id);
-  }
-  return ids;
-}
-
-export interface Band {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-interface LibraryCardProps {
-  asset: LibraryAsset;
-  /** Flat position in `assets` — drives shift-range + box selection. */
-  index: number;
-  selected: boolean;
-  /** This card's asset is mid "Edit as page" (spinner gate). */
-  editing: boolean;
-  onToggle: (id: string, index: number) => void;
-  onRange: (index: number) => void;
-  onPreview: (id: string) => void;
-  onDelete: (id: string) => void;
-  onEditAsPage: (id: string) => void;
-  onOpenProject: (projectId: string, fileName?: string) => void;
-}
-
-// One asset card. Shared by the grid and timeline views. Memoized so a
-// selection change — including the per-frame `setSelectedIds` of a rubber-band
-// drag — only re-renders the cards whose `selected`/`editing` actually flipped,
-// not the whole grid. On a large Library that turn-the-whole-list re-render was
-// the single biggest cost; all the callbacks below are stable (useCallback /
-// setState) so React.memo's shallow compare holds across those updates.
-const LibraryCard = memo(function LibraryCard({
-  asset,
-  index,
-  selected,
-  editing,
-  onToggle,
-  onRange,
-  onPreview,
-  onDelete,
-  onEditAsPage,
-  onOpenProject,
-}: LibraryCardProps) {
-  const src = primarySource(asset);
-  const projectId = originProjectId(asset);
-  const designSystemId = originDesignSystemId(asset);
-  const title = assetTitle(asset);
-  return (
-    <figure
-      className={styles.card}
-      data-asset-card
-      data-asset-id={asset.id}
-      data-selected={selected ? 'true' : 'false'}
-    >
-      <div className={styles.thumb}>
-        <LibraryThumb asset={asset} />
-        <button
-          type="button"
-          className={styles.thumbButton}
-          onClick={(e) => {
-            if (e.metaKey || e.ctrlKey) {
-              onToggle(asset.id, index);
-              return;
-            }
-            if (e.shiftKey) {
-              onRange(index);
-              return;
-            }
-            onPreview(asset.id);
-          }}
-          aria-label={`Preview ${title}`}
-        >
-          <span className={styles.previewOverlay} aria-hidden>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-          </span>
-        </button>
-        <button
-          type="button"
-          className={styles.selectCheck}
-          data-checked={selected ? 'true' : 'false'}
-          aria-pressed={selected}
-          aria-label={selected ? 'Deselect asset' : 'Select asset'}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (e.shiftKey) onRange(index);
-            else onToggle(asset.id, index);
-          }}
-        >
-          {selected ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-          ) : null}
-        </button>
-        {src ? (
-          <span className={styles.badge} data-source={src}>
-            {SOURCE_LABELS[src]}
-          </span>
-        ) : null}
-        <span
-          className={styles.kindBadge}
-          style={{ ['--kind-tint' as string]: kindTint(badgeKind(asset)) }}
-        >
-          <KindIcon kind={badgeKind(asset)} size={12} />
-          {kindLabel(badgeKind(asset))}
-        </span>
-      </div>
-      <figcaption className={styles.meta}>
-        <button
-          type="button"
-          className={styles.title}
-          title={asset.sourceTitle ?? asset.sourceUrl ?? asset.id}
-          onClick={() => onPreview(asset.id)}
-        >
-          {title}
-        </button>
-        <span className={styles.sub}>
-          {asset.width && asset.height
-            ? `${asset.width}×${asset.height}`
-            : kindLabel(badgeKind(asset))}
-        </span>
-      </figcaption>
-      <div className={styles.cardActions}>
-        {/* Jump back to an asset's origin. A synced design-system / project
-            asset links to where it lives; a clipper html capture (no origin)
-            still offers "Edit as page"; otherwise the external source. */}
-        {designSystemId ? (
-          <button
-            type="button"
-            className={styles.linkBtn}
-            onClick={() => navigate({ kind: 'design-system-detail', designSystemId })}
-          >
-            Open design system
-          </button>
-        ) : projectId ? (
-          <button
-            type="button"
-            className={styles.linkBtn}
-            onClick={() => onOpenProject(projectId, asset.relPath)}
-          >
-            Open project
-          </button>
-        ) : asset.kind === 'html' ? (
-          <button
-            type="button"
-            className={styles.linkBtn}
-            onClick={() => onEditAsPage(asset.id)}
-            disabled={editing}
-          >
-            {editing ? 'Opening…' : 'Edit as page'}
-          </button>
-        ) : asset.sourceUrl ? (
-          <a className={styles.linkBtn} href={asset.sourceUrl} target="_blank" rel="noreferrer">
-            Source
-          </a>
-        ) : (
-          <span />
-        )}
-        <button type="button" className={styles.deleteBtn} onClick={() => onDelete(asset.id)}>
-          Remove
-        </button>
-      </div>
-    </figure>
-  );
-});
+// Grid item min-width steps the size slider scrubs through (index 2 matches
+// the pre-restructure fixed 180px).
+const CARD_SIZE_STEPS_PX = [140, 160, 180, 220, 280];
+const DEFAULT_CARD_SIZE_INDEX = 2;
 
 export function LibrarySection({ active, onOpenProject }: Props) {
   const t = useT();
@@ -502,6 +109,15 @@ export function LibrarySection({ active, onOpenProject }: Props) {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const fetchedCountRef = useRef(0);
+  // The rail needs whole-library counts (per kind + "Generated") independent
+  // of whatever filter is currently active. Rather than firing extra
+  // requests, we snapshot the assets/total from the most recent UNFILTERED
+  // load — free, since kind='' && source==='' is the default view and every
+  // filter change/Refresh already re-runs load(). This undercounts a kind
+  // whose rows haven't been fetched yet in a library bigger than one page,
+  // same known caveat the pre-existing `element` filter already carried.
+  const [unfilteredSnapshot, setUnfilteredSnapshot] = useState<LibraryAsset[]>([]);
+  const [grandTotal, setGrandTotal] = useState(0);
   // Ref mirrors of `total`/`assets`, kept in sync via effects below, so
   // handlers that fire from outside React's render cycle (the long-lived SSE
   // subscription, delete handlers) can read the current value synchronously
@@ -534,7 +150,12 @@ export function LibrarySection({ active, onOpenProject }: Props) {
   const confirmDeleteTitleId = useId();
   // Asset currently being turned into an editable OD page (spinner gate).
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'timeline'>('grid');
+  // Date-grouped ("timeline") is the default main-area layout, matching the
+  // restructured target; the flat ungrouped "grid" mode is preserved as a
+  // toggle, not dropped.
+  const [viewMode, setViewMode] = useState<'grid' | 'timeline'>('timeline');
+  const [cardSizeIndex, setCardSizeIndex] = useState(DEFAULT_CARD_SIZE_INDEX);
+  const [railCollapsed, setRailCollapsed] = useState(false);
   // "Use in design system" menu state (multi-select → design system).
   const [dsMenuOpen, setDsMenuOpen] = useState(false);
   const [dsList, setDsList] = useState<DesignSystemSummary[]>([]);
@@ -557,8 +178,8 @@ export function LibrarySection({ active, onOpenProject }: Props) {
 
   // Debounce the search box before it touches the network (250ms trailing).
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 250);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(timer);
   }, [search]);
 
   const query = useMemo<LibraryAssetQuery>(() => {
@@ -570,6 +191,8 @@ export function LibrarySection({ active, onOpenProject }: Props) {
     if (debouncedSearch.trim()) q.q = debouncedSearch.trim();
     return q;
   }, [kind, source, debouncedSearch]);
+
+  const isUnfilteredView = !kind && !source;
 
   // Whether any filter narrows the default newest-first feed. Tracked in a ref
   // so the long-lived SSE subscription can read it without resubscribing on
@@ -611,13 +234,18 @@ export function LibrarySection({ active, onOpenProject }: Props) {
       fetchedCountRef.current = page.assets.length;
       // Final filtering is badge-aware (shared with the picker) so `image` excludes
       // element captures and `element` keeps only them; other kinds pass through.
-      setAssets(page.assets.filter((a) => matchesKindFilter(a, kind as KindFilterValue)));
+      const filtered = page.assets.filter((a) => matchesKindFilter(a, kind as KindFilterValue));
+      setAssets(filtered);
       setTotal(page.total);
       setHasMore(page.truncated);
+      if (isUnfilteredView) {
+        setUnfilteredSnapshot(filtered);
+        setGrandTotal(page.total);
+      }
     } finally {
       if (requestIdRef.current === requestId) setLoading(false);
     }
-  }, [query, kind]);
+  }, [query, kind, isUnfilteredView]);
 
   // Fetch the next page (BUG-5) and append it — the grid never silently caps
   // at the first page's rows. `offset` continues from every row fetched so
@@ -641,6 +269,10 @@ export function LibrarySection({ active, onOpenProject }: Props) {
       setAssets((prev) => [...prev, ...filtered]);
       setTotal(page.total);
       setHasMore(page.truncated);
+      if (isUnfilteredView) {
+        setUnfilteredSnapshot((prev) => [...prev, ...filtered]);
+        setGrandTotal(page.total);
+      }
     } finally {
       // Unconditional: this request's OWN loading indicator must clear when
       // ITS fetch settles regardless of generation, or a superseded call
@@ -649,7 +281,7 @@ export function LibrarySection({ active, onOpenProject }: Props) {
       // never fire once superseded, since the check is permanently false).
       setLoadingMore(false);
     }
-  }, [query, kind, hasMore, loadingMore]);
+  }, [query, kind, hasMore, loadingMore, isUnfilteredView]);
 
   // Force a reconcile (design systems + agent deliverables → referenced Library
   // rows), then reload so the freshly-indexed assets appear. The throttle lives
@@ -785,7 +417,7 @@ export function LibrarySection({ active, onOpenProject }: Props) {
       if (timer) clearTimeout(timer);
       es?.close();
     };
-  }, [active]);
+  }, [active, reconcilePagingAfterRemoval]);
 
   // Drop selected ids that no longer exist after a reload / delete. Membership
   // is a single Set lookup so a large grid + large selection stays O(n).
@@ -1019,6 +651,68 @@ export function LibrarySection({ active, onOpenProject }: Props) {
 
   const selectAll = useCallback(() => setSelectedIds(new Set(assets.map((a) => a.id))), [assets]);
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+  const toggleGroupSelection = useCallback(
+    (ids: string[]) => setSelectedIds((prev) => toggleGroupInSelection(prev, ids)),
+    [],
+  );
+
+  // --- rail: search / kind / generated selection ---------------------------
+  const selectAllRail = useCallback(() => {
+    setKind('');
+    setSource('');
+  }, []);
+  const selectRailKind = useCallback((k: BadgeKind) => {
+    setSource('');
+    setKind(k);
+  }, []);
+  const selectGeneratedRail = useCallback(() => {
+    setKind('');
+    setSource('generated');
+  }, []);
+  const railCounts = useMemo(() => computeRailCounts(unfilteredSnapshot), [unfilteredSnapshot]);
+
+  // --- composer: generate an image without leaving the gallery -------------
+  //
+  // Wired to the EXISTING direct media-generate route (generateProjectMedia →
+  // POST /api/projects/:id/media/generate, the same dispatcher `od media
+  // generate` and the chat agent's tool token both use) — no new daemon
+  // capability. It needs a projectId, and Assets isn't project-scoped, so a
+  // small project is created to host the generation, exactly like the Home
+  // composer's "start a blank project" path already does for a from-scratch
+  // creation. See `generateProjectMedia`'s docblock for the one known
+  // fidelity gap this reuse carries: the resulting asset syncs into the
+  // Library as `manual-upload`, not `generated`, because that classification
+  // is driven by chat-conversation attribution a direct API call has none of.
+  const generateFromComposer = useCallback(
+    async (input: LibraryComposerGenerateInput): Promise<{ ok: boolean; message?: string }> => {
+      try {
+        const { project } = await createProject({
+          name: input.prompt.slice(0, 60) || 'Generated image',
+          skillId: null,
+          designSystemId: null,
+        });
+        const image = input.attachment ? await readFileAsDataUrl(input.attachment) : undefined;
+        const task = await generateProjectMedia(project.id, {
+          surface: 'image',
+          model: input.model,
+          prompt: input.prompt,
+          aspect: input.aspect,
+          ...(image ? { image } : {}),
+        });
+        if (!task) return { ok: false, message: 'Could not start generation.' };
+        const snap = await waitForMediaTask(task.taskId, { totalBudgetMs: 5 * 60 * 1000 });
+        if (snap.status !== 'done') {
+          return { ok: false, message: snap.error?.message || 'Generation failed.' };
+        }
+        await syncLibrary();
+        await load();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, message: err instanceof Error ? err.message : 'Could not generate that image.' };
+      }
+    },
+    [load],
+  );
 
   // --- file upload (drop-anywhere + Upload button) -------------------------
   const openUpload = useCallback((files?: File[]) => {
@@ -1095,18 +789,18 @@ export function LibrarySection({ active, onOpenProject }: Props) {
       raf = 0;
       const d = dragRef.current;
       if (!d) return;
-      const band: Band = {
+      const nextBand: Band = {
         x: Math.min(d.startX, lastX),
         y: Math.min(d.startY, lastY),
         w: Math.abs(lastX - d.startX),
         h: Math.abs(lastY - d.startY),
       };
-      setBand(band);
+      setBand(nextBand);
       const next = new Set(d.base);
       // `.band` is position:fixed, so the snapshotted viewport rects and the
       // band share a coordinate space; the scroll handler re-snapshots so the
       // selection still tracks content that scrolls under a stationary band.
-      for (const id of cardIdsInBand(d.rects, band)) next.add(id);
+      for (const id of cardIdsInBand(d.rects, nextBand)) next.add(id);
       setSelectedIds(next);
     };
     const schedule = () => {
@@ -1201,26 +895,8 @@ export function LibrarySection({ active, onOpenProject }: Props) {
   // showing them here would overstate the count, and "Load more" could fetch
   // an entire page of non-element images that renders nothing. Suppressing
   // the affordance for this one pseudo-kind keeps every real kind fully
-  // paginated while being honest that `element` isn't (yet) — see the PR's
-  // Adjacent issues for the full rationale; fixing it for real means an
-  // element-aware server query, out of scope here.
+  // paginated while being honest that `element` isn't (yet).
   const showLoadMore = hasMore && kind !== 'element';
-
-  // Day-bucketed groups for the timeline view (newest day first). Items keep
-  // their flat index in `assets` so range/box selection stays consistent across
-  // both views. Grouping by a Map collapses non-contiguous same-day assets.
-  const timelineGroups = useMemo(() => {
-    const map = new Map<string, Array<{ asset: LibraryAsset; index: number }>>();
-    assets.forEach((asset, index) => {
-      const key = dayKeyOf(asset);
-      const bucket = map.get(key);
-      if (bucket) bucket.push({ asset, index });
-      else map.set(key, [{ asset, index }]);
-    });
-    return [...map.entries()]
-      .sort((a, b) => (a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0))
-      .map(([key, items]) => ({ key, items }));
-  }, [assets]);
 
   // Render one memoized card. The wrapper just wires this render's per-card
   // props; `LibraryCard` itself is what skips re-rendering when only another
@@ -1231,6 +907,7 @@ export function LibrarySection({ active, onOpenProject }: Props) {
       asset={asset}
       index={index}
       selected={selectedIds.has(asset.id)}
+      selecting={selectedCount > 0}
       editing={editingId === asset.id}
       onToggle={toggleOne}
       onRange={rangeTo}
@@ -1269,221 +946,241 @@ export function LibrarySection({ active, onOpenProject }: Props) {
         </div>
       </header>
 
-      <div className={styles.toolbar}>
-        <div className={styles.searchWrap}>
-          <Icon name="search" size={15} className={styles.searchIcon} />
-          <input
-            className={styles.search}
-            type="search"
-            placeholder="Search captions, tags, titles…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+      <div className={styles.layout} data-rail-collapsed={railCollapsed ? 'true' : 'false'}>
+        {railCollapsed ? null : (
+          <LibraryRail
+            search={search}
+            onSearchChange={setSearch}
+            activeKind={kind}
+            activeGenerated={source === 'generated'}
+            onSelectAll={selectAllRail}
+            onSelectKind={selectRailKind}
+            onSelectGenerated={selectGeneratedRail}
+            grandTotal={grandTotal}
+            counts={railCounts}
           />
-        </div>
-        <select aria-label="Filter by kind" className={styles.select} value={kind} onChange={(e) => setKind(e.target.value)}>
-          {KIND_FILTERS.map((f) => (
-            <option key={f.value} value={f.value}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-        <select aria-label="Filter by source" className={styles.select} value={source} onChange={(e) => setSource(e.target.value)}>
-          {SOURCE_FILTERS.map((f) => (
-            <option key={f.value} value={f.value}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-        <div className={styles.viewToggle} role="group" aria-label="View mode">
-          <button
-            type="button"
-            className={`${styles.viewToggleBtn} od-tooltip`}
-            data-active={viewMode === 'grid' ? 'true' : 'false'}
-            aria-pressed={viewMode === 'grid'}
-            onClick={() => setViewMode('grid')}
-            data-tooltip="Show assets as a grid"
-            data-tooltip-placement="bottom"
-          >
-            Grid
-          </button>
-          <button
-            type="button"
-            className={`${styles.viewToggleBtn} od-tooltip`}
-            data-active={viewMode === 'timeline' ? 'true' : 'false'}
-            aria-pressed={viewMode === 'timeline'}
-            onClick={() => setViewMode('timeline')}
-            data-tooltip="Group assets by day, newest first"
-            data-tooltip-placement="bottom"
-          >
-            Timeline
-          </button>
-        </div>
-        <Button
-          variant="ghost"
-          className={`${styles.refreshBtn} od-tooltip`}
-          onClick={() => void load()}
-          aria-busy={loading}
-          data-tooltip="Reload the list with the current filters"
-          data-tooltip-placement="bottom"
-        >
-          <Icon name="refresh" size={15} className={loading ? styles.spin : undefined} />
-          Refresh
-        </Button>
-        <Button
-          variant="ghost"
-          className={`${styles.refreshBtn} od-tooltip`}
-          onClick={() => void runSync()}
-          aria-busy={syncing}
-          disabled={syncing}
-          data-tooltip="Pull your design systems and agent-generated artifacts into Assets"
-          data-tooltip-placement="bottom"
-        >
-          <Icon name="refresh" size={15} className={syncing ? styles.spin : undefined} />
-          {syncing ? 'Syncing…' : 'Sync'}
-        </Button>
-        <Button
-          className={`${styles.uploadBtn} od-tooltip`}
-          onClick={() => openUpload()}
-          data-tooltip="Upload images, fonts, or files into Assets"
-          data-tooltip-placement="bottom"
-        >
-          <Icon name="upload" size={15} />
-          Upload
-        </Button>
-      </div>
+        )}
 
-      {selectedCount > 0 && !dragging ? (
-        <div className={styles.selectionBar}>
-          <span className={styles.selectionCount}>{selectedCount} selected</span>
-          <button type="button" className={styles.selectionLink} onClick={selectAll}>
-            Select all
-          </button>
-          <button type="button" className={styles.selectionLink} onClick={clearSelection}>
-            Clear
-          </button>
-          <span className={styles.selectionSpacer} />
-          <button
-            type="button"
-            className={styles.chatBtn}
-            onClick={() => void chatToDesignFromSelection()}
-            disabled={dsBusy}
-            title={`Start a chat to turn ${selectedCount} into a design`}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            Chat to design
-          </button>
-          <div className={styles.dsMenuWrap} ref={dsMenuWrapRef}>
+        <div className={styles.main}>
+          <div className={styles.toolbar}>
+            <select
+              aria-label="Filter by source"
+              className={styles.select}
+              value={source === 'generated' ? '' : source}
+              onChange={(e) => setSource(e.target.value)}
+            >
+              {SOURCE_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+            <div className={styles.viewToggle} role="group" aria-label="View mode">
+              <button
+                type="button"
+                className={`${styles.viewToggleBtn} od-tooltip`}
+                data-active={viewMode === 'grid' ? 'true' : 'false'}
+                aria-pressed={viewMode === 'grid'}
+                onClick={() => setViewMode('grid')}
+                data-tooltip="Show assets as a flat grid"
+                data-tooltip-placement="bottom"
+              >
+                Grid
+              </button>
+              <button
+                type="button"
+                className={`${styles.viewToggleBtn} od-tooltip`}
+                data-active={viewMode === 'timeline' ? 'true' : 'false'}
+                aria-pressed={viewMode === 'timeline'}
+                onClick={() => setViewMode('timeline')}
+                data-tooltip="Group assets by day, newest first"
+                data-tooltip-placement="bottom"
+              >
+                Timeline
+              </button>
+            </div>
+            <div className={styles.sizeSliderWrap}>
+              <Icon name="zoom-out" size={13} className={styles.sizeSliderIcon} />
+              <input
+                type="range"
+                className={styles.sizeSlider}
+                min={0}
+                max={CARD_SIZE_STEPS_PX.length - 1}
+                step={1}
+                value={cardSizeIndex}
+                aria-label={t('library.sizeSlider')}
+                onChange={(e) => setCardSizeIndex(Number(e.target.value))}
+              />
+              <Icon name="zoom-in" size={13} className={styles.sizeSliderIcon} />
+            </div>
             <button
               type="button"
-              className={styles.dsMenuBtn}
-              onClick={() => setDsMenuOpen((o) => !o)}
-              aria-haspopup="menu"
-              aria-expanded={dsMenuOpen}
-              disabled={dsBusy}
+              className={`${styles.expandBtn} od-tooltip`}
+              aria-pressed={railCollapsed}
+              onClick={() => setRailCollapsed((v) => !v)}
+              data-tooltip={railCollapsed ? t('library.collapseRail') : t('library.expandGrid')}
+              data-tooltip-placement="bottom"
             >
-              {dsBusy ? 'Working…' : 'Use in design system'}
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="m6 9 6 6 6-6" />
-              </svg>
+              <Icon name="panel-left" size={15} />
             </button>
-            {dsMenuOpen ? (
-              <div className={styles.dsMenu} role="menu">
+            <Button
+              variant="ghost"
+              className={`${styles.refreshBtn} od-tooltip`}
+              onClick={() => void load()}
+              aria-busy={loading}
+              data-tooltip="Reload the list with the current filters"
+              data-tooltip-placement="bottom"
+            >
+              <Icon name="refresh" size={15} className={loading ? styles.spin : undefined} />
+              Refresh
+            </Button>
+            <Button
+              variant="ghost"
+              className={`${styles.refreshBtn} od-tooltip`}
+              onClick={() => void runSync()}
+              aria-busy={syncing}
+              disabled={syncing}
+              data-tooltip="Pull your design systems and agent-generated artifacts into Assets"
+              data-tooltip-placement="bottom"
+            >
+              <Icon name="refresh" size={15} className={syncing ? styles.spin : undefined} />
+              {syncing ? 'Syncing…' : 'Sync'}
+            </Button>
+            <Button
+              className={`${styles.uploadBtn} od-tooltip`}
+              onClick={() => openUpload()}
+              data-tooltip="Upload images, fonts, or files into Assets"
+              data-tooltip-placement="bottom"
+            >
+              <Icon name="upload" size={15} />
+              Upload
+            </Button>
+          </div>
+
+          {selectedCount > 0 && !dragging ? (
+            <div className={styles.selectionBar}>
+              <span className={styles.selectionCount}>{selectedCount} selected</span>
+              <button type="button" className={styles.selectionLink} onClick={selectAll}>
+                Select all
+              </button>
+              <button type="button" className={styles.selectionLink} onClick={clearSelection}>
+                Clear
+              </button>
+              <span className={styles.selectionSpacer} />
+              <button
+                type="button"
+                className={styles.chatBtn}
+                onClick={() => void chatToDesignFromSelection()}
+                disabled={dsBusy}
+                title={`Start a chat to turn ${selectedCount} into a design`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                Chat to design
+              </button>
+              <div className={styles.dsMenuWrap} ref={dsMenuWrapRef}>
                 <button
                   type="button"
-                  className={styles.dsMenuItem}
-                  role="menuitem"
-                  onClick={() => void createDesignSystemFromSelection()}
+                  className={styles.dsMenuBtn}
+                  onClick={() => setDsMenuOpen((o) => !o)}
+                  aria-haspopup="menu"
+                  aria-expanded={dsMenuOpen}
+                  disabled={dsBusy}
                 >
-                  <span className={styles.dsMenuItemTitle}>Create new design system</span>
-                  <span className={styles.dsMenuItemSub}>
-                    Open the create flow with these {selectedCount} attached
-                  </span>
+                  {dsBusy ? 'Working…' : 'Use in design system'}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
                 </button>
-                <div className={styles.dsMenuDivider} />
-                <div className={styles.dsMenuHeader}>Refine existing</div>
-                {dsList.length === 0 ? (
-                  <div className={styles.dsMenuEmpty}>No editable design systems yet.</div>
-                ) : (
-                  dsList.map((ds) => (
+                {dsMenuOpen ? (
+                  <div className={styles.dsMenu} role="menu">
                     <button
-                      key={ds.id}
                       type="button"
                       className={styles.dsMenuItem}
                       role="menuitem"
-                      onClick={() => void optimizeExistingDesignSystem(ds)}
+                      onClick={() => void createDesignSystemFromSelection()}
                     >
-                      <span className={styles.dsMenuItemTitle}>{ds.title}</span>
-                      <span className={styles.dsMenuItemSub}>Add assets & open to refine</span>
+                      <span className={styles.dsMenuItemTitle}>Create new design system</span>
+                      <span className={styles.dsMenuItemSub}>
+                        Open the create flow with these {selectedCount} attached
+                      </span>
                     </button>
-                  ))
-                )}
+                    <div className={styles.dsMenuDivider} />
+                    <div className={styles.dsMenuHeader}>Refine existing</div>
+                    {dsList.length === 0 ? (
+                      <div className={styles.dsMenuEmpty}>No editable design systems yet.</div>
+                    ) : (
+                      dsList.map((ds) => (
+                        <button
+                          key={ds.id}
+                          type="button"
+                          className={styles.dsMenuItem}
+                          role="menuitem"
+                          onClick={() => void optimizeExistingDesignSystem(ds)}
+                        >
+                          <span className={styles.dsMenuItemTitle}>{ds.title}</span>
+                          <span className={styles.dsMenuItemSub}>Add assets & open to refine</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
-          <button type="button" className={styles.selectionDelete} onClick={requestDeleteSelected}>
-            Delete {selectedCount}
-          </button>
-        </div>
-      ) : null}
+              <button type="button" className={styles.selectionDelete} onClick={requestDeleteSelected}>
+                Delete {selectedCount}
+              </button>
+            </div>
+          ) : null}
 
-      {loading && assets.length === 0 ? (
-        <p className={styles.empty}>Loading…</p>
-      ) : assets.length === 0 ? (
-        <div className={styles.empty}>
-          <p>No assets yet.</p>
-          <p className={styles.emptyHint}>
-            Clip from any page with the MishMash Web Clipper, run{' '}
-            <code>od library import &lt;file&gt;</code>, or upload inside a project — everything
-            lands here.
-          </p>
-        </div>
-      ) : viewMode === 'timeline' ? (
-        <div
-          className={styles.timeline}
-          ref={gridRef}
-          onMouseDown={onGridMouseDown}
-          data-selecting={selectedCount > 0 ? 'true' : 'false'}
-        >
-          {timelineGroups.map((group) => (
-            <section key={group.key} className={styles.timelineDay}>
-              <div className={styles.timelineHead}>
-                <span className={styles.timelineDot} aria-hidden />
-                <h2 className={styles.timelineDate}>{dayHeading(group.key)}</h2>
-                <span className={styles.timelineCount}>{group.items.length}</span>
-              </div>
-              <div className={styles.timelineGrid}>
-                {group.items.map(({ asset, index }) => renderCard(asset, index))}
-              </div>
-            </section>
-          ))}
-        </div>
-      ) : (
-        <div
-          className={styles.grid}
-          ref={gridRef}
-          onMouseDown={onGridMouseDown}
-          data-selecting={selectedCount > 0 ? 'true' : 'false'}
-        >
-          {assets.map((asset, index) => renderCard(asset, index))}
-        </div>
-      )}
+          {loading && assets.length === 0 ? (
+            <p className={styles.empty}>Loading…</p>
+          ) : assets.length === 0 ? (
+            <div className={styles.empty}>
+              <p>No assets yet.</p>
+              <p className={styles.emptyHint}>
+                Clip from any page with the MishMash Web Clipper, run{' '}
+                <code>od library import &lt;file&gt;</code>, or upload inside a project — everything
+                lands here.
+              </p>
+            </div>
+          ) : (
+            <div style={{ ['--library-card-min' as string]: `${CARD_SIZE_STEPS_PX[cardSizeIndex]}px` }}>
+              <h2 className={styles.gridHeading}>All assets</h2>
+              <LibraryGrid
+                viewMode={viewMode}
+                assets={assets}
+                gridRef={gridRef}
+                onMouseDown={onGridMouseDown}
+                selecting={selectedCount > 0}
+                selectedIds={selectedIds}
+                onToggleGroup={toggleGroupSelection}
+                renderCard={renderCard}
+              />
+            </div>
+          )}
 
-      {showLoadMore ? (
-        <div className={styles.loadMoreRow}>
-          {/* aria-live: this text changes after every Load more click (the
-              shown count grows), so a screen-reader user gets an announcement
-              instead of silence — the same "never silently present a
-              truncated set" principle BUG-5 fixed, applied to a11y. */}
-          <span className={styles.loadMoreCount} aria-live="polite">
-            {t('library.assetCount', { shown: assets.length, total })}
-          </span>
-          <Button variant="ghost" onClick={() => void loadMore()} disabled={loadingMore} aria-busy={loadingMore}>
-            {loadingMore ? t('library.loadingMore') : t('library.loadMore')}
-          </Button>
+          {showLoadMore ? (
+            <div className={styles.loadMoreRow}>
+              {/* aria-live: this text changes after every Load more click (the
+                  shown count grows), so a screen-reader user gets an announcement
+                  instead of silence — the same "never silently present a
+                  truncated set" principle BUG-5 fixed, applied to a11y. */}
+              <span className={styles.loadMoreCount} aria-live="polite">
+                {t('library.assetCount', { shown: assets.length, total })}
+              </span>
+              <Button variant="ghost" onClick={() => void loadMore()} disabled={loadingMore} aria-busy={loadingMore}>
+                {loadingMore ? t('library.loadingMore') : t('library.loadMore')}
+              </Button>
+            </div>
+          ) : null}
+
+          {/* Always available, even on an empty library — generating the
+              first asset is a legitimate entry point, not just a follow-up
+              action once assets already exist. */}
+          <LibraryComposer onGenerate={generateFromComposer} />
         </div>
-      ) : null}
+      </div>
 
       {band ? (
         <div

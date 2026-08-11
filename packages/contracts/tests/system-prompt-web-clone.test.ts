@@ -63,3 +63,21 @@ describe('composeSystemPrompt — web-clone suppresses active-design-system guid
     expect(prompt).not.toContain(DS.designSystemBody);
   });
 });
+
+// MM-004-A: the design-templates catalogue is 100% MIT-licensed, so
+// template-derived runs (metadata.kind === 'template') must not be told not
+// to recreate copyrighted designs — that guardrail was telling the agent not
+// to copy the very MIT template the user asked to build from. Mirrors the
+// daemon-side fix (apps/daemon/src/prompts/system.ts) so API/BYOK-backed
+// template runs behave identically (same parity concern as PR #5178 above).
+describe('composeSystemPrompt — template-kind copyright guardrail exemption (MM-004-A, BYOK parity)', () => {
+  it('keeps the guardrail bullet for a plain (non-template) run', () => {
+    const prompt = composeSystemPrompt({ sessionMode: 'plan', metadata: { kind: 'prototype' } as any });
+    expect(prompt).toContain(COPYRIGHT_GUARDRAIL_BULLET);
+  });
+
+  it('drops the guardrail bullet for a template-kind run', () => {
+    const prompt = composeSystemPrompt({ sessionMode: 'plan', metadata: { kind: 'template' } as any });
+    expect(prompt).not.toContain(COPYRIGHT_GUARDRAIL_BULLET);
+  });
+});

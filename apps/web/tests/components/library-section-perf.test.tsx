@@ -27,6 +27,8 @@ vi.mock('../../src/providers/registry', () => ({
   fetchLibraryAssetsPage: (...args: unknown[]) => fetchLibraryAssetsPage(...(args as [])),
   fetchLibraryAsset: (...args: unknown[]) => fetchLibraryAsset(...(args as [])),
   libraryAssetRawUrl: (id: string) => `/raw/${id}`,
+  libraryAssetFileUrl: (asset: LibraryAsset) =>
+    `/file/${asset.id}/${asset.relPath?.split('/').pop() || `${asset.contentHash}.html`}`,
   applyLibraryAsset: vi.fn(),
   deleteLibraryAsset: vi.fn(),
   editLibraryAssetAsPage: vi.fn(),
@@ -204,9 +206,12 @@ describe('LibrarySection lazy-mount contract', () => {
     render(<LibrarySection active onOpenProject={() => {}} />);
     await screen.findByText('A design system');
     await waitFor(() => {
+      // MM-020: html/design-system thumbnails point at the sibling-resolving
+      // /file/<basename> URL, not /raw (which only serves the one registered
+      // file and 404s on a captured page's relative refs).
       const srcs = [...document.querySelectorAll('iframe')].map((frame) => frame.getAttribute('src'));
-      expect(srcs).toContain('/raw/html-1');
-      expect(srcs).toContain('/raw/ds-1');
+      expect(srcs).toContain('/file/html-1/hash-html-1.html');
+      expect(srcs).toContain('/file/ds-1/hash-ds-1.html');
     });
   });
 

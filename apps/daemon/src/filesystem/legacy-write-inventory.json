@@ -151,6 +151,8 @@
   "apps/daemon/src/services/plugin-installation.ts#finishUploadedPluginInstall": "rm:1",
   "apps/daemon/src/services/plugin-installation.ts#stageUploadedPluginFolder": "mkdir:1,mkdtemp:1,rm:1,writeFile:1",
   "apps/daemon/src/services/plugin-installation.ts#stageUploadedPluginZip": "mkdtemp:1",
+  "apps/daemon/src/sidecar/desktop-renderer/render.ts#exportArtifact": "mkdtemp:1,writeFile:1",
+  "apps/daemon/src/sidecar/desktop-renderer/render.ts#writeCapturedImages": "mkdir:1,writeFile:1",
   "apps/daemon/src/sidecar/payload-desktop-handoff.ts#executeLegacyPayloadDesktopHandoff": "rm:1",
   "apps/daemon/src/skills.ts#cloneSkillSideFiles": "cp:1,mkdir:1",
   "apps/daemon/src/skills.ts#deleteUserSkill": "rm:1",

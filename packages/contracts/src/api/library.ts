@@ -86,6 +86,15 @@ export interface LibraryAsset {
   originProjectId?: string;
   /** referenced-only: file path relative to the origin project root. */
   relPath?: string;
+  /**
+   * True once the reconcile sweep or a project delete found this row's
+   * origin project gone (or its resolved bytes path missing) and marked it —
+   * never set by removing the row or its bytes. The Library UI should render
+   * a "missing source" state instead of a 404-ing preview for these.
+   */
+  broken?: boolean;
+  /** Unix ms `broken` was first set. */
+  missingSince?: number;
   sources: LibraryAssetSource[];
   createdAt: number;
   updatedAt: number;
@@ -339,6 +348,17 @@ export interface LibrarySyncResponse {
   projectAssets: number;
   /** Referenced rows skipped because their origin file was already indexed. */
   deduped: number;
+  /**
+   * Referenced rows newly marked `broken` this pass — a gone origin project
+   * or missing bytes on disk (MM-021). Mark-only; never removes a row or
+   * bytes. A row already broken is not recounted on a later pass.
+   */
+  markedBroken: number;
+  /**
+   * Previously-broken referenced rows whose mark was undone this pass —
+   * their origin project still exists and their bytes are readable again.
+   */
+  cleared: number;
   /** Total Library rows newly registered this pass (`designSystems + projectAssets`). */
   total: number;
 }

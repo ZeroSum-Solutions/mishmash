@@ -57,6 +57,22 @@ export interface Dict {
   'library.assetCount': string;
   'library.loadMore': string;
   'library.loadingMore': string;
+  'library.rail.allAssets': string;
+  'library.rail.types': string;
+  'library.rail.searchPlaceholder': string;
+  'library.rail.collections': string;
+  'library.rail.collectionsEmpty': string;
+  'library.rail.newCollection': string;
+  'library.rail.collectionsUnavailable': string;
+  'library.sizeSlider': string;
+  'library.expandGrid': string;
+  'library.collapseRail': string;
+  'library.composer.attach': string;
+  'library.composer.removeAttachment': string;
+  'library.composer.promptPlaceholder': string;
+  'library.composer.generate': string;
+  'library.composer.generating': string;
+  'library.composer.error': string;
   'common.save': string;
   'common.close': string;
   'common.clear': string;
@@ -4472,10 +4488,19 @@ export interface Dict {
   'designLibrary.openLivePreview': string;
   'designLibrary.openLivePreviewBusy': string;
   'designLibrary.openLivePreviewError': string;
-  // Detail-view preview strip and interactive kit canvas (C6/C7).
-  'designLibrary.stripLabel': string;
-  'designLibrary.stripItemLabel': string;
+  // Interactive kit canvas (C7).
   'designLibrary.duplicatesHidden': string;
+  // MM-011: read-only hover orientation panel on the card's title/
+  // description area — title + description (repeated in full), suggested
+  // stack, and what could be carried forward. Never a picker; the picker
+  // stays the existing AspectSelector / guided-create flow.
+  'designLibrary.hoverCarryForwardLabel': string;
+  // MM-012#1: example cycling in the detail dialog's preview pane — the
+  // first slide is the live entry page (when previewable), the rest are the
+  // catalog's other gallery images.
+  'designLibrary.previewPrev': string;
+  'designLibrary.previewNext': string;
+  'designLibrary.previewCounter': string;
   'designLibrary.exploreKit': string;
   'designLibrary.viewportLabel': string;
   'designLibrary.viewportDesktop': string;
@@ -4620,4 +4645,13 @@ export interface Dict {
   'storyboard.moodLaneTeaser': string;
   'storyboard.flowHint': string;
   'storyboard.rowActionsMenu': string;
+  // Shot inspector rail (right-docked, persistent — replaces the modal
+  // details drawer; see ShotInspectorRail.tsx)
+  'storyboard.keyframesHeading': string;
+  'storyboard.uploadConstraintHint': string;
+  'storyboard.parametersHeading': string;
+  'storyboard.settingsHeading': string;
+  'storyboard.previousShot': string;
+  'storyboard.nextShot': string;
+  'storyboard.selectShotHint': string;
 }

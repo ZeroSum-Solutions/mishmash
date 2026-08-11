@@ -14,7 +14,7 @@
 
 import type Database from 'better-sqlite3';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   LibraryAssetKind,
@@ -27,6 +27,9 @@ import {
   getLibraryAsset,
   insertLibraryAsset,
   insertLibraryTask,
+  listReferencedAssetsByOriginProject,
+  markLibraryAssetBroken,
+  materializeLibraryAssetToOwned,
   updateLibraryAsset,
   type LibraryAssetRecord,
 } from './library-store.js';
@@ -36,6 +39,14 @@ import type {
 } from './filesystem/write-gateway.js';
 
 type SqliteDb = Database.Database;
+
+/** The single content-hash algorithm every owned/materialize write path must
+ * use — `registerLibraryAsset`'s owned branch and `materializeReferencedAsset`
+ * both hash actual bytes through this, so a hash never means two different
+ * things depending on which ingest path produced it. */
+export function contentHashForBytes(bytes: Buffer): string {
+  return createHash('sha256').update(bytes).digest('hex');
+}
 
 export function libraryObjectsDir(libraryDir: string): string {
   return path.join(libraryDir, 'objects');
@@ -370,7 +381,7 @@ export async function registerLibraryAsset(
     throw new Error('registerLibraryAsset requires bytes, text, or absPath');
   }
 
-  const contentHash = createHash('sha256').update(bytes).digest('hex');
+  const contentHash = contentHashForBytes(bytes);
 
   // Dedup: same bytes already indexed → append source, union tags.
   const existing = findLibraryAssetByHash(db, contentHash);
@@ -495,4 +506,239 @@ export function resolveAssetBytesPath(
   }
   if (asset.filePath) return asset.filePath;
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Referenced-asset materialization (MM-021: project delete must not orphan
+// referenced Library rows)
+// ---------------------------------------------------------------------------
+//
+// A `referenced` row only ever stores a pointer (`originProjectId` +
+// `relPath`, resolved through `resolveAssetBytesPath`); deleting the project
+// removes the directory those bytes live in and leaves the row pointing at
+// nothing forever (/raw and /file/*splat both 404). Materializing copies the
+// bytes into library-owned, content-addressed storage — the SAME write path
+// `registerLibraryAsset`'s `storage: 'owned'` branch uses (`libraryObjectPath`
+// under LIBRARY_DIR, mkdir + a gateway write) — and flips the row so it no
+// longer depends on the source project existing.
+//
+// Single-file limitation: `libraryObjectPath` is a flat, content-addressed
+// path — ONE file per hash, no directory shape (see its own docblock above).
+// A referenced `html` asset with sibling files (served today via
+// `/api/library/assets/:id/file/*splat` against the asset's parent directory)
+// therefore only survives as its entry file once materialized — siblings are
+// NOT copied, and the store deliberately does not grow a second, parallel
+// directory-based storage shape to carry them. A materialized multi-file HTML
+// asset renders unstyled/broken-linked after the source project is gone. This
+// is a known, accepted limitation of this fix, not an oversight.
+
+export interface MaterializeAssetResult {
+  ok: boolean;
+  reason?: 'missing-source' | 'copy-failed';
+}
+
+/**
+ * Materialize one `referenced` row's bytes into owned, content-addressed
+ * storage. Best-effort and never throws: a missing source file or a copy
+ * failure marks the row `broken` (see `markLibraryAssetBroken`) instead of
+ * surfacing an error, so a caller in the middle of an unrelated destructive
+ * operation (project delete) is never blocked by this.
+ */
+export async function materializeReferencedAsset(
+  db: SqliteDb,
+  asset: LibraryAssetRecord,
+  libraryDir: string,
+  projectsDir: string,
+  destinationWrites: LibraryDestinationWrites,
+): Promise<MaterializeAssetResult> {
+  const sourcePath = resolveAssetBytesPath(asset, projectsDir);
+  if (!sourcePath) {
+    markLibraryAssetBroken(db, asset.id, Date.now());
+    return { ok: false, reason: 'missing-source' };
+  }
+  // Read (not just stat) the source now: materialize re-hashes the actual
+  // bytes below rather than trusting the row's stored `contentHash`, which
+  // can go stale if the source file changed after it was indexed (finding
+  // #5 of the MM-021 adversarial review). Trusting the stale hash would
+  // write to the WRONG content-addressed path — and could silently
+  // overwrite an unrelated owned object that already lives at that stale
+  // hash's path.
+  let bytes: Buffer;
+  try {
+    const info = await stat(sourcePath);
+    if (!info.isFile()) throw new Error('materialize source is not a regular file');
+    bytes = await readFile(sourcePath);
+  } catch {
+    markLibraryAssetBroken(db, asset.id, Date.now());
+    return { ok: false, reason: 'missing-source' };
+  }
+  const contentHash = contentHashForBytes(bytes);
+  let tmpTarget: string | undefined;
+  try {
+    const ext = extForMime(asset.mime, asset.relPath ? path.basename(asset.relPath) : undefined);
+    const target = libraryObjectPath(libraryDir, contentHash, ext);
+    await destinationWrites.gateway.mkdir(
+      destinationWrites.capability,
+      path.dirname(target),
+      { recursive: true },
+    );
+    // Content-addressed: if these exact bytes are already owned at this path
+    // (a prior materialize pass, or another asset already landed here under
+    // the same hash), skip the write — it would just reproduce the same
+    // bytes. Re-hash the TARGET's own bytes rather than trusting a stat-only
+    // existence check: a prior write that died mid-flight (process kill,
+    // disk full) can leave a truncated/corrupt object sitting at this
+    // content-addressed path, and a stat-only check would flip a LATER
+    // materialize's row to `owned` pointing at those corrupt bytes forever.
+    // Only a byte-for-byte hash match on the target's actual contents is a
+    // real skip; missing OR present-but-wrong both fall through to write.
+    const targetIsCorrect = await readFile(target)
+      .then((existing) => contentHashForBytes(existing) === contentHash)
+      .catch(() => false);
+    if (!targetIsCorrect) {
+      // Write the buffer already read + hashed above — never re-`copyFile`
+      // the source path here. Hash-then-copy is a TOCTOU: if the source
+      // changed between the `readFile` above and a second, separate copy,
+      // the wrong bytes would land under the hash computed from the earlier
+      // read. Write through a temp file + rename into place so nothing (a
+      // concurrent reader, or a later materialize's own target-hash check)
+      // can ever observe a partially-written object at `target` — the same
+      // atomic pattern `writeCover` uses (apps/daemon/src/covers/store.ts).
+      tmpTarget = `${target}.tmp-${process.pid}-${Date.now()}`;
+      await destinationWrites.gateway.writeFile(destinationWrites.capability, tmpTarget, bytes);
+      await destinationWrites.gateway.rename(destinationWrites.capability, tmpTarget, target);
+      tmpTarget = undefined;
+    }
+    // Only pass the recomputed hash through when it actually differs from
+    // what the row already had — keeps the store write a no-op column change
+    // in the common case where the source never drifted.
+    materializeLibraryAssetToOwned(
+      db,
+      asset.id,
+      target,
+      contentHash !== asset.contentHash ? contentHash : undefined,
+    );
+    return { ok: true };
+  } catch {
+    // Write failed for a reason other than a missing source (permissions,
+    // disk full, a race with the directory removal). Must not throw into the
+    // caller's delete flow -- degrade to the same "broken" state a missing
+    // source produces rather than leaving the row silently pointing at bytes
+    // about to disappear. If a temp file was left behind by a failed
+    // write/rename, best-effort clean it up — never remove `target` itself,
+    // which may be a pre-existing, unrelated CA object under this hash.
+    if (tmpTarget) {
+      await destinationWrites.gateway
+        .rm(destinationWrites.capability, tmpTarget, { force: true })
+        .catch(() => {});
+    }
+    markLibraryAssetBroken(db, asset.id, Date.now());
+    return { ok: false, reason: 'copy-failed' };
+  }
+}
+
+export interface MaterializeProjectAssetsResult {
+  /** Rows successfully copied into owned storage and flipped. */
+  materialized: number;
+  /** Rows marked `broken` (missing source or a copy failure). */
+  markedBroken: number;
+  /**
+   * Rows where `materializeReferencedAsset` threw unexpectedly (bypassing
+   * its own best-effort handling) AND the backstop's own attempt to mark it
+   * broken also failed to leave the row actually broken. Should be 0 in
+   * practice; a nonzero count means a row was neither materialized nor
+   * marked — surfaced here instead of silently folding into `markedBroken`
+   * so the count never lies about what happened (adversarial finding #2).
+   */
+  failed: number;
+  /** materialized + markedBroken + failed. */
+  total: number;
+}
+
+/**
+ * Materialize every `referenced` Library row that points at `projectId`,
+ * BEFORE the caller removes the project directory. Per-row best-effort: one
+ * bad row (unreadable file, disk full) is marked `broken` and the pass
+ * continues, so a single asset can never abort a project delete.
+ */
+export async function materializeProjectLibraryAssets(
+  db: SqliteDb,
+  projectId: string,
+  libraryDir: string,
+  projectsDir: string,
+  destinationWrites: LibraryDestinationWrites,
+): Promise<MaterializeProjectAssetsResult> {
+  const rows = listReferencedAssetsByOriginProject(db, projectId);
+  const result: MaterializeProjectAssetsResult = {
+    materialized: 0,
+    markedBroken: 0,
+    failed: 0,
+    total: rows.length,
+  };
+  for (const asset of rows) {
+    try {
+      const res = await materializeReferencedAsset(db, asset, libraryDir, projectsDir, destinationWrites);
+      if (res.ok) result.materialized += 1;
+      else result.markedBroken += 1;
+    } catch (err) {
+      // materializeReferencedAsset is itself best-effort and marks broken on
+      // every failure path it knows about, so reaching here means IT threw
+      // unexpectedly (e.g. markLibraryAssetBroken's own DB write failed
+      // inside one of its catch blocks). This backstop must still try to
+      // mark the row, and must verify the row actually ended up broken
+      // before counting it as `markedBroken` -- previously this just
+      // incremented the counter unconditionally without ever calling
+      // markLibraryAssetBroken, so the count lied and the row stayed
+      // unmarked (adversarial finding #2).
+      let brokenNow = false;
+      try {
+        markLibraryAssetBroken(db, asset.id, Date.now());
+        brokenNow = Boolean(getLibraryAsset(db, asset.id)?.broken);
+      } catch {
+        // best-effort — fall through to the `failed` count below
+      }
+      if (brokenNow) {
+        result.markedBroken += 1;
+      } else {
+        result.failed += 1;
+      }
+      console.warn(
+        `[library] materialize backstop: row ${asset.id} for project ${projectId} threw unexpectedly`,
+        err,
+      );
+    }
+  }
+  return result;
+}
+
+/**
+ * Fallback for a project delete whose materialize pass fails as a WHOLE —
+ * the write gateway can't be created/minted, or `materializeProjectLibraryAssets`
+ * itself rejects (e.g. its `listReferencedAssetsByOriginProject` store call
+ * throws) — rather than per-row (adversarial findings #1/#3). Marks every
+ * `referenced` row for `projectId` broken directly, bypassing materialize
+ * entirely, so a total failure degrades to the same recoverable state a
+ * per-row failure would instead of silently orphaning every row.
+ *
+ * Best-effort and never throws: the list call is wrapped (a broken store
+ * degrades to "marked 0" rather than throwing), and each row's mark is
+ * wrapped individually so one bad row can't block marking the rest.
+ */
+export function markAllReferencedProjectAssetsBroken(db: SqliteDb, projectId: string): number {
+  let rows: LibraryAssetRecord[];
+  try {
+    rows = listReferencedAssetsByOriginProject(db, projectId);
+  } catch {
+    return 0;
+  }
+  let marked = 0;
+  const now = Date.now();
+  for (const row of rows) {
+    try {
+      if (markLibraryAssetBroken(db, row.id, now)) marked += 1;
+    } catch {
+      // best-effort per row — one bad row must not block marking the rest
+    }
+  }
+  return marked;
 }

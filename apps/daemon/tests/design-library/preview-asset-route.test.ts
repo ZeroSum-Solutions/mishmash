@@ -114,7 +114,7 @@ describe('design library preview-asset route', () => {
     return started.url;
   }
 
-  it('serves a licensed item\'s entry HTML with a locked-down CSP', async () => {
+  it('serves a licensed item\'s entry HTML with a CSP that allows CDN-hosted mockup assets', async () => {
     const daemonUrl = await startWithFixture();
 
     const res = await fetch(previewAssetUrl(daemonUrl, '01 Kits/licensed-kit', 'index.html'));
@@ -123,7 +123,26 @@ describe('design library preview-asset route', () => {
     expect(res.headers.get('content-type')).toMatch(/^text\/html/);
     const csp = res.headers.get('content-security-policy');
     expect(csp).toContain("default-src 'self'");
-    expect(csp).toContain("connect-src 'none'");
+    // Catalog templates are single-file mockups that depend on CDN-hosted
+    // CSS/JS (e.g. cdn.tailwindcss.com, code.iconify.design) and images
+    // (e.g. Unsplash) -- see the route's own comment for the full rationale.
+    // The iframe consuming this stays sandboxed to an opaque origin, so
+    // https: egress here can't reach this daemon's own API surface.
+    expect(csp).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval' https:");
+    expect(csp).toContain("style-src 'self' 'unsafe-inline' https:");
+    expect(csp).toContain("img-src 'self' data: blob: https:");
+    expect(csp).toContain("font-src 'self' data: https:");
+    expect(csp).toContain("media-src 'self' data: blob: https:");
+    // Iconify's web component fetches icon JSON over the network -- but
+    // connect-src deliberately excludes 'self': CSP is computed from the
+    // DOCUMENT url, not the iframe's opaque sandbox origin, so 'self' here
+    // would let a scripted fetch('/api/...') inside a preview template
+    // reach this loopback daemon's own API.
+    expect(csp).toContain('connect-src https:');
+    expect(csp).not.toContain("connect-src 'self'");
+    expect(csp).toContain("form-action 'none'");
+    expect(csp).toContain("base-uri 'none'");
+    expect(csp).toContain("object-src 'none'");
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
   });
 
