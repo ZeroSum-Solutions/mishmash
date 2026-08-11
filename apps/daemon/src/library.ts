@@ -14,7 +14,7 @@
 
 import type Database from 'better-sqlite3';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   LibraryAssetKind,
@@ -27,6 +27,9 @@ import {
   getLibraryAsset,
   insertLibraryAsset,
   insertLibraryTask,
+  listReferencedAssetsByOriginProject,
+  markLibraryAssetBroken,
+  materializeLibraryAssetToOwned,
   updateLibraryAsset,
   type LibraryAssetRecord,
 } from './library-store.js';
@@ -495,4 +498,119 @@ export function resolveAssetBytesPath(
   }
   if (asset.filePath) return asset.filePath;
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Referenced-asset materialization (MM-021: project delete must not orphan
+// referenced Library rows)
+// ---------------------------------------------------------------------------
+//
+// A `referenced` row only ever stores a pointer (`originProjectId` +
+// `relPath`, resolved through `resolveAssetBytesPath`); deleting the project
+// removes the directory those bytes live in and leaves the row pointing at
+// nothing forever (/raw and /file/*splat both 404). Materializing copies the
+// bytes into library-owned, content-addressed storage — the SAME write path
+// `registerLibraryAsset`'s `storage: 'owned'` branch uses (`libraryObjectPath`
+// under LIBRARY_DIR, mkdir + a gateway write) — and flips the row so it no
+// longer depends on the source project existing.
+//
+// Single-file limitation: `libraryObjectPath` is a flat, content-addressed
+// path — ONE file per hash, no directory shape (see its own docblock above).
+// A referenced `html` asset with sibling files (served today via
+// `/api/library/assets/:id/file/*splat` against the asset's parent directory)
+// therefore only survives as its entry file once materialized — siblings are
+// NOT copied, and the store deliberately does not grow a second, parallel
+// directory-based storage shape to carry them. A materialized multi-file HTML
+// asset renders unstyled/broken-linked after the source project is gone. This
+// is a known, accepted limitation of this fix, not an oversight.
+
+export interface MaterializeAssetResult {
+  ok: boolean;
+  reason?: 'missing-source' | 'copy-failed';
+}
+
+/**
+ * Materialize one `referenced` row's bytes into owned, content-addressed
+ * storage. Best-effort and never throws: a missing source file or a copy
+ * failure marks the row `broken` (see `markLibraryAssetBroken`) instead of
+ * surfacing an error, so a caller in the middle of an unrelated destructive
+ * operation (project delete) is never blocked by this.
+ */
+export async function materializeReferencedAsset(
+  db: SqliteDb,
+  asset: LibraryAssetRecord,
+  libraryDir: string,
+  projectsDir: string,
+  destinationWrites: LibraryDestinationWrites,
+): Promise<MaterializeAssetResult> {
+  const sourcePath = resolveAssetBytesPath(asset, projectsDir);
+  if (!sourcePath) {
+    markLibraryAssetBroken(db, asset.id, Date.now());
+    return { ok: false, reason: 'missing-source' };
+  }
+  try {
+    const info = await stat(sourcePath);
+    if (!info.isFile()) throw new Error('materialize source is not a regular file');
+  } catch {
+    markLibraryAssetBroken(db, asset.id, Date.now());
+    return { ok: false, reason: 'missing-source' };
+  }
+  try {
+    const ext = extForMime(asset.mime, asset.relPath ? path.basename(asset.relPath) : undefined);
+    const target = libraryObjectPath(libraryDir, asset.contentHash, ext);
+    await destinationWrites.gateway.mkdir(
+      destinationWrites.capability,
+      path.dirname(target),
+      { recursive: true },
+    );
+    await destinationWrites.gateway.copyFile(destinationWrites.capability, sourcePath, target);
+    materializeLibraryAssetToOwned(db, asset.id, target);
+    return { ok: true };
+  } catch {
+    // Copy failed for a reason other than a missing source (permissions,
+    // disk full, a race with the directory removal). Must not throw into the
+    // caller's delete flow -- degrade to the same "broken" state a missing
+    // source produces rather than leaving the row silently pointing at bytes
+    // about to disappear.
+    markLibraryAssetBroken(db, asset.id, Date.now());
+    return { ok: false, reason: 'copy-failed' };
+  }
+}
+
+export interface MaterializeProjectAssetsResult {
+  /** Rows successfully copied into owned storage and flipped. */
+  materialized: number;
+  /** Rows marked `broken` (missing source or a copy failure). */
+  markedBroken: number;
+  /** materialized + markedBroken. */
+  total: number;
+}
+
+/**
+ * Materialize every `referenced` Library row that points at `projectId`,
+ * BEFORE the caller removes the project directory. Per-row best-effort: one
+ * bad row (unreadable file, disk full) is marked `broken` and the pass
+ * continues, so a single asset can never abort a project delete.
+ */
+export async function materializeProjectLibraryAssets(
+  db: SqliteDb,
+  projectId: string,
+  libraryDir: string,
+  projectsDir: string,
+  destinationWrites: LibraryDestinationWrites,
+): Promise<MaterializeProjectAssetsResult> {
+  const rows = listReferencedAssetsByOriginProject(db, projectId);
+  const result: MaterializeProjectAssetsResult = { materialized: 0, markedBroken: 0, total: rows.length };
+  for (const asset of rows) {
+    try {
+      const res = await materializeReferencedAsset(db, asset, libraryDir, projectsDir, destinationWrites);
+      if (res.ok) result.materialized += 1;
+      else result.markedBroken += 1;
+    } catch {
+      // materializeReferencedAsset is itself best-effort and marks broken on
+      // every failure path it knows about; this is only a final backstop.
+      result.markedBroken += 1;
+    }
+  }
+  return result;
 }

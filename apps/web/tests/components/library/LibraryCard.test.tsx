@@ -45,7 +45,7 @@ function makeAsset(over: Partial<LibraryAsset> = {}): LibraryAsset {
   };
 }
 
-function renderCard(asset: LibraryAsset) {
+function renderCardContainer(asset: LibraryAsset) {
   const props: LibraryCardProps = {
     asset,
     index: 0,
@@ -59,8 +59,11 @@ function renderCard(asset: LibraryAsset) {
     onEditAsPage: vi.fn(),
     onOpenProject: vi.fn(),
   };
-  const { container } = render(<LibraryCard {...props} />);
-  return container.querySelector('iframe');
+  return render(<LibraryCard {...props} />).container;
+}
+
+function renderCard(asset: LibraryAsset) {
+  return renderCardContainer(asset).querySelector('iframe');
 }
 
 afterEach(() => {
@@ -94,5 +97,29 @@ describe('LibraryCard HTML/design-system thumbnail', () => {
     const frame = renderCard(makeAsset());
     expect(frame?.getAttribute('loading')).toBe('lazy');
     expect(frame?.getAttribute('scrolling')).toBe('no');
+  });
+});
+
+// MM-021: a project delete materializes referenced Library rows it can, and
+// marks the rest `broken` (gone origin project, or a copy that failed) —
+// the reconcile sweep marks any other row whose bytes went missing the same
+// way. Either way the row survives; only its rendering must change so the
+// card doesn't point an <iframe>/<img> at bytes that will 404 forever.
+describe('LibraryCard missing-source (broken) state', () => {
+  it('renders a "Missing source" placeholder instead of the html iframe', () => {
+    const container = renderCardContainer(makeAsset({ kind: 'html', broken: true }));
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(container.textContent).toContain('Missing source');
+  });
+
+  it('renders the placeholder instead of the raw <img> for a broken image asset', () => {
+    const container = renderCardContainer(makeAsset({ kind: 'image', broken: true }));
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.textContent).toContain('Missing source');
+  });
+
+  it('renders the normal thumbnail (no placeholder) once an asset is not broken', () => {
+    const frame = renderCard(makeAsset({ kind: 'html', broken: false }));
+    expect(frame).toBeTruthy();
   });
 });

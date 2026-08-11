@@ -20,7 +20,7 @@ import {
   openDatabase,
   upsertMessage,
 } from '../src/db.js';
-import { listLibraryAssets } from '../src/library-store.js';
+import { insertLibraryAsset, listLibraryAssets } from '../src/library-store.js';
 import { reconcileLibrary } from '../src/library-sync.js';
 import type Database from 'better-sqlite3';
 
@@ -232,5 +232,66 @@ describe('reconcileLibrary', () => {
 
     expect(result.designSystems).toBe(0);
     expect(listLibraryAssets(db, {}).filter((asset) => asset.kind === 'design-system')).toEqual([]);
+  });
+});
+
+// MM-021: a referenced Library row can go orphaned without a project delete
+// ever running (it predates the delete-time materialize fix in library.ts,
+// or its file was removed without the project itself being deleted). The
+// sweep marks it `broken` instead of deleting it — never removes a row or
+// bytes — and is idempotent so re-running it on every Library open doesn't
+// re-mark or double-count what a previous pass already found.
+describe('reconcileLibrary — MM-021 broken-row sweep', () => {
+  it('marks a referenced row broken when its origin project no longer exists, idempotently', async () => {
+    const now = Date.now();
+    insertLibraryAsset(db, {
+      id: 'orphan-asset-1',
+      kind: 'image',
+      storage: 'referenced',
+      capturedAt: now,
+      archivedDate: '2024-05-01',
+      contentHash: 'orphan-hash-1',
+      tags: [],
+      originProjectId: 'ghost-project-does-not-exist',
+      relPath: 'render.png',
+      mime: 'image/png',
+    });
+
+    const first = await reconcileLibrary(db, paths());
+    expect(first.markedBroken).toBe(1);
+
+    const marked = listLibraryAssets(db, {}).find((a) => a.id === 'orphan-asset-1');
+    expect(marked?.broken).toBe(true);
+    expect(marked?.missingSince).toBeGreaterThan(0);
+    // Mark-only: the row (and its pointer) survives.
+    expect(marked?.storage).toBe('referenced');
+
+    // Idempotent — a second pass finds nothing new to mark for this row.
+    const second = await reconcileLibrary(db, paths());
+    expect(second.markedBroken).toBe(0);
+    expect(listLibraryAssets(db, {}).filter((a) => a.broken).length).toBe(1);
+  });
+
+  it('marks a referenced row broken when its origin project exists but the file itself is missing', async () => {
+    await seedProject();
+    const now = Date.now();
+    insertLibraryAsset(db, {
+      id: 'missing-file-asset-1',
+      kind: 'image',
+      storage: 'referenced',
+      capturedAt: now,
+      archivedDate: '2024-05-01',
+      contentHash: 'missing-file-hash-1',
+      tags: [],
+      originProjectId: PROJECT_ID,
+      relPath: 'does-not-exist.png',
+      mime: 'image/png',
+    });
+
+    const result = await reconcileLibrary(db, paths());
+
+    expect(result.markedBroken).toBeGreaterThanOrEqual(1);
+    const marked = listLibraryAssets(db, {}).find((a) => a.id === 'missing-file-asset-1');
+    expect(marked?.broken).toBe(true);
   });
 });

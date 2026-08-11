@@ -67,8 +67,18 @@ import {
 } from '../design-library.js';
 import { registerProjectConversationRoutes } from './conversations.js';
 import { cancelRunsOwnedBy } from './cancel-owned-runs.js';
+import { materializeProjectLibraryAssets } from '../../library.js';
+import { designLibraryRoot } from '../../design-library/root.js';
+import type { createFilesystemWriteGateway } from '../../filesystem/write-gateway.js';
 
-export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {}
+export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {
+  // Optional (not part of `ServerContext`, unlike RegisterLibraryRoutesDeps's
+  // required `filesystem` — route-context-contract.ts asserts `ServerContext`
+  // satisfies every route Deps type in its union, and this one is in that
+  // union) even though the real registration call in server.ts always
+  // supplies it; `createWriteGateway` below fails fast if it's ever missing.
+  filesystem?: { create: typeof createFilesystemWriteGateway };
+}
 
 function projectDetailResolvedDir(
   projectsRoot: string,
@@ -1237,7 +1247,19 @@ const RESERVED_PROJECT_IDS = new Set(['storyboard-media']);
 export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDeps) {
   const { db, design } = ctx;
   const { sendApiError, createSseResponse } = ctx.http;
-  const { DESIGN_SYSTEMS_DIR, PROJECTS_DIR, SKILLS_DIR, BRANDS_DIR, USER_DESIGN_SYSTEMS_DIR } = ctx.paths;
+  const { DESIGN_SYSTEMS_DIR, PROJECTS_DIR, SKILLS_DIR, BRANDS_DIR, USER_DESIGN_SYSTEMS_DIR, LIBRARY_DIR } = ctx.paths;
+  const createWriteGateway = () => {
+    if (!ctx.filesystem) {
+      // Only reachable if a caller assembles RegisterProjectRoutesDeps by
+      // hand without the `filesystem` factory server.ts always supplies —
+      // see the interface's own comment for why the field is optional.
+      throw new Error('registerProjectRoutes requires ctx.filesystem to materialize referenced Library assets on project delete');
+    }
+    return ctx.filesystem.create({
+      runtimeDataRoot: ctx.paths.RUNTIME_DATA_DIR,
+      forbiddenWriteRoots: [designLibraryRoot()],
+    });
+  };
   const { readAppConfig, writeAppConfig } = ctx.appConfig;
   const { insertProject, validateLinkedDirs, getProject, updateProject, dbDeleteProject, removeProjectDir } = ctx.projectStore;
   const { writeProjectFile, readProjectFile, ensureProject, listFiles, listTabs, setTabs, resolveProjectDir } = ctx.projectFiles;
@@ -2373,6 +2395,23 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       // are removed, otherwise the CLI subprocess is orphaned — it keeps
       // billing and writes into a directory that no longer exists (#5468).
       await cancelRunsOwnedBy(design.runs, { projectId: req.params.id });
+      // MM-021: a `referenced` Library row resolves its bytes through
+      // PROJECTS_DIR/<originProjectId>/<relPath> (library.ts's
+      // resolveAssetBytesPath); once the directory below is gone those rows
+      // 404 forever on /raw and /file. Copy each one's bytes into
+      // library-owned storage BEFORE the directory is removed, flipping the
+      // row to `owned`. Best-effort: a copy failure (or an already-missing
+      // source file) marks the row `broken` instead — it must never abort
+      // the delete itself.
+      const gateway = createWriteGateway();
+      const capability = await gateway.runtimeData();
+      await materializeProjectLibraryAssets(
+        db,
+        req.params.id,
+        LIBRARY_DIR,
+        PROJECTS_DIR,
+        { gateway, capability },
+      ).catch(() => {});
       dbDeleteProject(db, req.params.id);
       await removeProjectDir(PROJECTS_DIR, req.params.id).catch(() => {});
       /** @type {import('@open-design/contracts').OkResponse} */

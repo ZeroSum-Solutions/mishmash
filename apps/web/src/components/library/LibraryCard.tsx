@@ -113,8 +113,39 @@ function MediaThumb({ asset }: { asset: LibraryAsset }) {
   );
 }
 
+// MM-021: a `referenced` row whose origin project is gone (or whose bytes
+// went missing on disk) is marked `broken` by the daemon's reconcile sweep /
+// project-delete materialize step instead of being deleted (see
+// library-sync.ts, library.ts). Rendering its normal thumbnail would point an
+// <img>/<video>/<iframe> at bytes that 404 forever, so it gets this
+// placeholder instead — same 4:3 box, same glyph-centered layout as the
+// other non-lazy kinds (.thumbGlyph), just with an explicit label.
+function BrokenThumb() {
+  return (
+    <div className={styles.thumbBroken} title="Source file is missing">
+      <svg
+        width="28"
+        height="28"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+      <span>Missing source</span>
+    </div>
+  );
+}
+
 /** Kind-aware thumbnail. Stays fetch-free so the grid scrolls cheaply. */
 function Thumb({ asset }: { asset: LibraryAsset }) {
+  if (asset.broken) return <BrokenThumb />;
   switch (asset.kind) {
     case 'image':
     case 'video':

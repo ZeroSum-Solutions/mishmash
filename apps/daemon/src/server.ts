@@ -3218,6 +3218,7 @@ export async function startServer({
     appConfig: appConfigDeps,
     agents: agentDeps,
     validation: validationDeps,
+    filesystem: { create: createRouteFilesystemWriteGateway },
   });
   registerTerminalRoutes(app, {
     db,
