@@ -165,12 +165,15 @@ const REFERENCE_ASPECT_MAX = 12;
 const START_PROJECT_MAX_FILES_DEFAULT = 6000;
 const START_PROJECT_MAX_BYTES_DEFAULT = 600 * 1024 * 1024;
 
-function startProjectMaxFiles(): number {
+// Exported so other project-creation copy flows that need the same
+// tolerant, env-overridable caps (e.g. the catalogue "start from template"
+// flow in routes/project/index.ts) don't duplicate the defaults.
+export function startProjectMaxFiles(): number {
   const raw = Number(process.env.OD_DESIGN_LIBRARY_COPY_MAX_FILES);
   return Number.isFinite(raw) && raw > 0 ? raw : START_PROJECT_MAX_FILES_DEFAULT;
 }
 
-function startProjectMaxBytes(): number {
+export function startProjectMaxBytes(): number {
   const raw = Number(process.env.OD_DESIGN_LIBRARY_COPY_MAX_BYTES);
   return Number.isFinite(raw) && raw > 0 ? raw : START_PROJECT_MAX_BYTES_DEFAULT;
 }
@@ -184,7 +187,8 @@ function startProjectMaxBytes(): number {
 // (.next/cache/webpack/…/29.pack)"). Deliberately NOT excluded: `dist`,
 // `build`, `out` — kits legitimately ship their deliverable there (see
 // ENTRY_FILE_CANDIDATES).
-const START_PROJECT_EXCLUDED_DIR_NAMES = new Set([
+// Exported alongside the caps above for the same reuse reason.
+export const START_PROJECT_EXCLUDED_DIR_NAMES = new Set([
   // Private library metadata may occur at any depth inside a collection.
   // It is never project input and never counts against copy caps.
   ...DESIGN_LIBRARY_PRIVATE_METADATA_NAMES,
@@ -198,7 +202,7 @@ const START_PROJECT_EXCLUDED_DIR_NAMES = new Set([
   '.parcel-cache',
   '.vite',
 ]);
-const START_PROJECT_EXCLUDED_FILE_NAMES = new Set([
+export const START_PROJECT_EXCLUDED_FILE_NAMES = new Set([
   ...DESIGN_LIBRARY_PRIVATE_METADATA_NAMES,
   '.DS_Store',
 ]);
@@ -307,7 +311,10 @@ async function withComputedCatalogFields(root: string, catalog: unknown): Promis
   return { ...base, groups: resolved };
 }
 
-async function detectEntryFile(projectRoot: string): Promise<string | undefined> {
+// Exported so other project-creation copy flows can detect an entry file
+// the same way (first of ENTRY_FILE_CANDIDATES, then first *.html at depth
+// <= 2) instead of re-deriving the heuristic.
+export async function detectEntryFile(projectRoot: string): Promise<string | undefined> {
   for (const candidate of ENTRY_FILE_CANDIDATES) {
     if (fs.existsSync(path.join(projectRoot, candidate))) return candidate;
   }

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { Express, Response } from 'express';
@@ -56,6 +57,14 @@ import {
 import { auditDesignSystemPackage } from '../../tools-connectors-cli.js';
 import { parseOrchestratorWorkspace } from '../../workspace-contract.js';
 import { buildGuidedBriefSection, foldGuidedBriefIntoPrompt, normalizeGuidedBrief } from '../../prompts/guided-brief.js';
+import { copyDirectoryContents, type CopyDirectoryState } from '../../copy-directory.js';
+import {
+  detectEntryFile,
+  START_PROJECT_EXCLUDED_DIR_NAMES,
+  START_PROJECT_EXCLUDED_FILE_NAMES,
+  startProjectMaxBytes,
+  startProjectMaxFiles,
+} from '../design-library.js';
 import { registerProjectConversationRoutes } from './conversations.js';
 import { cancelRunsOwnedBy } from './cancel-owned-runs.js';
 
@@ -1237,7 +1246,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   const { listLatestProjectRunStatuses, listProjectsAwaitingInput, normalizeProjectDisplayStatus, composeProjectDisplayStatus, listProjects } = ctx.status;
   const { subscribeFileEvents, activeProjectEventSinks } = ctx.events;
   const { randomId } = ctx.ids;
-  const { validateProjectDesignSystemId, validateProjectSkillId } = ctx.validation;
+  const { validateProjectDesignSystemId, validateProjectSkillId, resolveSkillDir } = ctx.validation;
   async function loadPluginRegistryView() {
     const [skills, designSystems] = await Promise.all([
       listSkills(SKILLS_DIR),
@@ -1842,6 +1851,64 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
               // best-effort; the agent still has the embedded copy.
             }
           }
+        }
+      }
+      // Templates gallery — EntryShell.startProjectFromTemplate (via
+      // metadataForSkill) pins the chosen design-templates catalogue skill
+      // as this project's skillId and stamps kind:'template', but carries no
+      // metadata.templateId (that field belongs to the unrelated
+      // "save this project as a template" Share-menu feature handled by the
+      // block above). Without this, a catalogue-started project's files
+      // never reach disk and the canvas opens empty (MM-001 #1 / MM-007).
+      // Copy the resolved skill's assets/ directory into the new project
+      // folder, mirroring routes/design-library.ts's kit-starter copy
+      // (copyDirectoryContents + detectEntryFile) so the canvas knows what
+      // file to open.
+      if (
+        metadata &&
+        typeof metadata === 'object' &&
+        metadata.kind === 'template' &&
+        typeof metadata.templateId !== 'string' &&
+        typeof normalizedSkillId === 'string'
+      ) {
+        try {
+          const skillDir = await resolveSkillDir(normalizedSkillId);
+          if (typeof skillDir === 'string') {
+            const assetsDir: string = path.join(skillDir, 'assets');
+            if (existsSync(assetsDir)) {
+              const projectRoot = await ensureProject(PROJECTS_DIR, id, projectMetadata);
+              const state: CopyDirectoryState = {
+                copiedFiles: 0,
+                copiedBytes: 0,
+                skippedFiles: 0,
+                warnings: [],
+              };
+              await copyDirectoryContents(assetsDir, projectRoot, state, {
+                excludedDirNames: START_PROJECT_EXCLUDED_DIR_NAMES,
+                excludedFileNames: START_PROJECT_EXCLUDED_FILE_NAMES,
+                limits: { maxFiles: startProjectMaxFiles(), maxBytes: startProjectMaxBytes() },
+                onIncomplete: (reason, relPath) => {
+                  throw new Error(`template asset copy incomplete: ${reason} (${relPath})`);
+                },
+              });
+              const entryFile = await detectEntryFile(projectRoot);
+              if (entryFile) {
+                const updated = updateProject(db, id, {
+                  metadata: { ...projectMetadata, entryFile },
+                });
+                if (updated) project = updated;
+              }
+            }
+          }
+        } catch (err) {
+          // Best-effort, same spirit as the saved-template snapshot above —
+          // the agent still has the skill body embedded in the system
+          // prompt even if the on-disk copy fails partway (e.g. a symlink
+          // or cap breach inside a malformed catalogue entry).
+          console.warn(
+            `[projects] template asset copy failed for skill ${normalizedSkillId}:`,
+            err,
+          );
         }
       }
       /** @type {import('@open-design/contracts').CreateProjectResponse} */
