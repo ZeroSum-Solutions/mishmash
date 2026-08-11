@@ -1,0 +1,12 @@
+{
+  "slug": "nimbus-sticky-cards",
+  "name": "Nimbus Grid Platform — Sticky Stacking Cards",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=nimbus-sticky-cards",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

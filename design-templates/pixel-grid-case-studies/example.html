@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Case studies grid with a pixel-dissolve hover reveal, magnetic accent squares, and a client-logo marquee.">
+<title>Case Studies — Pixel Grid Hover Section</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #ffffff;
+    --ink: #000000;
+    --ink-10: rgba(0, 0, 0, 0.10);
+    --ink-20: rgba(0, 0, 0, 0.20);
+    --ink-40: rgba(0, 0, 0, 0.40);
+    --ink-60: rgba(0, 0, 0, 0.60);
+    --ink-80: rgba(0, 0, 0, 0.80);
+    --ink-85: rgba(0, 0, 0, 0.85);
+    --paper-30: rgba(255, 255, 255, 0.30);
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    /* Genuinely chromatic root token. The source design is pure black/white —
+       this exists ONLY to drive the keyboard focus ring below and never
+       appears in the resting-state render. See SKILL.md > Palette. */
+    --accent: #4a6cf7;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'DM Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  img { display: block; max-width: 100%; }
+
+  a { color: inherit; text-decoration: none; }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* ---------- Section shell ---------- */
+
+  .case-studies {
+    position: relative;
+    background: var(--paper);
+    color: var(--ink);
+    overflow: hidden;
+  }
+
+  /* ---------- Top area: floating squares + header text ---------- */
+
+  .case-studies__top {
+    position: relative;
+    padding: 8rem 1.5rem 2.5rem;
+  }
+
+  @media (min-width: 640px) {
+    .case-studies__top { padding-left: 2.5rem; padding-right: 2.5rem; }
+  }
+
+  @media (min-width: 1024px) {
+    .case-studies__top { padding-left: 4rem; padding-right: 4rem; padding-top: 10rem; }
+  }
+
+  .case-studies__squares {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .case-studies__square {
+    position: absolute;
+    will-change: transform;
+  }
+
+  .case-studies__square-bob {
+    display: block;
+    background: var(--ink);
+    animation: squareBob 3s ease-in-out infinite;
+  }
+
+  @keyframes squareBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  .case-studies__header {
+    position: relative;
+    max-width: 80rem;
+    margin: 0 auto;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+  }
+
+  .case-studies__header.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .case-studies__badge {
+    margin-bottom: 1.25rem;
+    display: inline-block;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 0.375rem 1rem;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  .case-studies__heading {
+    margin: 0;
+    font-size: clamp(1.8rem, 3.2vw, 2.8rem);
+    font-weight: 300;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+
+  .case-studies__heading .is-muted { color: var(--ink-40); }
+
+  /* ---------- Case study grid ---------- */
+
+  .case-studies__grid {
+    list-style: none;
+    margin: 0 auto;
+    max-width: 80rem;
+    padding: 0 1.5rem 4rem;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 640px) {
+    .case-studies__grid { padding-left: 2.5rem; padding-right: 2.5rem; }
+  }
+
+  @media (min-width: 768px) {
+    .case-studies__grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  @media (min-width: 1024px) {
+    .case-studies__grid { padding-left: 4rem; padding-right: 4rem; }
+  }
+
+  .case-card-item {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+  }
+
+  .case-card-item.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .case-card {
+    position: relative;
+    display: block;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    background: var(--ink-10);
+  }
+
+  .case-card__image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Pixel-dissolve hover overlay: 12 x 8 grid of blocks, diagonal stagger */
+  .case-card__pixels {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    pointer-events: none;
+  }
+
+  .case-card__pixel {
+    background: var(--ink-80);
+    opacity: 0;
+    transform: scale(0);
+    transition: transform 0.25s var(--ease), opacity 0.25s var(--ease);
+    transition-delay: var(--delay-out, 0s);
+  }
+
+  .case-card:hover .case-card__pixel,
+  .case-card:focus-within .case-card__pixel,
+  .case-card.is-touched .case-card__pixel {
+    opacity: 1;
+    transform: scale(1);
+    transition-delay: var(--delay-in, 0s);
+  }
+
+  /* Magnetic accent squares */
+  .case-card__magnetic {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  .case-card__square {
+    position: absolute;
+    background: var(--ink);
+    transform: translate(-50%, -50%) translate(var(--ox, 0px), var(--oy, 0px));
+  }
+
+  .case-card__plus {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    z-index: 10;
+    height: 1.75rem;
+    width: 1.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--paper-30);
+    color: var(--paper);
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .case-card__plate {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    max-width: 70%;
+    background: var(--paper);
+    padding: 0.625rem 1rem 0.75rem;
+  }
+
+  .case-card__title {
+    margin: 0;
+    font-size: clamp(1.4rem, 2.2vw, 2rem);
+    font-weight: 400;
+    line-height: 1.2;
+    color: var(--ink);
+  }
+
+  .case-card__meta {
+    margin-top: 0.375rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .case-card__category {
+    font-size: 12px;
+    color: var(--ink-60);
+  }
+
+  .case-card__year {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  /* ---------- Footer area ---------- */
+
+  .case-studies__footer {
+    max-width: 80rem;
+    margin: 0 auto;
+    padding: 0 1.5rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  @media (min-width: 640px) {
+    .case-studies__footer { padding-left: 2.5rem; padding-right: 2.5rem; }
+  }
+
+  @media (min-width: 768px) {
+    .case-studies__footer { flex-direction: row; align-items: flex-end; justify-content: space-between; }
+  }
+
+  @media (min-width: 1024px) {
+    .case-studies__footer { padding-left: 4rem; padding-right: 4rem; }
+  }
+
+  .case-studies__footer-left { max-width: 28rem; }
+
+  .case-studies__footer-plus {
+    margin-bottom: 1rem;
+    display: flex;
+    height: 1.75rem;
+    width: 1.75rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--ink-20);
+    color: var(--ink);
+    font-size: 12px;
+  }
+
+  .case-studies__footer-copy {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--ink-60);
+  }
+
+  .case-studies__cta {
+    margin-top: 1.5rem;
+    display: inline-flex;
+    align-items: flex-end;
+    border: none;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .case-studies__cta-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--ink-20);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 0.5rem 0.75rem;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: background 0.2s var(--ease);
+  }
+
+  .case-studies__cta:hover .case-studies__cta-label,
+  .case-studies__cta:focus-visible .case-studies__cta-label {
+    background: var(--ink-85);
+  }
+
+  .case-studies__cta-arrow {
+    margin-bottom: 1.5rem;
+    height: 1.5rem;
+    width: 1.5rem;
+    background: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: margin-bottom 0.3s var(--ease);
+  }
+
+  .case-studies__cta:hover .case-studies__cta-arrow,
+  .case-studies__cta:focus-visible .case-studies__cta-arrow {
+    margin-bottom: 2.25rem;
+  }
+
+  .case-studies__footer-right {
+    flex: 1;
+    overflow: hidden;
+    border-top: 1px solid var(--ink-10);
+  }
+
+  @media (min-width: 768px) {
+    .case-studies__footer-right { margin-left: 3rem; border-top: none; }
+  }
+
+  .case-studies__marquee {
+    overflow: hidden;
+    padding: 1.25rem 0;
+  }
+
+  .marquee-projects {
+    animation: marqueeProjects 28s linear infinite;
+  }
+
+  .marquee-projects:hover {
+    animation-play-state: paused;
+  }
+
+  @keyframes marqueeProjects {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  .case-studies__marquee-track {
+    display: flex;
+    width: max-content;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .case-studies__marquee-item {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0 2rem;
+  }
+
+  .case-studies__marquee-item svg { flex-shrink: 0; }
+
+  .case-studies__marquee-name {
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--ink-80, rgba(0, 0, 0, 0.8));
+  }
+
+  .case-studies__spacer { height: 3rem; }
+
+  /* ---------- Reduced motion: additive fallback, resting look unchanged ---------- */
+
+  @media (prefers-reduced-motion: reduce) {
+    .case-studies__header,
+    .case-card-item {
+      transition-duration: 0.01ms !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+
+    .case-studies__square-bob {
+      animation: none !important;
+    }
+
+    .case-studies__square {
+      transform: none !important;
+    }
+
+    .case-card__pixel {
+      transition-duration: 0.01ms !important;
+      transition-delay: 0s !important;
+    }
+
+    .case-card__square {
+      transition: none !important;
+      transform: translate(-50%, -50%) !important;
+    }
+
+    .marquee-projects {
+      animation-play-state: paused !important;
+    }
+
+    .case-studies__cta-arrow {
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<!--BODY-START-->
+<section class="case-studies" id="case-studies" aria-labelledby="case-studies-heading">
+  <div class="case-studies__top">
+    <div class="case-studies__squares" aria-hidden="true" data-role="parallax-squares">
+      <!-- 8 floating decorative squares injected by script -->
+    </div>
+    <div class="case-studies__header" data-role="reveal-header">
+      <span class="case-studies__badge">Projects</span>
+      <h2 class="case-studies__heading" id="case-studies-heading">
+        Insights from <span class="is-muted">Our</span><br>
+        <span class="is-muted">Case Studies</span>
+      </h2>
+    </div>
+  </div>
+
+  <!--CARDS-START-->
+  <ul class="case-studies__grid" data-role="case-grid">
+    <li class="case-card-item" data-role="reveal-card" style="transition-delay:0s;">
+      <a class="case-card" href="#" data-case-id="corax" aria-label="CoraX — Brand Strategy &amp; Product Design, 2026">
+        <img class="case-card__image" src="assets/case-corax.jpg" alt="CoraX case study cover: a person holding an umbrella beside a parked car on a city street.">
+        <div class="case-card__pixels" data-role="pixels" aria-hidden="true"></div>
+        <div class="case-card__magnetic" data-role="magnetic" aria-hidden="true"></div>
+        <span class="case-card__plus" aria-hidden="true">+</span>
+        <div class="case-card__plate">
+          <h3 class="case-card__title">CoraX</h3>
+          <div class="case-card__meta">
+            <span class="case-card__category">Brand Strategy &amp; Product Design</span>
+            <span class="case-card__year">2026</span>
+          </div>
+        </div>
+      </a>
+    </li>
+    <li class="case-card-item" data-role="reveal-card" style="transition-delay:0.1s;">
+      <a class="case-card" href="#" data-case-id="kelvae" aria-label="Kelvae&reg; — Web Design &amp; Identity, 2025">
+        <img class="case-card__image" src="assets/case-kelvae.jpg" alt="Kelvae case study cover: a dramatic coastal cliff and mountain landscape at dusk.">
+        <div class="case-card__pixels" data-role="pixels" aria-hidden="true"></div>
+        <div class="case-card__magnetic" data-role="magnetic" aria-hidden="true"></div>
+        <span class="case-card__plus" aria-hidden="true">+</span>
+        <div class="case-card__plate">
+          <h3 class="case-card__title">Kelvae&reg;</h3>
+          <div class="case-card__meta">
+            <span class="case-card__category">Web Design &amp; Identity</span>
+            <span class="case-card__year">2025</span>
+          </div>
+        </div>
+      </a>
+    </li>
+    <li class="case-card-item" data-role="reveal-card" style="transition-delay:0.2s;">
+      <a class="case-card" href="#" data-case-id="eduvane" aria-label="Eduvane — Brand Strategy &amp; Web Design, 2023">
+        <img class="case-card__image" src="assets/case-eduvane.jpg" alt="Eduvane case study cover: a classroom of children raising their hands.">
+        <div class="case-card__pixels" data-role="pixels" aria-hidden="true"></div>
+        <div class="case-card__magnetic" data-role="magnetic" aria-hidden="true"></div>
+        <span class="case-card__plus" aria-hidden="true">+</span>
+        <div class="case-card__plate">
+          <h3 class="case-card__title">Eduvane</h3>
+          <div class="case-card__meta">
+            <span class="case-card__category">Brand Strategy &amp; Web Design</span>
+            <span class="case-card__year">2023</span>
+          </div>
+        </div>
+      </a>
+    </li>
+    <li class="case-card-item" data-role="reveal-card" style="transition-delay:0.3s;">
+      <a class="case-card" href="#" data-case-id="verdalux" aria-label="Verdalux — Brand Strategy &amp; Web Design, 2022">
+        <img class="case-card__image" src="assets/case-verdalux.jpg" alt="Verdalux case study cover: an aerial view of a solar panel farm.">
+        <div class="case-card__pixels" data-role="pixels" aria-hidden="true"></div>
+        <div class="case-card__magnetic" data-role="magnetic" aria-hidden="true"></div>
+        <span class="case-card__plus" aria-hidden="true">+</span>
+        <div class="case-card__plate">
+          <h3 class="case-card__title">Verdalux</h3>
+          <div class="case-card__meta">
+            <span class="case-card__category">Brand Strategy &amp; Web Design</span>
+            <span class="case-card__year">2022</span>
+          </div>
+        </div>
+      </a>
+    </li>
+  </ul>
+  <!--CARDS-END-->
+
+  <!--FOOTER-START-->
+  <div class="case-studies__footer">
+    <div class="case-studies__footer-left">
+      <span class="case-studies__footer-plus" aria-hidden="true">+</span>
+      <p class="case-studies__footer-copy">We partner with ambitious brands that are ready to move beyond fragmented visuals and shallow quick fixes -- turning their identity, website, and messaging into one focused engine for growth.</p>
+      <button type="button" class="case-studies__cta" data-role="cta-noop">
+        <span class="case-studies__cta-label">Let's work together</span>
+        <span class="case-studies__cta-arrow" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M18.75 6V15.75C18.75 15.949 18.671 16.14 18.53 16.28C18.39 16.421 18.199 16.5 18 16.5C17.801 16.5 17.61 16.421 17.47 16.28C17.329 16.14 17.25 15.949 17.25 15.75V7.81L6.53 18.53C6.39 18.671 6.199 18.75 6 18.75C5.801 18.75 5.61 18.671 5.47 18.53C5.329 18.39 5.25 18.199 5.25 18C5.25 17.801 5.329 17.61 5.47 17.47L16.19 6.75H8.25C8.051 6.75 7.86 6.671 7.72 6.53C7.579 6.39 7.5 6.199 7.5 6C7.5 5.801 7.579 5.61 7.72 5.47C7.86 5.329 8.051 5.25 8.25 5.25H18C18.199 5.25 18.39 5.329 18.53 5.47C18.671 5.61 18.75 5.801 18.75 6Z" fill="white"/>
+          </svg>
+        </span>
+      </button>
+    </div>
+    <div class="case-studies__footer-right">
+      <div class="case-studies__marquee">
+        <ul class="case-studies__marquee-track marquee-projects" data-role="marquee-track" aria-hidden="true">
+          <!-- 8 logos, doubled to 16, injected by script -->
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="case-studies__spacer"></div>
+  <!--FOOTER-END-->
+</section>
+<!--BODY-END-->
+<script>
+(function () {
+  'use strict';
+
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------------------------------------------------------------
+   * 1. Floating parallax + bob squares in the header
+   * ------------------------------------------------------------- */
+  var SQUARE_DEFS = [
+    { x: 6, y: 20, size: 12 }, { x: 12, y: 32, size: 8 }, { x: 8, y: 44, size: 6 }, { x: 88, y: 18, size: 10 },
+    { x: 92, y: 30, size: 14 }, { x: 85, y: 42, size: 7 }, { x: 90, y: 52, size: 5 }, { x: 14, y: 56, size: 5 }
+  ];
+
+  var squaresLayer = document.querySelector('[data-role="parallax-squares"]');
+  var squareOuters = [];
+
+  SQUARE_DEFS.forEach(function (def, i) {
+    var outer = document.createElement('span');
+    outer.className = 'case-studies__square';
+    outer.style.left = def.x + '%';
+    outer.style.top = def.y + '%';
+
+    var inner = document.createElement('span');
+    inner.className = 'case-studies__square-bob';
+    inner.style.width = def.size + 'px';
+    inner.style.height = def.size + 'px';
+    if (!reduceMotion) {
+      inner.style.animationDuration = (3 + i * 0.4) + 's';
+      inner.style.animationDelay = (i * 0.3) + 's';
+    }
+
+    outer.appendChild(inner);
+    squaresLayer.appendChild(outer);
+    squareOuters.push({ el: outer, index: i, target: 0, value: 0, velocity: 0 });
+  });
+
+  /* Scroll-linked parallax, smoothed with a spring (stiffness 40, damping 20)
+     ported from the source's useTransform + useSpring pair. */
+  var sectionEl = document.getElementById('case-studies');
+
+  function scrollProgress() {
+    var rect = sectionEl.getBoundingClientRect();
+    var vh = window.innerHeight || document.documentElement.clientHeight;
+    var p = (vh - rect.top) / (vh + rect.height);
+    return Math.max(0, Math.min(1, p));
+  }
+
+  function stepSpring(state, dt, stiffness, damping, mass) {
+    var force = -stiffness * (state.value - state.target);
+    var damp = -damping * state.velocity;
+    var accel = (force + damp) / mass;
+    state.velocity += accel * dt;
+    state.value += state.velocity * dt;
+    return state.value;
+  }
+
+  var lastTime = null;
+
+  function tickParallax(now) {
+    if (lastTime === null) lastTime = now;
+    var dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+
+    var progress = scrollProgress();
+    squareOuters.forEach(function (state) {
+      state.target = progress * -(80 + state.index * 30);
+      var y = stepSpring(state, dt, 40, 20, 1);
+      state.el.style.transform = 'translateY(' + y.toFixed(2) + 'px)';
+    });
+
+    requestAnimationFrame(tickParallax);
+  }
+
+  if (!reduceMotion) {
+    requestAnimationFrame(tickParallax);
+  }
+
+  /* ---------------------------------------------------------------
+   * 2. Scroll-triggered reveal for the header and each case card
+   * ------------------------------------------------------------- */
+  function revealOnce(el, options) {
+    if (reduceMotion || !('IntersectionObserver' in window)) {
+      el.classList.add('is-visible');
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      if (entries[0].isIntersecting) {
+        el.classList.add('is-visible');
+        io.disconnect();
+      }
+    }, options);
+    io.observe(el);
+  }
+
+  revealOnce(document.querySelector('[data-role="reveal-header"]'), { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+  document.querySelectorAll('[data-role="reveal-card"]').forEach(function (card) {
+    revealOnce(card, { threshold: 0.1 });
+  });
+
+  /* ---------------------------------------------------------------
+   * 3. Per-card pixel-dissolve grid (12 cols x 8 rows, diagonal stagger)
+   * ------------------------------------------------------------- */
+  var COLS = 12, ROWS = 8;
+
+  document.querySelectorAll('[data-role="pixels"]').forEach(function (host) {
+    for (var row = 0; row < ROWS; row++) {
+      for (var col = 0; col < COLS; col++) {
+        var pixel = document.createElement('span');
+        pixel.className = 'case-card__pixel';
+        var delayIn = (row + col) * 0.018;
+        var delayOut = ((ROWS - row) + (COLS - col)) * 0.012;
+        pixel.style.setProperty('--delay-in', delayIn.toFixed(3) + 's');
+        pixel.style.setProperty('--delay-out', delayOut.toFixed(3) + 's');
+        host.appendChild(pixel);
+      }
+    }
+  });
+
+  /* ---------------------------------------------------------------
+   * 4. Magnetic squares: spring toward the pointer (stiffness 80,
+   *    damping 18, mass 0.6); rest position uses pointer = (0.5, 0.5)
+   * ------------------------------------------------------------- */
+  var MAGNETIC_DEFS = {
+    corax:    [[5, 30, 16], [10, 42, 10], [3, 52, 7], [80, 70, 14], [85, 82, 9], [78, 60, 6]],
+    kelvae:   [[82, 55, 16], [88, 68, 10], [78, 72, 7], [85, 42, 6], [90, 80, 8]],
+    eduvane:  [[4, 24, 16], [10, 36, 10], [2, 44, 7], [78, 78, 14], [84, 88, 8]],
+    verdalux: [[82, 26, 14], [88, 38, 10], [78, 44, 7], [84, 54, 5], [90, 60, 8]]
+  };
+
+  var magneticStates = [];
+
+  document.querySelectorAll('.case-card').forEach(function (card) {
+    var id = card.getAttribute('data-case-id');
+    var host = card.querySelector('[data-role="magnetic"]');
+    var defs = MAGNETIC_DEFS[id] || [];
+    var squares = defs.map(function (d) {
+      var sq = document.createElement('span');
+      sq.className = 'case-card__square';
+      sq.style.left = d[0] + '%';
+      sq.style.top = d[1] + '%';
+      sq.style.width = d[2] + 'px';
+      sq.style.height = d[2] + 'px';
+      host.appendChild(sq);
+      return {
+        el: sq, baseX: d[0] / 100, baseY: d[1] / 100,
+        sx: { value: 0, target: 0, velocity: 0 },
+        sy: { value: 0, target: 0, velocity: 0 }
+      };
+    });
+
+    function setPointer(nx, ny) {
+      squares.forEach(function (s) {
+        s.sx.target = (nx - s.baseX) * 40;
+        s.sy.target = (ny - s.baseY) * 40;
+      });
+    }
+
+    setPointer(0.5, 0.5);
+
+    if (!reduceMotion) {
+      card.addEventListener('pointermove', function (event) {
+        var rect = card.getBoundingClientRect();
+        var nx = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+        var ny = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+        setPointer(nx, ny);
+      });
+      card.addEventListener('pointerleave', function () {
+        setPointer(0.5, 0.5);
+      });
+    }
+
+    magneticStates.push.apply(magneticStates, squares);
+  });
+
+  var lastMagTime = null;
+
+  function tickMagnetic(now) {
+    if (lastMagTime === null) lastMagTime = now;
+    var dt = Math.min(0.05, (now - lastMagTime) / 1000);
+    lastMagTime = now;
+
+    magneticStates.forEach(function (s) {
+      var x = stepSpring(s.sx, dt, 80, 18, 0.6);
+      var y = stepSpring(s.sy, dt, 80, 18, 0.6);
+      s.el.style.setProperty('--ox', x.toFixed(2) + 'px');
+      s.el.style.setProperty('--oy', y.toFixed(2) + 'px');
+    });
+
+    requestAnimationFrame(tickMagnetic);
+  }
+
+  if (!reduceMotion && magneticStates.length) {
+    requestAnimationFrame(tickMagnetic);
+  }
+
+  /* ---------------------------------------------------------------
+   * 5. Touch fallback: hover may enhance, never gate. A tap toggles
+   *    the same engaged state that :hover / :focus-within provide.
+   * ------------------------------------------------------------- */
+  document.querySelectorAll('.case-card').forEach(function (card) {
+    card.addEventListener('touchstart', function () {
+      document.querySelectorAll('.case-card.is-touched').forEach(function (other) {
+        if (other !== card) other.classList.remove('is-touched');
+      });
+      card.classList.toggle('is-touched');
+    }, { passive: true });
+  });
+
+  document.addEventListener('touchstart', function (event) {
+    if (!event.target.closest('.case-card')) {
+      document.querySelectorAll('.case-card.is-touched').forEach(function (card) {
+        card.classList.remove('is-touched');
+      });
+    }
+  }, { passive: true });
+
+  /* ---------------------------------------------------------------
+   * 6. Marquee: 8 client logos, doubled to 16 for a seamless loop
+   * ------------------------------------------------------------- */
+  var ICONS = {
+    code: '<svg width="22" height="18" viewBox="0 0 22 18" fill="none" xmlns="http://www.w3.org/2000/svg"><polyline points="6,4 1,9 6,14" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><polyline points="16,4 21,9 16,14" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><line x1="13" y1="2" x2="9" y2="16" stroke="black" stroke-width="2" stroke-linecap="round"/></svg>',
+    dots: '<svg width="20" height="20" viewBox="0 0 20 20" fill="black" xmlns="http://www.w3.org/2000/svg">' +
+      [3, 10, 17].map(function (cy) { return [3, 10, 17].map(function (cx) { return '<circle cx="' + cx + '" cy="' + cy + '" r="2.2"/>'; }).join(''); }).join('') +
+      '</svg>',
+    'circle-ring': '<svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="9" stroke="black" stroke-width="2"/><circle cx="11" cy="11" r="4" stroke="black" stroke-width="2"/></svg>',
+    arrow: '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><line x1="2" y1="16" x2="16" y2="2" stroke="black" stroke-width="2" stroke-linecap="round"/><polyline points="7,2 16,2 16,11" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
+    'wave-circle': '<svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="9" stroke="black" stroke-width="1.5"/><path d="M5 11Q8 7 11 11Q14 15 17 11" stroke="black" stroke-width="1.5" fill="none"/></svg>',
+    lines: '<svg width="24" height="18" viewBox="0 0 24 18" fill="none" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="3" x2="24" y2="3" stroke="black" stroke-width="2.2" stroke-linecap="round"/><line x1="6" y1="9" x2="24" y2="9" stroke="black" stroke-width="2.2" stroke-linecap="round"/><line x1="0" y1="15" x2="18" y2="15" stroke="black" stroke-width="2.2" stroke-linecap="round"/></svg>',
+    bolt: '<svg width="14" height="20" viewBox="0 0 14 20" fill="black" xmlns="http://www.w3.org/2000/svg"><polygon points="8,0 0,11 6,11 6,20 14,9 8,9"/></svg>',
+    plus: '<svg width="18" height="18" viewBox="0 0 18 18" fill="black" xmlns="http://www.w3.org/2000/svg"><rect x="7.5" y="0" width="3" height="18"/><rect x="0" y="7.5" width="18" height="3"/></svg>'
+  };
+
+  var LOGOS = [
+    { name: 'Codecraft_', icon: 'code' },
+    { name: 'ennLabs', icon: 'dots' },
+    { name: 'GlobalBank', icon: 'circle-ring' },
+    { name: '45 Degrees°', icon: 'arrow' },
+    { name: 'AlphaVane', icon: 'wave-circle' },
+    { name: 'Biosynthesis', icon: 'lines' },
+    { name: 'Boltshift', icon: 'bolt' },
+    { name: 'Clarendine', icon: 'plus' }
+  ];
+
+  var track = document.querySelector('[data-role="marquee-track"]');
+  var doubled = LOGOS.concat(LOGOS);
+  doubled.forEach(function (logo) {
+    var li = document.createElement('li');
+    li.className = 'case-studies__marquee-item';
+    li.innerHTML = ICONS[logo.icon] + '<span class="case-studies__marquee-name">' + logo.name + '</span>';
+    track.appendChild(li);
+  });
+
+  /* ---------------------------------------------------------------
+   * 7. The footer CTA is decorative in this standalone template —
+   *    intercept its click so it never navigates anywhere.
+   * ------------------------------------------------------------- */
+  var cta = document.querySelector('[data-role="cta-noop"]');
+  if (cta) {
+    cta.addEventListener('click', function (event) { event.preventDefault(); });
+  }
+})();
+</script>
+</body>
+</html>
