@@ -1,0 +1,12 @@
+{
+  "slug": "fine-jewelry-shop",
+  "name": "Azure Vale — Fine Jewelry Mobile App Concept",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500;700&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=fine-jewelry-shop",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

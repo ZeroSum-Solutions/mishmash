@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Azure Vale — Fine Jewelry</title>
+<meta name="description" content="Azure Vale mobile app concept: a warm-orange hero inside a realistic iPhone mockup, showcasing the Aura Crush ring." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ===== Reset ===== */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: var(--page-bg); }
+  body {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+    color: #111;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  img { max-width: 100%; }
+  button { font-family: inherit; }
+
+  /* ===== Tokens ===== */
+  :root {
+    --page-bg: #f5f5f0;
+    --brand-orange: #E96B00;
+    --brand-peach: #F6BB7E;
+    --brand-dark: #0B2122;
+  }
+
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+  /* ===== Stage / page chrome ===== */
+  .stage {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+  @media (max-width: 479px) {
+    .stage { padding: 16px; }
+  }
+
+  .phone-viewport {
+    width: 375px;
+    height: 812px;
+    position: relative;
+  }
+
+  /* ===== Phone frame ===== */
+  .phone {
+    position: absolute;
+    inset: 0;
+    width: 375px;
+    height: 812px;
+    border-radius: 55px;
+    background: #050505;
+    padding: 12px;
+    box-shadow:
+      0 50px 100px -20px rgba(0, 0, 0, 0.5),
+      0 30px 60px -10px rgba(0, 0, 0, 0.4),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  }
+
+  .screen {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 43px;
+    overflow: hidden;
+    background: var(--page-bg);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Side buttons (decorative — realistic mockup framing) */
+  .side-btn {
+    position: absolute;
+    background: #050505;
+    border-radius: 2px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+  .side-btn--silent { left: -3px; top: 120px; width: 3px; height: 28px; }
+  .side-btn--vol1   { left: -3px; top: 170px; width: 3px; height: 55px; }
+  .side-btn--vol2   { left: -3px; top: 235px; width: 3px; height: 55px; }
+  .side-btn--power  { right: -3px; top: 185px; width: 3px; height: 88px; }
+
+  /* Dynamic Island */
+  .dynamic-island {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 126px;
+    height: 36px;
+    background: #000;
+    border-radius: 9999px;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .camera-lens {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #111;
+    border: 1px solid #2a2a3e;
+  }
+
+  /* ===== Nav ===== */
+  .app-nav {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 56px 16px 0;
+    z-index: 70;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .logo {
+    color: #fff;
+    font-family: 'Archivo', sans-serif;
+    font-weight: 700;
+    font-size: 20px;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .logo span { display: block; }
+
+  .menu-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    position: relative;
+  }
+  .menu-btn svg {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    transition: transform 300ms cubic-bezier(0.77, 0, 0.18, 1), opacity 300ms cubic-bezier(0.77, 0, 0.18, 1);
+  }
+  .icon-menu { opacity: 1; transform: rotate(0deg) scale(1); }
+  .icon-close { opacity: 0; transform: rotate(-90deg) scale(0.5); }
+  .menu-btn[aria-expanded="true"] .icon-menu { opacity: 0; transform: rotate(90deg) scale(0.5); }
+  .menu-btn[aria-expanded="true"] .icon-close { opacity: 1; transform: rotate(0deg) scale(1); }
+
+  /* ===== Hero ===== */
+  .hero {
+    position: relative;
+    flex: 1 1 auto;
+    overflow: hidden;
+    background: var(--brand-orange);
+  }
+  .hero-glow-bg {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    left: -96px;
+    top: 33%;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--brand-peach) 0%, transparent 70%);
+    opacity: 0.4;
+    filter: blur(200px);
+  }
+  .grid-line {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: #fff;
+    opacity: 0.16;
+  }
+  .grid-line--1 { left: 33.333%; }
+  .grid-line--2 { left: 66.666%; }
+
+  .hero-image-wrap {
+    position: absolute;
+    left: 50%;
+    bottom: -40px;
+    transform: translateX(-50%);
+    width: 132%;
+    z-index: 20;
+  }
+  .hero-glow {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    height: 60%;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--brand-peach) 0%, transparent 70%);
+    opacity: 0.4;
+    filter: blur(80px);
+    z-index: 0;
+  }
+  .hero-image {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .awards-row {
+    position: absolute;
+    left: 16px; right: 16px; bottom: 16px;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .awards-count {
+    color: #fff;
+    display: flex;
+    align-items: baseline;
+  }
+  .awards-count .bracket { font-size: 48px; font-weight: 300; }
+  .awards-count .num { font-size: 48px; font-weight: 700; }
+  .awards-count .plus { font-size: 18px; font-weight: 700; position: relative; top: -4px; }
+  .awards-label {
+    color: #fff;
+    font-size: 16px;
+    line-height: 1.375;
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+    text-align: right;
+  }
+
+  /* ===== Product card ===== */
+  .product-card {
+    position: relative;
+    background: #fff;
+    padding: 12px;
+    height: 220px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .product-top h2 {
+    color: #000;
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1.25;
+  }
+  .product-sub {
+    color: rgba(0, 0, 0, 0.6);
+    font-size: 12px;
+    margin-top: 4px;
+  }
+  /* A CSS animation on `transform` replaces the whole property rather than
+     composing with a static transform, so the product image's static
+     translate(-50%,-50%) centering needs its own keyframe that bakes the
+     centering in, instead of reusing the generic .stagger-up class. */
+  .product-image-wrap {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 70%;
+    z-index: 1;
+    opacity: 0;
+    animation: product-image-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 1.06s;
+  }
+  .product-image-wrap img {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+  }
+  @keyframes product-image-in {
+    from { opacity: 0; transform: translate(-50%, calc(-50% + 20px)); }
+    to   { opacity: 1; transform: translate(-50%, -50%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .product-image-wrap {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: translate(-50%, -50%) !important;
+    }
+  }
+  .product-bottom {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+  .price-label { color: var(--brand-dark); opacity: 0.64; font-size: 12px; }
+  .price { color: var(--brand-dark); font-size: 18px; font-weight: 500; margin-top: 4px; }
+
+  .arrow-btn {
+    position: absolute;
+    bottom: 0; right: 0;
+    width: 72px;
+    height: 68px;
+    background: #000;
+    border: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 200ms ease-out;
+    z-index: 3;
+  }
+  .arrow-btn:hover, .arrow-btn:focus-visible { background: rgba(0, 0, 0, 0.9); }
+  .arrow-btn svg { width: 16px; height: 16px; }
+  .arrow-btn:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+
+  /* ===== Mobile menu overlay ===== */
+  .menu-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 500ms ease;
+    z-index: 60;
+  }
+  .menu-backdrop.is-open { opacity: 1; pointer-events: auto; }
+
+  .menu-drawer {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 80%;
+    max-width: 280px;
+    background: var(--brand-orange);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    transform: translateX(-100%);
+    transition: transform 500ms cubic-bezier(0.77, 0, 0.18, 1);
+    z-index: 65;
+    padding: 96px 24px 24px;
+  }
+  .menu-drawer.is-open { transform: translateX(0); }
+
+  .menu-list { list-style: none; }
+  .menu-list li {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    opacity: 0;
+    transform: translateX(-16px);
+    transition: opacity 400ms cubic-bezier(0.16, 1, 0.3, 1), transform 400ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .menu-drawer.is-open .menu-list li { opacity: 1; transform: translateX(0); }
+  .menu-list li:nth-child(1) { transition-delay: 80ms; }
+  .menu-list li:nth-child(2) { transition-delay: 130ms; }
+  .menu-list li:nth-child(3) { transition-delay: 180ms; }
+  .menu-list li:nth-child(4) { transition-delay: 230ms; }
+  .menu-list li:nth-child(5) { transition-delay: 280ms; }
+  .menu-list a {
+    display: block;
+    padding: 10px 0;
+    color: #fff;
+    font-size: 24px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: opacity 200ms ease-out, transform 200ms ease-out;
+  }
+  .menu-list a:hover, .menu-list a:focus-visible { transform: translateX(2px); opacity: 0.8; }
+
+  /* ===== Mount-in stagger animations ===== */
+  @keyframes stagger-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes stagger-scale { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+  @keyframes stagger-fade { from { opacity: 0; } to { opacity: 1; } }
+
+  .stagger-up { opacity: 0; animation: stagger-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  .stagger-scale { opacity: 0; animation: stagger-scale 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  .stagger-fade { opacity: 0; animation: stagger-fade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+  .d0  { animation-delay: .10s; }
+  .d1  { animation-delay: .22s; }
+  .d2  { animation-delay: .34s; }
+  .d3  { animation-delay: .46s; }
+  .d4  { animation-delay: .58s; }
+  .d5  { animation-delay: .70s; }
+  .d6  { animation-delay: .82s; }
+  .d7  { animation-delay: .94s; }
+  .d8  { animation-delay: 1.06s; }
+  .d9  { animation-delay: 1.18s; }
+  .d10 { animation-delay: 1.30s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stagger-up, .stagger-scale, .stagger-fade {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    .menu-btn svg, .menu-backdrop, .menu-drawer, .menu-list li, .menu-list a, .arrow-btn {
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="phone-viewport">
+    <div class="phone">
+      <div class="side-btn side-btn--silent" aria-hidden="true"></div>
+      <div class="side-btn side-btn--vol1" aria-hidden="true"></div>
+      <div class="side-btn side-btn--vol2" aria-hidden="true"></div>
+      <div class="side-btn side-btn--power" aria-hidden="true"></div>
+
+      <div class="screen scrollbar-hide">
+        <div class="dynamic-island" aria-hidden="true">
+          <div class="camera-lens"></div>
+        </div>
+
+        <nav class="app-nav">
+          <a class="logo stagger-up d1" href="#top" aria-label="Azure Vale home">
+            <span>Azure</span><span>Vale</span>
+          </a>
+          <button
+            class="menu-btn stagger-up d2"
+            type="button"
+            id="menu-toggle"
+            aria-expanded="false"
+            aria-controls="mobile-menu"
+            aria-label="Open menu"
+          >
+            <svg class="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line></svg>
+            <svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </nav>
+
+        <section class="hero" id="top" aria-label="Featured collection">
+          <div class="hero-glow-bg stagger-fade d0" aria-hidden="true"></div>
+          <div class="grid-line grid-line--1 stagger-fade d0" aria-hidden="true"></div>
+          <div class="grid-line grid-line--2 stagger-fade d0" aria-hidden="true"></div>
+
+          <div class="hero-image-wrap stagger-fade d3">
+            <div class="hero-glow" aria-hidden="true"></div>
+            <img
+              class="hero-image"
+              src="assets/hero-model-pave-rings.png"
+              alt="Model wearing Azure Vale pavé diamond rings and gold stud earrings, hand resting near her chin"
+            />
+          </div>
+
+          <div class="awards-row">
+            <p class="awards-count stagger-up d4">
+              <span class="bracket">[</span><span class="num">12</span><span class="plus">+</span><span class="bracket">]</span>
+            </p>
+            <p class="awards-label stagger-up d5">Awards<br />Celebrate<br />Innovation</p>
+          </div>
+        </section>
+
+        <article class="product-card stagger-up d6" aria-label="Featured product">
+          <div class="product-top stagger-up d7">
+            <h2>Aura Crush ring</h2>
+            <p class="product-sub">18K yellow</p>
+          </div>
+
+          <div class="product-image-wrap">
+            <img
+              src="assets/aura-crush-ring.png"
+              alt="Aura Crush ring in 18K yellow gold with a quilted crosshatch pattern"
+            />
+          </div>
+
+          <div class="product-bottom stagger-up d9">
+            <div class="price-block">
+              <p class="price-label">From</p>
+              <p class="price">$25,550</p>
+            </div>
+          </div>
+
+          <button class="arrow-btn stagger-scale d10" type="button" aria-label="View Aura Crush ring details">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
+          </button>
+        </article>
+
+        <div class="menu-backdrop" id="menu-backdrop" aria-hidden="true"></div>
+
+        <nav class="menu-drawer" id="mobile-menu" aria-label="Mobile menu">
+          <ul class="menu-list">
+            <li><a href="#top" data-menu-link>Search</a></li>
+            <li><a href="#top" data-menu-link>Catalog</a></li>
+            <li><a href="#top" data-menu-link>About</a></li>
+            <li><a href="#top" data-menu-link>Profile</a></li>
+            <li><a href="#top" data-menu-link>Favorites</a></li>
+          </ul>
+        </nav>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+
+  /* ---- Responsive fit: scale the 375x812 phone to the viewport, no horizontal overflow ---- */
+  var viewport = document.querySelector('.phone-viewport');
+  var STAGE_H_PADDING = 32; /* .stage horizontal padding total (16px each side at narrow widths) */
+
+  function fitPhone() {
+    var available = window.innerWidth - STAGE_H_PADDING;
+    var scale = Math.min(1, available / 375);
+    viewport.style.transform = 'scale(' + scale + ')';
+  }
+  fitPhone();
+  window.addEventListener('resize', fitPhone);
+
+  /* ---- Mobile menu drawer ---- */
+  var menuToggle = document.getElementById('menu-toggle');
+  var backdrop = document.getElementById('menu-backdrop');
+  var drawer = document.getElementById('mobile-menu');
+  var menuLinks = drawer.querySelectorAll('[data-menu-link]');
+  var isOpen = false;
+
+  function openMenu() {
+    isOpen = true;
+    menuToggle.setAttribute('aria-expanded', 'true');
+    backdrop.classList.add('is-open');
+    drawer.classList.add('is-open');
+    document.addEventListener('keydown', onKeydown);
+    /* focus the first menu item once the slide-in has had a moment to start */
+    window.setTimeout(function () {
+      if (menuLinks[0]) menuLinks[0].focus();
+    }, 50);
+  }
+
+  function closeMenu(returnFocus) {
+    isOpen = false;
+    menuToggle.setAttribute('aria-expanded', 'false');
+    backdrop.classList.remove('is-open');
+    drawer.classList.remove('is-open');
+    document.removeEventListener('keydown', onKeydown);
+    if (returnFocus !== false) menuToggle.focus();
+  }
+
+  function onKeydown(event) {
+    if (event.key === 'Escape') {
+      closeMenu(true);
+      return;
+    }
+    if (event.key === 'Tab') {
+      /* simple focus trap within the drawer */
+      var focusable = [menuToggle].concat(Array.prototype.slice.call(menuLinks));
+      var first = menuLinks[0];
+      var last = menuLinks[menuLinks.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  }
+
+  menuToggle.addEventListener('click', function () {
+    if (isOpen) {
+      closeMenu(true);
+    } else {
+      openMenu();
+    }
+  });
+
+  backdrop.addEventListener('click', function () {
+    closeMenu(true);
+  });
+
+  menuLinks.forEach(function (link) {
+    link.addEventListener('click', function (event) {
+      event.preventDefault();
+      closeMenu(false);
+    });
+  });
+
+  /* ---- Product CTA: decorative in this mockup, still a real focusable/hoverable control ---- */
+  var arrowBtn = document.querySelector('.arrow-btn');
+  arrowBtn.addEventListener('click', function () {
+    arrowBtn.blur();
+  });
+})();
+</script>
+
+</body>
+</html>
