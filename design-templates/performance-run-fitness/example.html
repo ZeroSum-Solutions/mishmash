@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RunPulse — Watch Your Runs Get Stronger, Day by Day</title>
+<meta name="description" content="RunPulse logs speed, mileage, HR bands, and habits, then shapes them into sharp, inspiring charts you'll genuinely love to check out.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --white: #ffffff;
+    --gray-900: #111827;
+    --accent: #ff6a3d;
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-serif: 'Playfair Display', Georgia, serif;
+    --fallback-bg: #10222c;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--fallback-bg);
+    color: var(--white);
+    -webkit-font-smoothing: antialiased;
+  }
+  img, video { max-width: 100%; display: block; }
+  a { text-decoration: none; color: inherit; }
+  button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; }
+  ul { margin: 0; padding: 0; list-style: none; }
+
+  ::selection { background: var(--accent); color: var(--white); }
+
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  /* ---------- Hero shell ---------- */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    width: 100%;
+    overflow: hidden;
+    background: var(--fallback-bg);
+  }
+  .hero-video {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    width: 100%;
+    object-fit: cover;
+    object-position: right center;
+    background: var(--fallback-bg);
+  }
+  .hero-overlay {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    min-height: 100vh;
+    flex-direction: column;
+  }
+  .hero-container {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  @media (min-width: 640px) {
+    .hero-container { padding-left: 24px; padding-right: 24px; }
+  }
+  @media (min-width: 768px) {
+    .hero-container { padding-left: 48px; padding-right: 48px; }
+  }
+  @media (min-width: 1024px) {
+    .hero-container { padding-left: 64px; padding-right: 64px; }
+  }
+
+  /* ---------- Navbar ---------- */
+  .navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+  .navbar-logo {
+    font-size: 1.125rem;
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    color: var(--white);
+  }
+  .nav-links {
+    display: none;
+    gap: 32px;
+  }
+  @media (min-width: 768px) {
+    .nav-links { display: flex; }
+  }
+  .nav-links a {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.8);
+    transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .nav-links a:hover { color: var(--white); }
+
+  .nav-cta {
+    display: none;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 8px 20px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--white);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+  }
+  @media (min-width: 768px) {
+    .nav-cta { display: inline-flex; }
+  }
+  .nav-cta:hover { background: rgba(255, 255, 255, 0.2); }
+
+  .hamburger {
+    position: relative;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px;
+    width: 40px;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @media (min-width: 768px) {
+    .hamburger { display: none; }
+  }
+  .hamburger:hover { background: rgba(255, 255, 255, 0.2); }
+  .hamburger .icon {
+    position: absolute;
+    height: 20px;
+    width: 20px;
+    color: var(--white);
+    transition: transform 300ms ease-out, opacity 300ms ease-out;
+  }
+  .hamburger .icon-menu { opacity: 1; transform: rotate(0deg); }
+  .hamburger .icon-close { opacity: 0; transform: rotate(90deg); }
+  .hamburger[aria-expanded="true"] .icon-menu { opacity: 0; transform: rotate(90deg); }
+  .hamburger[aria-expanded="true"] .icon-close { opacity: 1; transform: rotate(0deg); }
+
+  /* ---------- Mobile menu overlay ---------- */
+  .mobile-menu {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.8);
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 500ms ease-out;
+  }
+  @media (min-width: 768px) {
+    .mobile-menu { display: none; }
+  }
+  .mobile-menu.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .mobile-menu-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .mobile-links {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .mobile-link {
+    padding: 16px;
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--white);
+    opacity: 0;
+    transform: translateY(32px);
+    transition: opacity 500ms ease-out, transform 500ms ease-out;
+  }
+  .mobile-menu.is-open .mobile-link {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .mobile-cta {
+    margin-top: 16px;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    padding: 12px 32px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--white);
+    opacity: 0;
+    transform: translateY(32px);
+    transition: opacity 500ms ease-out, transform 500ms ease-out, background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .mobile-menu.is-open .mobile-cta {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .mobile-cta:hover { background: rgba(255, 255, 255, 0.2); }
+
+  /* ---------- Main hero copy ---------- */
+  .hero-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .hero-copy {
+    max-width: 36rem;
+  }
+  .hero-title {
+    margin: 0;
+    font-size: 1.875rem;
+    line-height: 1.15;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    color: var(--white);
+  }
+  @media (min-width: 640px) { .hero-title { font-size: 2.25rem; } }
+  @media (min-width: 768px) { .hero-title { font-size: 3rem; } }
+  @media (min-width: 1024px) { .hero-title { font-size: 3.4rem; } }
+
+  .hero-subcopy {
+    max-width: 28rem;
+    margin-top: 16px;
+    font-size: 14px;
+    line-height: 1.625;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  @media (min-width: 640px) {
+    .hero-subcopy { margin-top: 20px; font-size: 15px; }
+  }
+  .hero-subcopy strong {
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .hero-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 24px;
+    border-radius: 9999px;
+    background: var(--white);
+    padding: 14px 56px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @media (min-width: 640px) { .hero-cta { margin-top: 32px; } }
+  .hero-cta:hover {
+    transform: scale(1.03);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  }
+  .hero-cta:active { transform: scale(0.98); }
+
+  .feature-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 24px;
+  }
+  @media (min-width: 640px) { .feature-list { margin-top: 32px; } }
+  .feature-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .feature-item .icon {
+    flex-shrink: 0;
+    height: 14px;
+    width: 14px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+  .feature-item span {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  @media (min-width: 640px) { .feature-item span { font-size: 13px; } }
+
+  /* ---------- Bottom bar ---------- */
+  .bottom-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-bottom: 24px;
+  }
+  @media (min-width: 640px) {
+    .bottom-bar { flex-direction: row; align-items: flex-end; justify-content: space-between; }
+  }
+  @media (min-width: 768px) {
+    .bottom-bar { padding-bottom: 32px; }
+  }
+  .proof-label {
+    margin: 0 0 8px;
+    font-size: 11px;
+    letter-spacing: 0.025em;
+    color: rgba(255, 255, 255, 0.4);
+  }
+  @media (min-width: 640px) { .proof-label { font-size: 12px; } }
+  .proof-logos {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+  @media (min-width: 640px) { .proof-logos { gap: 32px; } }
+
+  .scroll-hint {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.6);
+    transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @media (min-width: 640px) { .scroll-hint { display: flex; } }
+  .scroll-hint:hover { color: var(--white); }
+  .scroll-hint .arrow { display: inline-block; transform: translateY(1px); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+    .hero-cta:hover { transform: none; }
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+</style>
+</head>
+<body>
+<section class="hero">
+  <video class="hero-video" autoplay loop muted playsinline poster="assets/hero-poster.jpg">
+    <source src="assets/hero-video.mp4" type="video/mp4">
+  </video>
+  <div class="hero-overlay">
+    <div class="hero-container">
+      <nav class="navbar" aria-label="Primary">
+        <a href="#top" class="navbar-logo">RunPulse</a>
+        <ul class="nav-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="#download">Download</a></li>
+        </ul>
+        <a href="#" class="nav-cta">Link PaceLine / VitalSync</a>
+        <button
+          type="button"
+          class="hamburger"
+          id="menuToggle"
+          aria-expanded="false"
+          aria-controls="mobileMenu"
+          aria-label="Open menu"
+        >
+          <svg class="icon icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line></svg>
+          <svg class="icon icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </nav>
+    </div>
+
+    <div class="mobile-menu" id="mobileMenu" role="dialog" aria-modal="true" aria-label="Mobile navigation" inert>
+      <div class="mobile-menu-inner" id="mobileMenuInner">
+        <nav class="mobile-links" aria-label="Mobile">
+          <a href="#features" class="mobile-link" data-index="0">Features</a>
+          <a href="#pricing" class="mobile-link" data-index="1">Pricing</a>
+          <a href="#faq" class="mobile-link" data-index="2">FAQ</a>
+          <a href="#download" class="mobile-link" data-index="3">Download</a>
+        </nav>
+        <a href="#" class="mobile-cta" data-index="4">Link PaceLine / VitalSync</a>
+      </div>
+    </div>
+
+    <main class="hero-main hero-container" id="top">
+      <div class="hero-copy">
+        <h1 class="hero-title">Watch Your Runs Get<br>Stronger, Day by Day</h1>
+        <p class="hero-subcopy">RunPulse logs speed, mileage, HR bands, and <strong>habits</strong>&mdash;then shapes them into sharp, inspiring charts you'll genuinely love to check out.</p>
+        <a href="#" class="hero-cta">Try It Free</a>
+        <ul class="feature-list">
+          <li class="feature-item">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Heart rate zones (Z1&ndash;Z5 splits)</span>
+          </li>
+          <li class="feature-item">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Exportable charts for coaches</span>
+          </li>
+          <li class="feature-item">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Syncs with VitalSync &amp; PaceLine</span>
+          </li>
+        </ul>
+      </div>
+    </main>
+
+    <div class="bottom-bar hero-container">
+      <div>
+        <p class="proof-label">Loved by 12,000+ athletes</p>
+        <div class="proof-logos" aria-label="Trusted by athletes using">
+          <span style="font-family: var(--font-serif); font-size: 1.1rem; font-weight: 700; font-style: italic; letter-spacing: 0.02em;">Solene</span>
+          <span style="font-family: var(--font-sans); font-size: 0.95rem; font-weight: 700; letter-spacing: 0.15em;">PACELINE</span>
+          <span style="font-family: var(--font-sans); font-size: 1rem; font-weight: 700; letter-spacing: 0.08em;">VERTEX.</span>
+          <span style="font-family: var(--font-sans); font-size: 0.9rem; font-weight: 500; letter-spacing: 0.1em;">Meridian</span>
+          <span style="font-family: var(--font-sans); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.12em;">ORBYTE</span>
+        </div>
+      </div>
+      <a href="#milestone" class="scroll-hint">Find your next personal best <span class="arrow" aria-hidden="true">&darr;</span></a>
+    </div>
+  </div>
+</section>
+<script>
+(function () {
+  'use strict';
+
+  var toggle = document.getElementById('menuToggle');
+  var menu = document.getElementById('mobileMenu');
+  var links = Array.prototype.slice.call(menu.querySelectorAll('.mobile-link, .mobile-cta'));
+  var isOpen = false;
+
+  var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  function setDelays(opening) {
+    links.forEach(function (el) {
+      if (reducedMotion.matches) {
+        el.style.transitionDelay = '0ms';
+        return;
+      }
+      var i = Number(el.getAttribute('data-index'));
+      el.style.transitionDelay = opening ? (i * 80 + 100) + 'ms' : '0ms';
+    });
+  }
+
+  function openMenu() {
+    isOpen = true;
+    setDelays(true);
+    menu.removeAttribute('inert');
+    menu.classList.add('is-open');
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.setAttribute('aria-label', 'Close menu');
+    document.body.style.overflow = 'hidden';
+    var first = links[0];
+    if (first) first.focus();
+  }
+
+  function closeMenu(returnFocus) {
+    isOpen = false;
+    setDelays(false);
+    menu.classList.remove('is-open');
+    menu.setAttribute('inert', '');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', 'Open menu');
+    document.body.style.overflow = '';
+    if (returnFocus) toggle.focus();
+  }
+
+  toggle.addEventListener('click', function () {
+    if (isOpen) {
+      closeMenu(true);
+    } else {
+      openMenu();
+    }
+  });
+
+  menu.addEventListener('click', function (event) {
+    if (event.target === menu) closeMenu(true);
+  });
+
+  document.getElementById('mobileMenuInner').addEventListener('click', function (event) {
+    event.stopPropagation();
+  });
+
+  links.forEach(function (link) {
+    link.addEventListener('click', function () {
+      closeMenu(false);
+    });
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && isOpen) closeMenu(true);
+  });
+
+  window.addEventListener('resize', function () {
+    if (isOpen && window.innerWidth >= 768) closeMenu(false);
+  });
+
+  var video = document.querySelector('.hero-video');
+  function applyMotionPreference() {
+    if (!video) return;
+    if (reducedMotion.matches) {
+      video.setAttribute('autoplay', 'false');
+      video.removeAttribute('autoplay');
+      video.pause();
+      video.currentTime = 0;
+    } else {
+      video.setAttribute('autoplay', '');
+      video.play().catch(function () {});
+    }
+  }
+  applyMotionPreference();
+  if (typeof reducedMotion.addEventListener === 'function') {
+    reducedMotion.addEventListener('change', applyMotionPreference);
+  }
+
+  video.addEventListener('error', function () {
+    video.style.display = 'none';
+  });
+})();
+</script>
+</body>
+</html>
