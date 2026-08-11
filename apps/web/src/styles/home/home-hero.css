@@ -2,6 +2,8 @@
    Home view — vertical stack inside the entry main scroll
    ============================================================ */
 .home-view {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   gap: 36px;
@@ -2944,7 +2946,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 74px;
+  height: 90px;
   color: var(--accent);
   background: radial-gradient(
     120% 120% at 30% 20%,
@@ -2952,6 +2954,11 @@
     var(--bg-subtle)
   );
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.home-hero__scenario-art {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 /* Illustrative intent thumbnail (ScenarioArt). A small hover lift on the art
    keeps the card feeling responsive now that the hint no longer animates. */
