@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>What Builders Say — Feedback Slider</title>
+<meta name="description" content="Testimonial slider section: five builder quotes in an auto-advancing, tripled-loop carousel with prev/next controls." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ---------------------------------------------------------------------
+     Tokens
+     PP Neue Montreal -> Inter (nearest Google equivalent, not on Google Fonts)
+     PP Mondwest       -> Fraunces (nearest Google equivalent, not on Google Fonts)
+     --accent is a recolor-compatible chromatic token used ONLY for the
+     keyboard focus ring; the resting-state design is intentionally
+     monochrome (white / #0D212C / #273C46) and fidelity to that palette
+     wins over injecting a visible accent per the build brief.
+     --------------------------------------------------------------------- */
+  :root {
+    --bg: #ffffff;
+    --text-dark: #0d212c;
+    --text-muted: #273c46;
+    --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    --nav-border: rgba(13, 33, 44, 0.2);
+    --nav-hover: rgba(13, 33, 44, 0.05);
+    --ease-carousel: cubic-bezier(0.4, 0, 0.2, 1);
+    --accent: #2f6fed;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-serif-accent: 'Fraunces', serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background: var(--bg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    color: var(--text-dark);
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .page-shell {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+  }
+
+  .page-shell > .wb-section {
+    width: 100%;
+  }
+
+  /* ---- Section / layout scaffolding ---- */
+  .wb-section {
+    width: 100%;
+    padding: 80px 0;
+    background: var(--bg);
+  }
+
+  .wb-container {
+    max-width: 80rem; /* max-w-7xl */
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  .wb-inner {
+    width: 100%;
+  }
+  @media (min-width: 768px) {
+    .wb-inner {
+      padding-right: 24px;
+    }
+  }
+
+  /* ---- Header row ---- */
+  .wb-header {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    margin-bottom: 64px;
+  }
+  @media (min-width: 768px) {
+    .wb-header {
+      flex-direction: row;
+      align-items: flex-start;
+      justify-content: space-between;
+      max-width: 56rem; /* max-w-4xl */
+      margin-left: auto;
+      gap: 0;
+    }
+  }
+
+  .wb-header-left {
+    flex: 1;
+  }
+
+  .wb-heading {
+    margin: 0;
+    font-weight: 400;
+    font-size: 32px;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--text-dark);
+  }
+  @media (min-width: 768px) {
+    .wb-heading { font-size: 40px; }
+  }
+  @media (min-width: 1024px) {
+    .wb-heading { font-size: 44px; }
+  }
+
+  .wb-heading-accent {
+    font-family: var(--font-serif-accent);
+    font-style: normal;
+  }
+
+  .wb-header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  @media (min-width: 768px) {
+    .wb-header-right { align-items: flex-end; }
+  }
+
+  .wb-stars {
+    display: flex;
+    gap: 0;
+  }
+  .wb-stars svg {
+    width: 20px;
+    height: 20px;
+    fill: #000;
+    color: #000;
+  }
+
+  .wb-rating {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .wb-rating-brand {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-dark);
+  }
+  .wb-rating-score {
+    font-size: 16px;
+    color: var(--text-muted);
+  }
+
+  /* ---- Carousel ---- */
+  .wb-carousel {
+    position: relative;
+    overflow: hidden;
+    padding: 24px 0;
+    margin: 0 -24px;
+  }
+  @media (min-width: 768px) {
+    .wb-carousel {
+      max-width: 56rem;
+      margin: 0;
+      margin-left: auto;
+      padding-left: 24px;
+    }
+  }
+
+  .wb-track {
+    display: flex;
+    gap: 24px;
+    padding-left: 24px;
+    will-change: transform;
+  }
+  @media (min-width: 768px) {
+    .wb-track { padding-left: 0; }
+  }
+
+  .wb-card {
+    background: #ffffff;
+    border-radius: 32px;
+    padding: 32px 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    flex-shrink: 0;
+    box-shadow: var(--card-shadow);
+  }
+  @media (min-width: 768px) {
+    .wb-card {
+      border-radius: 40px;
+      padding-top: 2.36rem;
+      padding-bottom: 2.63rem;
+      padding-left: 40px;
+      padding-right: 96px;
+    }
+  }
+
+  .wb-quote-icon {
+    width: 32px;
+    height: 32px;
+    color: var(--text-dark);
+    margin-bottom: 24px;
+    display: block;
+  }
+
+  .wb-quote {
+    margin: 0 0 32px;
+    font-size: 16px;
+    line-height: 1.625;
+    color: var(--text-dark);
+  }
+
+  .wb-author {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .wb-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .wb-author-info {
+    min-width: 0;
+  }
+
+  .wb-author-name {
+    display: block;
+    font-style: normal;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-dark);
+  }
+
+  .wb-author-role {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 14px;
+    color: var(--text-muted);
+  }
+
+  .wb-author-role-glyph {
+    font-size: 12px;
+  }
+
+  /* ---- Nav buttons ---- */
+  .wb-nav {
+    display: flex;
+    gap: 16px;
+    margin-top: 32px;
+  }
+  @media (min-width: 768px) {
+    .wb-nav {
+      max-width: 56rem;
+      margin-left: auto;
+      padding-left: 24px;
+    }
+  }
+
+  .wb-nav-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1px solid var(--nav-border);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background-color 0.2s ease-out;
+  }
+  .wb-nav-btn:hover {
+    background-color: var(--nav-hover);
+  }
+  .wb-nav-btn svg {
+    width: 20px;
+    height: 20px;
+    color: var(--text-dark);
+  }
+  .wb-nav-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* ---- Scroll-triggered fade-in ---- */
+  @keyframes fadeInUp {
+    0% { opacity: 0; transform: translateY(30px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .wb-fade {
+    opacity: 0;
+  }
+  .wb-fade.is-in-view {
+    animation: fadeInUp 0.8s ease-out forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wb-fade {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    .wb-track {
+      transition: none !important;
+    }
+    .wb-card {
+      transition: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+<main class="page-shell">
+<section class="wb-section" aria-labelledby="wb-heading">
+  <div class="wb-container">
+    <div class="wb-inner">
+
+      <div class="wb-header">
+        <div class="wb-header-left wb-fade" id="wbHeaderLeft" style="animation-delay: 0s;">
+          <h2 id="wb-heading" class="wb-heading">What <span class="wb-heading-accent">builders</span> say</h2>
+        </div>
+        <div class="wb-header-right wb-fade" id="wbHeaderRight" style="animation-delay: 0s;">
+          <div class="wb-stars" role="img" aria-label="5 out of 5 stars">
+            <svg viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>
+            <svg viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>
+            <svg viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>
+            <svg viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>
+            <svg viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>
+          </div>
+          <div class="wb-rating">
+            <span class="wb-rating-brand">Clutch</span>
+            <span class="wb-rating-score">5/5</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="wb-carousel wb-fade" id="wbCarousel" style="animation-delay: 0s;">
+        <div class="wb-track" id="wbTrack">
+
+          <!-- copy 1 of 3 -->
+          <article class="wb-card" data-index="0" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>With very little guidance team delivered designs that were consistently spot on. We've received so much positive feedback about the design, our community loves it.</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-marcus-anderson.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">Marcus Anderson</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> CEO, Data.storage</p>
+              </div>
+            </footer>
+          </article>
+
+          <article class="wb-card" data-index="1" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>Viktor led the creation of our best fundraising deck to date! Knows how to merge sophisticated UX with simple cryptonative design</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-alexwu.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">alexwu</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> Founder, Nexgate</p>
+              </div>
+            </footer>
+          </article>
+
+          <article class="wb-card" data-index="2" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>Working with Viktor transformed our product vision into something truly exceptional. The attention to detail and strategic thinking was outstanding.</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-james-mitchell.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">James Mitchell</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> VP Product, LaunchPad</p>
+              </div>
+            </footer>
+          </article>
+
+          <article class="wb-card" data-index="3" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>The design quality exceeded our expectations. Viktor brought a level of polish and professionalism that elevated our entire brand.</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-rachel-foster.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">Rachel Foster</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> Co-founder, Nexus Labs</p>
+              </div>
+            </footer>
+          </article>
+
+          <article class="wb-card" data-index="4" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>Incredible work from start to finish. The team's ability to understand our vision and execute flawlessly was remarkable.</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-david-zhang.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">David Zhang</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> Head of Design, Paradigm Labs</p>
+              </div>
+            </footer>
+          </article>
+
+          <!-- copy 2 of 3 -->
+          <article class="wb-card" data-index="5" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>With very little guidance team delivered designs that were consistently spot on. We've received so much positive feedback about the design, our community loves it.</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-marcus-anderson.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">Marcus Anderson</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> CEO, Data.storage</p>
+              </div>
+            </footer>
+          </article>
+
+          <article class="wb-card" data-index="6" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>Viktor led the creation of our best fundraising deck to date! Knows how to merge sophisticated UX with simple cryptonative design</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-alexwu.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">alexwu</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> Founder, Nexgate</p>
+              </div>
+            </footer>
+          </article>
+
+          <article class="wb-card" data-index="7" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>Working with Viktor transformed our product vision into something truly exceptional. The attention to detail and strategic thinking was outstanding.</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-james-mitchell.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">James Mitchell</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> VP Product, LaunchPad</p>
+              </div>
+            </footer>
+          </article>
+
+          <article class="wb-card" data-index="8" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>The design quality exceeded our expectations. Viktor brought a level of polish and professionalism that elevated our entire brand.</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-rachel-foster.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">Rachel Foster</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> Co-founder, Nexus Labs</p>
+              </div>
+            </footer>
+          </article>
+
+          <article class="wb-card" data-index="9" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>Incredible work from start to finish. The team's ability to understand our vision and execute flawlessly was remarkable.</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-david-zhang.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">David Zhang</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> Head of Design, Paradigm Labs</p>
+              </div>
+            </footer>
+          </article>
+
+          <!-- copy 3 of 3 -->
+          <article class="wb-card" data-index="10" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>With very little guidance team delivered designs that were consistently spot on. We've received so much positive feedback about the design, our community loves it.</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-marcus-anderson.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">Marcus Anderson</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> CEO, Data.storage</p>
+              </div>
+            </footer>
+          </article>
+
+          <article class="wb-card" data-index="11" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>Viktor led the creation of our best fundraising deck to date! Knows how to merge sophisticated UX with simple cryptonative design</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-alexwu.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">alexwu</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> Founder, Nexgate</p>
+              </div>
+            </footer>
+          </article>
+
+          <article class="wb-card" data-index="12" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>Working with Viktor transformed our product vision into something truly exceptional. The attention to detail and strategic thinking was outstanding.</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-james-mitchell.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">James Mitchell</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> VP Product, LaunchPad</p>
+              </div>
+            </footer>
+          </article>
+
+          <article class="wb-card" data-index="13" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>The design quality exceeded our expectations. Viktor brought a level of polish and professionalism that elevated our entire brand.</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-rachel-foster.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">Rachel Foster</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> Co-founder, Nexus Labs</p>
+              </div>
+            </footer>
+          </article>
+
+          <article class="wb-card" data-index="14" style="width: 427.5px;">
+            <svg class="wb-quote-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+            <blockquote class="wb-quote"><p>Incredible work from start to finish. The team's ability to understand our vision and execute flawlessly was remarkable.</p></blockquote>
+            <footer class="wb-author">
+              <img class="wb-avatar" src="assets/avatar-david-zhang.jpg" alt="" loading="lazy" width="48" height="48" />
+              <div class="wb-author-info">
+                <cite class="wb-author-name">David Zhang</cite>
+                <p class="wb-author-role"><span class="wb-author-role-glyph" aria-hidden="true">↳</span> Head of Design, Paradigm Labs</p>
+              </div>
+            </footer>
+          </article>
+
+        </div>
+      </div>
+
+      <div class="wb-nav wb-fade" id="wbNav" style="animation-delay: 0s;">
+        <button type="button" class="wb-nav-btn" id="wbPrev" aria-label="Previous testimonial">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <button type="button" class="wb-nav-btn" id="wbNext" aria-label="Next testimonial">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        <p class="sr-only" id="wbLiveRegion" aria-live="polite"></p>
+      </div>
+
+    </div>
+  </div>
+</section>
+</main>
+<script>
+(function () {
+  'use strict';
+
+  var TESTIMONIAL_NAMES = [
+    'Marcus Anderson',
+    'alexwu',
+    'James Mitchell',
+    'Rachel Foster',
+    'David Zhang'
+  ];
+  var COUNT = TESTIMONIAL_NAMES.length; // 5 — tripled in markup to 15 cards
+  var AUTOPLAY_MS = 3000;
+  var GAP = 24;
+
+  var track = document.getElementById('wbTrack');
+  var carousel = document.getElementById('wbCarousel');
+  var navRow = document.getElementById('wbNav');
+  var prevBtn = document.getElementById('wbPrev');
+  var nextBtn = document.getElementById('wbNext');
+  var liveRegion = document.getElementById('wbLiveRegion');
+  var cards = Array.prototype.slice.call(track.querySelectorAll('.wb-card'));
+
+  var reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var reduceMotion = reduceMotionQuery.matches;
+
+  var offset = 0;
+  var cardWidth = 0;
+  var cardWithGap = 0;
+  var totalWidth = 0;
+  var hovered = false;
+  var focused = false;
+  var intervalId = null;
+
+  function computeSizes() {
+    var isMobile = window.innerWidth < 768;
+    cardWidth = isMobile ? window.innerWidth - 48 : 427.5;
+    cardWithGap = cardWidth + GAP;
+    totalWidth = cardWithGap * COUNT;
+  }
+
+  function applyCardWidths() {
+    for (var i = 0; i < cards.length; i += 1) {
+      cards[i].style.width = cardWidth + 'px';
+    }
+  }
+
+  function render() {
+    var trackTransition = reduceMotion ? 'none' : 'transform 0.8s cubic-bezier(0.4, 0, 0.2, 1)';
+    track.style.transition = trackTransition;
+    track.style.transform = 'translateX(-' + offset + 'px)';
+
+    var cardTransition = reduceMotion ? 'none' : 'opacity 0.4s ease-out, transform 0.4s ease-out';
+    var distanceFromEdge = offset % totalWidth;
+
+    for (var i = 0; i < cards.length; i += 1) {
+      var cardPosition = i * cardWithGap;
+      var relativePosition = cardPosition - distanceFromEdge;
+      var opacity = 1;
+      var scale = 1;
+
+      if (relativePosition < -cardWidth / 2) {
+        var exitProgress = Math.min(1, Math.abs(relativePosition) / cardWidth);
+        opacity = Math.max(0, 1 - exitProgress * 2);
+        scale = Math.max(0.85, 1 - exitProgress * 0.15);
+      }
+
+      cards[i].style.transition = cardTransition;
+      cards[i].style.opacity = String(opacity);
+      cards[i].style.transform = 'scale(' + scale + ')';
+    }
+  }
+
+  function announceCurrent() {
+    if (!liveRegion) return;
+    var index = Math.round(offset / cardWithGap) % COUNT;
+    index = ((index % COUNT) + COUNT) % COUNT;
+    liveRegion.textContent = 'Showing testimonial from ' + TESTIMONIAL_NAMES[index] + '.';
+  }
+
+  function goTo(direction) {
+    offset += direction * cardWithGap;
+    if (offset >= totalWidth) {
+      offset = 0;
+    } else if (offset < 0) {
+      offset = totalWidth - cardWithGap;
+    }
+    render();
+    announceCurrent();
+  }
+
+  function shouldRun() {
+    return !reduceMotion && !hovered && !focused;
+  }
+
+  function stopAutoplay() {
+    if (intervalId !== null) {
+      window.clearInterval(intervalId);
+      intervalId = null;
+    }
+  }
+
+  function startAutoplay() {
+    stopAutoplay();
+    if (!shouldRun()) return;
+    intervalId = window.setInterval(function () {
+      goTo(1);
+    }, AUTOPLAY_MS);
+  }
+
+  function refreshAutoplay() {
+    if (shouldRun()) {
+      startAutoplay();
+    } else {
+      stopAutoplay();
+    }
+  }
+
+  // ---- Pointer + focus pause (SPEC-BATCH2 §4: stop on hover, stop on focus) ----
+  carousel.addEventListener('mouseenter', function () {
+    hovered = true;
+    refreshAutoplay();
+  });
+  carousel.addEventListener('mouseleave', function () {
+    hovered = false;
+    refreshAutoplay();
+  });
+
+  function onFocusIn() {
+    focused = true;
+    refreshAutoplay();
+  }
+  function onFocusOut(event) {
+    var next = event.relatedTarget;
+    if (next && (carousel.contains(next) || navRow.contains(next))) return;
+    focused = false;
+    refreshAutoplay();
+  }
+  carousel.addEventListener('focusin', onFocusIn);
+  carousel.addEventListener('focusout', onFocusOut);
+  navRow.addEventListener('focusin', onFocusIn);
+  navRow.addEventListener('focusout', onFocusOut);
+
+  // ---- Prev / next controls ----
+  prevBtn.addEventListener('click', function () {
+    goTo(-1);
+  });
+  nextBtn.addEventListener('click', function () {
+    goTo(1);
+  });
+
+  // ---- Resize: recompute card width (mobile vs desktop) ----
+  var resizeRaf = null;
+  window.addEventListener('resize', function () {
+    if (resizeRaf !== null) return;
+    resizeRaf = window.requestAnimationFrame(function () {
+      resizeRaf = null;
+      computeSizes();
+      applyCardWidths();
+      render();
+    });
+  });
+
+  // ---- prefers-reduced-motion can change at runtime ----
+  function onReduceMotionChange(event) {
+    reduceMotion = event.matches;
+    render();
+    refreshAutoplay();
+  }
+  if (typeof reduceMotionQuery.addEventListener === 'function') {
+    reduceMotionQuery.addEventListener('change', onReduceMotionChange);
+  } else if (typeof reduceMotionQuery.addListener === 'function') {
+    reduceMotionQuery.addListener(onReduceMotionChange);
+  }
+
+  // ---- Scroll-triggered fade-in-up (IntersectionObserver, threshold 0.1, fires once) ----
+  var fadeTargets = [
+    { el: document.getElementById('wbHeaderLeft'), delay: '0.1s' },
+    { el: document.getElementById('wbHeaderRight'), delay: '0.2s' },
+    { el: carousel, delay: '0.3s' },
+    { el: navRow, delay: '0.4s' }
+  ];
+
+  if ('IntersectionObserver' in window) {
+    var observer = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          var target = fadeTargets.filter(function (t) { return t.el === entry.target; })[0];
+          if (!target) return;
+          target.el.style.animationDelay = target.delay;
+          target.el.classList.add('is-in-view');
+          observer.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.1 }
+    );
+    fadeTargets.forEach(function (t) {
+      if (t.el) observer.observe(t.el);
+    });
+  } else {
+    fadeTargets.forEach(function (t) {
+      if (t.el) t.el.classList.add('is-in-view');
+    });
+  }
+
+  // ---- Init ----
+  computeSizes();
+  applyCardWidths();
+  render();
+  refreshAutoplay();
+})();
+</script>
+</body>
+</html>

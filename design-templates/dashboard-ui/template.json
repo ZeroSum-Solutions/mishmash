@@ -1,0 +1,12 @@
+{
+  "slug": "dashboard-ui",
+  "name": "Dashboard UI — Conference Dashboard",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=dashboard",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

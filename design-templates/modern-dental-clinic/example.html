@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Halcyon Dental Studio — Restore Your True Smile</title>
+<meta name="description" content="Halcyon Dental Studio is a fictional modern dental practice. Full-screen video hero landing page with a calm blue palette and comprehensive, comfort-first dental care copy." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%235f9ad1'/%3E%3Cpath d='M32 14c-7 0-12 5-12 12 0 5 2 8 3 13l3 15c.3 1.6 1.7 3 3.3 3h5.4c1.6 0 3-1.4 3.3-3l3-15c1-5 3-8 3-13 0-7-5-12-12-12z' fill='white'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --accent: #5f9ad1;
+    --accent-deep: #3d8cd5;
+    --accent-lime: #ebfa73;
+    --ink: #ffffff;
+    --ink-dim: rgba(255, 255, 255, 0.6);
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-menu: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow-x: hidden; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--accent);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, p { margin: 0; }
+  img { max-width: 100%; display: block; }
+  a { color: inherit; }
+  button { font: inherit; }
+
+  .skip-link {
+    position: absolute;
+    left: -999px;
+    top: 0;
+    z-index: 100;
+    background: #fff;
+    color: #051a24;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0 0 0.5rem 0;
+  }
+  .skip-link:focus { left: 0; }
+
+  /* ---------- Hero shell ---------- */
+  .hero {
+    position: relative;
+    min-height: 100svh;
+    width: 100%;
+    overflow: hidden;
+    background: var(--accent);
+  }
+
+  .hero-media { position: absolute; inset: 0; z-index: 0; }
+  .hero-video,
+  .hero-poster-fallback {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+  .hero-video { animation: fadeIn 1.2s var(--ease-out) 0.2s both; }
+  .hero-poster-fallback { display: none; }
+
+  .hero-blend {
+    display: none;
+    position: absolute;
+    top: 30%;
+    left: 0;
+    right: 0;
+    height: 128px;
+    z-index: 1;
+    background: linear-gradient(to bottom, var(--accent), transparent);
+    pointer-events: none;
+  }
+
+  @media (max-width: 767px) {
+    .hero-media { inset: auto; top: 30%; left: 0; right: 0; height: 70%; }
+    .hero-video, .hero-poster-fallback { object-position: 80% center; }
+    .hero-blend { display: block; }
+  }
+
+  /* ---------- Nav ---------- */
+  .hero-nav {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem 1.5rem 0;
+    animation: slideDown 0.7s var(--ease-out) 0.1s both;
+  }
+  @media (min-width: 768px) { .hero-nav { padding: 2rem 2rem 0; } }
+  @media (min-width: 1024px) { .hero-nav { padding: 3rem 4rem 0; } }
+
+  .brand { display: inline-flex; align-items: center; gap: 0.6rem; text-decoration: none; color: var(--ink); }
+  .brand-mark { width: 28px; height: 32px; flex-shrink: 0; }
+  @media (min-width: 768px) { .brand-mark { width: 32px; height: 36px; } }
+  .brand-name { font-size: 1.25rem; font-weight: 500; letter-spacing: -0.025em; }
+  @media (min-width: 768px) { .brand-name { font-size: 1.5rem; } }
+  @media (min-width: 1024px) { .brand-name { font-size: 1.75rem; } }
+
+  .nav-links {
+    display: none;
+    align-items: center;
+    gap: 2rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  @media (min-width: 768px) { .nav-links { display: flex; } }
+  @media (min-width: 1024px) { .nav-links { gap: 3rem; } }
+  .nav-links a {
+    text-decoration: none;
+    font-size: 1.125rem;
+    color: var(--ink-dim);
+    transition: color 0.2s var(--ease-out);
+  }
+  .nav-links a:hover, .nav-links a:focus-visible { color: var(--ink); }
+  .nav-links a.is-current { color: var(--ink); font-weight: 500; }
+
+  .nav-cta {
+    display: none;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--ink);
+    color: #000;
+    border: none;
+    border-radius: 999px;
+    padding: 0.75rem 1.25rem;
+    font-size: 1.125rem;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  @media (min-width: 768px) { .nav-cta { display: inline-flex; } }
+  .nav-cta-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    background: var(--accent-lime);
+    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s var(--ease-out);
+  }
+  .nav-cta:hover .nav-cta-icon, .nav-cta:focus-visible .nav-cta-icon { transform: scale(1.1); }
+
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--ink);
+    padding: 0.5rem;
+    cursor: pointer;
+  }
+  @media (min-width: 768px) { .nav-toggle { display: none; } }
+  .nav-toggle-icon { position: relative; width: 24px; height: 24px; }
+  .nav-toggle-icon svg {
+    position: absolute;
+    inset: 0;
+    transition: opacity 0.3s var(--ease-out), transform 0.3s var(--ease-out);
+  }
+  .icon-menu { opacity: 1; transform: rotate(0deg) scale(1); }
+  .icon-close { opacity: 0; transform: rotate(90deg) scale(0.5); }
+  .nav-toggle[aria-expanded="true"] .icon-menu { opacity: 0; transform: rotate(-90deg) scale(0.5); }
+  .nav-toggle[aria-expanded="true"] .icon-close { opacity: 1; transform: rotate(0deg) scale(1); }
+
+  /* ---------- Mobile menu overlay ---------- */
+  .mobile-menu {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    background: rgba(95, 154, 209, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.5s var(--ease-menu), visibility 0.5s var(--ease-menu);
+  }
+  .mobile-menu.is-open { opacity: 1; visibility: visible; pointer-events: auto; }
+  .mobile-menu-close {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    background: none;
+    border: none;
+    color: var(--ink);
+    padding: 0.5rem;
+    cursor: pointer;
+  }
+  .mobile-menu-links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+  }
+  .mobile-menu-links a {
+    font-size: 1.875rem;
+    font-weight: 300;
+    text-decoration: none;
+    color: var(--ink);
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.5s var(--ease-menu), transform 0.5s var(--ease-menu);
+  }
+  .mobile-menu.is-open .mobile-menu-links a { opacity: 1; transform: translateY(0); }
+  .mobile-menu-links li:nth-child(1) a { transition-delay: 0.16s; }
+  .mobile-menu-links li:nth-child(2) a { transition-delay: 0.22s; }
+  .mobile-menu-links li:nth-child(3) a { transition-delay: 0.28s; }
+  .mobile-menu-links li:nth-child(4) a { transition-delay: 0.34s; }
+  .mobile-menu-links li:nth-child(5) a { transition-delay: 0.4s; }
+
+  .mobile-menu-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--ink);
+    color: #000;
+    border-radius: 999px;
+    padding: 0.75rem 1.25rem;
+    font-size: 1.125rem;
+    font-weight: 500;
+    text-decoration: none;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.5s var(--ease-menu), transform 0.5s var(--ease-menu);
+  }
+  .mobile-menu.is-open .mobile-menu-cta { opacity: 1; transform: translateY(0); transition-delay: 0.4s; }
+
+  /* ---------- Heading ---------- */
+  .hero-heading-wrap {
+    position: relative;
+    z-index: 2;
+    max-width: 48rem;
+    margin: 2rem auto 0;
+    padding: 0 1.5rem;
+    text-align: center;
+    animation: blurIn 0.9s var(--ease-out) 0.3s both;
+  }
+  @media (min-width: 768px) {
+    .hero-heading-wrap { margin: 1.5rem 0 0; padding: 0 2rem; text-align: left; }
+  }
+  @media (min-width: 1024px) {
+    .hero-heading-wrap { margin-top: 2.5rem; padding: 0 4rem; }
+  }
+
+  .hero-title {
+    font-weight: 400;
+    letter-spacing: -0.025em;
+    line-height: 0.9;
+    font-size: 72px;
+  }
+  @media (min-width: 640px) { .hero-title { font-size: 60px; } }
+  @media (min-width: 768px) { .hero-title { line-height: 0.85; } }
+  @media (min-width: 1024px) { .hero-title { font-size: 90px; } }
+  @media (min-width: 1280px) { .hero-title { font-size: 100px; } }
+
+  .smile-row { display: inline-flex; align-items: flex-end; gap: 1rem; }
+  @media (min-width: 1024px) { .smile-row { gap: 1.5rem; } }
+
+  .avatar-group { display: none; align-items: center; margin-bottom: 0.1em; }
+  @media (min-width: 768px) { .avatar-group { display: inline-flex; } }
+  .avatar-group img {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    object-fit: cover;
+    margin-left: -0.5rem;
+  }
+  .avatar-group img:first-child { margin-left: 0; }
+  @media (min-width: 1024px) { .avatar-group img { width: 3.5rem; height: 3.5rem; } }
+  .avatar-more {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    background: #fff;
+    color: var(--accent-deep);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-left: -0.5rem;
+  }
+  @media (min-width: 1024px) { .avatar-more { width: 3.5rem; height: 3.5rem; font-size: 1rem; } }
+
+  .hero-subtext {
+    display: none;
+  }
+  @media (min-width: 768px) {
+    .hero-subtext {
+      display: block;
+      max-width: 28rem;
+      margin-top: 1.25rem;
+      font-size: 1.125rem;
+      line-height: 1.25;
+      color: var(--ink-dim);
+    }
+  }
+  @media (min-width: 1024px) { .hero-subtext { margin-top: 1.5rem; } }
+  .hero-subtext strong { color: var(--ink); font-weight: 400; }
+
+  /* ---------- Bottom-left stat + figure ---------- */
+  .hero-figure-wrap {
+    display: none;
+  }
+  @media (min-width: 768px) {
+    .hero-figure-wrap {
+      display: block;
+      position: absolute;
+      left: 1rem;
+      bottom: 0;
+      z-index: 2;
+      animation: slideUp 0.9s var(--ease-out) 0.8s both;
+    }
+  }
+  @media (min-width: 1024px) { .hero-figure-wrap { left: 3rem; } }
+
+  .hero-figure-stat {
+    position: absolute;
+    top: 2rem;
+    left: 0.75rem;
+    z-index: 3;
+    text-align: center;
+    width: 6rem;
+    background: #fff;
+    border-radius: 1.25rem 1.25rem 1.25rem 0.35rem;
+    padding: 0.65rem 0.5rem 0.75rem;
+    box-shadow: 0 10px 24px rgba(5, 26, 36, 0.18);
+  }
+  @media (min-width: 1024px) { .hero-figure-stat { top: 3rem; left: 1rem; width: 8rem; padding: 0.85rem 0.65rem 1rem; } }
+  .stat-num {
+    display: block;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--accent-deep);
+    line-height: 1.1;
+  }
+  @media (min-width: 1024px) { .stat-num { font-size: 2rem; } }
+  .stat-caption {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--accent-deep);
+    line-height: 1.2;
+  }
+  @media (min-width: 1024px) { .stat-caption { font-size: 0.875rem; } }
+
+  .hero-figure-img {
+    position: relative;
+    z-index: 2;
+    width: 13rem;
+    object-fit: contain;
+    animation: float 6s ease-in-out 1.7s infinite;
+  }
+  @media (min-width: 640px) { .hero-figure-img { width: 16rem; } }
+  @media (min-width: 1024px) { .hero-figure-img { width: 20rem; } }
+
+  /* ---------- Book-your-consultation rotating badge ---------- */
+  .consult-badge { display: none; }
+  @media (min-width: 768px) {
+    .consult-badge {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+      /* reference places the badge just left of the tooth base, over the
+         scaffolding — not against the right edge */
+      left: 44%;
+      bottom: 4%;
+      z-index: 2;
+      width: 9rem;
+      height: 9rem;
+      text-decoration: none;
+      animation: fadeIn 1.2s var(--ease-out) 1s both;
+    }
+  }
+  @media (min-width: 1024px) { .consult-badge { width: 11rem; height: 11rem; } }
+  .consult-badge-ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    animation: spin 16s linear infinite;
+  }
+  .consult-badge-ring circle { fill: var(--accent-lime); }
+  .consult-badge-ring text {
+    font-family: 'Inter', sans-serif;
+    font-size: 8.6px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    fill: #051a24;
+    text-transform: uppercase;
+  }
+  .consult-badge-arrow {
+    position: relative;
+    z-index: 1;
+    width: 2.25rem;
+    height: 2.25rem;
+    color: #051a24;
+  }
+
+  /* ---------- Keyframes ---------- */
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes blurIn { from { opacity: 0; filter: blur(12px); } to { opacity: 1; filter: blur(0); } }
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: none; } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+  /* ---------- Reduced motion ---------- */
+  @media (prefers-reduced-motion: reduce) {
+    .hero-video { display: none; }
+    .hero-poster-fallback { display: block; }
+    .hero-video,
+    .hero-nav,
+    .hero-heading-wrap,
+    .hero-figure-wrap,
+    .hero-figure-img,
+    .nav-cta-icon,
+    .mobile-menu,
+    .mobile-menu-links a,
+    .mobile-menu-cta,
+    .nav-toggle-icon svg,
+    .consult-badge,
+    .consult-badge-ring {
+      animation: none !important;
+      transition-duration: 0.001ms !important;
+    }
+    .hero-nav, .hero-heading-wrap, .hero-figure-wrap, .consult-badge {
+      opacity: 1;
+      filter: none;
+      transform: none;
+    }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-heading">Skip to content</a>
+<main>
+<section class="hero" aria-label="Halcyon Dental Studio">
+<div class="hero-media">
+  <video class="hero-video" autoplay muted loop playsinline poster="assets/dental-hero-poster.jpg" aria-hidden="true">
+    <source src="assets/dental-hero-loop.mp4" type="video/mp4" />
+  </video>
+  <img class="hero-poster-fallback" src="assets/dental-hero-poster.jpg" alt="" aria-hidden="true" />
+</div>
+<div class="hero-blend" aria-hidden="true"></div>
+<nav class="hero-nav" aria-label="Primary">
+  <a class="brand" href="#main-heading">
+    <svg class="brand-mark" viewBox="0 0 32 36" fill="none" aria-hidden="true">
+      <path d="M16 4c-2.5 0-4 2-6 2-3.5 0-6 3-6 7 0 3 1.5 5 3 6.5.5 3.5 1 7.5 1.5 11 .2 1.5 1 2.5 2.5 2.5s2-1.5 2.3-4c.3-2.5 1.2-5 2.7-5s2.4 2.5 2.7 5c.3 2.5.8 4 2.3 4s2.3-1 2.5-2.5c.5-3.5 1-7.5 1.5-11 1.5-1.5 3-3.5 3-6.5 0-4-2.5-7-6-7-2 0-3.5-2-6-2z" stroke="#ebfa73" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+    </svg>
+    <span class="brand-name">Halcyon Dental</span>
+  </a>
+  <ul class="nav-links">
+    <li><a class="is-current" href="#">About</a></li>
+    <li><a href="#">Results</a></li>
+    <li><a href="#">Pricing</a></li>
+    <li><a href="#">Reviews</a></li>
+    <li><a href="#">Blog</a></li>
+  </ul>
+  <a class="nav-cta" href="#">
+    Contacts
+    <span class="nav-cta-icon" aria-hidden="true">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>
+    </span>
+  </a>
+  <button type="button" class="nav-toggle" id="menuToggle" aria-expanded="false" aria-controls="mobileMenu" aria-label="Open menu">
+    <span class="nav-toggle-icon">
+      <svg class="icon-menu" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+      <svg class="icon-close" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </span>
+  </button>
+</nav>
+<div class="mobile-menu" id="mobileMenu" role="dialog" aria-modal="true" aria-label="Site menu">
+  <button type="button" class="mobile-menu-close" id="menuClose" aria-label="Close menu">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+  </button>
+  <ul class="mobile-menu-links">
+    <li><a href="#">About</a></li>
+    <li><a href="#">Results</a></li>
+    <li><a href="#">Pricing</a></li>
+    <li><a href="#">Reviews</a></li>
+    <li><a href="#">Blog</a></li>
+  </ul>
+  <a class="mobile-menu-cta" href="#">
+    Contacts
+    <span class="nav-cta-icon" aria-hidden="true">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>
+    </span>
+  </a>
+</div>
+<div class="hero-heading-wrap">
+  <h1 class="hero-title" id="main-heading">
+    Restore<br />
+    Your True<br />
+    <span class="smile-row">
+      Smile
+      <span class="avatar-group" aria-hidden="true">
+        <img src="assets/avatar-patient-1.jpg" alt="" loading="lazy" />
+        <img src="assets/avatar-patient-2.jpg" alt="" loading="lazy" />
+        <span class="avatar-more">+2k</span>
+      </span>
+    </span>
+  </h1>
+  <p class="hero-subtext">
+    Using <strong>advanced technology</strong>, we deliver comprehensive treatments for a healthy, <strong>confident smile.</strong>
+  </p>
+</div>
+<div class="hero-figure-wrap">
+  <p class="hero-figure-stat">
+    <span class="stat-num">Here</span>
+    <span class="stat-caption">for every patient</span>
+  </p>
+  <img class="hero-figure-img" src="assets/hero-patient-figure.png" alt="" aria-hidden="true" loading="lazy" />
+</div>
+<a class="consult-badge" href="#" aria-label="Book your consultation">
+  <svg class="consult-badge-ring" viewBox="0 0 200 200" aria-hidden="true">
+    <defs>
+      <path id="consultCirclePath" d="M100,100 m-82,0 a82,82 0 1,1 164,0 a82,82 0 1,1 -164,0" />
+    </defs>
+    <circle cx="100" cy="100" r="100" />
+    <text>
+      <textPath href="#consultCirclePath" startOffset="0%">Book your consultation &#8226; Book your consultation &#8226;</textPath>
+    </text>
+  </svg>
+  <svg class="consult-badge-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M7 17 17 7M9 7h8v8" />
+  </svg>
+</a>
+</section>
+</main>
+<script>
+(function () {
+  'use strict';
+
+  var toggle = document.getElementById('menuToggle');
+  var menu = document.getElementById('mobileMenu');
+  var closeBtn = document.getElementById('menuClose');
+  if (!toggle || !menu || !closeBtn) return;
+
+  function focusable() {
+    return Array.prototype.slice.call(
+      menu.querySelectorAll('a[href], button:not([disabled])')
+    );
+  }
+
+  function onKeydown(e) {
+    if (e.key === 'Escape' || e.key === 'Esc') {
+      e.preventDefault();
+      closeMenu();
+      return;
+    }
+    if (e.key === 'Tab') {
+      var items = focusable();
+      if (!items.length) return;
+      var first = items[0];
+      var last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+
+  function openMenu() {
+    menu.classList.add('is-open');
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.setAttribute('aria-label', 'Close menu');
+    document.addEventListener('keydown', onKeydown);
+    /* Defer focus a frame: closeBtn is still visibility:hidden until the
+       class-toggle style change flushes, so an immediate focus() call is a
+       silent no-op and leaves focus on the trigger button. */
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        closeBtn.focus();
+      });
+    });
+  }
+
+  function closeMenu() {
+    menu.classList.remove('is-open');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', 'Open menu');
+    document.removeEventListener('keydown', onKeydown);
+    toggle.focus();
+  }
+
+  toggle.addEventListener('click', function () {
+    if (toggle.getAttribute('aria-expanded') === 'true') {
+      closeMenu();
+    } else {
+      openMenu();
+    }
+  });
+
+  closeBtn.addEventListener('click', closeMenu);
+
+  menu.addEventListener('click', function (e) {
+    if (e.target === menu) closeMenu();
+  });
+
+  Array.prototype.forEach.call(menu.querySelectorAll('a'), function (link) {
+    link.addEventListener('click', closeMenu);
+  });
+
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var video = document.querySelector('.hero-video');
+  if (video && reduceMotion.matches) {
+    video.pause();
+    video.removeAttribute('autoplay');
+  }
+})();
+</script>
+</body>
+</html>

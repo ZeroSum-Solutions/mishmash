@@ -1,0 +1,1006 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI Rocket — Core Features</title>
+<meta name="description" content="Glassmorphic feature-tabs section for UI Rocket: a cross-fading dashboard preview stage with mouse-tracked spotlight borders, auto-rotating tabs, and full keyboard-accessible ARIA tab navigation.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23000000'/%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='24' y2='24'%3E%3Cstop offset='0' stop-color='%239e67fa'/%3E%3Cstop offset='.5' stop-color='%23fe6abb'/%3E%3Cstop offset='1' stop-color='%23ff9c65'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='12' cy='12' r='6' fill='url(%23g)'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+<script>
+(function () {
+  var html = document.documentElement;
+  html.classList.add('js-enabled');
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    html.classList.add('reduce-motion');
+  }
+})();
+</script>
+<style>
+  :root {
+    --bg: #000000;
+    --section-bg: #08020e; /* hsl(270 80% 3%), the prompt's --background token */
+    --fg: #ffffff;
+    --fg-faint: rgba(255, 255, 255, 0.4);
+    --ink: #0e0e0e;
+    --accent-a: #9e67fa;
+    --accent-b: #fe6abb;
+    --accent-c: #ff9c65;
+    --accent-blue: #3b82f6;
+    --ease-ui: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-reveal: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+  img, video { max-width: 100%; display: block; }
+  a { color: inherit; }
+  button { font-family: inherit; }
+  h1, h2, h3, p { margin: 0; }
+  ul { margin: 0; padding: 0; list-style: none; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-b);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  .msr {
+    font-family: 'Material Symbols Rounded';
+    font-weight: normal;
+    font-style: normal;
+    line-height: 1;
+    display: inline-block;
+    white-space: nowrap;
+    letter-spacing: normal;
+    word-wrap: normal;
+    -webkit-font-smoothing: antialiased;
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+    flex-shrink: 0;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Page chrome — flat, matches the reference (no invented glow)       */
+  /* ---------------------------------------------------------------- */
+  main {
+    position: relative;
+    background: var(--bg);
+    padding-block: clamp(2.5rem, 5vw, 4rem);
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Scroll reveal primitive (FadeUp)                                  */
+  /* ---------------------------------------------------------------- */
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s var(--ease-reveal), transform 0.6s var(--ease-reveal);
+    transition-delay: var(--reveal-delay, 0s);
+  }
+  .reveal.in-view { opacity: 1; transform: translateY(0); }
+
+  /* ---------------------------------------------------------------- */
+  /* Section + header                                                  */
+  /* ---------------------------------------------------------------- */
+  .features {
+    position: relative;
+    width: 100%;
+    background: var(--section-bg);
+    padding-block: 3rem; /* py-12 */
+  }
+  @media (min-width: 640px) { .features { padding-block: 4rem; } } /* sm:py-16 */
+  .wrap { max-width: 1180px; margin: 0 auto; padding-inline: 1rem; }
+  @media (min-width: 640px) { .wrap { padding-inline: 1.5rem; } }
+
+  .features-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem; /* gap-10 */
+    margin-bottom: 3.5rem; /* mb-14 */
+  }
+  @media (min-width: 768px) {
+    .features-head { flex-direction: row; align-items: flex-end; justify-content: space-between; }
+  }
+  .head-left { max-width: 42rem; } /* max-w-2xl */
+  .head-right {
+    max-width: 24rem; /* max-w-sm */
+    font-size: 0.875rem; /* text-sm */
+    line-height: 1.625; /* leading-relaxed */
+    color: rgba(255, 255, 255, 0.65); /* text-foreground/65 */
+  }
+  @media (min-width: 640px) { .head-right { font-size: 1rem; } } /* sm:text-base */
+  @media (min-width: 768px) { .head-right { padding-top: 0.5rem; } } /* md:pt-2 */
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem; /* gap-2 */
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.10); /* bg-landing-surface */
+    border: 1px solid rgba(255, 255, 255, 0.10); /* border-white/10 */
+    padding: 0.25rem 0.75rem; /* px-3 py-1 */
+    font-size: 0.75rem; /* text-xs */
+    color: rgba(255, 255, 255, 0.8); /* text-foreground/80 */
+    -webkit-backdrop-filter: blur(8px); /* backdrop-blur */
+    backdrop-filter: blur(8px);
+    margin-bottom: 1rem;
+  }
+  .pill-dot { width: 6px; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.7); } /* w-1.5 h-1.5 bg-foreground/70 */
+
+  .heading {
+    font-weight: 400; /* font-normal */
+    font-size: 1.875rem; /* text-3xl */
+    line-height: 1.05; /* leading-[1.05] */
+    letter-spacing: -0.02em; /* tracking-[-0.02em] */
+    color: var(--fg);
+  }
+  @media (min-width: 640px) { .heading { font-size: 2.25rem; } } /* sm:text-4xl */
+  .heading-dim { color: rgba(255, 255, 255, 0.55); } /* text-foreground/55 */
+  .heading-break { display: none; }
+  @media (min-width: 640px) { .heading-break { display: inline; } }
+
+  /* ---------------------------------------------------------------- */
+  /* Spotlight border shell                                            */
+  /* ---------------------------------------------------------------- */
+  .spot { position: relative; }
+  .spot-border {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    padding: 1px;
+    background: radial-gradient(
+      var(--spot-size, 360px) circle at var(--spot-x, -200px) var(--spot-y, -200px),
+      rgba(255, 255, 255, var(--spot-intensity, 0.5)),
+      rgba(255, 255, 255, 0) 60%
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Tab pill bar (desktop only, matches source design)                */
+  /* ---------------------------------------------------------------- */
+  .tabbar-shell { display: none; border-radius: 9999px; padding: 0.25rem; margin: 0 auto 1.5rem; width: 100%; }
+  @media (min-width: 640px) { .tabbar-shell { display: block; } }
+  .tablist {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    justify-items: start;
+    gap: 0.25rem; /* gap-1 */
+    border-radius: 9999px;
+    padding: 0.25rem; /* p-1 */
+  }
+  .tab {
+    appearance: none;
+    cursor: pointer;
+    border-radius: 9999px;
+    padding: 0.625rem 1rem; /* px-4 py-2.5 */
+    font-size: 0.875rem; /* text-sm */
+    background: transparent;
+    border: 1px solid transparent;
+    color: rgba(255, 255, 255, 0.55); /* text-foreground/55 */
+    transition: color 0.3s var(--ease-ui), background-color 0.3s var(--ease-ui), border-color 0.3s var(--ease-ui); /* duration-300 */
+  }
+  .tab:hover { color: rgba(255, 255, 255, 0.8); } /* hover:text-foreground/80 */
+  .tab.is-active {
+    background: rgba(255, 255, 255, 0.06); /* bg-white/[0.06] */
+    color: var(--fg);
+    border-color: rgba(255, 255, 255, 0.15); /* border-white/15 */
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Image / dashboard stage                                           */
+  /* ---------------------------------------------------------------- */
+  .stage-shell { position: relative; margin: 0 auto; width: 100%; padding: 0.5rem; border-radius: 1rem; } /* p-2 sm:p-3, radius 2xl */
+  @media (min-width: 640px) { .stage-shell { padding: 0.75rem; } }
+  .stage-inner {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1rem; /* rounded-2xl */
+    border: 1px solid rgba(255, 255, 255, 0.10); /* border-white/10 */
+    background: var(--ink);
+    z-index: 1;
+  }
+  .stage-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    container-type: inline-size;
+    container-name: stage;
+  }
+  .stage-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+  .stage-img.is-active { opacity: 1; }
+
+  .mock {
+    position: absolute;
+    inset: 4px; /* inset-1 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3%; /* p-[3%] */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease; /* duration-300 */
+  }
+  @media (min-width: 640px) { .mock { padding: 4%; } } /* sm:p-[4%] */
+  .mock.is-active { opacity: 1; pointer-events: auto; }
+
+  .mock-card {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    border-radius: 1rem; /* rounded-2xl */
+    background: rgba(255, 255, 255, 0.04); /* bg-white/[0.04] */
+    -webkit-backdrop-filter: blur(24px); /* backdrop-blur-xl */
+    backdrop-filter: blur(24px);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); /* shadow-2xl */
+    overflow: hidden;
+  }
+
+  .mock-sidebar {
+    flex: 0 0 140px;
+    flex-basis: 23.333cqw; /* w-[210px] of the 900px canvas */
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    gap: 0.444cqw; /* gap-1 */
+    padding: 8px;
+    padding: 1.333cqw; /* p-3 */
+    min-width: 0;
+  }
+  .mock-brand {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 5px; padding: 0.889cqw; /* px-2 py-2 */
+    margin-bottom: 8px; margin-bottom: 1.333cqw; /* mb-3 */
+  }
+  .mock-brand-left { display: flex; align-items: center; gap: 6px; gap: 0.667cqw; min-width: 0; }
+  .mock-brand-icon {
+    width: 16px; height: 16px;
+    width: 2.667cqw; height: 2.667cqw; /* h-6 w-6 */
+    border-radius: 4px; border-radius: 0.667cqw; /* rounded-md */
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--accent-a), var(--accent-b) 50%, var(--accent-c));
+    flex-shrink: 0;
+  }
+  .mock-brand-icon .msr { color: #fff; font-size: 9px; font-size: 1.556cqw; } /* MIcon size 14 */
+  .mock-brand-name {
+    font-size: 9px; font-size: 1.444cqw; /* text-[13px] */
+    font-weight: 600; color: var(--fg);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mock-search { color: rgba(255, 255, 255, 0.4); font-size: 9px; font-size: 1.556cqw; flex-shrink: 0; } /* MIcon size 14, white/40 */
+
+  .mock-nav { display: flex; flex-direction: column; gap: 1px; gap: 0.222cqw; } /* gap-0.5 */
+  .mock-nav-item {
+    display: flex; align-items: center; gap: 7px; gap: 1.111cqw; /* gap-2.5 */
+    border-radius: 5px; border-radius: 0.889cqw; /* rounded-lg */
+    padding: 5px 7px;
+    padding: 0.889cqw 1.111cqw; /* px-2.5 py-2 */
+    font-size: 8px; font-size: 1.333cqw; /* text-[12px] */
+    color: rgba(255, 255, 255, 0.55); /* text-white/55 */
+    transition: background-color 0.3s var(--ease-ui), color 0.3s var(--ease-ui);
+  }
+  .mock-nav-item .msr { font-size: 9px; font-size: 1.556cqw; } /* icon size 14 */
+  .mock-nav-item.is-active { background: rgba(255, 255, 255, 0.08); color: var(--fg); } /* bg-white/[0.08] */
+
+  .mock-main {
+    flex: 1 1 auto; display: flex; flex-direction: column;
+    padding: 8px; padding: 1.333cqw; /* p-3 */
+    min-width: 0;
+  }
+  .mock-panel {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 11px; border-radius: 1.778cqw; /* rounded-2xl */
+    background: rgba(0, 0, 0, 0.2); /* bg-black/20 */
+    min-height: 0;
+  }
+  .mock-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 11px;
+    padding: 1.333cqw 1.778cqw; /* px-4 py-3 */
+    flex-shrink: 0;
+  }
+  .mock-panel-head-left { display: flex; align-items: center; gap: 7px; gap: 1.111cqw; min-width: 0; } /* implied gap */
+  .mock-panel-icon {
+    width: 19px; height: 19px;
+    width: 3.111cqw; height: 3.111cqw; /* h-7 w-7 */
+    border-radius: 4px; border-radius: 0.667cqw; /* rounded-md */
+    background: var(--accent-blue); /* rgb(59,130,246) */
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .mock-panel-icon .msr { color: #fff; font-size: 11px; font-size: 1.778cqw; } /* MIcon size 16 */
+  .mock-panel-title {
+    font-size: 11px; font-size: 1.778cqw; /* text-base */
+    font-weight: 600; color: var(--fg);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mock-panel-head-right { display: flex; align-items: center; gap: 7px; gap: 1.111cqw; flex-shrink: 0; } /* gap-2.5 */
+  .mock-panel-head-right .msr { color: rgba(255, 255, 255, 0.6); font-size: 11px; font-size: 1.778cqw; } /* white/60, size 16 */
+  .mock-invite {
+    border-radius: 9999px;
+    background: var(--accent-blue); /* rgb(59,130,246) */
+    color: #fff;
+    font-size: 7px; font-size: 1.222cqw; /* text-[11px] */
+    font-weight: 500;
+    padding: 3px 7px;
+    padding: 0.444cqw 1.111cqw; /* px-2.5 py-1 */
+    white-space: nowrap;
+  }
+  .mock-avatar {
+    width: 19px; height: 19px;
+    width: 3.111cqw; height: 3.111cqw; /* h-7 w-7 */
+    border-radius: 9999px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--accent-a), var(--accent-c));
+    color: #fff;
+    font-size: 8px; font-size: 1.3cqw;
+    font-weight: 700;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1); /* ring-1 ring-white/10 */
+    flex-shrink: 0;
+  }
+
+  .mock-panel-body {
+    flex: 1 1 auto; overflow: hidden;
+    padding: 0 11px 11px;
+    padding: 0 1.778cqw 1.778cqw; /* px-4 pb-4 */
+    min-height: 0;
+  }
+
+  /* 2x2 card grids (Courses / Templates — matches the reference screenshot) */
+  .mock-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; gap: 1.6cqw; height: 100%; }
+  .mock-grid-3 { grid-template-columns: repeat(3, 1fr); } /* Animated Backgrounds: 3x2 */
+  .mock-tile .mock-card-thumb { aspect-ratio: auto; height: 100%; }
+
+  .mock-card-item {
+    display: flex; flex-direction: column;
+    border-radius: 8px; border-radius: 1.2cqw;
+    background: rgba(255, 255, 255, 0.04);
+    overflow: hidden;
+    min-height: 0;
+  }
+  .mock-card-thumb {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background-size: cover;
+    background-position: center;
+    flex-shrink: 0;
+  }
+  .mock-card-body { padding: 6px 8px; padding: 1.4cqw 1.8cqw; min-width: 0; }
+  .mock-card-title {
+    font-size: 11px; font-size: 2.2cqw;
+    font-weight: 500;
+    color: var(--fg);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mock-card-meta { font-size: 9px; font-size: 1.8cqw; color: var(--fg-faint); margin-top: 2px; }
+
+  /* Small corner/overlay tags shared by the tutorial + backgrounds tiles */
+  .mock-tag {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 8px; font-size: 1.4cqw;
+    border-radius: 9999px;
+    padding: 3px 8px; padding: 0.5cqw 1.3cqw;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    white-space: nowrap;
+  }
+  .mock-tag .msr { font-size: 1.1em; }
+  .mock-tag-live { background: rgba(239, 68, 68, 0.92); }
+  .mock-tag-tl { top: 8px; left: 8px; }
+  .mock-tag-tr { top: 8px; right: 8px; }
+  .mock-tag-br { bottom: 8px; right: 8px; }
+  .mock-tag-bc { bottom: 8px; left: 50%; transform: translateX(-50%); }
+
+  .mock-play-center {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 28px; height: 28px;
+    width: 4.5cqw; height: 4.5cqw;
+    border-radius: 9999px;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex; align-items: center; justify-content: center;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+  }
+  .mock-play-center img { width: 50%; height: 50%; }
+
+  /* Exclusive Tutorial — single full-width featured card (matches the reference) */
+  .mock-tutorial-featured { display: flex; flex-direction: column; height: 100%; border-radius: 8px; border-radius: 1.2cqw; overflow: hidden; background: rgba(255, 255, 255, 0.04); }
+  .mock-tutorial-featured .mock-card-thumb { flex: 1 1 auto; aspect-ratio: auto; min-height: 0; }
+  .mock-tutorial-featured .mock-card-body { flex-shrink: 0; }
+  .mock-tutorial-featured .mock-card-title { font-size: 12px; font-size: 2.6cqw; white-space: normal; }
+
+  /* ---------------------------------------------------------------- */
+  /* Arrow / caption control bar                                       */
+  /* ---------------------------------------------------------------- */
+  .ctrl-shell { position: relative; margin: 1.5rem auto 0; width: 100%; padding: 0.25rem; border-radius: 999px; }
+  .ctrl {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-radius: 999px;
+    padding: 0.5rem 0.75rem;
+  }
+  .arrow-btn {
+    flex-shrink: 0;
+    width: 2.5rem; /* h-10 w-10 */
+    height: 2.5rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.10); /* border-white/10 */
+    background: rgba(255, 255, 255, 0.04); /* bg-white/[0.04] */
+    color: rgba(255, 255, 255, 0.8); /* text-foreground/80 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s var(--ease-ui), color 0.2s var(--ease-ui), transform 0.2s var(--ease-ui); /* transition-colors */
+  }
+  .arrow-btn .msr { font-size: 16px; } /* icon size 16 */
+  .arrow-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--fg); } /* hover:bg-white/[0.08] */
+  .arrow-btn:active { transform: scale(0.94); }
+
+  .caption { flex: 1 1 auto; min-height: 1.5rem; overflow: hidden; text-align: center; }
+  .caption-text {
+    display: inline-block;
+    padding-inline: 0.5rem;
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.75);
+    transition: opacity 0.25s var(--ease-ui), transform 0.25s var(--ease-ui);
+  }
+  .caption-mobile { display: none; font-weight: 500; color: var(--fg); }
+  .caption-desktop { display: none; }
+  @media (max-width: 639px) { .caption-mobile { display: inline-block; } }
+  @media (min-width: 640px) { .caption-desktop { display: inline-block; } }
+
+  /* ---------------------------------------------------------------- */
+  /* Reduced motion                                                    */
+  /* ---------------------------------------------------------------- */
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    .stage-img, .mock, .tab, .caption-text { transition-duration: 0.01ms !important; }
+  }
+  html.reduce-motion .reveal { opacity: 1; transform: none; transition: none; }
+
+  /* No-JS fallback: show first tab state, keep content reachable */
+  html:not(.js-enabled) .tabbar-shell,
+  html:not(.js-enabled) .ctrl-shell { display: none; }
+  html:not(.js-enabled) .mock:first-of-type,
+  html:not(.js-enabled) .stage-img:first-of-type { opacity: 1; }
+</style>
+</head>
+<body>
+<main>
+<section class="features" aria-labelledby="features-heading">
+  <div class="wrap">
+
+    <header class="features-head">
+      <div class="head-left">
+        <p class="pill reveal" style="--reveal-delay:0s">
+          <span class="pill-dot" aria-hidden="true"></span>
+          Core Features
+        </p>
+        <h2 id="features-heading" class="heading reveal" style="--reveal-delay:0.1s">
+          One platform to run your<br class="heading-break">
+          <span class="heading-dim">entire AI design journey.</span>
+        </h2>
+      </div>
+      <p class="head-right reveal" style="--reveal-delay:0.2s">
+        UI Rocket brings your lessons, templates, tools, and community into one
+        space — so you stop switching between tabs and start shipping real
+        AI-powered work.
+      </p>
+    </header>
+
+    <div class="tabbar-shell spot" style="--spot-size:360px; --spot-intensity:0.5; border-radius:999px;" data-spot>
+      <span class="spot-border" aria-hidden="true"></span>
+      <div class="tablist" role="tablist" aria-label="Core features">
+        <button type="button" class="tab is-active" id="tab-tutorial" role="tab"
+          aria-selected="true" aria-controls="panel-tutorial" tabindex="0" data-tab="tutorial">
+          Exclusive Tutorial
+        </button>
+        <button type="button" class="tab" id="tab-courses" role="tab"
+          aria-selected="false" aria-controls="panel-courses" tabindex="-1" data-tab="courses">
+          Courses
+        </button>
+        <button type="button" class="tab" id="tab-templates" role="tab"
+          aria-selected="false" aria-controls="panel-templates" tabindex="-1" data-tab="templates">
+          Templates
+        </button>
+        <button type="button" class="tab" id="tab-backgrounds" role="tab"
+          aria-selected="false" aria-controls="panel-backgrounds" tabindex="-1" data-tab="backgrounds">
+          Animated Backgrounds
+        </button>
+      </div>
+    </div>
+
+    <div class="stage-shell spot" style="--spot-size:600px; --spot-intensity:0.5; border-radius:1.5rem;" data-spot>
+      <span class="spot-border" aria-hidden="true"></span>
+      <div class="stage-inner">
+        <div class="stage-frame" id="stage-frame">
+          <img class="stage-img is-active" data-tab="tutorial" src="assets/tab-tutorial.webp" alt="Exclusive Tutorial preview inside the UI Rocket dashboard" loading="eager" decoding="async">
+          <img class="stage-img" data-tab="courses" src="assets/tab-courses.webp" alt="Courses preview inside the UI Rocket dashboard" loading="eager" decoding="async">
+          <img class="stage-img" data-tab="templates" src="assets/tab-templates.webp" alt="Templates preview inside the UI Rocket dashboard" loading="eager" decoding="async">
+          <img class="stage-img" data-tab="backgrounds" src="assets/tab-backgrounds.webp" alt="Animated Backgrounds preview inside the UI Rocket dashboard" loading="eager" decoding="async">
+
+          <div class="mock is-active" id="panel-tutorial" role="tabpanel" aria-labelledby="tab-tutorial" data-tab="tutorial" tabindex="0">
+            <p class="sr-only">Exclusive Tutorial: Step-by-step guides to master AI design tools. Preview shows a mockup of the tutorials library inside the UI Rocket dashboard.</p>
+            <div class="mock-card" aria-hidden="true">
+              <div class="mock-sidebar">
+                <div class="mock-brand">
+                  <span class="mock-brand-left">
+                    <span class="mock-brand-icon"><span class="msr">rocket_launch</span></span>
+                    <span class="mock-brand-name">UI Rocket</span>
+                  </span>
+                  <span class="mock-search msr">search</span>
+                </div>
+                <div class="mock-nav">
+                  <span class="mock-nav-item"><span class="msr">grid_view</span><span>Dashboard</span></span>
+                  <span class="mock-nav-item"><span class="msr">school</span><span>Courses</span></span>
+                  <span class="mock-nav-item"><span class="msr">dashboard</span><span>Templates</span></span>
+                  <span class="mock-nav-item is-active"><span class="msr">play_circle</span><span>Tutorials</span></span>
+                  <span class="mock-nav-item"><span class="msr">auto_awesome</span><span>Backgrounds</span></span>
+                  <span class="mock-nav-item"><span class="msr">sell</span><span>Pricing</span></span>
+                </div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-panel">
+                  <div class="mock-panel-header">
+                    <span class="mock-panel-head-left">
+                      <span class="mock-panel-icon"><span class="msr">add</span></span>
+                      <span class="mock-panel-title">Exclusive Tutorials</span>
+                    </span>
+                    <span class="mock-panel-head-right">
+                      <span class="msr">notifications</span>
+                      <span class="mock-invite">Invite</span>
+                      <span class="mock-avatar">UI</span>
+                    </span>
+                  </div>
+                  <div class="mock-panel-body">
+                    <div class="mock-tutorial-featured">
+                      <div class="mock-card-thumb" style="background-image:url('assets/tab-tutorial.webp')">
+                        <span class="mock-tag mock-tag-live mock-tag-tl"><span aria-hidden="true">●</span> LIVE</span>
+                        <span class="mock-tag mock-tag-tr"><span class="msr" aria-hidden="true">more_horiz</span></span>
+                        <span class="mock-play-center"><img src="assets/play-icon.svg" alt=""></span>
+                        <span class="mock-tag mock-tag-br">12 min</span>
+                      </div>
+                      <div class="mock-card-body">
+                        <p class="mock-card-title">Mastering the Spotlight Border Effect</p>
+                        <p class="mock-card-meta">12 min · Pro</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mock" id="panel-courses" role="tabpanel" aria-labelledby="tab-courses" data-tab="courses" tabindex="0">
+            <p class="sr-only">Courses: Structured learning paths to level up your skills. Preview shows a mockup of the course library inside the UI Rocket dashboard.</p>
+            <div class="mock-card" aria-hidden="true">
+              <div class="mock-sidebar">
+                <div class="mock-brand">
+                  <span class="mock-brand-left">
+                    <span class="mock-brand-icon"><span class="msr">rocket_launch</span></span>
+                    <span class="mock-brand-name">UI Rocket</span>
+                  </span>
+                  <span class="mock-search msr">search</span>
+                </div>
+                <div class="mock-nav">
+                  <span class="mock-nav-item"><span class="msr">grid_view</span><span>Dashboard</span></span>
+                  <span class="mock-nav-item is-active"><span class="msr">school</span><span>Courses</span></span>
+                  <span class="mock-nav-item"><span class="msr">dashboard</span><span>Templates</span></span>
+                  <span class="mock-nav-item"><span class="msr">play_circle</span><span>Tutorials</span></span>
+                  <span class="mock-nav-item"><span class="msr">auto_awesome</span><span>Backgrounds</span></span>
+                  <span class="mock-nav-item"><span class="msr">sell</span><span>Pricing</span></span>
+                </div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-panel">
+                  <div class="mock-panel-header">
+                    <span class="mock-panel-head-left">
+                      <span class="mock-panel-icon"><span class="msr">add</span></span>
+                      <span class="mock-panel-title">Courses</span>
+                    </span>
+                    <span class="mock-panel-head-right">
+                      <span class="msr">notifications</span>
+                      <span class="mock-invite">Invite</span>
+                      <span class="mock-avatar">UI</span>
+                    </span>
+                  </div>
+                  <div class="mock-panel-body">
+                    <div class="mock-grid">
+                      <div class="mock-card-item">
+                        <div class="mock-card-thumb" style="background-image:url('assets/module-cover-1.png')"></div>
+                        <div class="mock-card-body">
+                          <p class="mock-card-title">Intro to AI Prompting</p>
+                          <p class="mock-card-meta">8 lessons · 42 min</p>
+                        </div>
+                      </div>
+                      <div class="mock-card-item">
+                        <div class="mock-card-thumb" style="background-image:url('assets/module-cover-2.png')"></div>
+                        <div class="mock-card-body">
+                          <p class="mock-card-title">Layout Systems 101</p>
+                          <p class="mock-card-meta">6 lessons · 35 min</p>
+                        </div>
+                      </div>
+                      <div class="mock-card-item">
+                        <div class="mock-card-thumb" style="background-image:url('assets/module-cover-1.png')"></div>
+                        <div class="mock-card-body">
+                          <p class="mock-card-title">Prototyping Fast</p>
+                          <p class="mock-card-meta">5 lessons · 28 min</p>
+                        </div>
+                      </div>
+                      <div class="mock-card-item">
+                        <div class="mock-card-thumb" style="background-image:url('assets/module-cover-2.png')"></div>
+                        <div class="mock-card-body">
+                          <p class="mock-card-title">Design Systems at Scale</p>
+                          <p class="mock-card-meta">9 lessons · 51 min</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mock" id="panel-templates" role="tabpanel" aria-labelledby="tab-templates" data-tab="templates" tabindex="0">
+            <p class="sr-only">Templates: Production-ready designs you can customize instantly. Preview shows a mockup of the template library inside the UI Rocket dashboard.</p>
+            <div class="mock-card" aria-hidden="true">
+              <div class="mock-sidebar">
+                <div class="mock-brand">
+                  <span class="mock-brand-left">
+                    <span class="mock-brand-icon"><span class="msr">rocket_launch</span></span>
+                    <span class="mock-brand-name">UI Rocket</span>
+                  </span>
+                  <span class="mock-search msr">search</span>
+                </div>
+                <div class="mock-nav">
+                  <span class="mock-nav-item"><span class="msr">grid_view</span><span>Dashboard</span></span>
+                  <span class="mock-nav-item"><span class="msr">school</span><span>Courses</span></span>
+                  <span class="mock-nav-item is-active"><span class="msr">dashboard</span><span>Templates</span></span>
+                  <span class="mock-nav-item"><span class="msr">play_circle</span><span>Tutorials</span></span>
+                  <span class="mock-nav-item"><span class="msr">auto_awesome</span><span>Backgrounds</span></span>
+                  <span class="mock-nav-item"><span class="msr">sell</span><span>Pricing</span></span>
+                </div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-panel">
+                  <div class="mock-panel-header">
+                    <span class="mock-panel-head-left">
+                      <span class="mock-panel-icon"><span class="msr">add</span></span>
+                      <span class="mock-panel-title">Templates</span>
+                    </span>
+                    <span class="mock-panel-head-right">
+                      <span class="msr">notifications</span>
+                      <span class="mock-invite">Invite</span>
+                      <span class="mock-avatar">UI</span>
+                    </span>
+                  </div>
+                  <div class="mock-panel-body">
+                    <div class="mock-grid">
+                      <div class="mock-card-item">
+                        <div class="mock-card-thumb" style="background-image:url('assets/module-cover-1.png')"></div>
+                        <div class="mock-card-body">
+                          <p class="mock-card-title">SaaS Landing Kit</p>
+                          <p class="mock-card-meta">Landing page</p>
+                        </div>
+                      </div>
+                      <div class="mock-card-item">
+                        <div class="mock-card-thumb" style="background-image:url('assets/module-cover-2.png')"></div>
+                        <div class="mock-card-body">
+                          <p class="mock-card-title">Portfolio Grid</p>
+                          <p class="mock-card-meta">Portfolio</p>
+                        </div>
+                      </div>
+                      <div class="mock-card-item">
+                        <div class="mock-card-thumb" style="background-image:url('assets/module-cover-1.png')"></div>
+                        <div class="mock-card-body">
+                          <p class="mock-card-title">Analytics Dashboard</p>
+                          <p class="mock-card-meta">Dashboard</p>
+                        </div>
+                      </div>
+                      <div class="mock-card-item">
+                        <div class="mock-card-thumb" style="background-image:url('assets/module-cover-2.png')"></div>
+                        <div class="mock-card-body">
+                          <p class="mock-card-title">Pricing Table Set</p>
+                          <p class="mock-card-meta">Pricing</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mock" id="panel-backgrounds" role="tabpanel" aria-labelledby="tab-backgrounds" data-tab="backgrounds" tabindex="0">
+            <p class="sr-only">Animated Backgrounds: Motion-ready visuals that bring your projects to life. Preview shows a mockup of the background library inside the UI Rocket dashboard.</p>
+            <div class="mock-card" aria-hidden="true">
+              <div class="mock-sidebar">
+                <div class="mock-brand">
+                  <span class="mock-brand-left">
+                    <span class="mock-brand-icon"><span class="msr">rocket_launch</span></span>
+                    <span class="mock-brand-name">UI Rocket</span>
+                  </span>
+                  <span class="mock-search msr">search</span>
+                </div>
+                <div class="mock-nav">
+                  <span class="mock-nav-item"><span class="msr">grid_view</span><span>Dashboard</span></span>
+                  <span class="mock-nav-item"><span class="msr">school</span><span>Courses</span></span>
+                  <span class="mock-nav-item"><span class="msr">dashboard</span><span>Templates</span></span>
+                  <span class="mock-nav-item"><span class="msr">play_circle</span><span>Tutorials</span></span>
+                  <span class="mock-nav-item is-active"><span class="msr">auto_awesome</span><span>Backgrounds</span></span>
+                  <span class="mock-nav-item"><span class="msr">sell</span><span>Pricing</span></span>
+                </div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-panel">
+                  <div class="mock-panel-header">
+                    <span class="mock-panel-head-left">
+                      <span class="mock-panel-icon"><span class="msr">add</span></span>
+                      <span class="mock-panel-title">Animated Backgrounds</span>
+                    </span>
+                    <span class="mock-panel-head-right">
+                      <span class="msr">notifications</span>
+                      <span class="mock-invite">Invite</span>
+                      <span class="mock-avatar">UI</span>
+                    </span>
+                  </div>
+                  <div class="mock-panel-body">
+                    <div class="mock-grid mock-grid-3">
+                      <div class="mock-card-item mock-tile">
+                        <div class="mock-card-thumb" style="background-image:url('assets/tab-backgrounds.webp')">
+                          <span class="mock-tag mock-tag-bc"><span class="msr" aria-hidden="true">content_copy</span> Copy URL</span>
+                        </div>
+                      </div>
+                      <div class="mock-card-item mock-tile">
+                        <div class="mock-card-thumb" style="background-image:url('assets/tab-courses.webp')">
+                          <span class="mock-tag mock-tag-bc"><span class="msr" aria-hidden="true">content_copy</span> Copy URL</span>
+                        </div>
+                      </div>
+                      <div class="mock-card-item mock-tile">
+                        <div class="mock-card-thumb" style="background-image:url('assets/tab-templates.webp')">
+                          <span class="mock-tag mock-tag-bc"><span class="msr" aria-hidden="true">content_copy</span> Copy URL</span>
+                        </div>
+                      </div>
+                      <div class="mock-card-item mock-tile">
+                        <div class="mock-card-thumb" style="background-image:url('assets/tab-tutorial.webp')">
+                          <span class="mock-tag mock-tag-bc"><span class="msr" aria-hidden="true">content_copy</span> Copy URL</span>
+                        </div>
+                      </div>
+                      <div class="mock-card-item mock-tile">
+                        <div class="mock-card-thumb" style="background-image:url('assets/tab-backgrounds.webp')">
+                          <span class="mock-tag mock-tag-bc"><span class="msr" aria-hidden="true">content_copy</span> Copy URL</span>
+                        </div>
+                      </div>
+                      <div class="mock-card-item mock-tile">
+                        <div class="mock-card-thumb" style="background-image:url('assets/tab-courses.webp')">
+                          <span class="mock-tag mock-tag-bc"><span class="msr" aria-hidden="true">content_copy</span> Copy URL</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ctrl-shell spot" style="--spot-size:360px; --spot-intensity:0.5; border-radius:999px;" data-spot>
+      <span class="spot-border" aria-hidden="true"></span>
+      <div class="ctrl">
+        <button type="button" class="arrow-btn" id="ctrl-prev" aria-label="Previous feature">
+          <span class="msr" aria-hidden="true">arrow_back</span>
+        </button>
+        <div class="caption" aria-live="polite">
+          <span class="caption-text caption-mobile" id="caption-mobile">Exclusive Tutorial</span>
+          <span class="caption-text caption-desktop" id="caption-desktop">Step-by-step guides to master AI design tools.</span>
+        </div>
+        <button type="button" class="arrow-btn" id="ctrl-next" aria-label="Next feature">
+          <span class="msr" aria-hidden="true">arrow_forward</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</section>
+</main>
+<script>
+(function () {
+  'use strict';
+
+  var reduceMotion = document.documentElement.classList.contains('reduce-motion');
+
+  var tabs = [
+    { slug: 'tutorial', label: 'Exclusive Tutorial', caption: 'Step-by-step guides to master AI design tools.' },
+    { slug: 'courses', label: 'Courses', caption: 'Structured learning paths to level up your skills.' },
+    { slug: 'templates', label: 'Templates', caption: 'Production-ready designs you can customize instantly.' },
+    { slug: 'backgrounds', label: 'Animated Backgrounds', caption: 'Motion-ready visuals that bring your projects to life.' }
+  ];
+
+  var tabButtons = Array.prototype.slice.call(document.querySelectorAll('.tab[role="tab"]'));
+  var stageImgs = Array.prototype.slice.call(document.querySelectorAll('.stage-img'));
+  var mocks = Array.prototype.slice.call(document.querySelectorAll('.mock[role="tabpanel"]'));
+  var captionMobile = document.getElementById('caption-mobile');
+  var captionDesktop = document.getElementById('caption-desktop');
+  var prevBtn = document.getElementById('ctrl-prev');
+  var nextBtn = document.getElementById('ctrl-next');
+  var featuresSection = document.querySelector('.features');
+
+  var activeIndex = 0;
+  var userStopped = false;
+  var isHovered = false;
+  var isFocused = false;
+
+  function updateCaption(index) {
+    var applyText = function () {
+      captionMobile.textContent = tabs[index].label;
+      captionDesktop.textContent = tabs[index].caption;
+    };
+    if (reduceMotion) {
+      applyText();
+      return;
+    }
+    [captionMobile, captionDesktop].forEach(function (el) {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(-6px)';
+    });
+    window.setTimeout(function () {
+      applyText();
+      [captionMobile, captionDesktop].forEach(function (el) {
+        el.style.transform = 'translateY(6px)';
+      });
+      requestAnimationFrame(function () {
+        [captionMobile, captionDesktop].forEach(function (el) {
+          el.style.opacity = '1';
+          el.style.transform = 'translateY(0)';
+        });
+      });
+    }, 125);
+  }
+
+  function selectTab(index, opts) {
+    opts = opts || {};
+    index = ((index % tabs.length) + tabs.length) % tabs.length;
+    var slug = tabs[index].slug;
+
+    tabButtons.forEach(function (btn, i) {
+      var selected = i === index;
+      btn.setAttribute('aria-selected', selected ? 'true' : 'false');
+      btn.tabIndex = selected ? 0 : -1;
+      btn.classList.toggle('is-active', selected);
+    });
+    stageImgs.forEach(function (img) {
+      img.classList.toggle('is-active', img.getAttribute('data-tab') === slug);
+    });
+    mocks.forEach(function (mock) {
+      var active = mock.getAttribute('data-tab') === slug;
+      mock.classList.toggle('is-active', active);
+    });
+    updateCaption(index);
+
+    activeIndex = index;
+    if (opts.userInitiated) {
+      userStopped = true;
+    }
+  }
+
+  tabButtons.forEach(function (btn, i) {
+    btn.addEventListener('click', function () {
+      selectTab(i, { userInitiated: true });
+    });
+    btn.addEventListener('keydown', function (e) {
+      var next = null;
+      if (e.key === 'ArrowRight') { next = i + 1; }
+      else if (e.key === 'ArrowLeft') { next = i - 1; }
+      else if (e.key === 'Home') { next = 0; }
+      else if (e.key === 'End') { next = tabs.length - 1; }
+      if (next === null) { return; }
+      e.preventDefault();
+      var normalized = ((next % tabs.length) + tabs.length) % tabs.length;
+      selectTab(normalized, { userInitiated: true });
+      tabButtons[normalized].focus();
+    });
+  });
+
+  prevBtn.addEventListener('click', function () {
+    selectTab(activeIndex - 1, { userInitiated: true });
+  });
+  nextBtn.addEventListener('click', function () {
+    selectTab(activeIndex + 1, { userInitiated: true });
+  });
+
+  if (featuresSection) {
+    featuresSection.addEventListener('pointerenter', function () { isHovered = true; }, true);
+    featuresSection.addEventListener('pointerleave', function () { isHovered = false; }, true);
+    featuresSection.addEventListener('focusin', function () { isFocused = true; });
+    featuresSection.addEventListener('focusout', function () {
+      window.setTimeout(function () {
+        isFocused = featuresSection.contains(document.activeElement);
+      }, 0);
+    });
+  }
+
+  if (!reduceMotion) {
+    window.setInterval(function () {
+      if (userStopped || isHovered || isFocused) { return; }
+      selectTab(activeIndex + 1, { userInitiated: false });
+    }, 5000);
+  }
+
+  /* Mouse-tracked spotlight border */
+  var spots = Array.prototype.slice.call(document.querySelectorAll('[data-spot]'));
+  spots.forEach(function (spot) {
+    spot.addEventListener('pointermove', function (e) {
+      var rect = spot.getBoundingClientRect();
+      spot.style.setProperty('--spot-x', (e.clientX - rect.left) + 'px');
+      spot.style.setProperty('--spot-y', (e.clientY - rect.top) + 'px');
+    });
+    spot.addEventListener('pointerleave', function () {
+      spot.style.setProperty('--spot-x', '-200px');
+      spot.style.setProperty('--spot-y', '-200px');
+    });
+  });
+
+  /* Scroll reveal */
+  var revealEls = Array.prototype.slice.call(document.querySelectorAll('.reveal'));
+  if (reduceMotion || !('IntersectionObserver' in window)) {
+    revealEls.forEach(function (el) { el.classList.add('in-view'); });
+  } else {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in-view');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.3 });
+    revealEls.forEach(function (el) { io.observe(el); });
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "slug": "nimbus-pricing-table",
+  "name": "Nimbus Grid Pricing — Gold Bar Wave",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=nimbus-pricing",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

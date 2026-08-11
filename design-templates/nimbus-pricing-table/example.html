@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nimbus Grid — Pricing</title>
+<meta name="description" content="Nimbus Grid cloud storage pricing: encrypted active storage, warm collaboration, cold archive tiers, three plans, and a scroll-driven gold bar wave." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* ---------- Tokens ---------- */
+  :root {
+    color-scheme: dark;
+    --bg: #17130d;
+    --ink: #fff4d5;
+    --muted: #dacaa1;
+    --line: rgba(255, 240, 199, 0.28);
+    --glass: rgba(255, 239, 199, 0.16);
+    --glass-strong: rgba(255, 239, 199, 0.24);
+    --accent: #ead09a;
+    --accent-2: #ffd879;
+    --deep: #4d3f24;
+    --radius: 8px;
+    /* Exact opaque colors behind the gold-bar gradient stops (prompt's
+       literal rgba() values, alpha channel stripped out to 0-255 form) so
+       the recolor pass can retint them via color-mix() without shifting the
+       shipped hue even slightly. --accent already matches rgb(234,208,154)
+       exactly and is reused as-is below; these four are additional. */
+    --bar-glow: rgb(255, 247, 222);
+    --bar-gold-deep: rgb(87, 76, 43);
+    --bar-muted-gold: rgb(201, 180, 124);
+    --bar-muted-deep: rgb(78, 69, 42);
+    --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+  }
+
+  /* ---------- Resets ---------- */
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.375;
+    letter-spacing: 0.0175rem;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  a { color: inherit; text-decoration: none; }
+  h1, h2, h3, h4, h5, h6, p { margin-top: 0; }
+
+  /* ---------- Utilities ---------- */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .skip-link {
+    position: absolute;
+    top: -100%;
+    left: 12px;
+    z-index: 100;
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #241d0f;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.04rem;
+    text-transform: uppercase;
+    transition: top 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .skip-link:focus { top: 12px; }
+  :focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
+  /* ---------- Shared type ---------- */
+  .eyebrow {
+    margin: 0 0 16px;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.18;
+    letter-spacing: 0.04rem;
+    text-transform: uppercase;
+  }
+  h2 {
+    max-width: 920px;
+    margin-bottom: 0;
+    font-size: clamp(25px, 4vw, 52px);
+    line-height: 1.08;
+    letter-spacing: 0.005rem;
+    font-weight: 400;
+  }
+
+  /* ---------- Page chrome: header ---------- */
+  .site-header {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 22px clamp(20px, 5vw, 72px);
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+  }
+  .site-header .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 15px;
+    letter-spacing: 0.02rem;
+    color: var(--ink);
+  }
+  .brand-mark {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: linear-gradient(155deg, var(--accent-2), var(--accent));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 35%, transparent);
+  }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: clamp(14px, 3vw, 28px);
+  }
+  .site-nav a {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.02rem;
+    color: var(--muted);
+    transition: color 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .site-nav a:hover,
+  .site-nav a:focus-visible { color: var(--ink); }
+  .site-nav a[aria-current="page"] { color: var(--ink); }
+  .site-nav a.cta {
+    padding: 9px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--glass);
+    color: var(--ink);
+  }
+  .site-nav a.cta:hover,
+  .site-nav a.cta:focus-visible { background: var(--glass-strong); }
+
+  /* ---------- Pricing section ---------- */
+  .pricing-section {
+    position: relative;
+    min-height: auto;
+    padding: clamp(72px, 9vw, 118px) clamp(20px, 5vw, 72px) 0;
+    overflow: hidden;
+    border-top: 1px solid rgba(255, 240, 199, 0.1);
+    background:
+      linear-gradient(180deg, rgba(255, 240, 199, 0.05), transparent 44%),
+      #11120f;
+  }
+  .pricing-section::before {
+    content: "";
+    position: absolute;
+    top: -27vw;
+    left: -21vw;
+    z-index: 1;
+    width: 69vw;
+    height: 69vw;
+    pointer-events: none;
+    background: radial-gradient(
+      circle,
+      rgba(151, 211, 235, 0.14) 0%,
+      rgba(151, 211, 235, 0.07) 34%,
+      rgba(151, 211, 235, 0) 68%
+    );
+    filter: blur(22px);
+  }
+
+  /* Part 1: copy + table */
+  .pricing-top {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: minmax(280px, 0.38fr) minmax(360px, 0.62fr);
+    gap: clamp(42px, 8vw, 118px);
+    max-width: 1320px;
+    margin-inline: auto;
+  }
+  .pricing-copy h2 {
+    max-width: 560px;
+    margin-bottom: 54px;
+    font-size: clamp(34px, 4vw, 68px);
+    line-height: 1;
+  }
+  .pricing-copy p:not(.eyebrow) {
+    max-width: 470px;
+    color: var(--muted);
+    font-size: clamp(15px, 1.2vw, 19px);
+    line-height: 1.55;
+  }
+  .pricing-table {
+    display: grid;
+    align-content: start;
+    color: var(--muted);
+  }
+  .pricing-table-header,
+  .pricing-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 24px;
+    border-bottom: 1px solid rgba(255, 247, 222, 0.2);
+    padding: 18px 0;
+  }
+  .pricing-table-header { padding-top: 0; }
+  .pricing-table h3 {
+    margin-bottom: 0;
+    color: var(--ink);
+    font-size: clamp(20px, 1.7vw, 28px);
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: 0.0125rem;
+  }
+  .billing-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 999px;
+    background: rgba(255, 247, 222, 0.1);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.02rem;
+  }
+  .billing-toggle span { padding-inline: 10px; color: rgba(255, 247, 222, 0.55); }
+  .billing-toggle strong {
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #241d0f;
+    font-weight: 500;
+  }
+  .pricing-row span,
+  .pricing-row strong { font-size: clamp(14px, 1.2vw, 18px); font-weight: 400; }
+  .pricing-row strong { color: var(--ink); font-family: var(--font-mono); }
+
+  /* Part 2: plan cards */
+  .pricing-plan-row {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(42px, 8vw, 120px);
+    max-width: 1320px;
+    margin: clamp(136px, 16vw, 224px) auto 0;
+    padding-bottom: 6px;
+  }
+  .pricing-plan { width: min(300px, 100%); color: var(--ink); }
+  .pricing-plan h3 {
+    margin-bottom: 22px;
+    font-size: clamp(20px, 1.8vw, 30px);
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: 0.0125rem;
+  }
+  .pricing-plan p { margin-bottom: 24px; color: var(--muted); line-height: 1.55; }
+  .pricing-plan a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 18px;
+    border: 1px solid rgba(255, 247, 222, 0.24);
+    border-radius: 999px;
+    color: var(--ink);
+    background: rgba(255, 247, 222, 0.08);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1rem;
+    letter-spacing: 0.04rem;
+    text-transform: uppercase;
+    transition: border-color 160ms ease, background 160ms ease;
+  }
+  .pricing-plan a:hover,
+  .pricing-plan a:focus-visible {
+    border-color: rgba(255, 247, 222, 0.48);
+    background: rgba(255, 247, 222, 0.14);
+  }
+
+  /* Part 3: gold bars — scroll-driven wave */
+  .pricing-bars {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: end;
+    width: 100vw;
+    height: 480px;
+    margin-top: 36px;
+    margin-left: calc(50% - 50vw);
+  }
+  .pricing-bars::before {
+    content: "";
+    position: absolute;
+    inset: -28% 0 0;
+    z-index: -1;
+    background: linear-gradient(
+      180deg,
+      rgba(17, 18, 15, 0),
+      rgba(17, 18, 15, 0.78) 36%,
+      #11120f 100%
+    );
+    pointer-events: none;
+  }
+  /* Gradient stops reference root vars via color-mix() so MishMash's
+     recolor pass can retint them. color-mix(in srgb, var(X) P%, transparent)
+     reproduces the exact same RGB channels as var(X) with alpha = P% (the
+     un-premultiply step in the color-mix spec preserves hue exactly), so
+     every stop below is pixel-identical to the prompt's literal rgba(). */
+  .pricing-bar {
+    height: calc(var(--bar-height) + var(--bar-morph, 0px));
+    min-height: 120px;
+    background:
+      radial-gradient(circle at 30% 18%, color-mix(in srgb, var(--bar-glow) 32%, transparent), transparent 26%),
+      linear-gradient(180deg, color-mix(in srgb, var(--accent) 82%, transparent), color-mix(in srgb, var(--bar-gold-deep) 42%, transparent));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bar-glow) 25%, transparent);
+    transition: height 80ms linear;
+  }
+  .pricing-bar.muted {
+    background:
+      radial-gradient(circle at 26% 20%, color-mix(in srgb, var(--bar-glow) 24%, transparent), transparent 28%),
+      linear-gradient(180deg, color-mix(in srgb, var(--bar-muted-gold) 70%, transparent), color-mix(in srgb, var(--bar-muted-deep) 38%, transparent));
+  }
+
+  /* ---------- Page chrome: footer ---------- */
+  .site-footer {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 28px clamp(20px, 5vw, 72px) 34px;
+    background: #11120f;
+    border-top: 1px solid var(--line);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.02rem;
+    color: var(--muted);
+  }
+  .site-footer a { color: var(--muted); transition: color 160ms cubic-bezier(0.23, 1, 0.32, 1); }
+  .site-footer a:hover,
+  .site-footer a:focus-visible { color: var(--ink); }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 820px) {
+    .pricing-section { padding-top: 64px; }
+    .pricing-top { grid-template-columns: 1fr; gap: 38px; }
+    .pricing-copy h2 { margin-bottom: 28px; }
+    .pricing-table-header,
+    .pricing-row { grid-template-columns: 1fr; gap: 8px; }
+    .pricing-bars { height: 480px; }
+    .pricing-plan-row { grid-template-columns: 1fr; gap: 28px; margin-top: 48px; }
+  }
+  @media (max-width: 520px) {
+    .pricing-bars { height: 480px; }
+    .pricing-plan { width: min(280px, 100%); }
+    .eyebrow { font-size: 12px; }
+    .site-header { padding: 18px 20px; }
+  }
+
+  /* ---------- Motion safety ---------- */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .pricing-bar { transition: none; }
+    .skip-link,
+    .site-nav a,
+    .site-footer a,
+    .pricing-plan a { transition: none; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#pricing">Skip to pricing</a>
+<header class="site-header">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span>Nimbus Grid</span>
+  </div>
+  <h1 class="sr-only">Nimbus Grid — cloud storage pricing</h1>
+  <nav class="site-nav" aria-label="Primary">
+    <a href="#pricing" aria-current="page">Pricing</a>
+    <a class="cta" href="#plans">Get started</a>
+  </nav>
+</header>
+<main>
+<section class="pricing-section" id="pricing" aria-labelledby="pricing-title">
+  <div class="pricing-top">
+    <div class="pricing-copy">
+      <p class="eyebrow">Pricing</p>
+      <h2 id="pricing-title">Only pay for cloud storage your teams actually use.</h2>
+      <p>
+        Scale capacity up for active projects and cool it down when workspaces go quiet.
+        Nimbus Grid keeps storage, transfer, and policy costs visible before they become invoices.
+      </p>
+    </div>
+    <div class="pricing-table" aria-label="Nimbus Grid pricing examples">
+      <div class="pricing-table-header">
+        <h3>Storage costs</h3>
+        <div class="billing-toggle" aria-label="Billing mode">
+          <span>Per month</span>
+          <strong>Per GiB</strong>
+        </div>
+      </div>
+      <div class="pricing-row">
+        <span>Encrypted active storage</span>
+        <strong>$0.021 / GiB / month</strong>
+      </div>
+      <div class="pricing-row">
+        <span>Warm collaboration tier</span>
+        <strong>$0.012 / GiB / month</strong>
+      </div>
+      <div class="pricing-row">
+        <span>Cold retained archive</span>
+        <strong>$0.004 / GiB / month</strong>
+      </div>
+      <div class="pricing-row">
+        <span>Regional accelerated transfer</span>
+        <strong>$0.018 / GiB moved</strong>
+      </div>
+      <div class="pricing-row">
+        <span>Customer-managed key vault</span>
+        <strong>included</strong>
+      </div>
+    </div>
+  </div>
+  <div class="pricing-plan-row" id="plans">
+    <div class="pricing-plan starter">
+      <h3>Starter</h3>
+      <p>For small teams consolidating shared project files.</p>
+      <a href="#pricing">Start small</a>
+    </div>
+    <div class="pricing-plan team">
+      <h3>Team</h3>
+      <p>For departments scaling collaboration and regional transfer.</p>
+      <a href="#pricing">Build team plan</a>
+    </div>
+    <div class="pricing-plan enterprise">
+      <h3>Enterprise</h3>
+      <p>For organizations prioritizing governance, residency, and support.</p>
+      <a href="#plans">Talk to sales</a>
+    </div>
+  </div>
+  <div class="pricing-bars" aria-hidden="true">
+    <div class="pricing-bar" style="--bar-height: 66%;"></div>
+    <div class="pricing-bar muted" style="--bar-height: 58%;"></div>
+    <div class="pricing-bar" style="--bar-height: 50%;"></div>
+    <div class="pricing-bar muted" style="--bar-height: 62%;"></div>
+    <div class="pricing-bar" style="--bar-height: 45%;"></div>
+    <div class="pricing-bar muted" style="--bar-height: 54%;"></div>
+    <div class="pricing-bar" style="--bar-height: 48%;"></div>
+    <div class="pricing-bar muted" style="--bar-height: 64%;"></div>
+    <div class="pricing-bar" style="--bar-height: 72%;"></div>
+    <div class="pricing-bar muted" style="--bar-height: 70%;"></div>
+    <div class="pricing-bar" style="--bar-height: 78%;"></div>
+    <div class="pricing-bar muted" style="--bar-height: 82%;"></div>
+  </div>
+</section>
+</main>
+<footer class="site-footer">
+  <p>&copy; 2026 Nimbus Grid, Inc.</p>
+  <nav aria-label="Footer">
+    <a href="#pricing">Pricing</a>
+  </nav>
+</footer>
+<script>
+(function () {
+  "use strict";
+
+  // --- Verbatim port of the prompt's scroll-driven bar-wave function ---
+  const pricingSection = document.querySelector(".pricing-section");
+  const pricingBars = Array.from(document.querySelectorAll(".pricing-bar"));
+
+  function updatePricingBars() {
+    if (!pricingSection || !pricingBars.length) return;
+
+    const rect = pricingSection.getBoundingClientRect();
+    const viewport = window.innerHeight || 1;
+    const progress = Math.min(1, Math.max(0,
+      (viewport - rect.top) / (viewport + rect.height)
+    ));
+
+    pricingBars.forEach((bar, index) => {
+      const wave = Math.sin(progress * Math.PI * 2 + index * 0.72);
+      const secondaryWave = Math.cos(progress * Math.PI + index * 0.34);
+      const morph = Math.round(wave * 34 + secondaryWave * 14);
+      bar.style.setProperty("--bar-morph", `${morph}px`);
+    });
+  }
+
+  // --- Additive reduced-motion fallback (not in the original prompt) ---
+  // Only attach the scroll/resize listeners when motion is not reduced.
+  // Reduced motion leaves --bar-morph unset, so bars sit at their literal
+  // --bar-height values via the calc() fallback in the CSS above.
+  const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  function enableWave() {
+    window.addEventListener("scroll", updatePricingBars, { passive: true });
+    window.addEventListener("resize", updatePricingBars);
+    updatePricingBars();
+  }
+
+  function disableWave() {
+    window.removeEventListener("scroll", updatePricingBars);
+    window.removeEventListener("resize", updatePricingBars);
+    pricingBars.forEach((bar) => bar.style.removeProperty("--bar-morph"));
+  }
+
+  if (reduceMotionQuery.matches) {
+    disableWave();
+  } else {
+    enableWave();
+  }
+
+  if (typeof reduceMotionQuery.addEventListener === "function") {
+    reduceMotionQuery.addEventListener("change", (event) => {
+      if (event.matches) {
+        disableWave();
+      } else {
+        enableWave();
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>
