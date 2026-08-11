@@ -173,8 +173,8 @@ describe('DesignLibrarySection', () => {
     const buttons = within(card).getAllByRole('button');
     expect(buttons).toHaveLength(2);
     expect(within(card).getByRole('button', { name: 'Preview Fintune (iOS)' })).toBeTruthy();
-    const openFolderBtn = within(card).getByRole('button', { name: /open folder/i });
-    expect(within(card).queryByText('Use as template')).toBeNull();
+    const openFolderBtn = within(card).getByRole('button', { name: /open file/i });
+    expect(within(card).queryByText('Start project')).toBeNull();
 
     fireEvent.click(openFolderBtn);
     await waitFor(() => expect(openDesignLibraryPath).toHaveBeenCalledWith('02 App Captures/fintune'));
@@ -191,14 +191,14 @@ describe('DesignLibrarySection', () => {
     // entry_html), Use as template.
     const licensedButtons = within(licensedCard).getAllByRole('button');
     expect(licensedButtons).toHaveLength(4);
-    expect(within(licensedCard).getByText('Use as template')).toBeTruthy();
+    expect(within(licensedCard).getByText('Start project')).toBeTruthy();
 
     const restrictedLabel = screen.getByText('Fintune (iOS)');
     const restrictedCard = restrictedLabel.closest('article') as HTMLElement;
     expect(restrictedCard.getAttribute('data-allowed-use')).toBe('human-local-only');
     const restrictedButtons = within(restrictedCard).getAllByRole('button');
     expect(restrictedButtons).toHaveLength(2);
-    expect(within(restrictedCard).queryByText('Use as template')).toBeNull();
+    expect(within(restrictedCard).queryByText('Start project')).toBeNull();
   });
 
   it('removes the Use as template affordance when a catalog item is rights-blocked', async () => {
@@ -217,7 +217,7 @@ describe('DesignLibrarySection', () => {
     render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
     const card = (await screen.findByText('Neon Dashboard Kit')).closest('article') as HTMLElement;
     expect(card.getAttribute('data-allowed-use')).toBe('blocked-pending-license');
-    expect(within(card).queryByText('Use as template')).toBeNull();
+    expect(within(card).queryByText('Start project')).toBeNull();
   });
 
   it('renders the description on the card when present and omits it when absent', async () => {
@@ -248,15 +248,15 @@ describe('DesignLibrarySection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
-    // Full uncropped composite (the "whole kit UI, laid out") plus the
-    // kit's metadata and description.
-    expect(within(dialog).getByRole('img', { name: 'Neon Dashboard Kit' })).toBeTruthy();
+    // MM-012#1: the live entry page, not a static composite, plus the kit's
+    // metadata and description.
+    expect(within(dialog).getByTestId('design-library-preview-frame')).toBeTruthy();
     expect(
       within(dialog).getByText('Dark glassmorphic analytics dashboard. Best for SaaS admin panels.'),
     ).toBeTruthy();
     // The same actions the card offers stay reachable from the dialog.
-    expect(within(dialog).getByRole('button', { name: /open folder/i })).toBeTruthy();
-    expect(within(dialog).getByText('Use as template')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: /open file/i })).toBeTruthy();
+    expect(within(dialog).getByText('Start project')).toBeTruthy();
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Neon Dashboard Kit' })).toBeNull());
@@ -271,7 +271,7 @@ describe('DesignLibrarySection', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Fintune (iOS)' });
     expect(within(dialog).getByText('Visual preview unavailable')).toBeTruthy();
     expect(within(dialog).getByText('No preview · 40 files · 12 MB')).toBeTruthy();
-    expect(within(dialog).getByRole('button', { name: /open folder/i })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: /open file/i })).toBeTruthy();
     expect(within(dialog).queryByRole('img')).toBeNull();
   });
 
@@ -354,7 +354,7 @@ describe('DesignLibrarySection', () => {
 
     const label = await screen.findByText('Neon Dashboard Kit');
     const card = label.closest('article') as HTMLElement;
-    fireEvent.click(within(card).getByText('Use as template'));
+    fireEvent.click(within(card).getByText('Start project'));
 
     const dialog = await screen.findByTestId('guided-create-dialog');
     // Skip all reproduces today's single-click behavior exactly: no options
@@ -387,7 +387,7 @@ describe('DesignLibrarySection', () => {
 
     const label = await screen.findByText('Neon Dashboard Kit');
     const card = label.closest('article') as HTMLElement;
-    fireEvent.click(within(card).getByText('Use as template'));
+    fireEvent.click(within(card).getByText('Start project'));
 
     const dialog = await screen.findByTestId('guided-create-dialog');
     const screensPresets = within(dialog).getAllByTestId('guided-create-screens-preset');
@@ -424,9 +424,14 @@ describe('DesignLibrarySection', () => {
 
     const label = await screen.findByText('NeuForm Particle Field');
     const card = label.closest('article') as HTMLElement;
+    // The suggested stack now lives in the hover panel, not permanently on
+    // the card body (MM-011 standardized card height) — the AspectSelector
+    // picker itself is unchanged and stays directly clickable.
+    fireEvent.mouseEnter(within(card).getByTestId('design-library-title-area'));
     expect(within(card).getByText(/React · Three.js · GSAP/)).toBeTruthy();
+    fireEvent.mouseLeave(within(card).getByTestId('design-library-title-area'));
     fireEvent.click(within(card).getByRole('button', { name: 'WebGL' }));
-    fireEvent.click(within(card).getByRole('button', { name: /Use design/ }));
+    fireEvent.click(within(card).getByRole('button', { name: /Start project/ }));
 
     await waitFor(() =>
       expect(startDesignLibraryProject).toHaveBeenCalledWith(
@@ -445,7 +450,7 @@ describe('DesignLibrarySection', () => {
 
     const label = await screen.findByText('Neon Dashboard Kit');
     const card = label.closest('article') as HTMLElement;
-    fireEvent.click(within(card).getByText('Use as template'));
+    fireEvent.click(within(card).getByText('Start project'));
     const dialog = await screen.findByTestId('guided-create-dialog');
     fireEvent.click(within(dialog).getByTestId('guided-create-skip'));
 
@@ -515,7 +520,7 @@ describe('DesignLibrarySection', () => {
     const meta = within(card).getByTestId('design-library-meta');
     expect(meta.contains(within(card).getByRole('heading'))).toBe(true);
     const actions = within(card).getByTestId('design-library-actions');
-    expect(within(actions).getByRole('button', { name: /open folder/i })).toBeTruthy();
+    expect(within(actions).getByRole('button', { name: /open file/i })).toBeTruthy();
   });
 
   it('swaps the cover to the shared fallback state when the thumbnail image fails to load', async () => {
@@ -554,75 +559,25 @@ describe('DesignLibrarySection', () => {
     expect(within(cover).getByText('Visual preview unavailable')).toBeTruthy();
   });
 
-  // --- detail view (t6/PRD C6): hero, identity, preview strip -------------
+  // --- detail view (t6/PRD C6): identity + preview pane --------------------
+  // MM-012#1 replaced the old strip-of-tiny-thumbnails hero swap with a
+  // single filled preview pane (live page first, then the catalog's other
+  // gallery images) and explicit Next/Previous cycling — see the dedicated
+  // MM-012#1 block below for the pane's own contract.
 
-  it('renders the detail dialog\'s hero, title, category chip, description, and preview strip', async () => {
+  it('renders the detail dialog\'s title, category chip, and description alongside the preview pane', async () => {
     render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
     await screen.findByText('Neon Dashboard Kit');
 
     fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
     const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
 
-    expect(within(dialog).getByTestId('design-library-hero-image')).toBeTruthy();
+    expect(within(dialog).getByTestId('design-library-preview-pane')).toBeTruthy();
     expect(within(dialog).getByRole('heading', { name: 'Neon Dashboard Kit' })).toBeTruthy();
     expect(within(dialog).getByText('Ui Kit')).toBeTruthy();
     expect(
       within(dialog).getByText('Dark glassmorphic analytics dashboard. Best for SaaS admin panels.'),
     ).toBeTruthy();
-    expect(within(dialog).getAllByTestId('design-library-strip-item')).toHaveLength(2);
-  });
-
-  it('does not render a preview strip at all when the item has no thumb', async () => {
-    render(<DesignLibrarySection active />);
-    await screen.findByText('Fintune (iOS)');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Preview Fintune (iOS)' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Fintune (iOS)' });
-    expect(dialog.querySelector('[data-testid="design-library-strip-item"]')).toBeNull();
-  });
-
-  it('omits the strip for an item with only a single cover image, no catalog gallery', async () => {
-    render(<DesignLibrarySection active />);
-    await screen.findByText('NeuForm Particle Field');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Preview NeuForm Particle Field' }));
-    const dialog = await screen.findByRole('dialog', { name: 'NeuForm Particle Field' });
-    expect(within(dialog).queryByTestId('design-library-strip-item')).toBeNull();
-  });
-
-  it('swaps the hero image when a strip thumbnail is clicked, without closing the dialog', async () => {
-    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
-    await screen.findByText('Neon Dashboard Kit');
-    fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
-
-    const hero = within(dialog).getByTestId('design-library-hero-image') as HTMLImageElement;
-    expect(hero.getAttribute('src')).toBe('/api/design-library/thumb/ui-kit-1.jpg');
-
-    const stripItems = within(dialog).getAllByTestId('design-library-strip-item');
-    fireEvent.click(stripItems[1]!);
-
-    const heroAfter = within(dialog).getByTestId('design-library-hero-image') as HTMLImageElement;
-    expect(heroAfter.getAttribute('src')).toBe('/api/design-library/thumb/ui-kit-1-fig.png');
-    // Still the same dialog — the strip never reloads it.
-    expect(screen.getByRole('dialog', { name: 'Neon Dashboard Kit' })).toBeTruthy();
-  });
-
-  it('swaps the hero image with the left/right arrow keys', async () => {
-    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
-    await screen.findByText('Neon Dashboard Kit');
-    fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
-
-    fireEvent.keyDown(document, { key: 'ArrowRight' });
-    expect(
-      (within(dialog).getByTestId('design-library-hero-image') as HTMLImageElement).getAttribute('src'),
-    ).toBe('/api/design-library/thumb/ui-kit-1-fig.png');
-
-    fireEvent.keyDown(document, { key: 'ArrowLeft' });
-    expect(
-      (within(dialog).getByTestId('design-library-hero-image') as HTMLImageElement).getAttribute('src'),
-    ).toBe('/api/design-library/thumb/ui-kit-1.jpg');
   });
 
   // --- duplicate suppression (t9) ------------------------------------------
@@ -715,5 +670,244 @@ describe('DesignLibrarySection', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
 
     expect(within(dialog).queryByTestId('design-library-explore-kit')).toBeNull();
+  });
+
+  // --- MM-011: Templates-pattern grid + standardized card + hover panel ----
+
+  it('lays every card out inside a group grid container, Templates-style', async () => {
+    render(<DesignLibrarySection active />);
+    await screen.findByText('Neon Dashboard Kit');
+
+    const grids = screen.getAllByTestId('design-library-grid');
+    expect(grids.length).toBeGreaterThan(0);
+    const cards = screen.getAllByTestId('design-library-card');
+    for (const card of cards) {
+      expect(grids.some((grid) => grid.contains(card))).toBe(true);
+    }
+  });
+
+  it('keeps domains and the suggested-stack line off the card body by default', async () => {
+    render(<DesignLibrarySection active />);
+    const label = await screen.findByText('NeuForm Particle Field');
+    const card = label.closest('article') as HTMLElement;
+
+    // These are catalog metadata (domains, suggested stack) that used to sit
+    // permanently on the card and push its height around — MM-011 moves them
+    // into the hover panel / detail dialog so every card shares one height.
+    expect(within(card).queryByText(/React · Three\.js · GSAP/)).toBeNull();
+    expect(within(card).queryByText('webgl-motion')).toBeNull();
+  });
+
+  it('shows a read-only hover panel over the title/description area with no click, and hides it again on mouseleave', async () => {
+    render(<DesignLibrarySection active />);
+    const label = await screen.findByText('NeuForm Particle Field');
+    const card = label.closest('article') as HTMLElement;
+    const titleArea = within(card).getByTestId('design-library-title-area');
+
+    expect(within(card).queryByTestId('design-library-hover-panel')).toBeNull();
+
+    fireEvent.mouseEnter(titleArea);
+    const panel = within(card).getByTestId('design-library-hover-panel');
+    expect(within(panel).getByText('NeuForm Particle Field')).toBeTruthy();
+    expect(within(panel).getByText('Particle hero with restrained orbital motion.')).toBeTruthy();
+    expect(within(panel).getByText(/React · Three\.js · GSAP/)).toBeTruthy();
+    expect(within(panel).getByText(/WebGL · Hero · GSAP motion/)).toBeTruthy();
+    // Orientation only — this is not the carry-forward picker, so nothing in
+    // the panel itself is clickable.
+    expect(within(panel).queryAllByRole('button')).toHaveLength(0);
+
+    fireEvent.mouseLeave(titleArea);
+    expect(within(card).queryByTestId('design-library-hover-panel')).toBeNull();
+  });
+
+  it('omits the suggested-stack and carry-forward hover sections when the catalog has neither, without hiding the panel itself', async () => {
+    render(<DesignLibrarySection active />);
+    const label = await screen.findByText('Neon Dashboard Kit');
+    const card = label.closest('article') as HTMLElement;
+    const titleArea = within(card).getByTestId('design-library-title-area');
+
+    fireEvent.mouseEnter(titleArea);
+    const panel = within(card).getByTestId('design-library-hover-panel');
+    expect(within(panel).getByText('Neon Dashboard Kit')).toBeTruthy();
+    expect(
+      within(panel).getByText('Dark glassmorphic analytics dashboard. Best for SaaS admin panels.'),
+    ).toBeTruthy();
+    // Substring match — the rendered label carries a trailing ":" (see
+    // hoverPanelLabel in the component), so an exact match here would be a
+    // false-negative-proof no-op regardless of whether the section leaked in.
+    expect(within(panel).queryByText(/Suggested stack/)).toBeNull();
+    expect(within(panel).queryByText(/Could carry forward/)).toBeNull();
+  });
+
+  it('opens the hover panel on real keyboard focus, with a visible-focus tab stop', async () => {
+    render(<DesignLibrarySection active />);
+    const label = await screen.findByText('NeuForm Particle Field');
+    const card = label.closest('article') as HTMLElement;
+    const titleArea = within(card).getByTestId('design-library-title-area');
+
+    expect(within(card).queryByTestId('design-library-hover-panel')).toBeNull();
+
+    // Real DOM .focus() (not fireEvent.focus, which dispatches a focus event
+    // regardless of focusability) — jsdom only moves activeElement here if
+    // the element is genuinely focusable, i.e. carries a tabIndex. This is
+    // the exact defect being fixed: a plain, tabIndex-less div is not a real
+    // tab stop, so this assertion alone would fail against the old markup.
+    titleArea.focus();
+    expect(document.activeElement).toBe(titleArea);
+
+    // jsdom's native .focus() does not dispatch the bubbling `focusin` event
+    // React's synthetic onFocus delegates through, so drive the handler with
+    // the same bubbling event a real Tab keypress produces.
+    fireEvent.focusIn(titleArea);
+    expect(within(card).getByTestId('design-library-hover-panel')).toBeTruthy();
+
+    fireEvent.focusOut(titleArea);
+    expect(within(card).queryByTestId('design-library-hover-panel')).toBeNull();
+  });
+
+  it('dismisses the hover panel on Escape without closing anything else', async () => {
+    render(<DesignLibrarySection active />);
+    const label = await screen.findByText('NeuForm Particle Field');
+    const card = label.closest('article') as HTMLElement;
+    const titleArea = within(card).getByTestId('design-library-title-area');
+
+    titleArea.focus();
+    fireEvent.focusIn(titleArea);
+    expect(within(card).getByTestId('design-library-hover-panel')).toBeTruthy();
+
+    fireEvent.keyDown(titleArea, { key: 'Escape' });
+    expect(within(card).queryByTestId('design-library-hover-panel')).toBeNull();
+    // Focus itself is untouched — Escape dismisses the panel, not the page.
+    expect(document.activeElement).toBe(titleArea);
+  });
+
+  it('associates the open hover panel to its trigger via aria-describedby/aria-expanded, and the panel is a non-interactive group (not a tooltip — it carries multiple labeled sections, not short plain text)', async () => {
+    render(<DesignLibrarySection active />);
+    const label = await screen.findByText('NeuForm Particle Field');
+    const card = label.closest('article') as HTMLElement;
+    const titleArea = within(card).getByTestId('design-library-title-area');
+
+    expect(titleArea.getAttribute('aria-describedby')).toBeNull();
+    expect(titleArea.getAttribute('aria-expanded')).toBe('false');
+
+    fireEvent.mouseEnter(titleArea);
+    const panel = within(card).getByTestId('design-library-hover-panel');
+    expect(panel.getAttribute('role')).toBe('group');
+    expect(titleArea.getAttribute('aria-describedby')).toBe(panel.id);
+    expect(titleArea.getAttribute('aria-expanded')).toBe('true');
+
+    fireEvent.mouseLeave(titleArea);
+    expect(titleArea.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('keeps the card actions in the accessibility tree and clickable while the hover panel is open', async () => {
+    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
+    const label = await screen.findByText('Neon Dashboard Kit');
+    const card = label.closest('article') as HTMLElement;
+    const titleArea = within(card).getByTestId('design-library-title-area');
+
+    fireEvent.mouseEnter(titleArea);
+    expect(within(card).getByTestId('design-library-hover-panel')).toBeTruthy();
+
+    // The occlusion fix is that the panel never captures the pointer — the
+    // action row stays reachable (present, findable by role, and clickable)
+    // the entire time the panel is open, not just after it closes.
+    const openFileBtn = within(card).getByRole('button', { name: /open file/i });
+    expect(openFileBtn).toBeTruthy();
+    fireEvent.click(openFileBtn);
+    expect(openDesignLibraryPath).toHaveBeenCalledWith('01 UI Kits/neon-dashboard');
+  });
+
+  // --- MM-012#1: preview pane shows the live page first, cyclable ---------
+
+  it('opens the detail dialog straight to the live first example, filling the pane, with a 1-of-N counter', async () => {
+    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
+    await screen.findByText('Neon Dashboard Kit');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
+
+    const frame = within(dialog).getByTestId('design-library-preview-frame') as HTMLIFrameElement;
+    expect(frame.getAttribute('src')).toBe(
+      '/api/design-library/preview-asset/01%20UI%20Kits%2Fneon-dashboard/index.html',
+    );
+    expect(within(dialog).queryByTestId('design-library-hero-image')).toBeNull();
+    expect(within(dialog).getByText('1 of 3')).toBeTruthy();
+  });
+
+  it('cycles forward through the other examples with Next, and wraps back to the live example', async () => {
+    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
+    await screen.findByText('Neon Dashboard Kit');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Next example' }));
+    expect(within(dialog).queryByTestId('design-library-preview-frame')).toBeNull();
+    expect(
+      (within(dialog).getByTestId('design-library-hero-image') as HTMLImageElement).getAttribute('src'),
+    ).toBe('/api/design-library/thumb/ui-kit-1.jpg');
+    expect(within(dialog).getByText('2 of 3')).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Next example' }));
+    expect(
+      (within(dialog).getByTestId('design-library-hero-image') as HTMLImageElement).getAttribute('src'),
+    ).toBe('/api/design-library/thumb/ui-kit-1-fig.png');
+    expect(within(dialog).getByText('3 of 3')).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Next example' }));
+    expect(within(dialog).getByTestId('design-library-preview-frame')).toBeTruthy();
+    expect(within(dialog).getByText('1 of 3')).toBeTruthy();
+  });
+
+  it('cycles backward through the examples with the left/right arrow keys', async () => {
+    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
+    await screen.findByText('Neon Dashboard Kit');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
+
+    fireEvent.keyDown(document, { key: 'ArrowLeft' });
+    expect(within(dialog).getByText('3 of 3')).toBeTruthy();
+    expect(
+      (within(dialog).getByTestId('design-library-hero-image') as HTMLImageElement).getAttribute('src'),
+    ).toBe('/api/design-library/thumb/ui-kit-1-fig.png');
+
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(within(dialog).getByText('1 of 3')).toBeTruthy();
+    expect(within(dialog).getByTestId('design-library-preview-frame')).toBeTruthy();
+  });
+
+  it('omits the cycle controls entirely when the item has only one example', async () => {
+    render(<DesignLibrarySection active />);
+    await screen.findByText('NeuForm Particle Field');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview NeuForm Particle Field' }));
+    const dialog = await screen.findByRole('dialog', { name: 'NeuForm Particle Field' });
+
+    expect(within(dialog).queryByRole('button', { name: 'Next example' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Previous example' })).toBeNull();
+    expect(within(dialog).queryByText(/of 1/)).toBeNull();
+  });
+
+  it('omits cycle controls when the item has no visual and no live preview at all', async () => {
+    render(<DesignLibrarySection active />);
+    await screen.findByText('Fintune (iOS)');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Fintune (iOS)' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Fintune (iOS)' });
+
+    expect(within(dialog).queryByTestId('design-library-preview-frame')).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Next example' })).toBeNull();
+  });
+
+  it('falls back to the unavailable state when a gallery example image fails to load', async () => {
+    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
+    await screen.findByText('Neon Dashboard Kit');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
+
+    // Move off the live first example onto a plain gallery image example.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Next example' }));
+    const img = within(dialog).getByTestId('design-library-hero-image');
+    fireEvent.error(img);
+
+    expect(within(dialog).queryByTestId('design-library-hero-image')).toBeNull();
+    expect(within(dialog).getByText('Visual preview unavailable')).toBeTruthy();
   });
 });

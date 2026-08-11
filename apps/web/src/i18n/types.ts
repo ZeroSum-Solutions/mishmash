@@ -4488,10 +4488,19 @@ export interface Dict {
   'designLibrary.openLivePreview': string;
   'designLibrary.openLivePreviewBusy': string;
   'designLibrary.openLivePreviewError': string;
-  // Detail-view preview strip and interactive kit canvas (C6/C7).
-  'designLibrary.stripLabel': string;
-  'designLibrary.stripItemLabel': string;
+  // Interactive kit canvas (C7).
   'designLibrary.duplicatesHidden': string;
+  // MM-011: read-only hover orientation panel on the card's title/
+  // description area — title + description (repeated in full), suggested
+  // stack, and what could be carried forward. Never a picker; the picker
+  // stays the existing AspectSelector / guided-create flow.
+  'designLibrary.hoverCarryForwardLabel': string;
+  // MM-012#1: example cycling in the detail dialog's preview pane — the
+  // first slide is the live entry page (when previewable), the rest are the
+  // catalog's other gallery images.
+  'designLibrary.previewPrev': string;
+  'designLibrary.previewNext': string;
+  'designLibrary.previewCounter': string;
   'designLibrary.exploreKit': string;
   'designLibrary.viewportLabel': string;
   'designLibrary.viewportDesktop': string;
