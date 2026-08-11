@@ -126,6 +126,38 @@ function galleryImages(item: DesignLibraryItem): string[] {
   return item.thumb ? [item.thumb] : [];
 }
 
+// MM-015 — TEMPORARY pin: NeuForm groups render ahead of the normal
+// alphabetical design-system ordering, even though design systems would
+// otherwise sort first. Owner's ask verbatim: "even though design systems
+// alphabetically should run first ... we just tag them to the top." This is
+// a stopgap while every other design-library source's ingestion pipeline is
+// broken (MM-013) — NeuForm is the one tier that currently imports with
+// intact previews and metadata (see mm015-diagnostic.md). Revisit and
+// remove this pin once MM-013 lands and the other sources are trustworthy
+// enough that alphabetical ordering is acceptable again. This is a targeted
+// stable partition, not a new ranking system — every other group keeps its
+// catalog-supplied (alphabetical) relative order.
+//
+// Matches the folder prefix apps/daemon/scripts/import-neuform-favorites.ts
+// writes for every NeuForm group (`CATEGORY_META[...].folder`). Duplicated
+// here rather than imported: apps/web must not import apps/daemon/src/**.
+const NEUFORM_GROUP_FOLDER_PREFIX = '05 NeuForm Favorites';
+
+function isNeuFormGroup(folder: string): boolean {
+  return (
+    folder === NEUFORM_GROUP_FOLDER_PREFIX || folder.startsWith(`${NEUFORM_GROUP_FOLDER_PREFIX}/`)
+  );
+}
+
+function pinNeuFormGroupsFirst<T extends { folder: string }>(groups: T[]): T[] {
+  const pinned: T[] = [];
+  const rest: T[] = [];
+  for (const group of groups) {
+    (isNeuFormGroup(group.folder) ? pinned : rest).push(group);
+  }
+  return [...pinned, ...rest];
+}
+
 export function DesignLibrarySection({ active, onOpenProject }: Props) {
   const t = useT();
   const [result, setResult] = useState<DesignLibraryCatalogResult | null>(null);
@@ -207,7 +239,9 @@ export function DesignLibrarySection({ active, onOpenProject }: Props) {
       if (primaryItems.length > 0) primaryGroups.push({ ...group, items: primaryItems, hiddenDuplicateCount });
       if (humanLocalItems.length > 0) humanLocalGroups.push({ ...group, items: humanLocalItems, hiddenDuplicateCount });
     }
-    return { primaryGroups, humanLocalGroups };
+    // MM-015 pin: see pinNeuFormGroupsFirst above for why this exception
+    // exists and when to remove it.
+    return { primaryGroups: pinNeuFormGroupsFirst(primaryGroups), humanLocalGroups: pinNeuFormGroupsFirst(humanLocalGroups) };
   }, [catalog, search, category, domain]);
 
   const hasAnyItems = primaryGroups.length > 0 || humanLocalGroups.length > 0;
@@ -558,7 +592,8 @@ function AspectSelector({
 // is too structured for that role. The trigger (DesignLibraryCard's
 // titleArea) still associates via `aria-describedby` (screen readers read
 // the panel's full text as the trigger's description regardless of the
-// panel's own role) and signals the disclosure state via `aria-expanded`.
+// panel's own role). No `aria-expanded`: the trigger is a roleless text
+// wrapper, and `aria-expanded` is only valid on roles that support it.
 // The panel is never itself interactive or focusable (no tabIndex, no
 // controls) and stays `pointer-events: none` so it can never intercept a
 // click meant for the card underneath — hover/leave on the trigger is driven
@@ -669,7 +704,6 @@ function DesignLibraryCard({
           className={styles.titleArea}
           data-testid="design-library-title-area"
           tabIndex={0}
-          aria-expanded={hoverPanelOpen}
           aria-describedby={hoverPanelOpen ? hoverPanelId : undefined}
           onMouseEnter={() => setHoverPanelOpen(true)}
           onMouseLeave={() => setHoverPanelOpen(false)}

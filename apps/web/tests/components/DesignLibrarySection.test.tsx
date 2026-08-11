@@ -810,23 +810,23 @@ describe('DesignLibrarySection', () => {
     expect(document.activeElement).toBe(titleArea);
   });
 
-  it('associates the open hover panel to its trigger via aria-describedby/aria-expanded, and the panel is a non-interactive group (not a tooltip — it carries multiple labeled sections, not short plain text)', async () => {
+  it('associates the open hover panel to its trigger via aria-describedby, and the panel is a non-interactive group (not a tooltip — it carries multiple labeled sections, not short plain text; no aria-expanded — invalid on a roleless trigger)', async () => {
     render(<DesignLibrarySection active />);
     const label = await screen.findByText('NeuForm Particle Field');
     const card = label.closest('article') as HTMLElement;
     const titleArea = within(card).getByTestId('design-library-title-area');
 
     expect(titleArea.getAttribute('aria-describedby')).toBeNull();
-    expect(titleArea.getAttribute('aria-expanded')).toBe('false');
+    expect(titleArea.getAttribute('aria-expanded')).toBeNull();
 
     fireEvent.mouseEnter(titleArea);
     const panel = within(card).getByTestId('design-library-hover-panel');
     expect(panel.getAttribute('role')).toBe('group');
     expect(titleArea.getAttribute('aria-describedby')).toBe(panel.id);
-    expect(titleArea.getAttribute('aria-expanded')).toBe('true');
+    expect(titleArea.getAttribute('aria-expanded')).toBeNull();
 
     fireEvent.mouseLeave(titleArea);
-    expect(titleArea.getAttribute('aria-expanded')).toBe('false');
+    expect(titleArea.getAttribute('aria-describedby')).toBeNull();
   });
 
   it('keeps the card actions in the accessibility tree and clickable while the hover panel is open', async () => {
@@ -938,5 +938,156 @@ describe('DesignLibrarySection', () => {
 
     expect(within(dialog).queryByTestId('design-library-hero-image')).toBeNull();
     expect(within(dialog).getByText('Visual preview unavailable')).toBeTruthy();
+  });
+
+  // MM-015: NeuForm favorites are pinned ahead of the alphabetical
+  // design-system group order (a temporary convenience — see the pin
+  // comment in DesignLibrarySection.tsx), even when the catalog itself
+  // lists the NeuForm group after alphabetically-earlier groups.
+  it('pins the NeuForm group ahead of alphabetically-earlier groups', async () => {
+    const neuform = {
+      title: 'NeuForm · Templates',
+      folder: '05 NeuForm Favorites/Templates',
+      blurb: 'Complete layout and site directions for starting a new original project.',
+      items: [
+        {
+          ...CATALOG.groups[0]!.items[0]!,
+          id: 'neuform-template-1',
+          label: 'NeuForm Orbit Landing',
+          rel: '05 NeuForm Favorites/Templates/orbit-landing',
+          allowed_use: 'licensed-source-review' as const,
+        },
+      ],
+    };
+    const aardvark = {
+      title: 'Aardvark Kits',
+      folder: '01 Aardvark Kits',
+      blurb: 'Alphabetically first.',
+      items: [
+        {
+          ...CATALOG.groups[0]!.items[0]!,
+          id: 'aardvark-1',
+          label: 'Aardvark Starter Kit',
+          rel: '01 Aardvark Kits/starter',
+        },
+      ],
+    };
+    const bramble = {
+      title: 'Bramble Systems',
+      folder: '02 Bramble Systems',
+      blurb: 'Alphabetically second.',
+      items: [
+        {
+          ...CATALOG.groups[0]!.items[0]!,
+          id: 'bramble-1',
+          label: 'Bramble Design System',
+          rel: '02 Bramble Systems/system',
+        },
+      ],
+    };
+
+    fetchDesignLibraryCatalog.mockResolvedValue({
+      ok: true,
+      catalog: {
+        ...CATALOG,
+        total_collections: 3,
+        // Catalog order is the ordinary alphabetical order the daemon
+        // writes: NeuForm sorts last by folder name, not first.
+        groups: [aardvark, bramble, neuform],
+      },
+    });
+
+    render(<DesignLibrarySection active />);
+    await screen.findByText('NeuForm Orbit Landing');
+
+    expect(screen.getAllByTestId('design-library-card').map((card) => within(card).getByRole('heading').textContent)).toEqual([
+      'NeuForm Orbit Landing',
+      'Aardvark Starter Kit',
+      'Bramble Design System',
+    ]);
+    const groupTitles = new Set(['NeuForm · Templates', 'Aardvark Kits', 'Bramble Systems']);
+    expect(
+      screen
+        .getAllByRole('heading', { level: 2 })
+        .map((heading) => heading.textContent)
+        .filter((text): text is string => Boolean(text && groupTitles.has(text))),
+    ).toEqual(['NeuForm · Templates', 'Aardvark Kits', 'Bramble Systems']);
+  });
+
+  it('preserves alphabetical order among non-NeuForm groups while a mid-catalog NeuForm group is pinned out to the front', async () => {
+    const neuform = {
+      title: 'NeuForm · Tools',
+      folder: '05 NeuForm Favorites/Tools',
+      blurb: 'Curated NeuForm tools.',
+      items: [
+        {
+          ...CATALOG.groups[0]!.items[0]!,
+          id: 'neuform-tool-1',
+          label: 'NeuForm Cursor Trail',
+          rel: '05 NeuForm Favorites/Tools/cursor-trail',
+          allowed_use: 'licensed-source-review' as const,
+        },
+      ],
+    };
+    const aardvark = {
+      title: 'Aardvark Kits',
+      folder: '01 Aardvark Kits',
+      blurb: 'Alphabetically first.',
+      items: [
+        {
+          ...CATALOG.groups[0]!.items[0]!,
+          id: 'aardvark-1',
+          label: 'Aardvark Starter Kit',
+          rel: '01 Aardvark Kits/starter',
+        },
+      ],
+    };
+    const bramble = {
+      title: 'Bramble Systems',
+      folder: '02 Bramble Systems',
+      blurb: 'Alphabetically second.',
+      items: [
+        {
+          ...CATALOG.groups[0]!.items[0]!,
+          id: 'bramble-1',
+          label: 'Bramble Design System',
+          rel: '02 Bramble Systems/system',
+        },
+      ],
+    };
+    const crimson = {
+      title: 'Crimson Patterns',
+      folder: '03 Crimson Patterns',
+      blurb: 'Alphabetically third.',
+      items: [
+        {
+          ...CATALOG.groups[0]!.items[0]!,
+          id: 'crimson-1',
+          label: 'Crimson Pattern Set',
+          rel: '03 Crimson Patterns/patterns',
+        },
+      ],
+    };
+
+    fetchDesignLibraryCatalog.mockResolvedValue({
+      ok: true,
+      catalog: {
+        ...CATALOG,
+        total_collections: 4,
+        // NeuForm sits mid-catalog: the pin must pull it out to the front
+        // without disturbing the relative order of the groups around it.
+        groups: [aardvark, neuform, bramble, crimson],
+      },
+    });
+
+    render(<DesignLibrarySection active />);
+    await screen.findByText('Crimson Pattern Set');
+
+    expect(screen.getAllByTestId('design-library-card').map((card) => within(card).getByRole('heading').textContent)).toEqual([
+      'NeuForm Cursor Trail',
+      'Aardvark Starter Kit',
+      'Bramble Design System',
+      'Crimson Pattern Set',
+    ]);
   });
 });
