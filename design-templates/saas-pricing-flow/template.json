@@ -1,0 +1,12 @@
+{
+  "slug": "saas-pricing-flow",
+  "name": "Kavessa AI — SaaS Pricing Flow",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=saas-pricing-flow",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}
