@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   decideAutoOpenAfterWrite,
+  resolveAutoOpenArtifactOptions,
   selectAutoOpenProducedArtifact,
   selectAutoOpenTurnArtifact,
 } from '../../src/components/auto-open-file';
@@ -140,6 +141,55 @@ describe('decideAutoOpenAfterWrite', () => {
     );
     expect(result).toEqual({ shouldOpen: true, fileName: 'landing.html' });
   });
+});
+
+describe('resolveAutoOpenArtifactOptions', () => {
+  // MM-004-B: template projects (Home "New from template") were falling
+  // through to the newest-mtime tie-break, so an agent's second exploratory
+  // HTML file (e.g. a dark-mode variant) beat the faithful index.html clone
+  // for auto-open. The gate must widen to cover metadata.kind === 'template',
+  // not just the web-clone intent.
+  it('prefers the site entry for a template project (metadata.kind === "template")', () => {
+    const result = resolveAutoOpenArtifactOptions({ kind: 'template' });
+    expect(result).toEqual({ preferSiteEntry: true });
+  });
+
+  it('still prefers the site entry for a web-clone intent project', () => {
+    const result = resolveAutoOpenArtifactOptions({ kind: 'prototype', intent: 'web-clone' });
+    expect(result).toEqual({ preferSiteEntry: true });
+  });
+
+  it('does not prefer the site entry for an ordinary prototype project', () => {
+    const result = resolveAutoOpenArtifactOptions({ kind: 'prototype' });
+    expect(result).toEqual({ preferSiteEntry: false });
+  });
+
+  it('does not prefer the site entry when metadata is missing', () => {
+    const result = resolveAutoOpenArtifactOptions(undefined);
+    expect(result).toEqual({ preferSiteEntry: false });
+  });
+
+  it(
+    'reproduces MM-004-B: a template project auto-opens the faithful index.html ' +
+      'clone over a newer exploratory variant',
+    () => {
+      const metadata = { kind: 'template' as const };
+      const result = selectAutoOpenProducedArtifact(
+        [
+          { name: 'index.html', path: 'index.html', kind: 'html', mtime: 10 },
+          {
+            name: 'foxtrot-landing-dark.html',
+            path: 'foxtrot-landing-dark.html',
+            kind: 'html',
+            mtime: 30,
+          },
+        ],
+        resolveAutoOpenArtifactOptions(metadata),
+      );
+
+      expect(result).toBe('index.html');
+    },
+  );
 });
 
 describe('selectAutoOpenProducedArtifact', () => {
