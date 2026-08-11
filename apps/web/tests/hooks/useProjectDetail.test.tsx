@@ -73,4 +73,40 @@ describe('useProjectDetail', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).not.toBeNull();
   });
+
+  it('does not expose the previous project detail while the next project is loading', async () => {
+    let resolveSecond!: (response: Response) => void;
+    const secondResponse = new Promise<Response>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        project: { id: 'p1', name: 'First', skillId: null, designSystemId: null, createdAt: 1, updatedAt: 1 },
+        resolvedDir: '/tmp/od/projects/p1',
+        resolvedCanvasFile: 'first.html',
+      }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockImplementationOnce(() => secondResponse);
+
+    const { result, rerender } = renderHook(
+      ({ projectId }) => useProjectDetail(projectId),
+      { initialProps: { projectId: 'p1' } },
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.resolvedCanvasFile).toBe('first.html');
+
+    rerender({ projectId: 'p2' });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    expect(result.current.loading).toBe(true);
+    expect(result.current.project).toBeNull();
+    expect(result.current.resolvedDir).toBeNull();
+    expect(result.current.resolvedCanvasFile).toBeNull();
+
+    resolveSecond(new Response(JSON.stringify({
+      project: { id: 'p2', name: 'Second', skillId: null, designSystemId: null, createdAt: 2, updatedAt: 2 },
+      resolvedDir: '/tmp/od/projects/p2',
+      resolvedCanvasFile: 'second.html',
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+  });
 });

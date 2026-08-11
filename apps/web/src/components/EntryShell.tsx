@@ -1234,6 +1234,7 @@ export function EntryShell({
                 defaultDesignSystemId={defaultDesignSystemId}
                 onSubmit={handlePluginLoopSubmit}
                 onOpenProject={onOpenProject}
+                {...(onOpenProjectFromDesignLibrary ? { onOpenProjectFromDesignLibrary } : {})}
                 onViewAllProjects={() => changeView('projects')}
                 onDeleteProject={onDeleteProject}
                 onDuplicateProject={onDuplicateProject}

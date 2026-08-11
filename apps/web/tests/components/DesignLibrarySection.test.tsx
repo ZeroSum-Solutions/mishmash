@@ -458,6 +458,20 @@ describe('DesignLibrarySection', () => {
     expect(onOpenProject).not.toHaveBeenCalled();
   });
 
+  it('recovers from a rejected project start so the user can retry', async () => {
+    startDesignLibraryProject.mockRejectedValueOnce(new Error('network unavailable'));
+    const onOpenProject = vi.fn();
+    render(<DesignLibrarySection active onOpenProject={onOpenProject} />);
+
+    const card = (await screen.findByText('Neon Dashboard Kit')).closest('article') as HTMLElement;
+    fireEvent.click(within(card).getByText('Start project'));
+    fireEvent.click(within(await screen.findByTestId('guided-create-dialog')).getByTestId('guided-create-skip'));
+
+    expect(await within(card).findByText('Could not start a project from this kit.')).toBeTruthy();
+    expect(within(card).getByRole('button', { name: 'Start project' })).not.toBeDisabled();
+    expect(onOpenProject).not.toHaveBeenCalled();
+  });
+
   it('shows a friendly empty state when the daemon reports the library missing', async () => {
     fetchDesignLibraryCatalog.mockResolvedValue({ ok: false, notFound: true, message: 'design library not found' });
     render(<DesignLibrarySection active />);

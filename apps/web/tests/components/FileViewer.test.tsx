@@ -1377,6 +1377,48 @@ describe('FileViewer SVG artifacts', () => {
     expect(urlFrame?.getAttribute('data-od-active')).toBe('false');
   });
 
+  it('ignores manual edit selections from the inactive preview transport', async () => {
+    const target = manualEditTarget('stale-card', 'Stale card', 20);
+    const { container } = render(
+      <FileViewer
+        projectId="project-1"
+        projectKind="prototype"
+        file={baseFile({
+          name: 'page.html',
+          path: 'page.html',
+          mime: 'text/html',
+          kind: 'html',
+          artifactManifest: {
+            version: 1,
+            kind: 'html',
+            title: 'Page',
+            entry: 'page.html',
+            renderer: 'html',
+            exports: ['html'],
+          },
+        })}
+        liveHtml='<html><body><main data-od-id="stale-card">Stale</main></body></html>'
+      />,
+    );
+
+    const inactiveUrlFrame = container.querySelector(
+      'iframe[data-od-render-mode="url-load"]',
+    ) as HTMLIFrameElement;
+    fireEvent.click(screen.getByTestId('manual-edit-mode-toggle'));
+    await waitFor(() => {
+      expect(inactiveUrlFrame.getAttribute('data-od-active')).toBe('false');
+    });
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        source: inactiveUrlFrame.contentWindow,
+        data: { type: 'od-edit-select', target },
+      }));
+    });
+
+    expect(screen.queryByText('Stale card')).toBeNull();
+  });
+
   it('keeps the manual edit inspector pinned after clicking a target', async () => {
     const heroTarget = manualEditTarget('hero-card', 'Hero card', 20);
     const trendTarget = manualEditTarget('trend-card', 'Trend card', 320);

@@ -126,18 +126,48 @@ describe('FeaturedTemplatesRow', () => {
   });
 
   it('starts a project from a template card and opens it on success', async () => {
+    const project = {
+      id: 'proj-123',
+      name: 'Dwell',
+      skillId: null,
+      designSystemId: null,
+      createdAt: 1,
+      updatedAt: 1,
+      pendingPrompt: 'Adapt this website template.',
+    };
     startDesignLibraryProject.mockResolvedValue({
       ok: true,
-      response: { ok: true, projectId: 'proj-123', conversationId: 'conv-1' },
+      response: {
+        ok: true,
+        projectId: 'proj-123',
+        conversationId: 'conv-1',
+        entryFile: 'site/index.html',
+        project,
+      },
     });
     const onOpenProject = vi.fn();
-    render(<FeaturedTemplatesRow onOpenProject={onOpenProject} onToolAction={vi.fn()} onBrowseLibrary={vi.fn()} />);
+    const onOpenProjectFromDesignLibrary = vi.fn();
+    render(
+      <FeaturedTemplatesRow
+        onOpenProject={onOpenProject}
+        onOpenProjectFromDesignLibrary={onOpenProjectFromDesignLibrary}
+        onToolAction={vi.fn()}
+        onBrowseLibrary={vi.fn()}
+      />,
+    );
 
     const dwellCard = await screen.findByText('Dwell');
     fireEvent.click(dwellCard.closest('button')!);
 
     await waitFor(() => expect(startDesignLibraryProject).toHaveBeenCalledWith('01 UI8 Kits/dwell'));
-    await waitFor(() => expect(onOpenProject).toHaveBeenCalledWith('proj-123'));
+    await waitFor(() =>
+      expect(onOpenProjectFromDesignLibrary).toHaveBeenCalledWith(
+        project,
+        'conv-1',
+        'site/index.html',
+      ),
+    );
+    expect(onOpenProject).not.toHaveBeenCalled();
   });
 
   it('shows an error toast and does not navigate when starting a template project fails', async () => {

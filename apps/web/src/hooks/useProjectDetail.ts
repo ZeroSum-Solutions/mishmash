@@ -71,5 +71,16 @@ export function useProjectDetail(projectId: string): ProjectDetailState {
 
   const refresh = useCallback(() => fetchOnce(), [fetchOnce]);
 
-  return { project, resolvedDir, resolvedCanvasFile, loading, error, refresh };
+  // Effects start the next request after React commits the new projectId, so
+  // the previous response remains in state for that render. Never pair those
+  // project-scoped paths with the new id while its detail request is pending.
+  const hasCurrentProjectDetail = project?.id === projectId;
+  return {
+    project: hasCurrentProjectDetail ? project : null,
+    resolvedDir: hasCurrentProjectDetail ? resolvedDir : null,
+    resolvedCanvasFile: hasCurrentProjectDetail ? resolvedCanvasFile : null,
+    loading,
+    error,
+    refresh,
+  };
 }

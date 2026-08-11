@@ -21,6 +21,7 @@ import { designLibraryThumbUrl, fetchDesignLibraryCatalog, startDesignLibraryPro
 import { Icon, type IconName } from './Icon';
 import { Toast } from './Toast';
 import { useT } from '../i18n';
+import type { Project } from '../types';
 import styles from './FeaturedTemplatesRow.module.css';
 
 // Only these allowed_use tiers may render as a template card (mirrors
@@ -106,6 +107,13 @@ interface Props {
   /** Opens the newly-created project — same callback HomeView already
    *  receives and uses for every other project-creation entry point. */
   onOpenProject: (projectId: string, fileName?: string) => void;
+  /** Preserves the daemon-built record and conversation so App can cache the
+   * project, arm its pending prompt, and route to the detected entry file. */
+  onOpenProjectFromDesignLibrary?: (
+    project: Project,
+    conversationId?: string,
+    entryFile?: string,
+  ) => void;
   /** Dispatches a tool card into HomeView's existing bind machinery
    *  (usePlugin for plugin tools, pickChip for clone-rebrand) — the
    *  HomeHero chip rail itself is never touched. */
@@ -115,7 +123,12 @@ interface Props {
   onBrowseLibrary: () => void;
 }
 
-export function FeaturedTemplatesRow({ onOpenProject, onToolAction, onBrowseLibrary }: Props) {
+export function FeaturedTemplatesRow({
+  onOpenProject,
+  onOpenProjectFromDesignLibrary,
+  onToolAction,
+  onBrowseLibrary,
+}: Props) {
   const t = useT();
   const [items, setItems] = useState<ReadonlyMap<string, DesignLibraryItem>>(new Map());
   const [catalogAvailable, setCatalogAvailable] = useState(false);
@@ -172,7 +185,15 @@ export function FeaturedTemplatesRow({ onOpenProject, onToolAction, onBrowseLibr
         setError(result.message || t('home.featured.startError'));
         return;
       }
-      onOpenProject(result.response.projectId);
+      if (onOpenProjectFromDesignLibrary) {
+        onOpenProjectFromDesignLibrary(
+          result.response.project,
+          result.response.conversationId,
+          result.response.entryFile,
+        );
+      } else {
+        onOpenProject(result.response.projectId, result.response.entryFile);
+      }
     } catch {
       setError(t('home.featured.startError'));
     } finally {
