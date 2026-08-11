@@ -248,6 +248,22 @@ function extractBestImageFromZip(zipPath: string): string | null {
   }
 }
 
+// `sips` (already used for resizing above) also reports pixel dimensions
+// without decoding the file in-process — used to floor-check a would-be hero
+// image before committing to it, the same way MIN_TILE_DIM floors sliced
+// contact-sheet tiles.
+function getImagePixelDimensions(imgPath: string): { width: number; height: number } | null {
+  try {
+    const out = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', imgPath], { encoding: 'utf8' });
+    const width = Number(/pixelWidth:\s*(\d+)/.exec(out)?.[1]);
+    const height = Number(/pixelHeight:\s*(\d+)/.exec(out)?.[1]);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+    return { width, height };
+  } catch {
+    return null;
+  }
+}
+
 function extensionHistogram(dir: string): [string, number][] {
   const counts = new Map<string, number>();
   for (const f of walkFiles(dir, { maxFiles: 3000 })) {
@@ -864,6 +880,23 @@ async function processKitSheet(pageObj: PlaywrightPage, item: CatalogItem, dir: 
     }
   }
 
+  // A bundled raster living next to the asset (Preview/cover.png and
+  // similar) is a real export of the kit's own screens, sized for exactly
+  // this purpose. A .fig's embedded thumbnail.png is Figma's incidental
+  // canvas-navigator render, capped around 400px on its long edge regardless
+  // of source size (see MIN_TILE_DIM below) — worse by construction whenever
+  // a bundled raster exists. Try the bundled raster tier first so it outranks
+  // the fig thumbnail rather than only being reached when the fig extraction
+  // fails outright.
+  if (screens.length === 0) {
+    const rasters = findRasterCandidates(dir).slice(0, 5);
+    for (const r of rasters) {
+      const uri = toDataUri(r.path);
+      if (uri) screens.push(uri);
+      if (screens.length >= 5) break;
+    }
+  }
+
   if (screens.length === 0) {
     const figs = findFigFiles(dir);
     if (figs.length) {
@@ -898,21 +931,20 @@ async function processKitSheet(pageObj: PlaywrightPage, item: CatalogItem, dir: 
           // typographic cover beats a bad image.
           return { outcome: 'fallback', html: composeFallbackFor(item, dir) };
         }
-        const uri = toDataUri(thumb);
-        if (uri) {
-          screens = [uri];
-          captionNote = 'Figma design file';
+        // Single-thumbnail hero path: apply the same MIN_TILE_DIM floor the
+        // sliced-tile path already enforces. A sub-floor thumbnail blown up
+        // to fill the hero frame is exactly the "blurry cover" this script
+        // exists to avoid — a clean typographic fallback beats it.
+        const dims = getImagePixelDimensions(thumb);
+        const meetsFloor = dims !== null && dims.width >= MIN_TILE_DIM && dims.height >= MIN_TILE_DIM;
+        if (meetsFloor) {
+          const uri = toDataUri(thumb);
+          if (uri) {
+            screens = [uri];
+            captionNote = 'Figma design file';
+          }
         }
       }
-    }
-  }
-
-  if (screens.length === 0) {
-    const rasters = findRasterCandidates(dir).slice(0, 5);
-    for (const r of rasters) {
-      const uri = toDataUri(r.path);
-      if (uri) screens.push(uri);
-      if (screens.length >= 5) break;
     }
   }
 
