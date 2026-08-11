@@ -1,0 +1,55 @@
+.root {
+  position: absolute;
+  z-index: -1;
+  top: -28px;
+  left: 50%;
+  width: min(1180px, calc(100vw - 32px));
+  height: 680px;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateX(-50%);
+  border-radius: 48px;
+  background:
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 38%),
+    radial-gradient(circle at 78% 22%, color-mix(in srgb, #35d6d0 9%, transparent), transparent 38%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.9) 68%, transparent 100%);
+}
+
+.root::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: radial-gradient(
+    ellipse at 50% 34%,
+    transparent 0%,
+    color-mix(in srgb, var(--bg-app) 18%, transparent) 48%,
+    color-mix(in srgb, var(--bg-app) 82%, transparent) 100%
+  );
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0.5;
+  filter: saturate(1.15) contrast(1.05);
+}
+
+@media (max-width: 700px) {
+  .root {
+    top: -18px;
+    width: calc(100vw - 16px);
+    height: 620px;
+    border-radius: 28px;
+  }
+
+  .canvas {
+    opacity: 0.42;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas {
+    opacity: 0.36;
+  }
+}

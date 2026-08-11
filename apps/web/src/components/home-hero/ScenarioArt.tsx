@@ -24,8 +24,8 @@ function Frame({ children }: { children: ReactNode }) {
     <svg
       className="home-hero__scenario-art-svg"
       viewBox="0 0 60 42"
-      width={60}
-      height={42}
+      width={72}
+      height={50}
       fill="none"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -33,6 +33,93 @@ function Frame({ children }: { children: ReactNode }) {
     >
       {children}
     </svg>
+  );
+}
+
+function TemplateArt() {
+  // Template catalogue: a polished site preview plus a highlighted component
+  // tile, rather than the generic code-file glyph this lead card used before.
+  return (
+    <Frame>
+      <rect x="5" y="6" width="50" height="30" rx="4" stroke={INK} strokeWidth="2" />
+      <line x1="5" y1="13" x2="55" y2="13" stroke={INK} strokeWidth="2" />
+      <rect x="10" y="18" width="18" height="12" rx="2" fill={ACCENT} fillOpacity="0.9" />
+      <line x1="33" y1="19" x2="49" y2="19" stroke={INK} strokeWidth="2" />
+      <line x1="33" y1="24" x2="46" y2="24" stroke={INK} strokeWidth="2" />
+      <line x1="33" y1="29" x2="41" y2="29" stroke={INK} strokeWidth="2" />
+      <circle cx="10" cy="9.5" r="1" fill={ACCENT} />
+    </Frame>
+  );
+}
+
+function ScrollFilmArt() {
+  // A vertical strip of connected scenes with the active beat picked out in
+  // accent: the simplest recognizable model of a continuous scroll narrative.
+  return (
+    <Frame>
+      <path d="M17 5 V37 M43 5 V37" stroke={INK} strokeWidth="2" strokeOpacity="0.5" />
+      <rect x="13" y="5" width="34" height="9" rx="2.5" fill={SURFACE} stroke={INK} strokeWidth="2" />
+      <rect x="13" y="17" width="34" height="9" rx="2.5" fill={ACCENT} fillOpacity="0.92" />
+      <rect x="13" y="29" width="34" height="9" rx="2.5" fill={SURFACE} stroke={INK} strokeWidth="2" />
+      <path d="M51 11 V31 M48 28 L51 32 L54 28" stroke={ACCENT} strokeWidth="2.4" />
+    </Frame>
+  );
+}
+
+function HeroCreationArt() {
+  // Full-viewport hero stage with an oversized accent focal object and an
+  // editorial title lockup. Corner marks reinforce the viewport-scale intent.
+  return (
+    <Frame>
+      <rect x="6" y="6" width="48" height="30" rx="4" stroke={INK} strokeWidth="2" />
+      <circle cx="39" cy="20" r="9" fill={ACCENT} fillOpacity="0.88" />
+      <line x1="12" y1="17" x2="28" y2="17" stroke={INK} strokeWidth="2.5" />
+      <line x1="12" y1="22" x2="24" y2="22" stroke={INK} strokeWidth="2.5" />
+      <line x1="12" y1="28" x2="19" y2="28" stroke={ACCENT} strokeWidth="2.5" />
+      <path d="M10 11 V9 H14 M50 11 V9 H46 M10 31 V33 H14 M50 31 V33 H46" stroke={INK} strokeWidth="1.6" />
+    </Frame>
+  );
+}
+
+function CloneRebrandArt() {
+  // Source site becomes a branded clone: two windows, a transfer arrow, and
+  // a small accent palette that makes the rebrand step visible at a glance.
+  return (
+    <Frame>
+      <rect x="5" y="7" width="28" height="22" rx="3" stroke={INK} strokeWidth="2" strokeOpacity="0.55" />
+      <rect x="25" y="13" width="30" height="23" rx="3" fill={SURFACE} stroke={INK} strokeWidth="2" />
+      <path d="M13 34 H22 M19 31 L23 34 L19 37" stroke={ACCENT} strokeWidth="2.4" />
+      <circle cx="33" cy="21" r="3" fill={ACCENT} />
+      <circle cx="41" cy="21" r="3" fill={INK} fillOpacity="0.32" />
+      <circle cx="49" cy="21" r="3" fill={INK} fillOpacity="0.16" stroke={INK} strokeWidth="1.4" />
+      <line x1="32" y1="29" x2="49" y2="29" stroke={INK} strokeWidth="2" />
+    </Frame>
+  );
+}
+
+function ScrollAnimationsArt() {
+  // Layered page sections with a bright motion path weaving through them.
+  return (
+    <Frame>
+      <rect x="11" y="8" width="38" height="8" rx="2.5" fill={INK} fillOpacity="0.16" stroke={INK} strokeWidth="1.6" />
+      <rect x="11" y="19" width="38" height="8" rx="2.5" fill={SURFACE} stroke={INK} strokeWidth="1.6" />
+      <rect x="11" y="30" width="38" height="8" rx="2.5" fill={INK} fillOpacity="0.12" stroke={INK} strokeWidth="1.6" />
+      <path d="M17 12 C42 12 18 34 43 34" stroke={ACCENT} strokeWidth="2.8" />
+      <path d="M40 31 L44 34 L40 37" stroke={ACCENT} strokeWidth="2.4" />
+    </Frame>
+  );
+}
+
+function WebGlArt() {
+  // A mesh-like GPU orb crossed by an accent shader ribbon.
+  return (
+    <Frame>
+      <circle cx="30" cy="21" r="16" stroke={INK} strokeWidth="2" />
+      <ellipse cx="30" cy="21" rx="7" ry="16" stroke={INK} strokeWidth="1.5" strokeOpacity="0.7" />
+      <path d="M15 16 C22 21 38 21 45 16 M15 27 C22 22 38 22 45 27" stroke={INK} strokeWidth="1.5" strokeOpacity="0.7" />
+      <path d="M8 28 C18 11 39 34 53 13" stroke={ACCENT} strokeWidth="3" />
+      <circle cx="51" cy="13" r="2.5" fill={ACCENT} />
+    </Frame>
   );
 }
 
@@ -203,8 +290,14 @@ function AudioArt() {
 }
 
 const ART_BY_CHIP: Record<string, () => ReactElement> = {
+  template: TemplateArt,
   prototype: PrototypeArt,
   'web-clone': WebCloneArt,
+  'scroll-film': ScrollFilmArt,
+  'hero-creation': HeroCreationArt,
+  'clone-rebrand': CloneRebrandArt,
+  'scroll-animations': ScrollAnimationsArt,
+  webgl: WebGlArt,
   wireframe: WireframeArt,
   mobile: MobileArt,
   deck: DeckArt,
@@ -226,6 +319,12 @@ interface ScenarioArtProps {
 
 export function ScenarioArt({ chipId, fallbackIcon }: ScenarioArtProps) {
   const Art = ART_BY_CHIP[chipId];
-  if (Art) return <Art />;
+  if (Art) {
+    return (
+      <span className="home-hero__scenario-art" data-scenario-art={chipId}>
+        <Art />
+      </span>
+    );
+  }
   return <Icon name={fallbackIcon} size={24} aria-hidden />;
 }

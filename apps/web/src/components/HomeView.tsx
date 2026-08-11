@@ -79,6 +79,7 @@ import { HomeHero, type ExamplePromptInfo, type HomeHeroHandle } from './HomeHer
 import { findChip, HOME_HERO_CHIPS, type HomeHeroChip } from './home-hero/chips';
 import { homeHeroChipLabel } from './home-hero/chip-labels';
 import type { PlaceholderScenario } from './home-hero/placeholderScenarios';
+import { HomeAmbientBackdrop } from './home-hero/HomeAmbientBackdrop';
 import { consumePendingHomeChip, HOME_CHIP_INTENT_EVENT } from '../runtime/home-intent';
 import { navigate } from '../router';
 import { setPendingDesignSystemCreateEntry } from '../analytics/ds-create-entry';
@@ -2097,6 +2098,7 @@ export function HomeView({
 
   return (
     <div className="home-view" data-testid="home-view" ref={homeViewRef}>
+      <HomeAmbientBackdrop />
       <HomeHero
         ref={inputRef}
         active={isActive}
