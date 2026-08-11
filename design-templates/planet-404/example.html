@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>404 — NEXOVA</title>
+<meta name="description" content="NEXOVA hosting — 404 page not found." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+<style>
+  /* ============ Tokens ============ */
+  :root{
+    --emerald-400:#34d399;
+    --cyan-500:#06b6d4;
+    --white:#ffffff;
+    --nav-h:68px;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#000;
+    font-family:'Inter',Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none;}
+  button{font-family:inherit;border:none;background:none;cursor:pointer;color:inherit;}
+  ul{margin:0;padding:0;list-style:none;}
+  img,svg{display:block;}
+
+  /* ============ Page root ============ */
+  .page-root{
+    position:relative;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    isolation:isolate;
+  }
+
+  .bg-video{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    z-index:0;
+    background:#02040a;
+  }
+
+  .content-wrap{
+    position:relative;
+    z-index:10;
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+  }
+
+  /* ============ Nav ============ */
+  .navbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:20px 24px;
+    position:relative;
+    z-index:60;
+  }
+  @media (min-width:768px){ .navbar{padding-left:48px;padding-right:48px;} }
+  @media (min-width:1024px){ .navbar{padding-left:64px;padding-right:64px;} }
+
+  .nav-logo{
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .nav-logo-icon{width:32px;height:32px;flex:none;}
+  .nav-logo-text{
+    color:#fff;
+    font-size:20px;
+    font-weight:700;
+    letter-spacing:.05em;
+  }
+
+  .nav-links{
+    display:none;
+    align-items:center;
+    gap:32px;
+  }
+  @media (min-width:1024px){ .nav-links{display:flex;} }
+  .nav-links a{
+    color:rgba(255,255,255,.8);
+    font-size:14px;
+    letter-spacing:.025em;
+    transition:color .2s;
+  }
+  .nav-links a:hover,.nav-links a:focus-visible{color:#fff;}
+
+  .nav-login{
+    display:none;
+    align-items:center;
+    gap:6px;
+    background:linear-gradient(to right,var(--emerald-400),var(--cyan-500));
+    color:#fff;
+    font-size:14px;
+    font-weight:600;
+    padding:10px 24px;
+    border-radius:999px;
+    transition:transform .2s cubic-bezier(0.23,1,0.32,1),filter .2s;
+  }
+  @media (min-width:1024px){ .nav-login{display:inline-flex;} }
+  .nav-login:hover,.nav-login:focus-visible{filter:brightness(1.08);transform:translateY(-1px);}
+  .nav-login svg{width:16px;height:16px;}
+
+  .nav-toggle{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:40px;
+    height:40px;
+    position:relative;
+    z-index:60;
+    color:#fff;
+  }
+  @media (min-width:1024px){ .nav-toggle{display:none;} }
+  .nav-toggle svg{
+    position:absolute;
+    width:24px;
+    height:24px;
+    transition:opacity .3s,transform .3s;
+  }
+  .icon-menu{opacity:1;transform:rotate(0) scale(1);}
+  .icon-close{opacity:0;transform:rotate(-90deg) scale(.75);}
+  .nav-toggle[aria-expanded="true"] .icon-menu{opacity:0;transform:rotate(90deg) scale(.75);}
+  .nav-toggle[aria-expanded="true"] .icon-close{opacity:1;transform:rotate(0) scale(1);}
+
+  /* ============ Mobile menu ============ */
+  .mobile-backdrop{
+    position:fixed;
+    inset:0;
+    z-index:40;
+    background:rgba(0,0,0,.4);
+    backdrop-filter:blur(12px);
+    -webkit-backdrop-filter:blur(12px);
+    opacity:0;
+    transition:opacity .4s;
+    pointer-events:none;
+  }
+  .mobile-backdrop.is-visible{opacity:1;pointer-events:auto;}
+
+  .mobile-menu{
+    position:absolute;
+    left:0;
+    right:0;
+    top:var(--nav-h);
+    z-index:50;
+  }
+  .mobile-menu-blur{
+    position:absolute;
+    inset:0;
+    backdrop-filter:blur(20px);
+    -webkit-backdrop-filter:blur(20px);
+    border-radius:0 0 16px 16px;
+  }
+  .mobile-menu-inner{
+    position:relative;
+    z-index:10;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:24px 24px 32px;
+    gap:20px;
+  }
+  .mobile-menu-inner a,.mobile-menu-inner .nav-login{
+    opacity:0;
+    transform:translateY(12px);
+    transition:opacity .4s ease-out,transform .4s ease-out;
+  }
+  .mobile-menu.is-visible .mobile-menu-inner a,
+  .mobile-menu.is-visible .mobile-menu-inner .nav-login{
+    opacity:1;
+    transform:translateY(0);
+  }
+  .mobile-menu-inner a{
+    font-size:20px;
+    font-weight:300;
+    letter-spacing:.08em;
+    color:rgba(255,255,255,.8);
+    text-align:center;
+  }
+  .mobile-menu-inner a:hover,.mobile-menu-inner a:focus-visible{color:#fff;}
+  .mobile-menu-inner .nav-login{display:inline-flex;margin-top:4px;}
+
+  /* ============ Hero ============ */
+  .hero{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:48px 16px;
+  }
+  @media (min-width:640px){ .hero{padding:64px 24px;} }
+  @media (min-width:768px){ .hero{padding-top:0;padding-bottom:0;} }
+
+  .hero-sub{
+    color:rgba(255,255,255,.8);
+    font-size:18px;
+    font-weight:300;
+    line-height:1.375;
+    letter-spacing:-.025em;
+    margin:0 0 4px;
+  }
+  .hero-sub + .hero-sub{margin-bottom:32px;}
+  @media (min-width:480px){ .hero-sub{font-size:24px;} }
+  @media (min-width:640px){ .hero-sub{font-size:30px;margin-bottom:8px;} .hero-sub + .hero-sub{margin-bottom:48px;} }
+  @media (min-width:768px){ .hero-sub{font-size:48px;} }
+
+  .four-oh-four-wrap{
+    position:relative;
+    margin-bottom:32px;
+    width:100%;
+    display:flex;
+    justify-content:center;
+    overflow:visible;
+  }
+  @media (min-width:640px){ .four-oh-four-wrap{margin-bottom:48px;} }
+
+  .four-oh-four{
+    font-size:80px;
+    font-weight:900;
+    color:#fff;
+    line-height:1;
+    letter-spacing:-.05em;
+    -webkit-user-select:none;
+    user-select:none;
+    text-shadow:0 0 80px rgba(255,255,255,.3),0 0 160px rgba(255,255,255,.1);
+  }
+  @media (min-width:480px){ .four-oh-four{font-size:100px;} }
+  @media (min-width:640px){ .four-oh-four{font-size:140px;} }
+  @media (min-width:768px){ .four-oh-four{font-size:200px;} }
+  @media (min-width:1024px){ .four-oh-four{font-size:260px;} }
+
+  .liquid-glass{
+    background:rgba(255,255,255,.01);
+    background-blend-mode:luminosity;
+    backdrop-filter:blur(4px);
+    -webkit-backdrop-filter:blur(4px);
+    border:none;
+    box-shadow:inset 0 1px 1px rgba(255,255,255,.1);
+    position:relative;
+    overflow:hidden;
+    display:inline-block;
+  }
+  .liquid-glass::before{
+    content:'';
+    position:absolute;
+    inset:0;
+    border-radius:inherit;
+    padding:1.4px;
+    background:linear-gradient(180deg,
+      rgba(255,255,255,.45) 0%,rgba(255,255,255,.15) 20%,
+      rgba(255,255,255,0) 40%,rgba(255,255,255,0) 60%,
+      rgba(255,255,255,.15) 80%,rgba(255,255,255,.45) 100%);
+    -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+    -webkit-mask-composite:xor;
+    mask-composite:exclude;
+    pointer-events:none;
+  }
+  .hero-cta{
+    color:#fff;
+    font-size:10px;
+    letter-spacing:.15em;
+    font-weight:500;
+    padding:12px 24px;
+    border-radius:999px;
+    text-transform:uppercase;
+    transition:transform .2s cubic-bezier(0.23,1,0.32,1);
+  }
+  .hero-cta:hover,.hero-cta:focus-visible{transform:translateY(-2px);}
+  @media (min-width:480px){ .hero-cta{font-size:12px;padding:12px 32px;} }
+  @media (min-width:640px){ .hero-cta{font-size:14px;letter-spacing:.2em;padding:14px 32px;} }
+
+  /* ============ Footer ============ */
+  .site-footer{
+    position:relative;
+    z-index:10;
+    padding:40px 16px 32px;
+  }
+  @media (min-width:640px){ .site-footer{padding:64px 24px 40px;} }
+  @media (min-width:768px){ .site-footer{padding-left:48px;padding-right:48px;} }
+  @media (min-width:1024px){ .site-footer{padding-left:64px;padding-right:64px;} }
+
+  .footer-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:24px;
+  }
+  @media (min-width:640px){ .footer-grid{gap:32px;} }
+  @media (min-width:768px){ .footer-grid{grid-template-columns:repeat(4,minmax(0,1fr));} }
+  @media (min-width:1024px){ .footer-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:24px;} }
+
+  .footer-col h3{
+    color:#fff;
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:.15em;
+    margin:0 0 12px;
+  }
+  @media (min-width:640px){ .footer-col h3{font-size:12px;margin-bottom:16px;} }
+
+  .footer-col ul{display:flex;flex-direction:column;gap:8px;}
+  @media (min-width:640px){ .footer-col ul{gap:10px;} }
+  .footer-col a{
+    color:rgba(255,255,255,.5);
+    font-size:10px;
+    transition:color .2s;
+  }
+  @media (min-width:640px){ .footer-col a{font-size:12px;} }
+  .footer-col a:hover,.footer-col a:focus-visible{color:rgba(255,255,255,.8);}
+
+  .footer-signup{grid-column:span 2 / span 2;}
+  @media (min-width:1024px){ .footer-signup{grid-column:span 2 / span 2;} }
+
+  .signup-form{
+    display:flex;
+    max-width:384px;
+  }
+  .signup-form label{
+    position:absolute;
+    width:1px;height:1px;
+    overflow:hidden;
+    clip:rect(0 0 0 0);
+    white-space:nowrap;
+  }
+  .signup-form input{
+    flex:1;
+    min-width:0;
+    background:#fff;
+    color:#0a0a0a;
+    border:none;
+    border-radius:6px 0 0 6px;
+    padding:0 12px;
+    font-size:12px;
+    height:36px;
+  }
+  .signup-form input::placeholder{color:#6b7280;}
+  .signup-form button{
+    background:linear-gradient(to right,var(--emerald-400),var(--cyan-500));
+    color:#fff;
+    font-weight:700;
+    letter-spacing:.05em;
+    font-size:11px;
+    padding:0 16px;
+    border-radius:0 6px 6px 0;
+    white-space:nowrap;
+    transition:filter .2s;
+  }
+  .signup-form button:hover,.signup-form button:focus-visible{filter:brightness(1.08);}
+
+  .signup-success{
+    display:none;
+    align-items:center;
+    gap:8px;
+    max-width:384px;
+    color:var(--emerald-400);
+    font-size:12px;
+    padding:8px 0;
+  }
+  .signup-success svg{width:16px;height:16px;flex:none;}
+  .signup-success.is-visible{display:flex;}
+  .signup-form[hidden]{display:none;}
+
+  .connect-heading{margin-top:20px;margin-bottom:12px;}
+  @media (min-width:640px){ .connect-heading{margin-top:24px;} }
+
+  .social-row{display:flex;gap:12px;}
+  .social-row a{
+    color:rgba(255,255,255,.5);
+    transition:color .2s;
+  }
+  .social-row a:hover,.social-row a:focus-visible{color:#fff;}
+  .social-row svg{width:16px;height:16px;}
+
+  /* ============ Focus visibility ============ */
+  a:focus-visible,button:focus-visible,input:focus-visible{
+    outline:2px solid var(--cyan-500);
+    outline-offset:2px;
+    border-radius:4px;
+  }
+
+  /* ============ Reduced motion ============ */
+  @media (prefers-reduced-motion: reduce){
+    .bg-video{ }
+    *{transition-duration:.01ms !important;animation-duration:.01ms !important;}
+  }
+  .no-js .mobile-menu,.no-js .mobile-backdrop{display:none;}
+</style>
+</head>
+<body>
+<div class="page-root">
+  <video class="bg-video" autoplay muted loop playsinline poster="assets/earth-orbit-poster.jpg">
+    <source src="assets/earth-orbit-bg.mp4" type="video/mp4">
+  </video>
+
+  <div class="content-wrap">
+    <nav class="navbar" aria-label="Primary">
+      <a class="nav-logo" href="#top" aria-label="NEXOVA home">
+        <svg class="nav-logo-icon" viewBox="0 0 480 480" fill="#fff" aria-hidden="true">
+          <path d="M480 240a240 240 0 0 0-240 240 240 240 0 0 0 240-240Z"/>
+          <path d="M240 0A240 240 0 0 0 0 240 240 240 0 0 0 240 0Z"/>
+          <path d="M480 240A240 240 0 0 0 240 0a240 240 0 0 0 240 240Z"/>
+          <path d="M240 480A240 240 0 0 0 0 240a240 240 0 0 0 240 240Z"/>
+        </svg>
+        <span class="nav-logo-text">NEXOVA</span>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="#">Domain</a></li>
+        <li><a href="#">Servers</a></li>
+        <li><a href="#">Cloud</a></li>
+        <li><a href="#">Managed</a></li>
+        <li><a href="#">Email</a></li>
+        <li><a href="#">Privacy</a></li>
+      </ul>
+
+      <a class="nav-login" href="#">
+        LOG IN
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </a>
+
+      <button type="button" class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="mobileMenu" aria-label="Open menu">
+        <svg class="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+        <svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </nav>
+
+    <div class="mobile-backdrop" id="mobileBackdrop" hidden></div>
+    <div class="mobile-menu" id="mobileMenu" hidden>
+      <div class="mobile-menu-blur"></div>
+      <div class="mobile-menu-inner">
+        <a href="#" style="transition-delay:350ms">Domain</a>
+        <a href="#" style="transition-delay:400ms">Servers</a>
+        <a href="#" style="transition-delay:450ms">Cloud</a>
+        <a href="#" style="transition-delay:500ms">Managed</a>
+        <a href="#" style="transition-delay:550ms">Email</a>
+        <a href="#" style="transition-delay:600ms">Privacy</a>
+        <a class="nav-login" href="#" style="transition-delay:650ms">
+          LOG IN
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <main class="hero" id="top">
+      <h1 class="hero-sub">This page seems to have</h1>
+      <h1 class="hero-sub">slipped beyond our reach :/</h1>
+
+      <div class="four-oh-four-wrap">
+        <span class="four-oh-four">404</span>
+      </div>
+
+      <a class="liquid-glass hero-cta" href="#top">Return to Main Page</a>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-grid">
+        <div class="footer-col">
+          <h3>Servers</h3>
+          <ul>
+            <li><a href="#">Web Servers</a></li>
+            <li><a href="#">VPS Servers</a></li>
+            <li><a href="#">Cloud Servers</a></li>
+            <li><a href="#">Managed Instances</a></li>
+            <li><a href="#">Bare Metal</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h3>Domains</h3>
+          <ul>
+            <li><a href="#">Find Domain</a></li>
+            <li><a href="#">Move Domains</a></li>
+            <li><a href="#">DNS Manager</a></li>
+            <li><a href="#">Domain Costs</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h3>Help Us</h3>
+          <ul>
+            <li><a href="#">Open a Ticket</a></li>
+            <li><a href="#">FAQs</a></li>
+            <li><a href="#">Docs</a></li>
+            <li><a href="#">Tutorials</a></li>
+            <li><a href="#">Forum</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h3>About</h3>
+          <ul>
+            <li><a href="#">Our Story</a></li>
+            <li><a href="#">Leadership Team</a></li>
+            <li><a href="#">Press Room</a></li>
+            <li><a href="#">We Hire</a></li>
+            <li><a href="#">Alliance</a></li>
+            <li><a href="#">Blog</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col footer-signup">
+          <h3>Join for Exclusive Deals</h3>
+          <form class="signup-form" id="signupForm" novalidate>
+            <label for="signupEmail">Email address</label>
+            <input type="email" id="signupEmail" name="email" autocomplete="email" placeholder="Type your email to sign up" required>
+            <button type="submit">Send It</button>
+          </form>
+          <p class="signup-success" id="signupSuccess" role="status">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            You're on the list.
+          </p>
+
+          <h3 class="connect-heading">Connect</h3>
+          <div class="social-row">
+            <a href="#" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></a>
+            <a href="#" aria-label="Twitter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 12 2.2.1 4.4-.6 6-2-4-1-6.2-4.4-6-7 1.4.9 3 1.4 4.5 1.4-3.4-2.4-4.1-6.5-2-9.4 2.7 3 6.6 4.9 11 5.1-.9-3.6 3.4-6.4 6.4-3.9 1.2 0 2.6-.6 3.1-1.1-.2 1.3-1.4 2.4-2.5 3 1.1-.1 2.2-.4 3-1-.3 1-1.3 2.1-2.5 2.5z"/></svg></a>
+            <a href="#" aria-label="Dribbble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8.56 2.75c4.37 6 6 9.42 8 17.72M19.13 5.09C15.22 9.14 10 10.44 2.25 10.94M21.75 16.25c-4.5-1.29-8.44-.53-12.94 2"/></svg></a>
+            <a href="#" aria-label="YouTube"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 17a24 24 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49 49 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24 24 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49 49 0 0 1-16.2 0A2 2 0 0 1 2.5 17Z"/><path d="m10 15 5-3-5-3z"/></svg></a>
+            <a href="#" aria-label="LinkedIn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg></a>
+            <a href="#" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="20" x="2" y="2" rx="5"/><path d="M16 11.4a4 4 0 1 1-7.9 1.2A4 4 0 0 1 16 11.4z"/><path d="M17.5 6.5h0"/></svg></a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
+</div>
+<script>
+(function(){
+  'use strict';
+
+  /* ---- Mobile menu ---- */
+  var toggle = document.getElementById('navToggle');
+  var menu = document.getElementById('mobileMenu');
+  var backdrop = document.getElementById('mobileBackdrop');
+  var closeTimer = null;
+  var open = false;
+
+  function openMenu(){
+    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+    open = true;
+    menu.hidden = false;
+    backdrop.hidden = false;
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.setAttribute('aria-label', 'Close menu');
+    // next frame so the transition from hidden->visible actually animates
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        menu.classList.add('is-visible');
+        backdrop.classList.add('is-visible');
+      });
+    });
+    var firstLink = menu.querySelector('a');
+    if (firstLink) firstLink.focus();
+  }
+
+  function closeMenu(){
+    if (!open) return;
+    open = false;
+    menu.classList.remove('is-visible');
+    backdrop.classList.remove('is-visible');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', 'Open menu');
+    closeTimer = setTimeout(function(){
+      menu.hidden = true;
+      backdrop.hidden = true;
+    }, 500);
+  }
+
+  toggle.addEventListener('click', function(){
+    if (open) { closeMenu(); } else { openMenu(); }
+  });
+  backdrop.addEventListener('click', closeMenu);
+  menu.querySelectorAll('a').forEach(function(a){
+    a.addEventListener('click', closeMenu);
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && open) { closeMenu(); toggle.focus(); }
+  });
+  window.addEventListener('resize', function(){
+    if (open && window.innerWidth >= 1024) closeMenu();
+  });
+
+  /* ---- Newsletter signup ---- */
+  var form = document.getElementById('signupForm');
+  var success = document.getElementById('signupSuccess');
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var input = document.getElementById('signupEmail');
+    if (!input.checkValidity()) { input.reportValidity(); return; }
+    form.hidden = true;
+    success.classList.add('is-visible');
+  });
+
+  /* ---- Background video respects reduced motion ---- */
+  var mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var video = document.querySelector('.bg-video');
+  function applyMotionPref(){
+    if (mql.matches) {
+      video.pause();
+      video.removeAttribute('autoplay');
+    } else if (video.paused) {
+      video.play().catch(function(){});
+    }
+  }
+  applyMotionPref();
+  if (mql.addEventListener) mql.addEventListener('change', applyMotionPref);
+})();
+</script>
+</body>
+</html>
