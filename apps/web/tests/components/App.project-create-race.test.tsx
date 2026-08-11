@@ -40,6 +40,7 @@ vi.mock('../../src/components/EntryView', () => ({
     onDeleteProject,
     onImportFolderResponse,
     onOpenProject,
+    onOpenProjectFromDesignLibrary,
     onRefreshAgents,
     agents,
     projects,
@@ -53,6 +54,11 @@ vi.mock('../../src/components/EntryView', () => ({
       projectId: string;
     }) => Promise<void> | void;
     onOpenProject: (id: string) => Promise<boolean> | boolean | void;
+    onOpenProjectFromDesignLibrary?: (
+      project: Project,
+      conversationId?: string,
+      entryFile?: string,
+    ) => void;
     onRefreshAgents: () => void | Promise<void>;
     agents: AgentInfo[];
     projects: Project[];
@@ -71,6 +77,108 @@ vi.mock('../../src/components/EntryView', () => ({
         }
       >
         Create project
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          // Templates gallery flow (MM-001 #2): the client never composes
+          // the prompt itself — `brief` is folded into `pendingPrompt`
+          // server-side, so the client only knows `autoSendFirstMessage`,
+          // not the prompt text. `createProject` is mocked below to return
+          // a `pendingPrompt` the client never sent, simulating that fold.
+          onCreateProject({
+            name: 'Brief project',
+            skillId: 'landing-hero',
+            designSystemId: null,
+            metadata: { kind: 'template' },
+            brief: { screens: 3 },
+            autoSendFirstMessage: true,
+          })
+        }
+      >
+        Create project from template with brief
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          // True skip-all: no `brief` key at all (not `brief: {}` or
+          // `brief: undefined` — genuinely absent), matching
+          // GuidedCreateDialog's Skip-all path. autoSendFirstMessage is
+          // still sent unconditionally (MM-001 #2) — the gate must be the
+          // thing that keeps this from arming, not the caller.
+          onCreateProject({
+            name: 'Brief project',
+            skillId: 'landing-hero',
+            designSystemId: null,
+            metadata: { kind: 'template' },
+            autoSendFirstMessage: true,
+          })
+        }
+      >
+        Create project from template with no brief
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          // Direct regression for the empty-string derivedPendingPrompt
+          // finding: `input.pendingPrompt` flows into derivedPendingPrompt
+          // via `input.pendingPrompt ?? ...` untrimmed, so a whitespace
+          // value must not arm auto-send on its own either.
+          onCreateProject({
+            name: 'Whitespace prompt project',
+            skillId: null,
+            designSystemId: null,
+            metadata: { kind: 'prototype' },
+            pendingPrompt: '   ',
+            autoSendFirstMessage: true,
+          })
+        }
+      >
+        Create project with whitespace pendingPrompt
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onOpenProjectFromDesignLibrary?.(
+            {
+              id: 'project-design-library',
+              name: 'Neon Dashboard Kit',
+              skillId: null,
+              designSystemId: null,
+              createdAt: 1778244000000,
+              updatedAt: 1778244000000,
+              metadata: { kind: 'prototype' },
+              pendingPrompt: 'Design brief:\n- Build 3 screens.',
+            },
+            'conv-design-library',
+            'index.html',
+          )
+        }
+      >
+        Open project from design library
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onOpenProjectFromDesignLibrary?.(
+            {
+              id: 'project-design-library-no-prompt',
+              name: 'Fintune (iOS)',
+              skillId: null,
+              designSystemId: null,
+              createdAt: 1778244000000,
+              updatedAt: 1778244000000,
+              metadata: { kind: 'prototype' },
+              // Explicit whitespace, not merely absent — proves the trim
+              // check, not just an undefined/optional-field short-circuit.
+              pendingPrompt: '   ',
+            },
+            'conv-design-library-no-prompt',
+            undefined,
+          )
+        }
+      >
+        Open project from design library with whitespace prompt
       </button>
       <button
         type="button"
@@ -1046,5 +1154,176 @@ describe('App project creation routing', () => {
       expect(screen.getByTestId('project-route-conversation').textContent).toBe('conv-brand-acme');
     });
     expect(window.location.pathname).toBe(`/projects/${brandProject.id}/conversations/conv-brand-acme`);
+  });
+
+  it('arms auto-send from a daemon-composed pendingPrompt the client never sent (MM-001 #2)', async () => {
+    // The Templates gallery's guided-create brief is folded into
+    // pendingPrompt server-side (routes/project/index.ts) — the client only
+    // knows `autoSendFirstMessage: true`, never the composed prompt text.
+    // The auto-send gate must still arm from the daemon's response.
+    mockedListProjects.mockResolvedValue([]);
+    mockedCreateProject.mockResolvedValueOnce({
+      project: {
+        ...freshProject,
+        id: 'project-brief',
+        name: 'Brief project',
+        pendingPrompt: 'Design brief:\n- Build 3 screens.',
+      },
+      conversationId: 'conv-brief',
+    });
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Create project from template with brief' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('project-title').textContent).toBe('Brief project');
+    });
+    expect(window.sessionStorage.getItem('od:auto-send-first:project-brief')).toBe('1');
+  });
+
+  it('does not arm auto-send for a true skip-all create with no brief at all (empty-brief invariant)', async () => {
+    // A genuine skip-all: `brief` is entirely absent from the create call
+    // (not `{}`, not `undefined` passed explicitly) — the daemon's fold
+    // then leaves pendingPrompt null, exactly like every pre-existing
+    // caller of this endpoint. autoSendFirstMessage is still sent (MM-001
+    // #2 sends it unconditionally), so the gate — not the caller — must be
+    // what keeps this from arming.
+    mockedListProjects.mockResolvedValue([]);
+    mockedCreateProject.mockResolvedValueOnce({
+      project: {
+        ...freshProject,
+        id: 'project-no-brief',
+        name: 'Brief project',
+        // Explicit, not merely inherited from freshProject's omission —
+        // this test must not silently pass because the fixture happens to
+        // lack the field. (`Project.pendingPrompt` is `string | undefined`
+        // on the web side, so `undefined` is the explicit "no prompt".)
+        pendingPrompt: undefined,
+      },
+      conversationId: 'conv-no-brief',
+    });
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Create project from template with no brief' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('project-title').textContent).toBe('Brief project');
+    });
+    expect(mockedCreateProject.mock.calls.at(-1)?.[0]).not.toHaveProperty('brief');
+    expect(window.sessionStorage.getItem('od:auto-send-first:project-no-brief')).toBeNull();
+  });
+
+  it('does not arm auto-send when the daemon returns a whitespace-only pendingPrompt', async () => {
+    // A non-empty-but-blank fold (e.g. a brief that only trimmed to
+    // whitespace) must not arm auto-send either — the gate trims before
+    // checking length, not just checking for `undefined`/`null`.
+    mockedListProjects.mockResolvedValue([]);
+    mockedCreateProject.mockResolvedValueOnce({
+      project: {
+        ...freshProject,
+        id: 'project-whitespace-prompt',
+        name: 'Brief project',
+        pendingPrompt: '   ',
+      },
+      conversationId: 'conv-whitespace-prompt',
+    });
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Create project from template with brief' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('project-title').textContent).toBe('Brief project');
+    });
+    expect(
+      window.sessionStorage.getItem('od:auto-send-first:project-whitespace-prompt'),
+    ).toBeNull();
+  });
+
+  it('does not arm auto-send from a whitespace-only client-supplied pendingPrompt', async () => {
+    // Direct regression for the empty-string derivedPendingPrompt finding:
+    // `derivedPendingPrompt !== undefined` used to be the gate condition,
+    // which is true for a whitespace string — this must now require a
+    // non-empty TRIMMED value.
+    mockedListProjects.mockResolvedValue([]);
+    mockedCreateProject.mockResolvedValueOnce({
+      project: { ...freshProject, id: 'project-whitespace-input', name: 'Whitespace prompt project' },
+      conversationId: 'conv-whitespace-input',
+    });
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Create project with whitespace pendingPrompt' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('project-title').textContent).toBe('Whitespace prompt project');
+    });
+    expect(
+      window.sessionStorage.getItem('od:auto-send-first:project-whitespace-input'),
+    ).toBeNull();
+  });
+
+  it('registers a Design Library project in the client cache and arms auto-send without a refetch (MM-008)', async () => {
+    // startDesignLibraryProject already built the full project daemon-side
+    // (including any guided-create brief folded into pendingPrompt); opening
+    // it must land it in the client cache immediately — no getProject/listProjects
+    // refetch — and arm auto-send from its pendingPrompt.
+    mockedListProjects.mockResolvedValue([]);
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Open project from design library' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('project-title').textContent).toBe('Neon Dashboard Kit');
+    });
+    expect(screen.getByTestId('project-route-conversation').textContent).toBe(
+      'conv-design-library',
+    );
+    expect(window.location.pathname).toBe(
+      '/projects/project-design-library/conversations/conv-design-library/files/index.html',
+    );
+    expect(window.sessionStorage.getItem('od:auto-send-first:project-design-library')).toBe('1');
+    // The project reached the canvas without any daemon round trip —
+    // getProject is only used for deep-link/refetch paths.
+    expect(mockedGetProject).not.toHaveBeenCalled();
+  });
+
+  it('registers a Design Library project without arming auto-send when pendingPrompt is whitespace-only', async () => {
+    // Negative counterpart to the MM-008 test above: the cache-insert +
+    // navigate bookkeeping must still happen (the project is real and
+    // usable), but a blank pendingPrompt must not arm auto-send — the gate
+    // trims before checking length, same invariant as the create-flow gate.
+    mockedListProjects.mockResolvedValue([]);
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open project from design library with whitespace prompt',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('project-title').textContent).toBe('Fintune (iOS)');
+    });
+    expect(window.location.pathname).toBe(
+      '/projects/project-design-library-no-prompt/conversations/conv-design-library-no-prompt',
+    );
+    expect(
+      window.sessionStorage.getItem('od:auto-send-first:project-design-library-no-prompt'),
+    ).toBeNull();
   });
 });

@@ -18,6 +18,7 @@ import type {
   DesignLibraryGroup,
   DesignLibraryItem,
   GuidedCreateBrief,
+  Project,
 } from '@open-design/contracts';
 import {
   designLibraryPreviewAssetUrl,
@@ -39,6 +40,22 @@ import styles from './DesignLibrarySection.module.css';
 // never sent to or received from the daemon.
 type RenderableGroup = DesignLibraryGroup & { hiddenDuplicateCount: number };
 
+/**
+ * `project` is the daemon's full record for the just-started project —
+ * `startDesignLibraryProject`'s response already carries it, including any
+ * guided-create brief folded into `pendingPrompt` server-side (MM-008). The
+ * host needs the whole record (not just the id) to register it in its
+ * client-side project cache and arm auto-send before navigating, instead of
+ * routing to a project the client has never seen and landing on a dead
+ * canvas.
+ */
+export type DesignLibraryOpenProjectHandler = (
+  projectId: string,
+  conversationId?: string,
+  entryFile?: string,
+  project?: Project,
+) => void;
+
 interface Props {
   active: boolean;
   /**
@@ -47,7 +64,7 @@ interface Props {
    * opens it so the new project lands on the same page the live preview
    * showed instead of whatever the generic primary-file heuristic picks.
    */
-  onOpenProject?: (projectId: string, conversationId?: string, entryFile?: string) => void;
+  onOpenProject?: DesignLibraryOpenProjectHandler;
 }
 
 // Only these allowed_use tiers may be copied into a new project — mirrors
@@ -298,7 +315,7 @@ function DesignLibraryGroupSection({
 }: {
   group: RenderableGroup;
   t: ReturnType<typeof useT>;
-  onOpenProject?: (projectId: string, conversationId?: string, entryFile?: string) => void;
+  onOpenProject?: DesignLibraryOpenProjectHandler;
   nested?: boolean;
 }) {
   const GroupHeading = nested ? 'h3' : 'h2';
@@ -331,7 +348,7 @@ function useStartFromDesignLibrary(
   t: ReturnType<typeof useT>,
   mode: 'copy' | 'reference',
   aspects: string[],
-  onOpenProject?: (projectId: string, conversationId?: string, entryFile?: string) => void,
+  onOpenProject?: DesignLibraryOpenProjectHandler,
 ) {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -363,7 +380,12 @@ function useStartFromDesignLibrary(
       );
       return;
     }
-    onOpenProject?.(result.response.projectId, result.response.conversationId, result.response.entryFile);
+    onOpenProject?.(
+      result.response.projectId,
+      result.response.conversationId,
+      result.response.entryFile,
+      result.response.project,
+    );
   }
 
   return { starting, startError, canStart, handleStart };
@@ -507,7 +529,7 @@ function DesignLibraryCard({
 }: {
   item: DesignLibraryItem;
   t: ReturnType<typeof useT>;
-  onOpenProject?: (projectId: string, conversationId?: string, entryFile?: string) => void;
+  onOpenProject?: DesignLibraryOpenProjectHandler;
 }) {
   const [thumbError, setThumbError] = useState(false);
   const [thumbLoaded, setThumbLoaded] = useState(false);
@@ -696,7 +718,7 @@ function DesignLibraryDetailDialog({
   t: ReturnType<typeof useT>;
   hasVisualPreview: boolean;
   onClose: () => void;
-  onOpenProject?: (projectId: string, conversationId?: string, entryFile?: string) => void;
+  onOpenProject?: DesignLibraryOpenProjectHandler;
   onExplore?: () => void;
   selectedAspects: string[];
   onSelectedAspectsChange: (next: string[]) => void;

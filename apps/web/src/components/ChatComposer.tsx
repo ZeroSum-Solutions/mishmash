@@ -688,17 +688,29 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     // mark it seeded immediately, so an early clear by the user (typing or
     // backspace before the parent stops passing initialDraft) does not get
     // overwritten by the effect.
+    //
+    // A project opened without its prompt already in hand (e.g. the Design
+    // Library flow before the client cache catches up, or any other
+    // deferred-fetch project) mounts with `initialDraft === undefined` and
+    // only receives the real value on a later render. Latching seeded on
+    // that first undefined render — as this used to — permanently discards
+    // that later arrival. `composerEngaged` already tracks the one thing
+    // that should actually block seeding (the user has typed or opened
+    // mention/slash), so gate on that instead of on "did we see a value
+    // yet".
     const seededRef = useRef(Boolean(initialDraft));
 
     useEffect(() => {
       if (seededRef.current) return;
+      if (composerEngaged) {
+        seededRef.current = true;
+        return;
+      }
       if (initialDraft && initialDraft !== draft) {
         setDraft(initialDraft);
         seededRef.current = true;
-      } else if (initialDraft === undefined) {
-        seededRef.current = true;
       }
-    }, [initialDraft, draft]);
+    }, [initialDraft, draft, composerEngaged]);
 
     useEffect(() => {
       saveComposerDraft(draftStorageKey, draft);

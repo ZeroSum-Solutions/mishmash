@@ -128,6 +128,18 @@ interface Props {
   onImportFolder?: (baseDir: string) => Promise<void> | void;
   onImportFolderResponse?: (response: OpenDesignHostProjectImportSuccess) => Promise<void> | void;
   onOpenProject: (id: string) => Promise<boolean> | boolean | void;
+  /**
+   * Design Library "Use as template"/"Use as reference" (MM-008) already has
+   * the full daemon-built `Project` from `startDesignLibraryProject`'s
+   * response — including any guided-create brief folded into
+   * `pendingPrompt` server-side — so this receives the record directly
+   * instead of an id the client would have to re-fetch.
+   */
+  onOpenProjectFromDesignLibrary?: (
+    project: Project,
+    conversationId?: string,
+    entryFile?: string,
+  ) => void;
   onOpenLiveArtifact: (projectId: string, artifactId: string) => void;
   onDeleteProject: (id: string) => void;
   onDuplicateProject?: (id: string) => Promise<void> | void;
@@ -275,6 +287,7 @@ export function EntryView({
   onImportFolder,
   onImportFolderResponse,
   onOpenProject,
+  onOpenProjectFromDesignLibrary,
   onOpenLiveArtifact,
   onDeleteProject,
   onDuplicateProject,
@@ -395,6 +408,7 @@ export function EntryView({
       {...(onImportFolder ? { onImportFolder } : {})}
       {...(onImportFolderResponse ? { onImportFolderResponse } : {})}
       onOpenProject={onOpenProject}
+      {...(onOpenProjectFromDesignLibrary ? { onOpenProjectFromDesignLibrary } : {})}
       onOpenLiveArtifact={onOpenLiveArtifact}
       onDeleteProject={onDeleteProject}
       onDuplicateProject={onDuplicateProject}

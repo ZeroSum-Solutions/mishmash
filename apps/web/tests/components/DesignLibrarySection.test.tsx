@@ -330,9 +330,24 @@ describe('DesignLibrarySection', () => {
   });
 
   it('opens the guided create dialog from Use as template, then starts a project and navigates via onOpenProject on Skip all', async () => {
+    // MM-008: startDesignLibraryProject's response already carries the full
+    // daemon-built `project` record (including any pendingPrompt folded from
+    // a brief) — onOpenProject must receive it as a 4th argument so the host
+    // can register it in its client cache instead of navigating to a project
+    // it has never seen.
+    const project = {
+      id: 'proj-1',
+      name: 'Neon Dashboard Kit',
+      skillId: null,
+      designSystemId: null,
+      createdAt: 0,
+      updatedAt: 0,
+      metadata: { kind: 'prototype' },
+      pendingPrompt: null,
+    };
     startDesignLibraryProject.mockResolvedValue({
       ok: true,
-      response: { ok: true, projectId: 'proj-1', conversationId: 'conv-1', entryFile: 'index.html', copiedFiles: 12, skippedFiles: 0, warnings: [] },
+      response: { ok: true, projectId: 'proj-1', conversationId: 'conv-1', entryFile: 'index.html', project, copiedFiles: 12, skippedFiles: 0, warnings: [] },
     });
     const onOpenProject = vi.fn();
     render(<DesignLibrarySection active onOpenProject={onOpenProject} />);
@@ -347,13 +362,25 @@ describe('DesignLibrarySection', () => {
     fireEvent.click(within(dialog).getByTestId('guided-create-skip'));
 
     await waitFor(() => expect(startDesignLibraryProject).toHaveBeenCalledWith('01 UI Kits/neon-dashboard', undefined, undefined));
-    await waitFor(() => expect(onOpenProject).toHaveBeenCalledWith('proj-1', 'conv-1', 'index.html'));
+    await waitFor(() => expect(onOpenProject).toHaveBeenCalledWith('proj-1', 'conv-1', 'index.html', project));
   });
 
   it('collects guided create answers into the brief sent to startDesignLibraryProject', async () => {
+    const project = {
+      id: 'proj-brief',
+      name: 'Neon Dashboard Kit',
+      skillId: null,
+      designSystemId: null,
+      createdAt: 0,
+      updatedAt: 0,
+      metadata: { kind: 'prototype' },
+      // The guided brief is folded into pendingPrompt server-side — the
+      // client never composes this text itself.
+      pendingPrompt: 'Design brief:\n- Build 5 screens.',
+    };
     startDesignLibraryProject.mockResolvedValue({
       ok: true,
-      response: { ok: true, projectId: 'proj-brief', conversationId: 'conv-brief', copiedFiles: 12, skippedFiles: 0, warnings: [] },
+      response: { ok: true, projectId: 'proj-brief', conversationId: 'conv-brief', project, copiedFiles: 12, skippedFiles: 0, warnings: [] },
     });
     const onOpenProject = vi.fn();
     render(<DesignLibrarySection active onOpenProject={onOpenProject} />);
@@ -374,13 +401,23 @@ describe('DesignLibrarySection', () => {
         { mode: 'copy', brief: { screens: 5 } },
       ),
     );
-    await waitFor(() => expect(onOpenProject).toHaveBeenCalledWith('proj-brief', 'conv-brief', undefined));
+    await waitFor(() => expect(onOpenProject).toHaveBeenCalledWith('proj-brief', 'conv-brief', undefined, project));
   });
 
   it('selects an aspect and starts a prompt-only project from a private reference', async () => {
+    const project = {
+      id: 'proj-ref',
+      name: 'NeuForm Particle Field',
+      skillId: null,
+      designSystemId: null,
+      createdAt: 0,
+      updatedAt: 0,
+      metadata: { kind: 'prototype' },
+      pendingPrompt: 'Reference the selected aspects.',
+    };
     startDesignLibraryProject.mockResolvedValue({
       ok: true,
-      response: { ok: true, projectId: 'proj-ref', conversationId: 'conv-ref', copiedFiles: 0, skippedFiles: 0, warnings: [] },
+      response: { ok: true, projectId: 'proj-ref', conversationId: 'conv-ref', project, copiedFiles: 0, skippedFiles: 0, warnings: [] },
     });
     const onOpenProject = vi.fn();
     render(<DesignLibrarySection active onOpenProject={onOpenProject} />);
@@ -398,7 +435,7 @@ describe('DesignLibrarySection', () => {
         { mode: 'reference', aspects: ['WebGL'] },
       ),
     );
-    await waitFor(() => expect(onOpenProject).toHaveBeenCalledWith('proj-ref', 'conv-ref', undefined));
+    await waitFor(() => expect(onOpenProject).toHaveBeenCalledWith('proj-ref', 'conv-ref', undefined, project));
   });
 
   it('shows an inline error and does not navigate when Use as template fails', async () => {
