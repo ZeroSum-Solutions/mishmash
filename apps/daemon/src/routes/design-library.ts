@@ -756,13 +756,28 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
   // This is same-origin HTTP, unlike live-preview's opaque file://, so it
   // closes the "reachable /api/*" gap that route's comment describes with two
   // independent layers instead: the response Content-Security-Policy below
-  // (mirrors server.ts's projectRawFileCsp exactly — no external network,
-  // 'self' only) AND the web host loading it into an iframe with
+  // AND the web host loading it into an iframe with
   // `sandbox="allow-scripts allow-popups"` and no `allow-same-origin`, which
   // forces an opaque document origin regardless of serving origin. A script
   // from inside that iframe fetching this daemon's API sends `Origin: null`,
   // which isLocalSameOrigin already rejects — that check still runs below as
   // the first line of defense, not as the only one.
+  //
+  // Unlike server.ts's projectRawFileCsp (which this used to mirror exactly),
+  // this CSP deliberately allows https: egress on script/style/img/font/media
+  // and 'self' https: on connect. Catalog templates are licensed single-file
+  // mockups that are CDN-dependent by construction (cdn.tailwindcss.com's
+  // runtime JIT compiler, code.iconify.design's icon web components fetching
+  // icon JSON, Unsplash-hosted images) — under the strict, network-free CSP
+  // projectRawFileCsp uses, they render as unstyled raw HTML instead of the
+  // mockup they actually are. projectRawFileCsp guards a different trust
+  // class (agent-generated project content) and keeps its strict, no-network
+  // policy unchanged. This surface stays safe to relax because the consuming
+  // iframe is sandboxed to an opaque origin with no `allow-same-origin`
+  // (isLocalSameOrigin above still rejects any `Origin: null` request that
+  // reaches this daemon's own API), so https: egress from inside the preview
+  // can reach arbitrary external hosts but never this daemon. Devin approved
+  // this divergence 2026-08-10 (MM-019) for this route only.
   //
   // `:rel` is the catalog item's `rel`, `encodeURIComponent`-ed as a single
   // opaque path segment (embedded `/` becomes `%2F`, so it cannot be
@@ -772,12 +787,12 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
   // START_PROJECT_EXCLUDED_* below.
   const previewAssetCsp = [
     "default-src 'self' data: blob:",
-    "img-src 'self' data: blob:",
-    "media-src 'self' data: blob:",
-    "font-src 'self' data:",
-    "style-src 'self' 'unsafe-inline'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-    "connect-src 'none'",
+    "img-src 'self' data: blob: https:",
+    "media-src 'self' data: blob: https:",
+    "font-src 'self' data: https:",
+    "style-src 'self' 'unsafe-inline' https:",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
+    "connect-src 'self' https:",
     "form-action 'none'",
     "base-uri 'none'",
     "object-src 'none'",
