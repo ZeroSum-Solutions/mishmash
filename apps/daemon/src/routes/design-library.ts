@@ -794,7 +794,8 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
   // START_PROJECT_EXCLUDED_* below.
   const previewAssetCsp = SANDBOXED_PREVIEW_CSP;
   app.get(/^\/api\/design-library\/preview-asset\/([^/]+)\/(.+)$/u, async (req, res) => {
-    if (!isLocalSameOrigin(req, getResolvedPort())) {
+    const isOpaquePreviewRequest = req.get('origin') === 'null';
+    if (!isOpaquePreviewRequest && !isLocalSameOrigin(req, getResolvedPort())) {
       return res.status(403).json({ error: 'cross-origin request rejected' });
     }
     const root = designLibraryRoot();
@@ -838,6 +839,9 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Security-Policy', previewAssetCsp);
+    if (isOpaquePreviewRequest) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
     try {
       await res.type(mimeFor(target)).sendFile(target);
     } catch (err: any) {

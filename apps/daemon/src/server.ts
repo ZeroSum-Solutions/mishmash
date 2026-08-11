@@ -2281,6 +2281,59 @@ export async function startServer({
     /^\/projects\/[^/]+\/(?:raw|preview)\/|^\/codex-pets\/[^/]+\/spritesheet$|^\/asset-cache$/;
   const _POWERED_PREVIEW_SAFE_RE = /^\/projects\/[^/]+\/powered\/.+$/u;
 
+  function sandboxedPreviewAssetScope(pathname: string): string | null {
+    const apiRelativePath = pathname.startsWith('/api/') ? pathname.slice(4) : pathname;
+    const skill = /^\/skills\/([^/]+)\/assets\//u.exec(apiRelativePath);
+    if (skill?.[1]) {
+      try {
+        return `skill:${decodeURIComponent(skill[1])}`;
+      } catch {
+        return null;
+      }
+    }
+    const library = /^\/design-library\/preview-asset\/([^/]+)\//u.exec(apiRelativePath);
+    if (library?.[1]) {
+      try {
+        return `design-library:${decodeURIComponent(library[1])}`;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  const _SANDBOXED_PREVIEW_RESOURCE_DESTS = new Set([
+    'audio',
+    'font',
+    'image',
+    'manifest',
+    'script',
+    'style',
+    'track',
+    'video',
+    'worker',
+  ]);
+
+  // A sandboxed document has an opaque origin. Its passive CSS/image/font
+  // requests commonly omit Origin entirely, while CORS-enabled resources can
+  // send the literal value "null". Permit only browser-classified resource
+  // destinations under the two contained preview prefixes. A scripted
+  // fetch() has Sec-Fetch-Dest: empty and remains denied, so template code
+  // cannot use this exception to read daemon API responses or another
+  // collection's source bytes.
+  function isSandboxedPreviewResourceRequest(req: express.Request): boolean {
+    if (req.method !== 'GET' || req.headers['sec-fetch-site'] !== 'cross-site') return false;
+    const origin = req.headers.origin;
+    if (origin != null && origin !== '' && origin !== 'null') return false;
+    if (!sandboxedPreviewAssetScope(req.path)) return false;
+    const destination = req.headers['sec-fetch-dest'];
+    if (typeof destination !== 'string' || !_SANDBOXED_PREVIEW_RESOURCE_DESTS.has(destination)) {
+      return false;
+    }
+    const mode = req.headers['sec-fetch-mode'];
+    return mode === 'no-cors' || mode === 'cors';
+  }
+
   // Reject cross-origin requests to API endpoints.
   // Health/version remain open for monitoring probes.
   // Non-browser clients (no Origin header, no fetch metadata) are allowed.
@@ -2333,6 +2386,7 @@ export async function startServer({
     }
 
     const origin = req.headers.origin;
+    if (isSandboxedPreviewResourceRequest(req)) return next();
     // No Origin header. That alone does not mean "not a browser" — see
     // allowsMissingOriginRequest for the Sec-Fetch-Site reasoning.
     if (origin == null || origin === '') {

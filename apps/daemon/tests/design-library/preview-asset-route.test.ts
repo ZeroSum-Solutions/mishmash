@@ -155,6 +155,24 @@ describe('design library preview-asset route', () => {
     expect(res.headers.get('content-type')).toMatch(/^text\/css/);
   });
 
+  it('serves sibling assets to the opaque origin used by the preview canvas', async () => {
+    const daemonUrl = await startWithFixture();
+
+    const res = await fetch(
+      previewAssetUrl(daemonUrl, '01 Kits/licensed-kit', 'css/style.css'),
+      {
+        headers: {
+          'Sec-Fetch-Dest': 'style',
+          'Sec-Fetch-Mode': 'no-cors',
+          'Sec-Fetch-Site': 'cross-site',
+        },
+      },
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('body { color: red; }');
+  });
+
   it('403s a human-local-only item even though the catalog lists it', async () => {
     const daemonUrl = await startWithFixture();
 

@@ -37,6 +37,7 @@ beforeAll(async () => {
   const entryDir = path.join(dataDir, 'design-templates', ENTRY_ID);
   mkdirSync(path.join(entryDir, 'assets'), { recursive: true });
   writeFileSync(path.join(entryDir, 'assets', 'index.html'), ASSET_BODY);
+  writeFileSync(path.join(entryDir, 'assets', 'styles.css'), 'body { color: rebeccapurple; }');
   // A skill folder is user-supplied content, so the route must not follow a
   // symlink out of the entry, and must not hand over a dot-prefixed leaf.
   writeFileSync(path.join(tmpRoot, 'outside-the-entry.txt'), 'SECRET');
@@ -98,6 +99,35 @@ it('serves assets for an entry under a dot-prefixed data directory', async () =>
   const resp = await fetch(`${baseUrl}/api/skills/${ENTRY_ID}/assets/index.html`);
   expect(resp.status).toBe(200);
   await expect(resp.text()).resolves.toContain('asset body');
+});
+
+it('serves passive subresources requested by a sandboxed template preview', async () => {
+  const resp = await fetch(`${baseUrl}/api/skills/${ENTRY_ID}/assets/styles.css`, {
+    headers: {
+      'Sec-Fetch-Dest': 'style',
+      'Sec-Fetch-Mode': 'no-cors',
+      'Sec-Fetch-Site': 'cross-site',
+    },
+  });
+
+  expect(resp.status).toBe(200);
+  await expect(resp.text()).resolves.toBe('body { color: rebeccapurple; }');
+});
+
+it('still rejects scripted reads from a sandboxed template origin', async () => {
+  const resp = await fetch(`${baseUrl}/api/skills/${ENTRY_ID}/assets/styles.css`, {
+    headers: {
+      Origin: 'null',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'cross-site',
+    },
+  });
+
+  expect(resp.status).toBe(403);
+  await expect(resp.json()).resolves.toEqual({
+    error: 'Origin: null not allowed for this route',
+  });
 });
 
 it('still refuses traversal out of the entry assets directory', async () => {
