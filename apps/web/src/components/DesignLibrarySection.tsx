@@ -412,24 +412,31 @@ function useStartFromDesignLibrary(
     setStartError(null);
     setStarting(true);
     const hasBrief = Boolean(brief && Object.keys(brief).length > 0);
-    const result =
-      mode === 'reference'
-        ? await startDesignLibraryProject(item.rel, undefined, { mode, aspects })
-        : await startDesignLibraryProject(item.rel, undefined, hasBrief ? { mode: 'copy', brief } : undefined);
-    setStarting(false);
-    if (!result.ok) {
-      setStartError(
-        result.message ||
-          t(mode === 'copy' ? 'designLibrary.useAsTemplateError' : 'designLibrary.useAsReferenceError'),
+    try {
+      const result =
+        mode === 'reference'
+          ? await startDesignLibraryProject(item.rel, undefined, { mode, aspects })
+          : await startDesignLibraryProject(item.rel, undefined, hasBrief ? { mode: 'copy', brief } : undefined);
+      if (!result.ok) {
+        setStartError(
+          result.message ||
+            t(mode === 'copy' ? 'designLibrary.useAsTemplateError' : 'designLibrary.useAsReferenceError'),
+        );
+        return;
+      }
+      onOpenProject?.(
+        result.response.projectId,
+        result.response.conversationId,
+        result.response.entryFile,
+        result.response.project,
       );
-      return;
+    } catch {
+      setStartError(
+        t(mode === 'copy' ? 'designLibrary.useAsTemplateError' : 'designLibrary.useAsReferenceError'),
+      );
+    } finally {
+      setStarting(false);
     }
-    onOpenProject?.(
-      result.response.projectId,
-      result.response.conversationId,
-      result.response.entryFile,
-      result.response.project,
-    );
   }
 
   return { starting, startError, canStart, handleStart };

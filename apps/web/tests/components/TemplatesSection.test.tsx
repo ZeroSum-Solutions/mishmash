@@ -257,4 +257,28 @@ describe('TemplatesSection guided create wiring', () => {
       { fidelity: 'wireframe' },
     ));
   });
+
+  it('keeps the originating template preview locked while project creation is in flight', async () => {
+    let resolveCreate!: (value: boolean) => void;
+    const onUseTemplate = vi.fn(
+      () => new Promise<boolean>((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    const templates = [skill({ id: 'landing-hero', name: 'Landing Hero' })];
+    render(<TemplatesSection templates={templates} active onUseTemplate={onUseTemplate} />);
+
+    fireEvent.click(screen.getByTestId('templates-card'));
+    const viewer = await screen.findByTestId('templates-viewer');
+    fireEvent.click(within(viewer).getByTestId('templates-use'));
+    fireEvent.click(await screen.findByTestId('guided-create-skip'));
+
+    const close = within(viewer).getByRole('button', { name: 'Close preview' }) as HTMLButtonElement;
+    expect(close.disabled).toBe(true);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('templates-viewer')).toBeTruthy();
+
+    resolveCreate(true);
+    await waitFor(() => expect(screen.queryByTestId('templates-viewer')).toBeNull());
+  });
 });

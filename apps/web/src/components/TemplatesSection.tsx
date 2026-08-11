@@ -435,7 +435,7 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setOpenId(null);
+        if (!creating) setOpenId(null);
         return;
       }
       if (e.key !== 'Tab') return;
@@ -457,7 +457,7 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, creating]);
 
   useEffect(() => {
     if (!open) return;
@@ -591,7 +591,7 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
           aria-label={localizeSkillName(locale, open)}
           data-testid="templates-viewer"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setOpenId(null);
+            if (e.target === e.currentTarget && !creating) setOpenId(null);
           }}
         >
           <div className="templates-viewer__panel" ref={panelRef}>
@@ -605,6 +605,7 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
                 type="button"
                 className="templates-viewer__close"
                 onClick={() => setOpenId(null)}
+                disabled={creating}
                 aria-label={t('templates.close')}
               >
                 <Icon name="close" size={18} />

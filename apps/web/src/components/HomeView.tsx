@@ -234,6 +234,11 @@ interface Props {
     payload: PluginLoopSubmit,
   ) => Promise<boolean | 'blocked' | void> | boolean | 'blocked' | void;
   onOpenProject: (id: string, fileName?: string) => void;
+  onOpenProjectFromDesignLibrary?: (
+    project: Project,
+    conversationId?: string,
+    entryFile?: string,
+  ) => void;
   onViewAllProjects: () => void;
   onDeleteProject?: (id: string) => Promise<boolean | void> | boolean | void;
   onDuplicateProject?: (id: string) => Promise<void> | void;
@@ -318,6 +323,7 @@ export function HomeView({
   defaultDesignSystemId = null,
   onSubmit,
   onOpenProject,
+  onOpenProjectFromDesignLibrary,
   onViewAllProjects,
   onDeleteProject,
   onDuplicateProject,
@@ -2263,6 +2269,7 @@ export function HomeView({
       >
         <FeaturedTemplatesRow
           onOpenProject={onOpenProject}
+          {...(onOpenProjectFromDesignLibrary ? { onOpenProjectFromDesignLibrary } : {})}
           onToolAction={handleFeaturedToolAction}
           onBrowseLibrary={() => navigate({ kind: 'home', view: 'design-library' })}
         />
