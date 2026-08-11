@@ -34,6 +34,7 @@ import type {
   ProjectMetadata,
 } from '@open-design/contracts';
 import { mimeFor } from '../projects.js';
+import { SANDBOXED_PREVIEW_CSP } from '../http/sandboxed-preview-csp.js';
 import { copyDirectoryContents, type CopyDirectoryState } from '../copy-directory.js';
 import {
   DESIGN_LIBRARY_PRIVATE_METADATA_NAMES,
@@ -791,18 +792,7 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
   // file path within that item's own directory; private library metadata
   // (`.catalog/`, `rights.json`, …) is rejected in any segment, matching
   // START_PROJECT_EXCLUDED_* below.
-  const previewAssetCsp = [
-    "default-src 'self' data: blob:",
-    "img-src 'self' data: blob: https:",
-    "media-src 'self' data: blob: https:",
-    "font-src 'self' data: https:",
-    "style-src 'self' 'unsafe-inline' https:",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
-    "connect-src https:",
-    "form-action 'none'",
-    "base-uri 'none'",
-    "object-src 'none'",
-  ].join('; ');
+  const previewAssetCsp = SANDBOXED_PREVIEW_CSP;
   app.get(/^\/api\/design-library\/preview-asset\/([^/]+)\/(.+)$/u, async (req, res) => {
     if (!isLocalSameOrigin(req, getResolvedPort())) {
       return res.status(403).json({ error: 'cross-origin request rejected' });

@@ -26,6 +26,7 @@ import type {
 } from '@open-design/contracts';
 import { LIBRARY_UPLOAD_MAX_BYTES, isLibraryUploadMimeAllowed } from '@open-design/contracts';
 import type { RouteDeps } from '../server-context.js';
+import { SANDBOXED_PREVIEW_CSP } from '../http/sandboxed-preview-csp.js';
 import {
   addLibraryAssetSource,
   clampLibraryListOffset,
@@ -934,18 +935,7 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   // reach this loopback daemon's own API. Sibling subresources (CSS/img/
   // script/font) load via their own `-src` directives, none of which need
   // `connect-src`, so dropping it costs nothing for the styling fix.
-  const libraryFileAssetCsp = [
-    "default-src 'self' data: blob:",
-    "img-src 'self' data: blob: https:",
-    "media-src 'self' data: blob: https:",
-    "font-src 'self' data: https:",
-    "style-src 'self' 'unsafe-inline' https:",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
-    "connect-src https:",
-    "form-action 'none'",
-    "base-uri 'none'",
-    "object-src 'none'",
-  ].join('; ');
+  const libraryFileAssetCsp = SANDBOXED_PREVIEW_CSP;
   app.get('/api/library/assets/:id/file/*splat', requireLocalDaemonRequest, async (req, res) => {
     const asset = getLibraryAsset(db, req.params.id);
     if (!asset) return sendApiError(res, 404, 'NOT_FOUND', 'asset not found');
