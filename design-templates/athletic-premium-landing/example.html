@@ -96,6 +96,34 @@
   }
   .scene-bg svg { width: 100%; height: 100%; display: block; }
 
+  /* Product photography revealed through a cursor-tracked spotlight, as the
+     source design does: a dimmed base plate with a full-brightness copy
+     masked to a radial pool around the pointer. */
+  .scene-photo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    filter: brightness(0.34) contrast(1.06);
+  }
+  .scene-photo.is-lit {
+    filter: none;
+    -webkit-mask-image: radial-gradient(circle var(--spot-r, 26vw) at var(--mx, 50%) var(--my, 56%), #000 0 40%, transparent 72%);
+    mask-image: radial-gradient(circle var(--spot-r, 26vw) at var(--mx, 50%) var(--my, 56%), #000 0 40%, transparent 72%);
+  }
+  .scene-2 .scene-photo.is-lit { --spot-r: 30vw; }
+  /* No pointer to track: open the pool up so the product still reads. */
+  @media (hover: none) {
+    .scene-photo { filter: brightness(0.5) contrast(1.04); }
+    .scene-photo.is-lit { --spot-r: 42vw; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scene-photo { filter: brightness(0.55) contrast(1.04); }
+    .scene-photo.is-lit { --spot-r: 38vw; }
+  }
+
   .ambient-glow {
     position: absolute;
     inset: 0;
@@ -440,25 +468,8 @@
     <!-- Scene 1: hero -->
     <section class="scene scene-1" aria-label="Hero">
       <div class="scene-bg" aria-hidden="true">
-        <svg viewBox="0 0 1440 600" preserveAspectRatio="xMidYMax slice">
-          <defs>
-            <filter id="rockGlow" x="-60%" y="-60%" width="220%" height="220%">
-              <feGaussianBlur stdDeviation="6" />
-            </filter>
-          </defs>
-          <polygon class="rock-fill-1" points="0,600 0,420 90,460 150,300 230,380 300,220 380,340 460,180 540,320 620,160 700,300 780,200 860,340 940,150 1020,300 1100,220 1180,360 1260,240 1340,380 1440,300 1440,600" />
-          <polygon class="rock-fill-2" points="230,380 300,220 340,300" />
-          <polygon class="rock-fill-2" points="460,180 540,320 500,260" />
-          <polygon class="rock-fill-2" points="860,340 940,150 900,260" />
-          <polygon class="rock-fill-2" points="1180,360 1260,240 1220,320" />
-          <polygon class="rock-fill-3" points="700,300 780,200 740,280" />
-          <path class="vein-glow" d="M300,220 L340,300 L380,340" />
-          <path class="vein-glow" d="M540,320 L580,260 L620,160" />
-          <path class="vein-glow" d="M940,150 L960,220 L1020,300" />
-          <path class="vein-core" d="M300,220 L340,300 L380,340" />
-          <path class="vein-core" d="M540,320 L580,260 L620,160" />
-          <path class="vein-core" d="M940,150 L960,220 L1020,300" />
-        </svg>
+        <img class="scene-photo" src="assets/summit-hero.webp" alt="" decoding="async">
+        <img class="scene-photo is-lit" src="assets/summit-hero.webp" alt="IGNIS performance sneaker suspended above a volcanic ridge lit by molten seams" decoding="async">
       </div>
       <div class="ambient-glow" aria-hidden="true"></div>
 
@@ -519,16 +530,8 @@
     <!-- Scene 2: engineering / cushioning -->
     <section class="scene scene-2" aria-label="Engineering">
       <div class="scene-bg" aria-hidden="true">
-        <svg viewBox="0 0 1440 600" preserveAspectRatio="xMidYMax slice">
-          <polygon class="rock-fill-1" points="0,600 0,480 60,500 120,430 260,470 340,380 480,440 560,340 700,600" />
-          <polygon class="rock-fill-1" points="1440,600 1440,460 1360,490 1280,410 1140,460 1060,370 940,600" />
-          <polygon class="rock-fill-2" points="260,470 340,380 300,440" />
-          <polygon class="rock-fill-2" points="1140,460 1060,370 1100,430" />
-          <path class="vein-glow" d="M120,430 L180,460 L260,470" />
-          <path class="vein-glow" d="M1280,410 L1220,440 L1140,460" />
-          <path class="vein-core" d="M120,430 L180,460 L260,470" />
-          <path class="vein-core" d="M1280,410 L1220,440 L1140,460" />
-        </svg>
+        <img class="scene-photo" src="assets/ascent-detail.webp" alt="" decoding="async">
+        <img class="scene-photo is-lit" src="assets/ascent-detail.webp" alt="IGNIS sneaker in mid-air among floating basalt fragments with glowing magma edges" decoding="async">
       </div>
       <div class="ambient-glow" aria-hidden="true"></div>
 
@@ -628,12 +631,31 @@
         }
       });
 
+      /* ---- Spotlight reveal: the pointer drags a pool of full-brightness
+             product photography across each dimmed scene. Falls back to the
+             CSS-declared centred pool when there is no fine pointer. ---- */
+      if (window.matchMedia("(pointer: fine)").matches) {
+        Array.prototype.forEach.call(document.querySelectorAll(".scene"), function (scene) {
+          if (!scene.querySelector(".scene-photo")) return;
+          var pending = null;
+          scene.addEventListener("mousemove", function (event) {
+            if (pending) return;
+            pending = requestAnimationFrame(function () {
+              pending = null;
+              var rect = scene.getBoundingClientRect();
+              scene.style.setProperty("--mx", ((event.clientX - rect.left) / rect.width * 100).toFixed(2) + "%");
+              scene.style.setProperty("--my", ((event.clientY - rect.top) / rect.height * 100).toFixed(2) + "%");
+            });
+          });
+        });
+      }
+
       /* ---- Subtle pointer parallax on the hero rock/product art ---- */
       var fine = window.matchMedia("(pointer: fine)").matches;
       if (!reduceMotion && fine) {
         var heroScene = document.querySelector(".scene-1");
         var crystal = document.querySelector(".crystal-parallax");
-        var rocks = heroScene ? heroScene.querySelector(".scene-bg svg") : null;
+        var rocks = heroScene ? heroScene.querySelector(".scene-bg .scene-photo") : null;
         var targetX = 0, targetY = 0, curX = 0, curY = 0, raf = null;
 
         heroScene && heroScene.addEventListener("mousemove", function (event) {
