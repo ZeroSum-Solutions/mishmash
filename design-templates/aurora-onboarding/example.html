@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aurora — Create New Profile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --color-brand-gray: #1A1A1A;
+    --aurora-1: #d6c2ec;
+    --aurora-2: #8a5cd6;
+    --aurora-3: #3a2470;
+    --aurora-accent: #8a5cd6;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  * , *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { height: 100%; }
+  html, body { overflow-x: hidden; }
+  body {
+    min-height: 100%;
+    font-family: var(--font-sans);
+    background: #000;
+    color: #fff;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection { background: rgba(255, 255, 255, 0.3); }
+  img, video { display: block; max-width: 100%; }
+  button { font-family: inherit; }
+  a { color: inherit; }
+  input { font-family: inherit; }
+
+  /* ---------- shell ---------- */
+  .shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    width: 100%;
+    background: #000;
+    padding: 8px;
+    transition: all 0.5s var(--ease-out);
+  }
+  @media (min-width: 1024px) {
+    .shell { flex-direction: row; height: 100vh; overflow: hidden; padding: 16px; }
+  }
+
+  /* ---------- hero (left column) ---------- */
+  .hero { display: none; }
+  @media (min-width: 1024px) {
+    .hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      position: relative;
+      flex: 0 0 52%;
+      width: 52%;
+      height: 100%;
+      padding: 0 48px 128px;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      background: #000;
+    }
+  }
+  .hero-video-fallback {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: linear-gradient(180deg, var(--aurora-1) 0%, var(--aurora-2) 38%, var(--aurora-3) 62%, #000 88%);
+  }
+  .hero-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+    transition: opacity 0.4s ease;
+  }
+  .hero-video.is-static { opacity: 0; }
+
+  .hero-content {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+  @keyframes heroFadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .hero-content > * {
+    opacity: 0;
+    animation: heroFadeUp 0.5s var(--ease-out) forwards;
+    animation-delay: var(--reveal-delay, 0.2s);
+  }
+
+  .hero-brand { display: flex; align-items: center; gap: 10px; }
+  .hero-brand svg { width: 22px; height: 22px; fill: #fff; color: #fff; flex-shrink: 0; }
+  .hero-brand span { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.025em; }
+
+  .hero-heading { display: flex; flex-direction: column; gap: 10px; text-align: center; }
+  .hero-heading h1 { font-size: 2.25rem; font-weight: 500; letter-spacing: -0.025em; white-space: nowrap; }
+  .hero-heading p { color: rgba(255, 255, 255, 0.6); font-size: 0.875rem; line-height: 1.625; padding: 0 16px; }
+
+  .hero-steps { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    padding: 14px 20px;
+    border-radius: 16px;
+    border: 1px solid transparent;
+  }
+  .step[data-active="true"] { background: #fff; color: #000; border-color: #fff; }
+  .step[data-active="false"] { background: var(--color-brand-gray); color: #fff; border: none; }
+  .step-num {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .step[data-active="true"] .step-num { background: #000; color: #fff; }
+  .step[data-active="false"] .step-num { background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.4); }
+  .step-text { font-size: 1rem; font-weight: 500; }
+
+  /* ---------- form (right column) ---------- */
+  .form-col {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 48px 16px;
+    overflow-y: auto;
+  }
+  @media (min-width: 640px) {
+    .form-col { padding-left: 48px; padding-right: 48px; }
+  }
+  @media (min-width: 1024px) {
+    .form-col {
+      padding-top: 24px;
+      padding-bottom: 24px;
+      padding-left: 64px;
+      padding-right: 64px;
+      overflow: hidden;
+    }
+  }
+  @media (min-width: 1280px) {
+    .form-col { padding-left: 96px; padding-right: 96px; }
+  }
+
+  .form-inner {
+    width: 100%;
+    max-width: 576px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    opacity: 0;
+    animation: formFadeIn 0.8s ease-out forwards;
+  }
+  @keyframes formFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @media (min-width: 640px) { .form-inner { gap: 40px; } }
+  @media (min-width: 1024px) { .form-inner { gap: 24px; } }
+
+  .form-header h2 { font-size: 1.875rem; font-weight: 500; letter-spacing: -0.025em; }
+  .form-header p { color: rgba(255, 255, 255, 0.4); font-size: 0.875rem; margin-top: 8px; }
+
+  .social-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .social-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 48px;
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: #fff;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s var(--ease-out);
+  }
+  .social-btn:hover { background: rgba(255, 255, 255, 0.05); }
+  .social-btn:focus-visible { outline: 2px solid var(--aurora-accent); outline-offset: 2px; }
+  .social-btn svg { width: 18px; height: 18px; }
+
+  .divider { display: flex; align-items: center; gap: 16px; }
+  .divider .line { flex: 1; height: 1px; background: rgba(255, 255, 255, 0.1); }
+  .divider span {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .form-fields { display: flex; flex-direction: column; gap: 24px; }
+  .form-fields[hidden] { display: none; }
+  .name-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .input-group { display: flex; flex-direction: column; gap: 8px; }
+  .input-group label { font-size: 0.875rem; font-weight: 500; color: #fff; }
+  .input-group input {
+    width: 100%;
+    height: 44px;
+    padding: 0 16px;
+    background: var(--color-brand-gray);
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 0.9375rem;
+  }
+  .input-group input::placeholder { color: rgba(255, 255, 255, 0.2); }
+  .input-group input:focus { outline: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2); }
+
+  .password-field { position: relative; }
+  .password-field input { padding-right: 44px; }
+  .password-field .toggle-visibility {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    height: 32px;
+    width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    border-radius: 8px;
+  }
+  .password-field .toggle-visibility:hover { color: rgba(255, 255, 255, 0.75); }
+  .password-field .toggle-visibility:focus-visible { outline: 2px solid var(--aurora-accent); outline-offset: 2px; }
+  .password-field .toggle-visibility svg { width: 18px; height: 18px; }
+  .password-field .toggle-visibility .icon-off { display: none; }
+  .password-field .toggle-visibility[aria-pressed="true"] .icon-on { display: none; }
+  .password-field .toggle-visibility[aria-pressed="true"] .icon-off { display: block; }
+  .helper-text { font-size: 0.75rem; color: rgba(255, 255, 255, 0.4); margin-top: 6px; }
+
+  .submit-btn {
+    width: 100%;
+    height: 56px;
+    background: #fff;
+    color: #000;
+    font-weight: 600;
+    font-size: 1rem;
+    border: none;
+    border-radius: 12px;
+    margin-top: 16px;
+    cursor: pointer;
+    transition: background 0.2s var(--ease-out), transform 0.1s var(--ease-out);
+  }
+  .submit-btn:hover { background: rgba(255, 255, 255, 0.9); }
+  .submit-btn:active { transform: scale(0.98); }
+  .submit-btn:focus-visible { outline: 2px solid var(--aurora-accent); outline-offset: 3px; }
+  .submit-btn[disabled] { opacity: 0.6; cursor: progress; }
+
+  .footer-link { text-align: center; font-size: 0.875rem; color: rgba(255, 255, 255, 0.4); }
+  .footer-link a { color: #fff; text-decoration: none; }
+  .footer-link a:hover { text-decoration: underline; }
+  .footer-link a:focus-visible { outline: 2px solid var(--aurora-accent); outline-offset: 2px; border-radius: 4px; }
+
+  .success-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+    padding: 40px 24px;
+    background: var(--color-brand-gray);
+    border-radius: 16px;
+  }
+  .success-panel[hidden] { display: none; }
+  .success-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #000;
+  }
+  .success-icon svg { width: 22px; height: 22px; }
+  .success-panel h3 { font-size: 1.25rem; font-weight: 600; }
+  .success-panel p { font-size: 0.875rem; color: rgba(255, 255, 255, 0.6); max-width: 320px; }
+  .success-panel .reset-btn {
+    margin-top: 8px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    padding: 10px 22px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+  .success-panel .reset-btn:hover { background: rgba(255, 255, 255, 0.08); }
+  .success-panel .reset-btn:focus-visible { outline: 2px solid var(--aurora-accent); outline-offset: 2px; }
+
+  .demo-note {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%) translateY(16px);
+    background: var(--color-brand-gray);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 0.8125rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s var(--ease-out), transform 0.25s var(--ease-out);
+    z-index: 50;
+    max-width: 90vw;
+    text-align: center;
+  }
+  .demo-note.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero-content > * { animation: none !important; opacity: 1 !important; transform: none !important; }
+    .form-inner { animation: none !important; opacity: 1 !important; }
+    .hero-video { display: none !important; }
+    .submit-btn, .social-btn, .toggle-visibility, .reset-btn, .demo-note { transition: none !important; }
+    * { scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+<main class="shell">
+<section class="hero" aria-label="Onboarding overview">
+  <div class="hero-video-fallback" aria-hidden="true"></div>
+  <video class="hero-video" autoplay muted loop playsinline poster="assets/aurora-poster.jpg" aria-hidden="true">
+    <source src="assets/aurora-hero.mp4" type="video/mp4">
+  </video>
+  <div class="hero-content">
+    <div class="hero-brand" style="--reveal-delay:0.2s">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" fill="currentColor"></circle>
+      </svg>
+      <span>Aurora</span>
+    </div>
+    <div class="hero-heading" style="--reveal-delay:0.35s">
+      <h1>Join Aurora</h1>
+      <p>Follow these 3 quick phases to activate your space.</p>
+    </div>
+    <ol class="hero-steps" style="--reveal-delay:0.5s">
+      <li class="step" data-active="true">
+        <span class="step-num" aria-hidden="true">1</span>
+        <span class="step-text">Register your identity</span>
+      </li>
+      <li class="step" data-active="false">
+        <span class="step-num" aria-hidden="true">2</span>
+        <span class="step-text">Configure your studio</span>
+      </li>
+      <li class="step" data-active="false">
+        <span class="step-num" aria-hidden="true">3</span>
+        <span class="step-text">Finalize your profile</span>
+      </li>
+    </ol>
+  </div>
+</section>
+<section class="form-col" aria-label="Create your account">
+  <div class="form-inner">
+    <header class="form-header">
+      <h2>Create New Profile</h2>
+      <p>Input your basic details to begin the journey.</p>
+    </header>
+
+    <div class="social-grid">
+      <button type="button" class="social-btn" data-provider="Google">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"></circle>
+          <circle cx="12" cy="12" r="4"></circle>
+          <line x1="21.17" y1="8" x2="12" y2="8"></line>
+          <line x1="3.95" y1="6.06" x2="8.54" y2="14"></line>
+          <line x1="10.88" y1="21.94" x2="15.46" y2="14"></line>
+        </svg>
+        <span>Google</span>
+      </button>
+      <button type="button" class="social-btn" data-provider="Github">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.3-.4-4.1 1.3a13.4 13.4 0 0 0-7 0C4.8 2.7 3.5 3.1 3.5 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 2.1 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"></path>
+        </svg>
+        <span>Github</span>
+      </button>
+    </div>
+
+    <div class="divider" role="separator" aria-orientation="horizontal">
+      <span class="line" aria-hidden="true"></span>
+      <span>Or</span>
+      <span class="line" aria-hidden="true"></span>
+    </div>
+
+    <form id="signup-form" novalidate>
+      <div class="form-fields" id="form-fields">
+        <div class="name-grid">
+          <div class="input-group">
+            <label for="first-name">First Name</label>
+            <input id="first-name" name="first-name" type="text" placeholder="ex. Alex" autocomplete="given-name" required>
+          </div>
+          <div class="input-group">
+            <label for="last-name">Last Name</label>
+            <input id="last-name" name="last-name" type="text" placeholder="ex. Sterling" autocomplete="family-name" required>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" placeholder="ex. alex.s@aurora.io" autocomplete="email" required>
+        </div>
+
+        <div class="input-group">
+          <label for="password">Password</label>
+          <div class="password-field">
+            <input id="password" name="password" type="password" placeholder="Secure your account" autocomplete="new-password" minlength="8" required>
+            <button type="button" class="toggle-visibility" aria-pressed="false" aria-label="Show password" aria-controls="password">
+              <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"></path>
+                <path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"></path>
+                <path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"></path>
+                <path d="m2 2 20 20"></path>
+              </svg>
+            </button>
+          </div>
+          <p class="helper-text">Requires at least 8 symbols.</p>
+        </div>
+
+        <button type="submit" class="submit-btn">Create Account</button>
+
+        <p class="footer-link">Member of the team? <a href="#login">Log in</a></p>
+      </div>
+
+      <div class="success-panel" id="success-panel" hidden aria-live="polite" tabindex="-1">
+        <span class="success-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </span>
+        <h3>Account created</h3>
+        <p>Welcome to Aurora. A confirmation link is on its way to your inbox.</p>
+        <button type="button" class="reset-btn" id="reset-form">Back to form</button>
+      </div>
+    </form>
+  </div>
+</section>
+</main>
+<div class="demo-note" id="demo-note" role="status" aria-live="polite"></div>
+<script>
+(function () {
+  "use strict";
+
+  var video = document.querySelector(".hero-video");
+  var reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  function syncMotionPreference() {
+    if (!video) return;
+    if (reducedMotionQuery.matches) {
+      video.pause();
+      video.classList.add("is-static");
+    } else {
+      video.classList.remove("is-static");
+      video.play().catch(function () {});
+    }
+  }
+  syncMotionPreference();
+  if (reducedMotionQuery.addEventListener) {
+    reducedMotionQuery.addEventListener("change", syncMotionPreference);
+  }
+  if (video) {
+    video.addEventListener("error", function () {
+      video.classList.add("is-static");
+    });
+  }
+
+  var toggle = document.querySelector(".toggle-visibility");
+  var passwordInput = document.getElementById("password");
+  if (toggle && passwordInput) {
+    toggle.addEventListener("click", function () {
+      var isShown = toggle.getAttribute("aria-pressed") === "true";
+      var next = !isShown;
+      toggle.setAttribute("aria-pressed", String(next));
+      toggle.setAttribute("aria-label", next ? "Hide password" : "Show password");
+      passwordInput.type = next ? "text" : "password";
+    });
+  }
+
+  var demoNote = document.getElementById("demo-note");
+  var demoTimer = null;
+  function showDemoNote(message) {
+    if (!demoNote) return;
+    demoNote.textContent = message;
+    demoNote.classList.add("is-visible");
+    if (demoTimer) window.clearTimeout(demoTimer);
+    demoTimer = window.setTimeout(function () {
+      demoNote.classList.remove("is-visible");
+    }, 2600);
+  }
+
+  var socialButtons = document.querySelectorAll(".social-btn");
+  socialButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var provider = btn.getAttribute("data-provider") || "provider";
+      showDemoNote(provider + " sign-in is disabled in this preview.");
+    });
+  });
+
+  var form = document.getElementById("signup-form");
+  var fields = document.getElementById("form-fields");
+  var successPanel = document.getElementById("success-panel");
+  var resetBtn = document.getElementById("reset-form");
+  var submitBtn = form ? form.querySelector(".submit-btn") : null;
+
+  if (form && fields && successPanel) {
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Creating…";
+      }
+      window.setTimeout(function () {
+        fields.hidden = true;
+        successPanel.hidden = false;
+        successPanel.focus();
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Create Account";
+        }
+      }, 500);
+    });
+  }
+
+  if (resetBtn && fields && successPanel && form) {
+    resetBtn.addEventListener("click", function () {
+      form.reset();
+      successPanel.hidden = true;
+      fields.hidden = false;
+      var firstName = document.getElementById("first-name");
+      if (firstName) firstName.focus();
+    });
+  }
+})();
+</script>
+</body>
+</html>
