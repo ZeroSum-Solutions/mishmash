@@ -739,6 +739,35 @@ describe('DesignLibrarySection', () => {
     expect(within(panel).queryByText(/Could carry forward/)).toBeNull();
   });
 
+  it('keeps a long description fully in the DOM even though the panel visually line-clamps it — truncation is CSS-only, not a data cut', async () => {
+    const longDescription =
+      'A very long description that repeats itself many times over so that it would overflow any fixed-height box. '.repeat(
+        6,
+      );
+    fetchDesignLibraryCatalog.mockResolvedValue({
+      ok: true,
+      catalog: {
+        ...CATALOG,
+        groups: [
+          {
+            ...CATALOG.groups[0]!,
+            items: [{ ...CATALOG.groups[0]!.items[0]!, description: longDescription }],
+          },
+        ],
+      },
+    });
+
+    render(<DesignLibrarySection active />);
+    const label = await screen.findByText('Neon Dashboard Kit');
+    const card = label.closest('article') as HTMLElement;
+    fireEvent.mouseEnter(within(card).getByTestId('design-library-title-area'));
+
+    const panel = within(card).getByTestId('design-library-hover-panel');
+    // No JS-level slicing anywhere in the render path — the full string is
+    // in the DOM; only CSS (-webkit-line-clamp) governs what paints.
+    expect(panel.textContent).toContain(longDescription.trim());
+  });
+
   it('opens the hover panel on real keyboard focus, with a visible-focus tab stop', async () => {
     render(<DesignLibrarySection active />);
     const label = await screen.findByText('NeuForm Particle Field');
