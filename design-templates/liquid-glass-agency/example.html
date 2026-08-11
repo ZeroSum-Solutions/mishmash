@@ -1,0 +1,999 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lucent Studio — AI-Powered Web Design Agency</title>
+<meta name="description" content="Lucent Studio designs and ships premium websites with AI-assisted speed and expert-refined craft. Stunning design, blazing performance, built in days." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Barlow:wght@300;400;500;600&amp;display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     TOKENS
+     ============================================================ */
+  :root {
+    --bg: #060708;
+    --bg-elevated: #0b0d10;
+    --fg: #ffffff;
+    --fg-muted: rgba(255, 255, 255, 0.62);
+    --fg-dim: rgba(255, 255, 255, 0.42);
+    --fg-faint: rgba(255, 255, 255, 0.24);
+
+    /* genuinely chromatic accent (parseable, recolor-compatible) */
+    --accent: hsl(213 45% 67%);
+    --accent-soft: hsl(213 55% 82%);
+    --accent-deep: hsl(213 50% 40%);
+    --accent-glow: hsl(213 60% 65% / 0.32);
+    --accent-ring: hsl(213 60% 72% / 0.45);
+
+    --glass-bg: rgba(255, 255, 255, 0.01);
+    --glass-border-a: rgba(255, 255, 255, 0.45);
+    --glass-border-b: rgba(255, 255, 255, 0.15);
+    --glass-shadow: 4px 4px 4px rgba(0, 0, 0, 0.05);
+
+    --radius-full: 9999px;
+    --radius-lg: 1.75rem;
+    --radius-xl: 2.5rem;
+
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --font-heading: "Instrument Serif", serif;
+    --font-body: "Barlow", sans-serif;
+
+    --container: 1240px;
+    --pad: clamp(1.25rem, 5vw, 4rem);
+  }
+
+  /* ============================================================
+     RESET & BASE
+     ============================================================ */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-weight: 300;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  img, video { display: block; max-width: 100%; }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  ul { list-style: none; }
+  section { position: relative; }
+  .container { width: 100%; max-width: var(--container); margin: 0 auto; padding-inline: var(--pad); }
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+  }
+
+  /* ============================================================
+     LIQUID GLASS SURFACES
+     ============================================================ */
+  .liquid-glass {
+    background: var(--glass-bg);
+    background-blend-mode: luminosity;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: none;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    position: relative;
+    overflow: hidden;
+  }
+  .liquid-glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.4px;
+    background: linear-gradient(
+      180deg,
+      var(--glass-border-a) 0%,
+      var(--glass-border-b) 20%,
+      transparent 40%,
+      transparent 60%,
+      var(--glass-border-b) 80%,
+      var(--glass-border-a) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  .liquid-glass-strong {
+    background: var(--glass-bg);
+    background-blend-mode: luminosity;
+    backdrop-filter: blur(50px);
+    -webkit-backdrop-filter: blur(50px);
+    border: none;
+    box-shadow: var(--glass-shadow), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+  }
+  .liquid-glass-strong::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.4px;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.5) 0%,
+      rgba(255, 255, 255, 0.2) 20%,
+      transparent 40%,
+      transparent 60%,
+      rgba(255, 255, 255, 0.2) 80%,
+      rgba(255, 255, 255, 0.5) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  .liquid-glass-strong:hover {
+    box-shadow: var(--glass-shadow), inset 0 1px 1px rgba(255, 255, 255, 0.15), 0 0 40px var(--accent-glow);
+    transform: translateY(-2px);
+  }
+
+  /* ambient chromatic glow blobs (brand surface — var() gradient stops) */
+  .ambient-glow {
+    position: absolute;
+    pointer-events: none;
+    z-index: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+    filter: blur(40px);
+    animation: pulseGlow 8s ease-in-out infinite;
+  }
+  @keyframes pulseGlow {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.08); }
+  }
+
+  /* ============================================================
+     TYPOGRAPHY HELPERS
+     ============================================================ */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: var(--radius-full);
+    padding: 0.35rem 0.9rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+  .heading {
+    font-family: var(--font-heading);
+    font-style: italic;
+    font-weight: 400;
+    color: var(--fg);
+    letter-spacing: -0.01em;
+    line-height: 0.95;
+  }
+  .heading-xl { font-size: clamp(2.75rem, 6vw + 1rem, 5.5rem); letter-spacing: -0.03em; }
+  .heading-lg { font-size: clamp(2.25rem, 4vw + 1rem, 3.75rem); }
+  .lede {
+    color: var(--fg-muted);
+    font-weight: 300;
+    font-size: clamp(0.9rem, 0.4vw + 0.8rem, 1.05rem);
+    line-height: 1.6;
+  }
+  .section-head { max-width: 640px; margin: 0 auto 3rem; text-align: center; }
+  .section-head .badge { margin-bottom: 1.25rem; }
+  .section-head .heading { margin-bottom: 0; }
+
+  /* ============================================================
+     BUTTONS
+     ============================================================ */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: var(--radius-full);
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), background 0.2s var(--ease-out);
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn-primary {
+    color: var(--fg);
+    padding: 0.75rem 1.4rem;
+  }
+  .btn-secondary {
+    background: var(--fg);
+    color: #060708;
+    padding: 0.75rem 1.4rem;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.12);
+  }
+  .btn-secondary:hover { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2); }
+  .btn-ghost {
+    color: var(--fg);
+    padding: 0.5rem 0.25rem;
+    font-weight: 400;
+  }
+  .btn-ghost:hover { color: var(--accent-soft); }
+  .icon { width: 1em; height: 1em; flex-shrink: 0; }
+
+  /* ============================================================
+     NAV
+     ============================================================ */
+  .nav {
+    position: fixed;
+    top: 1rem;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem var(--pad);
+  }
+  .nav-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: var(--font-heading);
+    font-style: italic;
+    font-size: 1.35rem;
+    color: var(--fg);
+  }
+  .nav-logo svg { width: 2rem; height: 2rem; }
+  .nav-pill {
+    display: none;
+    align-items: center;
+    gap: 0.15rem;
+    border-radius: var(--radius-full);
+    padding: 0.35rem;
+  }
+  .nav-pill a {
+    padding: 0.5rem 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    border-radius: var(--radius-full);
+    transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out);
+  }
+  .nav-pill a:hover { background: rgba(255, 255, 255, 0.08); color: var(--fg); }
+  .nav-pill .btn-secondary { padding: 0.45rem 0.9rem; font-size: 0.82rem; }
+  .nav-cta-mobile { display: inline-flex; }
+  @media (min-width: 860px) {
+    .nav-pill { display: flex; }
+    .nav-cta-mobile { display: none; }
+  }
+
+  /* ============================================================
+     VIDEO BACKGROUND UTILITIES
+     ============================================================ */
+  .media-fill {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+  }
+  .fade-top,
+  .fade-bottom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 200px;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .fade-top { top: 0; background: linear-gradient(to bottom, var(--bg), transparent); }
+  .fade-bottom { bottom: 0; background: linear-gradient(to top, var(--bg), transparent); }
+  .overlay-dim {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.28);
+    z-index: 0;
+  }
+  .video-fallback .media-fill { display: none; }
+  .video-fallback::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(circle at 30% 20%, var(--accent-glow), transparent 55%),
+      var(--bg-elevated);
+  }
+
+  /* ============================================================
+     HERO
+     ============================================================ */
+  .hero {
+    position: relative;
+    overflow-x: hidden;
+    overflow-y: visible;
+    height: clamp(680px, 94vh, 1000px);
+    background: var(--bg);
+  }
+  .hero-video-wrap {
+    position: absolute;
+    left: 0;
+    top: 20%;
+    width: 100%;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .hero-video-wrap video,
+  .hero-video-wrap img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .hero .fade-bottom { height: 300px; z-index: 2; }
+  .hero-content {
+    position: relative;
+    z-index: 10;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding-top: clamp(6.5rem, 14vw, 9.4rem);
+    padding-bottom: 2rem;
+    padding-inline: var(--pad);
+  }
+  .hero-badge { margin-bottom: 1.75rem; padding: 0.3rem; }
+  .hero-badge-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding-right: 0.9rem;
+  }
+  .hero-badge .badge-new {
+    background: var(--fg);
+    color: #060708;
+    border-radius: var(--radius-full);
+    padding: 0.25rem 0.7rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  .hero-badge span.copy { font-size: 0.8rem; color: var(--fg); font-weight: 400; }
+  .hero h1 {
+    max-width: 46rem;
+    letter-spacing: -0.09em;
+  }
+  .blur-word {
+    display: inline-block;
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(50px);
+    animation: blurWordIn 0.9s var(--ease-out) forwards;
+  }
+  @keyframes blurWordIn {
+    0% { opacity: 0; filter: blur(10px); transform: translateY(50px); }
+    55% { opacity: 0.6; filter: blur(5px); transform: translateY(-5px); }
+    100% { opacity: 1; filter: blur(0); transform: translateY(0); }
+  }
+  .hero-subtext {
+    max-width: 30rem;
+    margin-top: 1.25rem;
+    font-size: clamp(0.85rem, 0.3vw + 0.8rem, 1rem);
+    font-weight: 300;
+    line-height: 1.5;
+    color: var(--fg);
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(20px);
+    animation: fadeBlurIn 0.6s var(--ease-out) forwards;
+    animation-delay: 0.8s;
+  }
+  @keyframes fadeBlurIn {
+    to { opacity: 1; filter: blur(0); transform: translateY(0); }
+  }
+  .hero-ctas {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 1.25rem;
+    margin-top: 2rem;
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(20px);
+    animation: fadeBlurIn 0.6s var(--ease-out) forwards;
+    animation-delay: 1.1s;
+  }
+  .hero-ctas .btn-primary { border-radius: var(--radius-full); padding: 0.8rem 1.5rem; }
+  .partners {
+    margin-top: auto;
+    padding-top: 3rem;
+    padding-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+  }
+  .partners-label { padding: 0.4rem 1rem; font-size: 0.75rem; color: var(--fg); }
+  .partners-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: clamp(1.5rem, 3vw, 4rem);
+  }
+  .partners-row span {
+    font-family: var(--font-heading);
+    font-style: italic;
+    font-size: clamp(1.15rem, 1.5vw + 0.6rem, 1.85rem);
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  /* ============================================================
+     GENERIC CONTENT SECTIONS
+     ============================================================ */
+  .section { padding-block: clamp(4.5rem, 9vw, 7.5rem); background: var(--bg); }
+  .video-section {
+    padding-block: clamp(4.5rem, 9vw, 7.5rem);
+    min-height: 34rem;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+  }
+  .video-section .container { position: relative; z-index: 10; width: 100%; }
+  .video-section-inner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.25rem; }
+
+  /* reveal-on-scroll */
+  .reveal {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.7s var(--ease-out), transform 0.7s var(--ease-out);
+  }
+  .reveal.is-visible { opacity: 1; transform: translateY(0); }
+
+  /* ============================================================
+     FEATURES CHESS
+     ============================================================ */
+  .chess-row {
+    display: flex;
+    align-items: center;
+    gap: clamp(2rem, 5vw, 5rem);
+    margin-bottom: clamp(3rem, 6vw, 5rem);
+  }
+  .chess-row:last-child { margin-bottom: 0; }
+  .chess-row.reverse { flex-direction: row-reverse; }
+  .chess-text { flex: 1 1 320px; min-width: 260px; }
+  .chess-text h3 { font-size: clamp(1.6rem, 2vw + 1rem, 2.4rem); margin-bottom: 1rem; }
+  .chess-text p { margin-bottom: 1.75rem; max-width: 30rem; }
+  .chess-media { flex: 1 1 380px; min-width: 260px; border-radius: var(--radius-lg); overflow: hidden; }
+  .chess-media video { width: 100%; height: 100%; object-fit: cover; }
+  @media (max-width: 760px) {
+    .chess-row, .chess-row.reverse { flex-direction: column; }
+  }
+
+  /* ============================================================
+     FEATURES GRID
+     ============================================================ */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+  }
+  .feature-card { border-radius: var(--radius-lg); padding: 1.75rem; }
+  .feature-icon-ring {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.25rem;
+    color: var(--fg);
+  }
+  .feature-icon-ring .icon { width: 1.25rem; height: 1.25rem; }
+  .feature-card h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.6rem; }
+  .feature-card p { font-size: 0.88rem; color: var(--fg-muted); line-height: 1.55; }
+  @media (max-width: 980px) { .features-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .features-grid { grid-template-columns: 1fr; } }
+
+  /* ============================================================
+     STATS
+     ============================================================ */
+  .stats-card {
+    border-radius: var(--radius-xl);
+    padding: clamp(2rem, 4vw, 4rem);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2rem;
+    text-align: center;
+  }
+  .stat-value { font-family: var(--font-heading); font-style: italic; font-size: clamp(2rem, 3vw + 1rem, 3.5rem); color: var(--fg); }
+  .stat-label { margin-top: 0.4rem; font-size: 0.85rem; color: var(--fg-muted); }
+  @media (max-width: 760px) { .stats-card { grid-template-columns: repeat(2, 1fr); } }
+
+  /* ============================================================
+     TESTIMONIALS
+     ============================================================ */
+  .testimonials-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+  .testimonial-card { border-radius: var(--radius-lg); padding: 2rem; display: flex; flex-direction: column; gap: 1.5rem; }
+  .testimonial-card blockquote { font-style: italic; font-size: 0.92rem; color: rgba(255,255,255,0.82); line-height: 1.6; }
+  .testimonial-author strong { display: block; font-size: 0.88rem; font-weight: 500; color: var(--fg); }
+  .testimonial-author span { display: block; font-size: 0.78rem; color: rgba(255,255,255,0.5); margin-top: 0.2rem; }
+  @media (max-width: 900px) { .testimonials-grid { grid-template-columns: 1fr; } }
+
+  /* ============================================================
+     CTA + FOOTER
+     ============================================================ */
+  .cta-heading { font-size: clamp(2.5rem, 5vw + 1rem, 4.75rem); line-height: 0.9; max-width: 40rem; }
+  .cta-subtext { max-width: 28rem; margin-top: 1rem; }
+  .cta-buttons { display: flex; flex-wrap: wrap; gap: 1.25rem; justify-content: center; margin-top: 2.25rem; }
+  .cta-buttons .btn-primary { border-radius: var(--radius-full); padding: 0.85rem 1.6rem; }
+  .cta-buttons .btn-secondary { border-radius: var(--radius-full); padding: 0.85rem 1.6rem; }
+
+  .site-footer { background: var(--bg); border-top: 1px solid rgba(255,255,255,0.1); padding-block: 2rem; }
+  .footer-inner { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; }
+  .footer-copy { font-size: 0.75rem; color: rgba(255,255,255,0.4); }
+  .footer-links { display: flex; gap: 1.75rem; }
+  .footer-links a { font-size: 0.75rem; color: rgba(255,255,255,0.4); transition: color 0.2s var(--ease-out); }
+  .footer-links a:hover { color: var(--fg); }
+
+  /* ============================================================
+     REDUCED MOTION
+     ============================================================ */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .blur-word,
+    .hero-subtext,
+    .hero-ctas,
+    .ambient-glow {
+      animation: none !important;
+      opacity: 1 !important;
+      filter: none !important;
+      transform: none !important;
+    }
+    .reveal {
+      opacity: 1 !important;
+      transform: none !important;
+      transition: none !important;
+    }
+    .liquid-glass-strong,
+    .btn,
+    .footer-links a {
+      transition: none !important;
+    }
+    .liquid-glass-strong:hover,
+    .btn:hover { transform: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     ICON SPRITE
+     ============================================================ -->
+<svg style="display:none" aria-hidden="true">
+  <symbol id="icon-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7 17 17 7" />
+    <path d="M9 7h8v8" />
+  </symbol>
+  <symbol id="icon-play" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+    <path d="M6 4l14 8-14 8V4z" />
+  </symbol>
+  <symbol id="icon-zap" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+    <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" />
+  </symbol>
+  <symbol id="icon-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-.8 2-1.8 0-.6-.3-1.1-.7-1.6-.4-.5-.6-1.4.5-1.6h1.7A4.5 4.5 0 0 0 20 11.5C20 6.8 16.4 3 12 3z" />
+    <circle cx="7.5" cy="10.7" r="1.15" fill="currentColor" stroke="none" />
+    <circle cx="10.3" cy="7.3" r="1.15" fill="currentColor" stroke="none" />
+    <circle cx="14.3" cy="7.3" r="1.15" fill="currentColor" stroke="none" />
+    <circle cx="16.6" cy="10.7" r="1.15" fill="currentColor" stroke="none" />
+  </symbol>
+  <symbol id="icon-bars" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 21h18" />
+    <rect x="6" y="12" width="3" height="6" fill="currentColor" stroke="none" />
+    <rect x="11" y="7" width="3" height="11" fill="currentColor" stroke="none" />
+    <rect x="16" y="3" width="3" height="15" fill="currentColor" stroke="none" />
+  </symbol>
+  <symbol id="icon-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6l7-3z" />
+    <path d="M9 12l2 2 4-4" />
+  </symbol>
+</svg>
+
+<!-- ============================================================
+     NAV
+     ============================================================ -->
+<header class="nav">
+  <a href="#home" class="nav-logo" aria-label="Lucent Studio home">
+    <svg viewBox="0 0 40 40" aria-hidden="true">
+      <defs>
+        <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="var(--accent-soft)" />
+          <stop offset="100%" stop-color="var(--accent-deep)" />
+        </linearGradient>
+      </defs>
+      <path d="M20 3 34 20 20 37 6 20z" fill="url(#logoGrad)" opacity="0.9" />
+      <path d="M20 11 28 20 20 29 12 20z" fill="var(--bg)" opacity="0.85" />
+    </svg>
+    Lucent
+  </a>
+
+  <nav class="nav-pill liquid-glass" aria-label="Primary">
+    <a href="#home">Home</a>
+    <a href="#services">Services</a>
+    <a href="#work">Work</a>
+    <a href="#process">Process</a>
+    <a href="#pricing">Pricing</a>
+    <a href="mailto:hello@lucentstudio.ai?subject=New%20Project" class="btn-secondary">
+      Get Started <svg class="icon"><use href="#icon-arrow" /></svg>
+    </a>
+  </nav>
+
+  <a href="mailto:hello@lucentstudio.ai?subject=New%20Project" class="btn btn-secondary nav-cta-mobile">
+    Get Started <svg class="icon"><use href="#icon-arrow" /></svg>
+  </a>
+</header>
+
+<!-- ============================================================
+     HERO
+     ============================================================ -->
+<section class="hero" id="home">
+  <div class="ambient-glow" style="width:clamp(18rem,60vw,36rem);height:clamp(18rem,60vw,36rem);left:50%;top:8%;transform:translateX(-50%);"></div>
+
+  <div class="hero-video-wrap">
+    <video
+      class="media-fill"
+      style="position:static;"
+      autoplay muted loop playsinline
+      poster="assets/hero-poster.jpg"
+      onerror="this.closest('.hero').classList.add('video-fallback')"
+    >
+      <source src="assets/hero-bg.mp4" type="video/mp4" />
+    </video>
+  </div>
+  <div class="overlay-dim"></div>
+  <div class="fade-bottom"></div>
+
+  <div class="hero-content">
+    <div class="hero-badge badge liquid-glass">
+      <span class="hero-badge-inner">
+        <span class="badge-new">New</span>
+        <span class="copy">Introducing AI-powered web design.</span>
+      </span>
+    </div>
+
+    <h1 class="heading heading-xl">
+      <span class="blur-word" style="animation-delay:0.10s">The&nbsp;</span>
+      <span class="blur-word" style="animation-delay:0.19s">Website&nbsp;</span>
+      <span class="blur-word" style="animation-delay:0.28s">Your&nbsp;</span>
+      <span class="blur-word" style="animation-delay:0.37s">Brand&nbsp;</span>
+      <span class="blur-word" style="animation-delay:0.46s">Deserves</span>
+    </h1>
+
+    <p class="hero-subtext">Stunning design. Blazing performance. Built by AI, refined by experts. This is web design, wildly reimagined.</p>
+
+    <div class="hero-ctas">
+      <a href="mailto:hello@lucentstudio.ai?subject=New%20Project" class="btn btn-primary liquid-glass-strong">
+        Get Started <svg class="icon"><use href="#icon-arrow" /></svg>
+      </a>
+      <a href="#process" class="btn btn-ghost">
+        <svg class="icon"><use href="#icon-play" /></svg> Watch the Film
+      </a>
+    </div>
+
+    <div class="partners">
+      <span class="partners-label badge liquid-glass">Trusted by the teams behind</span>
+      <div class="partners-row">
+        <span>Northfold</span>
+        <span>Kaskade</span>
+        <span>Anchorpoint</span>
+        <span>Meridian</span>
+        <span>Glasswave</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     START SECTION — HOW IT WORKS
+     ============================================================ -->
+<section class="video-section" id="process">
+  <video
+    class="media-fill"
+    autoplay muted loop playsinline
+    poster="assets/start-section-poster.jpg"
+    onerror="this.closest('.video-section').classList.add('video-fallback')"
+  >
+    <source src="assets/start-section.mp4" type="video/mp4" />
+  </video>
+  <div class="fade-top"></div>
+  <div class="fade-bottom"></div>
+
+  <div class="container">
+    <div class="video-section-inner reveal">
+      <span class="badge liquid-glass">How It Works</span>
+      <h2 class="heading heading-lg">You dream it. We ship it.</h2>
+      <p class="lede" style="max-width:32rem;">Share your vision. Our AI handles the rest — wireframes, design, code, launch. All in days, not quarters.</p>
+      <a href="mailto:hello@lucentstudio.ai?subject=New%20Project" class="btn btn-primary liquid-glass-strong" style="border-radius:var(--radius-full);padding:0.9rem 1.75rem;margin-top:0.75rem;">
+        Get Started <svg class="icon"><use href="#icon-arrow" /></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     FEATURES CHESS
+     ============================================================ -->
+<section class="section" id="work">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="badge liquid-glass">Capabilities</span>
+      <h2 class="heading heading-lg">Pro features. Zero complexity.</h2>
+    </div>
+
+    <div class="chess-row reveal">
+      <div class="chess-text">
+        <h3 class="heading">Designed to convert. Built to perform.</h3>
+        <p class="lede">Every pixel is intentional. Our AI studies what works across thousands of top sites — then builds yours to outperform them all.</p>
+        <a href="#services" class="btn btn-primary liquid-glass-strong" style="border-radius:var(--radius-full);">Learn more</a>
+      </div>
+      <div class="chess-media liquid-glass">
+        <video autoplay muted loop playsinline poster="assets/hero-poster.jpg" aria-label="Preview of an AI-generated site layout">
+          <source src="assets/feature-1.mp4" type="video/mp4" />
+        </video>
+      </div>
+    </div>
+
+    <div class="chess-row reverse reveal">
+      <div class="chess-text">
+        <h3 class="heading">It gets smarter. Automatically.</h3>
+        <p class="lede">Your site evolves on its own. AI monitors every click, scroll, and conversion — then optimizes in real time. No manual updates. Ever.</p>
+        <a href="#process" class="btn btn-primary liquid-glass-strong" style="border-radius:var(--radius-full);">See how it works</a>
+      </div>
+      <div class="chess-media liquid-glass">
+        <video autoplay muted loop playsinline poster="assets/hero-poster.jpg" aria-label="Preview of an AI-optimized site layout">
+          <source src="assets/feature-2.mp4" type="video/mp4" />
+        </video>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     FEATURES GRID — WHY US
+     ============================================================ -->
+<section class="section" id="services">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="badge liquid-glass">Why Us</span>
+      <h2 class="heading heading-lg">The difference is everything.</h2>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card liquid-glass reveal">
+        <div class="feature-icon-ring liquid-glass-strong"><svg class="icon"><use href="#icon-zap" /></svg></div>
+        <h3>Days, Not Months</h3>
+        <p>Concept to launch at a pace that redefines fast. Because waiting isn't a strategy.</p>
+      </div>
+      <div class="feature-card liquid-glass reveal" style="transition-delay:0.08s">
+        <div class="feature-icon-ring liquid-glass-strong"><svg class="icon"><use href="#icon-palette" /></svg></div>
+        <h3>Obsessively Crafted</h3>
+        <p>Every detail considered. Every element refined. Design so precise, it feels inevitable.</p>
+      </div>
+      <div class="feature-card liquid-glass reveal" style="transition-delay:0.16s">
+        <div class="feature-icon-ring liquid-glass-strong"><svg class="icon"><use href="#icon-bars" /></svg></div>
+        <h3>Built to Convert</h3>
+        <p>Layouts informed by data. Decisions backed by performance. Results you can measure.</p>
+      </div>
+      <div class="feature-card liquid-glass reveal" style="transition-delay:0.24s">
+        <div class="feature-icon-ring liquid-glass-strong"><svg class="icon"><use href="#icon-shield" /></svg></div>
+        <h3>Secure by Default</h3>
+        <p>Enterprise-grade protection comes standard. SSL, DDoS mitigation, compliance. All included.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     STATS
+     ============================================================ -->
+<section class="video-section" style="min-height:28rem;">
+  <video
+    class="media-fill"
+    style="filter:saturate(0);"
+    autoplay muted loop playsinline
+    poster="assets/stats-section-poster.jpg"
+    onerror="this.closest('.video-section').classList.add('video-fallback')"
+  >
+    <source src="assets/stats-section.mp4" type="video/mp4" />
+  </video>
+  <div class="fade-top"></div>
+  <div class="fade-bottom"></div>
+
+  <div class="container">
+    <div class="stats-card liquid-glass reveal">
+      <div>
+        <div class="stat-value" data-count-to="200" data-suffix="+">0</div>
+        <div class="stat-label">Sites launched</div>
+      </div>
+      <div>
+        <div class="stat-value" data-count-to="98" data-suffix="%">0</div>
+        <div class="stat-label">Client satisfaction</div>
+      </div>
+      <div>
+        <div class="stat-value" data-count-to="3.2" data-suffix="x" data-decimals="1">0</div>
+        <div class="stat-label">More conversions</div>
+      </div>
+      <div>
+        <div class="stat-value" data-count-to="5" data-suffix=" days">0</div>
+        <div class="stat-label">Average delivery</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     TESTIMONIALS
+     ============================================================ -->
+<section class="section">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="badge liquid-glass">What They Say</span>
+      <h2 class="heading heading-lg">Don't take our word for it.</h2>
+    </div>
+
+    <div class="testimonials-grid">
+      <article class="testimonial-card liquid-glass reveal">
+        <blockquote>&ldquo;A complete rebuild in five days. The result outperformed everything we'd spent months building before.&rdquo;</blockquote>
+        <div class="testimonial-author">
+          <strong>Sarah Chen</strong>
+          <span>CEO, Luminary</span>
+        </div>
+      </article>
+      <article class="testimonial-card liquid-glass reveal" style="transition-delay:0.08s">
+        <blockquote>&ldquo;Conversions up 4x. That's not a typo. The design just works differently when it's built on real data.&rdquo;</blockquote>
+        <div class="testimonial-author">
+          <strong>Marcus Webb</strong>
+          <span>Head of Growth, Arcline</span>
+        </div>
+      </article>
+      <article class="testimonial-card liquid-glass reveal" style="transition-delay:0.16s">
+        <blockquote>&ldquo;They didn't just design our site. They defined our brand. World-class doesn't begin to cover it.&rdquo;</blockquote>
+        <div class="testimonial-author">
+          <strong>Elena Voss</strong>
+          <span>Brand Director, Helix</span>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     CTA + FOOTER
+     ============================================================ -->
+<section class="video-section" id="pricing" style="min-height:30rem;">
+  <video
+    class="media-fill"
+    autoplay muted loop playsinline
+    poster="assets/cta-footer-poster.jpg"
+    onerror="this.closest('.video-section').classList.add('video-fallback')"
+  >
+    <source src="assets/cta-footer.mp4" type="video/mp4" />
+  </video>
+  <div class="fade-top"></div>
+  <div class="fade-bottom"></div>
+
+  <div class="container">
+    <div class="video-section-inner reveal">
+      <h2 class="heading cta-heading">Your next website starts here.</h2>
+      <p class="lede cta-subtext">Book a free strategy call. See what AI-powered design can do. No commitment, no pressure. Just possibilities.</p>
+      <div class="cta-buttons">
+        <a href="mailto:hello@lucentstudio.ai?subject=Strategy%20Call" class="btn btn-primary liquid-glass-strong">Book a Call</a>
+        <a href="mailto:hello@lucentstudio.ai?subject=Pricing%20Inquiry" class="btn btn-secondary">View Pricing</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <span class="footer-copy">© 2026 Lucent Studio. All rights reserved.</span>
+    <nav class="footer-links" aria-label="Footer">
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="mailto:hello@lucentstudio.ai">Contact</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    "use strict";
+
+    var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    /* ---- scroll reveal ---- */
+    var revealEls = document.querySelectorAll(".reveal");
+    if (reduceMotion || !("IntersectionObserver" in window)) {
+      revealEls.forEach(function (el) { el.classList.add("is-visible"); });
+    } else {
+      var revealObserver = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+              revealObserver.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.15 }
+      );
+      revealEls.forEach(function (el) { revealObserver.observe(el); });
+    }
+
+    /* ---- stat counters ---- */
+    var statEls = document.querySelectorAll(".stat-value");
+    function animateCount(el) {
+      var to = parseFloat(el.getAttribute("data-count-to")) || 0;
+      var decimals = parseInt(el.getAttribute("data-decimals") || "0", 10);
+      var suffix = el.getAttribute("data-suffix") || "";
+      if (reduceMotion) {
+        el.textContent = to.toFixed(decimals) + suffix;
+        return;
+      }
+      var duration = 1400;
+      var start = null;
+      function step(ts) {
+        if (start === null) start = ts;
+        var progress = Math.min((ts - start) / duration, 1);
+        var eased = 1 - Math.pow(1 - progress, 3);
+        var current = to * eased;
+        el.textContent = current.toFixed(decimals) + suffix;
+        if (progress < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+    if ("IntersectionObserver" in window && statEls.length) {
+      var statObserver = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              animateCount(entry.target);
+              statObserver.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.4 }
+      );
+      statEls.forEach(function (el) { statObserver.observe(el); });
+    } else {
+      statEls.forEach(animateCount);
+    }
+
+    /* ---- respect reduced motion for background video ---- */
+    if (reduceMotion) {
+      document.querySelectorAll("video[autoplay]").forEach(function (video) {
+        video.removeAttribute("autoplay");
+        video.removeAttribute("loop");
+        video.pause();
+      });
+    }
+  })();
+</script>
+
+</body>
+</html>

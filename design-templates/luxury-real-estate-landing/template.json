@@ -1,0 +1,12 @@
+{
+  "slug": "luxury-real-estate-landing",
+  "name": "Velar. — Luxury Real Estate Landing",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800;900&family=Inter:wght@300;400;500;600&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=luxury-real-estate",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VERAXIS — Beyond the Interface</title>
+<meta name="description" content="VERAXIS — a full-screen cinematic brand hero with a looping ember-to-cyan energy film, staggered character-reveal headline, and glass navigation.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23000000'/%3E%3Cpath d='M18.5 14.5V9.5a1.7 1.7 0 0 0-.85-1.47l-5-2.9a1.7 1.7 0 0 0-1.7 0l-5 2.9A1.7 1.7 0 0 0 5.1 9.5v5a1.7 1.7 0 0 0 .85 1.47l5 2.9a1.7 1.7 0 0 0 1.7 0l5-2.9a1.7 1.7 0 0 0 .85-1.47Z' fill='none' stroke='%232fd0ff' stroke-width='1.4'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script>
+(function () {
+  var html = document.documentElement;
+  html.classList.add('js-enabled');
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    html.classList.add('reduce-motion');
+  }
+})();
+</script>
+<style>
+  :root {
+    --bg: #050506;
+    --fg: #ffffff;
+    --fg-dim: rgba(255, 255, 255, 0.62);
+    --fg-dimmer: rgba(255, 255, 255, 0.5);
+    --line: rgba(255, 255, 255, 0.15);
+    --line-soft: rgba(255, 255, 255, 0.08);
+    --surface: rgba(255, 255, 255, 0.05);
+    --ink: #0b0c10;
+    --accent-a: #ff5a36;
+    --accent-b: #2fd0ff;
+    --ease-hero: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --ease-ui: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Sora', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  img, video { max-width: 100%; }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-b);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    width: 100%;
+    overflow: hidden;
+    background: var(--ink);
+  }
+
+  .hero-bg-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+  }
+
+  .hero-grade {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(180deg, var(--accent-a) 0%, transparent 35%, transparent 65%, var(--accent-b) 100%);
+    mix-blend-mode: overlay;
+    opacity: 0.32;
+  }
+
+  .hero-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at 50% 42%, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.55) 100%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.05) 22%, rgba(0, 0, 0, 0.1) 68%, rgba(0, 0, 0, 0.62) 100%);
+  }
+
+  /* ---------- Navbar ---------- */
+  .navbar {
+    position: fixed;
+    inset-inline: 0;
+    top: 0;
+    z-index: 50;
+    padding: 0.75rem 0.75rem 0;
+    animation: navReveal 0.6s var(--ease-hero) both;
+  }
+  @media (min-width: 640px) {
+    .navbar { padding: 1rem 1.25rem 0; }
+  }
+  @keyframes navReveal {
+    from { transform: translateY(-24px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .navbar-inner {
+    margin: 0 auto;
+    max-width: 80rem;
+    height: 3.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1rem;
+  }
+  @media (min-width: 640px) {
+    .navbar-inner { height: 4rem; padding: 0 1.5rem; }
+  }
+
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .logo-icon {
+    display: inline-flex;
+    color: var(--fg);
+    transition: transform 0.3s var(--ease-ui);
+  }
+  .logo:hover .logo-icon { transform: rotate(30deg); }
+  .logo-text {
+    font-size: clamp(0.9375rem, 0.9rem + 0.2vw, 1rem);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--fg);
+  }
+
+  .nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+    border-radius: 999px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: transform 0.3s var(--ease-ui), border-color 0.3s var(--ease-ui), color 0.3s var(--ease-ui);
+  }
+  .btn:hover { transform: scale(1.05); }
+  .btn:active { transform: scale(1); }
+
+  .btn-ghost {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--fg-dim);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+  .btn-ghost:hover { border-color: rgba(255, 255, 255, 0.3); color: var(--fg); }
+
+  .btn-primary {
+    background: var(--ink);
+    color: var(--fg);
+  }
+
+  .btn-nav {
+    padding: 0.5rem 1.25rem;
+    font-size: 0.8125rem;
+  }
+
+  .btn-glow {
+    outline: 1.5px solid rgba(255, 255, 255, 0.6);
+    outline-offset: -1.5px;
+    box-shadow: inset 0 0 14px 0 rgba(255, 255, 255, 0.7);
+  }
+  @media (min-width: 640px) {
+    .btn-glow { outline-width: 2px; outline-offset: -2px; }
+  }
+
+  /* ---------- Hero content ---------- */
+  .hero-content {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    min-height: 100vh;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5rem 1.25rem 3rem;
+    text-align: center;
+    margin-top: -28px;
+  }
+  @media (min-width: 640px) {
+    .hero-content { padding: 6rem 1.5rem 3rem; margin-top: -50px; }
+  }
+
+  [data-reveal] {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s var(--ease-hero) var(--delay, 0s), transform 0.6s var(--ease-hero) var(--delay, 0s);
+  }
+  [data-reveal].is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 1rem;
+    font-size: clamp(0.625rem, 0.55rem + 0.3vw, 0.875rem);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.25em;
+    color: var(--fg-dim);
+  }
+  @media (min-width: 640px) {
+    .eyebrow { gap: 0.75rem; margin-bottom: 1.5rem; }
+  }
+  @media (min-width: 768px) {
+    .eyebrow { letter-spacing: 0.3em; }
+  }
+  .eyebrow-line {
+    display: inline-block;
+    height: 1px;
+    width: 1rem;
+    background: linear-gradient(90deg, var(--accent-a), var(--accent-b));
+  }
+  @media (min-width: 640px) { .eyebrow-line { width: 1.5rem; } }
+
+  .headline {
+    max-width: 56rem;
+    margin: 0;
+    font-size: clamp(1.75rem, 0.6rem + 3vw, 4.5rem);
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--fg);
+  }
+  .headline .plain-fallback { display: inline; }
+  .headline .chars-wrap { display: none; }
+  html.js-enabled:not(.reduce-motion) .headline .plain-fallback { display: none; }
+  html.js-enabled:not(.reduce-motion) .headline .chars-wrap { display: inline; }
+  .chars-wrap .word { display: inline-block; }
+  .chars-wrap .char {
+    display: inline-block;
+    opacity: 0;
+    transition: opacity 0.15s var(--ease-hero);
+  }
+  .chars-wrap.is-visible .char { opacity: 1; }
+
+  .subheading {
+    max-width: 20rem;
+    margin: 1rem 0 0;
+    font-size: clamp(0.75rem, 0.65rem + 0.5vw, 1.125rem);
+    font-weight: 300;
+    line-height: 1.6;
+    color: var(--fg-dimmer);
+  }
+  @media (min-width: 640px) {
+    .subheading { max-width: 36rem; margin-top: 1.5rem; }
+  }
+
+  .button-row {
+    display: flex;
+    width: 100%;
+    max-width: 24rem;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 2rem;
+  }
+  @media (min-width: 640px) {
+    .button-row {
+      width: auto;
+      max-width: none;
+      flex-direction: row;
+      gap: 1.25rem;
+      margin-top: 2.5rem;
+    }
+  }
+
+  .btn-begin {
+    width: 100%;
+    justify-content: center;
+    gap: 0.625rem;
+    padding: 0.625rem 0.75rem 0.625rem 1.5rem;
+    font-size: clamp(0.875rem, 0.8rem + 0.5vw, 1.125rem);
+  }
+  @media (min-width: 640px) {
+    .btn-begin { width: auto; gap: 0.75rem; padding: 0.875rem 1.25rem 0.875rem 2.5rem; }
+  }
+
+  .play-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+  @media (min-width: 640px) { .play-icon { width: 2.25rem; height: 2.25rem; } }
+
+  .btn-watch {
+    width: 100%;
+    padding: 0.625rem 1.5rem;
+    font-size: clamp(0.875rem, 0.8rem + 0.5vw, 1.125rem);
+  }
+  @media (min-width: 640px) {
+    .btn-watch { width: auto; padding: 0.875rem 2.5rem; }
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .navbar { animation: none; transform: none; opacity: 1; }
+    [data-reveal] { transition: none; opacity: 1; transform: none; }
+    .chars-wrap .char { transition: none; opacity: 1; }
+    .logo-icon, .btn { transition: none; }
+    .btn:hover { transform: none; }
+  }
+</style>
+</head>
+<body>
+  <section class="hero" id="top">
+    <video class="hero-bg-video" autoplay muted loop playsinline preload="auto" poster="assets/hero-bg-poster.jpg" aria-hidden="true">
+      <source src="assets/hero-bg.mp4" type="video/mp4">
+    </video>
+    <div class="hero-grade" aria-hidden="true"></div>
+    <div class="hero-scrim" aria-hidden="true"></div>
+
+    <nav class="navbar" aria-label="Primary">
+      <div class="navbar-inner">
+        <a class="logo" href="#top" aria-label="VERAXIS home">
+          <span class="logo-icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
+            </svg>
+          </span>
+          <span class="logo-text">VERAXIS</span>
+        </a>
+        <div class="nav-actions">
+          <a class="btn btn-ghost btn-nav" href="#">Contact</a>
+          <a class="btn btn-primary btn-nav btn-glow" href="#">Sign Up</a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="hero-content">
+      <p class="eyebrow" data-reveal style="--delay:0s">
+        <span class="eyebrow-line" aria-hidden="true"></span>
+        The future is unfolding
+      </p>
+
+      <h1 class="headline">
+        <span class="plain-fallback">Innovation that reshapes the fabric of experience</span>
+        <span class="chars-wrap" data-reveal data-typing style="--delay:0s" aria-hidden="true"></span>
+        <span class="sr-only">Innovation that reshapes the fabric of experience</span>
+      </h1>
+
+      <p class="subheading" data-reveal style="--delay:2.4s">
+        We craft platforms where insight, power, and design converge — giving rise to something the world hasn't seen.
+      </p>
+
+      <div class="button-row">
+        <a class="btn btn-primary btn-glow btn-begin" href="#" data-reveal style="--delay:2.8s">
+          Begin Now
+          <span class="play-icon" aria-hidden="true">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="6 3 20 12 6 21 6 3"></polygon>
+            </svg>
+          </span>
+        </a>
+        <a class="btn btn-ghost btn-watch" href="#" data-reveal style="--delay:3.0s">Watch the story</a>
+      </div>
+    </div>
+  </section>
+
+  <script>
+  (function () {
+    var reduceMotion = document.documentElement.classList.contains('reduce-motion');
+
+    // Background video: attempt autoplay as a mount fallback; keep it paused
+    // (showing the poster frame) when the user prefers reduced motion.
+    var video = document.querySelector('.hero-bg-video');
+    if (video) {
+      if (reduceMotion) {
+        video.pause();
+        try { video.currentTime = 0; } catch (e) {}
+      } else {
+        var playPromise = video.play();
+        if (playPromise && playPromise.catch) { playPromise.catch(function () {}); }
+      }
+    }
+
+    // Character-by-character headline reveal, built only when JS is
+    // available; the plain-text fallback stays in the DOM either way.
+    var CHAR_DELAY = 0.045;
+    var wrap = document.querySelector('.chars-wrap');
+    if (wrap && !reduceMotion) {
+      var text = 'Innovation that reshapes the fabric of experience';
+      var words = text.split(' ');
+      var globalIndex = 0;
+      var frag = document.createDocumentFragment();
+      words.forEach(function (word, wi) {
+        var wordSpan = document.createElement('span');
+        wordSpan.className = 'word';
+        word.split('').forEach(function (ch) {
+          var charSpan = document.createElement('span');
+          charSpan.className = 'char';
+          charSpan.textContent = ch;
+          charSpan.style.transitionDelay = (globalIndex * CHAR_DELAY).toFixed(3) + 's';
+          wordSpan.appendChild(charSpan);
+          globalIndex++;
+        });
+        frag.appendChild(wordSpan);
+        if (wi < words.length - 1) {
+          frag.appendChild(document.createTextNode(' '));
+        }
+      });
+      wrap.appendChild(frag);
+    }
+
+    // Scroll/mount reveal: fires once per element, matches the "in view"
+    // trigger the source design used for its fade-up and typing motion.
+    var revealTargets = document.querySelectorAll('[data-reveal]');
+    if ('IntersectionObserver' in window && !reduceMotion) {
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.1 });
+      revealTargets.forEach(function (el) { observer.observe(el); });
+    } else {
+      revealTargets.forEach(function (el) { el.classList.add('is-visible'); });
+    }
+  })();
+  </script>
+</body>
+</html>

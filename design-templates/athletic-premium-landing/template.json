@@ -1,0 +1,12 @@
+{
+  "slug": "athletic-premium-landing",
+  "name": "IGNIS — Premium Athletic Landing",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=nike-premium-landing",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Loopwork — Simple Management for Your Remote Team</title>
+	<meta
+		name="description"
+		content="Loopwork HR SaaS hero: an editorial, spacious white hero with a vertically flipped ambient video backdrop, a serif-accented headline, and a pill-shaped email capture bar with social proof."
+	>
+	<link
+		rel="icon"
+		href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23111114'/%3E%3Cpath d='M9 21V11.5L16 16.5L23 11.5V21' stroke='%23fcfcfc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E"
+	>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@1&display=swap"
+		rel="stylesheet"
+	>
+	<style>
+		:root {
+			--bg: #ffffff;
+			--fg: #14151a;
+			--slate: #373a46;
+
+			--accent: #4b5eff;
+			--accent-soft: rgba(75, 94, 255, 0.16);
+
+			--pill-bg: #fcfcfc;
+			--pill-border: rgba(20, 21, 26, 0.08);
+			--pill-shadow: rgba(194, 194, 194, 0.25);
+
+			--cta-a: #33343c;
+			--cta-b: #050506;
+			--cta-highlight: rgba(201, 201, 201, 0.08);
+			--cta-innershadow: rgba(29, 29, 29, 0.24);
+
+			--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html, body {
+			margin: 0;
+			padding: 0;
+			background: var(--bg);
+		}
+
+		body {
+			font-family: 'Geist', 'Helvetica Neue', Arial, sans-serif;
+			-webkit-font-smoothing: antialiased;
+			color: var(--fg);
+			overflow-x: hidden;
+		}
+
+		main {
+			display: block;
+		}
+
+		a, button, input {
+			font-family: inherit;
+		}
+
+		/* ---------- Hero shell ---------- */
+
+		.hero {
+			position: relative;
+			min-height: 100vh;
+			overflow: hidden;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			background: var(--bg);
+		}
+
+		.hero-bg,
+		.hero-bg-fallback {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			transform: scaleY(-1);
+			z-index: 0;
+		}
+
+		.hero-bg-fallback {
+			display: none;
+		}
+
+		.hero-overlay {
+			position: absolute;
+			inset: 0;
+			z-index: 1;
+			background: linear-gradient(
+				to bottom,
+				rgba(255, 255, 255, 0) 26.416%,
+				var(--bg) 66.943%
+			);
+		}
+
+		.hero-content {
+			position: relative;
+			z-index: 10;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			text-align: center;
+			width: 100%;
+			max-width: 1200px;
+			margin: 0 auto;
+			padding: 290px 24px 96px;
+			gap: 32px;
+		}
+
+		/* ---------- Headline ---------- */
+
+		.hero-heading {
+			margin: 0;
+			max-width: 780px;
+			font-family: 'Geist', 'Helvetica Neue', Arial, sans-serif;
+			font-weight: 500;
+			letter-spacing: -0.04em;
+			font-size: clamp(2.4rem, 6.4vw, 80px);
+			line-height: 1.08;
+			color: var(--fg);
+			opacity: 0;
+			animation: heroFadeUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.1s;
+		}
+
+		.hero-heading .accent {
+			font-family: 'Instrument Serif', Georgia, serif;
+			font-style: italic;
+			font-weight: 400;
+			letter-spacing: -0.01em;
+			font-size: clamp(2.9rem, 8vw, 100px);
+			line-height: 1;
+			display: inline-block;
+			vertical-align: -0.06em;
+		}
+
+		/* ---------- Description ---------- */
+
+		.hero-desc {
+			margin: 0;
+			max-width: 554px;
+			font-family: 'Geist', 'Helvetica Neue', Arial, sans-serif;
+			font-weight: 400;
+			font-size: 18px;
+			line-height: 1.55;
+			color: var(--slate);
+			opacity: 0;
+			animation: heroFadeUpDesc 800ms var(--ease-out) forwards;
+			animation-delay: 0.3s;
+		}
+
+		/* ---------- Email pill + CTA ---------- */
+
+		.hero-signup {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 16px;
+			opacity: 0;
+			animation: heroFadeUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.5s;
+		}
+
+		.email-pill {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			width: min(100%, 460px);
+			background: var(--pill-bg);
+			border: 1px solid var(--pill-border);
+			border-radius: 40px;
+			box-shadow: 0px 10px 40px 5px var(--pill-shadow);
+			padding: 6px 6px 6px 22px;
+		}
+
+		.email-pill input {
+			flex: 1;
+			min-width: 0;
+			border: none;
+			background: transparent;
+			outline: none;
+			font-size: 15px;
+			color: var(--fg);
+			padding: 12px 8px;
+		}
+
+		.email-pill input::placeholder {
+			color: rgba(20, 21, 26, 0.45);
+		}
+
+		.email-pill:focus-within {
+			box-shadow: 0px 10px 40px 5px var(--pill-shadow), 0 0 0 4px var(--accent-soft);
+		}
+
+		.cta {
+			flex-shrink: 0;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			white-space: nowrap;
+			border: none;
+			cursor: pointer;
+			border-radius: 999px;
+			padding: 13px 22px;
+			font-size: 14px;
+			font-weight: 500;
+			letter-spacing: -0.01em;
+			color: #f6f6f7;
+			background: linear-gradient(180deg, var(--cta-a) 0%, var(--cta-b) 100%);
+			box-shadow:
+				inset -4px -6px 25px 0px var(--cta-highlight),
+				inset 4px 4px 10px 0px var(--cta-innershadow),
+				0 8px 20px -6px rgba(5, 5, 6, 0.35);
+			transition: transform 250ms var(--ease-out), box-shadow 250ms var(--ease-out);
+		}
+
+		.cta:hover {
+			transform: translateY(-1px);
+		}
+
+		.cta:active {
+			transform: translateY(0) scale(0.98);
+			transition-duration: 140ms;
+		}
+
+		.cta.is-sent {
+			background: linear-gradient(180deg, #2a3a2c 0%, #050a06 100%);
+		}
+
+		/* ---------- Social proof ---------- */
+
+		.social-proof {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+		}
+
+		.avatar-stack {
+			display: flex;
+		}
+
+		.avatar-stack span {
+			width: 30px;
+			height: 30px;
+			border-radius: 50%;
+			border: 2px solid var(--bg);
+			margin-left: -10px;
+			background: linear-gradient(135deg, var(--avatar-a), var(--avatar-b));
+		}
+
+		.avatar-stack span:first-child {
+			margin-left: 0;
+		}
+
+		.avatar-stack span:nth-child(1) {
+			--avatar-a: #ffd8a8;
+			--avatar-b: #ff9d6c;
+		}
+
+		.avatar-stack span:nth-child(2) {
+			--avatar-a: #c9d7ff;
+			--avatar-b: #4b5eff;
+		}
+
+		.avatar-stack span:nth-child(3) {
+			--avatar-a: #cdeedd;
+			--avatar-b: #57b58a;
+		}
+
+		.avatar-stack span:nth-child(4) {
+			--avatar-a: #f4d1e0;
+			--avatar-b: #d8698f;
+		}
+
+		.social-proof-text {
+			display: flex;
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 3px;
+		}
+
+		.stars {
+			display: flex;
+			gap: 2px;
+		}
+
+		.stars svg {
+			width: 14px;
+			height: 14px;
+			fill: var(--accent);
+		}
+
+		.social-proof-text strong {
+			font-size: 13px;
+			font-weight: 500;
+			letter-spacing: -0.01em;
+			color: var(--fg);
+		}
+
+		/* ---------- Motion ---------- */
+
+		@keyframes heroFadeUp {
+			from {
+				opacity: 0;
+				transform: translateY(24px);
+			}
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+
+		@keyframes heroFadeUpDesc {
+			from {
+				opacity: 0;
+				transform: translateY(24px);
+			}
+			to {
+				opacity: 0.8;
+				transform: translateY(0);
+			}
+		}
+
+		/* ---------- Responsive ---------- */
+
+		@media (max-width: 900px) {
+			.hero-content {
+				padding-top: 180px;
+			}
+		}
+
+		@media (max-width: 640px) {
+			.hero-content {
+				padding-top: 128px;
+				gap: 24px;
+			}
+
+			.hero-heading {
+				max-width: 100%;
+			}
+
+			.email-pill {
+				flex-direction: column;
+				align-items: stretch;
+				border-radius: 24px;
+				padding: 14px;
+				gap: 10px;
+			}
+
+			.email-pill input {
+				padding: 8px 10px;
+				text-align: center;
+			}
+
+			.cta {
+				width: 100%;
+			}
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.hero-bg {
+				display: none;
+			}
+
+			.hero-bg-fallback {
+				display: block;
+			}
+
+			.hero-heading,
+			.hero-desc,
+			.hero-signup {
+				animation: none;
+				opacity: 1;
+				transform: none;
+			}
+
+			.hero-desc {
+				opacity: 0.8;
+			}
+
+			.cta,
+			.cta:hover,
+			.cta:active {
+				transition: none;
+				transform: none;
+			}
+		}
+	</style>
+</head>
+<body>
+	<main>
+		<section class="hero">
+			<video
+				class="hero-bg"
+				autoplay
+				loop
+				muted
+				playsinline
+				poster="assets/hero-poster.jpg"
+				aria-hidden="true"
+			>
+				<source src="assets/hero-bg-loop.mp4" type="video/mp4">
+			</video>
+			<img class="hero-bg-fallback" src="assets/hero-poster.jpg" alt="" aria-hidden="true">
+			<div class="hero-overlay" aria-hidden="true"></div>
+
+			<div class="hero-content">
+				<h1 class="hero-heading">
+					Simple <span class="accent">management</span> for your remote team
+				</h1>
+
+				<p class="hero-desc">
+					One calm home for time off, payroll, and performance —
+					built so a distributed team feels as connected as one
+					sitting in the same room.
+				</p>
+
+				<div class="hero-signup">
+					<form class="email-pill" novalidate>
+						<label for="hero-email" class="visually-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Work email</label>
+						<input id="hero-email" type="email" name="email" placeholder="Enter your work email" autocomplete="email" required>
+						<button type="submit" class="cta">Create Free Account</button>
+					</form>
+
+					<div class="social-proof">
+						<div class="avatar-stack" aria-hidden="true">
+							<span></span>
+							<span></span>
+							<span></span>
+							<span></span>
+						</div>
+						<div class="social-proof-text">
+							<div class="stars" role="img" aria-label="5 out of 5 stars">
+								<svg viewBox="0 0 20 20"><path d="M10 1l2.6 5.8 6.4.6-4.8 4.3 1.4 6.3L10 14.9l-5.6 3.1 1.4-6.3L1 6.4l6.4-.6L10 1z"/></svg>
+								<svg viewBox="0 0 20 20"><path d="M10 1l2.6 5.8 6.4.6-4.8 4.3 1.4 6.3L10 14.9l-5.6 3.1 1.4-6.3L1 6.4l6.4-.6L10 1z"/></svg>
+								<svg viewBox="0 0 20 20"><path d="M10 1l2.6 5.8 6.4.6-4.8 4.3 1.4 6.3L10 14.9l-5.6 3.1 1.4-6.3L1 6.4l6.4-.6L10 1z"/></svg>
+								<svg viewBox="0 0 20 20"><path d="M10 1l2.6 5.8 6.4.6-4.8 4.3 1.4 6.3L10 14.9l-5.6 3.1 1.4-6.3L1 6.4l6.4-.6L10 1z"/></svg>
+								<svg viewBox="0 0 20 20"><path d="M10 1l2.6 5.8 6.4.6-4.8 4.3 1.4 6.3L10 14.9l-5.6 3.1 1.4-6.3L1 6.4l6.4-.6L10 1z"/></svg>
+							</div>
+							<strong>1,020+ Reviews from HR teams</strong>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+	</main>
+
+	<script>
+		(function () {
+			var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+			var video = document.querySelector('.hero-bg');
+
+			if (video) {
+				if (reduceMotion) {
+					video.removeAttribute('autoplay');
+					video.pause();
+				} else {
+					var playPromise = video.play();
+					if (playPromise && typeof playPromise.catch === 'function') {
+						playPromise.catch(function () {});
+					}
+				}
+			}
+
+			var form = document.querySelector('.email-pill');
+			var cta = form ? form.querySelector('.cta') : null;
+
+			if (form && cta) {
+				var originalLabel = cta.textContent;
+				form.addEventListener('submit', function (event) {
+					event.preventDefault();
+					if (!form.checkValidity()) {
+						return;
+					}
+					cta.textContent = 'Check your inbox!';
+					cta.classList.add('is-sent');
+					window.setTimeout(function () {
+						cta.textContent = originalLabel;
+						cta.classList.remove('is-sent');
+						form.reset();
+					}, 3200);
+				});
+			}
+		})();
+	</script>
+</body>
+</html>

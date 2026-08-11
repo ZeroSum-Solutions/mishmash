@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+
+<defs>
+  <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#7b39fc" stop-opacity="0.55"/>
+    <stop offset="100%" stop-color="#7b39fc" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="cardSheen" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.05"/>
+    <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+  </linearGradient>
+  <style>
+    text { font-family: 'Manrope','Inter','Helvetica Neue',Arial,sans-serif; }
+  </style>
+</defs>
+
+<rect x="0" y="0" width="1920" height="1080" fill="#0a0a0d"/>
+<rect x="0" y="0" width="96" height="1080" fill="#12121a"/>
+<line x1="96" y1="0" x2="96" y2="1080" stroke="#25252f" stroke-width="1"/>
+<circle cx="48.0" cy="52" r="18" fill="#7b39fc"/>
+<path d="M 41.0 52 h 14 M 48.0 45 v 14" stroke="#f6f7f9" stroke-width="2.4" stroke-linecap="round"/>
+<g transform="translate(39.0,129)" fill="none" stroke="#8b8b98" stroke-width="2"><rect x="0" y="0" width="8" height="8" rx="2"/><rect x="11" y="0" width="8" height="8" rx="2"/><rect x="0" y="11" width="8" height="8" rx="2"/><rect x="11" y="11" width="8" height="8" rx="2"/></g>
+<rect x="18" y="190" width="60" height="44" rx="12" fill="#2b2344"/>
+<polyline points="38.0,216 45.0,206 51.0,210 58.0,200" fill="none" stroke="#7b39fc" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="38.0" y="272" width="20" height="14" rx="4" fill="none" stroke="#8b8b98" stroke-width="2"/><path d="M 44.0 286 l 4 5 4 -5" fill="none" stroke="#8b8b98" stroke-width="2"/>
+<rect x="40.0" y="339" width="16" height="21" rx="2" fill="none" stroke="#8b8b98" stroke-width="2"/><line x1="44.0" y1="346" x2="52.0" y2="346" stroke="#8b8b98" stroke-width="1.6"/><line x1="44.0" y1="351" x2="52.0" y2="351" stroke="#8b8b98" stroke-width="1.6"/>
+<circle cx="48.0" cy="420" r="9" fill="none" stroke="#8b8b98" stroke-width="2"/><circle cx="48.0" cy="420" r="3" fill="#8b8b98"/>
+<rect x="96" y="0" width="1824" height="88" fill="#12121a"/>
+<line x1="96" y1="88" x2="1920" y2="88" stroke="#25252f" stroke-width="1"/>
+<text x="136" y="51.0" font-size="22" font-weight="700" fill="#f6f7f9">Finlytic</text>
+<text x="261" y="50.0" font-size="14" fill="#8b8b98">Agent Console</text>
+<rect x="426" y="25.0" width="360" height="38" rx="19" fill="#171720" stroke="#25252f" stroke-width="1"/>
+<circle cx="456" cy="44.0" r="6" fill="none" stroke="#8b8b98" stroke-width="1.8"/>
+<line x1="461" y1="49.0" x2="466" y2="54.0" stroke="#8b8b98" stroke-width="1.8" stroke-linecap="round"/>
+<text x="478" y="49.0" font-size="13" fill="#8b8b98">Search leads, tickets, records&#8230;</text>
+<circle cx="1770" cy="44.0" r="18" fill="#171720"/>
+<path d="M 1765 47.0 a 5 6 0 0 1 10 0 v 1 l 2 3 h -14 l 2 -3 z" fill="none" stroke="#8b8b98" stroke-width="1.6"/>
+<circle cx="1776" cy="36.0" r="4" fill="#7b39fc"/>
+<circle cx="1830" cy="44.0" r="20" fill="#2b2344" stroke="#7b39fc" stroke-width="1.5"/>
+<circle cx="1830" cy="39.0" r="6.5" fill="#8b8b98"/>
+<path d="M 1819 59.0 a 11 9 0 0 1 22 0 z" fill="#8b8b98"/>
+<text x="140" y="150" font-size="26" font-weight="700" fill="#f6f7f9">Good morning &#8212; here&#8217;s what your agent handled</text>
+<text x="140" y="178" font-size="14" fill="#8b8b98">Automation summary &#183; last 24 hours</text>
+<rect x="140.0" y="210" width="416.0" height="132" rx="18" fill="#12121a" stroke="#25252f" stroke-width="1"/>
+<rect x="140.0" y="210" width="416.0" height="132" rx="18" fill="url(#cardSheen)"/>
+<text x="166.0" y="244" font-size="13" fill="#8b8b98">Revenue automated</text>
+<text x="166.0" y="284" font-size="30" font-weight="700" fill="#f6f7f9">$128,400</text>
+<rect x="166.0" y="300" width="72" height="24" rx="12" fill="#3ddc97" opacity="0.14"/>
+<text x="178.0" y="316" font-size="12" font-weight="600" fill="#3ddc97">&#8593; +18.2%</text>
+<rect x="580.0" y="210" width="416.0" height="132" rx="18" fill="#12121a" stroke="#25252f" stroke-width="1"/>
+<rect x="580.0" y="210" width="416.0" height="132" rx="18" fill="url(#cardSheen)"/>
+<text x="606.0" y="244" font-size="13" fill="#8b8b98">Leads captured</text>
+<text x="606.0" y="284" font-size="30" font-weight="700" fill="#f6f7f9">342</text>
+<rect x="606.0" y="300" width="72" height="24" rx="12" fill="#3ddc97" opacity="0.14"/>
+<text x="618.0" y="316" font-size="12" font-weight="600" fill="#3ddc97">&#8593; +24.0%</text>
+<rect x="1020.0" y="210" width="416.0" height="132" rx="18" fill="#12121a" stroke="#25252f" stroke-width="1"/>
+<rect x="1020.0" y="210" width="416.0" height="132" rx="18" fill="url(#cardSheen)"/>
+<text x="1046.0" y="244" font-size="13" fill="#8b8b98">Tickets resolved</text>
+<text x="1046.0" y="284" font-size="30" font-weight="700" fill="#f6f7f9">1,204</text>
+<rect x="1046.0" y="300" width="72" height="24" rx="12" fill="#3ddc97" opacity="0.14"/>
+<text x="1058.0" y="316" font-size="12" font-weight="600" fill="#3ddc97">&#8593; +9.4%</text>
+<rect x="1460.0" y="210" width="416.0" height="132" rx="18" fill="#12121a" stroke="#25252f" stroke-width="1"/>
+<rect x="1460.0" y="210" width="416.0" height="132" rx="18" fill="url(#cardSheen)"/>
+<text x="1486.0" y="244" font-size="13" fill="#8b8b98">Hours saved</text>
+<text x="1486.0" y="284" font-size="30" font-weight="700" fill="#f6f7f9">86 hrs</text>
+<rect x="1486.0" y="300" width="72" height="24" rx="12" fill="#3ddc97" opacity="0.14"/>
+<text x="1498.0" y="316" font-size="12" font-weight="600" fill="#3ddc97">&#8593; +31.0%</text>
+<rect x="140" y="366" width="1093.68" height="420" rx="20" fill="#12121a" stroke="#25252f" stroke-width="1"/>
+<text x="172" y="408" font-size="17" font-weight="700" fill="#f6f7f9">Automation volume</text>
+<text x="172" y="430" font-size="12" fill="#8b8b98">Tasks completed by the agent, per day</text>
+<circle cx="1043.68" cy="404" r="5" fill="#7b39fc"/>
+<text x="1055.68" y="409" font-size="12" fill="#8b8b98">This week</text>
+<circle cx="1143.68" cy="404" r="5" fill="#8b8b98"/>
+<text x="1155.68" y="409" font-size="12" fill="#8b8b98">Last week</text>
+<line x1="172" y1="466.0" x2="1201.68" y2="466.0" stroke="#25252f" stroke-width="1" stroke-dasharray="4 6"/>
+<line x1="172" y1="549.3333333333334" x2="1201.68" y2="549.3333333333334" stroke="#25252f" stroke-width="1" stroke-dasharray="4 6"/>
+<line x1="172" y1="632.6666666666666" x2="1201.68" y2="632.6666666666666" stroke="#25252f" stroke-width="1" stroke-dasharray="4 6"/>
+<line x1="172" y1="716.0" x2="1201.68" y2="716.0" stroke="#25252f" stroke-width="1" stroke-dasharray="4 6"/>
+<path d="M 172.0 611.0 L 343.6 578.5 L 515.2 621.0 L 686.8 546.0 L 858.5 566.0 L 1030.1 511.0 L 1201.7 531.0 L 1201.68 716 L 172 716 Z" fill="url(#chartFill)"/>
+<path d="M 172.0 641.0 L 343.6 628.5 L 515.2 646.0 L 686.8 606.0 L 858.5 616.0 L 1030.1 586.0 L 1201.7 596.0" fill="none" stroke="#8b8b98" stroke-width="2" stroke-dasharray="5 6" opacity="0.7"/>
+<path d="M 172.0 611.0 L 343.6 578.5 L 515.2 621.0 L 686.8 546.0 L 858.5 566.0 L 1030.1 511.0 L 1201.7 531.0" fill="none" stroke="#7b39fc" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="172.0" cy="611.0" r="4.5" fill="#0a0a0d" stroke="#7b39fc" stroke-width="2.4"/>
+<text x="172.0" y="744" font-size="11" fill="#8b8b98" text-anchor="middle">Mon</text>
+<circle cx="343.6" cy="578.5" r="4.5" fill="#0a0a0d" stroke="#7b39fc" stroke-width="2.4"/>
+<text x="343.6" y="744" font-size="11" fill="#8b8b98" text-anchor="middle">Tue</text>
+<circle cx="515.2" cy="621.0" r="4.5" fill="#0a0a0d" stroke="#7b39fc" stroke-width="2.4"/>
+<text x="515.2" y="744" font-size="11" fill="#8b8b98" text-anchor="middle">Wed</text>
+<circle cx="686.8" cy="546.0" r="4.5" fill="#0a0a0d" stroke="#7b39fc" stroke-width="2.4"/>
+<text x="686.8" y="744" font-size="11" fill="#8b8b98" text-anchor="middle">Thu</text>
+<circle cx="858.5" cy="566.0" r="4.5" fill="#0a0a0d" stroke="#7b39fc" stroke-width="2.4"/>
+<text x="858.5" y="744" font-size="11" fill="#8b8b98" text-anchor="middle">Fri</text>
+<circle cx="1030.1" cy="511.0" r="4.5" fill="#0a0a0d" stroke="#7b39fc" stroke-width="2.4"/>
+<text x="1030.1" y="744" font-size="11" fill="#8b8b98" text-anchor="middle">Sat</text>
+<circle cx="1201.7" cy="531.0" r="4.5" fill="#0a0a0d" stroke="#7b39fc" stroke-width="2.4"/>
+<text x="1201.7" y="744" font-size="11" fill="#8b8b98" text-anchor="middle">Sun</text>
+<rect x="1257.68" y="366" width="618.3199999999999" height="420" rx="20" fill="#12121a" stroke="#25252f" stroke-width="1"/>
+<text x="1285.68" y="408" font-size="17" font-weight="700" fill="#f6f7f9">Agent activity</text>
+<text x="1285.68" y="430" font-size="12" fill="#8b8b98">Live automated actions</text>
+<circle cx="1291.68" cy="462" r="5" fill="#3ddc97"/>
+<text x="1309.68" y="458" font-size="13.5" font-weight="600" fill="#f6f7f9">Qualified inbound lead</text>
+<text x="1309.68" y="478" font-size="11.5" fill="#8b8b98">Sales Agent &#183; 2m ago</text>
+<line x1="1285.68" y1="496" x2="1848.0" y2="496" stroke="#25252f" stroke-width="1"/>
+<circle cx="1291.68" cy="526" r="5" fill="#3ddc97"/>
+<text x="1309.68" y="522" font-size="13.5" font-weight="600" fill="#f6f7f9">Resolved billing ticket #4021</text>
+<text x="1309.68" y="542" font-size="11.5" fill="#8b8b98">Support Agent &#183; 6m ago</text>
+<line x1="1285.68" y1="560" x2="1848.0" y2="560" stroke="#25252f" stroke-width="1"/>
+<circle cx="1291.68" cy="590" r="5" fill="#7b39fc"/>
+<text x="1309.68" y="586" font-size="13.5" font-weight="600" fill="#f6f7f9">Logged invoice to ledger</text>
+<text x="1309.68" y="606" font-size="11.5" fill="#8b8b98">Data Agent &#183; 14m ago</text>
+<line x1="1285.68" y1="624" x2="1848.0" y2="624" stroke="#25252f" stroke-width="1"/>
+<circle cx="1291.68" cy="654" r="5" fill="#f6b93b"/>
+<text x="1309.68" y="650" font-size="13.5" font-weight="600" fill="#f6f7f9">Flagged anomaly for review</text>
+<text x="1309.68" y="670" font-size="11.5" fill="#8b8b98">Data Agent &#183; 22m ago</text>
+<line x1="1285.68" y1="688" x2="1848.0" y2="688" stroke="#25252f" stroke-width="1"/>
+<circle cx="1291.68" cy="718" r="5" fill="#3ddc97"/>
+<text x="1309.68" y="714" font-size="13.5" font-weight="600" fill="#f6f7f9">Sent onboarding follow-up</text>
+<text x="1309.68" y="734" font-size="11.5" fill="#8b8b98">Sales Agent &#183; 31m ago</text>
+<rect x="140.0" y="810" width="562.6666666666666" height="132" rx="18" fill="#12121a" stroke="#25252f" stroke-width="1"/>
+<circle cx="206.0" cy="876.0" r="34" fill="none" stroke="#171720" stroke-width="8"/>
+<circle cx="206.0" cy="876.0" r="34" fill="none" stroke="#7b39fc" stroke-width="8" stroke-linecap="round" stroke-dasharray="196.5 213.6" transform="rotate(-90 206.0 876.0)"/>
+<text x="206.0" y="881.0" font-size="14" font-weight="700" fill="#f6f7f9" text-anchor="middle">92%</text>
+<text x="266.0" y="872.0" font-size="13" fill="#8b8b98">Automation coverage</text>
+<text x="266.0" y="898.0" font-size="20" font-weight="700" fill="#f6f7f9">92%</text>
+<rect x="726.6666666666666" y="810" width="562.6666666666666" height="132" rx="18" fill="#12121a" stroke="#25252f" stroke-width="1"/>
+<circle cx="792.6666666666666" cy="876.0" r="34" fill="none" stroke="#171720" stroke-width="8"/>
+<circle cx="792.6666666666666" cy="876.0" r="34" fill="none" stroke="#7b39fc" stroke-width="8" stroke-linecap="round" stroke-dasharray="181.6 213.6" transform="rotate(-90 792.6666666666666 876.0)"/>
+<text x="792.6666666666666" y="881.0" font-size="14" font-weight="700" fill="#f6f7f9" text-anchor="middle">1.2s</text>
+<text x="852.6666666666666" y="872.0" font-size="13" fill="#8b8b98">Avg. response time</text>
+<text x="852.6666666666666" y="898.0" font-size="20" font-weight="700" fill="#f6f7f9">1.2s</text>
+<rect x="1313.3333333333333" y="810" width="562.6666666666666" height="132" rx="18" fill="#12121a" stroke="#25252f" stroke-width="1"/>
+<circle cx="1379.3333333333333" cy="876.0" r="34" fill="none" stroke="#171720" stroke-width="8"/>
+<circle cx="1379.3333333333333" cy="876.0" r="34" fill="none" stroke="#7b39fc" stroke-width="8" stroke-linecap="round" stroke-dasharray="213.0 213.6" transform="rotate(-90 1379.3333333333333 876.0)"/>
+<text x="1379.3333333333333" y="881.0" font-size="14" font-weight="700" fill="#f6f7f9" text-anchor="middle">99.7%</text>
+<text x="1439.3333333333333" y="872.0" font-size="13" fill="#8b8b98">Data entry accuracy</text>
+<text x="1439.3333333333333" y="898.0" font-size="20" font-weight="700" fill="#f6f7f9">99.7%</text>
+</svg>

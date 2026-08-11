@@ -1,0 +1,12 @@
+{
+  "slug": "cybersecurity-saas",
+  "name": "Korvid Lab — Cybersecurity SaaS Hero",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=cybersecurity",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

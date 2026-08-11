@@ -1,0 +1,1045 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Launchex Prizes — Awards for Ventures Reaching Orbit</title>
+	<meta
+		name="description"
+		content="Launchex Prizes awards landing page: a full-bleed video hero inside a rounded app-shell frame, a three-column submissions gallery, and founder stat cards with chamfered clip-path borders."
+	>
+	<link
+		rel="icon"
+		href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23154359'/%3E%3Cpath d='M16 7l2.1 5.9L24 15l-5.9 2.1L16 23l-2.1-5.9L8 15l5.9-2.1L16 7z' fill='%234BBDF0'/%3E%3C/svg%3E"
+	>
+	<meta name="theme-color" content="#154359">
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+		rel="stylesheet"
+	>
+	<style>
+		:root {
+			--primary-dark: #154359;
+			--teal-accent: #066377;
+			--teal-accent-soft: rgba(6, 99, 119, 0.25);
+			--bg-nominations: #F0F0F0;
+			--bg-about: #F0F5F7;
+			--grad-a: #185B7B;
+			--grad-b: #4BBDF0;
+			--white: #ffffff;
+			--shell-pad: 12px;
+			--shell-radius: 28px;
+			--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+		}
+
+		@media (min-width: 640px) {
+			:root {
+				--shell-pad: 20px;
+				--shell-radius: 36px;
+			}
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html, body {
+			height: 100%;
+			margin: 0;
+		}
+
+		body {
+			padding: var(--shell-pad);
+			background: var(--white);
+			font-family: 'Inter', system-ui, -apple-system, sans-serif;
+			-webkit-font-smoothing: antialiased;
+		}
+
+		.font-display {
+			font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+		}
+
+		a {
+			font-family: inherit;
+		}
+
+		/* ---------- Outer app-shell ---------- */
+
+		.shell {
+			position: relative;
+			width: 100%;
+			height: calc(100dvh - (var(--shell-pad) * 2));
+			overflow: hidden;
+			border-radius: var(--shell-radius);
+			background: var(--white);
+		}
+
+		.scroll-area {
+			position: absolute;
+			inset: 0;
+			overflow-y: auto;
+			overflow-x: hidden;
+			scrollbar-width: none;
+			-ms-overflow-style: none;
+		}
+
+		.scroll-area::-webkit-scrollbar {
+			display: none;
+		}
+
+		/* ---------- Persistent top nav ---------- */
+
+		.top-nav {
+			display: none;
+		}
+
+		@media (min-width: 768px) {
+			.top-nav {
+				display: flex;
+				position: absolute;
+				top: 0;
+				left: 50%;
+				transform: translateX(-50%);
+				z-index: 40;
+				align-items: center;
+				gap: 24px;
+				padding: 16px 24px;
+				background: var(--white);
+				border-bottom-left-radius: 28px;
+				border-bottom-right-radius: 28px;
+				list-style: none;
+			}
+		}
+
+		@media (min-width: 1024px) {
+			.top-nav {
+				gap: 40px;
+				padding: 16px 40px;
+			}
+		}
+
+		.top-nav a {
+			font-size: 11px;
+			font-weight: 500;
+			text-transform: uppercase;
+			letter-spacing: 0.14em;
+			color: #262626;
+			text-decoration: none;
+			transition: color 200ms var(--ease-out);
+		}
+
+		.top-nav a:hover {
+			color: #737373;
+		}
+
+		.top-nav .notch {
+			position: absolute;
+			bottom: 0;
+			width: 24px;
+			height: 24px;
+			background: var(--white);
+		}
+
+		.top-nav .notch-left {
+			left: -24px;
+			-webkit-mask-image: radial-gradient(circle at 0 100%, transparent 24px, black 25px);
+			mask-image: radial-gradient(circle at 0 100%, transparent 24px, black 25px);
+		}
+
+		.top-nav .notch-right {
+			right: -24px;
+			-webkit-mask-image: radial-gradient(circle at 100% 100%, transparent 24px, black 25px);
+			mask-image: radial-gradient(circle at 100% 100%, transparent 24px, black 25px);
+		}
+
+		/* ---------- Persistent bottom overlays ---------- */
+
+		.page-indicator,
+		.scroll-hint {
+			position: absolute;
+			z-index: 40;
+			bottom: 16px;
+			margin: 0;
+			font-size: 10px;
+			font-weight: 500;
+			text-transform: uppercase;
+			letter-spacing: 0.18em;
+			color: rgba(255, 255, 255, 0.8);
+			mix-blend-mode: difference;
+			pointer-events: none;
+		}
+
+		.page-indicator {
+			right: 16px;
+			display: flex;
+			align-items: center;
+			gap: 12px;
+		}
+
+		.page-indicator .indicator-line {
+			width: 32px;
+			height: 1px;
+			background: rgba(255, 255, 255, 0.4);
+		}
+
+		.scroll-hint {
+			left: 16px;
+		}
+
+		@media (min-width: 640px) {
+			.page-indicator,
+			.scroll-hint {
+				bottom: 24px;
+			}
+			.page-indicator {
+				right: 32px;
+			}
+			.scroll-hint {
+				left: 32px;
+			}
+		}
+
+		/* ---------- Scroll reveal ---------- */
+
+		.reveal {
+			opacity: 0;
+			transform: translateY(24px);
+			transition: opacity 700ms var(--ease-out), transform 700ms var(--ease-out);
+		}
+
+		.reveal.in-view {
+			opacity: 1;
+			transform: translateY(0);
+		}
+
+		/* ---------- Section 1: hero ---------- */
+
+		.hero {
+			position: relative;
+			min-height: 100%;
+			display: flex;
+			flex-direction: column;
+			overflow: hidden;
+			background: #0c2530;
+		}
+
+		.hero-video {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			z-index: 0;
+		}
+
+		.hero-video-fallback {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			z-index: 0;
+			display: none;
+		}
+
+		.hero-overlay {
+			position: absolute;
+			inset: 0;
+			z-index: 1;
+			background: linear-gradient(to bottom, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.2));
+			pointer-events: none;
+		}
+
+		.hero-topbar {
+			position: relative;
+			z-index: 20;
+			display: flex;
+			align-items: flex-start;
+			justify-content: space-between;
+			padding: 20px 16px 0;
+		}
+
+		@media (min-width: 640px) {
+			.hero-topbar {
+				padding: 32px 40px 0;
+			}
+		}
+
+		.brand {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			color: var(--white);
+			text-decoration: none;
+		}
+
+		.brand svg {
+			width: 20px;
+			height: 20px;
+			flex-shrink: 0;
+		}
+
+		@media (min-width: 640px) {
+			.brand svg {
+				width: 24px;
+				height: 24px;
+			}
+		}
+
+		.brand-text {
+			display: flex;
+			flex-direction: column;
+			line-height: 1.1;
+		}
+
+		.brand-text strong {
+			font-size: 14px;
+			font-weight: 600;
+			letter-spacing: -0.01em;
+		}
+
+		.brand-text small {
+			margin-top: -2px;
+			font-size: 10px;
+			font-weight: 300;
+			opacity: 0.9;
+		}
+
+		@media (min-width: 640px) {
+			.brand-text strong {
+				font-size: 15px;
+			}
+			.brand-text small {
+				font-size: 11px;
+			}
+		}
+
+		.cta-chip {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			padding: 10px 16px;
+			background: var(--teal-accent);
+			color: var(--white);
+			font-size: 10px;
+			font-weight: 500;
+			text-transform: uppercase;
+			letter-spacing: 0.14em;
+			text-decoration: none;
+			clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+			transition: filter 200ms var(--ease-out);
+		}
+
+		@media (min-width: 640px) {
+			.cta-chip {
+				font-size: 11px;
+			}
+		}
+
+		.cta-chip:hover {
+			filter: brightness(1.25);
+		}
+
+		.cta-chip svg {
+			width: 14px;
+			height: 14px;
+			transition: transform 200ms var(--ease-out);
+		}
+
+		.cta-chip:hover svg {
+			transform: translate(2px, -2px);
+		}
+
+		.cta-short {
+			display: none;
+		}
+
+		@media (max-width: 639px) {
+			.cta-full {
+				display: none;
+			}
+			.cta-short {
+				display: inline;
+			}
+		}
+
+		.hero-content {
+			position: relative;
+			z-index: 10;
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			text-align: center;
+			color: var(--white);
+			padding: 128px 24px 96px;
+		}
+
+		@media (min-width: 640px) {
+			.hero-content {
+				padding-top: 160px;
+			}
+		}
+
+		.eyebrow {
+			margin: 0 0 24px;
+			font-size: 11px;
+			font-weight: 500;
+			text-transform: uppercase;
+			letter-spacing: 0.3em;
+			opacity: 0.9;
+		}
+
+		@media (min-width: 640px) {
+			.eyebrow {
+				font-size: 12px;
+			}
+		}
+
+		.hero-heading {
+			margin: 0;
+			font-weight: 400;
+			text-transform: lowercase;
+			letter-spacing: -0.04em;
+			line-height: 0.9;
+			font-size: clamp(3rem, 2rem + 6vw, 7.5rem);
+		}
+
+		.hero-sub {
+			margin-top: 32px;
+			max-width: 28rem;
+			font-size: 12px;
+			font-weight: 500;
+			text-transform: uppercase;
+			letter-spacing: 0.22em;
+			line-height: 1.8;
+			opacity: 0.9;
+		}
+
+		@media (min-width: 640px) {
+			.hero-sub {
+				font-size: 14px;
+			}
+		}
+
+		/* ---------- Section 2: submissions ---------- */
+
+		.submissions {
+			position: relative;
+			background: var(--bg-nominations);
+			padding: 80px 24px;
+			overflow: hidden;
+		}
+
+		@media (min-width: 640px) {
+			.submissions {
+				padding: 112px 40px;
+			}
+		}
+
+		.submissions-grid {
+			max-width: 64rem;
+			margin: 0 auto;
+			display: grid;
+			grid-template-columns: 1fr;
+			gap: 40px;
+		}
+
+		@media (min-width: 1024px) {
+			.submissions-grid {
+				grid-template-columns: 1fr 1fr 1fr;
+				gap: 48px;
+				align-items: start;
+			}
+		}
+
+		.nom-col {
+			display: flex;
+			flex-direction: column;
+			gap: 32px;
+			order: 1;
+		}
+
+		@media (min-width: 1024px) {
+			.nom-col {
+				margin-top: 144px;
+				order: 0;
+			}
+		}
+
+		.submissions-center {
+			text-align: center;
+			order: 0;
+		}
+
+		.sub-eyebrow {
+			margin: 0;
+			font-size: 12px;
+			letter-spacing: 0.24em;
+			text-transform: uppercase;
+			color: var(--primary-dark);
+		}
+
+		.sub-heading {
+			margin: 8px 0 0;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: -0.02em;
+			color: var(--primary-dark);
+			font-size: clamp(2.75rem, 2rem + 3vw, 3.375rem);
+		}
+
+		.sub-video-wrap {
+			margin: 24px auto 0;
+			width: 220px;
+			height: 220px;
+		}
+
+		@media (min-width: 640px) {
+			.sub-video-wrap {
+				margin-top: 32px;
+				width: 380px;
+				height: 380px;
+			}
+		}
+
+		@media (min-width: 1024px) {
+			.sub-video-wrap {
+				width: 460px;
+				height: 460px;
+			}
+		}
+
+		.sub-video,
+		.sub-video-fallback {
+			display: block;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+
+		.sub-video-fallback {
+			display: none;
+		}
+
+		.nom-card {
+			position: relative;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			max-width: 20em;
+			height: 5em;
+			margin: 0 auto;
+			text-decoration: none;
+			color: var(--primary-dark);
+			transition: transform 300ms var(--ease-out);
+		}
+
+		.nom-card:hover {
+			transform: translateY(-2px);
+		}
+
+		.nom-border {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+		}
+
+		.nom-border use {
+			fill: none;
+			stroke: var(--teal-accent-soft);
+			stroke-width: 1;
+			vector-effect: non-scaling-stroke;
+		}
+
+		.nom-inner {
+			position: relative;
+			z-index: 1;
+			padding: 0 1.25em;
+			text-align: center;
+		}
+
+		.nom-title {
+			display: block;
+			font-size: 13px;
+			font-weight: 600;
+		}
+
+		.nom-sub {
+			display: block;
+			margin-top: 2px;
+			font-size: 12px;
+			font-weight: 400;
+			opacity: 0.8;
+		}
+
+		.fade-bottom {
+			position: absolute;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			z-index: 10;
+			height: 160px;
+			background: linear-gradient(to bottom, rgba(240, 245, 247, 0) 0%, rgba(240, 245, 247, 0.7) 60%, #F0F5F7 100%);
+			pointer-events: none;
+		}
+
+		@media (min-width: 640px) {
+			.fade-bottom {
+				height: 224px;
+			}
+		}
+
+		/* ---------- Section 3: about the founders ---------- */
+
+		.about {
+			position: relative;
+			background: var(--bg-about);
+			padding: 80px 24px;
+		}
+
+		@media (min-width: 640px) {
+			.about {
+				padding: 112px 40px;
+			}
+		}
+
+		.about-inner {
+			max-width: 80rem;
+			margin: 0 auto;
+		}
+
+		.about-top {
+			display: flex;
+			flex-direction: column;
+			gap: 32px;
+			color: var(--primary-dark);
+		}
+
+		@media (min-width: 1024px) {
+			.about-top {
+				flex-direction: row;
+				justify-content: space-between;
+			}
+		}
+
+		.about-heading {
+			margin: 0;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: -0.02em;
+			line-height: 0.95;
+			font-size: clamp(2.25rem, 1.8rem + 2vw, 3.375rem);
+		}
+
+		.about-copy {
+			max-width: 36rem;
+		}
+
+		.about-copy p {
+			margin: 0 0 16px;
+			font-size: 17px;
+			line-height: 1.5;
+		}
+
+		@media (min-width: 640px) {
+			.about-copy p {
+				font-size: 18px;
+			}
+		}
+
+		.about-link {
+			display: inline-flex;
+			align-items: center;
+			gap: 12px;
+			margin-top: 24px;
+			font-size: 14px;
+			font-weight: 500;
+			color: var(--primary-dark);
+			text-decoration: none;
+		}
+
+		.link-arrow-box {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 32px;
+			height: 32px;
+			border: 1px solid var(--primary-dark);
+			clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+			transition: transform 200ms var(--ease-out);
+		}
+
+		.link-arrow-box svg {
+			width: 14px;
+			height: 14px;
+		}
+
+		.about-link:hover .link-arrow-box {
+			transform: translateY(-2px);
+		}
+
+		.stats-grid {
+			margin-top: 56px;
+			display: grid;
+			grid-template-columns: 1fr;
+			gap: 20px;
+		}
+
+		@media (min-width: 768px) {
+			.stats-grid {
+				grid-template-columns: 1fr 1fr;
+			}
+		}
+
+		@media (min-width: 1024px) {
+			.stats-grid {
+				grid-template-columns: 1fr 1fr 1fr;
+			}
+		}
+
+		.stat-card {
+			position: relative;
+			width: 100%;
+			height: 280px;
+			padding: 1.5px;
+			background: rgba(255, 255, 255, 0.8);
+		}
+
+		@media (min-width: 640px) {
+			.stat-card {
+				height: 340px;
+			}
+		}
+
+		.stat-card-1 {
+			clip-path: polygon(64px 0, calc(100% - 14px) 0, calc(100% - 4px) 4px, 100% 14px, 100% calc(100% - 14px), calc(100% - 4px) calc(100% - 4px), calc(100% - 14px) 100%, 14px 100%, 4px calc(100% - 4px), 0 calc(100% - 14px), 0 64px);
+		}
+
+		.stat-card-2 {
+			clip-path: polygon(0 14px, 4px 4px, 14px 0, calc(100% - 64px) 0, 100% 64px, 100% calc(100% - 14px), calc(100% - 4px) calc(100% - 4px), calc(100% - 14px) 100%, 64px 100%, 0 calc(100% - 64px));
+		}
+
+		@media (min-width: 1024px) {
+			.stat-card-2 {
+				margin-top: 96px;
+			}
+		}
+
+		.stat-card-3 {
+			clip-path: polygon(0 14px, 4px 4px, 14px 0, calc(100% - 64px) 0, 100% 64px, 100% calc(100% - 64px), calc(100% - 64px) 100%, 14px 100%, 4px calc(100% - 4px), 0 calc(100% - 14px));
+		}
+
+		.stat-media {
+			display: block;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			mix-blend-mode: plus-darker;
+		}
+
+		.stat-card-1 .stat-media {
+			clip-path: polygon(64px 0, calc(100% - 14px) 0, calc(100% - 4px) 4px, 100% 14px, 100% calc(100% - 14px), calc(100% - 4px) calc(100% - 4px), calc(100% - 14px) 100%, 14px 100%, 4px calc(100% - 4px), 0 calc(100% - 14px), 0 64px);
+		}
+
+		.stat-card-2 .stat-media {
+			clip-path: polygon(0 14px, 4px 4px, 14px 0, calc(100% - 64px) 0, 100% 64px, 100% calc(100% - 14px), calc(100% - 4px) calc(100% - 4px), calc(100% - 14px) 100%, 64px 100%, 0 calc(100% - 64px));
+		}
+
+		.stat-card-3 .stat-media {
+			clip-path: polygon(0 14px, 4px 4px, 14px 0, calc(100% - 64px) 0, 100% 64px, 100% calc(100% - 64px), calc(100% - 64px) 100%, 14px 100%, 4px calc(100% - 4px), 0 calc(100% - 14px));
+		}
+
+		.stat-text {
+			position: absolute;
+			max-width: 66%;
+		}
+
+		.stat-card-1 .stat-text,
+		.stat-card-3 .stat-text {
+			left: 24px;
+			bottom: 24px;
+		}
+
+		.stat-card-1 .stat-text {
+			right: 24px;
+		}
+
+		.stat-card-3 .stat-text {
+			right: 112px;
+		}
+
+		.stat-card-2 .stat-text {
+			left: 24px;
+			bottom: 80px;
+		}
+
+		.stat-value {
+			display: block;
+			font-weight: 600;
+			text-transform: uppercase;
+			font-size: clamp(2.25rem, 1.6rem + 3vw, 3.25rem);
+			background-image: linear-gradient(294deg, var(--grad-a) 20%, var(--grad-b));
+			-webkit-background-clip: text;
+			background-clip: text;
+			-webkit-text-fill-color: transparent;
+			color: transparent;
+		}
+
+		.stat-desc {
+			margin: 12px 0 0;
+			font-size: 14px;
+			line-height: 1.4;
+			color: var(--primary-dark);
+		}
+
+		/* ---------- Reduced motion ---------- */
+
+		@media (prefers-reduced-motion: reduce) {
+			.reveal {
+				transition: none !important;
+				opacity: 1 !important;
+				transform: none !important;
+			}
+			.nom-card,
+			.cta-chip,
+			.cta-chip svg,
+			.link-arrow-box {
+				transition: none !important;
+			}
+			.nom-card:hover,
+			.link-arrow-box:hover {
+				transform: none !important;
+			}
+			.hero-video,
+			.sub-video {
+				display: none;
+			}
+			.hero-video-fallback,
+			.sub-video-fallback {
+				display: block;
+			}
+		}
+	</style>
+</head>
+<body>
+	<!-- Shared chamfered-rectangle border shape, referenced by every nomination card -->
+	<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+		<defs>
+			<polygon id="chamferShape" points="14,0 100,0 100,86 86,100 0,100 0,14"></polygon>
+		</defs>
+	</svg>
+
+	<div class="shell">
+		<div class="scroll-area no-scrollbar" id="scrollArea">
+
+			<section class="hero" id="hero">
+				<video class="hero-video" data-motion-video autoplay loop muted playsinline poster="assets/hero-poster.jpg" aria-hidden="true">
+					<source src="assets/hero-bg.mp4" type="video/mp4">
+				</video>
+				<img class="hero-video-fallback" src="assets/hero-poster.jpg" alt="" aria-hidden="true">
+				<div class="hero-overlay" aria-hidden="true"></div>
+
+				<div class="hero-topbar">
+					<a class="brand" href="#hero">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+							<path d="M12 3l1.9 5.4L19 10l-5.1 1.6L12 17l-1.9-5.4L5 10l5.1-1.6L12 3z"></path>
+						</svg>
+						<span class="brand-text">
+							<strong>launchex</strong>
+							<small>awards</small>
+						</span>
+					</a>
+					<a class="cta-chip" href="#submissions">
+						<span class="cta-full">Send in your entry form</span>
+						<span class="cta-short">Enter</span>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+							<path d="M7 17L17 7M7 7h10v10"></path>
+						</svg>
+					</a>
+				</div>
+
+				<div class="hero-content">
+					<p class="eyebrow reveal">Prize for ventures</p>
+					<h1 class="hero-heading font-display reveal">launchex<br>prizes</h1>
+					<p class="hero-sub reveal">Bridging visions with reality, helping ventures soar up to the stars</p>
+				</div>
+			</section>
+
+			<section class="submissions" id="submissions">
+				<div class="submissions-grid">
+					<div class="nom-col nom-left">
+						<a class="nom-card reveal" href="#submissions">
+							<svg class="nom-border" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><use href="#chamferShape"></use></svg>
+							<span class="nom-inner">
+								<span class="nom-title">Lead</span>
+								<span class="nom-sub">AI venture for commerce</span>
+							</span>
+						</a>
+						<a class="nom-card reveal" href="#submissions">
+							<svg class="nom-border" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><use href="#chamferShape"></use></svg>
+							<span class="nom-inner">
+								<span class="nom-title">Emerging innovations</span>
+								<span class="nom-sub">in food commerce</span>
+							</span>
+						</a>
+						<a class="nom-card reveal" href="#submissions">
+							<svg class="nom-border" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><use href="#chamferShape"></use></svg>
+							<span class="nom-inner">
+								<span class="nom-title">The finest innovations</span>
+								<span class="nom-sub">for learners and young students</span>
+							</span>
+						</a>
+					</div>
+
+					<div class="submissions-center">
+						<p class="sub-eyebrow reveal">[submissions]</p>
+						<h2 class="sub-heading font-display reveal">submissions</h2>
+						<div class="sub-video-wrap reveal">
+							<video class="sub-video" data-motion-video autoplay loop muted playsinline poster="assets/submissions-poster.jpg" aria-hidden="true">
+								<source src="assets/submissions-loop.mp4" type="video/mp4">
+							</video>
+							<img class="sub-video-fallback" src="assets/submissions-poster.jpg" alt="" aria-hidden="true">
+						</div>
+					</div>
+
+					<div class="nom-col nom-right">
+						<a class="nom-card reveal" href="#submissions">
+							<svg class="nom-border" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><use href="#chamferShape"></use></svg>
+							<span class="nom-inner">
+								<span class="nom-title">Innovations for advanced</span>
+								<span class="nom-sub">career training</span>
+							</span>
+						</a>
+						<a class="nom-card reveal" href="#submissions">
+							<svg class="nom-border" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><use href="#chamferShape"></use></svg>
+							<span class="nom-inner">
+								<span class="nom-title">The finest innovations</span>
+								<span class="nom-sub">in finance</span>
+							</span>
+						</a>
+						<a class="nom-card reveal" href="#submissions">
+							<svg class="nom-border" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><use href="#chamferShape"></use></svg>
+							<span class="nom-inner">
+								<span class="nom-title">Categories</span>
+								<span class="nom-sub">coming soon</span>
+							</span>
+						</a>
+					</div>
+				</div>
+				<div class="fade-bottom" aria-hidden="true"></div>
+			</section>
+
+			<section class="about" id="about">
+				<div class="about-inner">
+					<div class="about-top">
+						<h2 class="about-heading font-display reveal">About the<br>founders</h2>
+						<div class="about-copy reveal">
+							<p>Launchex.Hub is a platform that is part of a portfolio of companies Launchex, for sourcing and showcasing groundbreaking innovations.</p>
+							<p>Launchex.Hub's mission is to offer every local-language innovator the chance to reshape our world with their pioneering creation.</p>
+							<a class="about-link" href="#">
+								<span class="link-arrow-box">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+										<path d="M7 17L17 7M7 7h10v10"></path>
+									</svg>
+								</span>
+								Launchex.Hub website
+							</a>
+						</div>
+					</div>
+
+					<div class="stats-grid">
+						<article class="stat-card stat-card-1 reveal">
+							<img class="stat-media" src="assets/stat-years.webp" alt="Abstract teal and amber glass ribbon sculpture" loading="lazy">
+							<div class="stat-text">
+								<span class="stat-value font-display">7+ years</span>
+								<p class="stat-desc">Launchex has served the market, guiding ventures and their journeys</p>
+							</div>
+						</article>
+
+						<article class="stat-card stat-card-2 reveal">
+							<img class="stat-media" src="assets/stat-ventures.webp" alt="Abstract chrome torus sculpture" loading="lazy">
+							<div class="stat-text">
+								<span class="stat-value font-display">15000+</span>
+								<p class="stat-desc">innovation ventures moved through the Launchex pipeline</p>
+							</div>
+						</article>
+
+						<article class="stat-card stat-card-3 reveal">
+							<img class="stat-media" src="assets/stat-sessions.webp" alt="Abstract blue and amber glass swirl sculpture" loading="lazy">
+							<div class="stat-text">
+								<span class="stat-value font-display">120+</span>
+								<p class="stat-desc">accelerator sessions delivered by Launchex across Eastern Europe</p>
+							</div>
+						</article>
+					</div>
+				</div>
+				<div class="fade-bottom" aria-hidden="true"></div>
+			</section>
+
+		</div>
+
+		<nav class="top-nav" aria-label="Primary">
+			<span class="notch notch-left" aria-hidden="true"></span>
+			<a href="#about">About</a>
+			<a href="#submissions">Submissions</a>
+			<a href="#">Venue</a>
+			<a href="#">Judges</a>
+			<a href="#">Connect</a>
+			<span class="notch notch-right" aria-hidden="true"></span>
+		</nav>
+
+		<p class="page-indicator" aria-hidden="true">
+			<span>01</span>
+			<span class="indicator-line"></span>
+			<span>05</span>
+		</p>
+		<p class="scroll-hint" aria-hidden="true">Scroll to discover</p>
+	</div>
+
+	<script>
+		(function () {
+			var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+			var videos = document.querySelectorAll('[data-motion-video]');
+			videos.forEach(function (video) {
+				if (reduceMotion) {
+					video.removeAttribute('autoplay');
+					video.pause();
+				} else {
+					var playPromise = video.play();
+					if (playPromise && typeof playPromise.catch === 'function') {
+						playPromise.catch(function () {});
+					}
+				}
+			});
+
+			var revealEls = document.querySelectorAll('.reveal');
+			if (reduceMotion || !('IntersectionObserver' in window)) {
+				revealEls.forEach(function (el) {
+					el.classList.add('in-view');
+				});
+				return;
+			}
+
+			var io = new IntersectionObserver(
+				function (entries) {
+					entries.forEach(function (entry) {
+						if (entry.isIntersecting) {
+							entry.target.classList.add('in-view');
+							io.unobserve(entry.target);
+						}
+					});
+				},
+				{ threshold: 0.15, root: document.getElementById('scrollArea') }
+			);
+			revealEls.forEach(function (el) {
+				io.observe(el);
+			});
+		})();
+	</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "slug": "luminara-hero",
+  "name": "Luminara — Creative Showcase Hero",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=luminara",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

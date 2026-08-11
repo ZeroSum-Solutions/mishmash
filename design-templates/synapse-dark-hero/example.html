@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Synapse — Where Innovation Meets Execution</title>
+	<meta
+		name="description"
+		content="Synapse dark SaaS hero: a fixed glass navbar, a floating chrome-liquid video panel rising from the bottom of a solid-black viewport, and a staggered fade-in headline, subtext, and CTA pair above a grayscale partner-logo strip."
+	>
+	<link
+		rel="icon"
+		href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='32' cy='32' r='32' fill='%23000'/%3E%3Ccircle cx='9' cy='10' r='2.6' fill='%237c6cff'/%3E%3Ccircle cx='23' cy='22' r='2.6' fill='%2338bdf8'/%3E%3Cline x1='9' y1='10' x2='23' y2='22' stroke='%237c6cff' stroke-width='1.6'/%3E%3C/svg%3E"
+	>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+		rel="stylesheet"
+	>
+	<style>
+		:root {
+			--bg: #000000;
+			--fg: #ffffff;
+			--muted: #9a9aa2;
+			--muted-2: #6b6b73;
+			--subhead: #b8b8c0;
+			--line: rgba(255, 255, 255, 0.14);
+			--glass: rgba(255, 255, 255, 0.06);
+			--glass-strong: rgba(255, 255, 255, 0.12);
+			--gradient-a: #f5f5f7;
+			--gradient-b: #c7c7cf;
+			--accent: #7c6cff;
+			--accent-2: #38bdf8;
+			--accent-soft: rgba(124, 108, 255, 0.22);
+			--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html, body {
+			margin: 0;
+			padding: 0;
+			background: var(--bg);
+		}
+
+		body {
+			font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+			-webkit-font-smoothing: antialiased;
+			color: var(--fg);
+		}
+
+		main {
+			display: block;
+		}
+
+		a {
+			color: inherit;
+			text-decoration: none;
+		}
+
+		/* ---------- Navbar ---------- */
+
+		.navbar {
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			z-index: 100;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 1rem;
+			padding: 0.9rem clamp(1.25rem, 4vw, 3rem);
+			background: rgba(0, 0, 0, 0.55);
+			backdrop-filter: blur(18px) saturate(140%);
+			-webkit-backdrop-filter: blur(18px) saturate(140%);
+			border-bottom: 1px solid var(--line);
+		}
+
+		.logo {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.5rem;
+			font-weight: 500;
+			letter-spacing: -0.02em;
+			font-size: 1.15rem;
+			color: var(--fg);
+		}
+
+		.logo svg {
+			flex-shrink: 0;
+		}
+
+		.nav-links {
+			display: flex;
+			align-items: center;
+			gap: 1.75rem;
+			list-style: none;
+			margin: 0;
+			padding: 0;
+		}
+
+		.nav-link {
+			position: relative;
+			font-size: 0.875rem;
+			font-weight: 500;
+			color: var(--muted);
+			padding: 0.4rem 0.1rem;
+			transition: color 200ms var(--ease-out);
+		}
+
+		.nav-link:hover {
+			color: var(--fg);
+		}
+
+		.nav-link.active {
+			color: var(--fg);
+			padding: 0.4rem 0.9rem;
+			border-radius: 999px;
+			background:
+				linear-gradient(var(--bg), var(--bg)) padding-box,
+				linear-gradient(90deg, var(--accent), var(--accent-2)) border-box;
+			border: 1px solid transparent;
+		}
+
+		.nav-link.strike {
+			color: var(--muted-2);
+			text-decoration: line-through;
+			text-decoration-color: var(--muted-2);
+			text-decoration-thickness: 1px;
+		}
+
+		.nav-link.strike:hover {
+			color: var(--muted);
+		}
+
+		.nav-cta {
+			display: inline-flex;
+			align-items: center;
+			padding: 0.55rem 1.1rem;
+			border-radius: 999px;
+			font-size: 0.8125rem;
+			font-weight: 600;
+			color: #0a0a0c;
+			background: linear-gradient(180deg, var(--gradient-a), var(--gradient-b));
+			transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
+			white-space: nowrap;
+		}
+
+		.nav-cta:hover {
+			transform: translateY(-1px);
+			box-shadow: 0 8px 20px rgba(255, 255, 255, 0.12);
+		}
+
+		.nav-cta:active {
+			transform: translateY(0) scale(0.98);
+			transition-duration: 140ms;
+		}
+
+		.nav-menu-toggle {
+			display: none;
+		}
+
+		/* ---------- Hero ---------- */
+
+		.hero {
+			position: relative;
+			min-height: 100vh;
+			overflow: hidden;
+			background: var(--bg);
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: flex-start;
+			padding-top: clamp(6.5rem, 14vh, 9rem);
+			padding-bottom: 2.5rem;
+		}
+
+		.hero-video-wrap,
+		.hero-video-fallback {
+			position: absolute;
+			left: 0;
+			right: 0;
+			bottom: 35vh;
+			height: 80vh;
+			width: 100%;
+			z-index: 0;
+			overflow: hidden;
+		}
+
+		.hero-video-wrap video,
+		.hero-video-fallback img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			display: block;
+		}
+
+		.hero-video-fallback {
+			display: none;
+		}
+
+		.hero-content {
+			position: relative;
+			z-index: 10;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			text-align: center;
+			padding: 0 1.25rem;
+			max-width: 56rem;
+			margin: 0 auto;
+		}
+
+		/* Badges */
+
+		.badges {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			justify-content: center;
+			gap: 0.75rem;
+			opacity: 0;
+			animation: fadeInUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.1s;
+		}
+
+		.badge {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.5rem;
+			padding: 0.45rem 1rem;
+			border-radius: 999px;
+			font-size: 0.8125rem;
+			font-weight: 500;
+			color: var(--subhead);
+			text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7);
+			background: var(--glass);
+			border: 1px solid var(--line);
+			backdrop-filter: blur(10px);
+			-webkit-backdrop-filter: blur(10px);
+		}
+
+		.badge svg {
+			flex-shrink: 0;
+			color: var(--accent);
+		}
+
+		/* Headline */
+
+		.hero-headline {
+			margin: 1.75rem 0 0;
+			font-weight: 600;
+			font-size: clamp(2.75rem, 7vw, 5rem);
+			letter-spacing: -0.03em;
+			line-height: 1.05;
+			color: var(--fg);
+			text-shadow: 0 4px 24px rgba(0, 0, 0, 0.85);
+			opacity: 0;
+			animation: fadeInUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.22s;
+		}
+
+		.hero-subhead {
+			margin: 1.25rem auto 0;
+			max-width: 34rem;
+			font-size: clamp(1rem, 1.6vw, 1.1rem);
+			line-height: 1.55;
+			color: var(--subhead);
+			font-weight: 400;
+			text-shadow: 0 2px 16px rgba(0, 0, 0, 0.85);
+			opacity: 0;
+			animation: fadeInUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.34s;
+		}
+
+		.hero-actions {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			justify-content: center;
+			gap: 0.85rem;
+			margin-top: 1.9rem;
+			opacity: 0;
+			animation: fadeInUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.46s;
+		}
+
+		.btn {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.5rem;
+			padding: 0.8rem 1.6rem;
+			border-radius: 999px;
+			font-size: 0.9375rem;
+			font-weight: 600;
+			text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
+			transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out), background 200ms var(--ease-out);
+			white-space: nowrap;
+		}
+
+		.btn-solid {
+			background: var(--bg);
+			color: var(--fg);
+			border: 1px solid var(--fg);
+		}
+
+		.btn-solid:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 10px 28px var(--accent-soft);
+		}
+
+		.btn-solid:active {
+			transform: translateY(0) scale(0.98);
+			transition-duration: 140ms;
+		}
+
+		.btn-glass {
+			background: var(--glass);
+			color: var(--fg);
+			border: 1px solid var(--line);
+			backdrop-filter: blur(10px);
+			-webkit-backdrop-filter: blur(10px);
+		}
+
+		.btn-glass:hover {
+			background: var(--glass-strong);
+			transform: translateY(-2px);
+		}
+
+		.btn-glass:active {
+			transform: translateY(0) scale(0.98);
+			transition-duration: 140ms;
+		}
+
+		/* Logo marquee */
+
+		.logo-strip {
+			position: relative;
+			z-index: 10;
+			margin-top: auto;
+			padding-top: 3.5rem;
+			width: 100%;
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			justify-content: center;
+			gap: clamp(1.5rem, 5vw, 3.5rem);
+		}
+
+		.logo-strip .wordmark {
+			font-size: 1.05rem;
+			font-weight: 600;
+			letter-spacing: 0.04em;
+			color: var(--fg);
+			opacity: 0.4;
+			filter: grayscale(1);
+			white-space: nowrap;
+		}
+
+		@keyframes fadeInUp {
+			from {
+				opacity: 0;
+				transform: translateY(24px);
+			}
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+
+		@media (max-width: 900px) {
+			.nav-links {
+				display: none;
+			}
+		}
+
+		@media (max-width: 700px) {
+			.hero {
+				padding-top: 6rem;
+			}
+			.hero-video-wrap,
+			.hero-video-fallback {
+				bottom: 10vh;
+				height: 34vh;
+			}
+			.hero-headline {
+				font-size: clamp(2.3rem, 9vw, 3.2rem);
+			}
+			.logo-strip {
+				gap: 1.5rem;
+				padding-top: 2.5rem;
+			}
+		}
+
+		@media (max-width: 480px) {
+			.nav-cta {
+				padding: 0.5rem 0.85rem;
+				font-size: 0.75rem;
+			}
+			.badge {
+				font-size: 0.75rem;
+				padding: 0.4rem 0.8rem;
+			}
+			.btn {
+				width: 100%;
+			}
+			.hero-actions {
+				flex-direction: column;
+				width: 100%;
+				max-width: 20rem;
+			}
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.hero-video-wrap {
+				display: none;
+			}
+			.hero-video-fallback {
+				display: block;
+			}
+			.badges,
+			.hero-headline,
+			.hero-subhead,
+			.hero-actions {
+				animation: none;
+				opacity: 1;
+				transform: none;
+			}
+			.nav-cta,
+			.btn {
+				transition: none;
+			}
+			.nav-cta:hover,
+			.nav-cta:active,
+			.btn:hover,
+			.btn:active {
+				transform: none;
+				box-shadow: none;
+			}
+		}
+	</style>
+</head>
+<body>
+	<header class="navbar">
+		<a class="logo" href="#">
+			<svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+				<circle cx="6" cy="6" r="2.4" fill="var(--accent)"/>
+				<circle cx="16" cy="16" r="2.4" fill="var(--accent-2)"/>
+				<line x1="6" y1="6" x2="16" y2="16" stroke="var(--accent)" stroke-width="1.4"/>
+				<circle cx="6" cy="16" r="1.6" fill="var(--muted)"/>
+				<line x1="6" y1="6" x2="6" y2="16" stroke="var(--muted)" stroke-width="1.2"/>
+			</svg>
+			Synapse
+		</a>
+		<nav aria-label="Primary">
+			<ul class="nav-links">
+				<li><a class="nav-link active" href="#" aria-current="page">Features</a></li>
+				<li><a class="nav-link" href="#">Insights</a></li>
+				<li><a class="nav-link" href="#">About</a></li>
+				<li><a class="nav-link strike" href="#">Case Studies</a></li>
+				<li><a class="nav-link" href="#">Contact</a></li>
+			</ul>
+		</nav>
+		<a class="nav-cta" href="#">Get Started for Free</a>
+	</header>
+
+	<main>
+		<section class="hero">
+			<div class="hero-video-wrap">
+				<video autoplay loop muted playsinline poster="assets/hero-poster.jpg" aria-hidden="true">
+					<source src="assets/hero-bg.mp4" type="video/mp4">
+				</video>
+			</div>
+			<div class="hero-video-fallback" aria-hidden="true">
+				<img src="assets/hero-poster.jpg" alt="">
+			</div>
+
+			<div class="hero-content">
+				<div class="badges">
+					<span class="badge">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 17a4 4 0 0 1-1-7.87A5.5 5.5 0 0 1 15.9 7.1 4.5 4.5 0 0 1 18 16H6z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+						Integrated with Cloud
+					</span>
+					<span class="badge">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13 3 4 14h6l-1 7 9-11h-6l1-7z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+						Integrated with CI/CD
+					</span>
+					<span class="badge">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+						Integrated with Data
+					</span>
+				</div>
+
+				<h1 class="hero-headline">Where Innovation Meets Execution</h1>
+
+				<p class="hero-subhead">Ship features with confidence — automated testing catches regressions before they ship, and one-click deployment gets every release into production without the babysitting.</p>
+
+				<div class="hero-actions">
+					<a class="btn btn-solid" href="#">Get Started for Free</a>
+					<a class="btn btn-glass" href="#">Let's Get Connected</a>
+				</div>
+			</div>
+
+			<div class="logo-strip" aria-label="Trusted by teams at">
+				<span class="wordmark">NORTHPEAK</span>
+				<span class="wordmark">VERTA</span>
+				<span class="wordmark">HALCYON</span>
+				<span class="wordmark">ORBITAL</span>
+				<span class="wordmark">MERIDIAN</span>
+				<span class="wordmark">COBALT LABS</span>
+			</div>
+		</section>
+	</main>
+
+	<script>
+		(function () {
+			var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+			var video = document.querySelector('.hero-video-wrap video');
+			if (video) {
+				if (reduceMotion) {
+					video.removeAttribute('autoplay');
+					video.pause();
+				} else {
+					var playPromise = video.play();
+					if (playPromise && typeof playPromise.catch === 'function') {
+						playPromise.catch(function () {});
+					}
+				}
+			}
+		})();
+	</script>
+</body>
+</html>

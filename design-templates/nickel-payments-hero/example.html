@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Groat — Unlock growth with every payment</title>
+	<meta
+		name="description"
+		content="Groat payments hero: a floating white navbar over a warm off-white page, a wide orange-accented headline promising payments, net terms and collections automation, and a rounded video panel on the right."
+	>
+	<link
+		rel="icon"
+		href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2317171c'/%3E%3Crect x='12.5' y='12.5' width='7' height='7' rx='1.5' fill='%23fff'/%3E%3C/svg%3E"
+	>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+		rel="stylesheet"
+	>
+	<style>
+		:root {
+			--bg: #f1f0f5;
+			--fg: #17171c;
+			--primary: #f47825;
+			--primary-fg: #ffffff;
+			--secondary-bg: #ffffff;
+			--secondary-fg: #17171c;
+			--muted-fg: #6f6f7b;
+			--muted-bg: #e8e7ee;
+			--border: #dddde3;
+			--nav-bg: #ffffff;
+			--hero-grad-a: #ffa970;
+			--hero-grad-b: #fd5812;
+			--focus-ring: var(--primary);
+			--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html, body {
+			margin: 0;
+			padding: 0;
+			height: 100%;
+		}
+
+		body {
+			display: flex;
+			flex-direction: column;
+			min-height: 100vh;
+			background: var(--bg);
+			color: var(--fg);
+			font-family: 'Inter', system-ui, -apple-system, sans-serif;
+			-webkit-font-smoothing: antialiased;
+			overflow-x: hidden;
+		}
+
+		a {
+			text-decoration: none;
+			color: inherit;
+		}
+
+		button {
+			font-family: inherit;
+		}
+
+		:focus-visible {
+			outline: 2px solid var(--focus-ring);
+			outline-offset: 2px;
+		}
+
+		/* ---------------------------------------------------------------- */
+		/* Navbar                                                          */
+		/* ---------------------------------------------------------------- */
+
+		.nav-wrap {
+			padding: 16px 24px 0;
+			opacity: 0;
+			animation: fadeDown 700ms var(--ease-out) forwards;
+		}
+
+		@media (min-width: 1024px) {
+			.nav-wrap {
+				padding: 16px 32px 0;
+			}
+		}
+
+		.navbar {
+			max-width: 1280px;
+			margin: 0 auto;
+			background: var(--nav-bg);
+			border-radius: 12px;
+			box-shadow: 0 1px 2px 0 rgba(23, 23, 28, 0.05), 0 1px 3px 0 rgba(23, 23, 28, 0.06);
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 16px 20px;
+			position: relative;
+		}
+
+		@media (min-width: 640px) {
+			.navbar {
+				padding: 20px 32px;
+			}
+		}
+
+		.nav-logo {
+			display: inline-flex;
+			align-items: center;
+			gap: 10px;
+			font-size: 1.5rem;
+			font-weight: 700;
+			letter-spacing: -0.02em;
+			flex-shrink: 0;
+		}
+
+		.nav-logo-mark {
+			width: 28px;
+			height: 28px;
+			border-radius: 999px;
+			background: var(--fg);
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+		}
+
+		.nav-logo-mark span {
+			width: 12px;
+			height: 12px;
+			border-radius: 2px;
+			background: #ffffff;
+			display: block;
+		}
+
+		.nav-center {
+			display: none;
+			align-items: center;
+			gap: 24px;
+		}
+
+		@media (min-width: 768px) {
+			.nav-center {
+				display: flex;
+			}
+		}
+
+		.nav-link {
+			background: none;
+			border: none;
+			cursor: pointer;
+			display: inline-flex;
+			align-items: center;
+			gap: 5px;
+			font-size: 1rem;
+			font-weight: 500;
+			color: rgba(23, 23, 28, 0.8);
+			padding: 0;
+			transition: color 200ms var(--ease-out);
+		}
+
+		.nav-link:hover {
+			color: var(--fg);
+		}
+
+		.nav-link .chevron {
+			width: 14px;
+			height: 14px;
+			transition: transform 200ms var(--ease-out);
+		}
+
+		.nav-dropdown {
+			position: relative;
+		}
+
+		.nav-dropdown.is-open .nav-link {
+			color: var(--primary);
+		}
+
+		.nav-dropdown.is-open .chevron {
+			transform: rotate(180deg);
+		}
+
+		.dropdown-panel {
+			position: absolute;
+			top: calc(100% + 12px);
+			left: 50%;
+			transform: translate(-50%, -6px);
+			min-width: 190px;
+			background: var(--secondary-bg);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			box-shadow: 0 12px 24px -8px rgba(23, 23, 28, 0.14), 0 4px 8px -4px rgba(23, 23, 28, 0.08);
+			padding: 8px;
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+			z-index: 30;
+		}
+
+		.nav-dropdown.is-open .dropdown-panel {
+			opacity: 1;
+			transform: translate(-50%, 0);
+			pointer-events: auto;
+		}
+
+		.dropdown-panel a {
+			display: block;
+			padding: 9px 12px;
+			border-radius: 8px;
+			font-size: 0.9rem;
+			font-weight: 500;
+			color: var(--fg);
+			transition: background 150ms var(--ease-out);
+		}
+
+		.dropdown-panel a:hover {
+			background: var(--muted-bg);
+		}
+
+		.nav-right {
+			display: flex;
+			align-items: center;
+			gap: 20px;
+			flex-shrink: 0;
+		}
+
+		.nav-login {
+			display: none;
+			font-size: 1rem;
+			font-weight: 500;
+			color: rgba(23, 23, 28, 0.8);
+			transition: color 200ms var(--ease-out);
+		}
+
+		.nav-login:hover {
+			color: var(--fg);
+		}
+
+		@media (min-width: 640px) {
+			.nav-login {
+				display: inline-flex;
+			}
+		}
+
+		/* ---------------------------------------------------------------- */
+		/* Buttons                                                          */
+		/* ---------------------------------------------------------------- */
+
+		.btn {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			border-radius: 8px;
+			font-weight: 500;
+			border: none;
+			cursor: pointer;
+			white-space: nowrap;
+			transition: transform 200ms var(--ease-out), opacity 200ms var(--ease-out), box-shadow 200ms var(--ease-out), background 200ms var(--ease-out);
+		}
+
+		.btn:active {
+			transform: scale(0.97);
+			transition-duration: 120ms;
+		}
+
+		.btn-hero {
+			background: linear-gradient(to bottom, var(--hero-grad-a), var(--hero-grad-b));
+			color: var(--primary-fg);
+			box-shadow: 0 8px 20px -6px rgba(244, 120, 37, 0.45);
+		}
+
+		.btn-hero:hover {
+			opacity: 0.9;
+		}
+
+		.btn-hero-outline {
+			background: var(--secondary-bg);
+			color: var(--secondary-fg);
+			border: 1px solid var(--border);
+		}
+
+		.btn-hero-outline:hover {
+			background: var(--muted-bg);
+		}
+
+		.btn-nav {
+			height: 44px;
+			padding: 0 22px;
+			font-size: 0.95rem;
+			border-radius: 8px;
+		}
+
+		.btn-xl {
+			height: 56px;
+			padding: 0 40px;
+			font-size: 1.125rem;
+		}
+
+		/* ---------------------------------------------------------------- */
+		/* Hero                                                             */
+		/* ---------------------------------------------------------------- */
+
+		main {
+			display: flex;
+			flex-direction: column;
+			flex: 1 0 auto;
+		}
+
+		.hero {
+			position: relative;
+			flex: 1 0 auto;
+			min-height: 60vh;
+			overflow: hidden;
+			display: flex;
+			width: 100%;
+		}
+
+		.hero-inner {
+			position: relative;
+			z-index: 10;
+			width: 100%;
+			max-width: 1280px;
+			margin: 0 auto;
+			padding: 48px 24px;
+			display: flex;
+			align-items: center;
+		}
+
+		@media (min-width: 1024px) {
+			.hero-inner {
+				padding: 0 32px;
+			}
+		}
+
+		.hero-text {
+			max-width: 36rem;
+		}
+
+		.hero-title {
+			margin: 0;
+			font-weight: 500;
+			letter-spacing: -0.02em;
+			line-height: 1.05;
+			font-size: clamp(2.5rem, 3vw + 2rem, 4.5rem);
+			opacity: 0;
+			transform: translateY(24px);
+			animation: fadeUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.15s;
+		}
+
+		.hero-sub {
+			margin: 24px 0 0;
+			max-width: 36rem;
+			font-size: clamp(1.125rem, 0.6vw + 1rem, 1.25rem);
+			line-height: 1.65;
+			color: var(--muted-fg);
+			opacity: 0;
+			transform: translateY(24px);
+			animation: fadeUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.3s;
+		}
+
+		.hero-actions {
+			margin-top: 40px;
+			display: flex;
+			flex-wrap: wrap;
+			gap: 16px;
+			opacity: 0;
+			transform: translateY(24px);
+			animation: fadeUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.45s;
+		}
+
+		.hero-media {
+			position: absolute;
+			top: 0;
+			right: 0;
+			width: 55%;
+			height: 100%;
+			display: none;
+			overflow: hidden;
+			border-bottom-left-radius: 24px;
+		}
+
+		@media (min-width: 1024px) {
+			.hero-media {
+				display: block;
+			}
+		}
+
+		.hero-video,
+		.hero-media-fallback {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			display: block;
+		}
+
+		.hero-media-fallback {
+			display: none;
+		}
+
+		@keyframes fadeDown {
+			from {
+				opacity: 0;
+				transform: translateY(-16px);
+			}
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+
+		@keyframes fadeUp {
+			from {
+				opacity: 0;
+				transform: translateY(24px);
+			}
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+
+		@media (max-width: 480px) {
+			.hero-inner {
+				padding: 36px 20px;
+			}
+			.nav-wrap {
+				padding: 12px 16px 0;
+			}
+			.navbar {
+				padding: 14px 16px;
+			}
+			.btn-xl {
+				padding: 0 28px;
+			}
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.nav-wrap,
+			.hero-title,
+			.hero-sub,
+			.hero-actions {
+				animation: none;
+				opacity: 1;
+				transform: none;
+			}
+			.btn,
+			.nav-link .chevron,
+			.dropdown-panel {
+				transition: none;
+			}
+			.btn:active {
+				transform: none;
+			}
+			.hero-video {
+				display: none;
+			}
+			.hero-media-fallback {
+				display: block;
+			}
+		}
+	</style>
+</head>
+<body>
+	<header class="nav-wrap">
+		<nav class="navbar" aria-label="Primary">
+			<a href="#top" class="nav-logo">
+				<span class="nav-logo-mark" aria-hidden="true"><span></span></span>
+				groat
+			</a>
+
+			<div class="nav-center">
+				<div class="nav-dropdown" data-dropdown>
+					<button type="button" class="nav-link" aria-expanded="false" aria-controls="menu-products">
+						Products
+						<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+							<polyline points="6 9 12 15 18 9"></polyline>
+						</svg>
+					</button>
+					<div class="dropdown-panel" id="menu-products" role="menu">
+						<a href="#payments" role="menuitem">Payments</a>
+						<a href="#net-terms" role="menuitem">Net terms</a>
+						<a href="#collections" role="menuitem">Collections</a>
+					</div>
+				</div>
+				<div class="nav-dropdown" data-dropdown>
+					<button type="button" class="nav-link" aria-expanded="false" aria-controls="menu-company">
+						Company
+						<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+							<polyline points="6 9 12 15 18 9"></polyline>
+						</svg>
+					</button>
+					<div class="dropdown-panel" id="menu-company" role="menu">
+						<a href="#about" role="menuitem">About</a>
+						<a href="#careers" role="menuitem">Careers</a>
+						<a href="#contact" role="menuitem">Contact</a>
+					</div>
+				</div>
+				<a href="#pricing" class="nav-link">Pricing</a>
+				<a href="#accountants" class="nav-link">For Accountants</a>
+			</div>
+
+			<div class="nav-right">
+				<a href="#login" class="nav-login">Log in</a>
+				<a href="#get-started" class="btn btn-hero btn-nav">Get started</a>
+			</div>
+		</nav>
+	</header>
+
+	<main id="top">
+		<section class="hero" aria-label="Hero">
+			<div class="hero-inner">
+				<div class="hero-text">
+					<h1 class="hero-title">Unlock growth with every payment</h1>
+					<p class="hero-sub">Run payments, extend net terms and automate collections compliance.</p>
+					<div class="hero-actions">
+						<a href="#get-started" class="btn btn-hero btn-xl">Get started</a>
+						<a href="#talk" class="btn btn-hero-outline btn-xl">Talk to a human</a>
+					</div>
+				</div>
+			</div>
+
+			<div class="hero-media" aria-hidden="true">
+				<video class="hero-video" autoplay loop muted playsinline poster="assets/hero-poster.jpg">
+					<source src="assets/hero-video.mp4" type="video/mp4">
+				</video>
+				<img class="hero-media-fallback" src="assets/hero-poster.jpg" alt="">
+			</div>
+		</section>
+	</main>
+
+	<script>
+		(function () {
+			var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+			var video = document.querySelector('.hero-video');
+			if (video) {
+				if (reduceMotion) {
+					video.removeAttribute('autoplay');
+					video.pause();
+				} else {
+					var playPromise = video.play();
+					if (playPromise && typeof playPromise.catch === 'function') {
+						playPromise.catch(function () {});
+					}
+				}
+			}
+
+			var dropdowns = document.querySelectorAll('[data-dropdown]');
+
+			function closeAll(except) {
+				dropdowns.forEach(function (dd) {
+					if (dd === except) return;
+					dd.classList.remove('is-open');
+					var btn = dd.querySelector('.nav-link');
+					if (btn) btn.setAttribute('aria-expanded', 'false');
+				});
+			}
+
+			dropdowns.forEach(function (dd) {
+				var btn = dd.querySelector('.nav-link');
+				if (!btn) return;
+				btn.addEventListener('click', function (event) {
+					event.stopPropagation();
+					var isOpen = dd.classList.contains('is-open');
+					closeAll(dd);
+					dd.classList.toggle('is-open', !isOpen);
+					btn.setAttribute('aria-expanded', String(!isOpen));
+				});
+			});
+
+			document.addEventListener('click', function () {
+				closeAll(null);
+			});
+
+			document.addEventListener('keydown', function (event) {
+				if (event.key === 'Escape') closeAll(null);
+			});
+		})();
+	</script>
+</body>
+</html>

@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>CoderCrest — The Vision of Engineering is Human + AI</title>
+	<meta
+		name="description"
+		content="CoderCrest hero section: a full-bleed dark video backdrop behind a light, wide headline pairing circular human and AI motion icons, closing on a glowing green call-to-action."
+	>
+	<link
+		rel="icon"
+		href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23000'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%2327f3a9' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%2327f3a9'/%3E%3C/svg%3E"
+	>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap"
+		rel="stylesheet"
+	>
+	<style>
+		:root {
+			--bg: #000000;
+			--fg: #ffffff;
+			--muted: #999999;
+			--subhead: #cccccc;
+			--gradient-a: #666666;
+			--gradient-b: #d0d0d0;
+			--accent: #27f3a9;
+			--accent-outline: #30463c;
+			--accent-glow-soft: rgba(39, 243, 169, 0.15);
+			--accent-glow-strong: rgba(39, 243, 169, 0.22);
+			--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html, body {
+			margin: 0;
+			padding: 0;
+			background: var(--bg);
+		}
+
+		body {
+			font-family: 'Outfit', 'Helvetica Neue', Arial, sans-serif;
+			-webkit-font-smoothing: antialiased;
+		}
+
+		main {
+			display: block;
+		}
+
+		.hero {
+			position: relative;
+			min-height: 100vh;
+			overflow: hidden;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			background: var(--bg);
+		}
+
+		.hero-bg,
+		.hero-bg-fallback {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			z-index: 0;
+		}
+
+		.hero-bg-fallback {
+			display: none;
+		}
+
+		.hero-content {
+			position: relative;
+			z-index: 10;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			text-align: center;
+			padding: 0 1rem;
+			max-width: 64rem;
+			margin-left: auto;
+			margin-right: auto;
+			margin-top: 380px;
+		}
+
+		.hero-headline {
+			margin: 0;
+			font-family: 'Outfit', 'Helvetica Neue', Arial, sans-serif;
+			font-weight: 300;
+			font-size: clamp(2.2rem, 7vw, 6.5rem);
+			color: var(--fg);
+			letter-spacing: -0.01em;
+			line-height: 1.1;
+		}
+
+		.hero-headline .line {
+			display: block;
+			line-height: 1.1;
+			opacity: 0;
+			animation: heroFadeUp 800ms var(--ease-out) forwards;
+		}
+
+		.hero-headline .line-gradient {
+			background: linear-gradient(90deg, var(--gradient-a) 0%, var(--gradient-b) 50%, var(--gradient-a) 100%);
+			-webkit-background-clip: text;
+			background-clip: text;
+			-webkit-text-fill-color: transparent;
+			color: transparent;
+			margin-bottom: -0.22em;
+		}
+
+		.hero-headline .line-inline {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex-wrap: wrap;
+			gap: 0.75rem;
+			color: var(--fg);
+		}
+
+		.line-inline .muted {
+			color: var(--muted);
+		}
+
+		.line-inline .plus {
+			position: relative;
+			top: 0.15em;
+			margin-left: 0.25em;
+		}
+
+		.icon-video {
+			display: inline-block;
+			vertical-align: middle;
+			border-radius: 999px;
+			overflow: hidden;
+			width: clamp(48px, 10vw, 110px);
+			height: clamp(48px, 10vw, 110px);
+			flex-shrink: 0;
+		}
+
+		.icon-video video,
+		.icon-video .icon-poster {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			display: block;
+		}
+
+		.icon-video .icon-poster {
+			display: none;
+		}
+
+		.hero-subhead {
+			margin: 1rem auto 0;
+			max-width: 36rem;
+			padding: 0 0.5rem;
+			font-size: clamp(0.95rem, 2.2vw, 1.2rem);
+			color: var(--subhead);
+			line-height: 1.4;
+			font-weight: 400;
+			opacity: 0;
+			animation: heroFadeUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.4s;
+		}
+
+		.cta {
+			position: relative;
+			margin-top: 1.5rem;
+			padding: 12px 28px;
+			background: var(--bg);
+			box-shadow: 0 6px 24px 6px var(--accent-glow-soft);
+			border-radius: 8px;
+			outline: 1px solid var(--accent-outline);
+			outline-offset: -1px;
+			border: none;
+			cursor: pointer;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 10px;
+			opacity: 0;
+			animation: heroFadeUp 800ms var(--ease-out) forwards;
+			animation-delay: 0.5s;
+			transition: transform 300ms var(--ease-out), box-shadow 300ms var(--ease-out);
+		}
+
+		.cta::before {
+			content: "";
+			position: absolute;
+			inset: -24px;
+			border-radius: 999px;
+			background: radial-gradient(circle, var(--accent-glow-strong) 0%, transparent 70%);
+			opacity: 0;
+			filter: blur(16px);
+			z-index: -1;
+			transition: opacity 300ms var(--ease-out);
+			pointer-events: none;
+		}
+
+		.cta span {
+			color: var(--fg);
+			font-size: 14px;
+			font-weight: 400;
+		}
+
+		.cta:hover {
+			transform: scale(1.03);
+			box-shadow: 0 6px 32px 8px var(--accent-glow-strong);
+		}
+
+		.cta:hover::before {
+			opacity: 1;
+		}
+
+		.cta:active {
+			transform: scale(0.98);
+			transition-duration: 140ms;
+		}
+
+		.hero-headline .line:nth-of-type(1) {
+			animation-delay: 0.1s;
+		}
+
+		.hero-headline .line:nth-of-type(2) {
+			animation-delay: 0.2s;
+		}
+
+		.hero-headline .line:nth-of-type(3) {
+			animation-delay: 0.3s;
+		}
+
+		@keyframes heroFadeUp {
+			from {
+				opacity: 0;
+				transform: translateY(24px);
+			}
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+
+		@media (max-width: 780px), (max-height: 700px) {
+			.hero-content {
+				margin-top: 140px;
+			}
+		}
+
+		@media (max-width: 480px) {
+			.hero-content {
+				margin-top: 96px;
+			}
+			.hero-subhead {
+				max-width: 100%;
+			}
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.hero-bg {
+				display: none;
+			}
+			.hero-bg-fallback {
+				display: block;
+			}
+			.icon-video video {
+				display: none;
+			}
+			.icon-video .icon-poster {
+				display: block;
+			}
+			.hero-headline .line,
+			.hero-subhead,
+			.cta {
+				animation: none;
+				opacity: 1;
+				transform: none;
+			}
+			.cta {
+				transition: none;
+			}
+			.cta:hover,
+			.cta:active {
+				transform: none;
+			}
+			.cta::before {
+				display: none;
+			}
+		}
+	</style>
+</head>
+<body>
+	<main>
+		<section class="hero">
+			<video
+				class="hero-bg"
+				autoplay
+				loop
+				muted
+				playsinline
+				poster="assets/hero-poster.jpg"
+				aria-hidden="true"
+			>
+				<source src="assets/hero-bg.mp4" type="video/mp4">
+			</video>
+			<img class="hero-bg-fallback" src="assets/hero-poster.jpg" alt="" aria-hidden="true">
+
+			<div class="hero-content">
+				<h1 class="hero-headline">
+					<span class="line line-gradient">The vision</span>
+					<span class="line line-gradient">of engineering</span>
+					<span class="line line-inline">
+						<span class="muted">is</span>
+						<span class="icon-video">
+							<video autoplay loop muted playsinline aria-hidden="true">
+								<source src="assets/video-human.mp4" type="video/mp4">
+							</video>
+							<img class="icon-poster" src="assets/video-human-poster.jpg" alt="" aria-hidden="true">
+						</span>
+						<span>human</span>
+						<span class="muted plus">+</span>
+						<span class="icon-video">
+							<video autoplay loop muted playsinline aria-hidden="true">
+								<source src="assets/video-ai.mp4" type="video/mp4">
+							</video>
+							<img class="icon-poster" src="assets/video-ai-poster.jpg" alt="" aria-hidden="true">
+						</span>
+						<span>AI</span>
+					</span>
+				</h1>
+
+				<p class="hero-subhead">We help you map the talent you need, track the talent you have, and close your gaps to thrive in a GenAI world.</p>
+
+				<button type="button" class="cta">
+					<span>Join The Movement!</span>
+				</button>
+			</div>
+		</section>
+	</main>
+
+	<script>
+		(function () {
+			var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+			var videos = document.querySelectorAll('video');
+			videos.forEach(function (video) {
+				if (reduceMotion) {
+					video.removeAttribute('autoplay');
+					video.pause();
+				} else {
+					var playPromise = video.play();
+					if (playPromise && typeof playPromise.catch === 'function') {
+						playPromise.catch(function () {});
+					}
+				}
+			});
+
+			var cta = document.querySelector('.cta');
+			if (cta) {
+				cta.addEventListener('click', function () {
+					cta.dispatchEvent(new CustomEvent('cta:join', { bubbles: true }));
+				});
+			}
+		})();
+	</script>
+</body>
+</html>

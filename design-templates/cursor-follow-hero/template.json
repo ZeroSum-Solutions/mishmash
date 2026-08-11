@@ -1,0 +1,12 @@
+{
+  "slug": "cursor-follow-hero",
+  "name": "Orbis.Nft — Cursor-Follow Orbit Hero",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Anton&family=Condiment&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=cursor-follow",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

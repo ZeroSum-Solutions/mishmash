@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>veloce — Fast payments, your way at lightspeed</title>
+<meta name="description" content="veloce is a fintech app for instant, protected payments — real-time clarity, worldwide reach, and one app for every transfer.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2300041F'/%3E%3Cpath d='M18 20 L32 46 L46 20' stroke='url(%23g)' stroke-width='7' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='64' y2='0'%3E%3Cstop offset='0%25' stop-color='%23B56939'/%3E%3Cstop offset='50%25' stop-color='%235C3779'/%3E%3Cstop offset='100%25' stop-color='%23454BBB'/%3E%3C/linearGradient%3E%3C/defs%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #00041F;
+    --gray: #49484F;
+    --light: #EFF4FF;
+    --white: #ffffff;
+    --accent-a: #B56939;
+    --accent-b: #5C3779;
+    --accent-c: #454BBB;
+    --fill-base: #B8B7BA;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--white);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  img, video { max-width: 100%; display: block; }
+
+  a { text-decoration: none; color: inherit; }
+
+  h1, h2, h3 { margin: 0; font-family: 'Manrope', 'Inter', sans-serif; }
+  p { margin: 0; }
+
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--accent-c);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  /* ---------- Hero screen ---------- */
+
+  .hero-screen {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--ink);
+  }
+
+  .bg-video,
+  .poster-fallback.hero-poster {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 10% center;
+    z-index: 0;
+  }
+
+  .poster-fallback { display: none; }
+
+  @media (min-width: 768px) {
+    .bg-video, .poster-fallback.hero-poster { object-position: center; }
+  }
+
+  /* ---------- Header ---------- */
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem clamp(1.25rem, 4vw, 3.75rem);
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .logo {
+    font-family: 'Manrope', sans-serif;
+    font-weight: 600;
+    font-size: clamp(1.5rem, 1.2rem + 1vw, 1.875rem);
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+
+  .nav-desktop {
+    display: none;
+    align-items: center;
+    gap: 2rem;
+  }
+
+  .nav-desktop a {
+    font-size: 1rem;
+    color: var(--ink);
+    transition: opacity 0.2s var(--ease-out);
+  }
+
+  .nav-desktop a:hover { opacity: 0.7; }
+
+  .header-actions {
+    display: none;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .link-login {
+    font-weight: 500;
+    font-size: 1rem;
+    color: var(--ink);
+    transition: opacity 0.2s var(--ease-out);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .link-login:hover { opacity: 0.7; }
+
+  .btn-signup {
+    background: var(--ink);
+    color: var(--light);
+    padding: 0.625rem 1.5rem;
+    border-radius: 40px;
+    font-weight: 500;
+    font-size: 1rem;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+  }
+
+  .btn-signup:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-signup:active { transform: translateY(0); }
+
+  @media (min-width: 1024px) {
+    .nav-desktop, .header-actions { display: flex; }
+  }
+
+  .hamburger {
+    position: relative;
+    width: 2.25rem;
+    height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ink);
+    padding: 0;
+  }
+
+  @media (min-width: 1024px) { .hamburger { display: none; } }
+
+  .hamburger svg {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 24px;
+    height: 24px;
+    transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+  }
+
+  .icon-close { opacity: 0; transform: rotate(-90deg); }
+  .icon-menu { opacity: 1; transform: rotate(0deg); }
+
+  .hamburger.is-open .icon-menu { opacity: 0; transform: rotate(90deg); }
+  .hamburger.is-open .icon-close { opacity: 1; transform: rotate(0deg); }
+
+  .mobile-menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 1rem;
+    right: 1rem;
+    z-index: 50;
+    background: var(--white);
+    border-radius: 0.75rem;
+    box-shadow: 0 12px 32px rgba(0, 4, 31, 0.16);
+    padding: 2rem 1.5rem;
+    opacity: 0;
+    transform: translateY(-20px);
+    pointer-events: none;
+    transition: opacity 0.3s var(--ease-out), transform 0.3s var(--ease-out);
+  }
+
+  .mobile-menu.is-open {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  @media (min-width: 1024px) { .mobile-menu { display: none; } }
+
+  .mobile-menu nav {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .mobile-menu nav a {
+    font-size: 1.05rem;
+    color: var(--ink);
+    opacity: 0;
+    transform: translateX(-20px);
+    transition: opacity 0.3s var(--ease-out), transform 0.3s var(--ease-out);
+    transition-delay: calc(var(--i, 0) * 0.1s);
+  }
+
+  .mobile-menu.is-open nav a {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .mobile-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e5e5ea;
+  }
+
+  .mobile-actions .link-login { text-align: left; }
+  .mobile-actions .btn-signup { text-align: center; }
+
+  /* ---------- Hero content ---------- */
+
+  .hero {
+    position: relative;
+    z-index: 10;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem clamp(1.25rem, 4vw, 3rem) clamp(3rem, 6vw, 4rem);
+    text-align: center;
+  }
+
+  .hero-fade {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    height: 8rem;
+    background: linear-gradient(to top, var(--white), rgba(255, 255, 255, 0));
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .hero-center {
+    margin-top: auto;
+    margin-bottom: auto;
+    max-width: 42rem;
+  }
+
+  .hero-heading {
+    font-weight: 500;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    font-size: clamp(2.25rem, 1.55rem + 3.3vw, 4.5rem);
+    color: var(--ink);
+  }
+
+  .gradient-text {
+    background-image: linear-gradient(90deg, var(--accent-a), var(--accent-b), var(--accent-c));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .hero-bottom {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .hero-subtitle {
+    color: var(--gray);
+    font-size: clamp(1rem, 0.9rem + 0.4vw, 1.125rem);
+  }
+
+  .store-badges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+  }
+
+  .badge {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    border: 1px solid var(--ink);
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.9rem;
+    background: var(--white);
+    color: var(--ink);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background-color 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+  }
+
+  .badge:hover { background: #f7f7fa; transform: translateY(-1px); }
+  .badge:active { transform: translateY(0); }
+
+  .badge svg { width: 1.5rem; height: 1.75rem; flex-shrink: 0; color: var(--ink); }
+
+  .badge-text { text-align: left; }
+  .badge-text small {
+    display: block;
+    font-size: 0.625rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .badge-text strong {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  /* ---------- Reveal-on-scroll primitives ---------- */
+
+  .reveal-blur {
+    filter: blur(20px);
+    opacity: 0;
+    transition: filter 1.2s var(--ease-out), opacity 1.2s var(--ease-out);
+  }
+  .reveal-blur.is-visible { filter: blur(0); opacity: 1; }
+
+  .reveal-up {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.6s var(--ease-out), transform 0.6s var(--ease-out);
+    transition-delay: var(--delay, 0s);
+  }
+  .reveal-up.is-visible { opacity: 1; transform: translateY(0); }
+
+  /* ---------- Insights section ---------- */
+
+  .insights {
+    position: relative;
+    background: var(--white);
+    padding: 5rem clamp(1.25rem, 4vw, 3.75rem);
+    display: flex;
+    flex-direction: column;
+    gap: 5.625rem;
+  }
+
+  .insights-top {
+    max-width: 32.3125rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  .insights-top h2 {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    font-size: clamp(2.25rem, 1.75rem + 2.4vw, 3.75rem);
+    color: var(--ink);
+  }
+
+  .insights-top p {
+    color: var(--gray);
+    font-size: clamp(1rem, 0.9rem + 0.5vw, 1.25rem);
+    max-width: 22.5625rem;
+  }
+
+  .insights-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  @media (min-width: 1024px) {
+    .insights-cards { flex-direction: row; align-items: flex-end; }
+  }
+
+  .stat-card {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    border-radius: 2.5rem;
+    padding: 2.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 28.125rem;
+    background: var(--ink);
+  }
+
+  .stat-card.card-mid { min-height: 21.875rem; }
+
+  .stat-card video,
+  .stat-card .poster-fallback {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .card-overlay { position: absolute; inset: 0; }
+  .overlay-a { background: rgba(206, 223, 235, 0.25); }
+  .overlay-b { background: rgba(247, 236, 233, 0.6); }
+  .overlay-c { background: rgba(218, 218, 218, 0.2); }
+
+  .card-content {
+    position: relative;
+    z-index: 10;
+    max-width: 24.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .stat-number {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    line-height: 1;
+    font-size: clamp(2.5rem, 2rem + 2vw, 3.75rem);
+    color: var(--ink);
+  }
+
+  .stat-desc {
+    font-size: clamp(1.125rem, 1rem + 0.5vw, 1.375rem);
+    opacity: 0.8;
+    color: var(--gray);
+  }
+
+  /* ---------- Text-fill section ---------- */
+
+  .text-fill {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: clamp(4rem, 6vw, 8rem) clamp(1.25rem, 4vw, 4rem);
+    background: var(--white);
+    margin-bottom: 30vh;
+  }
+
+  .text-fill-inner {
+    max-width: 42rem;
+    width: 100%;
+    text-align: center;
+    position: relative;
+  }
+
+  .fill-heading {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: -0.03em;
+    font-size: clamp(2.25rem, 1.75rem + 2.4vw, 3.75rem);
+    position: relative;
+  }
+
+  .fill-base { display: block; color: var(--fill-base); }
+
+  .fill-top {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(90deg, var(--accent-a), var(--accent-b), var(--accent-c));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    clip-path: inset(0 100% 0 0);
+    transition: clip-path 0.1s linear;
+  }
+
+  /* ---------- Reduced motion ---------- */
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+
+    .reveal-blur, .reveal-up, .fill-top, .mobile-menu, .mobile-menu nav a,
+    .hamburger svg, .badge, .btn-signup {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+
+    .reveal-blur { filter: none; opacity: 1; }
+    .reveal-up { opacity: 1; transform: none; }
+    .fill-top { clip-path: inset(0 0 0 0); }
+
+    .bg-video, .stat-card video { display: none; }
+    .poster-fallback { display: block; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="hero-screen" id="top">
+    <video class="bg-video" autoplay loop muted playsinline poster="assets/hero-poster.jpg">
+      <source src="assets/hero-bg.mp4" type="video/mp4">
+    </video>
+    <img class="poster-fallback hero-poster" src="assets/hero-poster.jpg" alt="" aria-hidden="true">
+
+    <header class="site-header">
+      <a href="#top" class="logo">veloce</a>
+
+      <nav class="nav-desktop" aria-label="Primary">
+        <a href="#">Home</a>
+        <a href="#">About us</a>
+        <a href="#">Faq</a>
+      </nav>
+
+      <div class="header-actions">
+        <a href="#" class="link-login">Log in</a>
+        <a href="#" class="btn-signup">Sign up</a>
+      </div>
+
+      <button class="hamburger" id="hamburgerBtn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu">
+        <svg class="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>
+        </svg>
+        <svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/>
+        </svg>
+      </button>
+
+      <div class="mobile-menu" id="mobileMenu">
+        <nav aria-label="Mobile">
+          <a href="#" style="--i:0">Home</a>
+          <a href="#" style="--i:1">About us</a>
+          <a href="#" style="--i:2">Faq</a>
+        </nav>
+        <div class="mobile-actions">
+          <a href="#" class="link-login">Log in</a>
+          <a href="#" class="btn-signup">Sign up</a>
+        </div>
+      </div>
+    </header>
+
+    <section class="hero" aria-label="Introduction">
+      <div class="hero-fade" aria-hidden="true"></div>
+
+      <div class="hero-center">
+        <h1 class="hero-heading reveal-blur">
+          <span>Fast payments, your way at </span><span class="gradient-text">lightspeed.</span>
+        </h1>
+      </div>
+
+      <div class="hero-bottom">
+        <p class="hero-subtitle">Handle finances with ease and power</p>
+        <div class="store-badges">
+          <button class="badge" type="button" aria-label="Get veloce on the marketplace">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M4.5 17.5v2a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-2"/>
+            </svg>
+            <span class="badge-text"><small>Get it on</small><strong>Marketplace</strong></span>
+          </button>
+          <button class="badge" type="button" aria-label="Download veloce from the app gallery">
+            <svg viewBox="0 0 24 28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="4" y="2" width="16" height="24" rx="3"/><line x1="10" y1="22" x2="14" y2="22"/>
+            </svg>
+            <span class="badge-text"><small>Download on the</small><strong>App Gallery</strong></span>
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="insights" id="insights">
+    <div class="insights-top reveal-blur">
+      <h2>Instant payment clarity counts</h2>
+      <p>Real-time data powers smarter spending choices every day</p>
+    </div>
+
+    <div class="insights-cards" id="insightsCards">
+      <article class="stat-card reveal-up" style="--delay:0s">
+        <video autoplay loop muted playsinline poster="assets/card-members-poster.jpg">
+          <source src="assets/card-members.mp4" type="video/mp4">
+        </video>
+        <img class="poster-fallback" src="assets/card-members-poster.jpg" alt="" aria-hidden="true">
+        <div class="card-overlay overlay-a"></div>
+        <div class="card-content">
+          <p class="stat-number">1.6M</p>
+          <p class="stat-desc">Active members rely on us for effortless payment experiences</p>
+        </div>
+      </article>
+
+      <article class="stat-card card-mid reveal-up" style="--delay:0.2s">
+        <video autoplay loop muted playsinline poster="assets/card-transfers-poster.jpg">
+          <source src="assets/card-transfers.mp4" type="video/mp4">
+        </video>
+        <img class="poster-fallback" src="assets/card-transfers-poster.jpg" alt="" aria-hidden="true">
+        <div class="card-overlay overlay-b"></div>
+        <div class="card-content">
+          <p class="stat-number">850K</p>
+          <p class="stat-desc">Transfers completed each day, quick and protected</p>
+        </div>
+      </article>
+
+      <article class="stat-card reveal-up" style="--delay:0.4s">
+        <video autoplay loop muted playsinline poster="assets/card-nations-poster.jpg">
+          <source src="assets/card-nations.mp4" type="video/mp4">
+        </video>
+        <img class="poster-fallback" src="assets/card-nations-poster.jpg" alt="" aria-hidden="true">
+        <div class="card-overlay overlay-c"></div>
+        <div class="card-content">
+          <p class="stat-number">120+</p>
+          <p class="stat-desc">Nations enabled for instant checkouts and worldwide remittance</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="text-fill" id="textFillSection">
+    <div class="text-fill-inner">
+      <h2 class="fill-heading">
+        <span class="fill-base">Handle payments fast &amp; sleek! Track expenses, reach targets, unlock insights to make sharper decisions, all in one app</span><span class="fill-top" id="fillTop" aria-hidden="true">Handle payments fast &amp; sleek! Track expenses, reach targets, unlock insights to make sharper decisions, all in one app</span>
+      </h2>
+    </div>
+  </section>
+
+  <script>
+  (function () {
+    'use strict';
+
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /* Mobile menu */
+    var hamburgerBtn = document.getElementById('hamburgerBtn');
+    var mobileMenu = document.getElementById('mobileMenu');
+
+    function closeMenu() {
+      hamburgerBtn.classList.remove('is-open');
+      hamburgerBtn.setAttribute('aria-expanded', 'false');
+      hamburgerBtn.setAttribute('aria-label', 'Open menu');
+      mobileMenu.classList.remove('is-open');
+    }
+
+    function openMenu() {
+      hamburgerBtn.classList.add('is-open');
+      hamburgerBtn.setAttribute('aria-expanded', 'true');
+      hamburgerBtn.setAttribute('aria-label', 'Close menu');
+      mobileMenu.classList.add('is-open');
+    }
+
+    hamburgerBtn.addEventListener('click', function () {
+      if (mobileMenu.classList.contains('is-open')) closeMenu(); else openMenu();
+    });
+
+    mobileMenu.querySelectorAll('a').forEach(function (link) {
+      link.addEventListener('click', closeMenu);
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeMenu();
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!mobileMenu.classList.contains('is-open')) return;
+      if (mobileMenu.contains(e.target) || hamburgerBtn.contains(e.target)) return;
+      closeMenu();
+    });
+
+    /* Blur-in + fade-up reveals (IntersectionObserver, once) */
+    var revealBlurEls = document.querySelectorAll('.reveal-blur');
+    var revealBlurObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          revealBlurObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15 });
+    revealBlurEls.forEach(function (el) { revealBlurObserver.observe(el); });
+
+    var insightsCards = document.getElementById('insightsCards');
+    if (insightsCards) {
+      var cardsObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.querySelectorAll('.reveal-up').forEach(function (card) {
+              card.classList.add('is-visible');
+            });
+            cardsObserver.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.2 });
+      cardsObserver.observe(insightsCards);
+    }
+
+    /* Scroll-driven text fill */
+    var fillSection = document.getElementById('textFillSection');
+    var fillTop = document.getElementById('fillTop');
+
+    if (fillSection && fillTop) {
+      if (reduceMotion) {
+        fillTop.style.clipPath = 'inset(0 0 0 0)';
+      } else {
+        var ticking = false;
+
+        function updateFill() {
+          ticking = false;
+          var rect = fillSection.getBoundingClientRect();
+          var windowHeight = window.innerHeight;
+          var startFill = windowHeight * 0.8;
+          var endFill = windowHeight * 0.2;
+          var elementTop = rect.top;
+          var fillPercentage;
+
+          if (elementTop >= startFill) {
+            fillPercentage = 0;
+          } else if (elementTop <= endFill) {
+            fillPercentage = 100;
+          } else {
+            fillPercentage = ((startFill - elementTop) / (startFill - endFill)) * 100;
+          }
+
+          fillPercentage = Math.max(0, Math.min(100, fillPercentage));
+          fillTop.style.clipPath = 'inset(0 ' + (100 - fillPercentage) + '% 0 0)';
+        }
+
+        function requestFillUpdate() {
+          if (!ticking) {
+            window.requestAnimationFrame(updateFill);
+            ticking = true;
+          }
+        }
+
+        window.addEventListener('scroll', requestFillUpdate, { passive: true });
+        window.addEventListener('resize', requestFillUpdate);
+        updateFill();
+      }
+    }
+
+    /* Defensive autoplay + reduced-motion pause */
+    document.querySelectorAll('video[autoplay]').forEach(function (video) {
+      if (reduceMotion) {
+        video.pause();
+        video.removeAttribute('autoplay');
+      } else {
+        video.play().catch(function () {});
+      }
+    });
+  })();
+  </script>
+
+</body>
+</html>

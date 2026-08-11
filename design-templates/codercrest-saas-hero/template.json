@@ -1,0 +1,12 @@
+{
+  "slug": "codercrest-saas-hero",
+  "name": "CoderCrest — SaaS Hero Section",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=codercrest-hero",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}

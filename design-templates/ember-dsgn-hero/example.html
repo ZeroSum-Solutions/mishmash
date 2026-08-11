@@ -1,0 +1,1032 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>EMBER.dsgn — Digital Design Studio</title>
+	<meta
+		name="description"
+		content="EMBER.dsgn split-panel hero: a mirrored ambient video plays behind two full-height panels — the left cut into a frosted-glass 'EMBER' letterform revealing the footage beneath, the right closing with a solid 'STUDIO' wordmark between two concentric rings."
+	>
+	<meta name="theme-color" content="#000000">
+	<link
+		rel="icon"
+		href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23000'/%3E%3Crect x='9' y='9' width='6' height='6' fill='%23FF5C35'/%3E%3Crect x='17' y='9' width='6' height='6' fill='%23FF5C35'/%3E%3Crect x='9' y='17' width='6' height='6' fill='%23FF5C35'/%3E%3Crect x='17' y='17' width='6' height='6' fill='%23FF5C35'/%3E%3C/svg%3E"
+	>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+		rel="stylesheet"
+	>
+	<style>
+		:root {
+			--bg: #000000;
+			--fg: #ffffff;
+			--line: rgba(255, 255, 255, 0.08);
+			--line-strong: rgba(255, 255, 255, 0.2);
+			--muted: rgba(255, 255, 255, 0.4);
+			--muted-2: rgba(255, 255, 255, 0.7);
+			--muted-3: rgba(255, 255, 255, 0.9);
+			--accent: #FF5C35;
+			--accent-soft: rgba(255, 92, 53, 0.35);
+			--ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+			--ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html, body {
+			height: 100%;
+			margin: 0;
+			padding: 0;
+			background: var(--bg);
+		}
+
+		body {
+			position: relative;
+			overflow: hidden;
+			font-family: 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+			color: var(--fg);
+			-webkit-font-smoothing: antialiased;
+		}
+
+		a {
+			color: inherit;
+			text-decoration: none;
+		}
+
+		button {
+			font: inherit;
+			color: inherit;
+			background: none;
+			border: none;
+			cursor: pointer;
+			padding: 0;
+		}
+
+		ul {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+		}
+
+		address {
+			font-style: normal;
+		}
+
+		img, video {
+			display: block;
+			max-width: 100%;
+		}
+
+		::selection {
+			background: rgba(255, 255, 255, 0.2);
+		}
+
+		:focus-visible {
+			outline: 2px solid var(--accent);
+			outline-offset: 2px;
+		}
+
+		/* ---------- Hidden SVG mask defs ---------- */
+
+		.mask-defs {
+			position: absolute;
+			width: 0;
+			height: 0;
+			overflow: hidden;
+		}
+
+		/* ---------- Background video ---------- */
+
+		.bg-video,
+		.bg-video-fallback {
+			position: fixed;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			z-index: 0;
+		}
+
+		.bg-video {
+			object-fit: cover;
+			transform: scaleX(-1);
+		}
+
+		.bg-video-fallback {
+			display: none;
+		}
+
+		.bg-video-fallback img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			transform: scaleX(-1);
+		}
+
+		.nav-scrim {
+			position: fixed;
+			inset: 0 0 auto 0;
+			height: 13rem;
+			z-index: 40;
+			pointer-events: none;
+			background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0) 100%);
+		}
+
+		/* ---------- Split panels ---------- */
+
+		.split {
+			position: fixed;
+			inset: 0;
+			z-index: 10;
+			display: flex;
+			flex-direction: column;
+			overflow-y: auto;
+			overflow-x: hidden;
+			-webkit-overflow-scrolling: touch;
+			scrollbar-width: none;
+			-ms-overflow-style: none;
+			pointer-events: none;
+		}
+
+		.split::-webkit-scrollbar {
+			display: none;
+		}
+
+		@media (min-width: 1024px) {
+			.split {
+				flex-direction: row;
+				overflow: hidden;
+			}
+		}
+
+		.panel {
+			position: relative;
+			width: 100%;
+			pointer-events: auto;
+			overflow: hidden;
+			flex-shrink: 0;
+		}
+
+		.panel-left {
+			min-height: 100vh;
+			display: flex;
+			flex-direction: column;
+			border-bottom: 1px solid var(--line);
+		}
+
+		.panel-right {
+			min-height: 50vh;
+			display: flex;
+			flex-direction: column;
+			justify-content: flex-end;
+			padding-bottom: 2rem;
+		}
+
+		@media (min-width: 1024px) {
+			.panel {
+				width: 50%;
+				height: 100%;
+				min-height: 0;
+			}
+			.panel-left {
+				border-bottom: none;
+				border-right: 1px solid var(--line);
+			}
+			.panel-right {
+				padding-bottom: 0.5rem;
+			}
+		}
+
+		/* Left panel — frosted glass cut into the EMBER letterform */
+
+		.ember-mask {
+			position: absolute;
+			inset: 0;
+			z-index: 0;
+			background-color: rgba(131, 131, 131, 0.3);
+			backdrop-filter: blur(20px);
+			-webkit-backdrop-filter: blur(20px);
+			-webkit-mask-image: url(#emberMaskMobile);
+			mask-image: url(#emberMaskMobile);
+			-webkit-mask-repeat: no-repeat;
+			mask-repeat: no-repeat;
+			-webkit-mask-size: 100% 100%;
+			mask-size: 100% 100%;
+		}
+
+		@media (min-width: 1024px) {
+			.ember-mask {
+				-webkit-mask-image: url(#emberMaskDesktop);
+				mask-image: url(#emberMaskDesktop);
+			}
+		}
+
+		.panel-content {
+			position: relative;
+			z-index: 2;
+			flex: 1 1 auto;
+			display: flex;
+			flex-direction: column;
+			padding: 12vh 1.5rem 0;
+			opacity: 0;
+			animation: heroIn 900ms var(--ease-out) forwards;
+			animation-delay: 0.15s;
+		}
+
+		@media (min-width: 768px) {
+			.panel-content {
+				padding-inline: 3rem;
+			}
+		}
+
+		@media (min-width: 1024px) {
+			.panel-content {
+				padding-top: 8vh;
+			}
+		}
+
+		.ember-spacer {
+			flex: 0 0 auto;
+			height: 20vh;
+		}
+
+		@media (min-width: 1024px) {
+			.ember-spacer {
+				height: 25vh;
+			}
+		}
+
+		.vline-track {
+			flex: 1 1 auto;
+			display: flex;
+			flex-direction: column;
+			padding-top: 1rem;
+			min-height: 100px;
+		}
+
+		.vline {
+			width: 1px;
+			height: 100%;
+			background: var(--line-strong);
+		}
+
+		.panel-footer {
+			flex: 0 0 auto;
+			display: flex;
+			flex-direction: column;
+			gap: 1.5rem;
+			padding-top: 1rem;
+			padding-bottom: 3rem;
+		}
+
+		.eyebrow {
+			margin: 0;
+			font-size: 0.625rem;
+			font-weight: 700;
+			letter-spacing: 0.3em;
+			text-transform: uppercase;
+			color: var(--muted);
+		}
+
+		.lede {
+			margin: 0;
+			max-width: 32rem;
+			font-weight: 400;
+			line-height: 1.3;
+			color: var(--muted-3);
+			font-size: clamp(1.15rem, 0.85rem + 1.4vw, 1.5rem);
+		}
+
+		.lede-2 {
+			display: block;
+			margin-top: 0.85em;
+			opacity: 0.8;
+		}
+
+		.footer-row {
+			display: flex;
+			flex-direction: column;
+			gap: 2rem;
+			padding-top: 2rem;
+			border-top: 1px solid rgba(255, 255, 255, 0.1);
+			width: 100%;
+		}
+
+		@media (min-width: 640px) {
+			.footer-row {
+				flex-direction: row;
+				justify-content: space-between;
+				align-items: flex-end;
+			}
+		}
+
+		.micro {
+			font-size: 0.625rem;
+			font-weight: 700;
+			letter-spacing: 0.1em;
+			text-transform: uppercase;
+		}
+
+		.caption {
+			margin: 0 0 0.6rem;
+			color: var(--muted);
+		}
+
+		.explore-link {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.4rem;
+			color: var(--fg);
+			border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+			padding-bottom: 0.2rem;
+			transition: color 200ms var(--ease-out), border-color 200ms var(--ease-out);
+		}
+
+		.explore-link:hover {
+			color: var(--accent);
+			border-color: var(--accent);
+		}
+
+		.explore-arrow {
+			flex-shrink: 0;
+			transition: transform 200ms var(--ease-out);
+		}
+
+		.explore-link:hover .explore-arrow {
+			transform: translate(2px, -2px);
+		}
+
+		.social-list {
+			display: flex;
+			flex-direction: column;
+			gap: 0.6rem;
+		}
+
+		.social-list a {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.55rem;
+			color: var(--muted-2);
+			transition: color 200ms var(--ease-out);
+		}
+
+		.social-list a:hover {
+			color: var(--fg);
+		}
+
+		.dot {
+			width: 4px;
+			height: 4px;
+			border-radius: 50%;
+			background: currentColor;
+			opacity: 0.5;
+			flex-shrink: 0;
+		}
+
+		.studio-address {
+			display: none;
+			color: var(--muted-2);
+			line-height: 1.7;
+		}
+
+		@media (min-width: 640px) {
+			.studio-address {
+				display: block;
+			}
+		}
+
+		/* Right panel — concentric rings + STUDIO wordmark */
+
+		.circles {
+			position: absolute;
+			inset: 0;
+			z-index: 0;
+			pointer-events: none;
+		}
+
+		.circle {
+			position: absolute;
+			left: 50%;
+			border-radius: 50%;
+			border: 1px solid var(--line-strong);
+			transform: translateX(-50%);
+		}
+
+		.circle-a {
+			top: -10vh;
+			width: 40vh;
+			height: 40vh;
+		}
+
+		.circle-b {
+			top: 30vh;
+			width: 40vh;
+			height: 40vh;
+		}
+
+		@media (min-width: 1024px) {
+			.circle-a,
+			.circle-b {
+				width: 60vh;
+				height: 60vh;
+				border-color: rgba(255, 255, 255, 0.35);
+			}
+			.circle-a {
+				top: -25vh;
+			}
+			.circle-b {
+				top: 18vh;
+			}
+		}
+
+		.panel-right::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			z-index: 1;
+			pointer-events: none;
+			background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 55%);
+		}
+
+		.studio-word {
+			position: relative;
+			z-index: 10;
+			width: 100%;
+			margin-bottom: 0.25rem;
+			padding-inline: 1.5rem;
+			opacity: 0;
+			animation: heroIn 900ms var(--ease-out) forwards;
+			animation-delay: 0.35s;
+		}
+
+		@media (min-width: 768px) {
+			.studio-word {
+				padding-inline: 5%;
+			}
+		}
+
+		.studio-word svg {
+			width: 100%;
+			height: auto;
+			display: block;
+		}
+
+		@keyframes heroIn {
+			from {
+				opacity: 0;
+				transform: translateY(20px);
+			}
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+
+		/* ---------- Navigation ---------- */
+
+		.nav {
+			position: fixed;
+			inset: 0 0 auto 0;
+			z-index: 50;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 1rem;
+			padding: 1.5rem clamp(1.25rem, 4vw, 3rem);
+			pointer-events: none;
+		}
+
+		@media (min-width: 1024px) {
+			.nav {
+				padding-block: 2rem;
+			}
+		}
+
+		.nav-group {
+			display: flex;
+			align-items: center;
+			gap: 2rem;
+			pointer-events: auto;
+			opacity: 0;
+			animation: heroIn 800ms var(--ease-out) forwards;
+			animation-delay: 0.05s;
+		}
+
+		.brand {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.55rem;
+		}
+
+		.brand-mark {
+			display: grid;
+			grid-template-columns: repeat(2, 1fr);
+			grid-template-rows: repeat(2, 1fr);
+			gap: 2px;
+			width: 18px;
+			height: 18px;
+			flex-shrink: 0;
+		}
+
+		.brand-mark i {
+			background: var(--accent);
+			border-radius: 1px;
+		}
+
+		.brand-word {
+			margin: 0;
+			font-size: 1.125rem;
+			font-weight: 800;
+			letter-spacing: -0.02em;
+		}
+
+		@media (min-width: 768px) {
+			.brand-word {
+				font-size: 1.25rem;
+			}
+		}
+
+		.brand-suffix {
+			opacity: 0.55;
+			font-weight: 600;
+		}
+
+		.primary-nav {
+			display: none;
+			align-items: center;
+			gap: 1.5rem;
+		}
+
+		@media (min-width: 1024px) {
+			.primary-nav {
+				display: flex;
+			}
+		}
+
+		.primary-nav a {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.4rem;
+			font-size: 0.656rem;
+			font-weight: 500;
+			letter-spacing: 0.2em;
+			text-transform: uppercase;
+			color: var(--muted-2);
+			transition: color 200ms var(--ease-out);
+		}
+
+		.primary-nav a:hover {
+			color: var(--fg);
+		}
+
+		.lang-pill {
+			display: none;
+			align-items: center;
+			gap: 0.6rem;
+			border: 1px solid var(--line-strong);
+			border-radius: 999px;
+			padding: 0.35rem 1rem;
+			font-size: 0.656rem;
+			font-weight: 500;
+			letter-spacing: 0.15em;
+			text-transform: uppercase;
+			background: rgba(255, 255, 255, 0.05);
+			backdrop-filter: blur(8px);
+			-webkit-backdrop-filter: blur(8px);
+		}
+
+		@media (min-width: 640px) {
+			.lang-pill {
+				display: flex;
+			}
+		}
+
+		.lang-pill .sep {
+			opacity: 0.2;
+		}
+
+		.contacts-pill {
+			display: none;
+			align-items: center;
+			gap: 0.5rem;
+			border: 1px solid var(--line-strong);
+			border-radius: 999px;
+			padding: 0.5rem 1.25rem;
+			font-size: 0.656rem;
+			font-weight: 500;
+			letter-spacing: 0.15em;
+			text-transform: uppercase;
+			background: rgba(255, 255, 255, 0.05);
+			backdrop-filter: blur(8px);
+			-webkit-backdrop-filter: blur(8px);
+			transition: background 200ms var(--ease-out), color 200ms var(--ease-out), transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
+		}
+
+		@media (min-width: 640px) {
+			.contacts-pill {
+				display: inline-flex;
+			}
+		}
+
+		.contacts-pill:hover {
+			background: var(--fg);
+			color: #0a0a0a;
+			transform: translateY(-1px);
+			box-shadow: 0 8px 20px var(--accent-soft);
+		}
+
+		.contacts-pill:active {
+			transform: translateY(0) scale(0.98);
+			transition-duration: 140ms;
+		}
+
+		.burger {
+			display: inline-flex;
+			flex-direction: column;
+			justify-content: center;
+			align-items: center;
+			gap: 5px;
+			width: 2.25rem;
+			height: 2.25rem;
+		}
+
+		@media (min-width: 1024px) {
+			.burger {
+				display: none;
+			}
+		}
+
+		.burger-line {
+			width: 20px;
+			height: 1.5px;
+			background: var(--fg);
+			transition: transform 240ms var(--ease-out), opacity 200ms var(--ease-out);
+		}
+
+		/* ---------- Mobile menu overlay ---------- */
+
+		.mobile-menu {
+			position: fixed;
+			inset: 0;
+			z-index: 100;
+			display: flex;
+			flex-direction: column;
+			background: var(--bg);
+			transform: translateX(100%);
+			transition: transform 420ms var(--ease-spring);
+		}
+
+		.mobile-menu[hidden] {
+			display: none;
+		}
+
+		.mobile-menu.is-open {
+			transform: translateX(0);
+		}
+
+		@media (min-width: 1024px) {
+			.mobile-menu {
+				display: none;
+			}
+			.mobile-menu[hidden] {
+				display: none;
+			}
+		}
+
+		.mobile-menu-top {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 1.5rem clamp(1.25rem, 4vw, 3rem);
+		}
+
+		.menu-close {
+			position: relative;
+			width: 2.25rem;
+			height: 2.25rem;
+		}
+
+		.menu-close::before,
+		.menu-close::after {
+			content: '';
+			position: absolute;
+			left: 50%;
+			top: 50%;
+			width: 20px;
+			height: 1.5px;
+			background: var(--fg);
+		}
+
+		.menu-close::before {
+			transform: translate(-50%, -50%) rotate(45deg);
+		}
+
+		.menu-close::after {
+			transform: translate(-50%, -50%) rotate(-45deg);
+		}
+
+		.mobile-menu-links {
+			flex: 1 1 auto;
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			gap: 1.4rem;
+			padding: 0 clamp(1.5rem, 6vw, 4rem);
+		}
+
+		.mobile-menu-links a {
+			font-size: clamp(2rem, 1.3rem + 6vw, 2.75rem);
+			font-weight: 700;
+			letter-spacing: -0.03em;
+			color: var(--fg);
+			opacity: 0;
+			transform: translateY(16px);
+			transition: color 200ms var(--ease-out);
+			width: max-content;
+		}
+
+		.mobile-menu.is-open .mobile-menu-links a {
+			animation: menuLinkIn 420ms var(--ease-out) forwards;
+			animation-delay: calc(var(--i) * 60ms + 100ms);
+		}
+
+		.mobile-menu-links a:hover {
+			color: var(--accent);
+			text-shadow: 0 0 32px var(--accent-soft);
+		}
+
+		@keyframes menuLinkIn {
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+
+		.mobile-menu-bottom {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 1.5rem clamp(1.25rem, 4vw, 3rem) 2rem;
+			border-top: 1px solid var(--line);
+			font-size: 0.656rem;
+			font-weight: 500;
+			letter-spacing: 0.15em;
+			text-transform: uppercase;
+			color: var(--muted-2);
+		}
+
+		/* ---------- Reduced motion ---------- */
+
+		@media (prefers-reduced-motion: reduce) {
+			.bg-video {
+				display: none;
+			}
+			.bg-video-fallback {
+				display: block;
+			}
+			.panel-content,
+			.studio-word,
+			.nav-group {
+				animation: none;
+				opacity: 1;
+				transform: none;
+			}
+			.mobile-menu {
+				transition: none;
+			}
+			.mobile-menu.is-open .mobile-menu-links a {
+				animation: none;
+				opacity: 1;
+				transform: none;
+			}
+			.explore-link,
+			.explore-arrow,
+			.contacts-pill,
+			.social-list a,
+			.primary-nav a,
+			.mobile-menu-links a {
+				transition: none;
+			}
+			.contacts-pill:hover,
+			.contacts-pill:active {
+				transform: none;
+			}
+		}
+	</style>
+</head>
+<body>
+	<svg class="mask-defs" aria-hidden="true" focusable="false">
+		<defs>
+			<mask id="emberMaskMobile" maskContentUnits="objectBoundingBox">
+				<rect x="0" y="0" width="1" height="1" fill="#fff"></rect>
+				<text
+					x="0" y="0.27"
+					textLength="1" lengthAdjust="spacingAndGlyphs"
+					font-family="Inter, Arial, sans-serif" font-weight="900" font-size="0.24"
+					fill="#000"
+				>EMBER</text>
+			</mask>
+			<mask id="emberMaskDesktop" maskContentUnits="objectBoundingBox">
+				<rect x="0" y="0" width="1" height="1" fill="#fff"></rect>
+				<text
+					x="0" y="0.32"
+					textLength="1" lengthAdjust="spacingAndGlyphs"
+					font-family="Inter, Arial, sans-serif" font-weight="900" font-size="0.28"
+					fill="#000"
+				>EMBER</text>
+			</mask>
+		</defs>
+	</svg>
+
+	<video class="bg-video" autoplay muted loop playsinline poster="assets/hero-poster.jpg" aria-hidden="true">
+		<source src="assets/hero-bg.mp4" type="video/mp4">
+	</video>
+	<div class="bg-video-fallback" aria-hidden="true">
+		<img src="assets/hero-poster.jpg" alt="">
+	</div>
+	<div class="nav-scrim" aria-hidden="true"></div>
+
+	<main class="split">
+		<section class="panel panel-left" aria-label="About EMBER.dsgn">
+			<div class="ember-mask" aria-hidden="true"></div>
+			<div class="panel-content">
+				<div class="ember-spacer" aria-hidden="true"></div>
+				<div class="vline-track" aria-hidden="true">
+					<span class="vline"></span>
+				</div>
+				<div class="panel-footer">
+					<p class="eyebrow">About</p>
+					<h1 class="lede">We shape striking digital identities through bold contrasts and meaningful motion.<span class="lede-2">Our design process transforms the primal into the powerful.</span></h1>
+					<div class="footer-row">
+						<div>
+							<p class="micro caption">Double Click and</p>
+							<a class="explore-link micro" href="#work">
+								Explore Our Work
+								<svg class="explore-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+									<path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+								</svg>
+							</a>
+						</div>
+						<ul class="social-list" aria-label="Social">
+							<li><a class="micro" href="#" target="_blank" rel="noopener noreferrer"><span class="dot" aria-hidden="true"></span>Instagram</a></li>
+							<li><a class="micro" href="#" target="_blank" rel="noopener noreferrer"><span class="dot" aria-hidden="true"></span>Telegram</a></li>
+						</ul>
+						<address class="micro studio-address">23 Industrial Lane, Unit 5<br>London, UK, E2 8AA</address>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section class="panel panel-right" aria-label="Studio">
+			<div class="circles" aria-hidden="true">
+				<span class="circle circle-a"></span>
+				<span class="circle circle-b"></span>
+			</div>
+			<div class="studio-word">
+				<svg viewBox="0 0 1000 280" role="img" aria-label="Studio">
+					<text
+						x="0" y="230"
+						textLength="1000" lengthAdjust="spacingAndGlyphs"
+						font-family="Inter, Arial, sans-serif" font-weight="900" font-size="250"
+						fill="#ffffff"
+					>STUDIO</text>
+				</svg>
+			</div>
+		</section>
+	</main>
+
+	<header class="nav">
+		<div class="nav-group nav-left">
+			<a class="brand" href="#top" aria-label="EMBER.dsgn home">
+				<span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+				<span class="brand-word">EMBER<span class="brand-suffix">.dsgn</span></span>
+			</a>
+			<nav class="primary-nav" aria-label="Primary">
+				<a href="#works"><span class="dot" aria-hidden="true"></span>Works</a>
+				<a href="#services"><span class="dot" aria-hidden="true"></span>Services</a>
+				<a href="#about"><span class="dot" aria-hidden="true"></span>About</a>
+				<a href="#team"><span class="dot" aria-hidden="true"></span>Team</a>
+			</nav>
+		</div>
+		<div class="nav-group nav-right">
+			<div class="lang-pill" aria-hidden="true"><span>EN</span><span class="sep">|</span><span>RU</span></div>
+			<button class="burger" type="button" aria-expanded="false" aria-controls="mobile-menu" aria-label="Open menu">
+				<span class="burger-line"></span>
+				<span class="burger-line"></span>
+			</button>
+			<a class="contacts-pill" href="#contacts"><span class="dot" aria-hidden="true"></span>Contacts</a>
+		</div>
+	</header>
+
+	<div class="mobile-menu" id="mobile-menu" hidden>
+		<div class="mobile-menu-top">
+			<a class="brand" href="#top" aria-label="EMBER.dsgn home">
+				<span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+				<span class="brand-word">EMBER<span class="brand-suffix">.dsgn</span></span>
+			</a>
+			<button class="menu-close" type="button" aria-label="Close menu"></button>
+		</div>
+		<nav class="mobile-menu-links" aria-label="Mobile">
+			<a href="#works" style="--i:0">Works</a>
+			<a href="#services" style="--i:1">Services</a>
+			<a href="#about" style="--i:2">About</a>
+			<a href="#team" style="--i:3">Team</a>
+			<a href="#contacts" style="--i:4">Contacts</a>
+		</nav>
+		<div class="mobile-menu-bottom">
+			<div>EN <span style="opacity:.3">|</span> RU</div>
+			<div>Ukraine / London</div>
+		</div>
+	</div>
+
+	<script>
+		(function () {
+			var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+			var video = document.querySelector('.bg-video');
+			var fallback = document.querySelector('.bg-video-fallback');
+
+			function showFallback() {
+				if (video) { video.style.display = 'none'; }
+				if (fallback) { fallback.style.display = 'block'; }
+			}
+
+			if (video) {
+				video.muted = true;
+				if (reduceMotion) {
+					video.pause();
+					showFallback();
+				} else {
+					video.addEventListener('loadedmetadata', function () {
+						try { video.playbackRate = 0.7; } catch (e) {}
+					});
+					try { video.playbackRate = 0.7; } catch (e) {}
+					var playPromise = video.play();
+					if (playPromise && typeof playPromise.catch === 'function') {
+						playPromise.catch(function () {});
+					}
+					video.addEventListener('error', showFallback);
+				}
+			}
+
+			var burger = document.querySelector('.burger');
+			var menu = document.querySelector('.mobile-menu');
+			var closeBtn = document.querySelector('.menu-close');
+			var menuLinks = menu ? menu.querySelectorAll('a') : [];
+			var inertTargets = document.querySelectorAll('.nav, .split');
+			var lastFocused = null;
+			var closeTimer = null;
+
+			function setInert(state) {
+				inertTargets.forEach(function (el) {
+					if (state) { el.setAttribute('inert', ''); } else { el.removeAttribute('inert'); }
+				});
+			}
+
+			function onKeydown(e) {
+				if (e.key === 'Escape') { closeMenu(); }
+			}
+
+			function openMenu() {
+				if (!menu || !burger) { return; }
+				window.clearTimeout(closeTimer);
+				lastFocused = document.activeElement;
+				menu.removeAttribute('hidden');
+				setInert(true);
+				burger.setAttribute('aria-expanded', 'true');
+				document.addEventListener('keydown', onKeydown);
+				requestAnimationFrame(function () {
+					requestAnimationFrame(function () {
+						menu.classList.add('is-open');
+					});
+				});
+				if (closeBtn) { closeBtn.focus(); }
+			}
+
+			function closeMenu() {
+				if (!menu || !burger) { return; }
+				menu.classList.remove('is-open');
+				setInert(false);
+				burger.setAttribute('aria-expanded', 'false');
+				document.removeEventListener('keydown', onKeydown);
+				if (lastFocused && typeof lastFocused.focus === 'function') { lastFocused.focus(); }
+				var delay = reduceMotion ? 0 : 440;
+				closeTimer = window.setTimeout(function () {
+					menu.setAttribute('hidden', '');
+				}, delay);
+			}
+
+			if (burger && menu) {
+				burger.addEventListener('click', function () {
+					if (menu.classList.contains('is-open')) { closeMenu(); } else { openMenu(); }
+				});
+			}
+			if (closeBtn) { closeBtn.addEventListener('click', closeMenu); }
+			menuLinks.forEach(function (a) { a.addEventListener('click', closeMenu); });
+		})();
+	</script>
+</body>
+</html>
