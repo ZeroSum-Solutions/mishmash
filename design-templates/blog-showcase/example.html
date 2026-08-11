@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Behind the Lens — Photography Blog</title>
+<meta name="description" content="Behind the Lens: a photography blog showcase section with a featured post and a three-card grid, each carrying an autoplaying looped video." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #111111;
+    --pill-bg: #f4f4f4;
+    --subtitle: #666666;
+    --border-hairline: #f0f0f0;
+    --card-bg: #fcfcfc;
+    --overlay-dark: rgba(0, 0, 0, 0.25);
+    --icon-circle: rgba(255, 255, 255, 0.2);
+    --bracket-color: #ffffff;
+    --cat-gear: #7d1a4a;
+    --cat-lighting: #2c4c34;
+    --cat-editing: #a63e2d;
+    --cat-business: #1a2b8c;
+    --ease-hover: cubic-bezier(0.33, 1, 0.68, 1);
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: #ffffff;
+    color: var(--ink);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  img,
+  video {
+    display: block;
+    max-width: 100%;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  button {
+    font: inherit;
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Page shell                                                       */
+  /* ---------------------------------------------------------------- */
+
+  .page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 60px 20px;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Header                                                           */
+  /* ---------------------------------------------------------------- */
+
+  .blog-header {
+    margin-bottom: 48px;
+  }
+
+  .blog-badge {
+    display: inline-block;
+    background: var(--pill-bg);
+    color: var(--ink);
+    font-family: "Inter", sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+  }
+
+  .blog-heading {
+    font-family: "Outfit", sans-serif;
+    font-weight: 500;
+    font-size: 64px;
+    letter-spacing: -2.5px;
+    line-height: 1.05;
+    margin-bottom: 24px;
+  }
+
+  .header-bottom {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  .blog-subtitle {
+    max-width: 480px;
+    color: var(--subtitle);
+    font-size: 18px;
+    font-weight: 500;
+    opacity: 0.8;
+    line-height: 1.5;
+  }
+
+  .btn-view-all {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    background: #000000;
+    color: #ffffff;
+    font-family: "Inter", sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 14px 26px;
+    border-radius: 40px;
+    transition: transform 0.3s var(--ease-hover);
+  }
+
+  .btn-view-all:hover,
+  .btn-view-all:focus-visible {
+    transform: scale(1.02);
+  }
+
+  .btn-view-all:focus-visible {
+    outline: 2px solid #000000;
+    outline-offset: 3px;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Shared: media frame (video + hover overlay + corner brackets)    */
+  /* ---------------------------------------------------------------- */
+
+  .media-frame {
+    position: relative;
+    overflow: hidden;
+    background: #000000;
+  }
+
+  .media-frame video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s var(--ease-hover);
+  }
+
+  .media-link:hover .media-frame video,
+  .media-link:focus-visible .media-frame video {
+    transform: scale(1.08);
+  }
+
+  .media-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--overlay-dark);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+
+  .media-link:hover .media-overlay,
+  .media-link:focus-visible .media-overlay {
+    opacity: 1;
+  }
+
+  .media-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: var(--icon-circle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translate(-50%, -50%) scale(0.7);
+    opacity: 0;
+    transition: transform 0.3s var(--ease-hover), opacity 0.3s var(--ease-hover);
+  }
+
+  .media-icon svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .media-link:hover .media-icon,
+  .media-link:focus-visible .media-icon {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+
+  .corner {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--bracket-color);
+  }
+
+  .corner-tl {
+    top: 15px;
+    left: 15px;
+    border-right: none;
+    border-bottom: none;
+  }
+
+  .corner-tr {
+    top: 15px;
+    right: 15px;
+    border-left: none;
+    border-bottom: none;
+  }
+
+  .corner-bl {
+    bottom: 15px;
+    left: 15px;
+    border-right: none;
+    border-top: none;
+  }
+
+  .corner-br {
+    bottom: 15px;
+    right: 15px;
+    border-left: none;
+    border-top: none;
+  }
+
+  .media-link {
+    display: block;
+  }
+
+  .media-link:focus-visible {
+    outline: none;
+  }
+
+  .media-link:focus-visible .media-frame {
+    outline: 2px solid #000000;
+    outline-offset: 3px;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Category badge                                                   */
+  /* ---------------------------------------------------------------- */
+
+  .badge-cat {
+    display: inline-block;
+    border-radius: 20px;
+    color: #ffffff;
+    font-family: "Inter", sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 12px;
+    text-transform: capitalize;
+    white-space: nowrap;
+  }
+
+  .badge-cat.gear {
+    background: var(--cat-gear);
+  }
+
+  .badge-cat.lighting {
+    background: var(--cat-lighting);
+  }
+
+  .badge-cat.editing {
+    background: var(--cat-editing);
+  }
+
+  .badge-cat.business {
+    background: var(--cat-business);
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Featured post                                                    */
+  /* ---------------------------------------------------------------- */
+
+  .featured-post {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-radius: 20px;
+    border: 1px solid var(--border-hairline);
+    background: var(--card-bg);
+    min-height: 520px;
+    overflow: hidden;
+    margin-bottom: 25px;
+  }
+
+  .featured-media {
+    position: relative;
+  }
+
+  .featured-media .media-frame {
+    position: absolute;
+    inset: 0;
+  }
+
+  .featured-content {
+    padding: 60px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .badge-must-read {
+    display: inline-block;
+    align-self: flex-start;
+    background: #000000;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 16px;
+    border-radius: 20px;
+    margin-bottom: 24px;
+  }
+
+  .featured-title {
+    font-family: "Outfit", sans-serif;
+    font-weight: 500;
+    font-size: 48px;
+    letter-spacing: -1.5px;
+    line-height: 1.1;
+    margin-bottom: 20px;
+  }
+
+  .featured-desc {
+    color: var(--subtitle);
+    font-size: 17px;
+    line-height: 1.6;
+    max-width: 420px;
+  }
+
+  .featured-footer {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 24px;
+  }
+
+  .featured-author {
+    font-size: 14px;
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Post grid                                                        */
+  /* ---------------------------------------------------------------- */
+
+  .post-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 25px;
+  }
+
+  .post-card .media-frame {
+    aspect-ratio: 16 / 10;
+    border-radius: 20px;
+  }
+
+  .post-card-footer {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .post-card-title {
+    font-family: "Outfit", sans-serif;
+    font-weight: 600;
+    font-size: 17px;
+    line-height: 1.35;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Responsive                                                       */
+  /* ---------------------------------------------------------------- */
+
+  @media (max-width: 1024px) {
+    .featured-post {
+      grid-template-columns: 1fr;
+    }
+
+    .featured-media .media-frame {
+      position: static;
+      inset: auto;
+      aspect-ratio: 16 / 10;
+    }
+
+    .featured-content {
+      padding: 40px;
+    }
+
+    .post-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .blog-heading {
+      font-size: 48px;
+    }
+
+    .header-bottom {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 20px;
+    }
+
+    .post-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .featured-title {
+      font-size: 32px;
+    }
+
+    .featured-content {
+      padding: 32px;
+    }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Reduced motion                                                   */
+  /* ---------------------------------------------------------------- */
+
+  @media (prefers-reduced-motion: reduce) {
+    .media-frame video,
+    .media-overlay,
+    .media-icon,
+    .btn-view-all {
+      transition: none !important;
+    }
+
+    .media-link:hover .media-frame video,
+    .media-link:focus-visible .media-frame video {
+      transform: none;
+    }
+
+    .btn-view-all:hover,
+    .btn-view-all:focus-visible {
+      transform: none;
+    }
+  }
+
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="blog-header">
+    <span class="blog-badge">Blog</span>
+    <h1 class="blog-heading">Behind the lens</h1>
+    <div class="header-bottom">
+      <p class="blog-subtitle">Thoughts, insights, and stories from my photography journey. Take a peek into my creative process and recent projects.</p>
+      <a class="btn-view-all" href="#">View all posts</a>
+    </div>
+  </header>
+
+  <article class="featured-post">
+    <a class="media-link featured-media" href="#" aria-label="Read: Full-Frame vs. Crop Sensor: Which for Photography?">
+      <div class="media-frame">
+        <video src="assets/featured-full-frame-vs-crop.mp4" autoplay loop muted playsinline aria-hidden="true"></video>
+        <div class="media-overlay" aria-hidden="true"></div>
+        <div class="media-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 5V19M5 12H19" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+        </div>
+        <span class="corner corner-tl" aria-hidden="true"></span>
+        <span class="corner corner-tr" aria-hidden="true"></span>
+        <span class="corner corner-bl" aria-hidden="true"></span>
+        <span class="corner corner-br" aria-hidden="true"></span>
+      </div>
+    </a>
+    <div class="featured-content">
+      <span class="badge-must-read">Must Read</span>
+      <h2 class="featured-title">
+        <a href="#">Full-Frame vs. Crop Sensor: Which for Photography?</a>
+      </h2>
+      <p class="featured-desc">An honest look at the real-world differences between these camera systems to help you choose what's actually right for your photography needs.</p>
+      <div class="featured-footer">
+        <span class="featured-author">By August Renner &copy;</span>
+        <span class="badge-cat gear">Gear</span>
+      </div>
+    </div>
+  </article>
+
+  <div class="post-grid">
+    <article class="post-card">
+      <a class="media-link" href="#" aria-label="Read: Finding Natural Light in Unexpected Places">
+        <div class="media-frame">
+          <video src="assets/card-natural-light.mp4" autoplay loop muted playsinline aria-hidden="true"></video>
+          <div class="media-overlay" aria-hidden="true"></div>
+          <div class="media-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 5V19M5 12H19" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+          </div>
+          <span class="corner corner-tl" aria-hidden="true"></span>
+          <span class="corner corner-tr" aria-hidden="true"></span>
+          <span class="corner corner-bl" aria-hidden="true"></span>
+          <span class="corner corner-br" aria-hidden="true"></span>
+        </div>
+      </a>
+      <div class="post-card-footer">
+        <h3 class="post-card-title"><a href="#">Finding Natural Light in Unexpected Places</a></h3>
+        <span class="badge-cat lighting">Lighting</span>
+      </div>
+    </article>
+
+    <article class="post-card">
+      <a class="media-link" href="#" aria-label="Read: My Approach to Editing: Creating a Consistent Photography Style">
+        <div class="media-frame">
+          <video src="assets/card-editing-style.mp4" autoplay loop muted playsinline aria-hidden="true"></video>
+          <div class="media-overlay" aria-hidden="true"></div>
+          <div class="media-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 5V19M5 12H19" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+          </div>
+          <span class="corner corner-tl" aria-hidden="true"></span>
+          <span class="corner corner-tr" aria-hidden="true"></span>
+          <span class="corner corner-bl" aria-hidden="true"></span>
+          <span class="corner corner-br" aria-hidden="true"></span>
+        </div>
+      </a>
+      <div class="post-card-footer">
+        <h3 class="post-card-title"><a href="#">My Approach to Editing: Creating a Consistent Photography Style</a></h3>
+        <span class="badge-cat editing">Editing</span>
+      </div>
+    </article>
+
+    <article class="post-card">
+      <a class="media-link" href="#" aria-label="Read: Pricing Your Photography: Strategies That Work">
+        <div class="media-frame">
+          <video src="assets/card-pricing-strategy.mp4" autoplay loop muted playsinline aria-hidden="true"></video>
+          <div class="media-overlay" aria-hidden="true"></div>
+          <div class="media-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 5V19M5 12H19" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+          </div>
+          <span class="corner corner-tl" aria-hidden="true"></span>
+          <span class="corner corner-tr" aria-hidden="true"></span>
+          <span class="corner corner-bl" aria-hidden="true"></span>
+          <span class="corner corner-br" aria-hidden="true"></span>
+        </div>
+      </a>
+      <div class="post-card-footer">
+        <h3 class="post-card-title"><a href="#">Pricing Your Photography: Strategies That Work</a></h3>
+        <span class="badge-cat business">Business</span>
+      </div>
+    </article>
+  </div>
+</main>
+<script>
+(function () {
+  "use strict";
+
+  var videos = Array.prototype.slice.call(document.querySelectorAll(".media-frame video"));
+  var reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  function applyMotionPreference(reduce) {
+    videos.forEach(function (video) {
+      if (reduce) {
+        video.removeAttribute("autoplay");
+        video.loop = false;
+        video.pause();
+        try {
+          video.currentTime = 0;
+        } catch (err) {
+          /* some browsers throw before metadata loads; safe to ignore */
+        }
+      } else {
+        video.loop = true;
+        var playPromise = video.play();
+        if (playPromise && typeof playPromise.catch === "function") {
+          playPromise.catch(function () {
+            /* autoplay can be blocked before user interaction; no dignified retry needed here */
+          });
+        }
+      }
+    });
+  }
+
+  applyMotionPreference(reduceMotionQuery.matches);
+
+  if (typeof reduceMotionQuery.addEventListener === "function") {
+    reduceMotionQuery.addEventListener("change", function (event) {
+      applyMotionPreference(event.matches);
+    });
+  } else if (typeof reduceMotionQuery.addListener === "function") {
+    reduceMotionQuery.addListener(function (event) {
+      applyMotionPreference(event.matches);
+    });
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "slug": "blog-showcase",
+  "name": "Behind the Lens — Blog Showcase",
+  "family": "motionsites",
+  "kind": "baked-html",
+  "cdn_fonts": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap"
+  ],
+  "source": "https://motionsites.ai/?prompt=blog-showcase",
+  "source_note": "Generated output under MotionSites unlimited subscription; upstream prompt text not included.",
+  "remote_dependencies": []
+}
