@@ -138,9 +138,7 @@ describe('LibrarySection pagination', () => {
 
     // A filter change WHILE loadMore is still in flight fires a fresh
     // load() that must become the new source of truth.
-    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by kind' }), {
-      target: { value: 'html' },
-    });
+    fireEvent.click(screen.getByRole('button', { name: /^HTML \(/ }));
     await waitFor(() => expect(fetchLibraryAssetsPage).toHaveBeenCalledTimes(3));
     await screen.findByText('New One');
 
@@ -191,9 +189,7 @@ describe('LibrarySection pagination', () => {
 
     // A filter change fires a fresh load() while that fetch is STILL
     // pending (resolveLoadMore has not been called yet).
-    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by kind' }), {
-      target: { value: 'html' },
-    });
+    fireEvent.click(screen.getByRole('button', { name: /^HTML \(/ }));
     await waitFor(() => expect(fetchLibraryAssetsPage).toHaveBeenCalledTimes(3));
     await screen.findByText('New One');
 
@@ -281,9 +277,7 @@ describe('LibrarySection pagination', () => {
     render(<LibrarySection active onOpenProject={() => {}} />);
     await screen.findByText('One');
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by kind' }), {
-      target: { value: 'element' },
-    });
+    fireEvent.click(screen.getByRole('button', { name: /^Element \(/ }));
     await waitFor(() => expect(fetchLibraryAssetsPage).toHaveBeenCalledTimes(2));
     expect(screen.queryByText('Load more')).toBeNull();
   });

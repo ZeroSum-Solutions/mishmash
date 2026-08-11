@@ -1,0 +1,60 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--library-card-min, 180px), 1fr));
+  gap: 16px;
+}
+
+/* --- date-grouped view --------------------------------------------------- */
+
+.dayGroup {
+  margin: 0 0 28px;
+}
+.dayGroup:last-child {
+  margin-bottom: 4px;
+}
+.dayHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.dayCheck {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1.5px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-panel);
+  color: #fff;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.dayCheck[data-state='checked'] {
+  background: var(--selected);
+  border-color: var(--selected);
+}
+.dayCheck[data-state='indeterminate'] {
+  background: color-mix(in srgb, var(--selected) 55%, var(--bg-panel));
+  border-color: var(--selected);
+}
+.dayDate {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+.dayCount {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+}
+.dayGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--library-card-min, 180px), 1fr));
+  gap: 16px;
+}

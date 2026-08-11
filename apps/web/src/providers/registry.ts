@@ -3595,3 +3595,44 @@ export async function waitForMediaTask(
   }
   return last;
 }
+
+export interface GenerateProjectMediaRequest {
+  surface: 'image' | 'video' | 'audio';
+  model: string;
+  prompt: string;
+  aspect?: string;
+  /** Reference/start image as a `data:` URI (i2i), when the caller has one. */
+  image?: string;
+}
+
+/**
+ * Directly calls the EXISTING `POST /api/projects/:id/media/generate` route —
+ * the same generic media dispatcher `od media generate` and the agent's tool
+ * token both drive — without going through a chat run. Same-origin only (the
+ * route itself enforces this); callers still resolve `taskId` through
+ * {@link waitForMediaTask} same as the CLI does.
+ *
+ * Note for callers outside a chat run (e.g. the Assets composer): a file this
+ * writes is NOT attributed to any conversation's `producedFiles`, so a later
+ * Library reconcile (`syncLibrary`) will classify it as `manual-upload`, not
+ * `generated` — that classification is driven by conversation-message
+ * attribution (see the daemon's `library-sync.ts`), which only a chat-run
+ * generation produces.
+ */
+export async function generateProjectMedia(
+  projectId: string,
+  input: GenerateProjectMediaRequest,
+): Promise<{ taskId: string } | null> {
+  try {
+    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/media/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!resp.ok) return null;
+    const json = (await resp.json()) as { taskId?: string };
+    return typeof json.taskId === 'string' ? { taskId: json.taskId } : null;
+  } catch {
+    return null;
+  }
+}

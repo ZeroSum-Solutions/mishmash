@@ -1,0 +1,149 @@
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 220px;
+  flex: 0 0 220px;
+  padding: 4px 10px 4px 0;
+}
+
+.searchWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.searchIcon {
+  position: absolute;
+  left: 11px;
+  color: var(--text-soft);
+  pointer-events: none;
+}
+.search {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px 0 34px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.allAssets {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1), color 140ms;
+}
+.allAssets:hover {
+  background: var(--bg-subtle);
+}
+.allAssets[data-active='true'] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sectionLabel {
+  margin: 0;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-soft);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1), color 140ms;
+}
+.item:hover {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+.item[data-active='true'] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+.itemIcon {
+  display: inline-flex;
+  color: var(--kind-tint, currentColor);
+  flex: 0 0 auto;
+}
+.item[data-active='true'] .itemIcon {
+  color: var(--accent);
+}
+.itemLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.count {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.newCollectionBtn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-soft);
+  cursor: not-allowed;
+}
+
+.collectionsEmpty {
+  margin: 2px 10px 0;
+  font-size: 12px;
+  color: var(--text-soft);
+}
