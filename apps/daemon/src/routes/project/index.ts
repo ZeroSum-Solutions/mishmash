@@ -67,7 +67,7 @@ import {
 } from '../design-library.js';
 import { registerProjectConversationRoutes } from './conversations.js';
 import { cancelRunsOwnedBy } from './cancel-owned-runs.js';
-import { materializeProjectLibraryAssets } from '../../library.js';
+import { markAllReferencedProjectAssetsBroken, materializeProjectLibraryAssets } from '../../library.js';
 import { designLibraryRoot } from '../../design-library/root.js';
 import type { createFilesystemWriteGateway } from '../../filesystem/write-gateway.js';
 
@@ -2400,18 +2400,37 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       // resolveAssetBytesPath); once the directory below is gone those rows
       // 404 forever on /raw and /file. Copy each one's bytes into
       // library-owned storage BEFORE the directory is removed, flipping the
-      // row to `owned`. Best-effort: a copy failure (or an already-missing
-      // source file) marks the row `broken` instead — it must never abort
-      // the delete itself.
-      const gateway = createWriteGateway();
-      const capability = await gateway.runtimeData();
-      await materializeProjectLibraryAssets(
-        db,
-        req.params.id,
-        LIBRARY_DIR,
-        PROJECTS_DIR,
-        { gateway, capability },
-      ).catch(() => {});
+      // row to `owned`. Best-effort per row: a copy failure (or an
+      // already-missing source file) marks that row `broken` instead.
+      //
+      // Everything from acquiring the write gateway through the materialize
+      // call is one best-effort unit (adversarial findings #1/#3): a missing
+      // `ctx.filesystem` dep, a failed `gateway.runtimeData()` mint, or the
+      // materialize call rejecting as a WHOLE (its own store call throwing,
+      // not a per-row failure it already handles) used to either 500 the
+      // whole delete or silently leave every referenced row for this
+      // project pointing at bytes about to be removed — the exact orphan
+      // class MM-021 exists to close. On total failure here, fall back to
+      // marking every referenced row for this project broken directly
+      // (bypassing materialize) instead. The delete itself must proceed
+      // either way.
+      try {
+        const gateway = createWriteGateway();
+        const capability = await gateway.runtimeData();
+        await materializeProjectLibraryAssets(
+          db,
+          req.params.id,
+          LIBRARY_DIR,
+          PROJECTS_DIR,
+          { gateway, capability },
+        );
+      } catch (err) {
+        const marked = markAllReferencedProjectAssetsBroken(db, req.params.id);
+        console.warn(
+          `[project-delete] MM-021 materialize failed entirely for project ${req.params.id}; marked ${marked} referenced row(s) broken instead`,
+          err,
+        );
+      }
       dbDeleteProject(db, req.params.id);
       await removeProjectDir(PROJECTS_DIR, req.params.id).catch(() => {});
       /** @type {import('@open-design/contracts').OkResponse} */

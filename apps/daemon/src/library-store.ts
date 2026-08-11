@@ -453,15 +453,81 @@ export function markLibraryAssetBroken(db: SqliteDb, id: string, missingSince: n
 }
 
 /**
+ * Every `broken` `referenced` row — the candidate set the reconcile sweep
+ * re-checks each pass for self-healing (MM-021 adversarial follow-up,
+ * finding #4): a row previously marked from a transient failure (or one
+ * whose source file genuinely came back) can have its mark undone once its
+ * origin project still exists and its bytes are readable again. UPDATE-only
+ * from the caller's side — this is a read, `clearLibraryAssetBroken` is the
+ * write.
+ */
+export function listBrokenReferencedAssets(db: SqliteDb): LibraryAssetRecord[] {
+  const raws = db
+    .prepare(
+      `SELECT ${ASSET_COLS} FROM library_assets
+        WHERE storage = 'referenced' AND broken = 1`,
+    )
+    .all() as RawAssetRow[];
+  if (raws.length === 0) return [];
+  const sourcesByAsset = listLibraryAssetSourcesFor(db, raws.map((r) => r.id));
+  return raws.map((raw) => normalizeAsset(raw, sourcesByAsset.get(raw.id) ?? []));
+}
+
+/**
+ * Undo a prior `markLibraryAssetBroken` — clears `broken`/`missing_since` on
+ * a row whose bytes are readable again. UPDATE-only, same as every other
+ * write in this module: never deletes the row or touches its bytes. This is
+ * the recovery half of MM-021's mark-only contract — a false-positive mark
+ * (a transient stat error that used to be treated as permanent, or a source
+ * file that came back) is now recoverable instead of sticking forever.
+ * Idempotent: a row that is not currently broken is left untouched and this
+ * returns `false`.
+ */
+export function clearLibraryAssetBroken(db: SqliteDb, id: string): boolean {
+  const row = db.prepare(`SELECT broken FROM library_assets WHERE id = ?`).get(id) as
+    | { broken: number }
+    | undefined;
+  if (!row || !row.broken) return false;
+  db.prepare(`UPDATE library_assets SET broken = 0, missing_since = NULL, updated_at = ? WHERE id = ?`).run(
+    Date.now(),
+    id,
+  );
+  return true;
+}
+
+/**
  * Flip a `referenced` row to `owned` once its bytes have been copied into
  * library-owned content-addressed storage at `filePath` (MM-021 project-
  * delete materialize). Clears the origin pointer — the row no longer depends
- * on the source project existing.
+ * on the source project existing. Also clears `broken`/`missing_since`: a row
+ * that successfully materializes has, by definition, just had its bytes read
+ * and copied, so any prior "missing source" mark from an earlier sweep/delete
+ * attempt is stale (adversarial review finding #6).
+ *
+ * `contentHash`, when supplied, replaces the row's stored content hash —
+ * materialize re-hashes the actual source bytes rather than trusting the
+ * possibly-stale value the row was indexed with (finding #5); the caller
+ * passes the freshly computed hash whenever it differs from `asset.contentHash`.
  */
-export function materializeLibraryAssetToOwned(db: SqliteDb, id: string, filePath: string): void {
+export function materializeLibraryAssetToOwned(
+  db: SqliteDb,
+  id: string,
+  filePath: string,
+  contentHash?: string,
+): void {
+  if (contentHash) {
+    db.prepare(
+      `UPDATE library_assets
+         SET storage = 'owned', file_path = ?, content_hash = ?, origin_project_id = NULL,
+             rel_path = NULL, broken = 0, missing_since = NULL, updated_at = ?
+       WHERE id = ?`,
+    ).run(filePath, contentHash, Date.now(), id);
+    return;
+  }
   db.prepare(
     `UPDATE library_assets
-       SET storage = 'owned', file_path = ?, origin_project_id = NULL, rel_path = NULL, updated_at = ?
+       SET storage = 'owned', file_path = ?, origin_project_id = NULL, rel_path = NULL,
+           broken = 0, missing_since = NULL, updated_at = ?
      WHERE id = ?`,
   ).run(filePath, Date.now(), id);
 }

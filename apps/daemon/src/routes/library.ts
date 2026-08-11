@@ -363,6 +363,7 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     projectAssets: 0,
     deduped: 0,
     markedBroken: 0,
+    cleared: 0,
     total: 0,
   };
   async function runReconcile(force: boolean): Promise<ReconcileLibraryResult> {

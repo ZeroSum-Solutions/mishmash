@@ -354,6 +354,11 @@ export interface LibrarySyncResponse {
    * bytes. A row already broken is not recounted on a later pass.
    */
   markedBroken: number;
+  /**
+   * Previously-broken referenced rows whose mark was undone this pass —
+   * their origin project still exists and their bytes are readable again.
+   */
+  cleared: number;
   /** Total Library rows newly registered this pass (`designSystems + projectAssets`). */
   total: number;
 }
