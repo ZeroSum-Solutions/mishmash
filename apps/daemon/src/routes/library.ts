@@ -925,6 +925,13 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   // rest of this file's reads use would still leave them unstyled even with
   // the siblings resolvable. Scoped to this route only -- `/raw` stays
   // untouched (and network-free) for every non-HTML consumer.
+  //
+  // `connect-src` deliberately excludes `'self'`: CSP is computed from the
+  // DOCUMENT URL, not the iframe's opaque sandbox origin, so `'self'` here
+  // would let a scripted `fetch('/api/...')` inside agent-generated HTML
+  // reach this loopback daemon's own API. Sibling subresources (CSS/img/
+  // script/font) load via their own `-src` directives, none of which need
+  // `connect-src`, so dropping it costs nothing for the styling fix.
   const libraryFileAssetCsp = [
     "default-src 'self' data: blob:",
     "img-src 'self' data: blob: https:",
@@ -932,7 +939,7 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     "font-src 'self' data: https:",
     "style-src 'self' 'unsafe-inline' https:",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
-    "connect-src 'self' https:",
+    "connect-src https:",
     "form-action 'none'",
     "base-uri 'none'",
     "object-src 'none'",

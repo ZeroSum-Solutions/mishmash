@@ -765,7 +765,7 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
   //
   // Unlike server.ts's projectRawFileCsp (which this used to mirror exactly),
   // this CSP deliberately allows https: egress on script/style/img/font/media
-  // and 'self' https: on connect. Catalog templates are licensed single-file
+  // and https: on connect. Catalog templates are licensed single-file
   // mockups that are CDN-dependent by construction (cdn.tailwindcss.com's
   // runtime JIT compiler, code.iconify.design's icon web components fetching
   // icon JSON, Unsplash-hosted images) — under the strict, network-free CSP
@@ -778,6 +778,12 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
   // reaches this daemon's own API), so https: egress from inside the preview
   // can reach arbitrary external hosts but never this daemon. Devin approved
   // this divergence 2026-08-10 (MM-019) for this route only.
+  //
+  // `connect-src` excludes `'self'` on purpose: CSP is computed from the
+  // DOCUMENT URL, not the iframe's opaque sandbox origin, so `'self'` would
+  // let a scripted `fetch('/api/...')` inside a preview template reach this
+  // loopback daemon's own API. Sibling subresources (CSS/img/script/font)
+  // load via their own `-src` directives and never need `connect-src`.
   //
   // `:rel` is the catalog item's `rel`, `encodeURIComponent`-ed as a single
   // opaque path segment (embedded `/` becomes `%2F`, so it cannot be
@@ -792,7 +798,7 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
     "font-src 'self' data: https:",
     "style-src 'self' 'unsafe-inline' https:",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
-    "connect-src 'self' https:",
+    "connect-src https:",
     "form-action 'none'",
     "base-uri 'none'",
     "object-src 'none'",

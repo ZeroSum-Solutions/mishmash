@@ -133,8 +133,13 @@ describe('design library preview-asset route', () => {
     expect(csp).toContain("img-src 'self' data: blob: https:");
     expect(csp).toContain("font-src 'self' data: https:");
     expect(csp).toContain("media-src 'self' data: blob: https:");
-    // Iconify's web component fetches icon JSON over the network.
-    expect(csp).toContain("connect-src 'self' https:");
+    // Iconify's web component fetches icon JSON over the network -- but
+    // connect-src deliberately excludes 'self': CSP is computed from the
+    // DOCUMENT url, not the iframe's opaque sandbox origin, so 'self' here
+    // would let a scripted fetch('/api/...') inside a preview template
+    // reach this loopback daemon's own API.
+    expect(csp).toContain('connect-src https:');
+    expect(csp).not.toContain("connect-src 'self'");
     expect(csp).toContain("form-action 'none'");
     expect(csp).toContain("base-uri 'none'");
     expect(csp).toContain("object-src 'none'");

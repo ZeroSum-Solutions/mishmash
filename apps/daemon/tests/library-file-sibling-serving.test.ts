@@ -15,7 +15,7 @@
 // previews, project-synced HTML; see library-sync.ts).
 
 import type http from 'node:http';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { register } from 'prom-client';
@@ -106,11 +106,72 @@ it('serves a sibling resource resolved against the asset\'s parent directory, wi
   expect(await res.text()).toBe('h1{color:red}');
 });
 
-it('sets a CSP on the file route that allows external https and keeps object-src none', async () => {
+it('sets the exact file-route CSP, with connect-src allowing https: but excluding \'self\'', async () => {
+  // Pinned to the full header, not a substring: 'self' https: and https:
+  // alone both satisfy a substring check for 'https:', but only the latter
+  // closes the escalation hole where a scripted fetch('/api/...') inside
+  // agent-generated HTML could reach this loopback daemon's own API (CSP is
+  // computed from the DOCUMENT url, not the iframe's opaque sandbox origin).
   const res = await fetch(`${baseUrl}/api/library/assets/${ASSET_ID}/file/index.html`);
-  const csp = res.headers.get('content-security-policy') ?? '';
-  expect(csp).toContain('https:');
-  expect(csp).toContain("object-src 'none'");
+  const csp = res.headers.get('content-security-policy');
+  expect(csp).toBe(
+    [
+      "default-src 'self' data: blob:",
+      "img-src 'self' data: blob: https:",
+      "media-src 'self' data: blob: https:",
+      "font-src 'self' data: https:",
+      "style-src 'self' 'unsafe-inline' https:",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
+      'connect-src https:',
+      "form-action 'none'",
+      "base-uri 'none'",
+      "object-src 'none'",
+    ].join('; '),
+  );
+});
+
+it('does not set any CSP on /raw -- the relaxed file-route policy is scoped to /file only', async () => {
+  // /raw serves exactly the one file an asset is registered under to a
+  // non-iframe consumer (e.g. the clipper's own download flow); it has never
+  // set a Content-Security-Policy header, and this pins that it still
+  // doesn't after the /file route's CSP was relaxed for MM-019/MM-020 --
+  // confirming the relaxation didn't leak onto a sibling route.
+  const res = await fetch(`${baseUrl}/api/library/assets/${ASSET_ID}/raw`);
+  expect(res.status).toBe(200);
+  expect(res.headers.get('content-security-policy')).toBeNull();
+});
+
+it('rejects a sandboxed-iframe Origin: null request the same as any other non-loopback origin', async () => {
+  // A `sandbox="allow-scripts allow-popups"` iframe (no allow-same-origin)
+  // sends the literal string "null" as its Origin header. This documents
+  // the daemon's CURRENT, deliberate posture on this route: the middleware
+  // (requireLocalDaemonRequest -> validateLocalDaemonRequest ->
+  // localOriginFromHeader, apps/daemon/src/http/local-daemon-request.ts:58)
+  // treats a present-but-unparseable Origin header (including literal
+  // "null") as disqualifying and 403s, exactly like any other foreign
+  // Origin. The relaxed CSP above is the in-document brake for a same-
+  // origin scripted fetch; this 403 is a second, independent layer for a
+  // request that carries a browser-supplied Origin header at all. This test
+  // does not change the middleware -- it only pins what it already does.
+  const res = await fetch(`${baseUrl}/api/library/assets/${ASSET_ID}/file/index.html`, {
+    headers: { Origin: 'null' },
+  });
+  expect(res.status).toBe(403);
+});
+
+it('rejects a symlink inside the parent dir that escapes to a file outside the containment root', async () => {
+  const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'od-library-file-sibling-outside-'));
+  const outsideFile = path.join(outsideDir, 'secret.txt');
+  await writeFile(outsideFile, 'outside-bytes');
+  const entryDir = path.join(projectsDir, PROJECT_ID, 'screens');
+  const linkPath = path.join(entryDir, 'assets', 'escape-link.css');
+  try {
+    await symlink(outsideFile, linkPath);
+    const res = await fetch(`${baseUrl}/api/library/assets/${ASSET_ID}/file/assets/escape-link.css`);
+    expect(res.status).toBe(404);
+  } finally {
+    await rm(outsideDir, { recursive: true, force: true }).catch(() => {});
+  }
 });
 
 it('404s a sibling path that does not exist', async () => {
