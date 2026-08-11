@@ -159,6 +159,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           MAX_CHANGED_FILE_BYTES: "1048576"
+          # design-templates/ is the rendering catalogue: its example.html files and
+          # runtime assets (looping hero/background videos, embedded media) are
+          # source-owned template content, not generated artifacts, and must stay
+          # self-contained (no external URLs at render time). Reviewed exception per
+          # the guard's own escape hatch; anything above this cap still blocks.
+          MAX_DESIGN_TEMPLATE_FILE_BYTES: "8388608"
         shell: bash
         run: |
           set -euo pipefail
@@ -191,14 +197,18 @@ jobs:
               continue
             fi
             size="$(wc -c < "$file" | tr -d '[:space:]')"
-            if [ "$size" -gt "$MAX_CHANGED_FILE_BYTES" ]; then
+            limit="$MAX_CHANGED_FILE_BYTES"
+            case "$file" in
+              design-templates/*) limit="$MAX_DESIGN_TEMPLATE_FILE_BYTES" ;;
+            esac
+            if [ "$size" -gt "$limit" ]; then
               printf '%s\t%s\n' "$size" "$file" >> "$oversized"
             fi
           done < "$changed_files"
 
           if [ -s "$oversized" ]; then
             {
-              echo "Changed tracked files exceed the current blob guard threshold (${MAX_CHANGED_FILE_BYTES} bytes):"
+              echo "Changed tracked files exceed the blob guard threshold (${MAX_CHANGED_FILE_BYTES} bytes; design-templates/ ${MAX_DESIGN_TEMPLATE_FILE_BYTES} bytes):"
               while IFS=$'\t' read -r size file; do
                 echo "- ${size} bytes	${file}"
               done < "$oversized"
