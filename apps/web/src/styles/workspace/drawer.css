@@ -2550,21 +2550,26 @@
 
 /* Canvas-local Design delivery feedback. It stays with the workspace while
    the empty placeholder hands over to an actual file preview, rather than
-   becoming a bottom-of-screen notification. */
+   becoming a bottom-of-screen notification. Anchored bottom-center like
+   `.workspace-toast-anchor` (viewer/routines.css) instead of dead-center,
+   so it never sits on top of the design the user is looking at. Stacked
+   above the toast anchor's 24px bottom offset (rather than sharing it) so
+   a workspace-owned toast and the run-status pill can both be visible
+   without overlapping. */
 .ws-preview-run-status-slot {
   position: absolute;
   z-index: 2;
-  top: 50%;
-  left: 50%;
+  inset: auto 24px 88px;
+  display: flex;
+  justify-content: center;
   max-width: calc(100% - 48px);
   pointer-events: none;
-  transform: translate(-50%, 116px);
 }
 
 @media (max-width: 640px) {
   .ws-preview-run-status-slot {
+    inset: auto 16px 80px;
     max-width: calc(100% - 32px);
-    transform: translate(-50%, 104px);
   }
 }
 
