@@ -4,7 +4,7 @@
 
 import { memo, useEffect, useRef, useState } from 'react';
 import type { LibraryAsset } from '@open-design/contracts';
-import { libraryAssetRawUrl } from '../../providers/registry';
+import { libraryAssetFileUrl, libraryAssetRawUrl } from '../../providers/registry';
 import { useInView } from '../plugins-home/useInView';
 import { navigate } from '../../router';
 import {
@@ -65,13 +65,21 @@ function MediaThumb({ asset }: { asset: LibraryAsset }) {
       </>
     );
   } else if (asset.kind === 'html' || asset.kind === 'design-system') {
-    // Static (no scripts) sandboxed render — a faithful, lightweight preview
-    // of the captured page. The modal re-renders it with scripts for motion.
+    // `allow-scripts`, not the empty sandbox: agent-generated captures style
+    // themselves via CDN runtime JIT (cdn.tailwindcss.com) rather than
+    // static CSS, so an empty sandbox that blocks all scripts renders raw,
+    // unstyled markup. The sandboxed document still has no `allow-same-
+    // origin`, so it stays an opaque origin that cannot reach the daemon.
+    // `libraryAssetFileUrl` (not `rawUrl`) points the iframe at the asset's
+    // sibling-resolving `/file/<basename>` URL so its own relative refs
+    // (`href="assets/aura.css"`) resolve instead of 404ing against `/raw`,
+    // which only ever serves the one registered file. `loading="lazy"`
+    // still gates the browsing context to visible cards.
     media = (
       <iframe
         className={styles.thumbFrame}
-        src={rawUrl}
-        sandbox=""
+        src={libraryAssetFileUrl(asset)}
+        sandbox="allow-scripts"
         scrolling="no"
         loading="lazy"
         tabIndex={-1}

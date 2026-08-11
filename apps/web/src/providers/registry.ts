@@ -2583,6 +2583,29 @@ export function libraryAssetRawUrl(id: string): string {
 }
 
 /**
+ * Sibling-resolving URL for an HTML/design-system asset's own entry file, as
+ * opposed to `/raw`'s single-file bytes. Points the iframe's document URL at
+ * `/file/<basename>` inside the asset's real parent directory, so relative
+ * refs the captured markup makes (`href="assets/aura.css"`,
+ * `src="assets/subject-lateral.jpg"`) resolve the same way a same-origin
+ * static server would resolve them, instead of 404ing against `/raw`.
+ *
+ * `referenced` assets (design-system previews, project-synced HTML) always
+ * carry `relPath` -- the real on-disk path relative to their origin -- so
+ * basename it. `owned` clipper captures carry no `relPath`; the daemon names
+ * every clipper `html` capture's object `<contentHash>.html` (the ingest
+ * route always registers clipper HTML with mime `text/html` and no
+ * filename, so `extForMime` falls back to the mime-derived extension --
+ * see apps/daemon/src/routes/library.ts's ingest route and
+ * clipper/background.js). Use only for `html` / `design-system` kinds;
+ * every other kind stays on `libraryAssetRawUrl`.
+ */
+export function libraryAssetFileUrl(asset: LibraryAsset): string {
+  const basename = asset.relPath?.split('/').pop() || `${asset.contentHash}.html`;
+  return `/api/library/assets/${encodeURIComponent(asset.id)}/file/${encodeURIComponent(basename)}`;
+}
+
+/**
  * OD Figma capture download URL — only meaningful for clipper-captured `html`
  * assets whose `metadata.figmaCapture` marker is set. Importable via the OD
  * Figma plugin.

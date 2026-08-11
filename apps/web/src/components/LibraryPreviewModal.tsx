@@ -23,7 +23,12 @@ import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import type { LibraryAsset } from '@open-design/contracts';
 import { Button } from '@open-design/components';
-import { libraryAssetElementUrl, libraryAssetFigmaUrl, libraryAssetRawUrl } from '../providers/registry';
+import {
+  libraryAssetElementUrl,
+  libraryAssetFigmaUrl,
+  libraryAssetFileUrl,
+  libraryAssetRawUrl,
+} from '../providers/registry';
 import { modalOverlay, modalContent } from '../motion';
 import {
   KindIcon,
@@ -158,8 +163,13 @@ function Stage({ asset }: { asset: LibraryAsset }) {
       return <video className={styles.stageVideo} src={rawUrl} controls autoPlay loop playsInline />;
     case 'design-system':
     case 'html':
-      // Opaque-origin sandbox: scripts/animations run, daemon stays unreachable.
-      return <iframe className={styles.stageFrame} src={rawUrl} sandbox="allow-scripts" title={title} />;
+      // Opaque-origin sandbox: scripts/animations run, daemon stays
+      // unreachable. `libraryAssetFileUrl` (not `rawUrl`) points the iframe
+      // at the asset's sibling-resolving `/file/<basename>` URL so relative
+      // refs the captured markup makes (`href="assets/aura.css"`) resolve
+      // instead of 404ing against `/raw`, which only ever serves the one
+      // registered file.
+      return <iframe className={styles.stageFrame} src={libraryAssetFileUrl(asset)} sandbox="allow-scripts" title={title} />;
     case 'font':
       return <FontSpecimen asset={asset} rawUrl={rawUrl} />;
     case 'color':
