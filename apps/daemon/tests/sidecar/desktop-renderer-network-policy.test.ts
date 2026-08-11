@@ -103,6 +103,19 @@ describe("desktop renderer network policy (adversarial)", () => {
         res.writeHead(200).end("should never be reached either");
         return;
       }
+      if (url.pathname === `/api/projects/${PROJECT_ID}-prime-redirect/raw/`) {
+        // This bare path IS the priming URL itself (baseHref with no
+        // trailing dir) for a DIFFERENT project id than PROJECT_ID, so it
+        // does not affect the other tests in this file, whose priming
+        // request hits PROJECT_ID's own bare raw/ path (a harmless 404,
+        // matched by the final fallback below). Round 3 review finding 2:
+        // redirects a daemon-controlled priming URL off-prefix, same
+        // origin -- the "did the off-prefix handler run" signal is
+        // otherRouteHitCount, since the Location points there.
+        res.writeHead(302, { Location: `http://127.0.0.1:${allowedPort}/api/other-route` });
+        res.end();
+        return;
+      }
       res.writeHead(404).end();
     });
     allowedPort = await listen(allowedServer);
@@ -178,5 +191,45 @@ describe("desktop renderer network policy (adversarial)", () => {
     // serving content into the page: it never ran at all, not "ran and
     // was detected after the fact".
     expect(otherRouteHitCount).toBe(0);
+  }, 30_000);
+
+  it("fails closed when the priming baseHref URL itself redirects off-prefix, same origin (round 3 review finding 1)", async () => {
+    // Distinct from both tests above: those redirect an AGENT-triggered
+    // subresource request, which fulfillAllowedRequest fully validates
+    // per-hop. THIS redirect is on `baseHref` itself -- the EXACT URL the
+    // priming `page.goto()` navigates to before `setContent()` ever runs.
+    // That one navigation is deliberately exempted from per-hop validation
+    // (isUnusedPrimingNavigation) because routing it through the same
+    // validated-fetch path breaks Playwright's navigation-commit timing --
+    // see render.ts's RenderNetworkPolicy docblock for the accepted,
+    // documented residual this test exercises: a DAEMON-controlled 302 on
+    // the exact prime URL is followed unvalidated (its target's handler
+    // runs once -- confirmed below), but the render must not silently
+    // proceed as if the origin were still the validated one.
+    const primeRedirectProjectId = `${PROJECT_ID}-prime-redirect`;
+    const baseHref = `http://127.0.0.1:${allowedPort}/api/projects/${primeRedirectProjectId}/raw/`;
+    const input: DesktopRenderSlidesInput = {
+      html: "<html><body>should never render -- the priming navigation itself is redirected off-prefix</body></html>",
+      deck: false,
+      baseHref,
+      width: 320,
+      height: 200,
+    };
+
+    const result = await renderSlides(runtimeDataDir, input);
+
+    // The post-navigation URL check (render.ts, right after the priming
+    // `page.goto`) refuses to proceed once the committed URL no longer
+    // matches the validated href -- the render fails closed rather than
+    // running agent HTML (`setContent`, which never even executes here)
+    // against an unvalidated origin.
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("priming navigation");
+    // Empirically confirms the documented residual precisely: the daemon
+    // redirected its OWN priming URL, so the off-prefix target's handler
+    // DOES run once (this is accepted -- daemon-controlled input, not
+    // agent-controlled) -- but exactly once, and the render never returns
+    // that content as a successful result.
+    expect(otherRouteHitCount).toBe(1);
   }, 30_000);
 });

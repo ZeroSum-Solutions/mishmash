@@ -73,29 +73,42 @@ class DesktopRenderError extends Error {
 /** The renderer's per-job network guarantee, derived once from a validated
  * `baseHref`. Everything downstream (`route()`'s controlled-fetch
  * redirect-chain validation, `routeWebSocket()`, and the response
- * safety-net) is driven off this one object, so the guarantee below is
- * enforced identically everywhere:
+ * safety-net) is driven off this one object.
  *
- * The ONLY network destination this render's page can ever reach is
- * `assetPrefix` over plain HTTP GET/HEAD (never WebSocket, never any other
- * method; EventSource is HTTP-shaped and covered by the same `route()`
- * gate; Service Workers are disabled outright). Every other destination --
- * any other loopback port, any non-loopback host, any off-prefix redirect
- * target reached from an in-prefix request (review round 2), any nested
- * frame/iframe navigation -- fails closed, and its handler is never
- * fetched at all (not "fetched, then detected").
+ * **The actual guarantee (review round 3 finding 2 -- state this exactly,
+ * do not overclaim):**
  *
- * Enforcement is entirely at the `context.route()` / `routeWebSocket()`
- * layer, deliberately NOT a process-level proxy: `route.fetch()` (which
- * `fulfillAllowedRequest` below uses to validate every redirect hop before
- * fetching it) does not honor Chromium's proxy bypass list -- verified
- * empirically, it routes through the configured proxy regardless of
- * `bypass` entries, which made a dead-proxy backstop actively break the
- * one destination it needed to allow. Since `route()`'s `**\/*` pattern
- * already covers every HTTP-shaped resource type, and WebSocket is
- * independently and completely banned via `routeWebSocket()` rather than
- * left to a proxy backstop, no process-level proxy is needed for this
- * guarantee to hold.
+ * - Every HTTP(S)-shaped request Playwright's `context.route()` intercepts
+ *   (fetch/XHR, EventSource, subresources, ordinary/iframe navigation) is
+ *   validated against `assetPrefix` PER HOP before it is ever fetched --
+ *   an off-prefix target, including one reached by redirect from an
+ *   in-prefix URL (review round 2), is never fetched at all.
+ * - WebSocket is unconditionally banned via `routeWebSocket()` --
+ *   `connectToServer()` is never called, so no real connection is ever
+ *   opened for any WebSocket the page attempts, allowed origin or not.
+ * - Service Workers are disabled outright (`serviceWorkers: "block"`).
+ * - `--host-resolver-rules=MAP * 0.0.0.0` blackholes HOSTNAME-based DNS
+ *   lookups only.
+ * - One narrow, documented exception: the priming navigation (see
+ *   `isUnusedPrimingNavigation` and the call site in
+ *   `runBoundedRenderOnce`) uses plain `route.continue()`, so a
+ *   DAEMON-controlled redirect on that exact URL is followed and its
+ *   target's handler runs once before the render notices -- covered by a
+ *   post-navigation URL check, not by `route()`.
+ *
+ * **What this guarantee explicitly does NOT cover, since the dead-proxy
+ * backstop was removed (`route.fetch()` does not honor Chromium's proxy
+ * bypass list -- see the removal note in `runBoundedRenderOnce`):** any
+ * network path that opens a socket WITHOUT going through
+ * `context.route()`/`routeWebSocket()` -- most notably WebRTC (ICE
+ * candidate gathering can probe literal loopback IPs directly; mitigated
+ * cheaply below via `--force-webrtc-ip-handling-policy`, not eliminated by
+ * `route()`), and in general any literal IP-literal or non-HTTP(S)/WS
+ * channel Chromium might expose that this module has not identified.
+ * There is no process-level "nothing reaches the network without
+ * `context.route()`" backstop for those. The threat model this renderer
+ * actually defends is "Playwright-intercepted HTTP(S) + WS", not "every
+ * socket the browser process could ever open".
  */
 export interface RenderNetworkPolicy {
   /** The exact validated `http://127.0.0.1:<port>` origin. */
@@ -171,6 +184,26 @@ function isSafeReadMethod(method: string): boolean {
 }
 
 const MAX_REDIRECT_HOPS = 10;
+
+/**
+ * True only for the SINGLE exempted request: the priming navigation this
+ * module itself issues (`page.goto(policy.injectedHref)` below), never
+ * anything agent-influenced. Narrowed by predicate, not by "whichever
+ * request wins the first intercept" (review round 3 finding 2) -- a
+ * request only qualifies when it is a main-frame navigation, method GET,
+ * the URL is an EXACT match for `policy.injectedHref`, and the exemption
+ * has not already been consumed this job. Any other first packet --
+ * including one that merely arrives first for some unrelated reason --
+ * falls through to the fully validated `fulfillAllowedRequest` path.
+ */
+function isUnusedPrimingNavigation(route: Route, policy: RenderNetworkPolicy | null, used: boolean): boolean {
+  if (used || policy == null) return false;
+  const request = route.request();
+  if (request.method() !== "GET") return false;
+  if (request.url() !== policy.injectedHref) return false;
+  if (!request.isNavigationRequest()) return false;
+  return request.frame().parentFrame() === null;
+}
 
 /**
  * PRIMARY gate #1's actual implementation. `route.continue()` on an
@@ -302,6 +335,22 @@ async function runBoundedRenderOnce<T>(
         // RenderNetworkPolicy's docblock for why a process-level proxy is
         // deliberately NOT part of this renderer's network policy.
         "--host-resolver-rules=MAP * 0.0.0.0",
+        // Closes the cheapest named non-HTTP probe (review round 3 finding
+        // 3): WebRTC's ICE candidate gathering opens UDP sockets directly
+        // -- including to literal loopback IPs -- and is mediated by
+        // neither `context.route()` nor `routeWebSocket()`. With no proxy
+        // configured (see RenderNetworkPolicy's docblock for why), "only
+        // proxied UDP" means "no UDP", so this disables non-proxied UDP
+        // candidate gathering outright rather than leaving WebRTC as an
+        // unmediated loopback-probing channel. `--force-` is deliberate,
+        // not a typo: the bare `--webrtc-ip-handling-policy` switch is
+        // silently ignored on the command line (it is meant to be read via
+        // the `chrome.privacy` extension API) -- verified empirically
+        // against the pinned Playwright Chromium (playwright@1.60.0) with
+        // a real `RTCPeerConnection` ICE-gathering probe: the bare switch
+        // still produced a `typ host` UDP candidate; `--force-` produced
+        // none.
+        "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
         "--disable-background-networking",
         "--disable-sync",
         "--disable-default-apps",
@@ -383,21 +432,31 @@ async function runBoundedRenderOnce<T>(
       // the request itself and validating every redirect hop before
       // fetching it -- see its docblock.
       //
-      // Exception: the very first request this context ever issues is the
-      // priming `page.goto(policy.injectedHref)` navigation below, issued
-      // by THIS module itself (never agent-influenced) purely to give the
-      // document a real security origin -- see the comment at that call.
-      // Routing that one navigation through fetch()+fulfill() instead of
-      // continue() disrupts Playwright's own navigation-commit timing
-      // (observed as "Execution context was destroyed" from the very next
-      // `page.setContent()` call), so it takes the plain, known-good
-      // `continue()` path; every request after it -- i.e. everything the
-      // agent-supplied `html` itself can trigger, once `setContent` runs --
-      // still goes through the full validated path.
-      let primedNavigation = policy == null;
+      // Exception, scoped by PREDICATE not by arrival order (review round 3
+      // finding 2 -- the prior "whichever request wins the first intercept"
+      // shape was URL/method-agnostic): `isUnusedPrimingNavigation` grants
+      // plain `route.continue()` ONLY to the priming `page.goto` below --
+      // main-frame navigation, method GET, URL an EXACT match for
+      // `policy.injectedHref`, not already used this job. Anything else,
+      // including a first packet that merely arrives before the real prime
+      // for some unrelated reason, falls through to the fully validated
+      // `fulfillAllowedRequest` path below.
+      //
+      // The priming navigation itself is issued by THIS module (never
+      // agent-influenced), purely to give the document a real security
+      // origin -- see the comment at that call. Routing it through
+      // fetch()+fulfill() instead of continue() disrupts Playwright's own
+      // navigation-commit timing (observed as "Execution context was
+      // destroyed" from the very next `page.setContent()` call), so it
+      // must take the plain `continue()` path, which means a
+      // DAEMON-controlled redirect on that exact URL is followed
+      // unvalidated -- an accepted, narrow residual (daemon-controlled
+      // input, not agent-controlled) closed by the post-navigation URL
+      // check at the `page.goto` call site instead of by `route()`.
+      let primingUsed = false;
       await context.route("**/*", (route) => {
-        if (!primedNavigation) {
-          primedNavigation = true;
+        if (isUnusedPrimingNavigation(route, policy, primingUsed)) {
+          primingUsed = true;
           void route.continue();
           return;
         }
@@ -438,6 +497,23 @@ async function runBoundedRenderOnce<T>(
         // `setContent` below replaces the body regardless -- so failures
         // are swallowed rather than failing the whole render.
         await page.goto(policy.injectedHref, { timeout: PER_JOB_TIMEOUT_MS }).catch(() => undefined);
+        // Closes the accepted residual from the priming exemption above:
+        // that navigation used plain `continue()`, so a daemon-controlled
+        // redirect on `policy.injectedHref` would have been followed
+        // un-validated and its target's handler would have run once. This
+        // does not undo that (it already happened, if it happened) -- it
+        // makes sure the render never silently proceeds as if it hadn't.
+        // If the committed URL no longer matches the validated href, the
+        // daemon's own response moved the document's origin out from
+        // under the allowlist, and the render fails closed rather than
+        // running agent HTML (`setContent` below) against an unvalidated
+        // location.
+        if (page.url() !== policy.injectedHref) {
+          throw new DesktopRenderError(
+            "render blocked: the priming navigation's committed URL diverged from the validated baseHref",
+            "RENDER_FAILED",
+          );
+        }
       } else {
         await page.goto("about:blank", { timeout: PER_JOB_TIMEOUT_MS });
       }
