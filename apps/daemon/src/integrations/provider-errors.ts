@@ -63,6 +63,23 @@ export function providerCredentialRejectionMessage(providerLabel: string): strin
 }
 
 /**
+ * User-facing message for any classified provider failure. This function
+ * intentionally has no raw-body parameter: upstream response text may echo
+ * prompts or credentials and belongs only in redacted daemon diagnostics.
+ */
+export function providerCallFailureMessage(
+  providerLabel: string,
+  status: number,
+  kind: ProviderErrorKind,
+): string {
+  if (kind === 'invalid-credential') return providerCredentialRejectionMessage(providerLabel);
+  if (kind === 'rate-limited') {
+    return `${providerLabel} rate limit reached — wait a moment and retry.`;
+  }
+  return `${providerLabel} request failed with status ${status} — retry, or check provider status if it continues.`;
+}
+
+/**
  * Thrown by a provider render/call boundary on a classified HTTP failure.
  * `.code` mirrors `.kind` so it slots directly into the existing loose
  * `{message, status, code}` task-error shape

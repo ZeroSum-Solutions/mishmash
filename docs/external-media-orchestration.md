@@ -156,6 +156,14 @@ media policy because it is not associated with a run. In-run integrations
 should use `OD_TOOL_TOKEN` and `/api/tools/media/generate` instead of depending
 on the non-sandbox compatibility behavior.
 
+## Provider Failure Boundary
+
+User-facing media task errors are composed from the provider label, HTTP
+status, and classified failure kind. Raw upstream response bodies are never
+returned to the web UI or CLI because a provider can echo request content in
+an error. Troubleshooting detail stays in bounded daemon logs after the shared
+secret and PII redaction pass.
+
 ## Non-goals
 
 This composition pattern does not add:

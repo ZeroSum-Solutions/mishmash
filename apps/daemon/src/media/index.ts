@@ -105,8 +105,9 @@ import {
 import {
   classifyProviderError,
   ProviderCallError,
-  providerCredentialRejectionMessage,
+  providerCallFailureMessage,
 } from '../integrations/provider-errors.js';
+import { redactSecrets } from '../redact.js';
 
 const execFile = promisify(execFileCb);
 type ProviderConfig = { apiKey?: string; baseUrl?: string; model?: string };
@@ -2064,17 +2065,22 @@ async function renderNanoBananaImage(ctx: MediaContext, credentials: ProviderCon
     // always Google's own API (never a proxy/aggregator), so the 400-body
     // sniff is safe to opt into unconditionally here.
     const kind = classifyProviderError(resp.status, text, true);
-    const message =
-      kind === 'invalid-credential'
-        ? providerCredentialRejectionMessage('Google Gemini')
-        : `nano-banana image ${resp.status}: ${truncate(text, 240)}`;
+    console.warn('[media:nanobanana] provider request failed', {
+      status: resp.status,
+      kind,
+      body: truncate(redactSecrets(text), 240),
+    });
+    const message = providerCallFailureMessage('Google Gemini', resp.status, kind);
     throw new ProviderCallError(resp.status, kind, message);
   }
   let data: any;
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error(`nano-banana image non-JSON: ${truncate(text, 200)}`);
+    console.warn('[media:nanobanana] provider returned a non-JSON success response', {
+      body: truncate(redactSecrets(text), 200),
+    });
+    throw new Error('Google Gemini returned a non-JSON response. Retry, or check provider status if it continues.');
   }
   const bytes = inlineImageBytesFromGenerateContent(data);
   return {
