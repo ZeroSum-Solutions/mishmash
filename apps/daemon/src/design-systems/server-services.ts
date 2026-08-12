@@ -95,6 +95,7 @@ export function createDesignSystemServerServices({
     writeProjectFile: (projectsDir: string, projectId: string, filePath: string, content: Buffer, options?: JsonRecord, metadata?: JsonRecord) => Promise<unknown>;
     listFiles: (projectsDir: string, projectId: string, options?: { metadata?: JsonRecord }) => Promise<unknown[]>;
     resolveProjectDir: (projectsDir: string, projectId: string, metadata?: JsonRecord) => string;
+    invalidateProjectFileIndex: (projectsDir: string, projectId: string, metadata?: JsonRecord) => void;
     isSafeId: (id: string) => boolean;
   };
 }) {
@@ -340,6 +341,7 @@ export function createDesignSystemServerServices({
   async function removeLegacyDesignSystemWorkspaceArtifacts(project: ProjectRecord) {
     if (project?.metadata?.importedFrom !== 'design-system') return;
     const dir = projects.resolveProjectDir(paths.PROJECTS_DIR, project.id, project.metadata);
+    let removed = false;
     for (const artifact of designSystems.LEGACY_DESIGN_SYSTEM_ARTIFACTS) {
       const replacementReady = await Promise.all(
         artifact.replacementPaths.map(async (replacementPath) => {
@@ -357,6 +359,10 @@ export function createDesignSystemServerServices({
         recursive: artifact.removeDirectory === true,
         force: true,
       });
+      removed = true;
+    }
+    if (removed) {
+      projects.invalidateProjectFileIndex(paths.PROJECTS_DIR, project.id, project.metadata);
     }
   }
 
