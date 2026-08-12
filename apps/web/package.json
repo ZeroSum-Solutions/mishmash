@@ -23,6 +23,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "postbuild": "node ./scripts/assert-static-export-sourcemaps.mjs",
     "build:sidecar": "tsc -p tsconfig.sidecar.json",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run -c vitest.config.ts --maxWorkers=2"

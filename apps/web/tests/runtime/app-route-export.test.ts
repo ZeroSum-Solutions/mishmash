@@ -12,6 +12,7 @@ async function loadNextConfig() {
 
 afterEach(() => {
   delete process.env.OD_WEB_DIST_DIR;
+  delete process.env.OD_WEB_OUTPUT_MODE;
   vi.resetModules();
 });
 
@@ -20,9 +21,22 @@ describe('SPA shell export route', () => {
     const nextConfig = await loadNextConfig();
     expect(nextConfig.output).toBe('export');
     expect(nextConfig.distDir).toBeUndefined();
+    expect(nextConfig.productionBrowserSourceMaps).toBe(false);
     expect('dynamicParams' in spaShellRoute).toBe(false);
     expect(spaShellRoute.generateStaticParams()).toEqual([{ slug: [] }]);
   });
+
+  it.each(['server', 'standalone'] as const)(
+    'keeps browser source maps for the packaged %s build',
+    async (outputMode) => {
+      process.env.OD_WEB_OUTPUT_MODE = outputMode;
+
+      const nextConfig = await loadNextConfig();
+
+      expect(nextConfig.output).toBe(outputMode === 'standalone' ? 'standalone' : undefined);
+      expect(nextConfig.productionBrowserSourceMaps).toBe(true);
+    },
+  );
 
   it('keeps an explicit dist dir override even when static export is selected', async () => {
     const configuredDistDir = resolve(WEB_ROOT, '.tmp', 'vitest-next');
