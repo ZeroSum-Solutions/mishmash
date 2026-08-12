@@ -15,8 +15,11 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, promises as fsp, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startServer } from '../src/server.js';
+import { clearToken, setToken } from '../src/mcp-tokens.js';
+
+const INSECURE_TOKEN_SERVER_ID = 'insecure-token-relay';
 
 async function withFakeClaude<T>(run: () => Promise<T>): Promise<T> {
   const dir = await fsp.mkdtemp(join(tmpdir(), 'od-mcp-spawn-bin-'));
@@ -111,6 +114,9 @@ describe('spawn writes external MCP config for Claude Code', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ servers: [] }),
     }).catch(() => {});
+    if (process.env.OD_DATA_DIR) {
+      await clearToken(process.env.OD_DATA_DIR, INSECURE_TOKEN_SERVER_ID);
+    }
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -242,6 +248,73 @@ describe('spawn writes external MCP config for Claude Code', () => {
       await waitForRunStatus(baseUrl, runId2);
 
       expect(existsSync(target)).toBe(false);
+    });
+  }, 30_000);
+
+  it('emits one refusal diagnostic and one warning when an unsafe server has a stored bearer', async () => {
+    await withFakeClaude(async () => {
+      const dataDir = process.env.OD_DATA_DIR;
+      if (!dataDir) throw new Error('OD_DATA_DIR is required for MCP spawn tests');
+      const putRes = await fetch(`${baseUrl}/api/mcp/servers`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          servers: [
+            {
+              id: INSECURE_TOKEN_SERVER_ID,
+              transport: 'http',
+              enabled: true,
+              authMode: 'oauth',
+              url: 'http://mcp.example.test/mcp',
+            },
+          ],
+        }),
+      });
+      expect(putRes.ok).toBe(true);
+      await setToken(dataDir, INSECURE_TOKEN_SERVER_ID, {
+        accessToken: 'stored-test-token',
+        tokenType: 'Bearer',
+        savedAt: Date.now(),
+        expiresAt: Date.now() + 60_000,
+      });
+
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const { id, dir } = await createProject();
+        const runRes = await fetch(`${baseUrl}/api/runs`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ agentId: 'claude', projectId: id, message: 'check MCP refusal' }),
+        });
+        expect(runRes.status).toBe(202);
+        const { runId } = (await runRes.json()) as { runId: string };
+        expect((await waitForRunStatus(baseUrl, runId)).status).toBe('succeeded');
+
+        const eventsRes = await fetch(`${baseUrl}/api/runs/${runId}/events`);
+        const eventPayloads = (await eventsRes.text())
+          .split('\n')
+          .filter((line) => line.startsWith('data: '))
+          .map((line) => JSON.parse(line.slice('data: '.length)) as Record<string, unknown>);
+        expect(eventPayloads.filter((payload) => payload.type === 'mcp_spawn_token_refused')).toEqual([
+          expect.objectContaining({
+            type: 'mcp_spawn_token_refused',
+            serverId: INSECURE_TOKEN_SERVER_ID,
+            url: 'http://mcp.example.test/mcp',
+          }),
+        ]);
+
+        const matchingWarnings = warn.mock.calls.filter((args) =>
+          args.some((arg) => String(arg).includes(INSECURE_TOKEN_SERVER_ID)),
+        );
+        expect(matchingWarnings).toHaveLength(1);
+
+        const written = JSON.parse(await fsp.readFile(join(dir, '.mcp.json'), 'utf8')) as {
+          mcpServers: Record<string, { headers?: Record<string, string> }>;
+        };
+        expect(written.mcpServers[INSECURE_TOKEN_SERVER_ID]?.headers?.Authorization).toBeUndefined();
+      } finally {
+        warn.mockRestore();
+      }
     });
   }, 30_000);
 
