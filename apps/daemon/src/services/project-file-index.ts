@@ -96,9 +96,9 @@ export function createProjectFileIndex(deps: ProjectFileIndexDeps): ProjectFileI
     else remember(key, pending);
     let listing = await pending;
     await listing.updates;
-    if (now() - listing.scannedAt < reconcileAfterMs) return listing;
     const current = listings.get(key);
     if (current !== pending) return current ?? scan(key, input);
+    if (now() - listing.scannedAt < reconcileAfterMs) return listing;
     pending = scan(key, input);
     listing = await pending;
     return listing;

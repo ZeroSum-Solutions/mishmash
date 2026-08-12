@@ -230,4 +230,35 @@ describe('project file index', () => {
     ]);
     expect(scanProjectFiles).toHaveBeenCalledTimes(2);
   });
+
+  it('repairs a concurrent listing when its pending watcher delta fails', async () => {
+    let rejectRead!: (error: Error) => void;
+    const failedRead = new Promise<IndexedProjectFile | null>((_resolve, reject) => {
+      rejectRead = reject;
+    });
+    const scanProjectFiles = vi
+      .fn<() => Promise<IndexedProjectFile[]>>()
+      .mockResolvedValueOnce([INDEX_FILE])
+      .mockResolvedValueOnce([UPDATED_INDEX_FILE]);
+    const readProjectFileEntry = vi.fn(() => failedRead);
+    const index = createProjectFileIndex({
+      scanProjectFiles,
+      readProjectFileEntry,
+      resolveProjectDir: () => '/projects/project-1',
+    });
+
+    await index.list({ projectsRoot: '/projects', projectId: 'project-1' });
+    const failedDelta = index.applyWatchEvent({
+      projectsRoot: '/projects',
+      projectId: 'project-1',
+      event: { type: 'file-changed', path: 'index.html', kind: 'change' },
+    });
+    await vi.waitFor(() => expect(readProjectFileEntry).toHaveBeenCalledTimes(1));
+    const concurrentListing = index.list({ projectsRoot: '/projects', projectId: 'project-1' });
+    rejectRead(new Error('transient stat failure'));
+
+    await expect(failedDelta).resolves.toBeUndefined();
+    await expect(concurrentListing).resolves.toEqual([UPDATED_INDEX_FILE]);
+    expect(scanProjectFiles).toHaveBeenCalledTimes(2);
+  });
 });
