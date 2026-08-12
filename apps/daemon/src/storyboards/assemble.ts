@@ -22,7 +22,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { rm, writeFile } from 'node:fs/promises';
+import { readdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AssembleStoryboardFinishOptions, Storyboard, StoryboardShot } from '@open-design/contracts';
 import { isStoryboardFinishAudioMimeAllowed, STORYBOARD_FINISH_AUDIO_MAX_BYTES } from '@open-design/contracts';
@@ -42,6 +42,49 @@ import { finishWithRemotion } from './remotion/index.js';
  */
 function assembleOutputName(storyboardId: string): string {
   return `final-${storyboardId}-${randomUUID()}.mp4`;
+}
+
+/** Per-run scratch filename so concurrent concat passes never share a list. */
+export function concatListName(storyboardId: string): string {
+  return `.storyboard-concat-${storyboardId}-${randomUUID()}.txt`;
+}
+
+/** Number of assembled outputs retained per storyboard, including the current output. */
+export const STORYBOARD_ASSEMBLE_OUTPUTS_KEEP = 5;
+
+export async function pruneStoryboardAssembleOutputs(input: {
+  projectDir: string;
+  storyboardId: string;
+  currentOutput: string;
+  keep?: number;
+  removeOutput: (absolutePath: string) => Promise<void>;
+}): Promise<{ removed: string[] }> {
+  const keep = Math.max(1, Math.floor(input.keep ?? STORYBOARD_ASSEMBLE_OUTPUTS_KEEP));
+  const escapedId = input.storyboardId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const outputPattern = new RegExp(`^final-${escapedId}-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.mp4$`, 'i');
+  const entries = await readdir(input.projectDir, { withFileTypes: true });
+  const candidates = await Promise.all(
+    entries
+      .filter((entry) => entry.isFile() && outputPattern.test(entry.name))
+      .map(async (entry) => {
+        const details = await stat(path.join(input.projectDir, entry.name));
+        return { name: entry.name, mtimeMs: details.mtimeMs };
+      }),
+  );
+
+  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs || a.name.localeCompare(b.name));
+  const retained = new Set<string>();
+  if (candidates.some((candidate) => candidate.name === input.currentOutput)) {
+    retained.add(input.currentOutput);
+  }
+  for (const candidate of candidates) {
+    if (retained.size >= keep) break;
+    retained.add(candidate.name);
+  }
+
+  const removed = candidates.filter((candidate) => !retained.has(candidate.name)).map((candidate) => candidate.name);
+  await Promise.all(removed.map((name) => input.removeOutput(path.join(input.projectDir, name))));
+  return { removed };
 }
 
 /**
@@ -140,7 +183,7 @@ function decodeFinishAudio(
 }
 
 async function runConcatAssemble(resolvedOutputs: string[], input: AssembleStoryboardInput): Promise<AssembleStoryboardOutcome> {
-  const listFile = path.join(input.projectDir, `.storyboard-concat-${input.storyboard.id}.txt`);
+  const listFile = path.join(input.projectDir, concatListName(input.storyboard.id));
   const outputName = assembleOutputName(input.storyboard.id);
   const outputFile = path.join(input.projectDir, outputName);
 

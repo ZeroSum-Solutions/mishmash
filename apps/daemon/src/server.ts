@@ -3565,6 +3565,7 @@ export async function startServer({
     projectFiles: projectFileDeps,
     media: mediaDeps,
     validation: validationDeps,
+    filesystem: { create: createRouteFilesystemWriteGateway },
   });
 
   const pluginRouteHelpers = {
