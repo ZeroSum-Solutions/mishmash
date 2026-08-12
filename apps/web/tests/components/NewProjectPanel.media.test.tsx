@@ -100,7 +100,29 @@ describe('NewProjectPanel media provider badges', () => {
     const codexGroup = screen.getByText('Codex Subscription').closest('.ds-picker-group');
     // credentialsRequired: false — must NOT be badged "Needs API key".
     expect(codexGroup?.textContent).toContain('No key needed');
-    expect(screen.getByTestId('model-picker-option-codex-gpt-image-2')).toBeTruthy();
+    expect(screen.getByTestId('model-picker-option-codex-gpt-image-2').textContent).not.toContain('(needs API key)');
+  });
+
+  it('keeps provider and option key labels consistent while credential state is still loading', () => {
+    render(
+      <NewProjectPanel
+        skills={[]}
+        designSystems={[]}
+        defaultDesignSystemId={null}
+        templates={[]}
+        onDeleteTemplate={vi.fn()}
+        promptTemplates={[]}
+        onCreate={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Media' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Video' }));
+    fireEvent.click(screen.getByTestId('model-picker-trigger'));
+
+    const kieGroup = screen.getByText('Kie.ai').closest('.ds-picker-group');
+    expect(kieGroup?.textContent).toContain('Needs API key');
+    expect(screen.getByTestId('model-picker-option-bytedance/seedance-2').textContent).toContain('(needs API key)');
   });
 
   it('uses Codex subscription as the no-key image fallback', async () => {

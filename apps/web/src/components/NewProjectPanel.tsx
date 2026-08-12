@@ -2802,6 +2802,8 @@ function MediaModelCards({
       /** Selectable as an automatic default: real credentials, a no-key lane,
        * or an unfetched credentials map (unknown ⇒ don't second-guess). */
       ready: boolean;
+      /** Display policy only; intentionally independent from optimistic readiness. */
+      credentialsRequired: boolean;
       sortIndex: number;
       sortPriority: number;
       models: MediaModel[];
@@ -2832,6 +2834,7 @@ function MediaModelCards({
               ? 'integrated'
               : 'unsupported',
           ready,
+          credentialsRequired: provider?.credentialsRequired !== false,
           sortIndex: out.length,
           sortPriority: configured ? 0 : provider?.credentialsRequired === false ? 1 : 2,
           models: [],
@@ -2995,10 +2998,11 @@ function MediaModelCards({
                     // Group header already badges provider readiness, but the
                     // per-model label needs its own mark too: this is the
                     // same "(needs API key)" idiom the storyboard shot/mood
-                    // pickers append to model.label (see isModelConfigured in
-                    // storyboard/model-defaults.ts) — group.ready is the same
-                    // isMediaProviderPickerReady check that idiom reads.
-                    const needsKey = !group.ready;
+                    // pickers append to model.label. Read display truth from
+                    // credential policy + status, not group.ready: readiness
+                    // is deliberately optimistic while credentials are still
+                    // loading so auto-selection does not churn.
+                    const needsKey = group.credentialsRequired && group.status === 'integrated';
                     return (
                       <button
                         key={model.id}
