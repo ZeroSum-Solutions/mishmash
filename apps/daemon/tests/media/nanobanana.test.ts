@@ -245,15 +245,26 @@ describe('nano-banana media generation', () => {
     }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(generateMedia({
-      projectRoot,
-      projectsRoot,
-      projectId: 'project-1',
-      surface: 'image',
-      model: 'gemini-3.1-flash-image-preview',
-      prompt: 'A neon city skyline',
-      aspect: '1:1',
-    })).rejects.toThrow(/nano-banana image 429:.*quota exceeded/);
+    let caught: unknown;
+    try {
+      await generateMedia({
+        projectRoot,
+        projectsRoot,
+        projectId: 'project-1',
+        surface: 'image',
+        model: 'gemini-3.1-flash-image-preview',
+        prompt: 'A neon city skyline',
+        aspect: '1:1',
+      });
+    } catch (err) {
+      caught = err;
+    }
+    const err = caught as Error & { status?: number; code?: string };
+    expect(err.code).toBe('rate-limited');
+    expect(err.status).toBe(429);
+    expect(err.message).toMatch(/google gemini/i);
+    expect(err.message).toMatch(/rate limit/i);
+    expect(err.message).not.toContain('quota exceeded');
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -310,6 +321,44 @@ describe('nano-banana media generation', () => {
     expect(err.message).not.toMatch(/API key not valid/i);
   });
 
+  it('does not expose a malformed success response body in the user-facing parse error', async () => {
+    await writeConfig({ providers: { nanobanana: { baseUrl: TEST_NANOBANANA_BASE_URL } } });
+    const leakedKey = `AIza${'B'.repeat(35)}`;
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      `upstream debug x-goog-api-key: ${leakedKey}`,
+      { status: 200, headers: { 'content-type': 'text/plain' } },
+    )));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    let caught: unknown;
+    try {
+      await generateMedia({
+        projectRoot,
+        projectsRoot,
+        projectId: 'project-1',
+        surface: 'image',
+        model: 'gemini-3.1-flash-image-preview',
+        prompt: 'A neon city skyline',
+        aspect: '1:1',
+      });
+    } catch (err) {
+      caught = err;
+    }
+
+    const err = caught as Error;
+    expect(err.message).toMatch(/google gemini/i);
+    expect(err.message).toMatch(/non-json/i);
+    expect(err.message).not.toContain('upstream debug');
+    expect(err.message).not.toContain(leakedKey);
+    const logged = warn.mock.calls
+      .flat()
+      .map((value) => typeof value === 'string' ? value : JSON.stringify(value))
+      .join(' ');
+    expect(logged).toContain('[REDACTED:api_key_header]');
+    expect(logged).not.toContain(leakedKey);
+    warn.mockRestore();
+  });
+
   it('still reports a plain 400 that is NOT a credential rejection as an upstream failure', async () => {
     await writeConfig({
       providers: {
@@ -317,11 +366,13 @@ describe('nano-banana media generation', () => {
       },
     });
 
+    const leakedKey = `AIza${'A'.repeat(35)}`;
     const fetchMock = vi.fn(async () => new Response(
-      JSON.stringify({ error: { code: 400, message: 'Unknown field: shot_count' } }),
+      JSON.stringify({ error: { code: 400, message: `Unknown field: shot_count; x-goog-api-key: ${leakedKey}` } }),
       { status: 400, headers: { 'content-type': 'application/json' } },
     ));
     vi.stubGlobal('fetch', fetchMock);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     let caught: unknown;
     try {
@@ -342,6 +393,16 @@ describe('nano-banana media generation', () => {
     const err = caught as Error & { status?: number; code?: string };
     expect(err.code).toBe('upstream-error');
     expect(err.status).toBe(400);
-    expect(err.message).toMatch(/nano-banana image 400/);
+    expect(err.message).toMatch(/google gemini/i);
+    expect(err.message).toMatch(/status 400/i);
+    expect(err.message).not.toContain('Unknown field');
+    expect(err.message).not.toContain(leakedKey);
+    const logged = warn.mock.calls
+      .flat()
+      .map((value) => typeof value === 'string' ? value : JSON.stringify(value))
+      .join(' ');
+    expect(logged).toContain('[REDACTED:api_key_header]');
+    expect(logged).not.toContain(leakedKey);
+    warn.mockRestore();
   });
 });

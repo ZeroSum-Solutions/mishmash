@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyProviderError,
   ProviderCallError,
+  providerCallFailureMessage,
   providerCredentialRejectionMessage,
 } from '../../src/integrations/provider-errors.js';
 
@@ -81,6 +82,14 @@ describe('providerCredentialRejectionMessage', () => {
     const message = providerCredentialRejectionMessage('Google Gemini');
     expect(message).toMatch(/google gemini/i);
     expect(message).toMatch(/credential/i);
+  });
+});
+
+describe('providerCallFailureMessage', () => {
+  it('composes actionable messages without accepting an upstream response body', () => {
+    expect(providerCallFailureMessage('Google Gemini', 429, 'rate-limited')).toMatch(/rate limit/i);
+    expect(providerCallFailureMessage('Google Gemini', 400, 'upstream-error')).toMatch(/status 400/i);
+    expect(providerCallFailureMessage('Google Gemini', 400, 'invalid-credential')).toMatch(/credential/i);
   });
 });
 
