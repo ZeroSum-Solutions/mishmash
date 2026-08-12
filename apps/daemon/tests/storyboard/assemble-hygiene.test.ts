@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  assembleStoryboard,
   concatListName,
   pruneStoryboardAssembleOutputs,
   STORYBOARD_ASSEMBLE_OUTPUTS_KEEP,
@@ -23,6 +24,34 @@ describe('storyboard assemble scratch and output hygiene', () => {
     expect(first).not.toBe(second);
     expect(first).toMatch(/^\.storyboard-concat-storyboard-1-[0-9a-f-]+\.txt$/);
     expect(second).toMatch(/^\.storyboard-concat-storyboard-1-[0-9a-f-]+\.txt$/);
+  });
+
+  it('refuses an unsafe unique concat-list target before spawning ffmpeg', async () => {
+    const checkedTargets: string[] = [];
+    const outcome = await assembleStoryboard({
+      storyboard: {
+        id: 'storyboard-1',
+        shots: [{ id: 'shot-1', order: 0, status: 'done', output: 'shot-1.mp4' }],
+      } as Parameters<typeof assembleStoryboard>[0]['storyboard'],
+      projectDir: '/project',
+      runtimeDataDir: '/runtime',
+      resolveWithinProjectDirReal: async () => '/project/shot-1.mp4',
+      assertSafeWriteTarget: async (_projectDir, absoluteTarget) => {
+        checkedTargets.push(absoluteTarget);
+        return false;
+      },
+    });
+
+    expect(outcome).toEqual({
+      ok: false,
+      status: 400,
+      code: 'BAD_REQUEST',
+      message: 'concat list target is unsafe',
+    });
+    expect(checkedTargets).toHaveLength(1);
+    expect(path.basename(checkedTargets[0]!)).toMatch(
+      /^\.storyboard-concat-storyboard-1-[0-9a-f-]+\.txt$/,
+    );
   });
 
   it('keeps the current output plus only the newest retained outputs for one storyboard', async () => {

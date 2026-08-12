@@ -416,68 +416,6 @@ describe('storyboard routes', () => {
     }
   });
 
-  // The assemble output itself is now a per-run name (storyboard id + a
-  // random run discriminator — see storyboards/assemble.ts's
-  // assembleOutputName), so a test can no longer pre-plant a symlink at the
-  // exact path a future run will write to. The concat list file
-  // (`.storyboard-concat-<storyboard id>.txt`) stays deterministic per
-  // storyboard and is checked through the exact same
-  // assertSafeStoryboardWriteTarget guard, one step earlier in
-  // runConcatAssemble — targeting it still proves the route refuses to
-  // write through a pre-existing symlink.
-  it.runIf(canSymlink)('assemble 400s when its concat list file already exists as a symlink (refuses to write through it)', async () => {
-    await boot();
-    const created = await createStoryboard();
-    const dataDir = process.env.OD_DATA_DIR;
-    if (!dataDir) throw new Error('OD_DATA_DIR is required for daemon route tests');
-    const projectDir = path.join(dataDir, 'projects', 'storyboard-media');
-    await mkdir(projectDir, { recursive: true });
-    // A real (if fake-content) done-shot output so the route gets past the
-    // "no rendered shots" 400 and reaches the write-target guard — ffmpeg
-    // never actually runs here because the guard 400s first.
-    await writeFile(path.join(projectDir, 'shot-1.mp4'), Buffer.from(PNG_BASE64, 'base64'));
-    const outsideDir = mkdtempSync(path.join(tmpdir(), 'od-storyboard-outside-'));
-    const listFile = path.join(projectDir, `.storyboard-concat-${created.id}.txt`);
-    try {
-      const secretTarget = path.join(outsideDir, 'clobber-me.txt');
-      writeFileSync(secretTarget, 'pre-existing file outside the project');
-      symlinkSync(secretTarget, listFile);
-
-      await fetch(`${base}/api/storyboards/${created.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          shots: [
-            {
-              id: 'shot-1',
-              order: 0,
-              motionPrompt: 'motion',
-              model: 'openrouter/bytedance/seedance-2.0:1080p',
-              resolution: '1080p',
-              durationSec: 5,
-              output: 'shot-1.mp4',
-              status: 'done',
-            },
-          ],
-        }),
-      });
-
-      const resp = await fetch(`${base}/api/storyboards/${created.id}/assemble`, { method: 'POST' });
-      expect(resp.status).toBe(400);
-      const body = (await resp.json()) as { error?: { message?: string } | string };
-      const message = typeof body.error === 'string' ? body.error : body.error?.message;
-      expect(message).toMatch(/concat list target is unsafe/);
-    } finally {
-      // OD_DATA_DIR (and so the storyboard-media project dir) is shared by
-      // every test in this vitest worker — clean up the fixed-name symlink
-      // this test plants so later tests using the same storyboard id's
-      // concat list name aren't blocked by it.
-      rmSync(listFile, { force: true });
-      rmSync(path.join(projectDir, 'shot-1.mp4'), { force: true });
-      rmSync(outsideDir, { recursive: true, force: true });
-    }
-  });
-
   it('render-shot 400s when the shot has no start frame', async () => {
     await boot();
     const created = await createStoryboard();
