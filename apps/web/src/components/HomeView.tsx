@@ -79,6 +79,7 @@ import { HomeHero, type ExamplePromptInfo, type HomeHeroHandle } from './HomeHer
 import { findChip, HOME_HERO_CHIPS, type HomeHeroChip } from './home-hero/chips';
 import { homeHeroChipLabel } from './home-hero/chip-labels';
 import type { PlaceholderScenario } from './home-hero/placeholderScenarios';
+import { HomeAmbientBackdrop } from './home-hero/HomeAmbientBackdrop';
 import { consumePendingHomeChip, HOME_CHIP_INTENT_EVENT } from '../runtime/home-intent';
 import { navigate } from '../router';
 import { setPendingDesignSystemCreateEntry } from '../analytics/ds-create-entry';
@@ -234,6 +235,11 @@ interface Props {
     payload: PluginLoopSubmit,
   ) => Promise<boolean | 'blocked' | void> | boolean | 'blocked' | void;
   onOpenProject: (id: string, fileName?: string) => void;
+  onOpenProjectFromDesignLibrary?: (
+    project: Project,
+    conversationId?: string,
+    entryFile?: string,
+  ) => void;
   onViewAllProjects: () => void;
   onDeleteProject?: (id: string) => Promise<boolean | void> | boolean | void;
   onDuplicateProject?: (id: string) => Promise<void> | void;
@@ -318,6 +324,7 @@ export function HomeView({
   defaultDesignSystemId = null,
   onSubmit,
   onOpenProject,
+  onOpenProjectFromDesignLibrary,
   onViewAllProjects,
   onDeleteProject,
   onDuplicateProject,
@@ -2091,6 +2098,7 @@ export function HomeView({
 
   return (
     <div className="home-view" data-testid="home-view" ref={homeViewRef}>
+      <HomeAmbientBackdrop />
       <HomeHero
         ref={inputRef}
         active={isActive}
@@ -2263,6 +2271,7 @@ export function HomeView({
       >
         <FeaturedTemplatesRow
           onOpenProject={onOpenProject}
+          {...(onOpenProjectFromDesignLibrary ? { onOpenProjectFromDesignLibrary } : {})}
           onToolAction={handleFeaturedToolAction}
           onBrowseLibrary={() => navigate({ kind: 'home', view: 'design-library' })}
         />

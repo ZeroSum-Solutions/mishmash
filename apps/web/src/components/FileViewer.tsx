@@ -8360,6 +8360,7 @@ function HtmlViewer({
     }
     function onMessage(ev: MessageEvent) {
       if (!isOurPreviewIframeSource(ev.source)) return;
+      if (!isActivePreviewIframeSource(ev.source)) return;
       const data = ev.data as ManualEditBridgeMessage | null;
       if (!data?.type) return;
       if (data.type === 'od-edit-targets' && Array.isArray(data.targets)) {
@@ -8446,7 +8447,7 @@ function HtmlViewer({
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [isOurPreviewIframeSource, manualEditMode, source]);
+  }, [isActivePreviewIframeSource, isOurPreviewIframeSource, manualEditMode, source]);
 
   function nextManualEditPreviewVersion(): number {
     manualEditPreviewVersionRef.current += 1;
