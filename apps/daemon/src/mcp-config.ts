@@ -186,8 +186,9 @@ export function isHttpsOrLoopbackMcpUrl(rawUrl: string): boolean {
 /**
  * Resolve the OAuth bearer to inject for `server`, applying the
  * https-or-loopback guard above. Returns `undefined` (withholding
- * injection) when the URL/token pairing is unsafe, and logs a
- * `[mcp-config]` warning naming the server so the refusal isn't silent.
+ * injection) when the URL/token pairing is unsafe. Spawn orchestration owns
+ * the single warning and run-stream diagnostic; keeping this pure prevents
+ * config serialization from reporting the same refusal a second time.
  */
 function resolveSpawnBearer(
   server: McpServerConfig,
@@ -200,12 +201,6 @@ function resolveSpawnBearer(
   // McpServerConfig by hand must not get a free pass here.
   if (!server.url) return undefined;
   if (isHttpsOrLoopbackMcpUrl(server.url)) return bearer;
-  console.warn(
-    `[mcp-config] refusing to inject the OAuth bearer token for MCP server "${server.id}": ` +
-      `${server.url} is plain http to a non-loopback host, which would send the token in ` +
-      'cleartext off this machine. Use https, or point the server at a loopback address ' +
-      '(localhost / 127.0.0.1) to keep it eligible for automatic authentication.',
-  );
   return undefined;
 }
 
