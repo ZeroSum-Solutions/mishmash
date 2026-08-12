@@ -173,4 +173,25 @@ describe('storyboard assemble — per-run output naming (final.mp4 clobber regre
     const data = (await resp.json()) as { storyboard: { finalOutput?: string } };
     expect(data.storyboard.finalOutput).toBeUndefined();
   });
+
+  it('clears a stale finalOutput when its assembled file no longer exists', async () => {
+    await boot();
+    const dataDir = process.env.OD_DATA_DIR;
+    if (!dataDir) throw new Error('OD_DATA_DIR is required for daemon route tests');
+    const created = await createStoryboard('Stale assembled output');
+
+    const store = await import('../../src/storyboards/store.js');
+    const stored = await store.readStoryboard(dataDir, created.id);
+    if (!stored) throw new Error('expected the just-created storyboard to be readable');
+    stored.finalOutput = `final-${created.id}-00000000-0000-4000-8000-000000000000.mp4`;
+    await store.writeStoryboard(dataDir, stored);
+
+    const resp = await fetch(`${base}/api/storyboards/${created.id}`);
+    expect(resp.status).toBe(200);
+    const data = (await resp.json()) as { storyboard: { finalOutput?: string } };
+    expect(data.storyboard.finalOutput).toBeUndefined();
+
+    const repaired = await store.readStoryboard(dataDir, created.id);
+    expect(repaired?.finalOutput).toBeUndefined();
+  });
 });

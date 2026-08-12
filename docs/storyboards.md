@@ -32,6 +32,12 @@ For guided commercials, **Assemble video** stays disabled until every shot has
 an explicitly chosen completed take. Blank and older storyboards keep their
 existing behavior and can assemble any completed shots.
 
+Each assembly uses its own scratch list and output filename, so overlapping
+requests cannot overwrite one another. MishMash retains the current assembled
+video plus the four newest earlier outputs for that storyboard; older outputs
+are removed automatically. If the stored current-output file is removed
+outside MishMash, the next storyboard read clears that stale reference.
+
 ## Take history and disclosures
 
 Every render attempt is retained instead of overwriting the previous clip.

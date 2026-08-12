@@ -46,6 +46,7 @@ import {
   STORYBOARD_UPLOAD_MAX_BYTES,
 } from '@open-design/contracts';
 import type { RouteDeps } from '../server-context.js';
+import type { createFilesystemWriteGateway } from '../filesystem/write-gateway.js';
 import {
   FinalizeUpstreamError,
   isFinalizeProviderProtocol,
@@ -55,7 +56,7 @@ import {
 import { resolveProviderConfig } from '../media/config.js';
 import { modelsForSurface } from '../media/models.js';
 import { isSafeId, mimeFor } from '../projects.js';
-import { assembleStoryboard, getDoneShots } from '../storyboards/assemble.js';
+import { assembleStoryboard, getDoneShots, pruneStoryboardAssembleOutputs } from '../storyboards/assemble.js';
 import {
   DRAFT_TEXT_PROVIDER_IDS,
   draftShotsFromBrief,
@@ -80,7 +81,9 @@ import {
 } from '../storyboards/provenance.js';
 
 export interface RegisterStoryboardRoutesDeps
-  extends RouteDeps<'http' | 'paths' | 'ids' | 'db' | 'projectStore' | 'projectFiles' | 'media' | 'validation'> {}
+  extends RouteDeps<'http' | 'paths' | 'ids' | 'db' | 'projectStore' | 'projectFiles' | 'media' | 'validation'> {
+  filesystem: { create: typeof createFilesystemWriteGateway };
+}
 
 /** Hidden project every generated storyboard still/clip lives under. Auto-created on first use. */
 const STORYBOARD_MEDIA_PROJECT_ID = 'storyboard-media';
@@ -656,8 +659,24 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
   app.get('/api/storyboards/:id', async (req, res) => {
     if (!requireLocal(req, res)) return;
     if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
-    const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+    let storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
     if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+
+    if (storyboard.finalOutput) {
+      const projectDir = resolveProjectDir(PROJECTS_DIR, STORYBOARD_MEDIA_PROJECT_ID);
+      const outputPath = await resolveWithinStoryboardMediaDirReal(projectDir, storyboard.finalOutput);
+      const outputExists = outputPath ? await stat(outputPath).then((entry) => entry.isFile()).catch(() => false) : false;
+      if (!outputExists) {
+        await withStoryboardLock(req.params.id, async () => {
+          const current = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+          if (!current || current.finalOutput !== storyboard?.finalOutput) return;
+          delete current.finalOutput;
+          current.updatedAt = nowIso();
+          await writeStoryboard(RUNTIME_DATA_DIR, current);
+          storyboard = current;
+        });
+      }
+    }
     res.json({ storyboard });
   });
 
@@ -1481,6 +1500,19 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
       current.updatedAt = nowIso();
       await writeStoryboard(RUNTIME_DATA_DIR, current);
     });
+
+    try {
+      const writeGateway = ctx.filesystem.create({ runtimeDataRoot: RUNTIME_DATA_DIR });
+      const managedProjects = await writeGateway.managedProject(PROJECTS_DIR);
+      await pruneStoryboardAssembleOutputs({
+        projectDir,
+        storyboardId: req.params.id,
+        currentOutput: outcome.output,
+        removeOutput: (absolutePath) => writeGateway.rm(managedProjects, absolutePath, { force: true }),
+      });
+    } catch (err) {
+      console.warn(`[storyboard] could not prune old assembled outputs for ${req.params.id}`, err);
+    }
 
     res.json({ output: outcome.output, finish: outcome.finish });
   });
