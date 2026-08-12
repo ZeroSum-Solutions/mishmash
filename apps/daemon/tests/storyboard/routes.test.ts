@@ -586,12 +586,15 @@ describe('storyboard routes', () => {
 
     const getResp = await fetch(`${base}/api/storyboards/${created.id}`);
     const shot = ((await getResp.json()) as any).storyboard.shots[0];
-    // The route only sets 'rendering' synchronously at dispatch time; it
-    // never writes back on completion by design (see routes/storyboard.ts
-    // doc comment) — the caller (web UI / `od storyboard render-shot`)
-    // PATCHes the final status after polling /wait itself.
-    expect(shot.status).toBe('rendering');
+    // Terminal state and provenance are daemon-owned: a waiter observing
+    // failure must also be able to refresh the storyboard and see the same
+    // failure plus its immutable receipt without a client PATCH race.
+    expect(shot.status).toBe('failed');
     expect(shot.taskId).toBe(taskId);
+    expect(shot.error).toMatch(/unknown model/);
+    expect(shot.takes).toEqual([
+      expect.objectContaining({ taskId, status: 'failed', modelId: 'this-model-does-not-exist' }),
+    ]);
   });
 
   it('POST /frames dispatches a still-generation task and returns a predicted framePath', async () => {

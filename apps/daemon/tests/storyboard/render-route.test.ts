@@ -333,4 +333,32 @@ describe('POST /api/storyboards/:id/shots/:shotId/render — concurrency', () =>
     expect(probeShot.status).toBe('rendering');
     expect(probeShot.taskId).toBe(renderResp.json.taskId);
   });
+
+  it('settles failed renders into an append-only take receipt without a client PATCH', async () => {
+    await boot();
+    const { id, shotId } = await createStoryboardWithShot('this-model-does-not-exist');
+
+    const renderResp = await api('POST', `/api/storyboards/${id}/shots/${shotId}/render`);
+    expect(renderResp.status).toBe(202);
+    const taskId = renderResp.json.taskId as string;
+
+    const waited = await api('POST', `/api/media/tasks/${taskId}/wait`, {});
+    expect(waited.status).toBe(200);
+    expect(waited.json.status).toBe('failed');
+
+    const final = await api('GET', `/api/storyboards/${id}`);
+    const shot = final.json.storyboard.shots.find((entry: any) => entry.id === shotId);
+    expect(shot.status).toBe('failed');
+    expect(shot.takes).toHaveLength(1);
+    expect(shot.takes[0]).toMatchObject({
+      id: taskId,
+      taskId,
+      status: 'failed',
+      modelId: 'this-model-does-not-exist',
+      motionPrompt: 'camera pushes in slowly',
+      usageRights: { status: 'unverified' },
+      cost: { status: 'not-reported' },
+    });
+    expect(shot.takes[0].error).toContain('this-model-does-not-exist');
+  });
 });

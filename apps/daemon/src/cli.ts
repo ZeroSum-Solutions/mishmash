@@ -220,6 +220,8 @@ const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'url']);
 const STORYBOARD_STRING_FLAGS = new Set([
   'daemon-url', 'title', 'file', 'shot', 'slot', 'finish', 'audio',
   'brief', 'prompt-file', 'shot-count', 'design-md',
+  'recipe', 'product', 'audience', 'promise', 'direction', 'cta', 'ratio',
+  'note', 'brand-fit', 'motion-quality', 'artifact-control', 'revision-ease',
 ]);
 // Only the negative forms are real flags — titles/transitions both default
 // to on (assemble.ts: `finish.titles ?? true`, `finish.transitions ?? true`),
@@ -235,6 +237,8 @@ const STORYBOARD_BOOLEAN_FLAGS = new Set([
   'no-transitions',
   'captions',
   'no-captions',
+  'approve',
+  'reject',
 ]);
 // `od usage …` (NM-20 cost & usage meter). Hoisted up here for the same
 // reason as LIBRARY_STRING_FLAGS above: the top-level `await
@@ -9819,11 +9823,17 @@ function printStoryboardHelp() {
   console.log(`Usage:
   od storyboard list [--json]
   od storyboard create [--title "<title>"] [--json]
+  od storyboard create --recipe hero-product-commercial --product "<name>" --audience "<people>"
+                       --promise "<benefit>" --direction "<visual feel>" --cta "<action>"
+                       [--ratio 16:9|9:16|1:1] [--json]
   od storyboard get <id> [--json]
   od storyboard style-reference <id> --design-md <path|-> [--json]
   od storyboard style-reference <id> --clear [--json]
   od storyboard upload <id> --file <path> [--shot <shotId>] [--slot start|end] [--json]
   od storyboard render-shot <id> <shotId> [--json]
+  od storyboard review-take <id> <shotId> <takeId> --approve|--reject
+                               [--note "<text>"] [--brand-fit 1-5 --motion-quality 1-5
+                               --artifact-control 1-5 --revision-ease 1-5] [--json]
   od storyboard assemble <id> [--finish remotion [--title "<text>"] [--no-titles]
                                [--no-transitions] [--captions|--no-captions] [--audio <path>]] [--json]
   od storyboard draft <id> --brief "<text>" [--shot-count <n>] [--json]
@@ -9876,6 +9886,15 @@ Options:
   --brief <text>         Creative brief to draft shots from (draft only; or use --prompt-file).
   --prompt-file <path|-> Read the brief from a file, or - for stdin (draft only; long-form input).
   --shot-count <n>       How many shots to draft, 1-12 (draft only; defaults to 4).
+  --recipe <name>        Guided storyboard recipe (create only; hero-product-commercial).
+  --product <text>       Product or service name (guided create).
+  --audience <text>      Who the commercial is for (guided create).
+  --promise <text>       The one benefit to communicate (guided create).
+  --direction <text>     Visual mood/direction (guided create).
+  --cta <text>           What the viewer should do next (guided create).
+  --ratio <shape>        Output shape for guided create (defaults to 16:9).
+  --approve / --reject   Record the take decision (review-take only).
+  --note <text>          Optional comparison note (review-take only).
   --json                Print the raw response envelope.
   --daemon-url <url>   Override daemon URL`);
 }
@@ -9886,7 +9905,7 @@ async function runStoryboard(args) {
     printStoryboardHelp();
     return;
   }
-  const known = ['list', 'create', 'get', 'style-reference', 'upload', 'render-shot', 'assemble', 'draft'];
+  const known = ['list', 'create', 'get', 'style-reference', 'upload', 'render-shot', 'review-take', 'assemble', 'draft'];
   if (!known.includes(sub)) {
     console.error(`unknown subcommand: od storyboard ${sub}`);
     printStoryboardHelp();
@@ -9935,12 +9954,42 @@ async function runStoryboard(args) {
   }
 
   if (sub === 'create') {
+    let body;
+    if (flags.recipe === 'hero-product-commercial') {
+      const missing = [
+        ['--product', flags.product],
+        ['--audience', flags.audience],
+        ['--promise', flags.promise],
+        ['--direction', flags.direction],
+        ['--cta', flags.cta],
+      ].filter(([, value]) => typeof value !== 'string' || !value.trim());
+      if (missing.length > 0) {
+        console.error(`guided create requires ${missing.map(([name]) => name).join(', ')}`);
+        process.exit(2);
+      }
+      body = {
+        recipe: 'hero-product-commercial',
+        ratio: flags.ratio || '16:9',
+        commercialBrief: {
+          productName: flags.product.trim(),
+          audience: flags.audience.trim(),
+          promise: flags.promise.trim(),
+          visualDirection: flags.direction.trim(),
+          callToAction: flags.cta.trim(),
+        },
+      };
+    } else if (flags.recipe !== undefined) {
+      console.error(`unsupported --recipe value "${flags.recipe}" — use hero-product-commercial`);
+      process.exit(2);
+    } else {
+      body = flags.title ? { title: flags.title } : {};
+    }
     let resp;
     try {
       resp = await fetch(`${base}/api/storyboards`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title: flags.title }),
+        body: JSON.stringify(body),
       });
     } catch (err) {
       surfaceFetchError(err, base);
@@ -9950,6 +9999,58 @@ async function runStoryboard(args) {
     const data = await resp.json();
     if (flags.json) return writeJson(data);
     console.log(`[storyboard] created ${data.storyboard?.id} — ${data.storyboard?.title}`);
+    return;
+  }
+
+  if (sub === 'review-take') {
+    const [id, shotId, takeId] = positionals;
+    if (!id || !shotId || !takeId || Boolean(flags.approve) === Boolean(flags.reject)) {
+      console.error('Usage: od storyboard review-take <id> <shotId> <takeId> --approve|--reject [--note "<text>"]');
+      process.exit(2);
+    }
+    const scoreFlagNames = ['brand-fit', 'motion-quality', 'artifact-control', 'revision-ease'];
+    const suppliedScores = scoreFlagNames.filter((name) => flags[name] !== undefined);
+    if (suppliedScores.length !== 0 && suppliedScores.length !== scoreFlagNames.length) {
+      console.error('comparison scores are optional, but when used all four score flags are required');
+      process.exit(2);
+    }
+    let scores;
+    if (suppliedScores.length === scoreFlagNames.length) {
+      const values = scoreFlagNames.map((name) => Number(flags[name]));
+      if (values.some((value) => !Number.isInteger(value) || value < 1 || value > 5)) {
+        console.error('comparison scores must be integers from 1 to 5');
+        process.exit(2);
+      }
+      scores = {
+        brandFit: values[0],
+        motionQuality: values[1],
+        artifactControl: values[2],
+        revisionEase: values[3],
+      };
+    }
+    const body = {
+      decision: flags.approve ? 'approved' : 'rejected',
+      ...(typeof flags.note === 'string' && flags.note.trim() ? { note: flags.note.trim() } : {}),
+      ...(scores ? { scores } : {}),
+    };
+    let resp;
+    try {
+      resp = await fetch(
+        `${base}/api/storyboards/${encodeURIComponent(id)}/shots/${encodeURIComponent(shotId)}/takes/${encodeURIComponent(takeId)}/review`,
+        {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      );
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    console.log(`[storyboard] ${flags.approve ? 'approved' : 'rejected'} take ${takeId}`);
     return;
   }
 

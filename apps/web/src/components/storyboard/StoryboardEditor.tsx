@@ -5,7 +5,12 @@
 // ShotCard.tsx).
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
-import type { Storyboard, StoryboardFrameRef, StoryboardShot } from '@open-design/contracts';
+import type {
+  ReviewStoryboardTakeRequest,
+  Storyboard,
+  StoryboardFrameRef,
+  StoryboardShot,
+} from '@open-design/contracts';
 import { Button, VisuallyHidden } from '@open-design/components';
 import { Icon } from '../Icon';
 import { useT } from '../../i18n';
@@ -15,11 +20,13 @@ import {
   assembleStoryboard,
   draftStoryboardShots,
   exportStoryboardSlider,
+  fetchStoryboard,
   generateStoryboardFrame,
   openStoryboardFolder,
   patchStoryboard,
   readFileAsDataUrl,
   renderStoryboardShot,
+  reviewStoryboardTake,
   storyboardFrameUrl,
   uploadStoryboardFrame,
   waitForMediaTask,
@@ -175,6 +182,14 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
     [storyboard.shots],
   );
   const hasDoneShot = orderedShots.some((s) => s.status === 'done' && s.output);
+  const commercialReady =
+    storyboard.recipe === 'hero-product-commercial' &&
+    orderedShots.length > 0 &&
+    orderedShots.every((shot) => {
+      const selected = shot.takes?.find((take) => take.id === shot.selectedTakeId);
+      return selected?.status === 'done' && Boolean(selected.output);
+    });
+  const canAssemble = storyboard.recipe === 'hero-product-commercial' ? commercialReady : hasDoneShot;
 
   function setShotBusy(shotId: string, busy: boolean) {
     if (!aliveRef.current) return;
@@ -228,6 +243,20 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
       ...prev,
       shots: prev.shots.map((s) => (s.id === shotId ? { ...s, ...patch } : s)),
     }));
+  }
+
+  function updateShotLocally(shotId: string, patch: Partial<StoryboardShot>) {
+    const next = {
+      ...storyboardRef.current,
+      shots: storyboardRef.current.shots.map((shot) => (shot.id === shotId ? { ...shot, ...patch } : shot)),
+    };
+    storyboardRef.current = next;
+    setStoryboard(next);
+  }
+
+  function applyServerStoryboard(next: Storyboard) {
+    storyboardRef.current = next;
+    setStoryboard(next);
   }
 
   function addShot() {
@@ -353,6 +382,9 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
           taskId: undefined,
           output: undefined,
           error: undefined,
+          takes: undefined,
+          takeReviews: undefined,
+          selectedTakeId: undefined,
         }),
       ),
     );
@@ -538,18 +570,33 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
         updateShot(shotId, { status: 'failed', error: result.message });
         return;
       }
-      updateShot(shotId, { status: 'rendering', taskId: result.value.taskId, error: undefined });
+      updateShotLocally(shotId, { status: 'rendering', taskId: result.value.taskId, error: undefined });
       const snap = await waitForMediaTask(result.value.taskId);
       if (!aliveRef.current) return;
-      if (snap.status === 'done') {
-        updateShot(shotId, { status: 'done', output: snap.file?.name, error: undefined });
+      const refreshed = await fetchStoryboard(storyboardRef.current.id);
+      if (!aliveRef.current) return;
+      if (refreshed.ok) {
+        applyServerStoryboard(refreshed.value);
+      } else if (snap.status === 'done') {
+        updateShotLocally(shotId, { status: 'done', output: snap.file?.name, error: undefined });
       } else {
-        updateShot(shotId, { status: 'failed', error: snap.error?.message || t('storyboard.renderFailed') });
+        updateShotLocally(shotId, { status: 'failed', error: snap.error?.message || t('storyboard.renderFailed') });
       }
     } finally {
       setShotBusy(shotId, false);
     }
   }, []);
+
+  async function handleReviewTake(
+    shotId: string,
+    takeId: string,
+    review: ReviewStoryboardTakeRequest,
+  ) {
+    const result = await reviewStoryboardTake(storyboardRef.current.id, shotId, takeId, review);
+    if (!aliveRef.current) return;
+    if (result.ok) applyServerStoryboard(result.value);
+    else setFooterMessage(result.message || t('storyboard.reviewFailed'));
+  }
 
   function updateMoodDraft(draftId: string, patch: Partial<Storyboard['moodDrafts'][number]>) {
     runMutation((prev) => ({
@@ -723,6 +770,9 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
           ShotInspectorRail.tsx's module doc comment. */}
       <div className={styles.workspace}>
         <div className={styles.canvasColumn}>
+          {storyboard.recipe === 'hero-product-commercial' ? (
+            <p className={styles.commercialFlow}>{t('storyboard.commercialFlow')}</p>
+          ) : null}
           <MoodLane
             drafts={storyboard.moodDrafts}
             models={moodModels}
@@ -805,8 +855,8 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
                 until there's actually something to assemble. */}
             <Button
               type="button"
-              variant={hasDoneShot ? 'primary' : 'subtle'}
-              disabled={!hasDoneShot || footerBusy !== null}
+              variant={canAssemble ? 'primary' : 'subtle'}
+              disabled={!canAssemble || footerBusy !== null}
               onClick={() => void handleAssemble()}
             >
               {footerBusy === 'assemble' ? t('storyboard.assembling') : t('storyboard.assemble')}
@@ -845,6 +895,7 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
             onUploadFile={(slot, file) => selectedShot && handleUploadFile(selectedShot.id, slot, file)}
             onFieldChange={(patch) => selectedShot && updateShot(selectedShot.id, patch)}
             onRender={() => selectedShot && void handleRenderShot(selectedShot.id)}
+            onReviewTake={(takeId, review) => selectedShot && void handleReviewTake(selectedShot.id, takeId, review)}
             onClose={closeShotDetails}
           />
         ) : null}

@@ -117,6 +117,8 @@ function ShotRowImpl(props: ShotRowProps) {
       : `${model.label} ${t('storyboard.needsApiKey')}`
     : shot.model;
   const promptSnippet = shot.motionPrompt.trim();
+  const shotTitle = shot.title?.trim() ?? '';
+  const summaryTitle = [shotTitle, promptSnippet].filter(Boolean).join(' · ');
 
   // Steady kebab menu (grok design critique G4) for move/duplicate/delete —
   // replaces four always-on faint icon buttons that "failed the what's
@@ -175,8 +177,12 @@ function ShotRowImpl(props: ShotRowProps) {
       </div>
 
       <div className={styles.main}>
-        <p className={`${styles.prompt}${promptSnippet ? '' : ` ${styles.promptPlaceholder}`}`} title={promptSnippet || undefined}>
-          {promptSnippet || t('storyboard.noMotionPromptYet')}
+        <p className={styles.prompt} title={summaryTitle || undefined}>
+          {shotTitle ? <strong className={styles.shotTitle}>{shotTitle}</strong> : null}
+          {shotTitle && promptSnippet ? <span aria-hidden> · </span> : null}
+          <span className={promptSnippet ? undefined : styles.promptPlaceholder}>
+            {promptSnippet || t('storyboard.noMotionPromptYet')}
+          </span>
         </p>
         <span className={styles.modelChip}>{modelLabel}</span>
       </div>

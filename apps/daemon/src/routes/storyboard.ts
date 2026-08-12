@@ -25,12 +25,15 @@ import type {
   AssembleStoryboardFinishOptions,
   DraftStoryboardShotsRequest,
   Storyboard,
+  StoryboardCommercialBrief,
   StoryboardFrameRef,
   StoryboardMoodDraft,
   StoryboardResolution,
   StoryboardShot,
   StoryboardShotStatus,
   StoryboardSummary,
+  StoryboardTakeReceipt,
+  StoryboardTakeScores,
 } from '@open-design/contracts';
 import {
   isStoryboardUploadMimeAllowed,
@@ -69,6 +72,12 @@ import {
   composeStyledMediaPrompt,
   styleReferenceFromDesignMd,
 } from '../storyboards/style-reference.js';
+import { createHeroProductCommercial } from '../storyboards/product-commercial.js';
+import {
+  buildStoryboardTakeReceipt,
+  publishTerminalAfterReceipt,
+  storyboardShotOutputName,
+} from '../storyboards/provenance.js';
 
 export interface RegisterStoryboardRoutesDeps
   extends RouteDeps<'http' | 'paths' | 'ids' | 'db' | 'projectStore' | 'projectFiles' | 'media' | 'validation'> {}
@@ -220,6 +229,34 @@ function newStoryboard(id: string, title: string): Storyboard {
   };
 }
 
+const COMMERCIAL_BRIEF_LIMITS: Record<keyof StoryboardCommercialBrief, number> = {
+  productName: 120,
+  audience: 240,
+  promise: 240,
+  visualDirection: 500,
+  callToAction: 240,
+};
+
+function validateCommercialBrief(
+  raw: unknown,
+): { ok: true; value: StoryboardCommercialBrief } | { ok: false; error: string } {
+  if (!isPlainObject(raw)) return { ok: false, error: 'commercialBrief must be an object' };
+  const value = {} as StoryboardCommercialBrief;
+  for (const [field, max] of Object.entries(COMMERCIAL_BRIEF_LIMITS) as Array<
+    [keyof StoryboardCommercialBrief, number]
+  >) {
+    const candidate = raw[field];
+    if (typeof candidate !== 'string' || !candidate.trim()) {
+      return { ok: false, error: `commercialBrief.${field} must be a non-empty string` };
+    }
+    if (candidate.trim().length > max) {
+      return { ok: false, error: `commercialBrief.${field} must be ${max} characters or fewer` };
+    }
+    value[field] = candidate.trim();
+  }
+  return { ok: true, value };
+}
+
 function summarize(storyboard: Storyboard): StoryboardSummary {
   return {
     id: storyboard.id,
@@ -227,6 +264,7 @@ function summarize(storyboard: Storyboard): StoryboardSummary {
     createdAt: storyboard.createdAt,
     updatedAt: storyboard.updatedAt,
     shotCount: storyboard.shots.length,
+    ...(storyboard.recipe ? { recipe: storyboard.recipe } : {}),
   };
 }
 
@@ -434,6 +472,7 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
   }
 
   function dispatchMediaTask(input: {
+    taskId?: string | undefined;
     surface: 'image' | 'video';
     model: string;
     prompt: string;
@@ -442,55 +481,127 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
     length?: number | undefined;
     image?: string | undefined;
     endImage?: string | undefined;
+    onSettled?: ((outcome: {
+      taskId: string;
+      status: 'done' | 'failed';
+      startedAt: number;
+      endedAt: number;
+      file?: any;
+      error?: string;
+    }) => Promise<void>) | undefined;
   }): { taskId: string; task: ReturnType<typeof createMediaTask> } {
-    const taskId = randomUUID();
+    const taskId = input.taskId ?? randomUUID();
     const task = createMediaTask(taskId, STORYBOARD_MEDIA_PROJECT_ID, { surface: input.surface, model: input.model });
     task.status = 'running';
     persistMediaTask(task);
 
-    generateMedia({
-      projectRoot: PROJECT_ROOT,
-      projectsRoot: PROJECTS_DIR,
-      projectId: STORYBOARD_MEDIA_PROJECT_ID,
-      surface: input.surface,
-      model: input.model,
-      prompt: input.prompt,
-      output: input.output,
-      aspect: input.aspect,
-      length: input.length,
-      image: input.image,
-      endImage: input.endImage,
-      onProgress: (line: any) => appendTaskProgress(task, line),
-    })
-      .then((meta: any) => {
-        task.status = 'done';
-        task.file = meta;
-        task.endedAt = Date.now();
-        persistMediaTask(task);
-        notifyTaskWaiters(task);
-      })
-      .catch((err: any) => {
-        task.status = 'failed';
-        task.error = {
-          message: String(err && err.message ? err.message : err),
-          status: typeof err?.status === 'number' ? err.status : 400,
-          code: err?.code,
+    void (async () => {
+      let outcome:
+        | { status: 'done'; endedAt: number; file: any }
+        | { status: 'failed'; endedAt: number; error: { message: string; status: number; code?: string } };
+      try {
+        const file = await generateMedia({
+          projectRoot: PROJECT_ROOT,
+          projectsRoot: PROJECTS_DIR,
+          projectId: STORYBOARD_MEDIA_PROJECT_ID,
+          surface: input.surface,
+          model: input.model,
+          prompt: input.prompt,
+          output: input.output,
+          aspect: input.aspect,
+          length: input.length,
+          image: input.image,
+          endImage: input.endImage,
+          onProgress: (line: any) => appendTaskProgress(task, line),
+        });
+        outcome = { status: 'done', endedAt: Date.now(), file };
+      } catch (err: any) {
+        outcome = {
+          status: 'failed',
+          endedAt: Date.now(),
+          error: {
+            message: String(err && err.message ? err.message : err),
+            status: typeof err?.status === 'number' ? err.status : 400,
+            ...(typeof err?.code === 'string' ? { code: err.code } : {}),
+          },
         };
-        task.endedAt = Date.now();
-        // persistMediaTask/notifyTaskWaiters can throw on an I/O error (e.g.
-        // the SQLite write failing); this .catch() has no further handler of
-        // its own, so an uncaught throw here becomes an unhandled rejection.
-        // Log and swallow instead — the in-memory task is still marked
-        // failed even if persisting it lost the race.
-        try {
-          persistMediaTask(task);
-          notifyTaskWaiters(task);
-        } catch (persistErr) {
-          console.error('[storyboard] failed to persist failed media task', persistErr);
-        }
+      }
+
+      await publishTerminalAfterReceipt({
+        persistReceipt: async () => {
+          if (!input.onSettled) return;
+          await input.onSettled({
+            taskId,
+            status: outcome.status,
+            startedAt: task.startedAt,
+            endedAt: outcome.endedAt,
+            ...(outcome.status === 'done'
+              ? { file: outcome.file }
+              : { error: outcome.error.message }),
+          });
+        },
+        publishTerminal: () => {
+          task.endedAt = outcome.endedAt;
+          if (outcome.status === 'done') {
+            task.file = outcome.file;
+            task.error = null;
+          } else {
+            task.file = null;
+            task.error = outcome.error;
+          }
+          task.status = outcome.status;
+          try {
+            persistMediaTask(task);
+            notifyTaskWaiters(task);
+          } catch (persistErr) {
+            console.error(`[storyboard] failed to persist ${outcome.status} media task`, persistErr);
+          }
+        },
+        onReceiptError: (settleErr) => {
+          // Fail closed: without the daemon-owned receipt this task stays
+          // non-terminal, so /wait can never claim a durable render that the
+          // storyboard cannot account for.
+          console.error(`[storyboard] refusing to publish ${outcome.status} task without durable provenance`, settleErr);
+        },
       });
+    })();
 
     return { taskId, task };
+  }
+
+  function providerIdForVideoModel(modelId: string): string {
+    return modelsForSurface('video').find((entry) => entry.id === modelId)?.provider ?? 'unknown';
+  }
+
+  async function appendShotTake(
+    storyboardId: string,
+    shotId: string,
+    receipt: StoryboardTakeReceipt,
+  ): Promise<void> {
+    await withStoryboardLock(storyboardId, async () => {
+      const current = await readStoryboard(RUNTIME_DATA_DIR, storyboardId);
+      if (!current) throw new Error(`storyboard ${storyboardId} disappeared before its take receipt was persisted`);
+      const shot = current.shots.find((entry) => entry.id === shotId);
+      if (!shot) throw new Error(`shot ${shotId} disappeared before its take receipt was persisted`);
+      const existing = shot.takes ?? [];
+      if (existing.some((take) => take.id === receipt.id)) return;
+      shot.takes = [...existing, receipt];
+
+      // Multiple takes can render concurrently. Every receipt survives, but
+      // only the currently-active task may drive the shot's latest status.
+      if (shot.taskId === receipt.taskId) {
+        if (receipt.status === 'done' && receipt.output) {
+          shot.status = 'done';
+          shot.output = receipt.output;
+          delete shot.error;
+        } else if (receipt.status === 'failed') {
+          shot.status = 'failed';
+          shot.error = receipt.error ?? 'render failed';
+        }
+      }
+      current.updatedAt = nowIso();
+      await writeStoryboard(RUNTIME_DATA_DIR, current);
+    });
   }
 
   app.get('/api/storyboards', async (req, res) => {
@@ -502,7 +613,42 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
   app.post('/api/storyboards', async (req, res) => {
     if (!requireLocal(req, res)) return;
     const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
-    const storyboard = newStoryboard(randomUUID(), title);
+    const recipe = req.body?.recipe;
+    if (recipe !== undefined && recipe !== 'hero-product-commercial') {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'recipe must be hero-product-commercial when provided');
+    }
+    if (recipe === undefined && req.body?.commercialBrief !== undefined) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'commercialBrief requires recipe hero-product-commercial');
+    }
+    const id = randomUUID();
+    let storyboard: Storyboard;
+    if (recipe === 'hero-product-commercial') {
+      const parsedBrief = validateCommercialBrief(req.body?.commercialBrief);
+      if (!parsedBrief.ok) return sendApiError(res, 400, 'BAD_REQUEST', parsedBrief.error);
+      const ratio = typeof req.body?.ratio === 'string' && req.body.ratio.trim() ? req.body.ratio.trim() : '16:9';
+      const requestedModel = req.body?.model;
+      if (requestedModel !== undefined && (typeof requestedModel !== 'string' || !requestedModel.trim())) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'model must be a non-empty string');
+      }
+      const catalogModel = typeof requestedModel === 'string'
+        ? modelsForSurface('video').find((entry) => entry.id === requestedModel.trim())
+        : undefined;
+      if (requestedModel !== undefined && (!catalogModel || !catalogModel.caps?.includes('i2v'))) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'model must be a known image-to-video model');
+      }
+      const model = catalogModel?.id ?? defaultVideoModelId();
+      const resolution: StoryboardResolution = model.endsWith(':1080p') ? '1080p' : model.endsWith(':480p') ? '480p' : '720p';
+      storyboard = createHeroProductCommercial({
+        id,
+        now: nowIso(),
+        model,
+        resolution,
+        ratio,
+        brief: parsedBrief.value,
+      });
+    } else {
+      storyboard = newStoryboard(id, title);
+    }
     await writeStoryboard(RUNTIME_DATA_DIR, storyboard);
     res.status(201).json({ storyboard });
   });
@@ -574,6 +720,7 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
         // integration, a hallucinated agent PATCH) must not be able to
         // persist two shots sharing an id.
         const seenShotIds = new Set<string>();
+        const currentShotsById = new Map(storyboard.shots.map((entry) => [entry.id, entry]));
         for (let i = 0; i < patch.shots.length; i++) {
           const result = validateShot(patch.shots[i], i);
           if (!result.ok) return sendApiError(res, 400, 'BAD_REQUEST', result.error);
@@ -581,7 +728,27 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
             return sendApiError(res, 400, 'BAD_REQUEST', 'duplicate shot id');
           }
           seenShotIds.add(result.value.id);
-          parsed.push(result.value);
+          const rawShot = patch.shots[i] as Record<string, unknown>;
+          const currentShot = currentShotsById.get(result.value.id);
+          for (const field of ['takes', 'takeReviews', 'selectedTakeId'] as const) {
+            if (
+              rawShot[field] !== undefined &&
+              JSON.stringify(rawShot[field]) !== JSON.stringify(currentShot?.[field])
+            ) {
+              return sendApiError(
+                res,
+                400,
+                'BAD_REQUEST',
+                'take history, reviews, and selection are daemon-owned; use the take review route',
+              );
+            }
+          }
+          parsed.push({
+            ...result.value,
+            ...(currentShot?.takes ? { takes: currentShot.takes } : {}),
+            ...(currentShot?.takeReviews ? { takeReviews: currentShot.takeReviews } : {}),
+            ...(currentShot?.selectedTakeId ? { selectedTakeId: currentShot.selectedTakeId } : {}),
+          });
         }
         nextShots = parsed;
       }
@@ -1044,10 +1211,10 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
   // Validates start frame present + non-empty motion prompt, dispatches a
   // video generate (image=startFrame, endImage=endFrame when set), and
   // marks the shot 'rendering' with the dispatched taskId. Does NOT wait
-  // for completion — the caller (web UI / `od storyboard render-shot`)
-  // polls the existing POST /api/media/tasks/:id/wait and PATCHes the final
-  // status/output back onto the storyboard. Keeps this route fast and
-  // reuses the existing task machinery instead of a second long-poll loop.
+  // for completion. Once the task settles, this daemon route records the
+  // terminal shot state and immutable receipt; clients only need to refresh
+  // the storyboard. This keeps the route fast and reuses the existing task
+  // machinery instead of a second long-poll loop.
   app.post('/api/storyboards/:id/shots/:shotId/render', async (req, res) => {
     if (!requireLocal(req, res)) return;
     if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
@@ -1123,16 +1290,47 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
         return sendApiError(res, 400, 'BAD_REQUEST', 'shot endFrame.path escapes the storyboard project directory');
       }
 
-      const outputPath = `shot-${currentShot.id}.mp4`;
-      const { taskId } = dispatchMediaTask({
+      const taskId = randomUUID();
+      const outputPath = storyboardShotOutputName(currentShot.id, taskId);
+      const effectivePrompt = composeStyledMediaPrompt(motionPrompt, current.styleReference);
+      const fallbackProviderId = providerIdForVideoModel(currentShot.model);
+      dispatchMediaTask({
+        taskId,
         surface: 'video',
         model: currentShot.model,
-        prompt: composeStyledMediaPrompt(motionPrompt, current.styleReference),
+        prompt: effectivePrompt,
         output: outputPath,
         aspect: current.ratio,
         length: currentShot.durationSec,
         image: startFramePath,
         endImage: endFramePath,
+        onSettled: async (outcome) => {
+          const file = outcome.file ?? {};
+          const receipt = buildStoryboardTakeReceipt({
+            taskId: outcome.taskId,
+            status: outcome.status,
+            startedAt: outcome.startedAt,
+            endedAt: outcome.endedAt,
+            providerId:
+              typeof file.providerId === 'string' && file.providerId.trim()
+                ? file.providerId
+                : fallbackProviderId,
+            modelId: currentShot.model,
+            motionPrompt,
+            effectivePrompt,
+            startFrame: startFramePath,
+            ...(endFramePath ? { endFrame: endFramePath } : {}),
+            aspect: current.ratio,
+            durationSec: currentShot.durationSec,
+            ...(typeof file.name === 'string' ? { output: file.name } : {}),
+            ...(typeof file.providerNote === 'string' ? { providerNote: file.providerNote } : {}),
+            ...(Array.isArray(file.warnings)
+              ? { warnings: file.warnings.filter((entry: unknown): entry is string => typeof entry === 'string') }
+              : {}),
+            ...(outcome.error ? { error: outcome.error } : {}),
+          });
+          await appendShotTake(current.id, currentShot.id, receipt);
+        },
       });
 
       currentShot.status = 'rendering';
@@ -1142,6 +1340,76 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
       await writeStoryboard(RUNTIME_DATA_DIR, current);
 
       res.status(202).json({ taskId });
+    });
+  });
+
+  app.put('/api/storyboards/:id/shots/:shotId/takes/:takeId/review', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const decision = req.body?.decision;
+    if (decision !== 'approved' && decision !== 'rejected') {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'decision must be approved or rejected');
+    }
+    const note = req.body?.note;
+    if (note !== undefined && typeof note !== 'string') {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'note must be a string');
+    }
+    if (typeof note === 'string' && note.trim().length > 500) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'note must be 500 characters or fewer');
+    }
+
+    let scores: StoryboardTakeScores | undefined;
+    if (req.body?.scores !== undefined) {
+      if (!isPlainObject(req.body.scores)) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'scores must be an object');
+      }
+      const scoreFields = ['brandFit', 'motionQuality', 'artifactControl', 'revisionEase'] as const;
+      const parsed = {} as StoryboardTakeScores;
+      for (const field of scoreFields) {
+        const value = req.body.scores[field];
+        if (!Number.isInteger(value) || value < 1 || value > 5) {
+          return sendApiError(res, 400, 'BAD_REQUEST', `scores.${field} must be an integer from 1 to 5`);
+        }
+        parsed[field] = value;
+      }
+      scores = parsed;
+    }
+
+    await withStoryboardLock(req.params.id, async () => {
+      const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+      if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+      const shot = storyboard.shots.find((entry) => entry.id === req.params.shotId);
+      if (!shot) return sendApiError(res, 404, 'NOT_FOUND', 'shot not found');
+      const take = shot.takes?.find((entry) => entry.id === req.params.takeId);
+      if (!take) return sendApiError(res, 404, 'NOT_FOUND', 'take not found');
+      let approvedOutput: string | undefined;
+      if (decision === 'approved') {
+        if (take.status !== 'done' || !take.output) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'only a completed take can be approved');
+        }
+        approvedOutput = take.output;
+      }
+
+      shot.takeReviews = {
+        ...(shot.takeReviews ?? {}),
+        [take.id]: {
+          decision,
+          updatedAt: nowIso(),
+          ...(typeof note === 'string' && note.trim() ? { note: note.trim() } : {}),
+          ...(scores ? { scores } : {}),
+        },
+      };
+      if (approvedOutput) {
+        shot.selectedTakeId = take.id;
+        shot.output = approvedOutput;
+        shot.status = 'done';
+        delete shot.error;
+      } else if (shot.selectedTakeId === take.id) {
+        delete shot.selectedTakeId;
+      }
+      storyboard.updatedAt = nowIso();
+      await writeStoryboard(RUNTIME_DATA_DIR, storyboard);
+      res.json({ storyboard });
     });
   });
 
@@ -1161,6 +1429,21 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
 
     const parsedFinish = validateAssembleFinish((req.body as { finish?: unknown } | undefined)?.finish);
     if (!parsedFinish.ok) return sendApiError(res, 400, 'BAD_REQUEST', parsedFinish.error);
+
+    if (
+      storyboard.recipe === 'hero-product-commercial' &&
+      storyboard.shots.some((shot) => {
+        const selected = shot.takes?.find((take) => take.id === shot.selectedTakeId);
+        return !selected || selected.status !== 'done' || !selected.output;
+      })
+    ) {
+      return sendApiError(
+        res,
+        400,
+        'BAD_REQUEST',
+        'choose a take for each shot before assembling this commercial',
+      );
+    }
 
     // Fail fast BEFORE ensureStoryboardMediaProject — a zero-shot assemble
     // must 400 without provisioning the hidden storyboard-media project

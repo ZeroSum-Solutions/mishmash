@@ -166,6 +166,46 @@ The host keeps URL and srcDoc frames mounted when switching render mode to
 avoid reload flashes. Message handlers validate the sending iframe, and
 signals that must come from the active frame re-check the active window.
 
+### 3.7 Storyboards and render provenance
+
+The Storyboard surface is a web/daemon/CLI capability over
+`/api/storyboards`. Its shared document, receipt, recipe, and review DTOs live
+in `packages/contracts/src/api/storyboard.ts`; each document is stored as one
+JSON file by `apps/daemon/src/storyboards/store.ts`. The user workflow and
+disclosure behavior are documented in [`storyboards.md`](storyboards.md).
+
+`POST /api/storyboards` preserves blank storyboard creation and also accepts
+the `hero-product-commercial` recipe with a structured commercial brief. The
+deterministic four-shot seed is owned by
+`apps/daemon/src/storyboards/product-commercial.ts`; no provider call occurs
+until a shot is rendered. The web start dialog chooses a ready image-to-video
+model when one is configured, while the daemon validates that choice against
+its own video catalog.
+
+`POST /api/storyboards/:id/shots/:shotId/render` allocates a new media task and
+unique output filename for every attempt. On task settlement, the daemon
+appends an immutable `StoryboardTakeReceipt` through
+`apps/daemon/src/storyboards/provenance.ts` before exposing the task's terminal
+state to waiters. A receipt snapshots the provider, model, user and effective
+prompts, input assets, timing, outcome, output, warnings, cost disclosure, and
+unverified usage-rights status. Concurrent takes all retain receipts; only the
+currently active task may update the shot's latest status/output fields.
+
+General storyboard PATCH requests may carry an unchanged receipt/review
+snapshot for optimistic-concurrency retries, but cannot add, remove, or alter
+`takes`, `takeReviews`, or `selectedTakeId`. Human decisions use the dedicated
+`PUT /api/storyboards/:id/shots/:shotId/takes/:takeId/review` boundary. An
+approved completed take becomes the shot's selected output; rejecting the
+selected take clears the selection. The commercial recipe's assemble route
+requires one selected completed take for every shot. Blank and legacy
+storyboards keep their existing done-shot assembly behavior.
+
+The web implementation is split across `StoryboardStartDialog.tsx` (guided
+creation), `StoryboardEditor.tsx` (server refresh and assembly gating), and
+`ShotTakeHistory.tsx` (comparison and review). The `od storyboard create` and
+`od storyboard review-take` commands call the same HTTP contracts; neither CLI
+path reimplements receipt or review policy.
+
 ## 4. Generation data flow
 
 ### Filesystem execution profile
@@ -267,6 +307,7 @@ Shared DTOs live in `packages/contracts`.
 | Packaged launch (removed; `tools/pack/` retains the harness) | `tools/pack/` |
 | Development lifecycle | `tools/dev/` |
 | User-level validation | `e2e/` |
+| Storyboard recipes and immutable render receipts | `apps/daemon/src/storyboards/`, `apps/daemon/src/routes/storyboard.ts`, `apps/web/src/components/storyboard/` |
 
 When a user-facing capability changes, keep its daemon endpoint, shared
 contract, web surface, and `od` CLI surface aligned as required by the root

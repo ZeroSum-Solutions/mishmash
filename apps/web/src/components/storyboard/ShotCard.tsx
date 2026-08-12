@@ -9,7 +9,7 @@
 // without mocking network calls.
 
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
-import type { StoryboardShot } from '@open-design/contracts';
+import type { ReviewStoryboardTakeRequest, StoryboardShot } from '@open-design/contracts';
 import { Button } from '@open-design/components';
 import { useT } from '../../i18n';
 import { findMediaModel, type MediaModel } from '../../media/models';
@@ -24,6 +24,7 @@ import { Icon } from '../Icon';
 import { MediaFallback } from '../MediaFallback';
 import { computeRenderButtonMode, computeShotDisplayStatus, computeShotEditorState } from './shot-editor-state';
 import styles from './StoryboardSection.module.css';
+import { ShotTakeHistory } from './ShotTakeHistory';
 
 export interface ShotCardProps {
   shot: StoryboardShot;
@@ -41,6 +42,7 @@ export interface ShotCardProps {
   onUploadFile: (slot: 'start' | 'end', file: File) => void;
   onFieldChange: (patch: Partial<StoryboardShot>) => void;
   onRender: () => void;
+  onReviewTake: (takeId: string, review: ReviewStoryboardTakeRequest) => void;
 }
 
 function modelLabel(model: MediaModel, configured: ConfiguredProviderMap, t: ReturnType<typeof useT>): string {
@@ -102,6 +104,7 @@ export function ShotCard(props: ShotCardProps) {
     onUploadFile,
     onFieldChange,
     onRender,
+    onReviewTake,
   } = props;
   const t = useT();
   const state = computeShotEditorState(shot, previousShot);
@@ -415,8 +418,18 @@ export function ShotCard(props: ShotCardProps) {
         <p className={styles.shotStatusLine}>{t('storyboard.rendering')}</p>
       ) : shot.status === 'failed' ? (
         <p className={`${styles.shotStatusLine} ${styles.shotStatusError}`}>{shot.error || t('storyboard.renderFailed')}</p>
-      ) : shot.status === 'done' && shot.output ? (
+      ) : shot.status === 'done' && shot.output && !shot.takes?.length ? (
         <video className={styles.shotVideoPreview} src={frameUrl(shot.output)} controls muted loop />
+      ) : null}
+
+      {shot.takes?.length ? (
+        <ShotTakeHistory
+          takes={shot.takes}
+          reviews={shot.takeReviews ?? {}}
+          selectedTakeId={shot.selectedTakeId}
+          frameUrl={frameUrl}
+          onReview={onReviewTake}
+        />
       ) : null}
 
       {/* Pinned commit action (Higgsfield rail-content pattern): sticky to
