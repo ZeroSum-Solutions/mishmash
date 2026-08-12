@@ -4,10 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Weather Forecast — Central Jakarta</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500&display=swap" rel="stylesheet">
 <style>
+  /* Local fonts only — template must render fully offline. Inter ships as a
+     single variable-weight file covering 400-700. */
+  @font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 400 700;
+    font-display: swap;
+    src: url('assets/Inter-latin-var.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'Inter Tight';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('assets/InterTight-latin-500.woff2') format('woff2');
+  }
   :root {
     --u: min(100vw / 1357, 100dvh / 871);
     --ink: #ffffff;
@@ -210,7 +223,10 @@
     -webkit-backdrop-filter: blur(calc(26*var(--u))) saturate(118%);
     animation: slideR .95s var(--e-out) both;
   }
-  .card.big { border-radius: calc(26*var(--u)); padding: calc(24*var(--u)); flex: 1; animation-delay: .80s; }
+  /* Reference anchors the metrics row at the card's bottom edge with open
+     space between the big temperature and the metrics. */
+  .card.big { border-radius: calc(26*var(--u)); padding: calc(24*var(--u)); flex: 1; animation-delay: .80s; display: flex; flex-direction: column; }
+  .card.big .card__metrics { margin-top: auto; }
   .card.row { height: calc(120*var(--u)); padding: calc(20*var(--u)) calc(22*var(--u)); display: flex; align-items: center; justify-content: space-between; }
   .rail .card:nth-child(2) { animation-delay: .92s; }
   .rail .card:nth-child(3) { animation-delay: 1.03s; }
@@ -218,8 +234,10 @@
 
   .card__place { display: flex; align-items: center; gap: calc(8*var(--u)); font-size: calc(16*var(--u)); font-weight: 600; }
   .card__place svg { width: calc(16*var(--u)); height: calc(16*var(--u)); flex: none; }
-  .card__bigtemp { display: flex; align-items: flex-start; margin-top: calc(18*var(--u)); font-size: calc(92*var(--u)); font-weight: 500; letter-spacing: calc(-4.4*var(--u)); line-height: 1; }
-  .card__bigtemp i { font-style: normal; font-size: calc(46*var(--u)); margin-left: calc(4*var(--u)); }
+  /* Reference: the "C" is near digit height and sits on the same baseline,
+     separated by a small gap ("10° C"), not a superscript. */
+  .card__bigtemp { display: flex; align-items: baseline; margin-top: calc(18*var(--u)); font-size: calc(92*var(--u)); font-weight: 500; letter-spacing: calc(-4.4*var(--u)); line-height: 1; }
+  .card__bigtemp i { font-style: normal; font-size: calc(80*var(--u)); margin-left: calc(10*var(--u)); }
   .card__metrics { display: flex; gap: calc(22*var(--u)); margin-top: calc(28*var(--u)); font-size: calc(14*var(--u)); font-weight: 500; }
   .card__metrics span { display: flex; align-items: center; gap: calc(6*var(--u)); }
   .card__metrics svg { width: calc(16*var(--u)); height: calc(16*var(--u)); opacity: .85; flex: none; }
@@ -347,19 +365,21 @@
         <stop offset="1" stop-color="#fff" stop-opacity=".5"/>
       </linearGradient>
       <linearGradient id="wf" x1="0" y1="0" x2="835" y2="0" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stop-color="#fff" stop-opacity=".03"/>
-        <stop offset=".45" stop-color="#fff" stop-opacity=".18"/>
-        <stop offset="1" stop-color="#fff" stop-opacity=".04"/>
+        <stop offset="0" stop-color="#fff" stop-opacity=".08"/>
+        <stop offset=".45" stop-color="#fff" stop-opacity=".38"/>
+        <stop offset="1" stop-color="#fff" stop-opacity=".10"/>
       </linearGradient>
+      <!-- Reference: the glow is brightest just under the line and fades
+           downward, not the reverse. -->
       <linearGradient id="wfadeGrad" x1="0" y1="0" x2="0" y2="230" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stop-color="#fff" stop-opacity="0"/>
-        <stop offset="1" stop-color="#fff" stop-opacity=".9"/>
+        <stop offset="0" stop-color="#fff" stop-opacity=".95"/>
+        <stop offset="1" stop-color="#fff" stop-opacity=".12"/>
       </linearGradient>
       <mask id="wfade" maskUnits="userSpaceOnUse" x="0" y="0" width="835" height="230">
         <rect x="0" y="0" width="835" height="230" fill="url(#wfadeGrad)"/>
       </mask>
       <clipPath id="wclip" clipPathUnits="userSpaceOnUse">
-        <path d="M0,79 C90,40 180,0 280,2 C400,5 460,15 560,55 C660,95 740,105 835,86 L835,230 L0,230 Z"/>
+        <path d="M0,95 C60,78 125,60 185,62 C245,64 265,78 325,55 C385,30 425,18 475,22 C545,28 620,85 690,104 C742,113 792,98 835,88 L835,230 L0,230 Z"/>
       </clipPath>
       <clipPath id="wclipr" clipPathUnits="userSpaceOnUse"><rect class="wfill-rect" x="0" y="0" width="835" height="230"/></clipPath>
     </defs>
@@ -368,9 +388,9 @@
         <rect x="0" y="0" width="835" height="230" fill="url(#wf)" clip-path="url(#wclipr)"/>
       </g>
     </g>
-    <path class="wline wline--a" pathLength="1" d="M0,79 C90,40 180,0 280,2 C400,5 460,15 560,55 C660,95 740,105 835,86"/>
-    <path class="wline wline--b" pathLength="1" d="M0,79 C90,40 180,0 280,2 C400,5 460,15 560,55 C660,95 740,105 835,86"/>
-    <path class="wline wline--c" pathLength="1" d="M0,79 C90,40 180,0 280,2 C400,5 460,15 560,55 C660,95 740,105 835,86"/>
+    <path class="wline wline--a" pathLength="1" d="M0,95 C60,78 125,60 185,62 C245,64 265,78 325,55 C385,30 425,18 475,22 C545,28 620,85 690,104 C742,113 792,98 835,88"/>
+    <path class="wline wline--b" pathLength="1" d="M0,95 C60,78 125,60 185,62 C245,64 265,78 325,55 C385,30 425,18 475,22 C545,28 620,85 690,104 C742,113 792,98 835,88"/>
+    <path class="wline wline--c" pathLength="1" d="M0,95 C60,78 125,60 185,62 C245,64 265,78 325,55 C385,30 425,18 475,22 C545,28 620,85 690,104 C742,113 792,98 835,88"/>
   </svg>
   <ul class="forecast__days">
     <li>Sunday</li>

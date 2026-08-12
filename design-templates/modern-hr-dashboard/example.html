@@ -100,8 +100,10 @@ svg{display:block;}
 
 .welcome-right{flex:2 1 0%;display:flex;gap:24px;justify-content:flex-start;}
 @media(min-width:640px){.welcome-right{justify-content:flex-end;}}
-.stat-block{display:flex;flex-direction:column;}
-.stat-icon-badge{width:fit-content;background:rgba(137,137,137,0.15);border-radius:8px;padding:6px;margin-bottom:4px;color:var(--gray);}
+/* Reference layout: icon chip inline LEFT of the big number, label below both. */
+.stat-block{display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:center;}
+.stat-icon-badge{width:fit-content;background:rgba(137,137,137,0.15);border-radius:8px;padding:6px;color:var(--gray);}
+.stat-label{grid-column:1 / -1;}
 .stat-number{font-size:1.875rem;line-height:1;color:var(--dark);font-weight:500;}
 @media(min-width:640px){.stat-number{font-size:2.25rem;}}
 /* Same over-correction as .welcome-greeting above — stock lg=1024px, not the
