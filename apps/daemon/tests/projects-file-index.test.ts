@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile as writeRawFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile as writeRawFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -23,6 +23,23 @@ afterEach(async () => {
 });
 
 describe('listFiles project index integration', () => {
+  it('never surfaces the daemon-owned active-skill staging tree', async () => {
+    const projectsRoot = await createProjectsRoot();
+    const projectId = 'project-internal-skill';
+    const stagedSkill = path.join(projectsRoot, projectId, '.od-skills', 'prototype');
+
+    await expect(listFiles(projectsRoot, projectId)).resolves.toEqual([]);
+    await mkdir(stagedSkill, { recursive: true });
+    await writeRawFile(path.join(stagedSkill, 'SKILL.md'), '# Internal staging copy');
+    await applyProjectFileWatchEvent(projectsRoot, projectId, {
+      type: 'file-changed',
+      path: '.od-skills/prototype/SKILL.md',
+      kind: 'add',
+    });
+
+    await expect(listFiles(projectsRoot, projectId)).resolves.toEqual([]);
+  });
+
   it('keeps cached listings current across direct write, rename, and delete operations', async () => {
     const projectsRoot = await createProjectsRoot();
     const projectId = 'project-1';

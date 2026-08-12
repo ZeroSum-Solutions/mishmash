@@ -2,6 +2,8 @@ import type { ProjectFile } from '@open-design/contracts';
 import type { ProjectWatchEvent } from '../project-watchers.js';
 
 const ARTIFACT_MANIFEST_SUFFIX = '.artifact.json';
+const isHiddenProjectPath = (value: string) =>
+  value.split(/[\\/]/).some((segment) => segment.startsWith('.'));
 export type IndexedProjectFile = ProjectFile & { name: string; path: string; mtime: number };
 
 interface ProjectFileListOptions {
@@ -124,6 +126,10 @@ export function createProjectFileIndex(deps: ProjectFileIndexDeps): ProjectFileI
         const surfacedPath = isManifest
           ? input.event.path.slice(0, -ARTIFACT_MANIFEST_SUFFIX.length)
           : input.event.path;
+        if (isHiddenProjectPath(surfacedPath)) {
+          indexedProject.files.delete(surfacedPath);
+          return;
+        }
         if (input.event.kind === 'unlink' && !isManifest) {
           indexedProject.files.delete(surfacedPath);
           return;
