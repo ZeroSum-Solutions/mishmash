@@ -31,10 +31,9 @@
 //
 // Scope
 // -----
-// Only the packaged (mac/win/linux Electron) path is covered here. The OSS
-// `od` CLI distribution path serves `apps/web/out/_next/static/chunks/`
-// directly and is not currently used by any release artifact; it can be
-// added later if the OSS audience reports symbolication needs.
+// Only the packaged (mac/win/linux Electron) path is covered here. The regular
+// `od` CLI serves `apps/web/out/` directly, so `apps/web/next.config.ts`
+// disables browser sourcemap generation for that static-export mode.
 
 import { existsSync } from "node:fs";
 import { readdir, rm } from "node:fs/promises";

@@ -3,10 +3,16 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   resolve: {
-    alias: {
-      '@excalidraw/excalidraw': resolve(__dirname, 'tests/helpers/excalidraw-mock.tsx'),
-      'motion/react': resolve(__dirname, 'tests/helpers/motion-mock.tsx'),
-    },
+    alias: [
+      {
+        find: /^@excalidraw\/excalidraw$/,
+        replacement: resolve(__dirname, 'tests/helpers/excalidraw-mock.tsx'),
+      },
+      {
+        find: 'motion/react',
+        replacement: resolve(__dirname, 'tests/helpers/motion-mock.tsx'),
+      },
+    ],
   },
   test: {
     environment: 'node',
