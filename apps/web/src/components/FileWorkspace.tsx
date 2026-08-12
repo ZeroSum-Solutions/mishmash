@@ -1,4 +1,6 @@
 import {
+  Suspense,
+  lazy,
   memo,
   useCallback,
   useDeferredValue,
@@ -141,8 +143,6 @@ import { MissingBrandFontsBanner } from './MissingBrandFontsBanner';
 import { LibraryPicker } from './LibraryPicker';
 import { PreviewRunStatusBar } from './PreviewRunStatusBar';
 import { QuickSwitcher } from './QuickSwitcher';
-import { SketchEditor } from './SketchEditor';
-import { SketchEnginePrewarm } from './SketchEnginePrewarm';
 import {
   emptySketchScene,
   isSketchJsonFileName,
@@ -153,6 +153,12 @@ import {
 } from './sketch-model';
 import { AnimatePresence } from 'motion/react';
 import type { ChatMessage } from '../types';
+
+const SketchEditor = lazy(async () => {
+  await import('@excalidraw/excalidraw/index.css');
+  const module = await import('./SketchEditor');
+  return { default: module.SketchEditor };
+});
 
 type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
 
@@ -3224,7 +3230,6 @@ export function FileWorkspace({
       ].filter(Boolean).join(' ')}
       data-testid="file-workspace"
     >
-      <SketchEnginePrewarm />
       <div className="ws-tabs-shell">
         {onFocusModeChange && focusMode ? (
           <button
@@ -3671,42 +3676,44 @@ export function FileWorkspace({
           null
         ) : isActiveSketch && activeFile ? (
           activeSketch?.loaded ? (
-            <SketchEditor
-              fileName={activeFile.name}
-              scene={activeSketch.scene}
-              legacyItems={activeSketch.items}
-              hasPreservedRawItems={
-                !activeSketch.discardRawItemsOnSave && activeSketch.rawItems.length > activeSketch.items.length
-              }
-              onSceneChange={(scene, options) => setSketchScene(activeFile.name, scene, options)}
-              onClear={() => clearSketch(activeFile.name)}
-              onSave={async (scene) => {
-                // Fires only on the explicit "Save" button — background
-                // autosave calls saveSketch() directly and is not tracked.
-                const result = await saveSketch(activeFile.name, scene);
-                trackSketchSaveResult(analytics.track, {
-                  page_name: 'file_manager',
-                  area: 'sketch_editor',
-                  result: result === false ? 'failed' : 'success',
-                  project_id: projectId,
-                });
-                return result;
-              }}
-              onExportImage={async (base64, fileName) => {
-                const result = await exportSketchImage(activeFile.name, base64, fileName);
-                trackSketchExportResult(analytics.track, {
-                  page_name: 'file_manager',
-                  area: 'sketch_editor',
-                  result: result === false ? 'failed' : 'success',
-                  project_id: projectId,
-                });
-                return result;
-              }}
-              onOpenExportedImage={openFile}
-              saving={activeSketch.saving}
-              dirty={activeSketch.dirty || !activeSketch.persisted}
-              savedAt={activeSketch.savedAt}
-            />
+            <Suspense fallback={<div className="viewer-empty">{t('workspace.loadingSketch')}</div>}>
+              <SketchEditor
+                fileName={activeFile.name}
+                scene={activeSketch.scene}
+                legacyItems={activeSketch.items}
+                hasPreservedRawItems={
+                  !activeSketch.discardRawItemsOnSave && activeSketch.rawItems.length > activeSketch.items.length
+                }
+                onSceneChange={(scene, options) => setSketchScene(activeFile.name, scene, options)}
+                onClear={() => clearSketch(activeFile.name)}
+                onSave={async (scene) => {
+                  // Fires only on the explicit "Save" button — background
+                  // autosave calls saveSketch() directly and is not tracked.
+                  const result = await saveSketch(activeFile.name, scene);
+                  trackSketchSaveResult(analytics.track, {
+                    page_name: 'file_manager',
+                    area: 'sketch_editor',
+                    result: result === false ? 'failed' : 'success',
+                    project_id: projectId,
+                  });
+                  return result;
+                }}
+                onExportImage={async (base64, fileName) => {
+                  const result = await exportSketchImage(activeFile.name, base64, fileName);
+                  trackSketchExportResult(analytics.track, {
+                    page_name: 'file_manager',
+                    area: 'sketch_editor',
+                    result: result === false ? 'failed' : 'success',
+                    project_id: projectId,
+                  });
+                  return result;
+                }}
+                onOpenExportedImage={openFile}
+                saving={activeSketch.saving}
+                dirty={activeSketch.dirty || !activeSketch.persisted}
+                savedAt={activeSketch.savedAt}
+              />
+            </Suspense>
           ) : (
             <div className="viewer-empty">{t('workspace.loadingSketch')}</div>
           )
