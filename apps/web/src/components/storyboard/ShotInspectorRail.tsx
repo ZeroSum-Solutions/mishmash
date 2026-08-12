@@ -15,6 +15,7 @@
 // canvas beside it, and stays visually pinned to the viewport via
 // position: sticky as the canvas scrolls, not a portal/overlay.
 
+import { useEffect, useRef } from 'react';
 import { Icon } from '../Icon';
 import { useT } from '../../i18n';
 import { computeShotDisplayStatus } from './shot-editor-state';
@@ -51,10 +52,22 @@ export function ShotInspectorRail({
   ...shotCardProps
 }: ShotInspectorRailProps) {
   const t = useT();
+  const railRef = useRef<HTMLElement>(null);
+
+  // The dock becomes a stacked panel below the canvas on tablet/mobile.
+  // Bring it into view when someone taps Edit; otherwise the button appears
+  // to do nothing because the newly opened controls can sit a full page below.
+  useEffect(() => {
+    if (!shot || typeof window === 'undefined' || !window.matchMedia?.('(max-width: 900px)').matches) return;
+    const frame = window.requestAnimationFrame(() => {
+      railRef.current?.scrollIntoView({ block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [shot?.id]);
 
   if (!shot) {
     return (
-      <aside className={styles.rail} data-testid="shot-details-drawer" aria-label={t('storyboard.selectShotHint')}>
+      <aside ref={railRef} className={styles.rail} data-testid="shot-details-drawer" aria-label={t('storyboard.selectShotHint')}>
         <p className={styles.idle}>{t('storyboard.selectShotHint')}</p>
       </aside>
     );
@@ -62,10 +75,11 @@ export function ShotInspectorRail({
 
   const displayStatus = computeShotDisplayStatus(shot, shotCardProps.busy);
   const promptSnippet = shot.motionPrompt.trim();
+  const shotTitle = shot.title?.trim();
   const thumbPath = shot.startFrame?.path;
 
   return (
-    <aside className={styles.rail} data-testid="shot-details-drawer">
+    <aside ref={railRef} className={styles.rail} data-testid="shot-details-drawer">
       <header className={styles.head}>
         <button
           type="button"
@@ -86,7 +100,10 @@ export function ShotInspectorRail({
           )}
           <div className={styles.summaryText}>
             <span className={styles.summaryTitleRow}>
-              <span className={styles.summaryTitle}>{t('storyboard.shotLabel', { number: index + 1 })}</span>
+              <span className={styles.summaryTitle}>
+                {t('storyboard.shotLabel', { number: index + 1 })}
+                {shotTitle ? ` · ${shotTitle}` : ''}
+              </span>
               {displayStatus !== 'idle' ? (
                 <span className={styles.summaryStatus} data-status={displayStatus}>
                   {displayStatus === 'done'

@@ -52,6 +52,7 @@ function renderRail(overrides: Partial<React.ComponentProps<typeof ShotInspector
     onUploadFile: vi.fn(),
     onFieldChange: vi.fn(),
     onRender: vi.fn(),
+    onReviewTake: vi.fn(),
     onSelectPrevious: vi.fn(),
     onSelectNext: vi.fn(),
     onClose: vi.fn(),
@@ -78,6 +79,7 @@ function renderRail(overrides: Partial<React.ComponentProps<typeof ShotInspector
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 describe('ShotInspectorRail idle state', () => {
@@ -105,8 +107,22 @@ describe('ShotInspectorRail selected-shot summary (Higgsfield rail-content patte
   });
 
   it('shows the shot title with its 1-based position', () => {
-    renderRail({ index: 2 });
-    expect(screen.getByText('Shot 3')).toBeTruthy();
+    renderRail({ index: 2, shot: baseShot({ title: 'Product reveal' }) });
+    expect(screen.getByText('Shot 3 · Product reveal')).toBeTruthy();
+  });
+
+  it('brings stacked details into view when a tablet or mobile user opens a shot', async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+
+    renderRail({ shot: baseShot({ title: 'Product reveal' }) });
+    await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' }));
+
+    delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
   });
 
   it('renders the ShotCard editor body for the selected shot', () => {

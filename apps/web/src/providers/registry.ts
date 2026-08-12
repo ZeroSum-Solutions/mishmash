@@ -1,4 +1,5 @@
 import type {
+  CreateStoryboardRequest,
   ConnectorAuthConfigPrepareResponse,
   ConnectorDetail,
   ConnectorConnectResponse,
@@ -3279,6 +3280,7 @@ import type {
   GenerateStoryboardFrameResponse,
   PatchStoryboardRequest,
   RenderStoryboardShotResponse,
+  ReviewStoryboardTakeRequest,
   Storyboard,
   StoryboardSummary,
   UploadStoryboardFrameResponse,
@@ -3320,14 +3322,37 @@ export async function fetchStoryboardList(): Promise<StoryboardApiResult<Storybo
   }
 }
 
-export async function createStoryboard(title: string): Promise<StoryboardApiResult<Storyboard>> {
+export async function createStoryboard(body: CreateStoryboardRequest): Promise<StoryboardApiResult<Storyboard>> {
   try {
     const resp = await fetch('/api/storyboards', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify(body),
     });
     if (!resp.ok) return { ok: false, message: await readStoryboardApiError(resp) };
+    const data = (await resp.json()) as { storyboard: Storyboard };
+    return { ok: true, value: data.storyboard };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+export async function reviewStoryboardTake(
+  id: string,
+  shotId: string,
+  takeId: string,
+  review: ReviewStoryboardTakeRequest,
+): Promise<StoryboardApiResult<Storyboard>> {
+  try {
+    const resp = await fetch(
+      `/api/storyboards/${encodeURIComponent(id)}/shots/${encodeURIComponent(shotId)}/takes/${encodeURIComponent(takeId)}/review`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(review),
+      },
+    );
+    if (!resp.ok) return { ok: false, status: resp.status, message: await readStoryboardApiError(resp) };
     const data = (await resp.json()) as { storyboard: Storyboard };
     return { ok: true, value: data.storyboard };
   } catch (err) {

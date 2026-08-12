@@ -5,15 +5,18 @@
 // a configured provider and mark unconfigured ones.
 
 import { useEffect, useRef, useState } from 'react';
-import type { StoryboardSummary } from '@open-design/contracts';
+import type { CreateStoryboardRequest, StoryboardSummary } from '@open-design/contracts';
 import { Button } from '@open-design/components';
 import { Icon } from '../Icon';
 import { useT } from '../../i18n';
 import { createStoryboard, fetchStoryboard, fetchStoryboardList } from '../../providers/registry';
 import { goBack, navigate, useRoute } from '../../router';
 import { fetchMediaProvidersFromDaemon } from '../../state/config';
-import type { ConfiguredProviderMap } from './model-defaults';
+import { VIDEO_MODELS } from '../../media/models';
+import { isMediaProviderPickerReady } from '../../media/provider-readiness';
+import { defaultConfiguredModel, isModelConfigured, type ConfiguredProviderMap } from './model-defaults';
 import { StoryboardEditor } from './StoryboardEditor';
+import { StoryboardStartDialog } from './StoryboardStartDialog';
 import styles from './StoryboardSection.module.css';
 
 interface Props {
@@ -33,7 +36,11 @@ export function StoryboardSection({ active }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [activeStoryboard, setActiveStoryboard] = useState<import('@open-design/contracts').Storyboard | null>(null);
   const [configured, setConfigured] = useState<ConfiguredProviderMap>({});
+  const [showStartDialog, setShowStartDialog] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const hasFetchedRef = useRef(false);
+  const startDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!active || hasFetchedRef.current) return;
@@ -101,12 +108,26 @@ export function StoryboardSection({ active }: Props) {
     }
   }
 
-  async function handleCreate() {
-    const result = await createStoryboard('');
+  async function handleCreate(request: CreateStoryboardRequest) {
+    setCreateBusy(true);
+    setCreateError(null);
+    const recipeModels = VIDEO_MODELS.filter(
+      (model) => model.caps?.includes('i2v') && isMediaProviderPickerReady(model.provider),
+    );
+    const preferredModel = defaultConfiguredModel(recipeModels, configured);
+    const createRequest =
+      request.recipe === 'hero-product-commercial' && preferredModel && isModelConfigured(preferredModel, configured)
+        ? { ...request, model: preferredModel.id }
+        : request;
+    const result = await createStoryboard(createRequest);
     if (result.ok) {
+      setShowStartDialog(false);
       setActiveStoryboard(result.value);
       navigate({ kind: 'home', view: 'storyboard', storyboardId: result.value.id });
+    } else {
+      setCreateError(result.message);
     }
+    setCreateBusy(false);
   }
 
   function handleBack() {
@@ -114,6 +135,12 @@ export function StoryboardSection({ active }: Props) {
     // with no in-app history behind it lands on the list instead.
     goBack({ kind: 'home', view: 'storyboard' });
     void refreshList();
+  }
+
+  function closeStartDialog() {
+    if (createBusy) return;
+    setShowStartDialog(false);
+    window.requestAnimationFrame(() => startDialogTriggerRef.current?.focus());
   }
 
   // Strict id match: while a back/forward navigation is mid-fetch the cached
@@ -131,7 +158,16 @@ export function StoryboardSection({ active }: Props) {
     <div className={`entry-section ${styles.root}`}>
       <header className="entry-section__head">
         <h1 className="entry-section__title">{t('storyboard.title')}</h1>
-        <Button type="button" variant="primary" onClick={() => void handleCreate()} data-testid="storyboard-new">
+        <Button
+          type="button"
+          variant="primary"
+          onClick={(event) => {
+            startDialogTriggerRef.current = event.currentTarget;
+            setCreateError(null);
+            setShowStartDialog(true);
+          }}
+          data-testid="storyboard-new"
+        >
           <Icon name="plus" size={14} />
           {t('storyboard.newStoryboard')}
         </Button>
@@ -156,6 +192,9 @@ export function StoryboardSection({ active }: Props) {
               data-testid="storyboard-card"
             >
               <h3 className={styles.cardTitle}>{sb.title}</h3>
+              {sb.recipe === 'hero-product-commercial' ? (
+                <span className={styles.cardRecipe}>{t('storyboard.recipeHeroBadge')}</span>
+              ) : null}
               <p className={styles.cardMeta}>
                 {t(sb.shotCount === 1 ? 'storyboard.shotCountOne' : 'storyboard.shotCount', { count: sb.shotCount })} · {new Date(sb.updatedAt).toLocaleDateString()}
               </p>
@@ -163,6 +202,14 @@ export function StoryboardSection({ active }: Props) {
           ))}
         </div>
       )}
+      {showStartDialog ? (
+        <StoryboardStartDialog
+          busy={createBusy}
+          error={createError}
+          onCreate={(request) => void handleCreate(request)}
+          onClose={closeStartDialog}
+        />
+      ) : null}
     </div>
   );
 }

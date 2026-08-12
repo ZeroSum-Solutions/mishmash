@@ -80,6 +80,77 @@ export function isStoryboardShotStatus(value: unknown): value is StoryboardShotS
 }
 export type StoryboardResolution = '480p' | '720p' | '1080p';
 
+/** A bounded, guided starting point. Blank/legacy storyboards omit this field. */
+export type StoryboardRecipe = 'hero-product-commercial';
+
+/** The five plain-language decisions that shape a hero product commercial. */
+export interface StoryboardCommercialBrief {
+  productName: string;
+  audience: string;
+  promise: string;
+  visualDirection: string;
+  callToAction: string;
+}
+
+export type StoryboardTakeCostStatus = 'subscription-credits' | 'local-render' | 'not-reported';
+
+/** Honest cost disclosure: no numeric amount is synthesized when a provider omits one. */
+export interface StoryboardTakeCostDisclosure {
+  status: StoryboardTakeCostStatus;
+  note: string;
+}
+
+/** Usage rights stay unverified until an authoritative provider/model manifest says otherwise. */
+export interface StoryboardTakeUsageRights {
+  status: 'unverified';
+  note: string;
+}
+
+/** Immutable daemon-authored evidence for one render attempt, successful or failed. */
+export interface StoryboardTakeReceipt {
+  /** Equal to taskId: the media task is the stable identity of one take. */
+  id: string;
+  taskId: string;
+  status: 'done' | 'failed';
+  startedAt: string;
+  completedAt: string;
+  renderDurationMs: number;
+  providerId: string;
+  modelId: string;
+  /** The editable, user-facing motion prompt at dispatch time. */
+  motionPrompt: string;
+  /** The exact prompt sent after style-reference composition. */
+  effectivePrompt: string;
+  inputs: {
+    startFrame?: string;
+    endFrame?: string;
+    aspect: string;
+    durationSec: number;
+  };
+  /** Authoritative media-task filename on success. */
+  output?: string;
+  providerNote?: string;
+  warnings?: string[];
+  error?: string;
+  cost: StoryboardTakeCostDisclosure;
+  usageRights: StoryboardTakeUsageRights;
+}
+
+export interface StoryboardTakeScores {
+  brandFit: number;
+  motionQuality: number;
+  /** Higher means fewer visible artifacts/defects. */
+  artifactControl: number;
+  revisionEase: number;
+}
+
+export interface StoryboardTakeReview {
+  decision: 'approved' | 'rejected';
+  updatedAt: string;
+  note?: string;
+  scores?: StoryboardTakeScores;
+}
+
 export interface StoryboardShot {
   id: string;
   order: number;
@@ -97,6 +168,12 @@ export interface StoryboardShot {
   output?: string;
   status: StoryboardShotStatus;
   error?: string;
+  /** Append-only daemon-authored render history. General PATCH cannot alter it. */
+  takes?: StoryboardTakeReceipt[];
+  /** Mutable human decisions, keyed by take id and written only through the review route. */
+  takeReviews?: Record<string, StoryboardTakeReview>;
+  /** The approved take used for commercial assembly. */
+  selectedTakeId?: string;
 }
 
 /**
@@ -127,6 +204,10 @@ export interface Storyboard {
   ratio: string;
   moodDrafts: StoryboardMoodDraft[];
   shots: StoryboardShot[];
+  /** Guided origin for this board. Absent preserves blank/legacy behavior. */
+  recipe?: StoryboardRecipe;
+  /** Present when recipe is hero-product-commercial. */
+  commercialBrief?: StoryboardCommercialBrief;
   /**
    * Path relative to the storyboard-media project to the most recently
    * assembled output (see POST /api/storyboards/:id/assemble), persisted
@@ -152,12 +233,25 @@ export interface StoryboardSummary {
   createdAt: string;
   updatedAt: string;
   shotCount: number;
+  recipe?: StoryboardRecipe;
 }
 
 // --- Request / response DTOs ------------------------------------------------
 
 export interface CreateStoryboardRequest {
   title?: string;
+  ratio?: string;
+  /** Ready model selected by the web client; daemon validates it against the video catalog. */
+  model?: string;
+  recipe?: StoryboardRecipe;
+  commercialBrief?: StoryboardCommercialBrief;
+}
+
+/** PUT /api/storyboards/:id/shots/:shotId/takes/:takeId/review. */
+export interface ReviewStoryboardTakeRequest {
+  decision: 'approved' | 'rejected';
+  note?: string;
+  scores?: StoryboardTakeScores;
 }
 
 export interface ListStoryboardsResponse {

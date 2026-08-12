@@ -152,7 +152,9 @@
 @media (max-width: 900px) {
   .rail {
     flex: 1 1 auto;
-    width: auto;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     position: static;
     max-height: none;
   }

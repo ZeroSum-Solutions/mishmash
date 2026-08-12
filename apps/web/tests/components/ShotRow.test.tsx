@@ -84,6 +84,12 @@ describe('ShotRow at-a-glance status (PRD C4 outcome 3)', () => {
     expect(screen.getByText('camera pans left')).toBeTruthy();
   });
 
+  it('keeps a planned shot name visible beside its motion summary', () => {
+    renderRow(baseShot({ title: 'Product reveal', motionPrompt: 'camera pans left' }));
+    expect(screen.getByText('Product reveal')).toBeTruthy();
+    expect(screen.getByText('camera pans left')).toBeTruthy();
+  });
+
   it('shows no status badge for an untouched draft shot', () => {
     renderRow(baseShot());
     expect(screen.queryByTestId('shot-status-badge')).toBeNull();

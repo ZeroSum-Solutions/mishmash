@@ -7,7 +7,7 @@
  * those paths silently reset to the list.
  */
 
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StoryboardSection } from '../../src/components/storyboard/StoryboardSection';
@@ -191,5 +191,82 @@ describe('StoryboardSection list copy', () => {
     expect(screen.getByText(/^1 shot ·/)).toBeTruthy();
     expect(screen.getByText(/^2 shots ·/)).toBeTruthy();
     expect(screen.queryByText(/^1 shots ·/)).toBeNull();
+  });
+});
+
+describe('StoryboardSection guided commercial start', () => {
+  beforeEach(() => {
+    registryMocks.fetchStoryboardList.mockResolvedValue({ ok: true, value: [] });
+    registryMocks.createStoryboard.mockResolvedValue({
+      ok: true,
+      value: { ...SB, id: 'commercial-1', title: 'Luma Bottle — Hero product commercial' },
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('guides a nontechnical user through the five decisions needed to seed a commercial', async () => {
+    window.history.replaceState(null, '', '/storyboard');
+    renderSection();
+    fireEvent.click(await screen.findByTestId('storyboard-new'));
+
+    const dialog = screen.getByRole('dialog', { name: 'Start a storyboard' });
+    expect(screen.getByText('Hero product commercial')).toBeTruthy();
+    expect(screen.getByText('Recommended')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Product or service name'), { target: { value: 'Luma Bottle' } });
+    fireEvent.change(screen.getByLabelText('Who is it for?'), { target: { value: 'Busy commuters' } });
+    fireEvent.change(screen.getByLabelText('One promise to make'), { target: { value: 'Cold water all day' } });
+    fireEvent.change(screen.getByLabelText('How should it feel?'), {
+      target: { value: 'Clean daylight with tactile close-ups' },
+    });
+    fireEvent.change(screen.getByLabelText('What should viewers do next?'), {
+      target: { value: 'Take cold water anywhere' },
+    });
+    fireEvent.change(screen.getByLabelText('Video shape'), { target: { value: '9:16' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create commercial' }));
+
+    await waitFor(() => {
+      expect(registryMocks.createStoryboard).toHaveBeenCalledWith({
+        recipe: 'hero-product-commercial',
+        ratio: '9:16',
+        commercialBrief: {
+          productName: 'Luma Bottle',
+          audience: 'Busy commuters',
+          promise: 'Cold water all day',
+          visualDirection: 'Clean daylight with tactile close-ups',
+          callToAction: 'Take cold water anywhere',
+        },
+      });
+    });
+    expect(dialog).toBeTruthy();
+    expect(window.location.pathname).toBe('/storyboard/commercial-1');
+  });
+
+  it('keeps a one-click blank storyboard path for experienced users', async () => {
+    window.history.replaceState(null, '', '/storyboard');
+    renderSection();
+    fireEvent.click(await screen.findByTestId('storyboard-new'));
+    fireEvent.click(screen.getByRole('button', { name: 'Start blank instead' }));
+
+    await waitFor(() => expect(registryMocks.createStoryboard).toHaveBeenCalledWith({}));
+  });
+
+  it('closes with Escape and returns keyboard focus to New storyboard', async () => {
+    window.history.replaceState(null, '', '/storyboard');
+    renderSection();
+    const trigger = await screen.findByTestId('storyboard-new');
+    fireEvent.click(trigger);
+
+    const productName = screen.getByLabelText('Product or service name');
+    productName.focus();
+    fireEvent.keyDown(productName, { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog', { name: 'Start a storyboard' })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 });

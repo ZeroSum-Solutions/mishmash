@@ -45,6 +45,7 @@ function renderShotCard(shot: StoryboardShot, overrides: Partial<React.Component
     onUploadFile: vi.fn(),
     onFieldChange: vi.fn(),
     onRender: vi.fn(),
+    onReviewTake: vi.fn(),
   };
   render(
     <ShotCard

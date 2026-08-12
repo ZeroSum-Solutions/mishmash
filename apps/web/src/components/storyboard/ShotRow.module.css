@@ -86,6 +86,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.shotTitle {
+  font-weight: 700;
+}
 /* The empty-prompt placeholder reads as a placeholder (muted + italic),
    distinct from a real prompt — before, both used the same full-contrast
    style and a blank shot looked exactly as "done" as a described one. */
@@ -256,4 +259,32 @@
 .rowMenuPanel button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .index {
+    min-width: 0;
+  }
+  .frames {
+    justify-self: start;
+  }
+  .main {
+    grid-column: 1 / -1;
+  }
+  .status {
+    grid-column: 1 / 2;
+  }
+  .actions {
+    grid-column: 2 / -1;
+    justify-self: end;
+  }
+  .rowMenu {
+    grid-column: 3;
+    grid-row: 1;
+  }
 }

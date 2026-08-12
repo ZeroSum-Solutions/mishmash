@@ -991,7 +991,8 @@
       "POST /api/storyboards/:param/shots/:param/render",
       "POST /api/storyboards/:param/assemble",
       "POST /api/storyboards/:param/export-slider",
-      "POST /api/storyboards/:param/draft-shots"
+      "POST /api/storyboards/:param/draft-shots",
+      "PUT /api/storyboards/:param/shots/:param/takes/:param/review"
     ]
   },
   {
