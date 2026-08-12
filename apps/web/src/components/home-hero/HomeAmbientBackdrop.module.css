@@ -3,8 +3,8 @@
   z-index: -1;
   top: -28px;
   left: 50%;
-  width: min(1180px, calc(100vw - 32px));
-  height: 680px;
+  width: min(1440px, calc(100vw - 32px));
+  height: clamp(680px, 78dvh, 920px);
   overflow: hidden;
   pointer-events: none;
   transform: translateX(-50%);
@@ -39,7 +39,7 @@
   .root {
     top: -18px;
     width: calc(100vw - 16px);
-    height: 620px;
+    height: clamp(660px, 90dvh, 760px);
     border-radius: 28px;
   }
 

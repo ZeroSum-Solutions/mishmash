@@ -47,6 +47,10 @@ float fbm(vec2 point) {
 void main() {
   vec2 uv = gl_FragCoord.xy / uResolution;
   vec2 point = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+  // Keep the aurora expansive on wide home stages. Without this correction,
+  // the field retains a roughly fixed pixel width while the canvas grows.
+  float wideScale = max(1.0, (uResolution.x / uResolution.y) / 1.65);
+  point.x /= wideScale;
   float time = uTime * 0.08;
   float pointerPull = (uPointer.x - 0.5) * 0.34;
   float field = fbm(vec2(point.y * 1.45 - time, point.x * 0.7 + time));
@@ -151,9 +155,16 @@ export function HomeAmbientBackdrop() {
       animationFrame = window.requestAnimationFrame(animate);
     };
     const handlePointerMove = (event: PointerEvent) => {
-      pointer.target = event.clientX / Math.max(window.innerWidth, 1);
+      const bounds = canvas.getBoundingClientRect();
+      pointer.target = Math.min(
+        1,
+        Math.max(0, (event.clientX - bounds.left) / Math.max(bounds.width, 1)),
+      );
     };
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize);
 
+    resizeObserver?.observe(canvas);
     window.addEventListener('resize', resize);
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
     document.addEventListener('visibilitychange', start);
@@ -162,6 +173,7 @@ export function HomeAmbientBackdrop() {
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
+      resizeObserver?.disconnect();
       window.removeEventListener('resize', resize);
       window.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('visibilitychange', start);
