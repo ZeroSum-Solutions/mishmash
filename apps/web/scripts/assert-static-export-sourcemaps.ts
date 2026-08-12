@@ -4,8 +4,18 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const WEB_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-async function findSourceMaps(root) {
-  const maps = [];
+interface StaticExportSourcemapOptions {
+  outputRoot?: string;
+  webOutputMode?: string;
+}
+
+interface StaticExportSourcemapResult {
+  checked: boolean;
+  maps: string[];
+}
+
+async function findSourceMaps(root: string): Promise<string[]> {
+  const maps: string[] = [];
   const pending = [root];
 
   while (pending.length > 0) {
@@ -28,16 +38,16 @@ async function findSourceMaps(root) {
 export async function assertStaticExportHasNoSourceMaps({
   outputRoot = join(WEB_ROOT, 'out'),
   webOutputMode = process.env.OD_WEB_OUTPUT_MODE,
-} = {}) {
+}: StaticExportSourcemapOptions = {}): Promise<StaticExportSourcemapResult> {
   if (webOutputMode === 'server' || webOutputMode === 'standalone') {
     return { checked: false, maps: [] };
   }
 
-  let maps;
+  let maps: string[];
   try {
     maps = await findSourceMaps(outputRoot);
   } catch (error) {
-    if (error?.code === 'ENOENT') {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       throw new Error(`static export output is missing: ${outputRoot}`);
     }
     throw error;
@@ -51,7 +61,7 @@ export async function assertStaticExportHasNoSourceMaps({
   return { checked: true, maps: [] };
 }
 
-async function main() {
+async function main(): Promise<void> {
   const result = await assertStaticExportHasNoSourceMaps();
   if (result.checked) {
     process.stderr.write('[static-export] verified zero served source maps\n');
@@ -59,7 +69,7 @@ async function main() {
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  main().catch((error) => {
+  main().catch((error: unknown) => {
     process.stderr.write(`[static-export] ${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
   });

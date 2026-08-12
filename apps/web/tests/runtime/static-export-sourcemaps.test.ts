@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { assertStaticExportHasNoSourceMaps } from '../../scripts/assert-static-export-sourcemaps.mjs';
+import { assertStaticExportHasNoSourceMaps } from '../../scripts/assert-static-export-sourcemaps.js';
 
 let outputRoot: string;
 
