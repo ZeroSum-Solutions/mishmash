@@ -196,6 +196,7 @@ describe('project-watchers (real chokidar)', () => {
     expect(ignored(path.join(projectRoot, 'Rust', 'KeePassCore', 'target', 'release', 'lib.a'))).toBe(true);
     expect(ignored(path.join(projectRoot, 'vendor', 'package', 'generated.js'))).toBe(true);
     expect(ignored(path.join(projectRoot, '.build', 'debug', 'Module.o'))).toBe(true);
+    expect(ignored(path.join(projectRoot, '.od-skills', 'prototype', 'SKILL.md'))).toBe(true);
     expect(ignored(path.join(projectRoot, 'src', 'App.swift'))).toBe(false);
 
     await rm(root, { recursive: true, force: true });

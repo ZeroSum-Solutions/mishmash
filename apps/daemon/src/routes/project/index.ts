@@ -45,7 +45,7 @@ import {
 import { connectorService } from '../../connectors/service.js';
 import type { RouteDeps } from '../../server-context.js';
 import { listSkills } from '../../skills.js';
-import { isSafeId, resolveCanvasFile } from '../../projects.js';
+import { applyProjectFileWatchEvent, isSafeId, resolveCanvasFile } from '../../projects.js';
 import {
   BUILT_IN_PROJECT_LOCATION_ID,
   allProjectLocations,
@@ -2466,7 +2466,13 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       sinks.add(projectEventSink);
       const watchProject = getProject(db, req.params.id);
       sub = subscribeFileEvents(PROJECTS_DIR, req.params.id, (evt: any) => {
-        sse.send('file-changed', evt);
+        const sendEvent = () => sse.send('file-changed', evt);
+        void applyProjectFileWatchEvent(
+          PROJECTS_DIR,
+          req.params.id,
+          evt,
+          watchProject?.metadata,
+        ).then(sendEvent, sendEvent).catch(() => {});
       }, { metadata: watchProject?.metadata });
       sub.ready.then(() => sse.send('ready', { projectId: req.params.id })).catch(() => {});
       const cleanup = () => {

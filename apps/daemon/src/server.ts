@@ -504,6 +504,7 @@ import {
   ensureProjectSubdir,
   isRunTouchedProjectFile,
   isSafeId,
+  invalidateProjectFileIndex,
   listFiles,
   listProjectFolders,
   mimeFor,
@@ -2236,6 +2237,7 @@ export async function startServer({
       writeProjectFile,
       listFiles,
       resolveProjectDir,
+      invalidateProjectFileIndex,
       isSafeId,
     },
   });
@@ -8364,12 +8366,23 @@ export async function startServer({
       return true;
     };
 
+    const invalidateRunProjectFiles = () => {
+      if (!run.projectId || !isSafeId(run.projectId)) return;
+      try {
+        const project = getProject(db, run.projectId);
+        invalidateProjectFileIndex(PROJECTS_DIR, run.projectId, project?.metadata);
+      } catch {
+        // Cache invalidation is best-effort and must never block run finalization.
+      }
+    };
+
     child.on('error', (err) => {
       clearInactivityWatchdog();
       cleanupPromptFile();
       flushVisibleAgentStderr();
       revokeToolToken('child_exit');
       unregisterChatAgentEventSink();
+      invalidateRunProjectFiles();
       if (finishCanceledIfRequested(1, null)) return;
       send('error', createSseErrorPayload('AGENT_EXECUTION_FAILED', err.message));
       finishWithRetryDecision('failed', 1, null);
@@ -8392,6 +8405,7 @@ export async function startServer({
       }
       revokeToolToken('child_exit');
       unregisterChatAgentEventSink();
+      invalidateRunProjectFiles();
       // Resume-target-missing recovery runs BEFORE the generic fatal/stream-error
       // short-circuits. The signal arrives differently per adapter: codex reports
       // "no rollout found for thread id" as a stream `error` event, while AMR/vela

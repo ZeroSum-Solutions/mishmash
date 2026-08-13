@@ -6,6 +6,7 @@ export const IGNORED_PROJECT_DIR_NAMES = new Set([
   'node_modules',
   'vendor',
   '.od',
+  '.od-skills',
   'debug',
   'dist',
   'build',

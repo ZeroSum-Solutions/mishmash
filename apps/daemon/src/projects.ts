@@ -39,6 +39,7 @@ import type {
   FilesystemWriteGateway,
 } from './filesystem/write-gateway.js';
 import { designLibraryRoot } from './design-library/root.js';
+import { createProjectFileIndex } from './services/project-file-index.js';
 
 const FORBIDDEN_SEGMENT = /^$|^\.\.?$/;
 const RESERVED_PROJECT_FILE_SEGMENTS = new Set(['.file-versions', '.live-artifacts']);
@@ -188,7 +189,7 @@ export async function ensureProject(projectsRoot, projectId, metadata?, destinat
   return dir;
 }
 
-export async function listFiles(projectsRoot, projectId, opts = {}) {
+async function scanProjectFiles(projectsRoot, projectId, opts = {}) {
   const metadata = opts?.metadata;
   const dir = resolveProjectDir(projectsRoot, projectId, metadata);
   const out = [];
@@ -196,13 +197,30 @@ export async function listFiles(projectsRoot, projectId, opts = {}) {
   // projects can contain framework installs too; surfacing package HTML like
   // node_modules/tslib/*.html as artifacts produces blank previews.
   await collectFiles(dir, '', out, isIgnoredProjectDirName, dir);
-  // Newest first — matches the visual order users expect after generating.
-  out.sort((a, b) => b.mtime - a.mtime);
-  const since = Number(opts.since);
-  if (Number.isFinite(since) && since > 0) {
-    return out.filter((f) => Number(f.mtime) > since);
-  }
   return out;
+}
+
+const projectFileIndex = createProjectFileIndex({
+  scanProjectFiles,
+  readProjectFileEntry,
+  resolveProjectDir,
+});
+
+export async function listFiles(projectsRoot, projectId, opts = {}) {
+  return projectFileIndex.list({
+    projectsRoot,
+    projectId,
+    metadata: opts?.metadata,
+    since: opts?.since,
+  });
+}
+
+export async function applyProjectFileWatchEvent(projectsRoot, projectId, event, metadata?) {
+  await projectFileIndex.applyWatchEvent({ projectsRoot, projectId, event, metadata });
+}
+
+export function invalidateProjectFileIndex(projectsRoot, projectId, metadata?) {
+  projectFileIndex.invalidate({ projectsRoot, projectId, metadata });
 }
 
 // Resolve the single file the workspace "Canvas" control should open — the
@@ -861,6 +879,42 @@ export async function readProjectFile(projectsRoot, projectId, name, metadata?) 
   };
 }
 
+export async function readProjectFileEntry(projectsRoot, projectId, name, metadata?) {
+  assertVisibleForImportedProject(name, metadata);
+  const dir = resolveProjectDir(projectsRoot, projectId, metadata);
+  let file;
+  try {
+    file = await resolveSafeReal(dir, name);
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return null;
+    throw err;
+  }
+  let st;
+  try {
+    st = await stat(file);
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return null;
+    throw err;
+  }
+  if (!st.isFile()) return null;
+  const rootReal = await realpath(dir).catch(() => dir);
+  const rel = toProjectPath(path.relative(rootReal, file));
+  if (rel.endsWith('.artifact.json')) return null;
+  const manifest = await readManifestForPath(dir, rel);
+  return {
+    name: rel,
+    path: rel,
+    localPath: path.resolve(file),
+    type: 'file',
+    size: st.size,
+    mtime: st.mtimeMs,
+    kind: kindFor(rel),
+    mime: mimeFor(rel),
+    artifactKind: manifest?.kind,
+    artifactManifest: manifest,
+  };
+}
+
 // Like readProjectFile but skips loading the file content into memory.
 // Used by the media streaming endpoint so large video files are never buffered.
 export async function resolveProjectFilePath(projectsRoot, projectId, name, metadata?) {
@@ -978,6 +1032,11 @@ export async function writeProjectFile(
     artifactManifest: persistedManifest,
   };
   if (stubGuardWarning) result.stubGuardWarning = stubGuardWarning;
+  await applyProjectFileWatchEvent(projectsRoot, projectId, {
+    type: 'file-changed',
+    path: safeName,
+    kind: 'change',
+  }, metadata);
   return result;
 }
 
@@ -1041,6 +1100,11 @@ export async function reconcileHtmlArtifactManifest(projectsRoot, projectId, nam
   );
   if (!validated.ok || !validated.value) return null;
   await writeFile(manifestTarget, JSON.stringify(validated.value, null, 2));
+  await applyProjectFileWatchEvent(projectsRoot, projectId, {
+    type: 'file-changed',
+    path: manifestFileName,
+    kind: 'change',
+  }, metadata);
   return validated.value;
 }
 
@@ -1070,6 +1134,11 @@ export async function deleteProjectFile(projectsRoot, projectId, name, metadata?
   const dir = resolveProjectDir(projectsRoot, projectId, metadata);
   const file = await resolveSafeReal(dir, name);
   await unlink(file);
+  await applyProjectFileWatchEvent(projectsRoot, projectId, {
+    type: 'file-changed',
+    path: validateProjectPath(name),
+    kind: 'unlink',
+  }, metadata);
 }
 
 export async function renameProjectFile(projectsRoot, projectId, fromName, toName, metadata?) {
@@ -1138,7 +1207,7 @@ export async function renameProjectFile(projectsRoot, projectId, fromName, toNam
 
   const st = await stat(targetPath);
   const manifest = await readManifestForPath(dir, newName);
-  return {
+  const result = {
     file: {
       name: newName,
       path: newName,
@@ -1152,6 +1221,8 @@ export async function renameProjectFile(projectsRoot, projectId, fromName, toNam
     oldName,
     newName,
   };
+  projectFileIndex.invalidate({ projectsRoot, projectId, metadata });
+  return result;
 }
 
 async function renameFilePath(source, target, opts = {}) {
@@ -1447,6 +1518,7 @@ export async function removeProjectDir(projectsRoot, projectId, destinationWrite
   } else {
     await rm(dir, { recursive: true, force: true });
   }
+  projectFileIndex.invalidate({ projectsRoot, projectId });
 }
 
 function resolveSafe(dir, name) {
