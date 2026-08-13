@@ -14,6 +14,12 @@
   padding: 48px 32px 32px;
   overflow: hidden;
 }
+
+.workspace-shell__body:has(.new-project-modal-backdrop) {
+  position: relative;
+  z-index: 930;
+  overflow: visible;
+}
 .new-project-modal {
   width: 100%;
   max-width: 840px;
@@ -104,4 +110,52 @@
   border-color: color-mix(in oklab, var(--danger, #d4543b) 45%, var(--border));
   background: color-mix(in oklab, var(--danger, #d4543b) 10%, var(--bg-panel));
   color: var(--danger, #d4543b);
+}
+
+@media (max-width: 560px) {
+  .new-project-modal-backdrop {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .new-project-modal {
+    width: 100%;
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .new-project-modal__head {
+    min-height: 64px;
+    padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left));
+  }
+
+  .new-project-modal__close {
+    min-width: 44px;
+    width: 44px;
+    min-height: 44px;
+    height: 44px;
+  }
+
+  .new-project-modal__body {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
+  }
+
+  .new-project-modal .newproj-tab,
+  .new-project-modal .newproj-name,
+  .new-project-modal .newproj-working-dir,
+  .new-project-modal .ds-picker-trigger,
+  .new-project-modal .compact-toggle,
+  .new-project-modal .newproj-create,
+  .new-project-modal .newproj-import {
+    min-height: 44px;
+  }
+
+  .new-project-modal .newproj-name {
+    font-size: 16px;
+  }
 }

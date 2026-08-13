@@ -48,6 +48,12 @@ interface NavButtonProps {
   children: ReactNode;
 }
 
+function isCompactViewport(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(max-width: 720px)').matches;
+}
+
 function NavButton({ active, ariaLabel, tooltip, onClick, disabled, testId, children }: NavButtonProps) {
   return (
     <button
@@ -61,6 +67,7 @@ function NavButton({ active, ariaLabel, tooltip, onClick, disabled, testId, chil
       {...(testId ? { 'data-testid': testId } : {})}
     >
       {children}
+      <span className="entry-nav-rail__label" aria-hidden="true">{tooltip}</span>
     </button>
   );
 }
@@ -79,9 +86,16 @@ export function EntryNavRail({
   const isHome = view === 'home';
 
   // Once opened the rail stays docked (Manus-style); navigating between
-  // destinations no longer collapses it.
+  // destinations no longer collapses it on desktop. On compact viewports it
+  // behaves like a drawer and closes after a destination is chosen.
   const selectView = (next: EntryView) => {
     onViewChange(next);
+    if (isCompactViewport()) onClose();
+  };
+
+  const createProject = () => {
+    onNewProject();
+    if (isCompactViewport()) onClose();
   };
 
   // While collapsed the rail is visually hidden but its logo + nav buttons
@@ -137,7 +151,7 @@ export function EntryNavRail({
         <NavButton
           ariaLabel={t('entry.navNewProject')}
           tooltip={t('entry.navNewProject')}
-          onClick={onNewProject}
+          onClick={createProject}
           disabled={newProjectDisabled}
           testId="entry-nav-new-project"
         >

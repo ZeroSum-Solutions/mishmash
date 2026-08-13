@@ -331,6 +331,17 @@
     transform: none;
   }
 }
+@media (max-width: 560px) {
+  .recent-projects__view-all,
+  .recent-projects__card-more,
+  .recent-projects__card-menu button {
+    min-height: 44px;
+  }
+  .recent-projects__card-more {
+    width: 44px;
+    height: 44px;
+  }
+}
 @keyframes recent-projects-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
