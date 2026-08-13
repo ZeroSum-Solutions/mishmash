@@ -2305,6 +2305,139 @@ body.od-quick-switcher-open .chat-composer-fixed-layer .composer-send:disabled {
     grid-template-columns: 31px minmax(0, 1fr);
   }
 }
+
+@media (max-width: 720px) {
+  .workspace-shell {
+    --workspace-tabs-chrome-height: 48px;
+    grid-template-rows: 48px minmax(0, 1fr);
+  }
+
+  .workspace-shell .workspace-tabs-chrome.app-chrome-header {
+    min-height: 48px;
+    height: 48px;
+    padding-inline: max(4px, env(safe-area-inset-left)) max(4px, env(safe-area-inset-right));
+  }
+
+  .workspace-shell[data-client-type] .workspace-tab {
+    min-width: 48px;
+    max-width: 48px;
+    height: 46px;
+    flex: 0 0 48px;
+  }
+
+  .workspace-shell[data-client-type] .workspace-tab.is-pinned {
+    min-width: 48px;
+    max-width: 48px;
+    width: 48px;
+    flex: 0 0 48px;
+  }
+
+  .workspace-shell[data-client-type] .workspace-tab:not(.is-active):not(.is-pinned) {
+    display: none;
+  }
+
+  .workspace-shell[data-client-type] .workspace-tabs-new-btn,
+  .workspace-shell[data-client-type] .workspace-tabs-icon-btn {
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+    margin: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .workspace-shell[data-client-type] .workspace-tab__main {
+    min-width: 44px;
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .app .chat-project-back,
+  .app .chat-session-trigger {
+    min-width: 44px;
+    width: 44px;
+    min-height: 44px;
+    height: 44px;
+  }
+
+  .app .composer-row .working-dir-pill-trigger,
+  .app .composer-row .avatar-agent-trigger,
+  .app .composer-row .session-mode-toggle__trigger,
+  .app .composer-row .composer-send,
+  .app .composer-row .icon-btn,
+  .app .composer-row [data-testid='working-dir-trigger'],
+  .chat-composer-fixed-layer .composer-row .working-dir-pill-trigger,
+  .chat-composer-fixed-layer .composer-row .avatar-agent-trigger,
+  .chat-composer-fixed-layer .composer-row .session-mode-toggle__trigger,
+  .chat-composer-fixed-layer .composer-row .composer-send,
+  .chat-composer-fixed-layer .composer-row .icon-btn,
+  .chat-composer-fixed-layer .composer-row [data-testid='working-dir-trigger'] {
+    min-height: 44px;
+    height: 44px;
+  }
+
+  .chat-composer-fixed-layer .composer-workdir-row [data-testid='working-dir-trigger'] {
+    min-height: 44px;
+    height: 44px;
+  }
+
+  .app .composer-row .icon-btn,
+  .app .composer-row .composer-send,
+  .chat-composer-fixed-layer .composer-row .icon-btn,
+  .chat-composer-fixed-layer .composer-row .composer-send {
+    min-width: 44px;
+    width: 44px;
+  }
+
+  .app .composer-row .avatar-agent-trigger,
+  .chat-composer-fixed-layer .composer-row .avatar-agent-trigger {
+    width: 52px;
+    grid-template-columns: 28px 20px;
+  }
+
+  .app .composer-row [data-testid='working-dir-picker'],
+  .app .composer-row [data-testid='working-dir-trigger'],
+  .chat-composer-fixed-layer .composer-row [data-testid='working-dir-picker'],
+  .chat-composer-fixed-layer .composer-row [data-testid='working-dir-trigger'] {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .app .staged-context-picker--design-system .project-ds-picker-trigger,
+  .chat-composer-fixed-layer .staged-context-picker--design-system .project-ds-picker-trigger {
+    min-height: 44px;
+  }
+
+  .app .staged-context .staged-remove,
+  .chat-composer-fixed-layer .staged-context .staged-remove {
+    min-width: 44px;
+    width: 44px;
+    min-height: 44px;
+    height: 44px;
+  }
+
+  .app .ws-tab {
+    min-height: 44px;
+  }
+
+  .app .msg-plugin-chip--action,
+  .app .user-copy-btn,
+  .app .assistant-copy-button,
+  .app .assistant-feedback-button,
+  .app .action-card-toggle,
+  .app .op-card-head,
+  .app .op-open,
+  .app .file-ops-row-main--action {
+    min-height: 44px;
+  }
+
+  .app .user-copy-btn,
+  .app .assistant-copy-button,
+  .app .assistant-feedback-button {
+    min-width: 44px;
+    width: 44px;
+  }
+}
 .app .df-pagination {
   gap: 8px;
   padding: 0 0 12px;

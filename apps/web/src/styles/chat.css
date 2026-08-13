@@ -1736,6 +1736,25 @@
     width: 100%;
     min-width: 0;
   }
+
+  .app .composer-row .working-dir-pill-trigger,
+  .app .composer-row .avatar-agent-trigger,
+  .app .composer-row .session-mode-toggle__trigger,
+  .app .composer-row .composer-send,
+  .app .composer-row .icon-btn {
+    min-height: 44px;
+    height: 44px;
+  }
+
+  .app .composer-row .icon-btn {
+    min-width: 44px;
+    width: 44px;
+  }
+
+  .app .composer-row .avatar-agent-trigger {
+    width: 52px;
+    grid-template-columns: 28px 20px;
+  }
 }
 .composer-import {
   background: transparent;

@@ -1135,6 +1135,15 @@ export function EntryShell({
           open={railOpen}
           onClose={() => setRailOpen(false)}
         />
+        {railOpen ? (
+          <button
+            type="button"
+            className="entry-nav-mobile-backdrop"
+            onClick={() => setRailOpen(false)}
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+        ) : null}
         <main className="entry-main entry-main--scroll" ref={entryMainScrollRef}>
           <div className="entry-main__topbar">
             <button

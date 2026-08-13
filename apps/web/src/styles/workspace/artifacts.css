@@ -2880,6 +2880,8 @@
   cursor: pointer;
   overflow: hidden;
   text-align: center;
+  content-visibility: auto;
+  contain-intrinsic-size: 104px 112px;
   transition: border-color 140ms var(--ease-out), box-shadow 140ms var(--ease-out), transform 140ms var(--ease-out);
 }
 .newproj-start-card:hover {
