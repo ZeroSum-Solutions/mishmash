@@ -40,6 +40,9 @@ export interface BuildDeckRenderInputOptions {
   // Page mode only: split a long non-deck page into one image per viewport
   // (multi-page PDF). Ignored when the artifact renders as a deck.
   paginate?: boolean;
+  // Capture the one viewport-sized band at this document offset instead of the
+  // whole page. See DesktopRenderSlidesInput.viewportScrollY.
+  viewportScrollY?: number;
   title?: string;
 }
 
@@ -80,6 +83,8 @@ export async function buildDeckRenderInput(
       ...(options.paginate == null ? {} : { paginate: options.paginate }),
       ...(options.width == null ? {} : { width: options.width }),
       ...(options.height == null ? {} : { height: options.height }),
+      // Presence-checked: 0 is the top of the document, not a missing value.
+      ...(options.viewportScrollY == null ? {} : { viewportScrollY: options.viewportScrollY }),
     },
   };
 }

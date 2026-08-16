@@ -56,6 +56,9 @@ export interface BuildDesktopArtifactExportInputOptions {
   title?: string;
   width?: number;
   height?: number;
+  /** Presence switches the render from full-page to the one viewport-sized band
+   * at this offset. See DesktopExportArtifactInput.viewportScrollY. */
+  viewportScrollY?: number;
 }
 
 export async function buildDesktopArtifactExportInput(
@@ -77,6 +80,8 @@ export async function buildDesktopArtifactExportInput(
     ...(options.imageFormat ? { imageFormat: options.imageFormat } : {}),
     ...(options.width ? { width: options.width } : {}),
     ...(options.height ? { height: options.height } : {}),
+    // Presence-checked, not truthiness-checked: 0 means the top of the document.
+    ...(options.viewportScrollY != null ? { viewportScrollY: options.viewportScrollY } : {}),
   };
 }
 

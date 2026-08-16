@@ -1211,5 +1211,23 @@
       "GET /api/routing/gates",
       "POST /api/routing/gates/run"
     ]
+  },
+  {
+    "capability": "shell",
+    "uiEntryPoint": "Workspace Terminal tab (interactive project shell)",
+    "cliArgs": [
+      "shell",
+      "--help"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/terminals",
+    "outputSchema": "{ id, pid, shell, cols, rows } for the created terminal; the interactive session then streams over GET /api/projects/:id/terminals/:tid/stream",
+    "parityApplicable": false,
+    "reason": "od shell is an interactive PTY. Creating the terminal is a single POST, but the capability itself is the attached session: output arrives over an SSE stream and input goes back through /stdin, so there is no single-shot response for the gate to compare against a UI call. The terminal is also spawned with a real pty whose first bytes are the user's shell prompt, which is environment-dependent by construction and not stable across a UI/CLI pair.",
+    "probeBody": {
+      "cols": 80,
+      "rows": 24
+    },
+    "knownNamespaceRoutes": []
   }
 ]

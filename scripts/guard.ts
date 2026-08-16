@@ -15,6 +15,7 @@ import { checkComponentsManifestExtraction } from "./check-components-manifest-e
 import { checkPluginPreviewManifest } from "./check-plugin-preview-manifest.ts";
 import { checkBrandSurfaces } from "./check-brand-surfaces.ts";
 import { checkForkRepoLinks } from "./check-fork-repo-links.ts";
+import { checkCanvasCoverage } from "./canvas-coverage-report.ts";
 import { checkDaemonFilesystemWrites } from "./check-daemon-filesystem-writes.ts";
 import { validatePlaywrightSuiteTopology } from "../e2e/lib/playwright/suites.ts";
 import {
@@ -1989,6 +1990,9 @@ const checks: GuardCheck[] = [
   { name: "daemon filesystem writes", run: checkDaemonFilesystemWrites },
   { name: "brand surfaces", run: checkBrandSurfaces },
   { name: "fork repo links", run: checkForkRepoLinks },
+  // Ran by hand until now, which is how a high-risk row stayed marked covered
+  // while its capability was broken. Drift is only caught if the gate runs.
+  { name: "canvas coverage inventory", run: checkCanvasCoverage },
 ];
 
 async function runChecks(): Promise<boolean> {

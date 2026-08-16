@@ -6,6 +6,11 @@ export interface ExportCliRequestOptions {
   deck?: boolean;
   imageFormat?: ExportImageFormat;
   title?: string;
+  width?: number;
+  height?: number;
+  /** Presence asks for the single viewport-sized band at this document offset
+   * instead of the whole page, and the daemon requires width/height with it. */
+  viewportScrollY?: number;
 }
 
 export interface ExportCliDeckModeOptions {
@@ -39,6 +44,10 @@ export function buildExportCliRequestBody(options: ExportCliRequestOptions): Rec
     ...(deck !== undefined ? { deck } : {}),
     ...(options.format === "image" && options.imageFormat ? { imageFormat: options.imageFormat } : {}),
     ...(options.title ? { title: options.title } : {}),
+    ...(options.width != null ? { width: options.width } : {}),
+    ...(options.height != null ? { height: options.height } : {}),
+    // Presence-checked: 0 is the top of the document, not a missing value.
+    ...(options.viewportScrollY != null ? { viewportScrollY: options.viewportScrollY } : {}),
   };
 }
 

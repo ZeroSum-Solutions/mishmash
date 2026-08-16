@@ -97,6 +97,7 @@ import {
   exportProjectAsPptx,
   exportProjectAsZip,
   exportProjectImageDataUrl,
+  readPreviewViewportRect,
   exportProjectScreenshotPdf,
   exportSnapshotAsPdf,
   copyImageDataUrlToClipboard,
@@ -295,11 +296,11 @@ const POWERED_PREVIEW_ALLOW =
 const PREVIEW_BRIDGE_QUERY = 'odPreviewBridge=scroll&odPreviewBridge=selection&odPreviewBridge=snapshot';
 const HTML_PASSIVE_PREVIEW_FULL_TEXT_LIMIT = 2 * 1024 * 1024;
 const HTML_ROUTING_TEXT_PREVIEW_LIMIT = 96 * 1024;
-const HTML_PREVIEW_ASSET_PREFLIGHT_LIMIT = 32;
+export const HTML_PREVIEW_ASSET_PREFLIGHT_LIMIT = 32;
 type HtmlSourceLoadMode = 'full' | 'routing-preview';
 type PreviewAssetWarning = { filePath: string };
 
-function previewTextNeedsFullSourceForSafeInline(source: string | null): boolean {
+export function previewTextNeedsFullSourceForSafeInline(source: string | null): boolean {
   if (!source) return false;
   return (
     htmlNeedsSandboxShim(source) ||
@@ -309,7 +310,7 @@ function previewTextNeedsFullSourceForSafeInline(source: string | null): boolean
   );
 }
 
-function isBlockedPreviewAssetResponse(body: unknown): boolean {
+export function isBlockedPreviewAssetResponse(body: unknown): boolean {
   if (typeof body === 'string') {
     return /path escapes project dir/i.test(body);
   }
@@ -1086,7 +1087,7 @@ function compareDeploymentsByNewest(a: WebDeploymentInfo, b: WebDeploymentInfo):
   return deploymentTimestamp(b) - deploymentTimestamp(a);
 }
 
-function shareUrlForDeployment(deployment: WebDeploymentInfo): string {
+export function shareUrlForDeployment(deployment: WebDeploymentInfo): string {
   const customDomain = deployment.providerId === CLOUDFLARE_PAGES_PROVIDER_ID
     ? deployment.cloudflarePages?.customDomain
     : undefined;
@@ -1096,7 +1097,7 @@ function shareUrlForDeployment(deployment: WebDeploymentInfo): string {
   return deployment.url?.trim() || '';
 }
 
-function resolveShareUrl(rawUrl: string): string {
+export function resolveShareUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
   if (!trimmed) return '';
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
@@ -1104,7 +1105,7 @@ function resolveShareUrl(rawUrl: string): string {
   return new URL(trimmed, window.location.origin).toString();
 }
 
-function pickLatestShareDeployment(
+export function pickLatestShareDeployment(
   deploymentsByProvider: Partial<Record<WebDeployProviderId, WebDeploymentInfo>>,
 ): WebDeploymentInfo | null {
   return Object.values(deploymentsByProvider)
@@ -6359,6 +6360,13 @@ function HtmlViewer({
   const [inspectMode, setInspectMode] = useState(false);
   const [agentToolsOpen, setAgentToolsOpen] = useState(false);
   const [drawOverlayOpen, setDrawOverlayOpen] = useState(false);
+  // Driven by the srcDoc tweaks bridge's `od:tweaks-available` /
+  // `od:tweaks-panel-state` postMessages (see the message listener below).
+  // `tweaksAvailable` gates the toolbar toggle's disabled state; the bridge
+  // only exists on the srcDoc path, so a URL-loaded artifact reports nothing
+  // and the toggle stays disabled until tweaksBridge routes it to srcDoc.
+  const [tweaksAvailable, setTweaksAvailable] = useState(false);
+  const [tweaksPanelVisible, setTweaksPanelVisible] = useState(false);
   // for hint managing hint box state
   const [openHintBox, setOpenHintBox] = useState(true);
   const [manualEditMode, setManualEditModeRaw] = useState(false);
@@ -6442,6 +6450,33 @@ function HtmlViewer({
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [isOurPreviewIframeSource, onBrandExtractionStopRequest]);
+  // Tweaks bridge receiver (see injectTweaksBridge in runtime/srcdoc.ts).
+  // `od:tweaks-panel-state` just mirrors the artifact's own `× close` /
+  // `T`-shortcut toggle back into the host so the toolbar stays in sync —
+  // accept it from either iframe like every other bridge echo. But
+  // `od:tweaks-available` sets whether the toggle is enabled at all, and
+  // both iframes stay mounted with only one actually shown (CSS visibility
+  // swap, not unmount) — a stale `available:true` from the iframe the user
+  // just navigated away from would leave the toggle wrongly enabled for the
+  // artifact now on screen, so this one additionally requires the message
+  // come from the currently active iframe (AGENTS.md "Chat UI conventions").
+  useEffect(() => {
+    function onMessage(ev: MessageEvent) {
+      if (!isOurPreviewIframeSource(ev.source)) return;
+      const data = ev.data as { type?: unknown } | null;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'od:tweaks-panel-state') {
+        setTweaksPanelVisible(!!(data as { visible?: unknown }).visible);
+        return;
+      }
+      if (data.type === 'od:tweaks-available') {
+        if (!isActivePreviewIframeSource(ev.source)) return;
+        setTweaksAvailable(!!(data as { available?: unknown }).available);
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [isActivePreviewIframeSource, isOurPreviewIframeSource]);
   const previewScrollRestoreRef = useRef<{
     hostLeft: number;
     hostTop: number;
@@ -7272,6 +7307,17 @@ function HtmlViewer({
     const s = routingHtmlSource;
     return s != null && htmlNeedsRedirectGuard(s);
   }, [passiveLargeHtmlPreview, routingHtmlSource]);
+  // The artifact ships the class based tweaks template (`.tw-panel` /
+  // `.tw-hidden`). Only the srcDoc path injects the tweaks bridge that
+  // reports availability and drives panel visibility (see "Chat UI
+  // conventions" in AGENTS.md), so this forces srcDoc via urlLoadDecision
+  // below — otherwise the toolbar toggle would stay disabled forever on an
+  // artifact that actually has a panel to show.
+  const tweaksTemplateBridge = useMemo(() => {
+    if (passiveLargeHtmlPreview) return false;
+    const s = routingHtmlSource;
+    return s != null && hasTweaksTemplate(s);
+  }, [passiveLargeHtmlPreview, routingHtmlSource]);
   // Set by the injected guard's `od:redirect-loop-blocked` postMessage. The
   // browser makes `window.location` unforgeable, so a runaway reload can only be
   // stopped host-side — parking the srcDoc iframe on static content below. File-
@@ -7370,6 +7416,7 @@ function HtmlViewer({
     urlModeBridge,
     inspectMode,
     drawMode: drawOverlayOpen,
+    tweaksBridge: tweaksTemplateBridge,
     forceInline: (forceInline || needsSandboxShim) && !needsPowered,
     needsFocusGuard: needsFocusGuard && !needsPowered,
     needsRedirectGuard: needsRedirectGuard && !needsPowered,
@@ -7413,6 +7460,11 @@ function HtmlViewer({
     setBoardMode(false);
     setInspectMode(false);
     setSrcDocMaterialized(false);
+    // A new file starts with no known tweaks panel until its own bridge (if
+    // any) reports in — otherwise the toggle would keep showing the previous
+    // artifact's availability/visibility for a beat after switching files.
+    setTweaksAvailable(false);
+    setTweaksPanelVisible(false);
     // Closing boardMode alone is not enough: the comment dock renders off
     // `commentPanelOpen` and a panel save reuses `activeCommentTarget` /
     // `activePreviewCommentId`, both file-scoped. Left open across a file swap
@@ -10095,6 +10147,17 @@ function HtmlViewer({
     setAgentToolsOpen(false);
   }
 
+  // Closes the artifact's tweaks panel from a tool activation that isn't the
+  // tweaks toggle itself (Draw/Comment/ManualEdit taking over the preview
+  // surface). Mirrors toggleTweaksPanel's own close path: flips the host flag
+  // AND tells the iframe bridge, so the panel actually hides instead of just
+  // the toolbar button losing its pressed state.
+  function closeTweaksPanel() {
+    if (!tweaksPanelVisible) return;
+    setTweaksPanelVisible(false);
+    iframeRef.current?.contentWindow?.postMessage({ type: 'od:tweaks-panel-visible', visible: false }, '*');
+  }
+
   function activateDrawTool() {
     fireArtifactToolbarClick('mark');
     const next = !drawOverlayOpen;
@@ -10110,6 +10173,7 @@ function HtmlViewer({
       setBoardMode(false);
       clearBoardComposer();
       setInspectMode(false);
+      closeTweaksPanel();
       setMode('preview');
       setDrawOverlayOpen(true);
       closeArtifactToolMenus();
@@ -10121,6 +10185,69 @@ function HtmlViewer({
       return;
     }
     activateDraw();
+  }
+
+  // Drives the artifact's own tweaks panel (`.tw-panel`), not a host-owned
+  // motion-authoring surface — see injectTweaksBridge in runtime/srcdoc.ts.
+  // The active iframe is always the srcDoc one while a panel is available:
+  // tweaksBridge forces srcDoc via urlLoadDecision whenever
+  // hasTweaksTemplate(source) is true.
+  function toggleTweaksPanel() {
+    fireArtifactToolbarClick('tweaks');
+    const next = !tweaksPanelVisible;
+    if (!next) {
+      closeTweaksPanel();
+      return;
+    }
+    // Opening Tweaks while another tool owns the preview surface would stack
+    // two host-toolbar panels over it — mirrors the clearing every other
+    // activate*Tool() already does when it takes over the preview surface.
+    const openTweaks = () => {
+      setInspectMode(false);
+      setCommentPanelOpen(false);
+      setCommentCreateMode(false);
+      setBoardMode(false);
+      clearBoardComposer();
+      setDrawOverlayOpen(false);
+      setTweaksPanelVisible(true);
+      iframeRef.current?.contentWindow?.postMessage({ type: 'od:tweaks-panel-visible', visible: true }, '*');
+    };
+    if (manualEditMode) {
+      void exitManualEditModeAfterFlush().then((ok) => {
+        if (ok) openTweaks();
+      });
+      return;
+    }
+    openTweaks();
+  }
+
+  function activateInspectTool() {
+    fireArtifactToolbarClick('inspect');
+    const next = !inspectMode;
+    if (!next) {
+      setInspectMode(false);
+      setAgentToolsOpen(false);
+      return;
+    }
+    capturePreviewScrollPosition();
+    const activateInspect = () => {
+      setCommentPanelOpen(false);
+      setCommentCreateMode(false);
+      setBoardMode(false);
+      clearBoardComposer();
+      setDrawOverlayOpen(false);
+      closeTweaksPanel();
+      setMode('preview');
+      setInspectMode(true);
+      closeArtifactToolMenus();
+    };
+    if (manualEditMode) {
+      void exitManualEditModeAfterFlush().then((ok) => {
+        if (ok) activateInspect();
+      });
+      return;
+    }
+    activateInspect();
   }
 
   function activateCommentTool() {
@@ -10138,6 +10265,7 @@ function HtmlViewer({
       setCommentCreateMode(false);
       clearBoardComposer();
       setInspectMode(false);
+      closeTweaksPanel();
       setDrawOverlayOpen(false);
       setMode('preview');
       activateBoard('inspect');
@@ -10169,6 +10297,7 @@ function HtmlViewer({
       setCommentCreateMode(true);
       if (!activeCommentTarget) clearBoardComposer();
       setInspectMode(false);
+      closeTweaksPanel();
       setDrawOverlayOpen(false);
       setMode('preview');
       activateBoard('inspect');
@@ -10192,6 +10321,7 @@ function HtmlViewer({
       setBoardMode(false);
       clearBoardComposer();
       setInspectMode(false);
+      closeTweaksPanel();
       setDrawOverlayOpen(false);
       setMode('preview');
       setManualEditViewportWidth(previewBodyRef.current?.clientWidth ?? null);
@@ -10510,7 +10640,28 @@ function HtmlViewer({
     setDeployMenuOpen((v) => !v);
   };
   const captureExportImageSnapshot = useCallback(async (
-    options?: { wholeDeck?: boolean; context?: HtmlVersionExportContext | null },
+    options?: {
+      wholeDeck?: boolean;
+      context?: HtmlVersionExportContext | null;
+      /**
+       * Set by callers that composite NOTHING onto the returned snapshot, which
+       * is what makes the daemon's off-screen render substitutable for a
+       * viewport-matched one. Copy screenshot and Export as image qualify;
+       * annotation capture does not — PreviewDrawOverlay re-paints its marks
+       * onto the result scaled against the preview frame's rect, so handing it
+       * an off-screen render would land them on the wrong pixels.
+       */
+      allowOffscreenRender?: boolean;
+      /**
+       * Set by annotation capture, the one caller that DOES composite onto the
+       * result. It asks the daemon for the visible band rather than the whole
+       * document, which is the only render the overlay's rect-based scaling is
+       * true against. Mutually exclusive in practice with `allowOffscreenRender`:
+       * that flag exists for callers who need any faithful render, this one for
+       * the caller who needs a viewport-matched one.
+       */
+      viewportClip?: boolean;
+    },
   ) => {
     const exportContext = options?.context ?? null;
     const imageDeckSignal = deckExportSignalForContext(exportContext);
@@ -10522,7 +10673,7 @@ function HtmlViewer({
     // in the browser screenshot flow (DesignBrowserPanel).
     await waitForAnimationFrame();
     await waitForAnimationFrame();
-    // Prefer the daemon's off-screen render (desktop only): isolated from the
+    // Prefer the daemon's off-screen render: isolated from the
     // preview pane and, rendering the artifact alone in a hidden window, it can
     // never capture Open Design's own UI. Page exports use the selected preview
     // preset; desktop pages and decks retain the renderer defaults. `wholeDeck`
@@ -10531,7 +10682,45 @@ function HtmlViewer({
     // reports; otherwise (Copy screenshot, Mark/Draw capture) it grabs the
     // CURRENT slide, mirroring what's on screen. An ordinary page is its
     // full-page capture either way.
-    if (isOpenDesignHostAvailable() && projectId && file.name) {
+    // `isOpenDesignHostAvailable()` alone used to gate this, and it is the
+    // wrong question: it asks whether the CURRENT BROWSER is the Electron
+    // shell, while the renderer it guards lives in the daemon (Playwright
+    // Chromium, reached over plain HTTP) and answers any browser. This fork
+    // ships no Electron shell, so that gate was permanently false in the web
+    // Studio and every capture fell through to the foreignObject bridge, which
+    // fails on real artifacts.
+    //
+    // It stays as one disjunct so a desktop host keeps its exact prior
+    // behaviour for every caller, and `allowOffscreenRender` adds the browser
+    // path only for callers that composite nothing onto the result. A runtime
+    // that genuinely has no renderer answers 501, which
+    // `exportProjectImageDataUrl` reports as `unavailable`, and we fall through
+    // below exactly as before.
+    // Annotation capture, with no host compositor to grab on-screen pixels. Ask
+    // the daemon for exactly the band the user is looking at — same document,
+    // same viewport size, same scroll offset — so PreviewDrawOverlay's marks
+    // scale onto it correctly. A host, where it exists, keeps its compositor
+    // snapshot: that is already a viewport-matched image and is untouched here.
+    if (options?.viewportClip === true && !isOpenDesignHostAvailable() && projectId && file.name) {
+      const viewport = readPreviewViewportRect(iframeRef.current ?? srcDocPreviewIframeRef.current);
+      if (viewport) {
+        const rendered = await exportProjectImageDataUrl({
+          projectId,
+          fileName: file.name,
+          // Always page semantics: "what is on screen" is a viewport question
+          // even when the artifact happens to be a deck.
+          deck: false,
+          width: viewport.width,
+          height: viewport.height,
+          viewportScrollY: viewport.scrollY,
+          ...(exportContext?.versionId ? { versionId: exportContext.versionId } : {}),
+        });
+        if (rendered.ok) return rendered.snapshot;
+        if ('error' in rendered) throw new Error(rendered.error);
+      }
+    }
+
+    if ((isOpenDesignHostAvailable() || options?.allowOffscreenRender === true) && projectId && file.name) {
       // Deck-vs-page uses the same signal as PDF export — broader than the viewer's nav
       // signal — so runtime-managed decks (`<deck-stage>` / `data-screen-label`,
       // no literal `.slide`) export as a deck instead of a single page-mode shot
@@ -10545,7 +10734,15 @@ function HtmlViewer({
       // visible host snapshot (= the slide on screen). Whole-deck / pages /
       // tracked `.slide` decks still render off-screen.
       const trackedActive = slideState?.active ?? htmlPreviewSlideState.get(previewStateKey)?.active ?? null;
-      const plan = planDeckImageCapture({ deck: imageDeckSignal, wholeDeck, trackedActive });
+      const plan = planDeckImageCapture({
+        deck: imageDeckSignal,
+        wholeDeck,
+        trackedActive,
+        // Only for an opted-in caller AND only when there is no compositor to
+        // produce the viewport capture the plan would otherwise ask for. With a
+        // host present this stays false, so desktop behaviour is untouched.
+        fullPageFallback: options?.allowOffscreenRender === true && !isOpenDesignHostAvailable(),
+      });
       if (plan.useOffscreen) {
         const exportViewport = !imageDeckSignal && previewViewport !== 'desktop'
           ? PREVIEW_VIEWPORT_PRESETS.find((preset) => preset.id === previewViewport)
@@ -10626,29 +10823,39 @@ function HtmlViewer({
     file.name,
   ]);
 
+  // PreviewDrawOverlay calls this with no arguments, so the capture mode has to
+  // be bound here. It is the only caller that re-paints onto what it gets back,
+  // which is why it asks for a viewport-clipped render rather than the full-page
+  // one Copy screenshot and Export as image are happy with.
+  const captureAnnotationBackgroundSnapshot = useCallback(
+    () => captureExportImageSnapshot({ viewportClip: true }),
+    [captureExportImageSnapshot],
+  );
+
   const handleCopyScreenshot = useCallback(async () => {
     fireArtifactToolbarClick('screenshot');
     if (screenshotInFlightRef.current) return;
     screenshotInFlightRef.current = true;
     setExportToast({ message: t('fileViewer.screenshotCopying'), tone: 'loading' });
     try {
-      const snap = await captureExportImageSnapshot();
+      const snap = await captureExportImageSnapshot({ allowOffscreenRender: true });
       if (!snap) {
         setExportToast({ message: t('fileViewer.screenshotPreviewLoading'), tone: 'error' });
         return;
       }
       const result = await copyImageDataUrlToClipboard(snap.dataUrl);
+      // 'unfocused' is separated from 'denied' because the two need different
+      // things from the user: a refusal is out of their hands, while an
+      // unfocused tab is fixed by the click they were about to make anyway.
+      const failureKey = {
+        denied: 'fileViewer.screenshotClipboardDenied',
+        unfocused: 'fileViewer.screenshotClipboardUnfocused',
+        failed: 'fileViewer.screenshotCaptureFailed',
+      } as const;
       setExportToast(
         result === 'copied'
           ? { message: t('fileViewer.screenshotCopied'), tone: 'success' }
-          : {
-              message: t(
-                result === 'denied'
-                  ? 'fileViewer.screenshotClipboardDenied'
-                  : 'fileViewer.screenshotCaptureFailed',
-              ),
-              tone: 'error',
-            },
+          : { message: t(failureKey[result]), tone: 'error' },
       );
     } catch (err) {
       console.warn('[handleCopyScreenshot] failed:', err);
@@ -10757,7 +10964,17 @@ function HtmlViewer({
         // Export as image of a deck = the whole deck stitched into one long
         // image (every slide), matching the count the viewer reports. Copy
         // screenshot keeps the current slide.
-        const snap = await captureExportImageSnapshot({ wholeDeck: true, context });
+        // `allowOffscreenRender` is safe here for the same reason it is safe for
+        // Copy screenshot: this flow composites nothing onto the returned
+        // snapshot, it hands the pixels straight to the encoder. Everything the
+        // renderer cannot serve (it answers 501 → `unavailable`) still falls
+        // through to the bridge chain below, which is what the precedence specs
+        // in `file-viewer-image-export.test.tsx` pin.
+        const snap = await captureExportImageSnapshot({
+          wholeDeck: true,
+          context,
+          allowOffscreenRender: true,
+        });
         if (!snap) {
           setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
           fireImageExportResult('failed', 'CAPTURE_FAILED');
@@ -11612,6 +11829,20 @@ function HtmlViewer({
               </button>
               <span className="viewer-toolbar-tool-divider" aria-hidden />
               <button
+                className={`viewer-action viewer-action-icon od-tooltip${inspectMode ? ' active' : ''}`}
+                type="button"
+                data-testid="inspect-mode-toggle"
+                data-tooltip={t('fileViewer.inspect')}
+                data-tooltip-placement="bottom"
+                title={t('fileViewer.inspect')}
+                aria-label={t('fileViewer.inspect')}
+                aria-pressed={inspectMode}
+                onClick={activateInspectTool}
+              >
+                <RemixIcon name="palette-line" size={15} />
+              </button>
+              <span className="viewer-toolbar-tool-divider" aria-hidden />
+              <button
                 className={`viewer-action viewer-action-icon od-tooltip${manualEditMode ? ' active' : ''}`}
                 type="button"
                 data-testid="manual-edit-mode-toggle"
@@ -11623,6 +11854,21 @@ function HtmlViewer({
                 onClick={activateManualEditTool}
               >
                 <RemixIcon name="edit-line" size={15} />
+              </button>
+              <span className="viewer-toolbar-tool-divider" aria-hidden />
+              <button
+                className={`viewer-action viewer-action-icon od-tooltip${tweaksPanelVisible ? ' active' : ''}`}
+                type="button"
+                data-testid="tweaks-panel-toggle"
+                data-tooltip={tweaksAvailable ? t('fileViewer.tweaks') : t('fileViewer.tweaksUnavailable')}
+                data-tooltip-placement="bottom"
+                title={tweaksAvailable ? t('fileViewer.tweaks') : t('fileViewer.tweaksUnavailable')}
+                aria-label={t('fileViewer.tweaks')}
+                aria-pressed={tweaksPanelVisible}
+                disabled={!tweaksAvailable}
+                onClick={toggleTweaksPanel}
+              >
+                <Icon name="tweaks" size={15} />
               </button>
               <span className="viewer-toolbar-tool-divider" aria-hidden />
               <button
@@ -11806,6 +12052,18 @@ function HtmlViewer({
                     >
                       <RemixIcon name="mark-pen-line" size={15} />
                       <span>{t('fileViewer.mark')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`viewer-toolbar-more-item${inspectMode ? ' active' : ''}`}
+                      role="menuitem"
+                      onClick={() => {
+                        activateInspectTool();
+                        setToolbarMoreOpen(false);
+                      }}
+                    >
+                      <RemixIcon name="palette-line" size={15} />
+                      <span>{t('fileViewer.inspect')}</span>
                     </button>
                     <button
                       type="button"
@@ -12261,7 +12519,7 @@ function HtmlViewer({
                     active={drawOverlayOpen}
                     onActiveChange={setDrawOverlayOpen}
                     captureViewport
-                    captureSnapshot={captureExportImageSnapshot}
+                    captureSnapshot={captureAnnotationBackgroundSnapshot}
                     captureTarget={null}
                     filePath={file.name}
                     sendDisabled={streaming}

@@ -919,10 +919,16 @@ const SUBCOMMAND_MAP = {
   usage: runUsage,
   cover: runCover,
   route: runRoute,
+  // `runShell` shipped complete but unregistered, so `od shell` reported an
+  // unknown subcommand while the handler sat unreferenced. That left the
+  // in-app terminal reachable from the web UI only, which the "Capability
+  // exposure" rule in AGENTS.md treats as a regression.
+  shell: runShell,
 };
 
 const EXPORT_STRING_FLAGS = new Set([
   'daemon-url', 'project', 'format', 'out', 'output', 'image-format', 'title', 'file',
+  'width', 'height', 'scroll-y',
 ]);
 const EXPORT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'deck', 'page', 'no-deck']);
 // EXPORT_FORMATS / EXPORT_IMAGE_FORMATS are the shared contract DTO (single
@@ -946,6 +952,13 @@ Options:
   --image-format <fmt>     png | jpeg (for --format image)
   --deck                   Treat the artifact as a multi-slide deck
   --page, --no-deck        Treat the artifact as a normal scrollable page
+  --width <px>             Render viewport width (for --format image)
+  --height <px>            Render viewport height (for --format image)
+  --scroll-y <px>          Capture only the one viewport-sized band at this
+                           document offset instead of the whole page. Requires
+                           --width and --height, and --format image. This is the
+                           mode the in-app annotation capture uses, so a mark
+                           composited onto the result lands on the right pixels.
   --title <title>          Title used for metadata / default filename
   --json                   Print a machine-readable result envelope
   --daemon-url <url>       Override daemon URL
@@ -953,7 +966,9 @@ Options:
 Examples:
   od export index.html --project p1 --format pdf --out page.pdf
   od export slide.html --project p1 --format image --image-format png --out slide.png
-  od export deck.html --project p1 --format pptx --out deck.pptx`);
+  od export deck.html --project p1 --format pptx --out deck.pptx
+  od export index.html --project p1 --format image --width 1280 --height 800 \\
+      --scroll-y 1600 --out fold.png`);
 }
 
 async function runExport(args) {
@@ -988,6 +1003,35 @@ async function runExport(args) {
     console.error('--image-format is only valid with --format image');
     process.exit(2);
   }
+  // Viewport geometry for --format image. Parsed here rather than passed through
+  // as strings so a typo fails at the CLI boundary with a usable message instead
+  // of as a 400 from the daemon.
+  const pixelFlag = (name) => {
+    const raw = flags[name];
+    if (raw == null) return undefined;
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) {
+      console.error(`invalid --${name}: ${raw} (expected a non-negative number)`);
+      process.exit(2);
+    }
+    return value;
+  };
+  const width = pixelFlag('width');
+  const height = pixelFlag('height');
+  const scrollY = pixelFlag('scroll-y');
+  if (scrollY != null) {
+    if (format !== 'image') {
+      console.error('--scroll-y is only valid with --format image');
+      process.exit(2);
+    }
+    // The renderer clips to the viewport it is given. Without both dimensions it
+    // would clip to its own default and return a band of the wrong size, which is
+    // silently wrong rather than loudly wrong.
+    if (width == null || height == null) {
+      console.error('--scroll-y requires both --width and --height');
+      process.exit(2);
+    }
+  }
   const base = await cliDaemonBaseUrl(flags);
   // All three formats rasterize through the desktop screenshot renderer so the
   // CLI matches the UI exactly. In particular `pdf` uses `/export/pdf-image`
@@ -1013,6 +1057,9 @@ async function runExport(args) {
     deck: deckMode,
     ...(format === 'image' && flags['image-format'] ? { imageFormat: flags['image-format'] } : {}),
     ...(flags.title ? { title: flags.title } : {}),
+    ...(width != null ? { width } : {}),
+    ...(height != null ? { height } : {}),
+    ...(scrollY != null ? { viewportScrollY: scrollY } : {}),
   });
   let resp;
   try {

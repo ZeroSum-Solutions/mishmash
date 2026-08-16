@@ -683,47 +683,32 @@ describe('DesignSystemCreationFlow', () => {
     expect(onCreated).not.toHaveBeenCalled();
   });
 
-  it.skip('opens the project as soon as the workspace exists and prepares the first chat task afterward', async () => {
-    const system: DesignSystemDetail = {
-      id: 'user:acme-design-system',
-      title: 'Acme Design System',
-      category: 'Custom',
-      summary: 'Acme product workspace.',
-      swatches: [],
-      surface: 'web',
-      body: '# Acme Design System\n',
-      source: 'user',
-      status: 'draft',
-      isEditable: true,
-      projectId: 'ds-acme-design-system',
-    };
+  // Repaired 2026-08-15: this spec drove the same dead createDesignSystemDraft
+  // pipeline as its sibling below, and asserted a race (project opens
+  // immediately; patchProject/onProjectPrepared land afterward) that the
+  // current two-phase brand-extraction flow no longer has. generate() now
+  // AWAITS prepareCreatedDesignSystemProject (source manifest write, then
+  // patchProject with the generation prompt) before calling onCreated, so the
+  // project handed to the caller already carries its prepared pendingPrompt
+  // and auto-send flag. This rewrite asserts that current ordering and the
+  // fully-prepared handoff instead of the old race.
+  it('prepares the project chat task before handing the project off to the caller', async () => {
     const project: Project = {
-      id: 'ds-acme-design-system',
-      name: 'Acme Design System',
+      id: 'ds-northwind-design-system',
+      name: 'Northwind Design System',
       skillId: null,
-      designSystemId: system.id,
+      designSystemId: 'user:northwind-design-system',
       createdAt: 1,
       updatedAt: 1,
       metadata: {
         kind: 'other',
         importedFrom: 'design-system',
         entryFile: 'DESIGN.md',
-        sourceFileName: system.id,
+        sourceFileName: 'user:northwind-design-system',
       },
     };
-    let resolveManifestWrite: (file: {
-      name: string;
-      size: number;
-      mtime: number;
-      kind: 'document';
-      mime: string;
-    }) => void = () => {};
-    mocks.writeProjectTextFile.mockReturnValueOnce(new Promise((resolve) => {
-      resolveManifestWrite = resolve;
-    }));
-    mocks.createDesignSystemDraft.mockResolvedValue(system);
-    mocks.ensureDesignSystemWorkspace.mockResolvedValue({ project, files: [] });
-    mocks.patchProject.mockResolvedValue({ ...project, pendingPrompt: 'Create this project as a design system.' });
+    mockBrandExtractProject(project);
+    mocks.patchProject.mockResolvedValue(project);
     const onCreated = vi.fn();
     const onProjectPrepared = vi.fn();
 
@@ -737,72 +722,66 @@ describe('DesignSystemCreationFlow', () => {
 
     fireEvent.change(screen.getByPlaceholderText(/Mission Impastabowl/i), {
       target: {
-        value: 'Acme: analytics workspace for operations teams',
+        value: 'Northwind: logistics workspace for warehouse teams',
       },
     });
+    addSourceUrl('https://github.com/northwind/warehouse-app');
     continueToGeneration();
-    continueToGeneration();
+    confirmExtraction();
 
-    await waitFor(() => expect(screen.getByText('Opening project...')).toBeTruthy());
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(project.id, project, `conv-${project.id}`));
-    expect(screen.queryByText('Creating your design system...')).toBeNull();
-    expect(screen.queryByText('Opening project chat...')).toBeNull();
-    expect(screen.queryByText('Updated todos')).toBeNull();
-    expect(mocks.patchProject).not.toHaveBeenCalled();
-    expect(onProjectPrepared).not.toHaveBeenCalled();
 
-    resolveManifestWrite({
-      name: 'context/source-context.md',
-      size: 1,
-      mtime: 1,
-      kind: 'document',
-      mime: 'text/markdown',
-    });
-    await waitFor(() => expect(mocks.patchProject).toHaveBeenCalledWith(
+    // The chat task — source manifest written, pendingPrompt patched, and the
+    // auto-send flag set — must already be prepared by the time the caller
+    // receives the project, not filled in afterward.
+    expect(mocks.writeProjectTextFile).toHaveBeenCalledWith(
+      project.id,
+      'context/source-context.md',
+      expect.stringContaining('Canonical design-system title: Northwind Design System'),
+    );
+    expect(mocks.patchProject).toHaveBeenCalledWith(
       project.id,
       expect.objectContaining({
         pendingPrompt: expect.stringContaining('Create this project as a complete MishMash design system workspace.'),
       }),
-    ));
-    await waitFor(() => expect(onProjectPrepared).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: project.id,
-        pendingPrompt: 'Create this project as a design system.',
-      }),
-    ));
+    );
+    expect(onProjectPrepared).toHaveBeenCalledWith(project);
+    expect(window.sessionStorage.getItem(`od:auto-send-first:${project.id}`)).toBe('1');
+
+    const patchOrder = mocks.patchProject.mock.invocationCallOrder[0]!;
+    const preparedOrder = onProjectPrepared.mock.invocationCallOrder[0]!;
+    const onCreatedOrder = onCreated.mock.invocationCallOrder[0]!;
+    expect(patchOrder).toBeLessThan(onCreatedOrder);
+    expect(preparedOrder).toBeLessThan(onCreatedOrder);
   });
 
-  it.skip('creates a project-backed design system and hands the first task to the normal project chat', async () => {
-    const system: DesignSystemDetail = {
-      id: 'user:acme-design-system',
-      title: 'Acme Design System',
-      category: 'Custom',
-      summary: 'Acme product workspace.',
-      swatches: [],
-      surface: 'web',
-      body: '# Acme Design System\n',
-      source: 'user',
-      status: 'draft',
-      isEditable: true,
-      projectId: 'ds-acme-design-system',
-    };
+    // Repaired 2026-08-15: the pre-refactor 5-step pipeline this spec exercised
+  // (createDesignSystemDraft -> ensureDesignSystemWorkspace -> patchProject)
+  // is dead code — createDesignSystemDraft is never called anywhere in the
+  // current component. Project-backed creation with this exact pending-prompt
+  // content is still live, just reached through the two-phase brand-extraction
+  // flow's prepareCreatedDesignSystemProject helper, gated on
+  // hasProjectStagingSources(state) (true here because a GitHub repo link is
+  // staged). See the passing "extracts a design system from a website..." and
+  // "records connected GitHub repository sources..." specs for the current
+  // shape this spec is aligned to.
+  it('creates a project-backed design system and hands the first task to the normal project chat', async () => {
     const project: Project = {
       id: 'ds-acme-design-system',
       name: 'Acme Design System',
       skillId: null,
-      designSystemId: system.id,
+      designSystemId: 'user:acme-design-system',
       createdAt: 1,
       updatedAt: 1,
       metadata: {
         kind: 'other',
         importedFrom: 'design-system',
         entryFile: 'DESIGN.md',
-        sourceFileName: system.id,
+        sourceFileName: 'user:acme-design-system',
       },
     };
-    mocks.createDesignSystemDraft.mockResolvedValue(system);
-    mocks.ensureDesignSystemWorkspace.mockResolvedValue({ project, files: [] });
-    mocks.patchProject.mockResolvedValue({ ...project, pendingPrompt: 'Create this project as a design system.' });
+    mockBrandExtractProject(project);
+    mocks.patchProject.mockResolvedValue(project);
 
     const onCreated = vi.fn();
     const onSystemsRefresh = vi.fn();
@@ -820,20 +799,11 @@ describe('DesignSystemCreationFlow', () => {
         value: 'Acme: analytics workspace for operations teams',
       },
     });
+    addSourceUrl('https://github.com/acme/acme-app');
     continueToGeneration();
-    continueToGeneration();
+    confirmExtraction();
 
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(project.id, project, `conv-${project.id}`));
-
-    expect(mocks.createDesignSystemDraft).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Acme Design System',
-        status: 'draft',
-        surface: 'web',
-        artifactMode: 'agent-managed',
-      }),
-    );
-    expect(mocks.ensureDesignSystemWorkspace).toHaveBeenCalledWith(system.id);
     await waitFor(() => expect(mocks.writeProjectTextFile).toHaveBeenCalled());
     expect(mocks.writeProjectTextFile).toHaveBeenCalledWith(
       project.id,
@@ -1849,37 +1819,30 @@ describe('DesignSystemCreationFlow', () => {
     );
   });
 
-  it.skip('infers a product title from a GitHub URL instead of the URL protocol', async () => {
-    const system: DesignSystemDetail = {
-      id: 'user:cherry-studio-design-system',
-      title: 'Cherry Studio Design System',
-      category: 'Custom',
-      summary: 'https://github.com/cherryhq/cherry-studio',
-      swatches: [],
-      surface: 'web',
-      body: '# Cherry Studio Design System\n',
-      source: 'user',
-      status: 'draft',
-      isEditable: true,
-      projectId: 'ds-cherry-studio-design-system',
-    };
+  // Repaired 2026-08-15: same dead pipeline as the two specs above.
+  // inferDesignSystemTitle/titleCandidateFromCompanyContext/
+  // githubRepoTitleFromText are still live and still feed
+  // buildCreationAgentPrompt/buildSourceContextManifest directly (unchanged
+  // logic) — only the trigger changed. A GitHub link alone (no company text)
+  // now needs to be staged as a source link (not just typed into the company
+  // field) for prepareCreatedDesignSystemProject to run at all.
+  it('infers a product title from a GitHub URL instead of the URL protocol', async () => {
     const project: Project = {
       id: 'ds-cherry-studio-design-system',
       name: 'Cherry Studio Design System',
       skillId: null,
-      designSystemId: system.id,
+      designSystemId: 'user:cherry-studio-design-system',
       createdAt: 1,
       updatedAt: 1,
       metadata: {
         kind: 'other',
         importedFrom: 'design-system',
         entryFile: 'DESIGN.md',
-        sourceFileName: system.id,
+        sourceFileName: 'user:cherry-studio-design-system',
       },
     };
-    mocks.createDesignSystemDraft.mockResolvedValue(system);
-    mocks.ensureDesignSystemWorkspace.mockResolvedValue({ project, files: [] });
-    mocks.patchProject.mockResolvedValue({ ...project, pendingPrompt: 'Create this project as a design system.' });
+    mockBrandExtractProject(project);
+    mocks.patchProject.mockResolvedValue(project);
 
     render(
       <DesignSystemCreationFlow
@@ -1892,26 +1855,20 @@ describe('DesignSystemCreationFlow', () => {
     fireEvent.change(screen.getByPlaceholderText(/Mission Impastabowl/i), {
       target: { value: 'https://github.com/cherryhq/cherry-studio' },
     });
+    addSourceUrl('https://github.com/cherryhq/cherry-studio');
     continueToGeneration();
-    continueToGeneration();
+    confirmExtraction();
 
-    await waitFor(() => expect(mocks.createDesignSystemDraft).toHaveBeenCalled());
-
-    expect(mocks.createDesignSystemDraft).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Cherry Studio Design System',
-      }),
-    );
-    expect(mocks.createDesignSystemDraft).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'https Design System',
-      }),
-    );
     await waitFor(() => expect(mocks.writeProjectTextFile).toHaveBeenCalled());
     expect(mocks.writeProjectTextFile).toHaveBeenCalledWith(
       project.id,
       'context/source-context.md',
       expect.stringContaining('Canonical design-system title: Cherry Studio Design System'),
+    );
+    expect(mocks.writeProjectTextFile).not.toHaveBeenCalledWith(
+      project.id,
+      'context/source-context.md',
+      expect.stringContaining('Canonical design-system title: https Design System'),
     );
     expect(mocks.patchProject).toHaveBeenCalledWith(
       project.id,
@@ -1919,40 +1876,34 @@ describe('DesignSystemCreationFlow', () => {
         pendingPrompt: expect.stringContaining('Design system workspace title:\nCherry Studio Design System'),
       }),
     );
+    const patchCall = mocks.patchProject.mock.calls.find(([id]) => id === project.id);
+    expect((patchCall?.[1] as { pendingPrompt?: string } | undefined)?.pendingPrompt).not.toContain(
+      'Design system workspace title:\nhttps Design System',
+    );
   });
 
-  it.skip('adds website source links with Enter and keeps them out of GitHub intake', async () => {
-    const system: DesignSystemDetail = {
-      id: 'user:open-design-website-design-system',
-      title: 'MishMash Website Design System',
-      category: 'Custom',
-      summary: 'MishMash website source.',
-      swatches: [],
-      surface: 'web',
-      body: '# MishMash Website Design System\n',
-      source: 'user',
-      status: 'draft',
-      isEditable: true,
-      projectId: 'ds-open-design-website-design-system',
-    };
+  // Repaired 2026-08-15: the placeholder this spec queried
+  // ('https://example.com or https://github.com/owner/repo') no longer
+  // exists — the GitHub/website fields were merged into one input with
+  // placeholder 'https://github.com/org/repo' (see addSourceUrl above). The
+  // dead createDesignSystemDraft pipeline is also gone. Rewritten against the
+  // current architecture: a lone (non-GitHub) website link never triggers
+  // hasProjectStagingSources, so it is handled entirely by the
+  // POST /api/brands `url` field — no local GitHub-repo intake plumbing
+  // (source manifest, patchProject prompt) runs for it at all. That absence
+  // is the real, current form of "keeps them out of GitHub intake."
+  it('adds website source links with Enter and sends them straight to brand extraction, not GitHub intake', async () => {
     const project: Project = {
-      id: 'ds-open-design-website-design-system',
+      id: 'brand-open-design-website',
       name: 'MishMash Website Design System',
-      skillId: null,
-      designSystemId: system.id,
+      skillId: 'brand-extract',
+      designSystemId: null,
       createdAt: 1,
       updatedAt: 1,
-      metadata: {
-        kind: 'other',
-        importedFrom: 'design-system',
-        entryFile: 'DESIGN.md',
-        sourceFileName: system.id,
-      },
+      metadata: { kind: 'other' },
     };
     const onBeforeGenerate = vi.fn();
-    mocks.createDesignSystemDraft.mockResolvedValue(system);
-    mocks.ensureDesignSystemWorkspace.mockResolvedValue({ project, files: [] });
-    mocks.patchProject.mockResolvedValue({ ...project, pendingPrompt: 'Create this project as a design system.' });
+    const fetchMock = mockBrandExtractProject(project);
 
     render(
       <DesignSystemCreationFlow
@@ -1962,7 +1913,7 @@ describe('DesignSystemCreationFlow', () => {
       />,
     );
 
-    const sourceInput = screen.getByPlaceholderText('https://example.com or https://github.com/owner/repo') as HTMLInputElement;
+    const sourceInput = screen.getByPlaceholderText('https://github.com/org/repo') as HTMLInputElement;
     fireEvent.change(sourceInput, { target: { value: 'open-design.ai' } });
     fireEvent.keyDown(sourceInput, { key: 'Enter', code: 'Enter' });
 
@@ -1970,38 +1921,33 @@ describe('DesignSystemCreationFlow', () => {
     expect(previewLink.href).toBe('https://open-design.ai/');
     expect(sourceInput.value).toBe('');
 
-    fireEvent.change(screen.getByPlaceholderText(/Mission Impastabowl/i), {
-      target: { value: 'MishMash website source' },
-    });
     continueToGeneration();
-    continueToGeneration();
+    confirmExtraction();
 
-    await waitFor(() => expect(mocks.createDesignSystemDraft).toHaveBeenCalled());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/brands', expect.objectContaining({ method: 'POST' })));
     expect(onBeforeGenerate).toHaveBeenCalledWith(expect.objectContaining({
       sourceCount: 1,
       sourceUrlCount: 1,
       githubRepoCount: 0,
     }));
-    const draftInput = mocks.createDesignSystemDraft.mock.calls[0]?.[0];
-    expect(draftInput?.provenance?.sourceUrls).toEqual(['https://open-design.ai']);
-    expect(draftInput?.provenance?.githubUrls).toBeUndefined();
+    const requestInit = fetchMock.mock.calls.find(([url]) => url === '/api/brands')?.[1] as { body: string };
+    const body = JSON.parse(requestInit.body) as { url?: string; designMd?: string };
+    expect(body.url).toBe('https://open-design.ai');
+    expect(body.designMd ?? '').not.toContain('GitHub');
 
-    await waitFor(() => expect(mocks.writeProjectTextFile).toHaveBeenCalled());
-    const sourceManifestCall = mocks.writeProjectTextFile.mock.calls.find(
-      (call) => call[0] === project.id && call[1] === 'context/source-context.md',
-    );
-    expect(sourceManifestCall?.[2]).toEqual(expect.stringContaining('## Source Links'));
-    expect(sourceManifestCall?.[2]).toEqual(expect.stringContaining('- https://open-design.ai'));
-    expect(sourceManifestCall?.[2]).not.toEqual(expect.stringContaining('GitHub Connector Intake Runbook'));
-    expect(mocks.patchProject).toHaveBeenCalledWith(
-      project.id,
-      expect.objectContaining({
-        pendingPrompt: expect.stringContaining('Use the linked website/source URLs as public style and product references'),
-      }),
-    );
+    // A lone website link never stages local sources, so no GitHub-repo
+    // intake plumbing (source manifest write, prompt patch) runs for it.
+    expect(mocks.writeProjectTextFile).not.toHaveBeenCalled();
+    expect(mocks.patchProject).not.toHaveBeenCalled();
   });
 
-  it.skip('allows GitHub repo links without Composio by using local GitHub intake', () => {
+  // Repaired 2026-08-15: the website and GitHub-repo fields used to be
+  // separate inputs; they were merged into one, and the "Figma URL" field
+  // (also under the now-live "Advanced" disclosure) got its own "Add"
+  // button with the same label, so the un-scoped `getByRole('button', {name:
+  // 'Add'})` this spec used now matches two elements. Scope the click to the
+  // repo/website input's own row, same as the `addSourceUrl` test helper.
+  it('allows GitHub repo links without Composio by using local GitHub intake', () => {
     const onOpenConnectorsTab = vi.fn();
     const config = {
       composio: { apiKeyConfigured: false },
@@ -2030,7 +1976,8 @@ describe('DesignSystemCreationFlow', () => {
     expect(screen.getByText('Not configured')).toBeTruthy();
 
     fireEvent.change(input, { target: { value: 'https://github.com/nexu-io/open-design/' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    const addButton = input.closest('.ds-resource-inline')?.querySelector('button') as HTMLButtonElement;
+    fireEvent.click(addButton);
 
     expect(screen.getByText('nexu-io/open-design')).toBeTruthy();
 
@@ -2104,7 +2051,11 @@ describe('DesignSystemCreationFlow', () => {
     expect(screen.getByRole('button', { name: 'Connect via Composio' })).toBeTruthy();
   });
 
-  it.skip('keeps GitHub repo links available and shows connected connector status', async () => {
+  // Repaired 2026-08-15: same two selector defects as the sibling spec above
+  // — the merged GitHub/website placeholder text, and the now-ambiguous
+  // "Add" button (also matched by the Figma URL field's Add button under the
+  // live "Advanced" disclosure).
+  it('keeps GitHub repo links available and shows connected connector status', async () => {
     const connectedConnector: ConnectorDetail = {
       id: 'github',
       name: 'GitHub',
@@ -2136,7 +2087,7 @@ describe('DesignSystemCreationFlow', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Show access methods' }));
       await waitFor(() => expect(screen.getByRole('button', { name: 'Connect via Composio' })).toBeTruthy());
-      expect((screen.getByPlaceholderText('https://example.com or https://github.com/owner/repo') as HTMLInputElement).disabled).toBe(false);
+      expect((screen.getByPlaceholderText('https://github.com/org/repo') as HTMLInputElement).disabled).toBe(false);
 
       fireEvent.click(screen.getByRole('button', { name: 'Connect via Composio' }));
 
@@ -2145,11 +2096,12 @@ describe('DesignSystemCreationFlow', () => {
       await waitFor(() => expect(onConnectorsChanged).toHaveBeenCalledTimes(1));
       expect(screen.queryByRole('button', { name: 'Configure' })).toBeNull();
       expect(screen.getByRole('button', { name: 'Disconnect' })).toBeTruthy();
-      const input = screen.getByPlaceholderText('https://example.com or https://github.com/owner/repo') as HTMLInputElement;
+      const input = screen.getByPlaceholderText('https://github.com/org/repo') as HTMLInputElement;
       expect(input.disabled).toBe(false);
 
       fireEvent.change(input, { target: { value: 'https://github.com/nexu-io/open-design/' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      const addButton = input.closest('.ds-resource-inline')?.querySelector('button') as HTMLButtonElement;
+      fireEvent.click(addButton);
 
       expect(screen.getByText('nexu-io/open-design')).toBeTruthy();
       expect(input.value).toBe('');

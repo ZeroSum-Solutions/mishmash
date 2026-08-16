@@ -160,4 +160,34 @@ describe('ProjectReferenceModal', () => {
       ]);
     });
   });
+
+  it('discards an already-resolved selection when a later pick in the same confirm fails', async () => {
+    // All-or-nothing: confirm() resolves each selected project's dir in
+    // sequence and bails on the first failure, so a working first pick must
+    // never reach onSelect on its own when a later pick in the same batch
+    // can't resolve — the caller (metadata.linkedDirs patch) must see either
+    // every selection or none, not a silently truncated list.
+    const secondProject: Project = {
+      ...project,
+      id: 'second-project',
+      name: 'Second Project',
+    };
+    const { onSelect } = renderModal({ projects: [project, secondProject] });
+    vi.mocked(getProjectDetail).mockImplementation(async (id: string) => {
+      if (id === project.id) {
+        return { project, resolvedDir: '/tmp/open-design/project-ref' };
+      }
+      if (id === secondProject.id) {
+        return { project: secondProject, resolvedDir: '' };
+      }
+      return null;
+    });
+
+    await screen.findByText('Reference Project');
+    fireEvent.click(screen.getByText('Second Project'));
+    fireEvent.click(screen.getByRole('button', { name: 'Reference project' }));
+
+    await screen.findByRole('alert');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });

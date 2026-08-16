@@ -646,8 +646,13 @@ export const VIDEO_MODELS: MediaModel[] = [
     caps: ['t2v', 'i2v', 'audio'],
   },
 
-  // OpenRouter video models.
-  { id: 'openrouter/bytedance/seedance-2.0:1080p', label: 'seedance-2.0 1080p (OR)', hint: 'OpenRouter · ByteDance · 1080p', provider: 'openrouter', caps: ['t2v', 'i2v', 'kf'], default: true },
+  // OpenRouter video models. Deliberately no `default: true` here: this entry
+  // carried one alongside the Volcengine seedance above, and `DEFAULT_VIDEO_MODEL`
+  // resolves through `find`, so the two were separated only by list position —
+  // reordering the catalogue would have moved the default onto a different
+  // provider's billing. The Volcengine entry keeps the flag because it is the one
+  // `find` already returned. Pinned by tests/media/default-model-uniqueness.test.ts.
+  { id: 'openrouter/bytedance/seedance-2.0:1080p', label: 'seedance-2.0 1080p (OR)', hint: 'OpenRouter · ByteDance · 1080p', provider: 'openrouter', caps: ['t2v', 'i2v', 'kf'] },
   { id: 'openrouter/bytedance/seedance-2.0', label: 'seedance-2.0 720p (OR)', hint: 'OpenRouter · ByteDance · 720p', provider: 'openrouter', caps: ['t2v', 'i2v', 'kf'] },
   { id: 'openrouter/bytedance/seedance-2.0:480p', label: 'seedance-2.0 480p (OR)', hint: 'OpenRouter · ByteDance · 480p', provider: 'openrouter', caps: ['t2v', 'i2v', 'kf'] },
   { id: 'openrouter/google/veo-3.1', label: 'veo-3.1 (OR)', hint: 'OpenRouter · Google', provider: 'openrouter', caps: ['t2v', 'i2v', 'audio'] },

@@ -283,6 +283,13 @@ export type DesktopRenderSlidesInput = {
   // fall back to renderer defaults.
   width?: number;
   height?: number;
+  // Page mode only: capture the ONE viewport-sized band starting at this document
+  // offset instead of the whole page. Used by annotation capture, whose marks are
+  // composited back onto the result against the on-screen frame's rect -- only a
+  // viewport-matched image places them correctly. `0` is a meaningful value (an
+  // unscrolled document), so this is presence-checked, never truthiness-checked.
+  // Takes precedence over `paginate`, and forces page mode even for a deck.
+  viewportScrollY?: number;
   // When set, the renderer writes each rendered image to a file inside this
   // directory and returns the file paths in `slideFiles` instead of base64
   // data URLs in `slides`. The daemon (which owns the data root) creates and
@@ -338,6 +345,18 @@ export type DesktopExportArtifactInput = {
   title: string;
   width?: number;
   height?: number;
+  /**
+   * Present = capture the single viewport-sized band starting at this document
+   * offset, instead of the whole page. Absent = whole page, which is what every
+   * artifact export wants.
+   *
+   * This exists for annotation capture, which composites the user's marks back
+   * onto the returned image using the on-screen preview frame's rect as the
+   * scale reference. Only a viewport-matched image makes that arithmetic true.
+   * `0` is a meaningful value (an unscrolled document), so callers and
+   * normalizers must presence-check it rather than test truthiness.
+   */
+  viewportScrollY?: number;
 };
 
 export type DesktopExportArtifactResult = {
@@ -752,7 +771,7 @@ function normalizeDesktopExportPdfInput(input: unknown): DesktopExportPdfInput {
 
 function normalizeDesktopRenderSlidesInput(input: unknown): DesktopRenderSlidesInput {
   const value = assertObject(input, "desktop render slides input");
-  assertKnownKeys(value, ["baseHref", "deck", "editable", "height", "html", "index", "outputDir", "pageImageFormat", "stitch", "paginate", "width"], "desktop render slides input");
+  assertKnownKeys(value, ["baseHref", "deck", "editable", "height", "html", "index", "outputDir", "pageImageFormat", "stitch", "paginate", "width", "viewportScrollY"], "desktop render slides input");
   if (value.deck != null && typeof value.deck !== "boolean") {
     throw new Error("desktop render slides deck must be a boolean");
   }
@@ -792,6 +811,9 @@ function normalizeDesktopRenderSlidesInput(input: unknown): DesktopRenderSlidesI
     ...(value.paginate == null ? {} : { paginate: value.paginate }),
     ...(value.width == null ? {} : { width: normalizeOptionalPositiveNumber(value.width, "desktop render slides width") }),
     ...(value.height == null ? {} : { height: normalizeOptionalPositiveNumber(value.height, "desktop render slides height") }),
+    ...(value.viewportScrollY == null
+      ? {}
+      : { viewportScrollY: normalizeOptionalNonNegativeNumber(value.viewportScrollY, "desktop render slides viewportScrollY") }),
   };
 }
 
@@ -803,12 +825,22 @@ function normalizeOptionalPositiveNumber(value: unknown, label: string): number 
   return value;
 }
 
+/** Like the above but admits 0, for offsets where zero is a real value rather
+ * than a missing one (a scroll position at the top of the document). */
+function normalizeOptionalNonNegativeNumber(value: unknown, label: string): number | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative number`);
+  }
+  return value;
+}
+
 const DESKTOP_EXPORT_ARTIFACT_FORMATS: readonly DesktopExportArtifactFormat[] = ["pdf", "image"];
 const DESKTOP_EXPORT_ARTIFACT_IMAGE_FORMATS: readonly DesktopExportArtifactImageFormat[] = ["png", "jpeg"];
 
 function normalizeDesktopExportArtifactInput(input: unknown): DesktopExportArtifactInput {
   const value = assertObject(input, "desktop artifact export input");
-  assertKnownKeys(value, ["baseHref", "deck", "format", "html", "imageFormat", "title", "width", "height"], "desktop artifact export input");
+  assertKnownKeys(value, ["baseHref", "deck", "format", "html", "imageFormat", "title", "width", "height", "viewportScrollY"], "desktop artifact export input");
   if (!DESKTOP_EXPORT_ARTIFACT_FORMATS.includes(value.format as DesktopExportArtifactFormat)) {
     throw new Error(`unsupported artifact export format: ${String(value.format)}`);
   }
@@ -824,6 +856,9 @@ function normalizeDesktopExportArtifactInput(input: unknown): DesktopExportArtif
     title: normalizeNonEmptyString(value.title, "desktop artifact export title"),
     ...(value.width == null ? {} : { width: normalizeOptionalPositiveNumber(value.width, "desktop artifact export width")! }),
     ...(value.height == null ? {} : { height: normalizeOptionalPositiveNumber(value.height, "desktop artifact export height")! }),
+    ...(value.viewportScrollY == null
+      ? {}
+      : { viewportScrollY: normalizeOptionalNonNegativeNumber(value.viewportScrollY, "desktop artifact export viewportScrollY")! }),
   };
 }
 

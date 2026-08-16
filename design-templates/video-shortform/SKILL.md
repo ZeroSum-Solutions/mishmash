@@ -18,6 +18,20 @@ od:
   category: "video-motion"
   mode: video
   surface: video
+  # The Media -> Video tab's default skill. Without a declaration the panel
+  # falls back to `list[0]` of the merged skills/ + design-templates/ scan, and
+  # that winner decides the default model: resolving to `hyperframes` rewrites
+  # `videoModel` to the local HTML renderer, anything else leaves it on
+  # DEFAULT_VIDEO_MODEL. Catalog order was therefore choosing which provider a
+  # user's first video project billed against.
+  #
+  # This skill holds it because the product already says twice that "Video"
+  # means generative video: `home-hero/media-surfaces.ts` filters
+  # `hyperframes-html` out of the video surface's model list and gives
+  # hyperframes its own separate surface, and DEFAULT_VIDEO_MODEL is Seedance
+  # 2.0 -- which is exactly what this skill documents itself as defaulting to.
+  # HyperFrames stays reachable through its own surface and its templates.
+  default_for: video
   scenario: marketing
   preview:
     type: html

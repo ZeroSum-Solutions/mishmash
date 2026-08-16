@@ -3551,6 +3551,7 @@ export interface Dict {
   'fileViewer.jsxModuleCta': string;
   'fileViewer.comment': string;
   'fileViewer.edit': string;
+  'fileViewer.inspect': string;
   'fileViewer.draw': string;
   'fileViewer.mark': string;
   'fileViewer.markTool': string;
@@ -3690,6 +3691,7 @@ export interface Dict {
   'fileViewer.screenshotCopying': string;
   'fileViewer.screenshotCopied': string;
   'fileViewer.screenshotClipboardDenied': string;
+  'fileViewer.screenshotClipboardUnfocused': string;
   'fileViewer.screenshotPreviewLoading': string;
   'fileViewer.screenshotCaptureFailed': string;
   'fileViewer.exportPdf': string;

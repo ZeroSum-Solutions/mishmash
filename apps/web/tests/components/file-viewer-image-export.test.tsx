@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectFile } from '../../src/types';
 
 const {
@@ -110,6 +110,16 @@ async function clickSave() {
 }
 
 describe('FileViewer image export', () => {
+  beforeEach(() => {
+    // `vi.resetAllMocks()` leaves this returning `undefined`, which is not a
+    // shape the real function can produce — it always resolves a discriminated
+    // result. Defaulting it to the honest "this runtime has no off-screen
+    // renderer" answer is what lets the bridge-precedence specs below keep
+    // meaning what they say: they pin the fallback chain that runs when the
+    // renderer is unavailable, not a claim that the renderer is never asked.
+    exportProjectImageDataUrlMock.mockResolvedValue({ ok: false, unavailable: true });
+  });
+
   afterEach(() => {
     cleanup();
     vi.resetAllMocks();
@@ -476,5 +486,45 @@ describe('FileViewer image export', () => {
     });
     // The untracked deck must NOT be off-screen-rendered (which would grab slide 0).
     expect(exportProjectImageDataUrlMock).not.toHaveBeenCalled();
+  });
+
+  it('exports through the off-screen renderer in a browser, not the snapshot bridge', async () => {
+    // CANVAS-17. Export as image shares `captureExportImageSnapshot` with Copy
+    // screenshot, and used to reach the daemon renderer only when
+    // `isOpenDesignHostAvailable()` was true — a question about whether THIS
+    // BROWSER is the Electron shell, asked of a capability that lives in the
+    // daemon and answers over plain HTTP. In the web Studio (no Electron shell
+    // in this fork) that gate was permanently false, so every export fell to the
+    // in-iframe foreignObject bridge, which fails on real artifacts.
+    isOpenDesignHostAvailableMock.mockReturnValue(false);
+    exportProjectImageDataUrlMock.mockResolvedValue({
+      ok: true,
+      snapshot: { dataUrl: 'data:image/png;base64,offscreen', w: 1440, h: 900 },
+    });
+    imageDataUrlToBlobMock.mockResolvedValueOnce(new Blob(['png'], { type: 'image/png' }));
+    prepareImageExportTargetMock.mockResolvedValueOnce({
+      filename: 'workspace.png',
+      method: 'download',
+      save: saveImageBlobMock,
+    });
+
+    renderHtmlPreview();
+    await openImageExportDialog();
+    await clickSave();
+
+    await waitFor(() => {
+      expect(exportProjectImageDataUrlMock).toHaveBeenCalledWith(expect.objectContaining({
+        projectId: 'project-1',
+        fileName: 'workspace.html',
+      }));
+    });
+    // The rendered pixels must be what gets saved, and the bridge must not have
+    // been consulted at all — reaching it would mean the renderer's answer was
+    // discarded.
+    await waitFor(() => {
+      expect(imageDataUrlToBlobMock).toHaveBeenCalledWith('data:image/png;base64,offscreen', 'png');
+    });
+    expect(requestPreviewSnapshotMock).not.toHaveBeenCalled();
+    expect(captureHostIframeSnapshotMock).not.toHaveBeenCalled();
   });
 });

@@ -934,6 +934,15 @@ async function runVideoProjectRoutingFlow(
     };
   };
   expect(body.metadata?.kind).toBe('video');
+  // Deliberately only asserts that SOME model rode along, not which one. The
+  // Video surface's default model is decided by which skill wins the video tab,
+  // and no skill in the repository declares `od.default_for: video` — so the
+  // winner is `list[0]` of the merged skills/ + design-templates/ catalogs. When
+  // that lands on `hyperframes`, NewProjectPanel's effect rewrites the model to
+  // `hyperframes-html`; otherwise it stays at DEFAULT_VIDEO_MODEL. Pinning
+  // either id here made this spec pass and fail on the same commit in
+  // back-to-back runs. Aspect and length below are real defaults and stay
+  // pinned. See CANVAS-16 in docs/KNOWN-ISSUES-CANVAS.md.
   expect(body.metadata?.videoModel).toBeTruthy();
   expect(body.metadata?.videoAspect).toBe('16:9');
   expect(body.metadata?.videoLength).toBe(5);

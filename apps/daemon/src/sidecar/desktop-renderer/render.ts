@@ -615,10 +615,39 @@ async function captureDeckSlides(
 
 async function capturePage(
   page: Awaited<ReturnType<Browser["newPage"]>>,
-  request: { width: number; height: number; jpeg: boolean; paginate: boolean },
+  request: {
+    width: number;
+    height: number;
+    jpeg: boolean;
+    paginate: boolean;
+    /** Presence (not truthiness -- 0 is the top of the document) switches this
+     * from a full-page render to the one viewport-sized band at that offset.
+     * See DesktopExportArtifactInput.viewportScrollY. */
+    viewportScrollY?: number;
+  },
 ): Promise<CapturedImage[]> {
   await page.setViewportSize({ width: request.width, height: request.height });
   const type = request.jpeg ? ("jpeg" as const) : ("png" as const);
+  if (request.viewportScrollY != null) {
+    const top = Math.max(0, Math.round(request.viewportScrollY));
+    // Scroll before clipping rather than clipping a full-page capture: elements
+    // that position themselves against the viewport (sticky headers, fixed
+    // toolbars) must land where the user sees them, and only a real scroll puts
+    // them there. A string expression keeps this browser-context snippet out of
+    // the daemon's Node-only (no-DOM-lib) type-check surface.
+    await page.evaluate(`window.scrollTo(0, ${top})`);
+    // The clip is viewport-relative (Playwright rejects a region outside the
+    // viewport unless `fullPage` is set), so the scroll above is what selects the
+    // band and this clip is simply "the whole viewport". A document shorter than
+    // the requested offset scrolls to its own end instead, which is what the
+    // browser shows the user too.
+    const buffer = await page.screenshot({
+      clip: { x: 0, y: 0, width: request.width, height: request.height },
+      type,
+      ...(request.jpeg ? { quality: 90 } : {}),
+    });
+    return [{ buffer, jpeg: request.jpeg }];
+  }
   if (!request.paginate) {
     const buffer = await page.screenshot({ fullPage: true, type, ...(request.jpeg ? { quality: 90 } : {}) });
     return [{ buffer, jpeg: request.jpeg }];
@@ -666,12 +695,16 @@ export async function renderSlides(
         const count = await page.locator(DECK_SLIDE_SELECTOR).count();
         deckDetected = count > 0;
       }
-      if (wantsPage || !deckDetected) {
+      // A viewport-clipped request asks for what is on screen, which is a
+      // page-shaped question even when the artifact is a deck — so it takes the
+      // page path rather than the per-slide one.
+      if (wantsPage || !deckDetected || input.viewportScrollY != null) {
         const images = await capturePage(page, {
           width: input.width ?? DEFAULT_PAGE_WIDTH,
           height: input.height ?? DEFAULT_PAGE_HEIGHT,
           jpeg,
           paginate: input.paginate === true,
+          ...(input.viewportScrollY != null ? { viewportScrollY: input.viewportScrollY } : {}),
         });
         return { images, mode: "page" as const };
       }
@@ -736,12 +769,16 @@ export async function exportArtifact(
         const count = await page.locator(DECK_SLIDE_SELECTOR).count();
         deckDetected = count > 0;
       }
-      if (wantsPage || !deckDetected) {
+      // A viewport-clipped request is asking for what is on screen, which is a
+      // page-shaped question even when the artifact is a deck — so it takes the
+      // page path rather than the per-slide one.
+      if (wantsPage || !deckDetected || input.viewportScrollY != null) {
         const [captured] = await capturePage(page, {
           width: input.width ?? DEFAULT_PAGE_WIDTH,
           height: input.height ?? DEFAULT_PAGE_HEIGHT,
           jpeg,
           paginate: false,
+          ...(input.viewportScrollY != null ? { viewportScrollY: input.viewportScrollY } : {}),
         });
         return captured!;
       }

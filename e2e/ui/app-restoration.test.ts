@@ -168,7 +168,12 @@ test('[P0] @critical workspace restores the last manually selected file tab afte
     // timeout plus a full retry (~2 minutes) whenever the chat fetch was slow.
     const turnCard = page.locator('.msg.assistant').filter({ hasText: 'workspace-artifact.html' }).first();
     await expect(turnCard).toBeVisible({ timeout: 30_000 });
-    const openButton = turnCard.getByRole('button', { name: /^Open$/ });
+    // The produced-files row IS the button (FileOpsSummary renders the path as
+    // its only visible content), so its accessible name is the file path --
+    // `workspace-artifact.html`, never the bare word "Open". Matching /^Open$/
+    // here found nothing and burned the full timeout. `file-ops-row-open-<path>`
+    // is the row's own stable hook, so it survives a label rewording too.
+    const openButton = turnCard.getByTestId('file-ops-row-open-workspace-artifact.html');
     await expect(openButton).toBeVisible();
     await openButton.click();
 

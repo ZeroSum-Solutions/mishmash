@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   buildBoardCommentAttachments,
   buildVisualAnnotationAttachment,
+  commentSnapshotEqual,
   commentSnapshotOverlayEqual,
+  commentTargetDisplayName,
   commentVisibleOnDeckSlide,
   commentsToAttachments,
   historyWithCommentAttachmentContext,
+  isInternalCommentTargetName,
+  isValidCommentOverlayPosition,
   liveCommentTargetMapsEqual,
   liveSnapshotForComment,
   mergeAttachedComments,
@@ -14,6 +18,8 @@ import {
   overlayBoundsFromSnapshot,
   queuedSlideNavTarget,
   removeAttachedComment,
+  selectionKindLabel,
+  simplePositionLabel,
   targetFromSnapshot,
 } from '../src/comments';
 import type { PreviewCommentSnapshot } from '../src/comments';
@@ -546,5 +552,174 @@ describe('queuedSlideNavTarget', () => {
     expect(
       queuedSlideNavTarget([commentAttachment({ slideIndex: -1 })]),
     ).toBeNull();
+  });
+});
+
+// `isInternalCommentTargetName` / `commentTargetDisplayName` back the comment
+// side panel's per-thread label: FileViewer's srcDoc bridge auto-generates
+// positional ids/labels like `path-0-2` for elements with no author-facing
+// name, and the panel must show a generic fallback instead of leaking that
+// internal id to the user.
+describe('isInternalCommentTargetName', () => {
+  it('matches the bridge-generated positional id shape', () => {
+    expect(isInternalCommentTargetName('path-0')).toBe(true);
+    expect(isInternalCommentTargetName('path-0-2')).toBe(true);
+    expect(isInternalCommentTargetName('path-12-3-4')).toBe(true);
+  });
+
+  it('does not match author-facing labels or selectors', () => {
+    expect(isInternalCommentTargetName('hero-title')).toBe(false);
+    expect(isInternalCommentTargetName('path-hero')).toBe(false);
+    expect(isInternalCommentTargetName('h1.hero-title')).toBe(false);
+  });
+
+  it('treats missing/blank values as non-internal', () => {
+    expect(isInternalCommentTargetName(undefined)).toBe(false);
+    expect(isInternalCommentTargetName(null)).toBe(false);
+    expect(isInternalCommentTargetName('')).toBe(false);
+    expect(isInternalCommentTargetName('   ')).toBe(false);
+  });
+});
+
+describe('commentTargetDisplayName', () => {
+  it('always reports visual marks by their fixed name, ignoring label/elementId', () => {
+    expect(
+      commentTargetDisplayName({ selectionKind: 'visual', label: 'ignored', elementId: 'ignored' }),
+    ).toBe('Visual mark');
+  });
+
+  it('prefers a non-internal label over the elementId', () => {
+    expect(
+      commentTargetDisplayName({ label: 'h1.hero-title', elementId: 'path-0-1' }),
+    ).toBe('h1.hero-title');
+  });
+
+  it('falls back to a non-internal elementId when the label is internal or blank', () => {
+    expect(commentTargetDisplayName({ label: 'path-0', elementId: 'hero-cta' })).toBe('hero-cta');
+    expect(commentTargetDisplayName({ label: '', elementId: 'hero-cta' })).toBe('hero-cta');
+  });
+
+  it('falls back to the caller-supplied default when both label and elementId are internal/blank', () => {
+    expect(commentTargetDisplayName({ label: 'path-0', elementId: 'path-0-1' })).toBe('Annotation');
+    expect(commentTargetDisplayName({}, 'Untitled mark')).toBe('Untitled mark');
+  });
+});
+
+// `isValidCommentOverlayPosition` is the guard FileViewer applies to every
+// entry of an inbound `od:comment-targets` broadcast before it is trusted
+// into `liveCommentTargets` (comments.ts backs both the Comment and Inspect
+// element pickers) — a target with a collapsed or non-finite box must be
+// dropped rather than rendered as a zero-size overlay.
+describe('isValidCommentOverlayPosition', () => {
+  it('accepts a normal finite, non-empty box', () => {
+    expect(isValidCommentOverlayPosition({ x: 10, y: 20, width: 100, height: 40 })).toBe(true);
+  });
+
+  it('rejects a missing position', () => {
+    expect(isValidCommentOverlayPosition(undefined)).toBe(false);
+    expect(isValidCommentOverlayPosition(null)).toBe(false);
+  });
+
+  it('rejects a collapsed (zero-size) box', () => {
+    expect(isValidCommentOverlayPosition({ x: 0, y: 0, width: 0, height: 0 })).toBe(false);
+    expect(isValidCommentOverlayPosition({ x: 5, y: 5, width: 0, height: 10 })).toBe(false);
+    expect(isValidCommentOverlayPosition({ x: 5, y: 5, width: 10, height: 0 })).toBe(false);
+  });
+
+  it('rejects a non-finite width/height bridge payload (coerced to 0, then fails the >0 check)', () => {
+    expect(isValidCommentOverlayPosition({ x: 0, y: 0, width: Infinity, height: 10 })).toBe(false);
+    expect(isValidCommentOverlayPosition({ x: 0, y: 0, width: NaN, height: 10 })).toBe(false);
+  });
+
+  it('still validates a box whose x/y (not width/height) is non-finite, coercing it to 0', () => {
+    // normalizePosition coerces any non-finite field to 0 before the finite
+    // checks run, so a NaN x/y never trips validation on its own — only a
+    // non-finite width/height does, because that also fails the `> 0` check.
+    expect(isValidCommentOverlayPosition({ x: NaN, y: 0, width: 10, height: 10 })).toBe(true);
+  });
+
+  it('rejects a negative-size box', () => {
+    expect(isValidCommentOverlayPosition({ x: 0, y: 0, width: -10, height: 10 })).toBe(false);
+  });
+});
+
+// `commentSnapshotEqual` decides whether a live iframe re-scan actually
+// changed anything about a tracked target; `liveCommentTargetMapsEqual`
+// (already covered above) short-circuits `setLiveCommentTargets` through it
+// on every bridge broadcast, so a false positive here would starve the
+// comment/inspect overlays of real position updates and a false negative
+// would re-render on every idle rescan.
+describe('commentSnapshotEqual', () => {
+  const base: PreviewCommentSnapshot = {
+    filePath: 'index.html',
+    elementId: 'hero-title',
+    selector: '[data-od-id="hero-title"]',
+    label: 'h1.hero-title',
+    text: 'Hello',
+    htmlHint: '<h1>',
+    position: { x: 10, y: 20, width: 100, height: 40 },
+    style: { color: 'red' },
+  };
+
+  it('treats an identical snapshot as equal', () => {
+    expect(commentSnapshotEqual(base, { ...base })).toBe(true);
+  });
+
+  it('is sensitive to overlay-affecting fields (delegates to commentSnapshotOverlayEqual)', () => {
+    expect(commentSnapshotEqual(base, { ...base, elementId: 'other' })).toBe(false);
+  });
+
+  it('is also sensitive to metadata fields overlay-equality ignores', () => {
+    expect(commentSnapshotEqual(base, { ...base, label: 'different label' })).toBe(false);
+    expect(commentSnapshotEqual(base, { ...base, text: 'Different text' })).toBe(false);
+    expect(commentSnapshotEqual(base, { ...base, htmlHint: '<h2>' })).toBe(false);
+    expect(commentSnapshotEqual(base, { ...base, style: { color: 'blue' } })).toBe(false);
+  });
+
+  it('treats a pod snapshot with different member lists as unequal', () => {
+    const pod: PreviewCommentSnapshot = {
+      ...base,
+      selectionKind: 'pod',
+      podMembers: [{
+        elementId: 'a', selector: '[data-od-id="a"]', label: 'a', text: '', position: base.position, htmlHint: '',
+      }],
+    };
+    const podChanged: PreviewCommentSnapshot = {
+      ...pod,
+      podMembers: [{
+        elementId: 'b', selector: '[data-od-id="b"]', label: 'b', text: '', position: base.position, htmlHint: '',
+      }],
+    };
+    expect(commentSnapshotEqual(pod, podChanged)).toBe(false);
+  });
+});
+
+describe('simplePositionLabel', () => {
+  it('renders the rounded top-left corner', () => {
+    expect(simplePositionLabel({ x: 10.4, y: 20.6, width: 5, height: 5 })).toBe('x10 y21');
+  });
+
+  it('normalizes a missing/invalid position to x0 y0', () => {
+    expect(simplePositionLabel(undefined as unknown as { x: number; y: number; width: number; height: number })).toBe('x0 y0');
+  });
+});
+
+describe('selectionKindLabel', () => {
+  it('labels a visual mark regardless of member count', () => {
+    expect(selectionKindLabel('visual', 4)).toBe('Visual mark');
+  });
+
+  it('labels a pod with its member count', () => {
+    expect(selectionKindLabel('pod', 3)).toBe('Pod · 3 items');
+  });
+
+  it('labels a pod with no counted members generically', () => {
+    expect(selectionKindLabel('pod', 0)).toBe('Pod');
+    expect(selectionKindLabel('pod', undefined)).toBe('Pod');
+  });
+
+  it('labels anything else as a plain element', () => {
+    expect(selectionKindLabel('element', undefined)).toBe('Element');
+    expect(selectionKindLabel(undefined, undefined)).toBe('Element');
   });
 });

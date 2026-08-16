@@ -224,6 +224,10 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   // from a UI-supplied body. The next /api/skills request surfaces it
   // automatically because listSkills walks USER_SKILLS_DIR first.
   app.post('/api/skills/import', async (req, res) => {
+    // Gated by requireLocalOrigin like every other mutation route in this file
+    // (skills install/delete, design-system install/import/delete). This route
+    // was missing the check even though it writes to disk exactly like them.
+    if (!requireLocalOrigin(req, res)) return;
     try {
       const result = await importUserSkill(USER_SKILLS_DIR, req.body || {});
       const skills = await listAllSkills();
@@ -245,7 +249,14 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       });
     } catch (err: any) {
       if (err instanceof SkillImportError) {
-        const status = err.code === 'NOT_FOUND' ? 404 : err.code === 'BAD_REQUEST' ? 400 : 500;
+        const status =
+          err.code === 'NOT_FOUND'
+            ? 404
+            : err.code === 'BAD_REQUEST'
+              ? 400
+              : err.code === 'CONFLICT'
+                ? 409
+                : 500;
         return sendApiError(res, status, err.code, err.message);
       }
       sendApiError(res, 500, 'INTERNAL_ERROR', String(err));
@@ -258,6 +269,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   // /api/skills/:id/{files,example,assets/*} requests keep resolving
   // the bundled assets/references/scripts/examples). See PR #955 review.
   app.put('/api/skills/:id', async (req, res) => {
+    if (!requireLocalOrigin(req, res)) return;
     try {
       const skills = await listAllSkills();
       const skill = findSkillById(skills, req.params.id);
@@ -334,6 +346,10 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   // tuning knobs (`--limit`, `--concurrency`) on the CLI script and
   // only surface `force` + `source` here.
   app.post('/api/codex-pets/sync', async (req, res) => {
+    // Pulls remote community pets and writes them into the data dir, so it is a
+    // mutation despite the near-empty request body. Without this gate a
+    // cross-origin page could make the daemon fetch and persist remote content.
+    if (!requireLocalOrigin(req, res)) return;
     try {
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       const sourceRaw = typeof body.source === 'string' ? body.source : 'all';

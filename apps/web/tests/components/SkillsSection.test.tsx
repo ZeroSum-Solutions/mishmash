@@ -10,6 +10,10 @@ import type { AppConfig } from '../../src/types';
 import type { SkillSummary } from '@open-design/contracts';
 
 const originalFetch = globalThis.fetch;
+// Set by a test before rendering to make the mocked /api/skills/import
+// route reject that one name with 409 CONFLICT, mirroring the daemon's real
+// duplicate-name rejection (see apps/daemon/src/routes/static-resource.ts).
+let importRejectionTriggerName = '';
 
 const TEST_CONFIG: AppConfig = {
   mode: 'daemon',
@@ -61,6 +65,23 @@ function renderSkillsSection(
       });
     }
     if (url === '/api/skills/import' && init?.method === 'POST') {
+      const payload = init.body
+        ? (JSON.parse(init.body as string) as { name?: string })
+        : {};
+      if (payload.name === importRejectionTriggerName) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 'CONFLICT',
+              message: 'a user skill with slug "duplicate-skill" already exists',
+            },
+          }),
+          {
+            status: 409,
+            headers: { 'content-type': 'application/json' },
+          },
+        );
+      }
       return new Response(
         JSON.stringify({
           skill: makeSkill({
@@ -140,6 +161,7 @@ describe('SkillsSection', () => {
   afterEach(() => {
     cleanup();
     globalThis.fetch = originalFetch;
+    importRejectionTriggerName = '';
     vi.restoreAllMocks();
   });
 
@@ -332,6 +354,42 @@ describe('SkillsSection', () => {
           url.toString() === '/api/skills/import' && init?.method === 'POST',
       ),
     ).toBe(true);
+  });
+
+  // skill-package-import invalid-input case: the daemon rejects a duplicate
+  // skill name with 409 CONFLICT (apps/daemon/src/routes/static-resource.ts).
+  // importSkill() (registry.ts) surfaces that as `{ error }`, and submitDraft
+  // must show it via role="alert" rather than treating the daemon's
+  // rejection as success — the draft form stays open with the user's input
+  // intact so they can rename and retry, and neither refresh hook fires.
+  it('shows the daemon rejection message and keeps the draft open when import fails', async () => {
+    importRejectionTriggerName = 'Duplicate Skill';
+    const onSkillsRefresh = vi.fn();
+    const onSkillsChanged = vi.fn();
+    renderSkillsSection([], { onSkillsRefresh, onSkillsChanged });
+
+    fireEvent.click(await screen.findByTestId('skills-new'));
+    const form = await screen.findByTestId('skills-create-form');
+    fireEvent.change(within(form).getByPlaceholderText('my-skill'), {
+      target: { value: 'Duplicate Skill' },
+    });
+    fireEvent.change(within(form).getAllByRole('textbox').at(-1)!, {
+      target: { value: '# Duplicate Skill\n\nDo the thing.' },
+    });
+    fireEvent.click(within(form).getByTestId('skills-save'));
+
+    await waitFor(() => {
+      expect(within(form).getByRole('alert').textContent).toMatch(
+        /already exists/,
+      );
+    });
+    // The form is still open with the user's input preserved, not reset.
+    expect(screen.getByTestId('skills-create-form')).toBeTruthy();
+    expect(
+      (within(form).getByPlaceholderText('my-skill') as HTMLInputElement).value,
+    ).toBe('Duplicate Skill');
+    expect(onSkillsRefresh).not.toHaveBeenCalled();
+    expect(onSkillsChanged).not.toHaveBeenCalled();
   });
 
   // Regression for the mrcfps follow-up on PR #2190: when a user edits

@@ -7,6 +7,8 @@ import {
   buildDesignManifestContent,
   downloadImageDataUrl,
   buildSandboxedPreviewDocument,
+  CLIPBOARD_WRITE_TIMEOUT_MS,
+  copyImageDataUrlToClipboard,
   downloadDesignSystemArchive,
   downloadProjectArchive,
   exportAsImage,
@@ -65,6 +67,119 @@ describe('planDeckImageCapture (#4604 current-slide capture for runtime decks)',
       useOffscreen: false,
       index: undefined,
     });
+  });
+});
+
+describe('copyImageDataUrlToClipboard settles when the browser will not (CANVAS-15)', () => {
+  const DATA_URL = 'data:image/png;base64,iVBORw0KGgo=';
+
+  // This suite runs on the `node` environment (apps/web/vitest.config.ts), so
+  // the browser globals the helper reads are stubbed rather than spied on.
+  function installClipboard(write: () => Promise<void>) {
+    const clipboard = { write: vi.fn(write) };
+    vi.stubGlobal('navigator', { clipboard });
+    vi.stubGlobal(
+      'ClipboardItem',
+      class {
+        constructor(readonly items: Record<string, unknown>) {}
+      },
+    );
+    return clipboard;
+  }
+
+  function setFocus(hasFocus: boolean) {
+    vi.stubGlobal('document', { hasFocus: () => hasFocus });
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('refuses up front on an unfocused document instead of awaiting a write that never settles', async () => {
+    // Chromium never settles `clipboard.write()` while the document lacks focus
+    // — it neither resolves nor rejects. `handleCopyScreenshot` clears its
+    // in-flight guard in a `finally`, so a pending-forever promise left the
+    // Screenshot button dead until reload and the toast pinned on
+    // "Copying screenshot…".
+    const clipboard = installClipboard(() => new Promise<void>(() => {}));
+    setFocus(false);
+
+    await expect(copyImageDataUrlToClipboard(DATA_URL)).resolves.toBe('unfocused');
+    // Not merely fast — the write must never be attempted, because attempting it
+    // is what hangs.
+    expect(clipboard.write).not.toHaveBeenCalled();
+  });
+
+  it('gives up on a write that stalls after focus was lost mid-flight', async () => {
+    // `document.hasFocus()` is checked before the await, so focus can still be
+    // lost during it (the user clicks another window while the image encodes).
+    // The timeout is the backstop that keeps the caller's `finally` reachable.
+    vi.useFakeTimers();
+    installClipboard(() => new Promise<void>(() => {}));
+    setFocus(true);
+
+    const pending = copyImageDataUrlToClipboard(DATA_URL);
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(CLIPBOARD_WRITE_TIMEOUT_MS);
+    await expect(pending).resolves.toBe('failed');
+  });
+
+  it('still reports a real copy on a focused document', async () => {
+    installClipboard(async () => {});
+    setFocus(true);
+
+    await expect(copyImageDataUrlToClipboard(DATA_URL)).resolves.toBe('copied');
+  });
+});
+
+describe('planDeckImageCapture fullPageFallback (web Studio has no compositor)', () => {
+  // Every `useOffscreen: false` branch above resolves to a *visible host
+  // snapshot* — a desktop-compositor grab of the on-screen preview region.
+  // `captureHostRegionSnapshot` returns null the moment no host bridge is
+  // present, and this fork ships no Electron shell at all, so in a browser that
+  // branch has no compositor to fall back to: it lands on the in-iframe
+  // SVG-foreignObject bridge, which answers `snapshot image failed` /
+  // `empty-render` on real artifacts.
+  //
+  // `fullPageFallback` lets a caller that does not composite anything onto the
+  // result (Copy screenshot) accept the daemon's off-screen full-page render
+  // instead of failing. It is deliberately NOT set by annotation capture, whose
+  // marks are re-painted onto the snapshot using the preview frame's rect —
+  // a full-page image would scale them onto the wrong pixels.
+  it('ordinary-page current view renders off-screen when no compositor can serve it', () => {
+    expect(
+      planDeckImageCapture({ deck: false, wholeDeck: false, trackedActive: null, fullPageFallback: true }),
+    ).toEqual({ useOffscreen: true, index: undefined });
+  });
+
+  it('leaves an untracked runtime deck on the host snapshot even with the fallback armed', () => {
+    // Off-screen with no index stitches the WHOLE deck. For a "current slide"
+    // capture that is a wrong answer rather than a degraded one, so this case
+    // keeps failing loudly instead of silently returning every slide.
+    expect(
+      planDeckImageCapture({ deck: true, wholeDeck: false, trackedActive: null, fullPageFallback: true }),
+    ).toEqual({ useOffscreen: false, index: undefined });
+  });
+
+  it('defaults to the compositor path when the caller does not opt in', () => {
+    expect(planDeckImageCapture({ deck: false, wholeDeck: false, trackedActive: null })).toEqual({
+      useOffscreen: false,
+      index: undefined,
+    });
+  });
+
+  it('still routes a tracked deck slide to its own index', () => {
+    expect(
+      planDeckImageCapture({ deck: true, wholeDeck: false, trackedActive: 2, fullPageFallback: true }),
+    ).toEqual({ useOffscreen: true, index: 2 });
   });
 });
 

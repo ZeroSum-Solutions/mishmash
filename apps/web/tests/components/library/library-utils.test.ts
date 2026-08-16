@@ -5,7 +5,17 @@
 
 import { describe, expect, it } from 'vitest';
 import type { LibraryAsset } from '@open-design/contracts';
-import { computeRailCounts, dayHeading, groupByDay, toggleGroupInSelection, ymdLocal } from '../../../src/components/library/library-utils';
+import {
+  cardIdsInBand,
+  computeRailCounts,
+  dayHeading,
+  groupByDay,
+  mergeIngestedAssets,
+  parseEventAssetId,
+  toggleGroupInSelection,
+  ymdLocal,
+  type CardRect,
+} from '../../../src/components/library/library-utils';
 
 let seq = 0;
 function makeAsset(over: Partial<LibraryAsset> = {}): LibraryAsset {
@@ -127,5 +137,83 @@ describe('computeRailCounts', () => {
     const counts = computeRailCounts([generated, uploaded]);
     expect(counts.generated).toBe(1);
     expect(counts.byKind.image).toBe(2);
+  });
+});
+
+describe('parseEventAssetId', () => {
+  it('reads assetId out of a well-formed SSE payload', () => {
+    expect(parseEventAssetId('{"assetId":"asset-42"}')).toBe('asset-42');
+  });
+
+  it('rejects a non-string payload without throwing', () => {
+    expect(parseEventAssetId(42)).toBeNull();
+    expect(parseEventAssetId(null)).toBeNull();
+    expect(parseEventAssetId(undefined)).toBeNull();
+    expect(parseEventAssetId({ assetId: 'asset-42' })).toBeNull();
+  });
+
+  it('rejects malformed JSON instead of throwing', () => {
+    expect(parseEventAssetId('{not json')).toBeNull();
+  });
+
+  it('rejects a payload whose assetId is not a string', () => {
+    expect(parseEventAssetId('{"assetId":42}')).toBeNull();
+    expect(parseEventAssetId('{"assetId":null}')).toBeNull();
+    expect(parseEventAssetId('{}')).toBeNull();
+  });
+
+  it('rejects valid JSON that is not an object (e.g. a bare array or number)', () => {
+    expect(parseEventAssetId('[1,2,3]')).toBeNull();
+    expect(parseEventAssetId('42')).toBeNull();
+  });
+});
+
+describe('mergeIngestedAssets', () => {
+  it('returns the previous list unchanged (same reference) when nothing new arrived', () => {
+    const prev = [makeAsset({ id: 'a1' })];
+    expect(mergeIngestedAssets(prev, [])).toBe(prev);
+  });
+
+  it('prepends genuinely new assets ahead of the existing list, reversing fetch order', () => {
+    const existing = makeAsset({ id: 'existing' });
+    const newOlder = makeAsset({ id: 'new-older' });
+    const newNewer = makeAsset({ id: 'new-newer' });
+    // mergeIngestedAssets reverses the incoming `fetched` batch before
+    // prepending it, so callers must hand it new rows oldest-first for the
+    // merged list to come out newest-first (matching created_at DESC).
+    const merged = mergeIngestedAssets([existing], [newOlder, newNewer]);
+    expect(merged.map((a) => a.id)).toEqual(['new-newer', 'new-older', 'existing']);
+  });
+
+  it('refreshes an already-present asset in place without reordering the list', () => {
+    const a1 = makeAsset({ id: 'a1' });
+    const a2 = makeAsset({ id: 'a2' });
+    const refreshedA1 = { ...a1, tags: ['updated'] };
+    const merged = mergeIngestedAssets([a1, a2], [refreshedA1]);
+    expect(merged.map((a) => a.id)).toEqual(['a1', 'a2']);
+    expect(merged[0]).toEqual(refreshedA1);
+  });
+});
+
+describe('cardIdsInBand', () => {
+  function rect(id: string, left: number, top: number, right: number, bottom: number): CardRect {
+    return { id, left, top, right, bottom };
+  }
+
+  it('includes a card whose rect overlaps the selection band', () => {
+    const rects = [rect('inside', 10, 10, 50, 50)];
+    expect(cardIdsInBand(rects, { x: 0, y: 0, w: 100, h: 100 })).toEqual(['inside']);
+  });
+
+  it('excludes a card entirely outside the selection band', () => {
+    const rects = [rect('outside', 200, 200, 250, 250)];
+    expect(cardIdsInBand(rects, { x: 0, y: 0, w: 100, h: 100 })).toEqual([]);
+  });
+
+  it('excludes a card that only touches the band edge (no true overlap)', () => {
+    // Band spans x:[0,100]; a rect starting exactly at x:100 does not overlap
+    // under the strict-inequality intersection test.
+    const rects = [rect('touching-edge', 100, 0, 150, 50)];
+    expect(cardIdsInBand(rects, { x: 0, y: 0, w: 100, h: 100 })).toEqual([]);
   });
 });
