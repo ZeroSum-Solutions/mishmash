@@ -1,0 +1,1305 @@
+{
+  "$comment": "Machine-readable canvas/workbench feature inventory. Source of truth for scripts/canvas-coverage-report.ts. A feature with an empty proof_tests array is UNCOVERED and fails the gate.",
+  "generated_from": "docs/plans/2026-08-15-canvas-workbench-hardening.md",
+  "baseline_commit": "a8dd0663e",
+  "features": [
+    {
+      "id": "html-live-preview-canvas",
+      "group": "canvas-surface",
+      "name": "HTML/live prototype preview canvas (HtmlViewer)",
+      "user_action": "Open an HTML/prototype file in the workspace",
+      "expected_result": "Iframe renders the artifact via direct URL load or srcDoc inline (chosen by file-viewer-render-mode.ts); auto-detects and works around focus-stealing, redirect loops, sandbox-storage needs, and GPU/WASM-heavy content via a cross-origin-isolated preview path",
+      "risk": "high",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx",
+        "apps/web/src/components/file-viewer-render-mode.ts"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "url-vs-srcdoc-render-mode-decision",
+      "group": "runtime-wiring",
+      "name": "URL-load vs srcDoc iframe render-mode decision engine",
+      "user_action": "N/A \u2014 automatic per file based on which bridges are active (comment/inspect/edit/palette/tweaks/deck/draw)",
+      "expected_result": "shouldUrlLoadHtmlPreview() forces srcDoc whenever any interactive bridge, root-relative project asset refs, focus-stealing, or self-redirect patterns are detected; otherwise defaults to faster per-asset URL loading. Every exported function (hasTweaksTemplate, shouldUrlLoadHtmlPreview, hasUrlModeBridge, parseForceInline, htmlNeedsFocusGuard, htmlNeedsPoweredPreview, htmlNeedsSandboxShim, htmlNeedsRedirectGuard) is pure and directly unit-testable per its own docblock, and this contract is load-bearing enough that AGENTS.md documents it explicitly",
+      "risk": "high",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/file-viewer-render-mode.ts"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "deploy-vercel-cloudflare",
+      "group": "canvas-surface",
+      "name": "Deploy to Vercel or Cloudflare Pages",
+      "user_action": "Open the Share menu, pick a provider, enter token/account settings, click deploy",
+      "expected_result": "Opens a deploy modal per provider (Vercel default; Cloudflare Pages with account id + zone selection), deploys to preview or production, tracks deploy result, allows re-deploy",
+      "risk": "high",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/FileViewer.deploy-target.test.tsx",
+        "apps/web/tests/analytics/deploy-error-code.test.ts"
+      ]
+    },
+    {
+      "id": "comment-pods-mode",
+      "group": "editing",
+      "name": "Comment / Board mode \u2014 inspect + pod (lasso) element selection",
+      "user_action": "Click the comment toolbar icon to enter board mode; hover/click an element (inspect) or lasso-drag across multiple elements to group them into a 'pod'; type a note",
+      "expected_result": "A live selection overlay highlights the hovered/selected DOM target or grouped pod (weighted opacity by area); a composer anchored to the selection lets the note send immediately as a chat attachment or save as a persistent, repliable comment thread with open/resolved status",
+      "risk": "high",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx",
+        "apps/web/src/lib/pod-members.ts",
+        "apps/web/src/components/BoardComposerPopover.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/lib/pod-members.test.ts",
+        "apps/web/tests/components/BoardComposerPopover.pod-chip-hover.test.tsx",
+        "apps/web/tests/components/BoardComposerPopover.pod-remove.test.tsx",
+        "apps/web/tests/components/CommentTargetOverlay.hover-class.test.tsx"
+      ]
+    },
+    {
+      "id": "draw-mark-annotation",
+      "group": "editing",
+      "name": "Draw / Mark annotation overlay (box, pen, text) with screenshot capture and upload",
+      "user_action": "Click the mark-pen toolbar icon; draw a box, freehand stroke, or drop a draggable text label over the live preview; undo/redo; Send/Queue/Add-to-input",
+      "expected_result": "PreviewDrawOverlay renders a canvas layer over the preview, normalizing marks to frame coordinates (0..1) so they track zoom/viewport; on submit, a client-composited screenshot uploads through the standard project-upload path and a structured comment attachment (screenshotPath + bounds + target selector) is staged and dispatched to chat/agent; strokes/boxes/text each have Cmd+Z / Cmd+Shift+Z undo/redo; if screenshot capture itself fails, the structured position/selector fields still ride along",
+      "risk": "high",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/PreviewDrawOverlay.tsx",
+        "apps/web/src/components/ChatComposer.tsx",
+        "apps/web/src/comments.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/PreviewDrawOverlay.test.tsx",
+        "apps/web/tests/components/PreviewDrawOverlay.capture-fallback.test.tsx",
+        "apps/web/tests/components/PreviewDrawOverlay.send-disabled.test.tsx"
+      ]
+    },
+    {
+      "id": "manual-edit-mode-core",
+      "group": "editing",
+      "name": "Manual Edit Mode \u2014 click-to-select element, inline text edit",
+      "user_action": "Toggle the Edit tool in the artifact toolbar; click any tagged element in the preview; type directly (contenteditable) for text/link elements",
+      "expected_result": "Element discovery/click-to-select/inline-text-edit runs via an injected iframe bridge; typed text commits on blur/Enter, is applied to the HTML source string, persisted to the server as a new 'manual' file version, and the preview re-renders",
+      "risk": "high",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/edit-mode/bridge.ts",
+        "apps/web/src/edit-mode/source-patches.ts",
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": [
+        "e2e/ui/app-manual-edit.test.ts",
+        "apps/web/tests/components/FileViewer.manual-edit.test.tsx",
+        "apps/web/tests/components/manual-edit-kind.test.ts"
+      ]
+    },
+    {
+      "id": "manual-edit-undo-redo",
+      "group": "editing",
+      "name": "Manual Edit Mode \u2014 undo/redo across saves",
+      "user_action": "Trigger undo/redo from the edit panel or keyboard while in Manual Edit mode",
+      "expected_result": "Each undo/redo re-persists the before/after source as a new server-tracked version (not an ephemeral in-memory stack) and the preview reflects the reverted/reapplied state; a stale local history is detected and cleared if the file changed out-of-band",
+      "risk": "high",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx",
+        "apps/web/src/edit-mode/types.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/FileViewer.manual-edit-history.test.tsx"
+      ]
+    },
+    {
+      "id": "manual-edit-source-patch-engine",
+      "group": "runtime-wiring",
+      "name": "Manual edit source-patch engine (applyManualEditPatch)",
+      "user_action": "N/A \u2014 invoked by every Manual Edit Mode action (text/link/image/outer-html/delete/page-style edits)",
+      "expected_result": "A pure HTML-string patcher handles set-text/set-link/set-image/set-style/set-attributes/set-outer-html/remove-element/set-token against the raw source, independent of any DOM/iframe; every manual-edit UI feature depends on this function being correct, so a defect here corrupts saved source across all of them",
+      "risk": "high",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/edit-mode/source-patches.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/edit-mode/source-patches.test.ts"
+      ]
+    },
+    {
+      "id": "storyboard-shot-crud-render-takes",
+      "group": "editing",
+      "name": "Storyboard \u2014 shot CRUD, frame generation, video render, take review",
+      "user_action": "Add/duplicate/delete/reorder shots; generate or iterate a start/end frame; upload an image; render a shot to video; compare multiple 'takes' and approve/reject/select one",
+      "expected_result": "Each mutation applies optimistically then PATCHes /api/storyboards/:id with a single 409-conflict retry; renders poll a long-running media task; the selected take marks the shot 'done' for assembly",
+      "risk": "high",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/storyboard/StoryboardEditor.tsx",
+        "apps/web/src/components/storyboard/ShotTakeHistory.tsx",
+        "apps/web/src/components/storyboard/storyboard-persist.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/storyboard-persist.test.ts",
+        "apps/web/tests/components/StoryboardEditor.test.tsx",
+        "apps/web/tests/components/ShotInspectorRail.test.tsx"
+      ]
+    },
+    {
+      "id": "figma-import-offline-decode",
+      "group": "upload-attach",
+      "name": "Figma import \u2014 offline .fig file decode",
+      "user_action": "'+' \u2192 Import from Figma \u2192 Upload .fig tab \u2192 drop or browse a .fig file exported from Figma, optionally add build notes",
+      "expected_result": "Decoded entirely on-device (no Figma account) via POST /api/projects/:id/figma/import; returns node/page/frame/component counts, colors, fonts, and a 'Build' action that seeds the chat prompt; oversized (>200MB) or non-.fig files rejected client-side; decode failures surface FIGMA_IMPORT_FAILED with the caught error message; a per-asset 12MB cap inside the decoded snapshot guards against oversized embedded assets",
+      "risk": "high",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FigmaImportModal.tsx",
+        "apps/web/src/providers/registry.ts",
+        "apps/daemon/src/server.ts",
+        "apps/daemon/src/figma/figma-import.ts"
+      ],
+      "proof_tests": [
+        "apps/daemon/tests/figma-import.test.ts",
+        "apps/daemon/tests/figma-import-route.test.ts",
+        "apps/daemon/tests/figma-cli.test.ts"
+      ]
+    },
+    {
+      "id": "od-library-clipper-ingest",
+      "group": "upload-attach",
+      "name": "OD Library clipper ingest (browser extension)",
+      "user_action": "Via the paired OD 'clipper' Chrome extension, browse any live webpage and capture an element/screenshot/HTML",
+      "expected_result": "POSTs to /api/library/ingest with sourceKind='clipper', authenticated by a pairing token (allowlisted origin), capped at 5,000,000 total bytes/request regardless of the manual-upload MIME policy; captures land in the Library grid and refresh live via SSE (/api/library/events)",
+      "risk": "high",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "clipper/",
+        "apps/daemon/src/routes/library.ts"
+      ],
+      "proof_tests": [
+        "apps/daemon/tests/library-ingest-ssrf.test.ts",
+        "apps/daemon/tests/library-figma-sidecar.test.ts",
+        "apps/daemon/tests/library-rate-limit-clipper-probe.test.ts"
+      ]
+    },
+    {
+      "id": "connectors-catalog",
+      "group": "catalog",
+      "name": "Connectors catalog (MCP tool integrations) \u2014 connect/disconnect",
+      "user_action": "Open Connectors, type in search, click Connect on a card",
+      "expected_result": "Grid is masked/disabled until a Composio key is configured; search ranks by name/provider match; Connect opens an OAuth popup or system-browser flow and polls status until connected",
+      "risk": "high",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/ConnectorsBrowser.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/App.connectors.test.tsx",
+        "apps/web/tests/components/ConnectorsBrowser.test.tsx",
+        "e2e/ui/settings-connectors-auth-happy-path.test.ts",
+        "e2e/ui/settings-connectors-auth-recovery.test.ts"
+      ]
+    },
+    {
+      "id": "chat-workspace-split-resize",
+      "group": "canvas-surface",
+      "name": "Chat/Workspace resizable split",
+      "user_action": "Drag the vertical divider between chat and the file workspace, or Tab-focus it and use arrow keys",
+      "expected_result": "Chat panel width adjusts live, clamped between a computed min/max relative to split width; final width persists to localStorage and survives reload",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/ProjectView.tsx"
+      ],
+      "proof_tests": [
+        "e2e/ui/split-resize-scrollbar-hitbox.test.ts",
+        "e2e/ui/workspace-keyboard-flows.test.ts"
+      ]
+    },
+    {
+      "id": "workspace-focus-mode",
+      "group": "canvas-surface",
+      "name": "Workspace focus mode (hide chat)",
+      "user_action": "Click the focus-expand chevron in the workspace tab bar",
+      "expected_result": "Chat pane is hidden (hidden={workspaceFocused}); FileWorkspace occupies full width; a chevron button restores split view",
+      "risk": "low",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/ProjectView.tsx",
+        "apps/web/src/components/FileWorkspace.tsx"
+      ],
+      "proof_tests": [
+        "e2e/ui/workspace-keyboard-flows.test.ts"
+      ]
+    },
+    {
+      "id": "manual-edit-split-divider",
+      "group": "canvas-surface",
+      "name": "Manual-edit fixed left inspector layout",
+      "user_action": "Enter Edit mode on an HTML preview",
+      "expected_result": "Split layout switches from a draggable resize handle to a fixed 'split-edit-divider'; the chat slot region hosts a comment-left-host or edit inspector instead of ChatPane",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/ProjectView.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "tabbed-workspace-tabs",
+      "group": "canvas-surface",
+      "name": "Tabbed workspace \u2014 tab bar, Pages dropdown, dynamic tabs, drag reorder",
+      "user_action": "Click a workspace tab, open the Pages dropdown, or open a file/terminal/side-chat/browser tab via the '+' launcher; drag a tab to reorder; wheel-scroll the tab strip",
+      "expected_result": "One persistent tab per open file/terminal/side-chat/browser/live-artifact; tabs are draggable with a drop-edge indicator, horizontally wheel-scrollable, and closeable",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileWorkspace.tsx",
+        "apps/web/src/components/workspace/TabLauncherMenu.tsx",
+        "apps/web/src/components/WorkspaceTabsBar.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/WorkspaceTabsBar.test.tsx",
+        "apps/web/tests/styles/workspace-tabs-chrome.test.ts",
+        "apps/web/tests/components/ProjectView.tabs-navigation.test.tsx"
+      ]
+    },
+    {
+      "id": "design-files-panel",
+      "group": "canvas-surface",
+      "name": "Design Files panel \u2014 file tree/grid, upload, rename, delete, download project",
+      "user_action": "Open the Design Files tab; drag-drop or click Upload; right-click or use row actions to rename/delete; click Download Project",
+      "expected_result": "Files render as a list/grid rooted at rootDirName; upload shows progress/error banner; delete supports single and multi-select; Download Project produces a zip archive",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/DesignFilesPanel.tsx",
+        "apps/web/src/components/FileWorkspace.tsx"
+      ],
+      "proof_tests": [
+        "e2e/ui/app-design-files.test.ts",
+        "apps/web/tests/i18n/design-files-agent-copy.test.ts",
+        "apps/web/tests/i18n/design-files-dropzone-copy.test.ts",
+        "apps/web/tests/styles/design-files-preview-list.test.ts"
+      ]
+    },
+    {
+      "id": "embedded-browser-tab",
+      "group": "canvas-surface",
+      "name": "Embedded in-app Browser tab",
+      "user_action": "Click 'New Browser' from the tab launcher or Design Files panel",
+      "expected_result": "A DesignBrowserPanel tab opens with URL navigation, page snapshot toast, and the ability to attach the browsed page as a comment/board attachment",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/DesignBrowserPanel.tsx",
+        "apps/web/src/components/FileWorkspace.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/DesignBrowserPanel.test.tsx",
+        "apps/web/tests/components/DesignBrowserPanel.frame-check.test.tsx",
+        "apps/web/tests/components/DesignBrowserPanel.webview.test.tsx"
+      ]
+    },
+    {
+      "id": "in-app-terminal-tab",
+      "group": "canvas-surface",
+      "name": "In-app Terminal tab",
+      "user_action": "Open 'New Terminal' from the tab launcher",
+      "expected_result": "A TerminalViewer tab opens bound to a persisted terminal session id; multiple terminals are numbered",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/workspace/TerminalViewer.tsx",
+        "apps/web/src/components/FileWorkspace.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/TerminalViewer.test.tsx"
+      ]
+    },
+    {
+      "id": "side-chat-tab",
+      "group": "canvas-surface",
+      "name": "Side-chat tab",
+      "user_action": "Open a side chat from the tab launcher",
+      "expected_result": "A secondary ChatPane-style conversation opens as its own workspace tab, independent of the main chat",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/FileWorkspace.tsx",
+        "apps/web/src/components/workspace/SideChatTab.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/workspace/SideChatTab.test.tsx",
+        "apps/web/tests/components/FileWorkspace.sideChatLinkRouting.test.tsx"
+      ]
+    },
+    {
+      "id": "sketch-editor-tab",
+      "group": "canvas-surface",
+      "name": "Sketch (Excalidraw) editor for .sketch.json files",
+      "user_action": "Click 'New Sketch' in Design Files, or open an existing .sketch.json file; draw shapes/text/images/frames; Save or Export image",
+      "expected_result": "Lazy-loaded Excalidraw canvas with save/clear/export-image actions; dirty state tracked and autosaved; exported PNG saved as a sibling file; save-state indicator shows saving/dirty/saved",
+      "risk": "low",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/SketchEditor.tsx",
+        "apps/web/src/components/FileWorkspace.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/SketchEditor.default-color.test.tsx",
+        "apps/web/tests/components/SketchEditor.save.test.tsx",
+        "apps/web/tests/components/sketch-colors.test.ts",
+        "apps/web/tests/components/sketch-model.test.ts",
+        "apps/web/tests/runtime/sketch-engine-loading.test.ts"
+      ]
+    },
+    {
+      "id": "design-system-project-panel",
+      "group": "canvas-surface",
+      "name": "Design System project panel",
+      "user_action": "Click the Design System tab (present when the project is a design-system project)",
+      "expected_result": "Shows generation progress, section review cards (colors, typography, spacing/radius, guidance, preview, UI kit, assets), 'needs work' feedback, and use/duplicate/delete actions",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileWorkspace.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/FileWorkspace.design-system.test.tsx",
+        "apps/web/tests/components/design-system-project.test.ts",
+        "apps/web/tests/components/design-system-group-order.test.ts"
+      ]
+    },
+    {
+      "id": "page-creator-dialog",
+      "group": "canvas-surface",
+      "name": "Page Creator dialog (new page from template/preset)",
+      "user_action": "Click '+' in the Pages menu to open the Page Creator",
+      "expected_result": "Category-filtered gallery of blank/preset page templates (prototype, deck, wireframe, mobile, image, video, audio, live-artifact, document/markdown, hyperframes) with live thumbnail previews; selecting one creates and opens a new page file",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileWorkspace.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "zoom-control",
+      "group": "canvas-surface",
+      "name": "Zoom control (manual levels + desktop auto-fit)",
+      "user_action": "Click the zoom percentage in the toolbar; pick 50/75/100/125/150/200% or leave it in auto mode",
+      "expected_result": "Preview scales via CSS transform; in 'auto' mode + desktop viewport, zoom auto-fits content width via desktopPreviewAutoFitZoomPercent(); manual selection pins zoomMode to 'manual'",
+      "risk": "low",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "device-viewport-switcher",
+      "group": "canvas-surface",
+      "name": "Device viewport switcher (Desktop / Tablet / Mobile)",
+      "user_action": "Click the viewport icon/dropdown in the toolbar or the 'more' overflow menu",
+      "expected_result": "Preview frame resizes to fixed 820x1180 (tablet) or 390x844 (mobile) with auto-fit scaling within canvas padding, or fluid full-width (desktop); choice is cached per project+file",
+      "risk": "low",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "source-preview-toggle",
+      "group": "canvas-surface",
+      "name": "Source / Preview mode toggle",
+      "user_action": "Click the code icon in the toolbar",
+      "expected_result": "Switches the pane between rendered iframe preview and raw source code view",
+      "risk": "low",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "screenshot-copy",
+      "group": "canvas-surface",
+      "name": "Screenshot copy",
+      "user_action": "Click the screenshot icon while in preview mode",
+      "expected_result": "Captures the current preview frame and copies it to clipboard as an image",
+      "risk": "low",
+      "verifiable_by": "manual-browser",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/file-viewer-screenshot-tooltip.test.tsx"
+      ]
+    },
+    {
+      "id": "comment-side-panel",
+      "group": "editing",
+      "name": "Comment side panel / side dock (list, thread, drag-reorder, board batch send)",
+      "user_action": "Click the comment-count toolbar icon to open the side panel; drag comment cards to reorder; attach images to a batch and send",
+      "expected_result": "Docked or stacked (responsive) side panel lists all preview comments with reorder-by-drag, collapse/expand, image previews, and a 'send board batch' action that queues/sends attached comments+images to chat",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "inspect-panel",
+      "group": "editing",
+      "name": "Inspect panel \u2014 quick live CSS tuning on one element",
+      "user_action": "Toggle Inspect, click an element, drag color/font-size/weight/align/padding/radius controls",
+      "expected_result": "Style changes preview live in the iframe via a srcDoc bridge; 'Save to source' persists as an injected style block; 'Reset element' reverts to the pre-edit outerHTML snapshot",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "manual-edit-inspector-panel",
+      "group": "editing",
+      "name": "Manual Edit \u2014 style/content inspector panel",
+      "user_action": "With an element selected in Edit mode, adjust typography/color/spacing/layout fields or link href/image src/alt in the right-docked panel, then Save",
+      "expected_result": "A set-style / set-text / set-link / set-image patch applies and persists; live preview streams style changes via postMessage before the explicit Save commits a version",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/ManualEditPanel.tsx",
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": [
+        "e2e/ui/app-manual-edit.test.ts"
+      ]
+    },
+    {
+      "id": "manual-edit-outer-html",
+      "group": "editing",
+      "name": "Manual Edit \u2014 inline raw HTML editing for a container",
+      "user_action": "Select a container element with nested markup; edit its outer HTML directly in the CONTENT textarea and Save",
+      "expected_result": "set-outer-html patch replaces the element's outerHTML (must remain exactly one root element) and persists as a version",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/ManualEditPanel.tsx",
+        "apps/web/src/edit-mode/source-patches.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/edit-mode/source-patches.test.ts"
+      ]
+    },
+    {
+      "id": "manual-edit-delete-image-page-styles",
+      "group": "editing",
+      "name": "Manual Edit \u2014 delete element / upload image / page-level styles",
+      "user_action": "Click the trash icon on a selected element, upload a new image for an image element, or click empty canvas to open page-level background/font/size controls",
+      "expected_result": "remove-element / set-image / body-level set-style patches apply and persist; deleting the last renderable body child is blocked with an error",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/ManualEditPanel.tsx",
+        "apps/web/src/components/FileViewer.tsx",
+        "apps/web/src/edit-mode/source-patches.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/edit-mode/source-patches.test.ts"
+      ]
+    },
+    {
+      "id": "tweaks-bridge",
+      "group": "runtime-wiring",
+      "name": "Tweaks bridge (class-based theme/motion toggle template)",
+      "user_action": "Toggle the Tweaks palette on an artifact that ships the .tw-panel/.tw-hidden template",
+      "expected_result": "A srcDoc-injected bridge emits od:tweaks-available on mount and drives panel visibility; forces srcDoc render mode (never available on URL-load path); also carries the design-templates/tweaks --motion Off/Subtle/Lively multiplier (the one licensed GSAP-adjacent visual-motion surface permitted per docs/decisions/gsap-licensing.md)",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/file-viewer-render-mode.ts",
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "present-mode",
+      "group": "canvas-surface",
+      "name": "Present mode (in-tab, fullscreen, new tab)",
+      "user_action": "Click the Present (slideshow) icon, choose 'In this tab', 'Fullscreen', or 'Open in new tab'",
+      "expected_result": "Preview enters a chrome-less presentation state; fullscreen shows an Esc-to-exit hint; deck files get slide-navigation controls in presentation mode",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "deck-slide-presentation-controls",
+      "group": "canvas-surface",
+      "name": "Deck / slide presentation controls",
+      "user_action": "Use Prev/Next slide buttons, keyboard arrows/PageUp/PageDown/Home/End/R, or click a slide thumbnail",
+      "expected_result": "Slide index advances/resets via a postMessage bridge to the deck runtime; a collapsible thumbnail rail shows all slides; counter displays 'current / total'",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx",
+        "apps/web/src/components/DeckThumbnailRail.tsx",
+        "apps/web/src/components/DeckSlideThumbnail.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/deck-slide-thumbnail.test.tsx",
+        "apps/web/tests/components/deck-thumbnail-rail.test.tsx",
+        "apps/web/tests/runtime/deck-thumbnail-parser.test.ts",
+        "apps/web/tests/runtime/design-template-deck-nav.test.ts",
+        "apps/web/tests/runtime/srcdoc-deck-bridge-framework-deck.test.ts",
+        "apps/web/tests/runtime/srcdoc-deck-bridge-keyboard-page-sync.test.ts",
+        "apps/web/tests/runtime/srcdoc-deck-bridge-nested-slides.test.ts",
+        "apps/web/tests/runtime/srcdoc-deck-bridge-scroll-container.test.ts",
+        "apps/web/tests/runtime/srcdoc-deck-bridge-slide-message-text.test.ts",
+        "apps/web/tests/runtime/srcdoc-deck-bridge-transform-driven.test.ts",
+        "apps/web/tests/runtime/srcdoc-deck-bridge-visible-reveal.test.ts"
+      ]
+    },
+    {
+      "id": "speaker-notes",
+      "group": "canvas-surface",
+      "name": "Speaker notes (view + inline edit)",
+      "user_action": "Click into the speaker notes panel while on a deck; edit text; blur to save",
+      "expected_result": "Per-slide speaker notes editor with save-state feedback; placeholder shown when empty",
+      "risk": "low",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/runtime/speaker-notes.test.ts"
+      ]
+    },
+    {
+      "id": "version-history",
+      "group": "canvas-surface",
+      "name": "File version history \u2014 browse, preview, restore",
+      "user_action": "Open version history from the toolbar/more-menu; scroll/search the list; click a version to preview; click Restore",
+      "expected_result": "Each version (ai/manual/restore-sourced) previews in an isolated iframe with its generating prompt shown; Restore reverts the live file to that content and records a new 'restore' version",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/file-viewer-version-download.test.tsx"
+      ]
+    },
+    {
+      "id": "export-pdf-pptx-image",
+      "group": "canvas-surface",
+      "name": "Export: PDF, PPTX (editable or screenshot), image (PNG/JPEG/WebP)",
+      "user_action": "Open the Download menu and pick an export format",
+      "expected_result": "Triggers the corresponding export pipeline; PPTX offers 'editable' vs 'screenshot' modes and is disabled while streaming; image export offers a PNG/JPEG/WebP picker",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/file-viewer-image-export.test.tsx",
+        "apps/web/tests/components/preview-modal-image-export.test.tsx",
+        "apps/web/tests/analytics/export-error-code.test.ts"
+      ]
+    },
+    {
+      "id": "share-link",
+      "group": "canvas-surface",
+      "name": "Share link / share page",
+      "user_action": "Open the Share menu and click 'Copy share link' or 'Open share page'",
+      "expected_result": "Copies or opens a public share URL for the deployed artifact; disabled with a guiding hint when nothing is deployed yet or the run is still streaming",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "social-share-flow",
+      "group": "canvas-surface",
+      "name": "Social share flow",
+      "user_action": "Click 'Share to social' in the Share menu",
+      "expected_result": "Deploys (if needed) and produces a shareable social post/link",
+      "risk": "low",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/PluginShareMenu.test.tsx"
+      ]
+    },
+    {
+      "id": "save-as-template",
+      "group": "canvas-surface",
+      "name": "Save as reusable Template",
+      "user_action": "Use the template-save action to name and describe a project template",
+      "expected_result": "Persists the current artifact as a user template surfaced later in the New Project 'Template' tab",
+      "risk": "low",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "react-component-viewer",
+      "group": "canvas-surface",
+      "name": "React component viewer",
+      "user_action": "Open a .jsx/.tsx component file",
+      "expected_result": "ReactComponentViewer renders the compiled component in an isolated preview alongside module-pointer diagnostics",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/runtime/react-component.test.ts"
+      ]
+    },
+    {
+      "id": "live-artifact-viewer",
+      "group": "canvas-surface",
+      "name": "Live Artifact viewer (connector-backed / data-bearing)",
+      "user_action": "Open a Live Artifact tab",
+      "expected_result": "Tabs across Preview / Code / metadata / provenance / refresh history; supports manual refresh with event/status timeline and error surfacing",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "media-viewers",
+      "group": "canvas-surface",
+      "name": "Image / Video / Audio / SVG / Binary viewers",
+      "user_action": "Open a file of that media type",
+      "expected_result": "Dedicated lightweight viewer per type (native img/video/audio, SVG source/preview toggle, generic binary fallback with metadata)",
+      "risk": "low",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "markdown-viewer",
+      "group": "canvas-surface",
+      "name": "Markdown viewer (split/preview modes, code-block copy, image rewriting, inline edit/save)",
+      "user_action": "Open a .md file; toggle split vs. preview; edit and save",
+      "expected_result": "Renders GFM with syntax-highlighted, copy-button-equipped code blocks; rewrites relative image sources against the project file root; tracks save state and scroll-ratio sync between edit/preview panes in split mode",
+      "risk": "low",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/file-viewer-markdown-copy.test.tsx",
+        "apps/web/tests/components/markdown-scroll-sync.test.ts",
+        "apps/web/tests/runtime/markdown.test.tsx",
+        "apps/web/tests/runtime/markdown.linkClick.test.tsx",
+        "apps/web/tests/artifacts/markdown.test.ts",
+        "apps/web/tests/styles/markdown-links.test.ts"
+      ]
+    },
+    {
+      "id": "json-text-viewer",
+      "group": "canvas-surface",
+      "name": "JSON / plain-text viewer",
+      "user_action": "Open a .json or text file",
+      "expected_result": "Formats JSON preserving precision-sensitive numbers (avoids silent float rounding); plain text viewer shows line numbers and copy",
+      "risk": "low",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/FileViewer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "critique-theater",
+      "group": "canvas-surface",
+      "name": "Critique Theater / Design Jury (read-only, non-editing)",
+      "user_action": "Watch a live multi-panelist critique stream during a run; optionally click Interrupt",
+      "expected_result": "Read-only phase-driven UI (live -> shipped/degraded/interrupted/failed); Interrupt POSTs a kill request and optimistically flips to interrupted. Confirmed out of scope for edit-hardening \u2014 included only so the exclusion is explicit",
+      "risk": "low",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/Theater/CritiqueTheaterMount.tsx",
+        "apps/web/src/components/Theater/state/reducer.ts"
+      ],
+      "proof_tests": [
+        "e2e/ui/critique-theater.test.ts",
+        "e2e/tests/critique-coverage.test.ts"
+      ]
+    },
+    {
+      "id": "design-systems-catalog-browse",
+      "group": "catalog",
+      "name": "Design Systems catalog browse (Mine / Official / Enterprise)",
+      "user_action": "Open Design Systems, switch scope tab, pick a category chip or surface pill, type in search",
+      "expected_result": "Grid/list narrows live; card count badges update; 'Enterprise' tab shows a fixed Coming Soon state",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/DesignSystemsTab.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/styles/design-system-review-density.test.ts",
+        "apps/web/tests/components/DesignSystemsTab.test.tsx"
+      ]
+    },
+    {
+      "id": "design-system-preview",
+      "group": "catalog",
+      "name": "Design system full preview (tokens/kit)",
+      "user_action": "Click a catalog card to open the preview pane/modal",
+      "expected_result": "Right-hand pane (or modal) renders DESIGN.md-derived component kit, color/type/spacing tokens, and package file list",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/DesignSystemPreviewModal.tsx",
+        "apps/web/src/components/DesignSystemKitPreview.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/styles/design-system-modal-layer.test.ts"
+      ]
+    },
+    {
+      "id": "design-system-select-apply",
+      "group": "catalog",
+      "name": "Select/apply a design system (set default or switch project)",
+      "user_action": "Click 'Make default' on a catalog row, or use the in-chat DesignSystemSwitchPicker for the active project",
+      "expected_result": "Project's or the global default designSystemId updates; no files are copied, only the id reference changes",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/DesignSystemsTab.tsx",
+        "apps/web/src/components/DesignSystemSwitchPicker.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/styles/project-design-system-picker.test.ts",
+        "e2e/ui/chat-design-system-switch.test.ts"
+      ]
+    },
+    {
+      "id": "design-system-import",
+      "group": "catalog",
+      "name": "Import a design system (local upload / GitHub repo / shadcn registry)",
+      "user_action": "Use the import controls in DesignSystemsSection or DesignSystemFlow to drop a local folder, paste a GitHub repo URL, or point at a shadcn registry",
+      "expected_result": "POST /api/design-systems/import/{local,github,shadcn} creates a new 'user:' draft under 'Mine'; GitHub import gated behind requireLocalOrigin; shadcn import enforces 100-file/256KB-per-file caps",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/DesignSystemsSection.tsx",
+        "apps/web/src/components/DesignSystemAssetDropzone.tsx",
+        "apps/daemon/src/design-systems/github-import.ts",
+        "apps/daemon/src/design-systems/shadcn-import.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/design-system-asset-dropzone.test.tsx",
+        "apps/web/tests/components/design-system-github-evidence.test.ts",
+        "apps/web/tests/components/design-system-flow-figma-subdir.test.ts"
+      ]
+    },
+    {
+      "id": "design-system-publish-unpublish-delete",
+      "group": "catalog",
+      "name": "Publish / unpublish / delete a design system draft",
+      "user_action": "Use the row action menu on a 'Mine' entry",
+      "expected_result": "status flips draft<->published (or the entry is removed after a confirm dialog); busy spinner + toast reflect the async PATCH/DELETE",
+      "risk": "low",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/DesignSystemsTab.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "design-templates-gallery",
+      "group": "catalog",
+      "name": "Design Templates gallery (decks/prototypes/image/video/audio)",
+      "user_action": "Open the Templates tab in EntryView/EntryShell and browse cards",
+      "expected_result": "Each of 353 template folders renders as a live example.html preview tile (deck templates are keyboard/wheel/touch navigable); clicking opens or seeds a new project from that template",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "design-templates/AGENTS.md",
+        "apps/web/src/components/EntryView.tsx",
+        "apps/daemon/src/design-systems/server-services.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/TemplatesSection.test.tsx",
+        "apps/web/tests/components/EntryNavRail.single-templates.test.tsx",
+        "apps/web/tests/components/EntryShell.templates-autosend.test.tsx",
+        "apps/web/tests/components/home-hero/TemplatePicker.test.tsx",
+        "apps/web/tests/components/FeaturedTemplatesRow.test.tsx",
+        "apps/web/tests/runtime/design-template-deck-nav.test.ts"
+      ]
+    },
+    {
+      "id": "reference-board",
+      "group": "catalog",
+      "name": "Reference Board (curated external design-inspiration sites)",
+      "user_action": "Open the in-app Browser's start page, pick a category chip or search, click a site card",
+      "expected_result": "filterReferenceGroups narrows the wall by category+query across label/host/detail; clicking navigates the embedded Browser to that URL and tracks a click event",
+      "risk": "low",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/DesignBrowserPanel.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/DesignBrowserPanel.test.tsx"
+      ]
+    },
+    {
+      "id": "browser-use-action-catalog",
+      "group": "catalog",
+      "name": "Browser Use agent-action catalog",
+      "user_action": "Inside the embedded Browser, open the action menu and search/pick an action (extract_colors, extract_svgs, screenshot_full, audit_accessibility, etc.)",
+      "expected_result": "filterBrowserUseCategories narrows ~35 actions across 7 categories; picking one sends the action's canned prompt to the agent bound to that browser tab",
+      "risk": "low",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/DesignBrowserPanel.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "connector-tool-preview",
+      "group": "catalog",
+      "name": "Connector tool preview",
+      "user_action": "Open a connector's detail view",
+      "expected_result": "Lazily fetches and lists up to 50 of that connector's available tools (CONNECTOR_TOOL_PREVIEW_LIMIT), with per-connector cached loading/failed states",
+      "risk": "low",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/ConnectorsBrowser.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "brand-reference-picker",
+      "group": "catalog",
+      "name": "Brand Reference picker (start a brand extraction)",
+      "user_action": "Open 'Start from a brand', browse quick-picks or the full categorized/searchable wall, click a brand tile",
+      "expected_result": "onPick fires with the brand's domain; host kicks off site extraction (or, in the Design System create flow, adds the domain as a source URL); no assets stored ahead of time, only the public favicon renders",
+      "risk": "low",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/BrandReferencePicker.tsx",
+        "apps/web/src/components/BrandPickerModal.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/BrandReferencePicker.test.tsx",
+        "apps/web/tests/components/BrandPreviewCard.test.tsx",
+        "apps/web/tests/components/BrandEnrichmentBanner.test.tsx",
+        "apps/web/tests/runtime/brand-enrichment.test.ts",
+        "apps/web/tests/runtime/brands-focus.test.ts"
+      ]
+    },
+    {
+      "id": "library-assets-registry",
+      "group": "catalog",
+      "name": "Library/Assets registry (personal multi-source asset catalog)",
+      "user_action": "Open the Library tab, filter by kind in the left rail, scroll the day-grouped grid, click a card for full preview",
+      "expected_result": "Grid shows every asset that entered the system (clipper capture, upload, agent output, AI generation) with source+kind badges; live updates stream in over /api/library/events SSE; clicking opens LibraryPreviewModal",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/LibrarySection.tsx",
+        "apps/web/src/components/library/LibraryCard.tsx",
+        "apps/web/src/components/library/LibraryRail.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/LibrarySection.restructure.test.tsx",
+        "apps/web/tests/components/LibrarySection.a11y.test.tsx",
+        "apps/web/tests/components/LibrarySection.pagination.test.tsx",
+        "apps/web/tests/components/library/LibraryCard.test.tsx",
+        "apps/web/tests/components/library/LibraryRail.test.tsx",
+        "apps/web/tests/components/library-section-perf.test.tsx",
+        "apps/web/tests/components/library-ui-visible.test.tsx"
+      ]
+    },
+    {
+      "id": "library-multiselect-bulk-delete",
+      "group": "catalog",
+      "name": "Multi-select and bulk-delete library assets",
+      "user_action": "Checkbox-select, Cmd/Ctrl+click, Shift+click range, rubber-band drag, or Cmd/Ctrl+A across cards, then use the action bar or Delete key",
+      "expected_result": "Selected cards highlight; bulk delete removes them via deleteLibraryAsset and updates the grid",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/LibrarySection.tsx",
+        "apps/web/src/components/library/library-utils.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/library/library-utils.test.ts"
+      ]
+    },
+    {
+      "id": "library-insert-picker",
+      "group": "catalog",
+      "name": "Insert-from-library picker (composer/design-files attach)",
+      "user_action": "'+' \u2192 Select from library (in composer or Design Files); filter by kind, multi-select assets, confirm",
+      "expected_result": "Each picked asset copies into the active project's design files via POST /api/library/assets/:id/apply, staged as an attachment chip and recording a provenance back-link; element-pick captures inject outerHTML into the draft as a fenced code block",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/LibraryPicker.tsx",
+        "apps/web/src/components/ChatComposer.tsx",
+        "apps/daemon/src/routes/library.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/library-picker-perf.test.tsx"
+      ]
+    },
+    {
+      "id": "plugins-home-discovery",
+      "group": "catalog",
+      "name": "Plugins Home discovery grid (installed + community)",
+      "user_action": "On Home, click an artifact-kind chip (Prototype/Slides/Image/Video/HyperFrames/Audio), optionally a scene-bucket subcategory, search, or the Saved chip",
+      "expected_result": "usePluginFacets filters InstalledPluginRecord[] by category/subcategory/query; PluginCard renders a kind-aware hero preview (image/video poster, sandboxed HTML iframe, or design-system patch) lazily",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/PluginsHomeSection.tsx",
+        "apps/web/src/components/plugins-home/facets.ts",
+        "apps/web/src/components/plugins-home/PluginCard.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/plugins-home-facets.test.ts",
+        "apps/web/tests/components/plugins-home-section.test.tsx",
+        "apps/web/tests/components/plugins-home-sort-order.test.ts",
+        "apps/web/tests/components/plugins-home-html-surface.test.tsx",
+        "apps/web/tests/components/plugins-home-media-surface.test.tsx",
+        "apps/web/tests/components/plugins-home-preview-surface.test.tsx",
+        "apps/web/tests/components/plugins-home-preview.test.ts",
+        "apps/web/tests/components/plugins-home-newest-sink.test.ts",
+        "apps/web/tests/components/plugins-home-visualScore.test.ts"
+      ]
+    },
+    {
+      "id": "plugin-use-duplicate",
+      "group": "catalog",
+      "name": "Use / duplicate a plugin",
+      "user_action": "Click 'Use' (or 'Use with query') / 'Duplicate' on a plugin card",
+      "expected_result": "Plugin becomes the active driver for the next agent run, seeding the composer with its rendered use-case query; duplicate spins up a copy of its example artifact",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/HomeView.tsx",
+        "apps/web/src/components/plugins-home/duplicate.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/AssistantMessage.pluginInstall.test.tsx",
+        "apps/web/tests/components/HomeView.activePluginChip.test.tsx",
+        "apps/web/tests/components/HomeView.pickChip-plugins-loading.test.tsx"
+      ]
+    },
+    {
+      "id": "plugin-detail-modal",
+      "group": "catalog",
+      "name": "Plugin detail modal (per-type)",
+      "user_action": "Click 'Details' on a plugin card",
+      "expected_result": "Modal renders type-specific content \u2014 design-system patch diff, static example, media preview, or scenario steps \u2014 plus tags, description, and primary actions",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/plugin-details/PluginDesignSystemDetail.tsx",
+        "apps/web/src/components/plugin-details/PluginExampleDetail.tsx",
+        "apps/web/src/components/PluginDetailsModal.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/PluginDetailsModal.dispatch.test.tsx",
+        "apps/web/tests/components/PluginDetailsModal.layering.test.tsx",
+        "apps/web/tests/components/PluginExampleDetail.unavailable-noun.test.tsx"
+      ]
+    },
+    {
+      "id": "plugin-marketplace-browse-install",
+      "group": "catalog",
+      "name": "Available Plugins / marketplace browse + install",
+      "user_action": "Open Plugins manager, search/filter by source in the Available panel, click Install",
+      "expected_result": "filterAvailablePlugins narrows across all added marketplace manifests; Install POSTs /api/plugins/install and the card flips to a 'Use' state with a TrustBadge (restricted/trusted/official)",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/PluginsView.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/PluginsView.test.tsx"
+      ]
+    },
+    {
+      "id": "plugin-marketplace-sources",
+      "group": "catalog",
+      "name": "Plugin marketplace Sources management",
+      "user_action": "Paste a marketplace.json URL, pick a trust level, Add; or Refresh/Remove/change trust on an existing source",
+      "expected_result": "Marketplace list updates; each row shows plugin count, catalog version, and trust badge; refresh re-fetches that manifest",
+      "risk": "medium",
+      "verifiable_by": "manual-browser",
+      "source_files": [
+        "apps/web/src/components/PluginsView.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "plugin-import",
+      "group": "upload-attach",
+      "name": "Plugin import (GitHub / zip / folder)",
+      "user_action": "Open Import in Plugins manager, choose GitHub URL, upload a .zip, or pick a local folder",
+      "expected_result": "Plugin installs from the chosen source via /api/plugins/install, /api/plugins/upload-zip, or /api/plugins/upload-folder",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/PluginsView.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "community-gallery",
+      "group": "catalog",
+      "name": "Community gallery (installed community plugins, minimal preview)",
+      "user_action": "Browse the Community section on Home (gallery card layout)",
+      "expected_result": "Same PluginsHomeSection component renders a top-bar-only tile per plugin (dot + name + fullscreen), using the plugin's baked example.html as the live preview",
+      "risk": "low",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/PluginsHomeSection.tsx",
+        "apps/web/src/components/HomeView.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/PluginsView.gallery-tab.test.tsx"
+      ]
+    },
+    {
+      "id": "share-to-community",
+      "group": "catalog",
+      "name": "Share project to community catalog (publish direction)",
+      "user_action": "From a finished project, click 'Share to community' / run the od-share-to-community scenario",
+      "expected_result": "Agent packages the project into generated-plugin/, validates+packs+installs it locally, then the Design Files plugin-folder card exposes 'Add to My plugins', 'Publish repo', and 'MishMash PR' buttons to push it upstream",
+      "risk": "low",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/share-to-community/shareToCommunityPrompt.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/components/pluginFolderActions.test.ts"
+      ]
+    },
+    {
+      "id": "stock-media-gap",
+      "group": "catalog",
+      "name": "Stock media \u2014 no native picker (documented gap, not a bug)",
+      "user_action": "User looks for a built-in Unsplash/Pexels-style stock photo browser",
+      "expected_result": "None exists; the only paths are two static links (Unsplash, Pexels) inside the Reference Board that open the external site in the embedded Browser, or an agent 'asset-search' toolbox action that routes to an image-search skill rather than a UI catalog",
+      "risk": "low",
+      "verifiable_by": "manual-browser",
+      "source_files": [
+        "apps/web/src/components/DesignBrowserPanel.tsx",
+        "apps/web/src/runtime/design-toolbox.ts"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "composer-file-picker",
+      "group": "upload-attach",
+      "name": "Chat composer file picker (native multi-select)",
+      "user_action": "Click '+' \u2192 Attach files, or the paperclip; browser file dialog opens with no accept filter, multiple=true",
+      "expected_result": "Selected files upload via POST /api/projects/:id/upload (12/batch, 200MB/file cap, no MIME check), land flat in the project folder, and appear as staged ChatAttachment chips",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/ChatComposer.tsx",
+        "apps/web/src/components/ComposerPlusMenu.tsx",
+        "apps/web/src/providers/registry.ts",
+        "apps/daemon/src/routes/project/index.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/analytics/upload-tracking.test.ts",
+        "apps/daemon/tests/project-upload-filenames.test.ts",
+        "apps/daemon/tests/project-upload-subdir-path.test.ts"
+      ]
+    },
+    {
+      "id": "composer-drag-drop",
+      "group": "upload-attach",
+      "name": "Drag-and-drop onto the composer/canvas",
+      "user_action": "Drag one or more files from the OS Finder/Explorer and drop them anywhere on the chat composer shell",
+      "expected_result": "Same uploadFiles() path as the file picker; dropped files stage as attachment chips identically",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/ChatComposer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "composer-paste-clipboard",
+      "group": "upload-attach",
+      "name": "Paste-from-clipboard (files and screenshots)",
+      "user_action": "Cmd/Ctrl+V into the composer with an image or file on the clipboard",
+      "expected_result": "Synchronous clipboard files upload immediately; when the browser only exposes a screenshot via the async Clipboard API, it is read, named clipboard-screenshot-<timestamp>.<ext>, and uploaded the same way",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/ChatComposer.tsx",
+        "apps/web/src/components/composer/LexicalComposerInput.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/api-attachment-context.test.ts"
+      ]
+    },
+    {
+      "id": "connector-mention-context",
+      "group": "upload-attach",
+      "name": "Connector-sourced context (@-mention a connected service)",
+      "user_action": "'+' \u2192 Connectors submenu, or type @<connector-name> in the composer, and pick a connected integration",
+      "expected_result": "No bytes transferred through the composer \u2014 insertConnectorMention() stages the connector in RunContextSelection.connectorIds and inserts an @-mention token; the agent accesses the connector's data at run time via its wired MCP server tools",
+      "risk": "low",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/ChatComposer.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "reference-project-link-code",
+      "group": "upload-attach",
+      "name": "Reference project / Link local code (workspace context, not upload)",
+      "user_action": "'+' \u2192 Reference project (pick another MishMash project) or Link local code (native folder picker)",
+      "expected_result": "PATCHes the project's metadata.linkedDirs so the agent gets --add-dir read access to that folder; nothing is copied into the current project or staged as a ChatAttachment",
+      "risk": "low",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/ChatComposer.tsx",
+        "apps/web/src/components/ProjectReferenceModal.tsx"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "od-library-manual-upload",
+      "group": "upload-attach",
+      "name": "OD Library manual upload (global asset library, project-independent)",
+      "user_action": "Open the Library panel \u2192 Upload \u2192 drag/drop, paste, or browse files",
+      "expected_result": "Strict MIME+extension allowlist (images, fonts, text, HTML, JSON/XML \u2014 audio/video explicitly rejected), ~3MB/file cap (base64-inflated JSON body limit); daemon re-validates the same policy so a rejected file shows a per-row reason; duplicate content deduped and flagged 'Already in Library'",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/LibraryUploadModal.tsx",
+        "packages/contracts/src/api/library.ts",
+        "apps/daemon/src/routes/library.ts"
+      ],
+      "proof_tests": [
+        "packages/contracts/tests/library-upload-policy.test.ts"
+      ]
+    },
+    {
+      "id": "design-system-asset-dropzone",
+      "group": "upload-attach",
+      "name": "Design-system creation: asset dropzone",
+      "user_action": "During 'Create design system' flow, drag/drop/browse/paste logo, font, image, PDF, video, or slide-deck files",
+      "expected_result": "Files staged client-side (kind inferred from MIME then extension) with type-aware thumbnails/lightbox; uploaded through the generic project-upload path when the design system is created",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/components/DesignSystemAssetDropzone.tsx"
+      ],
+      "proof_tests": [
+        "apps/web/tests/design-system-asset-dropzone.test.tsx"
+      ]
+    },
+    {
+      "id": "kit-upload-logo-font-image",
+      "group": "upload-attach",
+      "name": "Design-system Kit: replace logo/font/image module",
+      "user_action": "In an existing design system's Kit view, click an empty logo/font/image module and pick a replacement file",
+      "expected_result": "uploadProjectFile() PUTs the file into logos/ | fonts/ | imagery/, then rewrites brand.json to point at the server-returned stored path; a failed upload or brand.json write surfaces onError() instead of silently no-op'ing",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/runtime/kit-upload.ts"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "folder-import-project",
+      "group": "upload-attach",
+      "name": "Import project from local folder",
+      "user_action": "Choose 'Import folder' (native OS folder picker via the host bridge, or a web fallback)",
+      "expected_result": "Creates a new project whose metadata.baseDir points at the selected folder (files stay in place, not copied); import failures (cancel vs. real error) are distinguished",
+      "risk": "medium",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/web/src/components/useOpenFolderImport.ts",
+        "apps/web/src/utils/pickAndImportError.ts"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "skill-package-import",
+      "group": "upload-attach",
+      "name": "Skill package import",
+      "user_action": "Import a skill (zip/package) via the Skills settings surface",
+      "expected_result": "POST /api/skills/import ingests and installs a skill package into the local skills store",
+      "risk": "low",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/daemon/src/routes/static-resource.ts"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "storyboard-uploads",
+      "group": "upload-attach",
+      "name": "Storyboard uploads",
+      "user_action": "Upload media/assets within the Storyboard feature",
+      "expected_result": "POST /api/storyboards/:id/uploads handles storyboard-scoped uploads on a separate route module from the project-attachment pipeline",
+      "risk": "low",
+      "verifiable_by": "e2e",
+      "source_files": [
+        "apps/daemon/src/routes/storyboard.ts"
+      ],
+      "proof_tests": []
+    },
+    {
+      "id": "api-attachment-context-injection",
+      "group": "runtime-wiring",
+      "name": "API-mode attachment context injection",
+      "user_action": "N/A \u2014 automatic when a BYOK/API-mode run includes staged attachments",
+      "expected_result": "historyWithApiAttachmentContext() renders each attachment as a fenced code/text block (raw text for html/text/code/svg/sketch.json, section previews for pdf/document/presentation/spreadsheet) appended to the user's message, truncated at 24,000 chars/attachment and 64,000 chars total, with images optionally omitted when the provider supports native image attachments",
+      "risk": "medium",
+      "verifiable_by": "unit",
+      "source_files": [
+        "apps/web/src/api-attachment-context.ts"
+      ],
+      "proof_tests": [
+        "apps/web/tests/api-attachment-context.test.ts"
+      ]
+    }
+  ]
+}
