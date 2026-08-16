@@ -259,3 +259,69 @@ holds on an idle machine and not on a loaded one. It is a timing budget, not a b
 **Why it is not fixed here.** Raising the budget is a one-line change, but it is worth first
 checking whether other Playwright specs in the suite share the same 5s `waitForResponse` pattern
 so they can all be lifted together rather than one flake at a time.
+
+---
+
+## CANVAS-11 — Tool activation deferred behind a manual-edit flush has no cancellation
+
+**Severity:** low · **Area:** editing · **Status:** open, pre-existing but widened
+
+When manual Edit is open, activating another preview tool defers behind
+`exitManualEditModeAfterFlush().then(...)` with no epoch or cancellation token. Clicking a
+second tool before the flush resolves can run both continuations, leaving two tools active and
+breaking the mutual exclusion each activator otherwise maintains.
+
+```bash
+grep -c "exitManualEditModeAfterFlush().then" apps/web/src/components/FileViewer.tsx
+```
+
+Pre-existing: the baseline `a8dd0663e` has 3 of these deferred activations (Draw, Comment,
+Comment-create). The Inspect and Tweaks restoration on this branch follows the same established
+pattern rather than inventing a new one, which takes it to 5 — so the branch widens an existing
+gap rather than introducing it.
+
+**Why it is not fixed here.** A correct fix threads a monotonic epoch (or an abort flag) through
+all five activation paths and their continuations. That is a change to shared tool-switching
+behaviour affecting every preview tool, and it deserves its own PR with its own specs rather than
+riding along inside a restoration change.
+
+Surfaced by an independent Grok 4.5 adversarial review of the branch diff.
+
+---
+
+## CANVAS-12 — Forcing srcDoc on a `hasTweaksTemplate` match has an unmeasured false-positive cost
+
+**Severity:** low · **Area:** runtime-wiring · **Status:** open, needs measurement
+
+CANVAS-3's fix wires `tweaksBridge: hasTweaksTemplate(source)` into `urlLoadDecision`, so any
+artifact whose source matches the tweaks template takes the heavier srcDoc path. That is correct
+for real tweaks artifacts — it is the only path where the bridge can inject.
+
+The open question is precision. `hasTweaksTemplate` is a source-text heuristic, so an artifact
+that merely *mentions* the panel's class names would be pushed onto srcDoc: full HTML inlined
+into the parent document, higher memory, slower first paint, and the toolbar toggle enabled for a
+panel that is not really there. The existing `passiveLargeHtmlPreview` short-circuit limits the
+worst case but does not eliminate it.
+
+**Why it is not fixed here.** Nothing is known to be broken — the risk is a cost, not a
+regression, and tightening the heuristic without measuring its current false-positive rate would
+be guessing. Measure against the real artifact corpus in `design-templates/` first.
+
+Surfaced by the same Grok 4.5 review.
+
+### Reviewed and dismissed, with evidence
+
+Two findings from that review did **not** survive checking, recorded so they are not re-raised:
+
+- *"Gating routes with `requireLocalOrigin` may break the `od` CLI, which sends no Origin header."*
+  It does not. `isLocalSameOrigin` (`apps/daemon/src/origin-validation.ts:263`) returns true for a
+  missing Origin when the `Host` header is an allowed local host, which is exactly what the CLI
+  sends. Confirmed live against the running daemon: a foreign `Origin` gets 403 on all three
+  newly-gated routes, while the same requests with no Origin proceed to real handling (400 / 404,
+  and the pets sync actually ran). Captured in
+  `~/.claude/goal-state/mishmash-canvas-hardening/proof/C10-origin-cli-evidence.txt`.
+- *"`od:tweaks-panel-state` should require the active iframe like `od:tweaks-available` does."*
+  The asymmetry is deliberate and is the documented contract: `AGENTS.md` § "Chat UI conventions"
+  names `od:tweaks-available` specifically as the signal that must re-check
+  `ev.source === iframeRef.current?.contentWindow`, while echoes are accepted from either mounted
+  iframe. The implementation matches that contract.
