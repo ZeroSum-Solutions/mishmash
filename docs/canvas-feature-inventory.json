@@ -28,7 +28,9 @@
       "source_files": [
         "apps/web/src/components/file-viewer-render-mode.ts"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/file-viewer-render-mode.test.ts"
+      ]
     },
     {
       "id": "deploy-vercel-cloudflare",
@@ -378,7 +380,8 @@
       "proof_tests": [
         "apps/web/tests/components/FileWorkspace.design-system.test.tsx",
         "apps/web/tests/components/design-system-project.test.ts",
-        "apps/web/tests/components/design-system-group-order.test.ts"
+        "apps/web/tests/components/design-system-group-order.test.ts",
+        "apps/web/tests/components/DesignSystemFlow.test.tsx"
       ]
     },
     {
@@ -405,7 +408,9 @@
       "source_files": [
         "apps/web/src/components/FileViewer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/FileViewer.zoom-control.test.tsx"
+      ]
     },
     {
       "id": "device-viewport-switcher",
@@ -418,7 +423,10 @@
       "source_files": [
         "apps/web/src/components/FileViewer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/FileViewer.viewport-switcher.test.tsx",
+        "apps/web/tests/lib/use-deck-preview-scale.test.ts"
+      ]
     },
     {
       "id": "source-preview-toggle",
@@ -431,7 +439,9 @@
       "source_files": [
         "apps/web/src/components/FileViewer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/FileViewer.test.tsx"
+      ]
     },
     {
       "id": "screenshot-copy",
@@ -459,7 +469,9 @@
       "source_files": [
         "apps/web/src/components/FileViewer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/comments.test.ts"
+      ]
     },
     {
       "id": "inspect-panel",
@@ -535,7 +547,9 @@
         "apps/web/src/components/file-viewer-render-mode.ts",
         "apps/web/src/components/FileViewer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/runtime/srcdoc-tweaks-bridge.test.ts"
+      ]
     },
     {
       "id": "present-mode",
@@ -704,7 +718,10 @@
       "source_files": [
         "apps/web/src/components/FileViewer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/FileViewer.media-viewers.test.tsx",
+        "apps/web/tests/components/FileViewer.test.tsx"
+      ]
     },
     {
       "id": "markdown-viewer",
@@ -737,7 +754,10 @@
       "source_files": [
         "apps/web/src/components/FileViewer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/FileViewer.test.tsx",
+        "apps/web/tests/components/FileViewer.media-viewers.test.tsx"
+      ]
     },
     {
       "id": "critique-theater",
@@ -822,7 +842,8 @@
       "proof_tests": [
         "apps/web/tests/design-system-asset-dropzone.test.tsx",
         "apps/web/tests/components/design-system-github-evidence.test.ts",
-        "apps/web/tests/components/design-system-flow-figma-subdir.test.ts"
+        "apps/web/tests/components/design-system-flow-figma-subdir.test.ts",
+        "apps/web/tests/components/DesignSystemFlow.test.tsx"
       ]
     },
     {
@@ -836,7 +857,9 @@
       "source_files": [
         "apps/web/src/components/DesignSystemsTab.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/DesignSystemsTab.publish-unpublish-delete.test.tsx"
+      ]
     },
     {
       "id": "design-templates-gallery",
@@ -886,7 +909,9 @@
       "source_files": [
         "apps/web/src/components/DesignBrowserPanel.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/DesignBrowserPanel.test.tsx"
+      ]
     },
     {
       "id": "connector-tool-preview",
@@ -899,7 +924,9 @@
       "source_files": [
         "apps/web/src/components/ConnectorsBrowser.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/ConnectorsBrowser.tool-preview.test.ts"
+      ]
     },
     {
       "id": "brand-reference-picker",
@@ -1065,7 +1092,9 @@
       "source_files": [
         "apps/web/src/components/PluginsView.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/PluginsView.test.tsx"
+      ]
     },
     {
       "id": "plugin-import",
@@ -1078,7 +1107,9 @@
       "source_files": [
         "apps/web/src/components/PluginsView.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/daemon/tests/plugin-upload-security.test.ts"
+      ]
     },
     {
       "id": "community-gallery",
@@ -1123,7 +1154,8 @@
         "apps/web/src/components/DesignBrowserPanel.tsx",
         "apps/web/src/runtime/design-toolbox.ts"
       ],
-      "proof_tests": []
+      "proof_tests": [],
+      "not_applicable": "Documented absence, not a capability. No native stock-media picker exists; DesignBrowserPanel ships two static outbound links. There is no code path to test - the absence IS the specified behaviour. Verified: grep for unsplash|pexels in DesignBrowserPanel.tsx returns exactly 2 static REFERENCE_GROUPS entries."
     },
     {
       "id": "composer-file-picker",
@@ -1156,7 +1188,9 @@
       "source_files": [
         "apps/web/src/components/ChatComposer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/providers/registry.test.ts"
+      ]
     },
     {
       "id": "composer-paste-clipboard",
@@ -1199,7 +1233,9 @@
         "apps/web/src/components/ChatComposer.tsx",
         "apps/web/src/components/ProjectReferenceModal.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/ProjectReferenceModal.test.tsx"
+      ]
     },
     {
       "id": "od-library-manual-upload",
@@ -1244,7 +1280,9 @@
       "source_files": [
         "apps/web/src/runtime/kit-upload.ts"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/daemon/tests/library-ingest-manual-upload-validation.test.ts"
+      ]
     },
     {
       "id": "folder-import-project",
@@ -1258,7 +1296,9 @@
         "apps/web/src/components/useOpenFolderImport.ts",
         "apps/web/src/utils/pickAndImportError.ts"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/daemon/tests/folder-import-validation.test.ts"
+      ]
     },
     {
       "id": "skill-package-import",

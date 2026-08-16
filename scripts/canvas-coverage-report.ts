@@ -33,6 +33,14 @@ type Feature = {
   verifiable_by: 'unit' | 'e2e' | 'static' | 'manual-browser';
   source_files: string[];
   proof_tests: string[];
+  /**
+   * Set only for entries that record a documented ABSENCE rather than a
+   * capability — there is no code path to test, so demanding a test would force
+   * either a fake proof or a permanently red gate. The value is the
+   * justification and is required: an unexplained exemption is how a real gap
+   * gets quietly excused.
+   */
+  not_applicable?: string;
 };
 
 type Inventory = { features: Feature[] };
@@ -72,8 +80,13 @@ function resolveTestPath(candidate: string): string | null {
 const uncovered: Feature[] = [];
 const dangling: { feature: Feature; missing: string[] }[] = [];
 const covered: Feature[] = [];
+const exempt: Feature[] = [];
 
 for (const feature of features) {
+  if (feature.not_applicable) {
+    exempt.push(feature);
+    continue;
+  }
   if (feature.proof_tests.length === 0) {
     uncovered.push(feature);
     continue;
@@ -91,6 +104,7 @@ if (asJson) {
         covered: covered.length,
         uncovered: uncovered.map((feature) => feature.id),
         dangling: dangling.map((entry) => ({ id: entry.feature.id, missing: entry.missing })),
+        exempt: exempt.map((feature) => feature.id),
       },
       null,
       2,
@@ -99,6 +113,7 @@ if (asJson) {
 } else {
   const byGroup = new Map<string, { total: number; covered: number }>();
   for (const feature of features) {
+    if (feature.not_applicable) continue;
     const bucket = byGroup.get(feature.group) ?? { total: 0, covered: 0 };
     bucket.total += 1;
     if (covered.includes(feature)) bucket.covered += 1;
@@ -130,9 +145,17 @@ if (asJson) {
     }
   }
 
+  if (exempt.length > 0) {
+    process.stdout.write(`\nNOT APPLICABLE — documented absence, no code path to test (${exempt.length}):\n`);
+    for (const feature of exempt) {
+      process.stdout.write(`  ${feature.id}\n      ${feature.not_applicable}\n`);
+    }
+  }
+
   process.stdout.write(`\nUNCOVERED ${uncovered.length}\n`);
   process.stdout.write(`DANGLING ${dangling.length}\n`);
-  process.stdout.write(`COVERED ${covered.length}/${features.length}\n`);
+  process.stdout.write(`EXEMPT ${exempt.length}\n`);
+  process.stdout.write(`COVERED ${covered.length}/${features.length - exempt.length}\n`);
 }
 
 process.exit(uncovered.length === 0 && dangling.length === 0 ? 0 : 1);

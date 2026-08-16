@@ -838,6 +838,91 @@ describe('uploadProjectFiles', () => {
     expect(result.failed).toHaveLength(1);
     expect(result.failed[0]).toMatchObject({ name: 'c.txt' });
   });
+
+  it('marks every file failed with the daemon error code/message when the upload response is non-ok', async () => {
+    const a = new File(['a'], 'a.txt', { type: 'text/plain' });
+    const b = new File(['b'], 'b.txt', { type: 'text/plain' });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(
+        JSON.stringify({ code: 'UNSUPPORTED_MEDIA_TYPE', error: 'file type not allowed' }),
+        { status: 415 },
+      )),
+    );
+
+    const result = await uploadProjectFiles('project-1', [a, b]);
+
+    expect(result.uploaded).toEqual([]);
+    expect(result.error).toBe('file type not allowed');
+    expect(result.failed).toEqual([
+      { name: 'a.txt', code: 'UNSUPPORTED_MEDIA_TYPE', error: 'file type not allowed' },
+      { name: 'b.txt', code: 'UNSUPPORTED_MEDIA_TYPE', error: 'file type not allowed' },
+    ]);
+  });
+
+  it('falls back to a status-derived message when the error response has no JSON body', async () => {
+    const a = new File(['a'], 'a.txt', { type: 'text/plain' });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('not json', { status: 500 })),
+    );
+
+    const result = await uploadProjectFiles('project-1', [a]);
+
+    expect(result.uploaded).toEqual([]);
+    expect(result.error).toBe('upload failed (500)');
+    expect(result.failed).toEqual([{ name: 'a.txt', code: undefined, error: 'upload failed (500)' }]);
+  });
+
+  it('marks every file failed when the upload request itself throws (network error)', async () => {
+    const a = new File(['a'], 'a.txt', { type: 'text/plain' });
+    const b = new File(['b'], 'b.txt', { type: 'text/plain' });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      }),
+    );
+
+    const result = await uploadProjectFiles('project-1', [a, b]);
+
+    expect(result.uploaded).toEqual([]);
+    expect(result.error).toBe('upload request failed');
+    expect(result.failed).toEqual([
+      { name: 'a.txt', error: 'upload request failed' },
+      { name: 'b.txt', error: 'upload request failed' },
+    ]);
+  });
+
+  it('splits more than PROJECT_UPLOAD_BATCH_SIZE files across multiple upload requests, preserving order', async () => {
+    const files = Array.from({ length: 13 }, (_, i) => new File([`f${i}`], `f${i}.txt`, { type: 'text/plain' }));
+    const calls: FormData[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const form = init.body as FormData;
+        calls.push(form);
+        const batchFiles = form.getAll('files') as File[];
+        return new Response(JSON.stringify({
+          files: batchFiles.map((f) => ({ name: f.name, path: f.name, size: f.size, originalName: f.name })),
+        }), { status: 200 });
+      }),
+    );
+
+    const result = await uploadProjectFiles('project-1', files);
+
+    // 13 files at a 12-file batch size means two requests: 12 + 1.
+    expect(calls).toHaveLength(2);
+    expect((calls[0]!.getAll('files') as File[]).length).toBe(12);
+    expect((calls[1]!.getAll('files') as File[]).length).toBe(1);
+    expect(result.uploaded).toHaveLength(13);
+    expect(result.uploaded.map((u) => u.name)).toEqual(files.map((f) => f.name));
+    expect(result.failed).toEqual([]);
+  });
 });
 
 describe('deploy provider registry helpers', () => {

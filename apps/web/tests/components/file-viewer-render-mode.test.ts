@@ -54,6 +54,13 @@ describe('shouldUrlLoadHtmlPreview', () => {
     expect(shouldUrlLoadHtmlPreview({ ...base, drawMode: true, urlSnapshotBridge: true })).toBe(true);
   });
 
+  it('falls back to srcDoc when the tweaks palette is active (palette bridge required)', () => {
+    // Palette recoloring has no URL-load bridge equivalent — unlike
+    // commentMode/drawMode there is no companion `url*Bridge` flag that can
+    // keep this on the URL-load path.
+    expect(shouldUrlLoadHtmlPreview({ ...base, paletteActive: true })).toBe(false);
+  });
+
   it('falls back to srcDoc when the artifact ships the class based tweaks template', () => {
     // Without this, a plain `.tw-panel` artifact would URL load on first
     // open, skip the tweaks bridge entirely, and leave the toolbar toggle
