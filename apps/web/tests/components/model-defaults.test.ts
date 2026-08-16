@@ -121,6 +121,26 @@ describe('validateStoryboardUploadFile (upload cap must not exceed the media pip
   it('rejects a file one byte over STORYBOARD_UPLOAD_MAX_BYTES as too-large', () => {
     expect(validateStoryboardUploadFile(fileOfSize(STORYBOARD_UPLOAD_MAX_BYTES + 1))).toBe('too-large');
   });
+
+  // storyboard-uploads: mirrors the daemon's own allowlist (png/jpeg/webp —
+  // POST /api/storyboards/:id/uploads via STORYBOARD_UPLOAD_MIME_TYPES in
+  // @open-design/contracts). gif is explicitly excluded upstream because the
+  // i2i providers this feature feeds don't accept it.
+  it('rejects a disallowed MIME type (gif) as bad-type', () => {
+    expect(validateStoryboardUploadFile(fileOfSize(1024, 'image/gif'))).toBe('bad-type');
+  });
+
+  it('accepts every allowed MIME type (png, jpeg, webp)', () => {
+    expect(validateStoryboardUploadFile(fileOfSize(1024, 'image/png'))).toBeNull();
+    expect(validateStoryboardUploadFile(fileOfSize(1024, 'image/jpeg'))).toBeNull();
+    expect(validateStoryboardUploadFile(fileOfSize(1024, 'image/webp'))).toBeNull();
+  });
+
+  // svg is deliberately excluded upstream (scriptable) — verify the client
+  // check enforces that too, not just the size/allowlist happy path.
+  it('rejects svg as bad-type even though it is a common "image" MIME', () => {
+    expect(validateStoryboardUploadFile(fileOfSize(1024, 'image/svg+xml'))).toBe('bad-type');
+  });
 });
 
 describe('defaultMoodLaneModel (issue #25 — mood lane prefers higgsfield when ready)', () => {

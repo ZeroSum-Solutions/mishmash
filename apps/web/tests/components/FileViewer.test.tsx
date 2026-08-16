@@ -4569,7 +4569,7 @@ describe('FileViewer tweaks toolbar', () => {
     );
 
     expect(screen.queryByTestId('palette-tweaks-toggle')).toBeNull();
-    expect(screen.queryByTestId('inspect-mode-toggle')).toBeNull();
+    expect(screen.getByTestId('inspect-mode-toggle')).toBeTruthy();
     expect(screen.getByTestId('board-mode-toggle')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'More annotation tools' })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: 'Pick element' })).toBeNull();
@@ -4594,6 +4594,213 @@ describe('FileViewer tweaks toolbar', () => {
 
     clickAgentTool('draw-overlay-toggle');
     expect(screen.queryByPlaceholderText('Add a note for this mark')).toBeNull();
+  });
+
+  it('makes the Inspect CSS panel reachable from the toolbar and closes it on a second click', async () => {
+    render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+      />,
+    );
+
+    const inspectToggle = screen.getByTestId('inspect-mode-toggle');
+    expect(inspectToggle.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByTestId('inspect-panel')).toBeNull();
+
+    fireEvent.click(inspectToggle);
+    expect(inspectToggle.getAttribute('aria-pressed')).toBe('true');
+    // No element picked yet — the empty-target hint proves Inspect mode is live.
+    expect(screen.getByTestId('inspect-empty-hint-container')).toBeTruthy();
+
+    const frame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+    window.dispatchEvent(new MessageEvent('message', {
+      source: frame.contentWindow,
+      data: {
+        type: 'od:comment-target',
+        elementId: 'hero',
+        selector: '[data-od-id="hero"]',
+        label: 'Hero',
+        text: 'Hero',
+        style: { color: 'rgb(0, 0, 0)', backgroundColor: 'rgb(255, 255, 255)' },
+      },
+    }));
+
+    await screen.findByTestId('inspect-panel');
+
+    fireEvent.click(inspectToggle);
+    expect(inspectToggle.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByTestId('inspect-panel')).toBeNull();
+    expect(screen.queryByTestId('inspect-empty-hint-container')).toBeNull();
+  });
+
+  it('keeps Inspect mutually exclusive with Draw, the comment picker, and manual Edit in both directions', async () => {
+    render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+      />,
+    );
+
+    const inspectToggle = screen.getByTestId('inspect-mode-toggle');
+    const drawToggle = screen.getByTestId('draw-overlay-toggle');
+    const boardToggle = screen.getByTestId('board-mode-toggle');
+    const editToggle = screen.getByTestId('manual-edit-mode-toggle');
+
+    // Inspect -> Draw turns Inspect off.
+    fireEvent.click(inspectToggle);
+    expect(inspectToggle.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(drawToggle);
+    expect(drawToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(inspectToggle.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByTestId('inspect-empty-hint-container')).toBeNull();
+
+    // Draw -> Inspect turns Draw off.
+    fireEvent.click(inspectToggle);
+    expect(inspectToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(drawToggle.getAttribute('aria-pressed')).toBe('false');
+
+    // Inspect -> comment picker turns Inspect off.
+    fireEvent.click(boardToggle);
+    expect(boardToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(inspectToggle.getAttribute('aria-pressed')).toBe('false');
+
+    // Comment picker -> Inspect turns the comment picker off.
+    fireEvent.click(inspectToggle);
+    expect(inspectToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(boardToggle.getAttribute('aria-pressed')).toBe('false');
+
+    // Inspect -> manual Edit turns Inspect off.
+    fireEvent.click(editToggle);
+    await waitFor(() => expect(editToggle.getAttribute('aria-pressed')).toBe('true'));
+    expect(inspectToggle.getAttribute('aria-pressed')).toBe('false');
+
+    // Manual Edit -> Inspect turns manual Edit off (async flush).
+    fireEvent.click(inspectToggle);
+    await waitFor(() => expect(inspectToggle.getAttribute('aria-pressed')).toBe('true'));
+    expect(editToggle.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('keeps Inspect mutually exclusive with the Tweaks panel in both directions', () => {
+    render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+      />,
+    );
+
+    const inspectToggle = screen.getByTestId('inspect-mode-toggle');
+    const tweaksToggle = screen.getByTestId('tweaks-panel-toggle');
+    const activeFrame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+
+    // No tw-panel content, so url-load is the active iframe (per the sibling
+    // tweaks tests below) — report availability from it so the toggle enables.
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        source: activeFrame.contentWindow,
+        data: { type: 'od:tweaks-available', available: true },
+      }));
+    });
+
+    // Inspect -> Tweaks turns Inspect off.
+    fireEvent.click(inspectToggle);
+    expect(inspectToggle.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(tweaksToggle);
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(inspectToggle.getAttribute('aria-pressed')).toBe('false');
+
+    // Tweaks -> Inspect turns Tweaks off.
+    fireEvent.click(inspectToggle);
+    expect(inspectToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('keeps Draw, the comment picker, and manual Edit mutually exclusive with the Tweaks panel', async () => {
+    render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+      />,
+    );
+
+    const drawToggle = screen.getByTestId('draw-overlay-toggle');
+    const boardToggle = screen.getByTestId('board-mode-toggle');
+    const editToggle = screen.getByTestId('manual-edit-mode-toggle');
+    const tweaksToggle = screen.getByTestId('tweaks-panel-toggle');
+    const activeFrame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        source: activeFrame.contentWindow,
+        data: { type: 'od:tweaks-available', available: true },
+      }));
+    });
+
+    // Tweaks -> Draw turns Tweaks off (and actually tells the iframe bridge
+    // to hide the panel, not just the toolbar button).
+    fireEvent.click(tweaksToggle);
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('true');
+    const postSpy = vi.spyOn(activeFrame.contentWindow!, 'postMessage');
+    fireEvent.click(drawToggle);
+    expect(drawToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('false');
+    expect(postSpy).toHaveBeenCalledWith({ type: 'od:tweaks-panel-visible', visible: false }, '*');
+    fireEvent.click(drawToggle);
+
+    // Tweaks -> comment picker turns Tweaks off.
+    fireEvent.click(tweaksToggle);
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(boardToggle);
+    expect(boardToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(boardToggle);
+
+    // Tweaks -> manual Edit turns Tweaks off (async flush).
+    fireEvent.click(tweaksToggle);
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(editToggle);
+    await waitFor(() => expect(editToggle.getAttribute('aria-pressed')).toBe('true'));
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('turns off Draw, the comment picker, and manual Edit when the Tweaks panel opens', async () => {
+    render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+      />,
+    );
+
+    const drawToggle = screen.getByTestId('draw-overlay-toggle');
+    const boardToggle = screen.getByTestId('board-mode-toggle');
+    const editToggle = screen.getByTestId('manual-edit-mode-toggle');
+    const tweaksToggle = screen.getByTestId('tweaks-panel-toggle');
+    const activeFrame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        source: activeFrame.contentWindow,
+        data: { type: 'od:tweaks-available', available: true },
+      }));
+    });
+
+    // Draw -> Tweaks turns Draw off.
+    fireEvent.click(drawToggle);
+    expect(drawToggle.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(tweaksToggle);
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(drawToggle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(tweaksToggle);
+
+    // Comment picker -> Tweaks turns the comment picker off.
+    fireEvent.click(boardToggle);
+    expect(boardToggle.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(tweaksToggle);
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(boardToggle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(tweaksToggle);
+
+    // Manual Edit -> Tweaks turns manual Edit off (async flush).
+    fireEvent.click(editToggle);
+    await waitFor(() => expect(editToggle.getAttribute('aria-pressed')).toBe('true'));
+    fireEvent.click(tweaksToggle);
+    await waitFor(() => expect(tweaksToggle.getAttribute('aria-pressed')).toBe('true'));
+    expect(editToggle.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('keeps preview viewport selection scoped to each HTML file', async () => {
@@ -6973,6 +7180,119 @@ describe('FileViewer tweaks toolbar', () => {
     // and removal stays wired to per-comment delete / send-selected instead.
     expect(screen.queryByText('Second')).not.toBeNull();
     expect(removed).toEqual([]);
+  });
+
+  it('routes a .tw-panel artifact through srcDoc so the tweaks bridge can inject', () => {
+    // Plain content with no other srcDoc-forcing signal (no <script src>,
+    // focus(), localStorage, or redirect) — the ONLY reason this should take
+    // the srcDoc path is tweaksBridge picking up the tw-panel class via
+    // hasTweaksTemplate. Contrast with the no-tw-panel case in
+    // "preserves URL-loaded preview scroll when opening Draw" above, which
+    // starts on url-load with identical framing.
+    render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlPreviewFile()}
+        liveHtml='<html><body><div class="tw-panel">Tweaks</div></body></html>'
+      />,
+    );
+
+    const activeFrame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+    expect(activeFrame.getAttribute('data-od-render-mode')).toBe('srcdoc');
+    const inactiveFrame = screen.getByTestId('artifact-preview-frame-url-load') as HTMLIFrameElement;
+    expect(inactiveFrame.getAttribute('data-od-active')).toBe('false');
+  });
+
+  it('enables the tweaks toggle only from an od:tweaks-available message on the ACTIVE iframe', () => {
+    // No tw-panel content, so url-load is the active iframe by default (per
+    // the sibling scroll/comment tests above) and the srcDoc iframe is the
+    // inactive one — exactly the asymmetry AGENTS.md documents for
+    // od:tweaks-available.
+    render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+      />,
+    );
+
+    const activeFrame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+    expect(activeFrame.getAttribute('data-od-render-mode')).toBe('url-load');
+    const inactiveFrame = screen.getByTestId('artifact-preview-frame-srcdoc') as HTMLIFrameElement;
+
+    const toggle = screen.getByTestId('tweaks-panel-toggle');
+    expect(toggle.hasAttribute('disabled')).toBe(true);
+
+    // Inactive iframe reports available:true — the active-iframe guard must
+    // reject it and leave the toggle disabled.
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        source: inactiveFrame.contentWindow,
+        data: { type: 'od:tweaks-available', available: true },
+      }));
+    });
+    expect(toggle.hasAttribute('disabled')).toBe(true);
+
+    // Active iframe reports available:true — accepted, toggle enables.
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        source: activeFrame.contentWindow,
+        data: { type: 'od:tweaks-available', available: true },
+      }));
+    });
+    expect(toggle.hasAttribute('disabled')).toBe(false);
+  });
+
+  it('mirrors od:tweaks-panel-state from either iframe (no active-iframe restriction)', () => {
+    render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+      />,
+    );
+
+    const inactiveFrame = screen.getByTestId('artifact-preview-frame-srcdoc') as HTMLIFrameElement;
+    const toggle = screen.getByTestId('tweaks-panel-toggle');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+
+    // Unlike od:tweaks-available, od:tweaks-panel-state just mirrors state
+    // back and is accepted from either iframe.
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        source: inactiveFrame.contentWindow,
+        data: { type: 'od:tweaks-panel-state', visible: true },
+      }));
+    });
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('posts od:tweaks-panel-visible to the active iframe on toggle click and flips on the second click', () => {
+    render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+      />,
+    );
+
+    const activeFrame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+    const postSpy = vi.spyOn(activeFrame.contentWindow!, 'postMessage');
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        source: activeFrame.contentWindow,
+        data: { type: 'od:tweaks-available', available: true },
+      }));
+    });
+
+    const toggle = screen.getByTestId('tweaks-panel-toggle');
+    expect(toggle.hasAttribute('disabled')).toBe(false);
+
+    fireEvent.click(toggle);
+    expect(postSpy).toHaveBeenLastCalledWith({ type: 'od:tweaks-panel-visible', visible: true }, '*');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(analyticsTrackMock).toHaveBeenCalledWith(
+      'ui_click',
+      expect.objectContaining({ element: 'tweaks' }),
+      undefined,
+    );
+
+    fireEvent.click(toggle);
+    expect(postSpy).toHaveBeenLastCalledWith({ type: 'od:tweaks-panel-visible', visible: false }, '*');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
   });
 });
 

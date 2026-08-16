@@ -1086,7 +1086,7 @@ function compareDeploymentsByNewest(a: WebDeploymentInfo, b: WebDeploymentInfo):
   return deploymentTimestamp(b) - deploymentTimestamp(a);
 }
 
-function shareUrlForDeployment(deployment: WebDeploymentInfo): string {
+export function shareUrlForDeployment(deployment: WebDeploymentInfo): string {
   const customDomain = deployment.providerId === CLOUDFLARE_PAGES_PROVIDER_ID
     ? deployment.cloudflarePages?.customDomain
     : undefined;
@@ -1096,7 +1096,7 @@ function shareUrlForDeployment(deployment: WebDeploymentInfo): string {
   return deployment.url?.trim() || '';
 }
 
-function resolveShareUrl(rawUrl: string): string {
+export function resolveShareUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
   if (!trimmed) return '';
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
@@ -1104,7 +1104,7 @@ function resolveShareUrl(rawUrl: string): string {
   return new URL(trimmed, window.location.origin).toString();
 }
 
-function pickLatestShareDeployment(
+export function pickLatestShareDeployment(
   deploymentsByProvider: Partial<Record<WebDeployProviderId, WebDeploymentInfo>>,
 ): WebDeploymentInfo | null {
   return Object.values(deploymentsByProvider)
@@ -6359,6 +6359,13 @@ function HtmlViewer({
   const [inspectMode, setInspectMode] = useState(false);
   const [agentToolsOpen, setAgentToolsOpen] = useState(false);
   const [drawOverlayOpen, setDrawOverlayOpen] = useState(false);
+  // Driven by the srcDoc tweaks bridge's `od:tweaks-available` /
+  // `od:tweaks-panel-state` postMessages (see the message listener below).
+  // `tweaksAvailable` gates the toolbar toggle's disabled state; the bridge
+  // only exists on the srcDoc path, so a URL-loaded artifact reports nothing
+  // and the toggle stays disabled until tweaksBridge routes it to srcDoc.
+  const [tweaksAvailable, setTweaksAvailable] = useState(false);
+  const [tweaksPanelVisible, setTweaksPanelVisible] = useState(false);
   // for hint managing hint box state
   const [openHintBox, setOpenHintBox] = useState(true);
   const [manualEditMode, setManualEditModeRaw] = useState(false);
@@ -6442,6 +6449,33 @@ function HtmlViewer({
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [isOurPreviewIframeSource, onBrandExtractionStopRequest]);
+  // Tweaks bridge receiver (see injectTweaksBridge in runtime/srcdoc.ts).
+  // `od:tweaks-panel-state` just mirrors the artifact's own `× close` /
+  // `T`-shortcut toggle back into the host so the toolbar stays in sync —
+  // accept it from either iframe like every other bridge echo. But
+  // `od:tweaks-available` sets whether the toggle is enabled at all, and
+  // both iframes stay mounted with only one actually shown (CSS visibility
+  // swap, not unmount) — a stale `available:true` from the iframe the user
+  // just navigated away from would leave the toggle wrongly enabled for the
+  // artifact now on screen, so this one additionally requires the message
+  // come from the currently active iframe (AGENTS.md "Chat UI conventions").
+  useEffect(() => {
+    function onMessage(ev: MessageEvent) {
+      if (!isOurPreviewIframeSource(ev.source)) return;
+      const data = ev.data as { type?: unknown } | null;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'od:tweaks-panel-state') {
+        setTweaksPanelVisible(!!(data as { visible?: unknown }).visible);
+        return;
+      }
+      if (data.type === 'od:tweaks-available') {
+        if (!isActivePreviewIframeSource(ev.source)) return;
+        setTweaksAvailable(!!(data as { available?: unknown }).available);
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [isActivePreviewIframeSource, isOurPreviewIframeSource]);
   const previewScrollRestoreRef = useRef<{
     hostLeft: number;
     hostTop: number;
@@ -7272,6 +7306,17 @@ function HtmlViewer({
     const s = routingHtmlSource;
     return s != null && htmlNeedsRedirectGuard(s);
   }, [passiveLargeHtmlPreview, routingHtmlSource]);
+  // The artifact ships the class based tweaks template (`.tw-panel` /
+  // `.tw-hidden`). Only the srcDoc path injects the tweaks bridge that
+  // reports availability and drives panel visibility (see "Chat UI
+  // conventions" in AGENTS.md), so this forces srcDoc via urlLoadDecision
+  // below — otherwise the toolbar toggle would stay disabled forever on an
+  // artifact that actually has a panel to show.
+  const tweaksTemplateBridge = useMemo(() => {
+    if (passiveLargeHtmlPreview) return false;
+    const s = routingHtmlSource;
+    return s != null && hasTweaksTemplate(s);
+  }, [passiveLargeHtmlPreview, routingHtmlSource]);
   // Set by the injected guard's `od:redirect-loop-blocked` postMessage. The
   // browser makes `window.location` unforgeable, so a runaway reload can only be
   // stopped host-side — parking the srcDoc iframe on static content below. File-
@@ -7370,6 +7415,7 @@ function HtmlViewer({
     urlModeBridge,
     inspectMode,
     drawMode: drawOverlayOpen,
+    tweaksBridge: tweaksTemplateBridge,
     forceInline: (forceInline || needsSandboxShim) && !needsPowered,
     needsFocusGuard: needsFocusGuard && !needsPowered,
     needsRedirectGuard: needsRedirectGuard && !needsPowered,
@@ -7413,6 +7459,11 @@ function HtmlViewer({
     setBoardMode(false);
     setInspectMode(false);
     setSrcDocMaterialized(false);
+    // A new file starts with no known tweaks panel until its own bridge (if
+    // any) reports in — otherwise the toggle would keep showing the previous
+    // artifact's availability/visibility for a beat after switching files.
+    setTweaksAvailable(false);
+    setTweaksPanelVisible(false);
     // Closing boardMode alone is not enough: the comment dock renders off
     // `commentPanelOpen` and a panel save reuses `activeCommentTarget` /
     // `activePreviewCommentId`, both file-scoped. Left open across a file swap
@@ -10095,6 +10146,17 @@ function HtmlViewer({
     setAgentToolsOpen(false);
   }
 
+  // Closes the artifact's tweaks panel from a tool activation that isn't the
+  // tweaks toggle itself (Draw/Comment/ManualEdit taking over the preview
+  // surface). Mirrors toggleTweaksPanel's own close path: flips the host flag
+  // AND tells the iframe bridge, so the panel actually hides instead of just
+  // the toolbar button losing its pressed state.
+  function closeTweaksPanel() {
+    if (!tweaksPanelVisible) return;
+    setTweaksPanelVisible(false);
+    iframeRef.current?.contentWindow?.postMessage({ type: 'od:tweaks-panel-visible', visible: false }, '*');
+  }
+
   function activateDrawTool() {
     fireArtifactToolbarClick('mark');
     const next = !drawOverlayOpen;
@@ -10110,6 +10172,7 @@ function HtmlViewer({
       setBoardMode(false);
       clearBoardComposer();
       setInspectMode(false);
+      closeTweaksPanel();
       setMode('preview');
       setDrawOverlayOpen(true);
       closeArtifactToolMenus();
@@ -10121,6 +10184,69 @@ function HtmlViewer({
       return;
     }
     activateDraw();
+  }
+
+  // Drives the artifact's own tweaks panel (`.tw-panel`), not a host-owned
+  // motion-authoring surface — see injectTweaksBridge in runtime/srcdoc.ts.
+  // The active iframe is always the srcDoc one while a panel is available:
+  // tweaksBridge forces srcDoc via urlLoadDecision whenever
+  // hasTweaksTemplate(source) is true.
+  function toggleTweaksPanel() {
+    fireArtifactToolbarClick('tweaks');
+    const next = !tweaksPanelVisible;
+    if (!next) {
+      closeTweaksPanel();
+      return;
+    }
+    // Opening Tweaks while another tool owns the preview surface would stack
+    // two host-toolbar panels over it — mirrors the clearing every other
+    // activate*Tool() already does when it takes over the preview surface.
+    const openTweaks = () => {
+      setInspectMode(false);
+      setCommentPanelOpen(false);
+      setCommentCreateMode(false);
+      setBoardMode(false);
+      clearBoardComposer();
+      setDrawOverlayOpen(false);
+      setTweaksPanelVisible(true);
+      iframeRef.current?.contentWindow?.postMessage({ type: 'od:tweaks-panel-visible', visible: true }, '*');
+    };
+    if (manualEditMode) {
+      void exitManualEditModeAfterFlush().then((ok) => {
+        if (ok) openTweaks();
+      });
+      return;
+    }
+    openTweaks();
+  }
+
+  function activateInspectTool() {
+    fireArtifactToolbarClick('inspect');
+    const next = !inspectMode;
+    if (!next) {
+      setInspectMode(false);
+      setAgentToolsOpen(false);
+      return;
+    }
+    capturePreviewScrollPosition();
+    const activateInspect = () => {
+      setCommentPanelOpen(false);
+      setCommentCreateMode(false);
+      setBoardMode(false);
+      clearBoardComposer();
+      setDrawOverlayOpen(false);
+      closeTweaksPanel();
+      setMode('preview');
+      setInspectMode(true);
+      closeArtifactToolMenus();
+    };
+    if (manualEditMode) {
+      void exitManualEditModeAfterFlush().then((ok) => {
+        if (ok) activateInspect();
+      });
+      return;
+    }
+    activateInspect();
   }
 
   function activateCommentTool() {
@@ -10138,6 +10264,7 @@ function HtmlViewer({
       setCommentCreateMode(false);
       clearBoardComposer();
       setInspectMode(false);
+      closeTweaksPanel();
       setDrawOverlayOpen(false);
       setMode('preview');
       activateBoard('inspect');
@@ -10169,6 +10296,7 @@ function HtmlViewer({
       setCommentCreateMode(true);
       if (!activeCommentTarget) clearBoardComposer();
       setInspectMode(false);
+      closeTweaksPanel();
       setDrawOverlayOpen(false);
       setMode('preview');
       activateBoard('inspect');
@@ -10192,6 +10320,7 @@ function HtmlViewer({
       setBoardMode(false);
       clearBoardComposer();
       setInspectMode(false);
+      closeTweaksPanel();
       setDrawOverlayOpen(false);
       setMode('preview');
       setManualEditViewportWidth(previewBodyRef.current?.clientWidth ?? null);
@@ -11612,6 +11741,20 @@ function HtmlViewer({
               </button>
               <span className="viewer-toolbar-tool-divider" aria-hidden />
               <button
+                className={`viewer-action viewer-action-icon od-tooltip${inspectMode ? ' active' : ''}`}
+                type="button"
+                data-testid="inspect-mode-toggle"
+                data-tooltip={t('fileViewer.inspect')}
+                data-tooltip-placement="bottom"
+                title={t('fileViewer.inspect')}
+                aria-label={t('fileViewer.inspect')}
+                aria-pressed={inspectMode}
+                onClick={activateInspectTool}
+              >
+                <RemixIcon name="palette-line" size={15} />
+              </button>
+              <span className="viewer-toolbar-tool-divider" aria-hidden />
+              <button
                 className={`viewer-action viewer-action-icon od-tooltip${manualEditMode ? ' active' : ''}`}
                 type="button"
                 data-testid="manual-edit-mode-toggle"
@@ -11623,6 +11766,21 @@ function HtmlViewer({
                 onClick={activateManualEditTool}
               >
                 <RemixIcon name="edit-line" size={15} />
+              </button>
+              <span className="viewer-toolbar-tool-divider" aria-hidden />
+              <button
+                className={`viewer-action viewer-action-icon od-tooltip${tweaksPanelVisible ? ' active' : ''}`}
+                type="button"
+                data-testid="tweaks-panel-toggle"
+                data-tooltip={tweaksAvailable ? t('fileViewer.tweaks') : t('fileViewer.tweaksUnavailable')}
+                data-tooltip-placement="bottom"
+                title={tweaksAvailable ? t('fileViewer.tweaks') : t('fileViewer.tweaksUnavailable')}
+                aria-label={t('fileViewer.tweaks')}
+                aria-pressed={tweaksPanelVisible}
+                disabled={!tweaksAvailable}
+                onClick={toggleTweaksPanel}
+              >
+                <Icon name="tweaks" size={15} />
               </button>
               <span className="viewer-toolbar-tool-divider" aria-hidden />
               <button
@@ -11806,6 +11964,18 @@ function HtmlViewer({
                     >
                       <RemixIcon name="mark-pen-line" size={15} />
                       <span>{t('fileViewer.mark')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`viewer-toolbar-more-item${inspectMode ? ' active' : ''}`}
+                      role="menuitem"
+                      onClick={() => {
+                        activateInspectTool();
+                        setToolbarMoreOpen(false);
+                      }}
+                    >
+                      <RemixIcon name="palette-line" size={15} />
+                      <span>{t('fileViewer.inspect')}</span>
                     </button>
                     <button
                       type="button"

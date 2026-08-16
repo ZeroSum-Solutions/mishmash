@@ -29,7 +29,8 @@
         "apps/web/src/components/file-viewer-render-mode.ts"
       ],
       "proof_tests": [
-        "apps/web/tests/components/file-viewer-render-mode.test.ts"
+        "apps/web/tests/components/file-viewer-render-mode.test.ts",
+        "apps/web/tests/components/FileViewer.test.tsx"
       ]
     },
     {
@@ -255,7 +256,9 @@
       "source_files": [
         "apps/web/src/components/ProjectView.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/ProjectView.split-divider.test.tsx"
+      ]
     },
     {
       "id": "tabbed-workspace-tabs",
@@ -395,7 +398,9 @@
       "source_files": [
         "apps/web/src/components/FileWorkspace.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/FileWorkspace.page-creator.test.ts"
+      ]
     },
     {
       "id": "zoom-control",
@@ -484,7 +489,9 @@
       "source_files": [
         "apps/web/src/components/FileViewer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/FileViewer.test.tsx"
+      ]
     },
     {
       "id": "manual-edit-inspector-panel",
@@ -548,7 +555,8 @@
         "apps/web/src/components/FileViewer.tsx"
       ],
       "proof_tests": [
-        "apps/web/tests/runtime/srcdoc-tweaks-bridge.test.ts"
+        "apps/web/tests/runtime/srcdoc-tweaks-bridge.test.ts",
+        "apps/web/tests/components/FileViewer.test.tsx"
       ]
     },
     {
@@ -649,7 +657,9 @@
       "source_files": [
         "apps/web/src/components/FileViewer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/FileViewer.share-link.test.ts"
+      ]
     },
     {
       "id": "social-share-flow",
@@ -677,7 +687,9 @@
       "source_files": [
         "apps/web/src/components/FileViewer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/FileViewer.save-as-template.test.tsx"
+      ]
     },
     {
       "id": "react-component-viewer",
@@ -1219,7 +1231,10 @@
       "source_files": [
         "apps/web/src/components/ChatComposer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/daemon/tests/runtimes/chat-run-context.test.ts",
+        "apps/web/tests/components/ChatComposer.context-pickers.test.tsx"
+      ]
     },
     {
       "id": "reference-project-link-code",
@@ -1311,7 +1326,10 @@
       "source_files": [
         "apps/daemon/src/routes/static-resource.ts"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/daemon/tests/static-resource-routes.test.ts",
+        "apps/web/tests/components/SkillsSection.test.tsx"
+      ]
     },
     {
       "id": "storyboard-uploads",
@@ -1324,7 +1342,10 @@
       "source_files": [
         "apps/daemon/src/routes/storyboard.ts"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/model-defaults.test.ts",
+        "apps/web/tests/components/StoryboardEditor.test.tsx"
+      ]
     },
     {
       "id": "api-attachment-context-injection",

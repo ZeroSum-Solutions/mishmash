@@ -116,6 +116,27 @@ describe('StoryboardEditor upload flows', () => {
     expect(mockUploadStoryboardFrame).not.toHaveBeenCalled();
   });
 
+  // storyboard-uploads invalid-input case (mirrors the oversize test above):
+  // a MIME type outside the png/jpeg/webp allowlist is rejected client-side
+  // by validateStoryboardUploadFile before any network round trip, same as
+  // an oversize file.
+  it('a wrong-type file surfaces a client-side bad-type error without calling uploadStoryboardFrame or readFileAsDataUrl', async () => {
+    mockPatchStoryboard.mockImplementation(async (id: string, patch: Record<string, unknown>) => ({
+      ok: true,
+      value: { ...baseDoc(), ...patch, updatedAt: '2026-01-01T00:01:00.000Z' },
+    }));
+    render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
+    openShotDetails();
+
+    const gifFile = new File(['GIF89a'], 'animated.gif', { type: 'image/gif' });
+    const input = screen.getByTestId('start-frame-file-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [gifFile] } });
+
+    await waitFor(() => expect(screen.getByTestId('shot-card')).toHaveAttribute('data-shot-status', 'failed'));
+    expect(mockReadFileAsDataUrl).not.toHaveBeenCalled();
+    expect(mockUploadStoryboardFrame).not.toHaveBeenCalled();
+  });
+
   it('dropping multiple images on the "Add shots from images" tile creates one shot per image', async () => {
     mockReadFileAsDataUrl.mockImplementation(async (file: File) => `data:image/png;base64,${file.name}`);
     mockUploadStoryboardFrame.mockImplementation(async (_id: string, dataUrl: string) => ({

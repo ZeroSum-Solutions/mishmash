@@ -5845,16 +5845,20 @@ function pagePresetDescription(preset: ProjectPagePreset, t: TranslateFn, locale
   return resolveLocalizedText(preset.description, locale);
 }
 
-function pagePresetMatchesCategory(preset: ProjectPagePreset, category: ProjectPageCategoryId): boolean {
+export function pagePresetMatchesCategory(preset: ProjectPagePreset, category: ProjectPageCategoryId): boolean {
   if (category === 'recommended') return preset.featured === true;
   return preset.category === category;
 }
 
-function pageCreatorCategoryVisible(category: ProjectPageCategoryId): boolean {
+export function pageCreatorCategoryVisible(category: ProjectPageCategoryId): boolean {
   return category !== 'recommended' && !PAGE_CREATOR_HIDDEN_CATEGORIES.has(category);
 }
 
-function pageCreatorPresetVisible(preset: ProjectPagePreset): boolean {
+// Gates which presets enter `visiblePresets` in the page-creator dialog
+// (passed by reference to `.filter(pageCreatorPresetVisible)`, not called
+// inline — grepping for the literal `pageCreatorPresetVisible(` call syntax
+// will not find that site).
+export function pageCreatorPresetVisible(preset: ProjectPagePreset): boolean {
   return preset.source !== 'blank' && pageCreatorCategoryVisible(preset.category);
 }
 
