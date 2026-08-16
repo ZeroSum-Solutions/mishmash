@@ -2925,6 +2925,7 @@ export const en: Dict = {
   'fileViewer.screenshotCopying': 'Copying screenshot...',
   'fileViewer.screenshotCopied': 'Screenshot copied to clipboard',
   'fileViewer.screenshotClipboardDenied': 'Browser blocked clipboard access',
+  'fileViewer.screenshotClipboardUnfocused': 'Click this page, then copy again — the browser only allows clipboard writes on a focused tab.',
   'fileViewer.screenshotPreviewLoading': 'Preview is still loading. Try again in a moment.',
   'fileViewer.screenshotCaptureFailed': 'Could not capture the preview. Please try again.',
   'fileViewer.exportPdf': 'Export as PDF',

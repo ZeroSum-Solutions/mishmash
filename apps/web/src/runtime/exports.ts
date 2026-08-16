@@ -518,20 +518,66 @@ type ClipboardItemCtor = new (
 ) => ClipboardItem;
 
 /**
+ * Resolves true when `work` settled first, false when the deadline won. A
+ * rejection from `work` still propagates, so the caller keeps its own error
+ * mapping; only the never-settles case is converted into a value.
+ */
+async function raceWithTimeout(work: Promise<unknown>, timeoutMs: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    // A late rejection from `work` needs no special handling: `Promise.race`
+    // attaches a rejection handler to every racer, so one arriving after the
+    // deadline is already consumed rather than left unhandled.
+    return await Promise.race([
+      work.then(() => true),
+      new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/**
+ * How long a clipboard write may stall before we stop waiting on it. Generous
+ * on purpose: a large screenshot legitimately takes a moment to hand over, and
+ * a false "failed" on a write that would have succeeded is worse than a slow
+ * toast. This is a liveness backstop, not a performance budget.
+ */
+export const CLIPBOARD_WRITE_TIMEOUT_MS = 10_000;
+
+/**
  * Copy a PNG (or other image) data-URL onto the system clipboard as a real
  * image item, so it can be pasted into the chat composer or any other app.
- * Returns 'copied' on success, 'denied' when the clipboard API is missing or
- * the browser refuses the write for permission/security reasons, and 'failed'
- * for any other error (e.g. a malformed data-URL).
+ *
+ * Always settles. Chromium leaves `clipboard.write()` pending forever — neither
+ * resolved nor rejected — while the document lacks focus, and callers guard
+ * re-entry with a flag they clear in a `finally`, so a promise that never
+ * settles disables the control until the page reloads. Two things prevent that:
+ * the focus precondition below (the common case, checked before the write is
+ * even attempted), and a timeout around the write itself (focus can be lost
+ * *during* it).
+ *
+ * Returns 'copied' on success, 'unfocused' when the document cannot accept a
+ * write yet — the user's own next click fixes it, so this is worth saying
+ * differently from a refusal — 'denied' when the clipboard API is missing or
+ * the browser refuses for permission/security reasons, and 'failed' for any
+ * other error, including a write that never came back.
  */
 export async function copyImageDataUrlToClipboard(
   dataUrl: string,
-): Promise<'copied' | 'denied' | 'failed'> {
+): Promise<'copied' | 'denied' | 'unfocused' | 'failed'> {
   const clipboard = navigator.clipboard;
   const ClipboardItemRef = (globalThis as { ClipboardItem?: ClipboardItemCtor })
     .ClipboardItem;
   if (!clipboard || typeof clipboard.write !== 'function' || !ClipboardItemRef) {
     return 'denied';
+  }
+  // `hasFocus` is optional-chained because this module is also exercised under
+  // the node test environment, where `document` is a stub.
+  if (typeof document !== 'undefined' && document.hasFocus?.() === false) {
+    return 'unfocused';
   }
   try {
     const blob = dataUrlToBlob(dataUrl);
@@ -544,7 +590,8 @@ export async function copyImageDataUrlToClipboard(
     } catch {
       item = new ClipboardItemRef({ [blob.type]: blob });
     }
-    await clipboard.write([item]);
+    const settled = await raceWithTimeout(clipboard.write([item]), CLIPBOARD_WRITE_TIMEOUT_MS);
+    if (!settled) return 'failed';
     return 'copied';
   } catch (err) {
     const name = (err as { name?: string } | null)?.name;
@@ -1057,6 +1104,40 @@ export type ProjectImageExportResult =
   | { ok: false; unavailable: true }
   | { ok: false; error: string };
 
+export interface PreviewViewportRect {
+  width: number;
+  height: number;
+  scrollY: number;
+}
+
+/**
+ * The embedded document's own viewport, as the daemon renderer needs to be told
+ * it: CSS pixels of the iframe's inner box plus how far the user has scrolled
+ * inside it.
+ *
+ * Returns null rather than guessing. A zero-sized frame has nothing to capture,
+ * and a cross-origin frame will not report its scroll offset — defaulting that
+ * to 0 would return the top of the document for a user who has scrolled, and a
+ * confidently wrong background is worse than a failed capture for the one caller
+ * that composites onto it.
+ */
+export function readPreviewViewportRect(
+  iframe: HTMLIFrameElement | null | undefined,
+): PreviewViewportRect | null {
+  if (!iframe) return null;
+  const width = Math.round(iframe.clientWidth);
+  const height = Math.round(iframe.clientHeight);
+  if (width <= 0 || height <= 0) return null;
+  try {
+    const win = iframe.contentWindow;
+    if (!win) return null;
+    const scrollY = Math.max(0, Math.round(win.scrollY || 0));
+    return { width, height, scrollY };
+  } catch {
+    return null;
+  }
+}
+
 export async function exportProjectImageDataUrl(opts: {
   projectId: string;
   fileName: string;
@@ -1065,6 +1146,14 @@ export async function exportProjectImageDataUrl(opts: {
   width?: number;
   height?: number;
   versionId?: string;
+  /**
+   * Presence asks for the single viewport-sized band at this document offset
+   * instead of the whole page, and requires `width`/`height` alongside it. Used
+   * by annotation capture, whose marks are composited back onto the result
+   * against the on-screen preview frame's rect. `0` is a real offset, so this is
+   * presence-checked rather than tested for truthiness.
+   */
+  viewportScrollY?: number;
 }): Promise<ProjectImageExportResult> {
   const url = `/api/projects/${encodeURIComponent(opts.projectId)}/export/image`;
   let resp: Response;
@@ -1078,6 +1167,7 @@ export async function exportProjectImageDataUrl(opts: {
         ...(typeof opts.deck === 'boolean' ? { deck: opts.deck } : {}),
         ...(typeof opts.width === 'number' ? { width: opts.width } : {}),
         ...(typeof opts.height === 'number' ? { height: opts.height } : {}),
+        ...(typeof opts.viewportScrollY === 'number' ? { viewportScrollY: opts.viewportScrollY } : {}),
         ...(opts.versionId ? { versionId: opts.versionId } : {}),
       }),
     });

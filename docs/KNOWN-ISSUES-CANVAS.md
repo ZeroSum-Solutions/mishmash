@@ -5,7 +5,9 @@ Open defects found by the 2026-08-15 canvas hardening run
 Everything here was confirmed against the code at `a8dd0663e`; nothing is carried over on
 the strength of an older report.
 
-Fixed defects are not listed here — they are in the branch's git history.
+Most fixed defects are not listed here — they are in the branch's git history. The exceptions
+are the few marked **RESOLVED** below, kept because tests and source comments cite them by id,
+and because two of them correct a diagnosis this file previously stated as fact.
 
 Each row states a repro you can run and a reason it was left open. "Not fixed" always has a
 reason; none of these are open merely because the run ended.
@@ -240,47 +242,50 @@ because CANVAS-13..15 below were found while fixing them and reference this entr
 
 ---
 
-## CANVAS-10 — `workspace-keyboard-flows` Shift+Enter spec is load-flaky
+## CANVAS-10 — Playwright specs were load-flaky under the default worker count — RESOLVED
 
-**Severity:** low · **Area:** test infrastructure · **Status:** open
+**Severity:** low · **Area:** test infrastructure · **Status:** fixed, and one earlier
+diagnosis in this entry was wrong
 
-`e2e/ui/workspace-keyboard-flows.test.ts` — "Shift+Enter inserts a newline" failed inside the
-full critical run with `TimeoutError: page.waitForResponse: Timeout 5000ms exceeded`, then
-passed in isolation in 30.7s.
-
-**Repro.** Contrast the two runs — it fails inside the full suite and passes alone:
-
-```bash
-pnpm --filter @open-design/e2e test:ui:critical            # Shift+Enter spec times out at 5000ms
-pnpm --filter @open-design/e2e exec playwright test -c playwright.config.ts \
-  ui/workspace-keyboard-flows.test.ts --grep '@critical'   # 1 passed (30.7s)
-```
-
-Same shape as the `resolveDaemonUrl` flake fixed on this branch: a 5s wall-clock budget that
-holds on an idle machine and not on a loaded one. It is a timing budget, not a behaviour bug.
-
-**Why it is not fixed here.** Raising the budget is a one-line change, but it is worth first
-checking whether other Playwright specs in the suite share the same 5s `waitForResponse` pattern
-so they can all be lifted together rather than one flake at a time.
-
-**Update 2026-08-16 — `app-manual-edit.test.ts` shows the same behaviour, and worse.** Across
-four full-suite runs on the same commit it failed a *different* subset each time — `:854`, then
-`:854` again with `app-restoration:1791`, then `:184` and `:825` — always on a 30s timeout, never
-on a content assertion. One failure is diagnostic: the click on Share reported
+Symptom, as first recorded: `workspace-keyboard-flows`'s Shift+Enter spec timed out inside
+the full critical run and passed alone; `app-manual-edit` then failed a *different* subset on
+each of four full-suite runs of the same commit, always on a 30s timeout and never on a
+content assertion. One failure was diagnostic — the click on Share reported
 `locator resolved to <button aria-label="Share" …>` and then timed out, so the control existed
-and simply never became actionable within the budget. Run alone with `--workers=1`, all three of
-its `@critical` specs pass in **44.4s total** — less than one of those timeouts.
+and simply never became actionable inside the budget.
+
+**Measured cause.** A Playwright worker here is not a browser context. Each one owns a whole
+tools-dev runtime — its own daemon and its own Next dev server — so the config's default of two
+workers ran two entire applications side by side. On a 16-core laptop, over
+`app-manual-edit` + `app-restoration` at `--grep @critical` (13 specs):
 
 ```bash
-pnpm --filter @open-design/e2e test:ui:critical    # app-manual-edit fails a rotating subset
-pnpm --filter @open-design/e2e exec playwright test -c playwright.config.ts \
-  ui/app-manual-edit.test.ts --grep '@critical' --workers=1   # 3 passed (44.4s)
+OD_PLAYWRIGHT_WORKERS=1 pnpm exec playwright test -c playwright.config.ts \
+  ui/app-manual-edit.test.ts ui/app-restoration.test.ts --grep '@critical'   # 13 passed, 3.7m
+OD_PLAYWRIGHT_WORKERS=2 …                                                    # 5 failed,  8.4m
 ```
 
-Each Playwright worker starts its own tools-dev runtime, and each of those now starts a
-`desktop-renderer` sidecar holding a Playwright Chromium. The suite's parallelism therefore costs
-several browsers plus several daemons, which is what pushes actionability past 30s on a laptop.
-That is the thing to measure before touching any individual spec's budget.
+Two workers were **2.3× slower in wall clock as well as red**, so the parallelism was costing
+time rather than saving it and the "flaky" specs were reporting that accurately. The individual
+specs that timed out at 30s took 11.5s and 5.3s single-worker.
+
+**Fix.** `e2e/playwright.config.ts` defaults to one worker locally. CI is unaffected: it sets
+`OD_PLAYWRIGHT_WORKERS` explicitly from `nproc/2`
+(`.github/actions/configure-ci-parallelism`), so raising the count stays a deliberate
+per-runner choice.
+
+**Correction to this entry's earlier text.** It claimed each runtime "starts a
+`desktop-renderer` sidecar holding a Playwright Chromium", and that the suite therefore paid
+for several browsers plus several daemons. That is wrong: `runBoundedRenderOnce`
+(`apps/daemon/src/sidecar/desktop-renderer/render.ts:288`) launches a browser **per render**
+and tears it down in a `finally` — "a fresh browser per render, not a long-lived singleton",
+as its own docblock says. Idle runtimes hold no Chromium at all. The cost is the daemon plus
+the Next dev server, which is what the measurement above actually shows.
+
+**Left open deliberately.** `playwright.visual.config.ts` still defaults to three workers. Its
+per-test budget is 240s rather than 45s, so it does not obviously share this failure mode, and
+it was not measured here — changing it on the strength of a different suite's numbers would be
+the same guessing this entry replaced.
 
 ---
 
@@ -341,148 +346,158 @@ Surfaced by the same Grok 4.5 review.
 
 ---
 
-## CANVAS-13 — Annotation (Mark / Draw) capture still has no working path in a browser
+## CANVAS-13 — Annotation (Mark / Draw) capture had no working path in a browser — RESOLVED
 
-**Severity:** high · **Area:** editing · **Status:** open, needs a renderer change
+Annotation capture could not take the fix Copy screenshot took, because it is the one caller
+that composites onto the image it receives: `PreviewDrawOverlay` re-paints the user's marks
+scaled by the preview frame's rect against the snapshot's pixel dimensions, so a full-page
+render would place every mark somewhere the user did not draw it.
 
-Screenshot capture was fixed by letting the daemon's off-screen renderer serve it (see the
-branch history for CANVAS-9's neighbours). Annotation capture deliberately did **not** take that
-fix, and so remains broken on the web Studio for the same underlying reason: there is no
-compositor.
+The renderer now answers a **viewport-clipped** request — same document, same viewport size,
+same scroll offset — which is the only render that arithmetic is true against.
+`DesktopExportArtifactInput.viewportScrollY` carries it (presence-checked, since `0` is the
+top of a document and not a missing value); `capturePage` scrolls and clips to the viewport;
+`POST /api/projects/:id/export/image` validates it and requires `width`/`height` with it; and
+per `AGENTS.md` § "Capability exposure" the same mode is drivable from the CLI:
 
-`PreviewDrawOverlay` re-paints the user's marks onto the returned snapshot, scaling them by the
-preview frame's `getBoundingClientRect()` against the snapshot's pixel dimensions. The daemon
-renderer answers `page.screenshot({ fullPage: true })` — the whole document, not the visible
-viewport — so feeding it to the overlay would place every mark on the wrong pixels. Silently
-wrong annotations are worse than a failed capture, so `captureExportImageSnapshot` requires an
-explicit `allowOffscreenRender` opt-in that Copy screenshot and Export as image set and the
-overlay does not.
-
-**Repro.** In a browser (not a desktop host), open an HTML artifact, start Mark or Draw, make a
-stroke and submit. The capture falls to the in-iframe SVG-foreignObject bridge, which answers
-`snapshot image failed` / `empty-render` on real artifacts:
-
-```js
-// paste in DevTools before submitting the annotation
-addEventListener('message', (e) => {
-  if (e.data?.type === 'od:snapshot:result') console.log('bridge:', e.data.error ?? 'ok');
-});
+```bash
+od export index.html --project p1 --format image --width 1280 --height 800 --scroll-y 1600
 ```
 
-**Why it is not fixed here.** The honest fix is a viewport-clipped render mode on the daemon
-(`clip` + scroll offset rather than `fullPage: true`), which changes the export contract and,
-under `AGENTS.md` § "Capability exposure", has to land with its `od` CLI surface in the same PR.
-That is a feature, and this repository is issue-first for those.
+The Electron slide-renderer path has no viewport-clip mode and answers 501 rather than
+silently serving a full-page render, so callers fall back instead of compositing onto wrong
+pixels. A cross-origin preview frame refuses to report its scroll offset;
+`readPreviewViewportRect` returns null there rather than guessing 0, for the same reason.
 
 ---
 
-## CANVAS-14 — Current-slide capture of a runtime-managed deck has no path in a browser
+## CANVAS-14 — Current-slide capture of a runtime-managed deck had no path in a browser — RESOLVED
 
-**Severity:** medium · **Area:** export · **Status:** open, needs a product decision
+Three places decide what counts as a slide, and one disagreed with the other two. The
+`<deck-stage>` runtime fallback and the off-screen renderer both use `DECK_SLIDE_SELECTOR`
+(`.slide, [data-screen-label], .deck-slide, .ppt-slide`); the srcDoc host bridge looked only
+for `.slide`. A deck built from `<deck-stage>` / `data-screen-label` therefore reported
+`count: 0`, the viewer never learned an active index, and `planDeckImageCapture` refused the
+off-screen renderer for it — rendering with no index stitches *every* slide, a wrong answer
+rather than a degraded one.
 
-A deck whose slides come from `<deck-stage>` / `data-screen-label` (no literal `.slide`) has no
-active-slide bridge, so the viewer cannot say which slide is on screen. `planDeckImageCapture`
-therefore refuses the off-screen renderer for it — rendering with no index stitches **every**
-slide, which is a wrong answer to "capture the current slide" rather than a degraded one — and
-falls back to a visible host snapshot that a browser cannot produce.
-
-**Repro.** Open a runtime-managed deck artifact in a browser, navigate to any slide but the
-first, and use Copy screenshot. Capture fails rather than returning that slide.
-
-**Why it is not fixed here.** Both available answers are wrong (slide 0, or all slides
-stitched). The right fix is to give runtime-managed decks the same active-slide bridge tracked
-`.slide` decks already have — a feature, not a repair.
+The renderer could always have served these decks; only the host's half of the agreement was
+missing. `slides()` now falls back to `DECK_SLIDE_SELECTOR` — strictly last, after both
+existing `.slide` passes, so decks that already worked count exactly as before, decoy markup
+included.
 
 ---
 
-## CANVAS-15 — A screenshot on an unfocused tab hangs, and strands the button
+## CANVAS-15 — A screenshot on an unfocused tab hung, and stranded the button — RESOLVED
 
-**Severity:** low · **Area:** export · **Status:** open, browser-gated
+`copyImageDataUrlToClipboard` awaited `navigator.clipboard.write()`, which Chromium never
+settles while the document lacks focus — neither resolving nor rejecting. `handleCopyScreenshot`
+clears its in-flight guard in a `finally`, so a promise that never settled left the control dead
+until reload, with the toast pinned on "Copying screenshot…". Pre-existing, but previously
+unreachable: capture failed first, so the `finally` always ran. Fixing capture exposed it.
 
-`copyImageDataUrlToClipboard` awaits `navigator.clipboard.write()`, which Chromium never settles
-while the document lacks focus. `handleCopyScreenshot` clears `screenshotInFlightRef` in a
-`finally`, so a promise that never settles leaves the guard set and every later click is
-swallowed until the page reloads. The toast stays on "Copying screenshot…" forever.
-
-This is pre-existing, but it was previously unreachable: capture failed first, so the `finally`
-always ran. Fixing capture is what exposed it.
-
-**Repro.** With the artifact open, run this from a *different* focused window so the tab stays
-unfocused:
-
-```js
-document.hasFocus();                                             // false
-document.querySelector('[data-testid="screenshot-copy-button"]').click();
-// toast pins at "Copying screenshot…"; a second click does nothing
-```
-
-A user clicking the button directly has focus by definition, so this needs an unfocused tab —
-browser automation, or a click dispatched from another window.
-
-**Why it is not fixed here.** The fix (race the clipboard write against a timeout, or gate on
-`document.hasFocus()`) is a change to shared clipboard plumbing used well beyond the canvas, and
-the symptom needs a deliberate call on what the user should see when the browser refuses.
+Two guards, because focus can be lost at two different moments: the write is not attempted at
+all on an unfocused document (attempting it is what hangs), and a write that stalls after focus
+was lost mid-flight gives up at `CLIPBOARD_WRITE_TIMEOUT_MS`. The refusal reports `'unfocused'`
+rather than `'denied'` and carries its own message, because the user's own next click fixes it —
+which is not true of a browser refusing outright.
 
 ---
 
-## CANVAS-16 — The Video surface has no declared default skill, so its default model is decided by catalog order
+## CANVAS-16 — The Video surface had no declared default skill — RESOLVED
 
-**Severity:** medium · **Area:** project creation · **Status:** open, needs a product decision
+`NewProjectPanel.skillIdForTab` resolved the Media→Video tab as
+`list.find((s) => s.defaultFor.includes('video'))?.id ?? list[0]?.id`. Nothing declared
+`od.default_for: video`, so `list[0]` decided — and that choice fed a loop: when the winner was
+`hyperframes` an effect rewrote `videoModel` to `hyperframes-html`, otherwise it stayed on
+`DEFAULT_VIDEO_MODEL`. Catalog order was choosing which provider a user's first video project
+billed against, and two runs of identical code disagreed.
 
-`NewProjectPanel.skillIdForTab` resolves the Media→Video tab's skill as
-`list.find((s) => s.defaultFor.includes('video'))?.id ?? list[0]?.id`. Nothing in the repository
-declares `od.default_for: video` — the only `default_for` anywhere is `guizang-ppt` for deck — so
-the `find` never matches and `list[0]` decides, drawn from the merged `skills/` +
-`design-templates/` catalogs.
+`design-templates/video-shortform` now declares it. The product had already said twice that
+"Video" means generative video — `home-hero/media-surfaces.ts` filters `hyperframes-html` out
+of the video surface's model list and gives hyperframes its own separate surface — so this
+makes an existing intent explicit rather than choosing a new one. HyperFrames stays reachable
+through its own surface and its templates.
 
-That choice then feeds a loop. `skillIdForTab` is derived from `videoModel`, and an effect sets
-`videoModel` from `skillIdForTab`: when the winner is `hyperframes`, the model is rewritten to
-`hyperframes-html`; otherwise it stays at `DEFAULT_VIDEO_MODEL`
-(`openrouter/bytedance/seedance-2.0:1080p`). So the user's default video model is a side effect
-of which skill happens to sort first.
+One level down, `VIDEO_MODELS` carried **two** `default: true` entries on different providers
+(Volcengine `doubao-seedance-2-0-260128` and `openrouter/bytedance/seedance-2.0:1080p`), and
+`DEFAULT_VIDEO_MODEL` resolves through `find` — so reordering the list would have moved the
+default onto a different account. The Volcengine entry keeps the flag because it is the one
+`find` already returned; the change makes the existing behaviour deliberate rather than
+positional. Both halves are now pinned by tests, so `e2e/resources/playwright.ts` asserts the
+default model id again.
+
+---
+
+## CANVAS-17 — Export as image routed around the off-screen renderer — RESOLVED
+
+Export as image shared `captureExportImageSnapshot` with Copy screenshot and the same defect:
+the daemon renderer was reachable only when `isOpenDesignHostAvailable()` was true, which asks
+whether the current browser is the Electron shell about a capability that lives in the daemon
+and answers over plain HTTP. It now opts into `allowOffscreenRender`, which is safe here for
+the same reason it is safe for Copy screenshot — this flow composites nothing onto the result.
+
+**A correction to this entry's earlier text.** It said flipping the flag "reorders a precedence
+that eight specs pin" and that they would have to be rewritten. Not one assertion needed
+changing. The obstacle was that `exportProjectImageDataUrlMock` was a bare `vi.fn()` returning
+`undefined` — a shape the real function cannot produce. Giving it the honest default
+(`{ ok: false, unavailable: true }`, what a runtime with no renderer actually answers) left all
+eight passing on their original assertions, because "renderer unavailable → bridge chain" is
+exactly what they were pinning.
+
+---
+
+## CANVAS-18 — Image, Audio and Prototype tabs still resolve their default skill by catalog order
+
+**Severity:** low · **Area:** project creation · **Status:** open, deliberately out of CANVAS-16's scope
+
+`skillIdForTab` uses the same `?? list[0]?.id` fallback for every tab, and only `deck` and
+`video` declare `od.default_for`. Image, Audio and Prototype therefore still resolve to
+whichever skill the merged `skills/` + `design-templates/` scan reaches first.
+
+The consequence is narrower than CANVAS-16's, which is why it was not fixed alongside it: no
+effect derives a model from those tabs' skills. `DEFAULT_IMAGE_MODEL` and `DEFAULT_AUDIO_MODEL`
+decide the model regardless, so catalog order chooses only which SKILL.md body the agent
+receives — a quality question, not a billing one. `apps/daemon/tests/skill-default-surface.test.ts`
+requires a declared default for the billing-relevant surfaces only, and names these three in a
+comment so the omission is deliberate rather than forgotten.
 
 **Repro.**
 
 ```bash
-grep -rn "default_for" skills/*/SKILL.md design-templates/*/SKILL.md   # one hit, and it is deck
-grep -rl "mode: video" skills/*/SKILL.md | wc -l                       # 15 candidates, none default
+grep -rn "default_for" skills/*/SKILL.md design-templates/*/SKILL.md   # deck and video only
 ```
 
-Then open New project → Media → Video and read the model picker: it shows whichever model the
-resolution above landed on, with no user input.
-
-**Why it is not fixed here.** Picking the default video skill is a product call — it decides
-which provider a user's first video project bills against, and the honest fix is an explicit
-`od.default_for: video` on the intended skill rather than a test edit. `e2e/ui/app.test.ts`'s
-`video-basic` scenario stopped asserting the model id because of this; it still pins aspect and
-duration, which are real defaults.
+**Why it is not fixed here.** Picking the right default prototype/image/audio skill is three
+more product calls, each wanting its own look at the catalogue rather than a batch decision
+made while fixing something else.
 
 ---
 
-## CANVAS-17 — Export as image still routes around the off-screen renderer
+## CANVAS-19 — The default video model follows provider readiness, not the declared default
 
-**Severity:** medium · **Area:** export · **Status:** open, needs its own spec pass
+**Severity:** low · **Area:** project creation · **Status:** open, found while closing CANVAS-16
 
-Copy screenshot was fixed by letting the daemon's off-screen renderer serve it. Export as image
-(`openImageExportModal` → `captureExportImageSnapshot({ wholeDeck: true })`) shares the same code
-path and the same defect, and was deliberately left alone.
+CANVAS-16 removed the two order-dependent inputs to the Video tab's default. A third input
+survives, and it is environmental rather than positional: `MediaModelCards` steers a
+not-ready selection onto the first model whose provider IS ready
+(`NewProjectPanel.tsx`, the `firstAvailableModelId` effect). `DEFAULT_VIDEO_MODEL` is
+`doubao-seedance-2-0-260128` (Volcengine); a runtime with no Volcengine credential persists
+`openrouter/bytedance/seedance-2.0:1080p` instead.
 
-Turning it on is one argument (`allowOffscreenRender: true`), but it reorders a precedence that
-eight specs in `apps/web/tests/components/file-viewer-image-export.test.tsx` pin explicitly:
-they set `isOpenDesignHostAvailableMock` to `false` and then assert the snapshot bridge is what
-runs — "retries the srcDoc snapshot bridge before giving up on URL-loaded previews",
-"captures the visible URL-loaded preview before falling back to the hidden srcDoc transport",
-and six more. Flipping the source without rewriting those turns eight passing specs red, and
-rewriting eight specs to accommodate an unrequested change is how a suite quietly stops being
-evidence.
+The effect is deliberate and mostly right — offering a model the user cannot run is worse
+than substituting one they can. What is undecided is whether the *declared* default should
+win when nothing is configured at all, which is the case a fresh install is in.
 
-**Repro.** In a browser, open an HTML artifact and use Export as image. It takes the same
-`foreignObject` bridge that failed six times out of six for Copy screenshot before the fix.
-Note this is inferred from the shared code path plus that measured bridge failure, not from a
-separate in-browser observation of the export dialog.
+**Repro.** Create a project through New project -> Media -> Video without touching the model
+picker, on a runtime with no Volcengine credential, and read the persisted
+`metadata.videoModel`. It is the OpenRouter id, not `DEFAULT_VIDEO_MODEL`.
 
-**Why it is not fixed here.** It is a sibling control, not the reported bug, and it needs its own
-red spec plus a deliberate rewrite of those eight precedence expectations.
+**Why it is not fixed here.** Same class of product call as CANVAS-16 — it decides which
+provider a first video project bills against — and the substitution is a real feature, not a
+bug, so changing it needs the decision rather than a patch. `e2e/resources/playwright.ts`'s
+`video-basic` scenario asserts aspect and duration, which are genuinely fixed defaults, and
+leaves the model id alone.
 
 ---
 

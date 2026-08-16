@@ -265,4 +265,4 @@ Use a specific file path when validating a single case. Do not add root e2e alia
 
 Case-level priority tags use test-name prefixes: `[P0]`, `[P1]`, `[P2]`.
 
-Playwright UI runs use one tools-dev daemon/web/data root per Playwright worker. The single-worker fallback is `--workers=1` (or `OD_PLAYWRIGHT_WORKERS=1`); do not reintroduce a shared daemon/web runtime mode.
+Playwright UI runs use one tools-dev daemon/web/data root per Playwright worker. Because a worker is therefore a whole application — daemon plus Next dev server, not just a browser context — `playwright.config.ts` now defaults to **one worker locally**; raise it deliberately with `OD_PLAYWRIGHT_WORKERS`, which is how CI sets its own count (`.github/actions/configure-ci-parallelism`). Measured on a 16-core laptop over `app-manual-edit` + `app-restoration` at `--grep @critical`: one worker ran 13/13 green in 3.7m, two workers went 5-red in 8.4m, every failure a 30s timeout rather than an assertion. Do not reintroduce a shared daemon/web runtime mode.

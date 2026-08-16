@@ -14,7 +14,10 @@
  *   { type: 'od:slide-state', active: number, count: number }
  * after every navigation so the host can render its own counter / dots.
  */
-import { injectDeckStageFallback } from '@open-design/contracts/runtime/deck-stage-fallback';
+import {
+  DECK_SLIDE_SELECTOR,
+  injectDeckStageFallback,
+} from '@open-design/contracts/runtime/deck-stage-fallback';
 
 import {
   buildManualEditBridge,
@@ -2628,7 +2631,16 @@ function injectDeckBridge(
     // the real count instead of leaving the host counter at 1 / 0.
     var structured = document.querySelectorAll('deck-stage > .slide, .deck > .slide, .deck-stage > .slide, .deck-shell > .slide, body > .slide');
     if (structured.length) return structured;
-    return document.querySelectorAll('.slide');
+    var plain = document.querySelectorAll('.slide');
+    if (plain.length) return plain;
+    // Last resort: a runtime-managed deck whose screens carry no .slide class at
+    // all (<deck-stage> / data-screen-label). Both the <deck-stage> fallback
+    // element and the off-screen renderer already identify these through
+    // DECK_SLIDE_SELECTOR; this bridge was the one place that did not, so such a
+    // deck reported count 0, the host never learned an active index, and a
+    // current-slide capture had nothing to ask the renderer for. Kept strictly
+    // last so a .slide deck's counting is unchanged, decoy markup included.
+    return document.querySelectorAll(${JSON.stringify(DECK_SLIDE_SELECTOR)});
   }
   function scrollOverflow(el){
     if (!el) return 0;

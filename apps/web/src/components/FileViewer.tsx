@@ -97,6 +97,7 @@ import {
   exportProjectAsPptx,
   exportProjectAsZip,
   exportProjectImageDataUrl,
+  readPreviewViewportRect,
   exportProjectScreenshotPdf,
   exportSnapshotAsPdf,
   copyImageDataUrlToClipboard,
@@ -10651,6 +10652,15 @@ function HtmlViewer({
        * an off-screen render would land them on the wrong pixels.
        */
       allowOffscreenRender?: boolean;
+      /**
+       * Set by annotation capture, the one caller that DOES composite onto the
+       * result. It asks the daemon for the visible band rather than the whole
+       * document, which is the only render the overlay's rect-based scaling is
+       * true against. Mutually exclusive in practice with `allowOffscreenRender`:
+       * that flag exists for callers who need any faithful render, this one for
+       * the caller who needs a viewport-matched one.
+       */
+      viewportClip?: boolean;
     },
   ) => {
     const exportContext = options?.context ?? null;
@@ -10686,6 +10696,30 @@ function HtmlViewer({
     // that genuinely has no renderer answers 501, which
     // `exportProjectImageDataUrl` reports as `unavailable`, and we fall through
     // below exactly as before.
+    // Annotation capture, with no host compositor to grab on-screen pixels. Ask
+    // the daemon for exactly the band the user is looking at — same document,
+    // same viewport size, same scroll offset — so PreviewDrawOverlay's marks
+    // scale onto it correctly. A host, where it exists, keeps its compositor
+    // snapshot: that is already a viewport-matched image and is untouched here.
+    if (options?.viewportClip === true && !isOpenDesignHostAvailable() && projectId && file.name) {
+      const viewport = readPreviewViewportRect(iframeRef.current ?? srcDocPreviewIframeRef.current);
+      if (viewport) {
+        const rendered = await exportProjectImageDataUrl({
+          projectId,
+          fileName: file.name,
+          // Always page semantics: "what is on screen" is a viewport question
+          // even when the artifact happens to be a deck.
+          deck: false,
+          width: viewport.width,
+          height: viewport.height,
+          viewportScrollY: viewport.scrollY,
+          ...(exportContext?.versionId ? { versionId: exportContext.versionId } : {}),
+        });
+        if (rendered.ok) return rendered.snapshot;
+        if ('error' in rendered) throw new Error(rendered.error);
+      }
+    }
+
     if ((isOpenDesignHostAvailable() || options?.allowOffscreenRender === true) && projectId && file.name) {
       // Deck-vs-page uses the same signal as PDF export — broader than the viewer's nav
       // signal — so runtime-managed decks (`<deck-stage>` / `data-screen-label`,
@@ -10789,6 +10823,15 @@ function HtmlViewer({
     file.name,
   ]);
 
+  // PreviewDrawOverlay calls this with no arguments, so the capture mode has to
+  // be bound here. It is the only caller that re-paints onto what it gets back,
+  // which is why it asks for a viewport-clipped render rather than the full-page
+  // one Copy screenshot and Export as image are happy with.
+  const captureAnnotationBackgroundSnapshot = useCallback(
+    () => captureExportImageSnapshot({ viewportClip: true }),
+    [captureExportImageSnapshot],
+  );
+
   const handleCopyScreenshot = useCallback(async () => {
     fireArtifactToolbarClick('screenshot');
     if (screenshotInFlightRef.current) return;
@@ -10801,17 +10844,18 @@ function HtmlViewer({
         return;
       }
       const result = await copyImageDataUrlToClipboard(snap.dataUrl);
+      // 'unfocused' is separated from 'denied' because the two need different
+      // things from the user: a refusal is out of their hands, while an
+      // unfocused tab is fixed by the click they were about to make anyway.
+      const failureKey = {
+        denied: 'fileViewer.screenshotClipboardDenied',
+        unfocused: 'fileViewer.screenshotClipboardUnfocused',
+        failed: 'fileViewer.screenshotCaptureFailed',
+      } as const;
       setExportToast(
         result === 'copied'
           ? { message: t('fileViewer.screenshotCopied'), tone: 'success' }
-          : {
-              message: t(
-                result === 'denied'
-                  ? 'fileViewer.screenshotClipboardDenied'
-                  : 'fileViewer.screenshotCaptureFailed',
-              ),
-              tone: 'error',
-            },
+          : { message: t(failureKey[result]), tone: 'error' },
       );
     } catch (err) {
       console.warn('[handleCopyScreenshot] failed:', err);
@@ -10920,13 +10964,17 @@ function HtmlViewer({
         // Export as image of a deck = the whole deck stitched into one long
         // image (every slide), matching the count the viewer reports. Copy
         // screenshot keeps the current slide.
-        // Deliberately NOT `allowOffscreenRender` — see CANVAS-17. Export as
-        // image has the same defect Copy screenshot had, but flipping it here
-        // reorders the precedence that eight specs in
-        // `file-viewer-image-export.test.tsx` pin (host absent → snapshot
-        // bridge), and rewriting those belongs with its own red spec rather
-        // than riding along on the screenshot fix.
-        const snap = await captureExportImageSnapshot({ wholeDeck: true, context });
+        // `allowOffscreenRender` is safe here for the same reason it is safe for
+        // Copy screenshot: this flow composites nothing onto the returned
+        // snapshot, it hands the pixels straight to the encoder. Everything the
+        // renderer cannot serve (it answers 501 → `unavailable`) still falls
+        // through to the bridge chain below, which is what the precedence specs
+        // in `file-viewer-image-export.test.tsx` pin.
+        const snap = await captureExportImageSnapshot({
+          wholeDeck: true,
+          context,
+          allowOffscreenRender: true,
+        });
         if (!snap) {
           setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
           fireImageExportResult('failed', 'CAPTURE_FAILED');
@@ -12471,7 +12519,7 @@ function HtmlViewer({
                     active={drawOverlayOpen}
                     onActiveChange={setDrawOverlayOpen}
                     captureViewport
-                    captureSnapshot={captureExportImageSnapshot}
+                    captureSnapshot={captureAnnotationBackgroundSnapshot}
                     captureTarget={null}
                     filePath={file.name}
                     sendDisabled={streaming}

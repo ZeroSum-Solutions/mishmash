@@ -1,7 +1,25 @@
 import { defineConfig, devices } from '@playwright/test';
 
+/**
+ * Defaults to ONE worker locally, because a worker here is not what Playwright's
+ * parallelism normally assumes. Each one owns a whole tools-dev runtime — its own
+ * daemon, its own Next dev server, its own data root — so a second worker is a
+ * second application, not a second browser context.
+ *
+ * Measured on a 16-core laptop, `app-manual-edit` + `app-restoration` at
+ * `--grep @critical` (13 specs):
+ *
+ *   workers=1 → 13 passed in 3.7m   (slowest single spec 26.1s)
+ *   workers=2 →  5 failed in 8.4m   (all five on 30s timeouts, not assertions)
+ *
+ * Two workers were 2.3x SLOWER in wall clock as well as red, so the parallelism
+ * was costing time rather than saving it, and the "flaky" specs were reporting
+ * that honestly. CI overrides this via OD_PLAYWRIGHT_WORKERS (see
+ * .github/actions/configure-ci-parallelism), so raising it stays a deliberate,
+ * per-runner choice rather than a local default nobody measured.
+ */
 function parseWorkerCount(value: string | undefined): number {
-  if (value == null || value.length === 0) return 2;
+  if (value == null || value.length === 0) return 1;
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1) {
     throw new Error(`OD_PLAYWRIGHT_WORKERS must be a positive integer, got: ${value}`);

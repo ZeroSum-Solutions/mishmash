@@ -3691,6 +3691,7 @@ export interface Dict {
   'fileViewer.screenshotCopying': string;
   'fileViewer.screenshotCopied': string;
   'fileViewer.screenshotClipboardDenied': string;
+  'fileViewer.screenshotClipboardUnfocused': string;
   'fileViewer.screenshotPreviewLoading': string;
   'fileViewer.screenshotCaptureFailed': string;
   'fileViewer.exportPdf': string;

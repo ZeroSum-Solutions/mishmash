@@ -16,14 +16,16 @@
         "apps/web/src/components/file-viewer-render-mode.ts"
       ],
       "proof_tests": [
-        "apps/web/tests/components/FileViewer.html-preview-canvas.test.tsx"
-      ]
+        "apps/web/tests/components/FileViewer.html-preview-canvas.test.tsx",
+        "e2e/ui/app-manual-edit.test.ts"
+      ],
+      "proof_note": "Asserts previewTextNeedsFullSourceForSafeInline's inline-vs-full-source decision per source shape, and end-to-end that the HTML viewer stays rendered with no code toggle. The unit half covers one input to the canvas rather than the canvas itself; the Playwright spec is what proves it paints."
     },
     {
       "id": "url-vs-srcdoc-render-mode-decision",
       "group": "runtime-wiring",
       "name": "URL-load vs srcDoc iframe render-mode decision engine",
-      "user_action": "N/A \u2014 automatic per file based on which bridges are active (comment/inspect/edit/palette/tweaks/deck/draw)",
+      "user_action": "N/A — automatic per file based on which bridges are active (comment/inspect/edit/palette/tweaks/deck/draw)",
       "expected_result": "shouldUrlLoadHtmlPreview() forces srcDoc whenever any interactive bridge, root-relative project asset refs, focus-stealing, or self-redirect patterns are detected; otherwise defaults to faster per-asset URL loading. Every exported function (hasTweaksTemplate, shouldUrlLoadHtmlPreview, hasUrlModeBridge, parseForceInline, htmlNeedsFocusGuard, htmlNeedsPoweredPreview, htmlNeedsSandboxShim, htmlNeedsRedirectGuard) is pure and directly unit-testable per its own docblock, and this contract is load-bearing enough that AGENTS.md documents it explicitly",
       "risk": "high",
       "verifiable_by": "unit",
@@ -33,7 +35,8 @@
       "proof_tests": [
         "apps/web/tests/components/file-viewer-render-mode.test.ts",
         "apps/web/tests/components/FileViewer.test.tsx"
-      ]
+      ],
+      "proof_note": "Asserts shouldUrlLoadHtmlPreview's verdict for each disqualifier, including that a deck falls back to srcDoc because its postMessage bridge can only inject there."
     },
     {
       "id": "deploy-vercel-cloudflare",
@@ -49,12 +52,13 @@
       "proof_tests": [
         "apps/web/tests/components/FileViewer.deploy-target.test.tsx",
         "apps/web/tests/analytics/deploy-error-code.test.ts"
-      ]
+      ],
+      "proof_note": "Asserts the deploy request carries the selected target (Production by default, Preview when chosen) and that deploy failures map to their analytics error codes."
     },
     {
       "id": "comment-pods-mode",
       "group": "editing",
-      "name": "Comment / Board mode \u2014 inspect + pod (lasso) element selection",
+      "name": "Comment / Board mode — inspect + pod (lasso) element selection",
       "user_action": "Click the comment toolbar icon to enter board mode; hover/click an element (inspect) or lasso-drag across multiple elements to group them into a 'pod'; type a note",
       "expected_result": "A live selection overlay highlights the hovered/selected DOM target or grouped pod (weighted opacity by area); a composer anchored to the selection lets the note send immediately as a chat attachment or save as a persistent, repliable comment thread with open/resolved status",
       "risk": "high",
@@ -69,7 +73,8 @@
         "apps/web/tests/components/BoardComposerPopover.pod-chip-hover.test.tsx",
         "apps/web/tests/components/BoardComposerPopover.pod-remove.test.tsx",
         "apps/web/tests/components/CommentTargetOverlay.hover-class.test.tsx"
-      ]
+      ],
+      "proof_note": "Asserts pod membership add/remove preserves order and tolerates absent ids, plus the chip hover/remove affordances and the selection overlay's hover class that make a pod visible."
     },
     {
       "id": "draw-mark-annotation",
@@ -87,13 +92,15 @@
       "proof_tests": [
         "apps/web/tests/components/PreviewDrawOverlay.test.tsx",
         "apps/web/tests/components/PreviewDrawOverlay.capture-fallback.test.tsx",
-        "apps/web/tests/components/PreviewDrawOverlay.send-disabled.test.tsx"
-      ]
+        "apps/web/tests/components/PreviewDrawOverlay.send-disabled.test.tsx",
+        "apps/web/tests/components/file-viewer-annotation-capture.test.tsx"
+      ],
+      "proof_note": "Asserts the ink canvas sizes from the frame's layout box rather than its CSS-scaled rect; that a failed capture still sends a noted annotation but still blocks an ink-only one; and that capture asks the renderer for the viewport band at the frame's own scroll offset, which is what makes the composited marks land on the right pixels."
     },
     {
       "id": "manual-edit-mode-core",
       "group": "editing",
-      "name": "Manual Edit Mode \u2014 click-to-select element, inline text edit",
+      "name": "Manual Edit Mode — click-to-select element, inline text edit",
       "user_action": "Toggle the Edit tool in the artifact toolbar; click any tagged element in the preview; type directly (contenteditable) for text/link elements",
       "expected_result": "Element discovery/click-to-select/inline-text-edit runs via an injected iframe bridge; typed text commits on blur/Enter, is applied to the HTML source string, persisted to the server as a new 'manual' file version, and the preview re-renders",
       "risk": "high",
@@ -107,12 +114,13 @@
         "e2e/ui/app-manual-edit.test.ts",
         "apps/web/tests/components/FileViewer.manual-edit.test.tsx",
         "apps/web/tests/components/manual-edit-kind.test.ts"
-      ]
+      ],
+      "proof_note": "Asserts edit mode opens with a clean canvas and no docked panel, drops invalid fields from pending style saves without losing valid ones, and end-to-end that an edited file's tab and preview survive a reload."
     },
     {
       "id": "manual-edit-undo-redo",
       "group": "editing",
-      "name": "Manual Edit Mode \u2014 undo/redo across saves",
+      "name": "Manual Edit Mode — undo/redo across saves",
       "user_action": "Trigger undo/redo from the edit panel or keyboard while in Manual Edit mode",
       "expected_result": "Each undo/redo re-persists the before/after source as a new server-tracked version (not an ephemeral in-memory stack) and the preview reflects the reverted/reapplied state; a stale local history is detected and cleared if the file changed out-of-band",
       "risk": "high",
@@ -123,13 +131,14 @@
       ],
       "proof_tests": [
         "apps/web/tests/components/FileViewer.manual-edit-history.test.tsx"
-      ]
+      ],
+      "proof_note": "Asserts a follow-up edit uses the undone source snapshot rather than the pre-undo one, that non-style source patches refresh the canvas, and that reset appears only once the selected element's draft actually changed."
     },
     {
       "id": "manual-edit-source-patch-engine",
       "group": "runtime-wiring",
       "name": "Manual edit source-patch engine (applyManualEditPatch)",
-      "user_action": "N/A \u2014 invoked by every Manual Edit Mode action (text/link/image/outer-html/delete/page-style edits)",
+      "user_action": "N/A — invoked by every Manual Edit Mode action (text/link/image/outer-html/delete/page-style edits)",
       "expected_result": "A pure HTML-string patcher handles set-text/set-link/set-image/set-style/set-attributes/set-outer-html/remove-element/set-token against the raw source, independent of any DOM/iframe; every manual-edit UI feature depends on this function being correct, so a defect here corrupts saved source across all of them",
       "risk": "high",
       "verifiable_by": "unit",
@@ -138,12 +147,13 @@
       ],
       "proof_tests": [
         "apps/web/tests/edit-mode/source-patches.test.ts"
-      ]
+      ],
+      "proof_note": "Asserts applyManualEditPatch rewrites only the selected target -- text, link label, href -- and leaves the rest of the source untouched."
     },
     {
       "id": "storyboard-shot-crud-render-takes",
       "group": "editing",
-      "name": "Storyboard \u2014 shot CRUD, frame generation, video render, take review",
+      "name": "Storyboard — shot CRUD, frame generation, video render, take review",
       "user_action": "Add/duplicate/delete/reorder shots; generate or iterate a start/end frame; upload an image; render a shot to video; compare multiple 'takes' and approve/reject/select one",
       "expected_result": "Each mutation applies optimistically then PATCHes /api/storyboards/:id with a single 409-conflict retry; renders poll a long-running media task; the selected take marks the shot 'done' for assembly",
       "risk": "high",
@@ -157,13 +167,14 @@
         "apps/web/tests/components/storyboard-persist.test.ts",
         "apps/web/tests/components/StoryboardEditor.test.tsx",
         "apps/web/tests/components/ShotInspectorRail.test.tsx"
-      ]
+      ],
+      "proof_note": "Asserts a 409 conflict reapplies the mutator to the server's current doc without reverting a concurrent edit, that uploads PATCH the shot with an origin: uploaded frame ref, and that an oversize file fails client-side before any upload call."
     },
     {
       "id": "figma-import-offline-decode",
       "group": "upload-attach",
-      "name": "Figma import \u2014 offline .fig file decode",
-      "user_action": "'+' \u2192 Import from Figma \u2192 Upload .fig tab \u2192 drop or browse a .fig file exported from Figma, optionally add build notes",
+      "name": "Figma import — offline .fig file decode",
+      "user_action": "'+' → Import from Figma → Upload .fig tab → drop or browse a .fig file exported from Figma, optionally add build notes",
       "expected_result": "Decoded entirely on-device (no Figma account) via POST /api/projects/:id/figma/import; returns node/page/frame/component counts, colors, fonts, and a 'Build' action that seeds the chat prompt; oversized (>200MB) or non-.fig files rejected client-side; decode failures surface FIGMA_IMPORT_FAILED with the caught error message; a per-asset 12MB cap inside the decoded snapshot guards against oversized embedded assets",
       "risk": "high",
       "verifiable_by": "e2e",
@@ -177,7 +188,8 @@
         "apps/daemon/tests/figma-import.test.ts",
         "apps/daemon/tests/figma-import-route.test.ts",
         "apps/daemon/tests/figma-cli.test.ts"
-      ]
+      ],
+      "proof_note": "Asserts decodeFigFile rebuilds the node tree, tokens, fonts and assets from a real .fig, composes parent transforms into absolute boxes, degrades to assets-only on a garbage kiwi payload, and warns rather than throws on non-fig input."
     },
     {
       "id": "od-library-clipper-ingest",
@@ -195,12 +207,13 @@
         "apps/daemon/tests/library-ingest-ssrf.test.ts",
         "apps/daemon/tests/library-figma-sidecar.test.ts",
         "apps/daemon/tests/library-rate-limit-clipper-probe.test.ts"
-      ]
+      ],
+      "proof_note": "Asserts ingest refuses a loopback/internal URL and does not exfiltrate its bytes, that the sibling assertPublicBrandUrl guard agrees, and that the clipper probe is rate limited."
     },
     {
       "id": "connectors-catalog",
       "group": "catalog",
-      "name": "Connectors catalog (MCP tool integrations) \u2014 connect/disconnect",
+      "name": "Connectors catalog (MCP tool integrations) — connect/disconnect",
       "user_action": "Open Connectors, type in search, click Connect on a card",
       "expected_result": "Grid is masked/disabled until a Composio key is configured; search ranks by name/provider match; Connect opens an OAuth popup or system-browser flow and polls status until connected",
       "risk": "high",
@@ -213,7 +226,8 @@
         "apps/web/tests/components/ConnectorsBrowser.test.tsx",
         "e2e/ui/settings-connectors-auth-happy-path.test.ts",
         "e2e/ui/settings-connectors-auth-recovery.test.ts"
-      ]
+      ],
+      "proof_note": "Asserts the grid masks immediately when the Composio key is cleared locally and that a completed connect broadcasts the change, plus two Playwright specs driving the real auth happy path and its recovery."
     },
     {
       "id": "chat-workspace-split-resize",
@@ -265,7 +279,7 @@
     {
       "id": "tabbed-workspace-tabs",
       "group": "canvas-surface",
-      "name": "Tabbed workspace \u2014 tab bar, Pages dropdown, dynamic tabs, drag reorder",
+      "name": "Tabbed workspace — tab bar, Pages dropdown, dynamic tabs, drag reorder",
       "user_action": "Click a workspace tab, open the Pages dropdown, or open a file/terminal/side-chat/browser tab via the '+' launcher; drag a tab to reorder; wheel-scroll the tab strip",
       "expected_result": "One persistent tab per open file/terminal/side-chat/browser/live-artifact; tabs are draggable with a drop-edge indicator, horizontally wheel-scrollable, and closeable",
       "risk": "medium",
@@ -284,7 +298,7 @@
     {
       "id": "design-files-panel",
       "group": "canvas-surface",
-      "name": "Design Files panel \u2014 file tree/grid, upload, rename, delete, download project",
+      "name": "Design Files panel — file tree/grid, upload, rename, delete, download project",
       "user_action": "Open the Design Files tab; drag-drop or click Upload; right-click or use row actions to rename/delete; click Download Project",
       "expected_result": "Files render as a list/grid rooted at rootDirName; upload shows progress/error banner; delete supports single and multi-select; Download Project produces a zip archive",
       "risk": "medium",
@@ -464,9 +478,11 @@
       ],
       "proof_tests": [
         "apps/web/tests/components/file-viewer-screenshot-tooltip.test.tsx",
-        "apps/web/tests/runtime/exports.test.ts"
+        "apps/web/tests/runtime/exports.test.ts",
+        "apps/web/tests/components/file-viewer-image-export.test.tsx"
       ],
-      "coverage_note": "The tooltip spec was this feature's ONLY proof until 2026-08-16, which is how the run that catalogued it recorded the feature as covered while capture was broken end-to-end in every browser: the daemon renderer was gated behind an Electron-only predicate and the fallback bridge failed. Naming a test is not the same as proving the behaviour. exports.test.ts now pins the capture-tier decision itself; the clipboard hand-off after it is still browser-gated (CANVAS-15)."
+      "coverage_note": "The tooltip spec was this feature's ONLY proof until 2026-08-16, which is how the run that catalogued it recorded the feature as covered while capture was broken end-to-end in every browser: the daemon renderer was gated behind an Electron-only predicate and the fallback bridge failed. Naming a test is not the same as proving the behaviour. exports.test.ts now pins the capture-tier decision itself; the clipboard hand-off after it is still browser-gated (CANVAS-15).",
+      "proof_note": "Asserts the capture plan routes to the daemon's off-screen renderer in a browser and to the host snapshot where a compositor exists, and that the clipboard write settles ('unfocused' / timeout) instead of stranding the button. The tooltip spec is kept but proves only the label -- for one run it was effectively this row's whole proof while capture was broken in every browser, which is why high-risk rows now have to say what they assert."
     },
     {
       "id": "comment-side-panel",
@@ -486,7 +502,7 @@
     {
       "id": "inspect-panel",
       "group": "editing",
-      "name": "Inspect panel \u2014 quick live CSS tuning on one element",
+      "name": "Inspect panel — quick live CSS tuning on one element",
       "user_action": "Toggle Inspect, click an element, drag color/font-size/weight/align/padding/radius controls",
       "expected_result": "Style changes preview live in the iframe via a srcDoc bridge; 'Save to source' persists as an injected style block; 'Reset element' reverts to the pre-edit outerHTML snapshot",
       "risk": "medium",
@@ -501,7 +517,7 @@
     {
       "id": "manual-edit-inspector-panel",
       "group": "editing",
-      "name": "Manual Edit \u2014 style/content inspector panel",
+      "name": "Manual Edit — style/content inspector panel",
       "user_action": "With an element selected in Edit mode, adjust typography/color/spacing/layout fields or link href/image src/alt in the right-docked panel, then Save",
       "expected_result": "A set-style / set-text / set-link / set-image patch applies and persists; live preview streams style changes via postMessage before the explicit Save commits a version",
       "risk": "medium",
@@ -517,7 +533,7 @@
     {
       "id": "manual-edit-outer-html",
       "group": "editing",
-      "name": "Manual Edit \u2014 inline raw HTML editing for a container",
+      "name": "Manual Edit — inline raw HTML editing for a container",
       "user_action": "Select a container element with nested markup; edit its outer HTML directly in the CONTENT textarea and Save",
       "expected_result": "set-outer-html patch replaces the element's outerHTML (must remain exactly one root element) and persists as a version",
       "risk": "medium",
@@ -533,7 +549,7 @@
     {
       "id": "manual-edit-delete-image-page-styles",
       "group": "editing",
-      "name": "Manual Edit \u2014 delete element / upload image / page-level styles",
+      "name": "Manual Edit — delete element / upload image / page-level styles",
       "user_action": "Click the trash icon on a selected element, upload a new image for an image element, or click empty canvas to open page-level background/font/size controls",
       "expected_result": "remove-element / set-image / body-level set-style patches apply and persist; deleting the last renderable body child is blocked with an error",
       "risk": "medium",
@@ -624,7 +640,7 @@
     {
       "id": "version-history",
       "group": "canvas-surface",
-      "name": "File version history \u2014 browse, preview, restore",
+      "name": "File version history — browse, preview, restore",
       "user_action": "Open version history from the toolbar/more-menu; scroll/search the list; click a version to preview; click Restore",
       "expected_result": "Each version (ai/manual/restore-sourced) previews in an isolated iframe with its generating prompt shown; Restore reverts the live file to that content and records a new 'restore' version",
       "risk": "medium",
@@ -785,7 +801,7 @@
       "group": "canvas-surface",
       "name": "Critique Theater / Design Jury (read-only, non-editing)",
       "user_action": "Watch a live multi-panelist critique stream during a run; optionally click Interrupt",
-      "expected_result": "Read-only phase-driven UI (live -> shipped/degraded/interrupted/failed); Interrupt POSTs a kill request and optimistically flips to interrupted. Confirmed out of scope for edit-hardening \u2014 included only so the exclusion is explicit",
+      "expected_result": "Read-only phase-driven UI (live -> shipped/degraded/interrupted/failed); Interrupt POSTs a kill request and optimistically flips to interrupted. Confirmed out of scope for edit-hardening — included only so the exclusion is explicit",
       "risk": "low",
       "verifiable_by": "e2e",
       "source_files": [
@@ -1012,7 +1028,7 @@
       "id": "library-insert-picker",
       "group": "catalog",
       "name": "Insert-from-library picker (composer/design-files attach)",
-      "user_action": "'+' \u2192 Select from library (in composer or Design Files); filter by kind, multi-select assets, confirm",
+      "user_action": "'+' → Select from library (in composer or Design Files); filter by kind, multi-select assets, confirm",
       "expected_result": "Each picked asset copies into the active project's design files via POST /api/library/assets/:id/apply, staged as an attachment chip and recording a provenance back-link; element-pick captures inject outerHTML into the draft as a fenced code block",
       "risk": "medium",
       "verifiable_by": "unit",
@@ -1073,7 +1089,7 @@
       "group": "catalog",
       "name": "Plugin detail modal (per-type)",
       "user_action": "Click 'Details' on a plugin card",
-      "expected_result": "Modal renders type-specific content \u2014 design-system patch diff, static example, media preview, or scenario steps \u2014 plus tags, description, and primary actions",
+      "expected_result": "Modal renders type-specific content — design-system patch diff, static example, media preview, or scenario steps — plus tags, description, and primary actions",
       "risk": "medium",
       "verifiable_by": "unit",
       "source_files": [
@@ -1166,7 +1182,7 @@
     {
       "id": "stock-media-gap",
       "group": "catalog",
-      "name": "Stock media \u2014 no native picker (documented gap, not a bug)",
+      "name": "Stock media — no native picker (documented gap, not a bug)",
       "user_action": "User looks for a built-in Unsplash/Pexels-style stock photo browser",
       "expected_result": "None exists; the only paths are two static links (Unsplash, Pexels) inside the Reference Board that open the external site in the embedded Browser, or an agent 'asset-search' toolbox action that routes to an image-search skill rather than a UI catalog",
       "risk": "low",
@@ -1182,7 +1198,7 @@
       "id": "composer-file-picker",
       "group": "upload-attach",
       "name": "Chat composer file picker (native multi-select)",
-      "user_action": "Click '+' \u2192 Attach files, or the paperclip; browser file dialog opens with no accept filter, multiple=true",
+      "user_action": "Click '+' → Attach files, or the paperclip; browser file dialog opens with no accept filter, multiple=true",
       "expected_result": "Selected files upload via POST /api/projects/:id/upload (12/batch, 200MB/file cap, no MIME check), land flat in the project folder, and appear as staged ChatAttachment chips",
       "risk": "medium",
       "verifiable_by": "e2e",
@@ -1233,8 +1249,8 @@
       "id": "connector-mention-context",
       "group": "upload-attach",
       "name": "Connector-sourced context (@-mention a connected service)",
-      "user_action": "'+' \u2192 Connectors submenu, or type @<connector-name> in the composer, and pick a connected integration",
-      "expected_result": "No bytes transferred through the composer \u2014 insertConnectorMention() stages the connector in RunContextSelection.connectorIds and inserts an @-mention token; the agent accesses the connector's data at run time via its wired MCP server tools",
+      "user_action": "'+' → Connectors submenu, or type @<connector-name> in the composer, and pick a connected integration",
+      "expected_result": "No bytes transferred through the composer — insertConnectorMention() stages the connector in RunContextSelection.connectorIds and inserts an @-mention token; the agent accesses the connector's data at run time via its wired MCP server tools",
       "risk": "low",
       "verifiable_by": "unit",
       "source_files": [
@@ -1249,7 +1265,7 @@
       "id": "reference-project-link-code",
       "group": "upload-attach",
       "name": "Reference project / Link local code (workspace context, not upload)",
-      "user_action": "'+' \u2192 Reference project (pick another MishMash project) or Link local code (native folder picker)",
+      "user_action": "'+' → Reference project (pick another MishMash project) or Link local code (native folder picker)",
       "expected_result": "PATCHes the project's metadata.linkedDirs so the agent gets --add-dir read access to that folder; nothing is copied into the current project or staged as a ChatAttachment",
       "risk": "low",
       "verifiable_by": "e2e",
@@ -1265,8 +1281,8 @@
       "id": "od-library-manual-upload",
       "group": "upload-attach",
       "name": "OD Library manual upload (global asset library, project-independent)",
-      "user_action": "Open the Library panel \u2192 Upload \u2192 drag/drop, paste, or browse files",
-      "expected_result": "Strict MIME+extension allowlist (images, fonts, text, HTML, JSON/XML \u2014 audio/video explicitly rejected), ~3MB/file cap (base64-inflated JSON body limit); daemon re-validates the same policy so a rejected file shows a per-row reason; duplicate content deduped and flagged 'Already in Library'",
+      "user_action": "Open the Library panel → Upload → drag/drop, paste, or browse files",
+      "expected_result": "Strict MIME+extension allowlist (images, fonts, text, HTML, JSON/XML — audio/video explicitly rejected), ~3MB/file cap (base64-inflated JSON body limit); daemon re-validates the same policy so a rejected file shows a per-row reason; duplicate content deduped and flagged 'Already in Library'",
       "risk": "medium",
       "verifiable_by": "unit",
       "source_files": [
@@ -1360,7 +1376,7 @@
       "id": "api-attachment-context-injection",
       "group": "runtime-wiring",
       "name": "API-mode attachment context injection",
-      "user_action": "N/A \u2014 automatic when a BYOK/API-mode run includes staged attachments",
+      "user_action": "N/A — automatic when a BYOK/API-mode run includes staged attachments",
       "expected_result": "historyWithApiAttachmentContext() renders each attachment as a fenced code/text block (raw text for html/text/code/svg/sketch.json, section previews for pdf/document/presentation/spreadsheet) appended to the user's message, truncated at 24,000 chars/attachment and 64,000 chars total, with images optionally omitted when the provider supports native image attachments",
       "risk": "medium",
       "verifiable_by": "unit",

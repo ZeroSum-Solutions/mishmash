@@ -100,6 +100,40 @@ describe('buildExportCliRequestBody', () => {
     });
   });
 
+  it('carries a viewport-clipped image request through to the daemon body', () => {
+    // CANVAS-13 / AGENTS.md "Capability exposure": viewport-clipped capture is a
+    // real export mode, so it has to be drivable from `od export` and not only
+    // from the in-app annotation flow. Both dimensions ride along because the
+    // renderer clips to the caller's viewport, not to a default one.
+    expect(
+      buildExportCliRequestBody({
+        fileName: 'page.html',
+        format: 'image',
+        width: 1280,
+        height: 800,
+        viewportScrollY: 1600,
+      }),
+    ).toEqual({
+      fileName: 'page.html',
+      width: 1280,
+      height: 800,
+      viewportScrollY: 1600,
+    });
+  });
+
+  it('keeps a zero scroll offset, which means the top of the document', () => {
+    // Truthiness-checking this field would drop `0` and silently return a
+    // full-page render for the most common case of all: a page nobody scrolled.
+    const body = buildExportCliRequestBody({
+      fileName: 'page.html',
+      format: 'image',
+      width: 1280,
+      height: 800,
+      viewportScrollY: 0,
+    });
+    expect(body).toHaveProperty('viewportScrollY', 0);
+  });
+
   it('rejects conflicting or impossible CLI deck/page modes', () => {
     expect(() => resolveExportCliDeckMode({ format: 'pdf', deck: true, page: true })).toThrow(
       /cannot be combined/,

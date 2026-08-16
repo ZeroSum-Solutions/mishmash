@@ -90,12 +90,36 @@ It is not gated on `isOpenDesignHostAvailable()` — that predicate asks whether
 genuinely without a renderer answers 501, which the client reports as `unavailable` so the older
 fallbacks still apply.
 
-The catch is that it renders `fullPage: true` — the whole document, never the visible viewport.
-That is fine for anything that just hands you an image (Copy screenshot, Export as image) and
-wrong for anything that composites onto it: `PreviewDrawOverlay` scales the user's marks against
-the preview frame's rect, so a full-page image would place them on the wrong pixels. Callers
-therefore opt in explicitly with `allowOffscreenRender`, and annotation capture does not — see
-CANVAS-13.
+### Full-page or viewport, and why the caller has to say which
+
+The renderer answers two shapes, and the difference matters more than it looks.
+
+By default it renders `fullPage: true` — the whole document. That is right for anything that
+just hands you an image, so **Copy screenshot** and **Export as image** opt in with
+`allowOffscreenRender: true` and take it as-is.
+
+It is wrong for anything that composites *onto* the image. `PreviewDrawOverlay` re-paints the
+user's marks scaled by the preview frame's rect against the returned image's pixel dimensions,
+so a full-page render would land every mark somewhere the user did not draw it. Annotation
+capture therefore asks for the other shape, with `viewportClip: true`: the request carries the
+frame's width, height and scroll offset, and the renderer scrolls there and clips to the
+viewport. Same document, same box, same offset — which is what makes the overlay's arithmetic
+true rather than approximately true.
+
+Two details are load-bearing:
+
+- **`viewportScrollY` is presence-checked, never truthiness-checked.** `0` is the top of a
+  document — the most ordinary case there is — and collapsing it back to "no clip" would
+  silently return a full-page render for exactly that case.
+- **`readPreviewViewportRect` returns null rather than guessing.** A cross-origin preview frame
+  will not report its scroll offset; defaulting to 0 would produce a confidently wrong
+  background for a user who had scrolled, which is worse than a capture that fails.
+
+The mode is reachable from the CLI too, per `AGENTS.md` § "Capability exposure":
+
+```bash
+od export index.html --project p1 --format image --width 1280 --height 800 --scroll-y 1600
+```
 
 ## What the canvas can do
 

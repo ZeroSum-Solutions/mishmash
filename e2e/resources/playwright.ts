@@ -147,18 +147,24 @@ export const playwrightUiScenarios: UiScenario[] = [
     prompt: 'Create a short product teaser video prompt',
     expectedProjectMetadata: {
       kind: 'video',
-      // `videoModel` is deliberately absent. It is not a fixed default: the
-      // Video surface's model follows whichever skill wins the video tab, and no
-      // skill declares `od.default_for: video`, so that winner comes from
-      // catalog ordering. Pinning either observed id made this spec pass and
-      // fail on the same commit in back-to-back runs. The flow still asserts a
-      // model rode along; CANVAS-16 tracks closing the product gap.
+      // `videoModel` stays unasserted, but for a different reason than before.
+      //
+      // CANVAS-16 removed the two order-dependent inputs — the video tab's skill
+      // is now declared (`od.default_for: video` on video-shortform) and
+      // VIDEO_MODELS carries exactly one `default: true`, both guarded by tests.
+      // Pinning the resulting id still fails, and the observed value proves why:
+      // DEFAULT_VIDEO_MODEL resolves to `doubao-seedance-2-0-260128` (Volcengine)
+      // while the created project persists `openrouter/bytedance/seedance-2.0:1080p`.
+      // `MediaModelCards` steers a not-ready selection onto the first model whose
+      // provider IS ready (NewProjectPanel.tsx, the `firstAvailableModelId`
+      // effect), so the persisted default follows which provider credentials this
+      // runtime happens to have — environment, not catalogue. See CANVAS-19.
       videoAspect: '16:9',
       videoLength: 5,
     },
     notes: [
       'Keeps this smoke on create-time routing and metadata instead of provider execution.',
-      'Asserts aspect and duration defaults only — the default video model is catalog-order dependent (CANVAS-16).',
+      'Asserts aspect and duration only: the model id follows provider readiness in the runtime under test (CANVAS-19), which this environment does not control.',
     ],
   },
   {

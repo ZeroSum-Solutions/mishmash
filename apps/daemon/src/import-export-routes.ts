@@ -537,6 +537,30 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
       if (height != null && (typeof height !== 'number' || !Number.isFinite(height) || height <= 0)) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'height must be a positive number');
       }
+      // Viewport-clipped capture: return the one viewport-sized band at this
+      // scroll offset instead of the whole page. Annotation capture needs it —
+      // the marks are composited back onto the result against the on-screen
+      // frame's rect, so only a viewport-matched image places them correctly.
+      const viewportScrollY = body?.viewportScrollY;
+      if (viewportScrollY != null) {
+        if (typeof viewportScrollY !== 'number' || !Number.isFinite(viewportScrollY) || viewportScrollY < 0) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'viewportScrollY must be a non-negative number');
+        }
+        if (format !== 'image') {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'viewportScrollY is only valid for image export');
+        }
+        // Without both, the "viewport" being clipped to is the renderer's default
+        // rather than the caller's — silently returning a band of the wrong size,
+        // which is exactly the mis-scaled composite this mode exists to prevent.
+        if (typeof width !== 'number' || typeof height !== 'number') {
+          return sendApiError(
+            res,
+            400,
+            'BAD_REQUEST',
+            'viewportScrollY requires both width and height',
+          );
+        }
+      }
       if (typeof desktopSlideRenderer !== 'function') {
         if (format === 'image' && typeof desktopArtifactExporter === 'function') {
           const input = await buildDesktopArtifactExportInput({
@@ -552,6 +576,7 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
             ...(format === 'image' && imageFormat === 'jpeg' ? { imageFormat: 'jpeg' } : {}),
             ...(typeof width === 'number' ? { width } : {}),
             ...(typeof height === 'number' ? { height } : {}),
+            ...(typeof viewportScrollY === 'number' ? { viewportScrollY } : {}),
           });
           let result;
           try {
@@ -622,6 +647,7 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
       if (typeof title === 'string') renderOptions.title = title;
       if (typeof width === 'number') renderOptions.width = width;
       if (typeof height === 'number') renderOptions.height = height;
+      if (typeof viewportScrollY === 'number') renderOptions.viewportScrollY = viewportScrollY;
       // Page-vs-deck is the caller's call, not a `.slide`-count guess: PPTX is
       // deck-only; image/PDF take the web's `effectiveDeck` signal so an ordinary
       // page that happens to contain `.slide` markup is still captured full-page.
@@ -639,7 +665,10 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
       if (format === 'image') {
         if (typeof index === 'number' && Number.isInteger(index) && index >= 0) {
           renderOptions.index = index;
-        } else {
+        } else if (viewportScrollY == null) {
+          // Not for a viewport-clipped capture: stitching every slide into one
+          // tall image is the opposite of "the band the user is looking at", and
+          // the renderer would have to ignore one instruction or the other.
           renderOptions.stitch = true;
         }
       }
