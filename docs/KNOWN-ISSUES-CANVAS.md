@@ -219,3 +219,43 @@ spec.
 static outbound links (`DesignBrowserPanel.tsx:459`). The absence is the specified behaviour,
 not a bug. Recorded in `docs/canvas-feature-inventory.json` as `not_applicable` so the
 coverage gate neither demands a fake test for it nor stays permanently red.
+
+---
+
+## CANVAS-9 — Two Playwright critical specs fail on `main`
+
+**Severity:** medium · **Area:** test infrastructure · **Status:** open, pre-existing
+
+Both fail at the untouched baseline `a8dd0663e`, so they are not introduced by the hardening
+branch. Verified by checking `a8dd0663e` out into a separate worktree and running the same
+specs there — 2 failed / 21 passed.
+
+| spec | failure |
+|---|---|
+| `e2e/ui/app-restoration.test.ts:76` — "workspace restores the last manually selected file tab after reload instead of jumping back to the generated artifact" | expected locator not visible; element not found |
+| `e2e/ui/app.test.ts:104` — "video-basic: Video project routes through media video creation with the expected default metadata" | expected metadata to contain `hyperframes-html`, received `openrouter/bytedance/seedance-2.0:1080p` |
+
+The second looks like model-routing drift: the spec pins a routing target the product no longer
+selects. Someone needs to decide which side is right — the spec or the routing table — before
+the assertion is simply updated to match current behaviour.
+
+**Why they are not fixed here.** Both sit outside the canvas surface this run was scoped to, and
+the video one needs a product decision rather than a test edit. Fixing them blind would mean
+changing an assertion until it passes, which is how a spec stops being evidence.
+
+---
+
+## CANVAS-10 — `workspace-keyboard-flows` Shift+Enter spec is load-flaky
+
+**Severity:** low · **Area:** test infrastructure · **Status:** open
+
+`e2e/ui/workspace-keyboard-flows.test.ts` — "Shift+Enter inserts a newline" failed inside the
+full critical run with `TimeoutError: page.waitForResponse: Timeout 5000ms exceeded`, then
+passed in isolation in 30.7s.
+
+Same shape as the `resolveDaemonUrl` flake fixed on this branch: a 5s wall-clock budget that
+holds on an idle machine and not on a loaded one. It is a timing budget, not a behaviour bug.
+
+**Why it is not fixed here.** Raising the budget is a one-line change, but it is worth first
+checking whether other Playwright specs in the suite share the same 5s `waitForResponse` pattern
+so they can all be lifted together rather than one flake at a time.
