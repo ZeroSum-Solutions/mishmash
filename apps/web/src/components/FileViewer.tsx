@@ -295,11 +295,11 @@ const POWERED_PREVIEW_ALLOW =
 const PREVIEW_BRIDGE_QUERY = 'odPreviewBridge=scroll&odPreviewBridge=selection&odPreviewBridge=snapshot';
 const HTML_PASSIVE_PREVIEW_FULL_TEXT_LIMIT = 2 * 1024 * 1024;
 const HTML_ROUTING_TEXT_PREVIEW_LIMIT = 96 * 1024;
-const HTML_PREVIEW_ASSET_PREFLIGHT_LIMIT = 32;
+export const HTML_PREVIEW_ASSET_PREFLIGHT_LIMIT = 32;
 type HtmlSourceLoadMode = 'full' | 'routing-preview';
 type PreviewAssetWarning = { filePath: string };
 
-function previewTextNeedsFullSourceForSafeInline(source: string | null): boolean {
+export function previewTextNeedsFullSourceForSafeInline(source: string | null): boolean {
   if (!source) return false;
   return (
     htmlNeedsSandboxShim(source) ||
@@ -309,7 +309,7 @@ function previewTextNeedsFullSourceForSafeInline(source: string | null): boolean
   );
 }
 
-function isBlockedPreviewAssetResponse(body: unknown): boolean {
+export function isBlockedPreviewAssetResponse(body: unknown): boolean {
   if (typeof body === 'string') {
     return /path escapes project dir/i.test(body);
   }

@@ -15,7 +15,9 @@
         "apps/web/src/components/FileViewer.tsx",
         "apps/web/src/components/file-viewer-render-mode.ts"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/FileViewer.html-preview-canvas.test.tsx"
+      ]
     },
     {
       "id": "url-vs-srcdoc-render-mode-decision",
@@ -570,7 +572,9 @@
       "source_files": [
         "apps/web/src/components/FileViewer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/FileViewer.present-mode.test.tsx"
+      ]
     },
     {
       "id": "deck-slide-presentation-controls",
@@ -717,7 +721,9 @@
       "source_files": [
         "apps/web/src/components/FileViewer.tsx"
       ],
-      "proof_tests": []
+      "proof_tests": [
+        "apps/web/tests/components/LiveArtifactViewer.data-refresh.test.tsx"
+      ]
     },
     {
       "id": "media-viewers",
