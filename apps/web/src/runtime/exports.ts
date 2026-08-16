@@ -1003,6 +1003,21 @@ export function planDeckImageCapture(opts: {
   deck: boolean;
   wholeDeck: boolean;
   trackedActive: number | null;
+  /**
+   * Set when no visible-host snapshot can serve this capture (no desktop
+   * compositor) AND the caller composites nothing onto the result, so a
+   * full-page off-screen render is an acceptable substitute for a viewport one.
+   *
+   * `useOffscreen: false` below means "use the desktop compositor", which
+   * `captureHostRegionSnapshot` refuses without a host bridge — and this fork
+   * ships no Electron shell, so in a browser that branch degrades to the
+   * in-iframe SVG-foreignObject bridge, which answers `snapshot image failed` /
+   * `empty-render` on real artifacts. Copy screenshot therefore opts in;
+   * annotation capture must not, because its marks are re-painted onto the
+   * snapshot against the preview frame's rect and a full-page image would land
+   * them on the wrong pixels.
+   */
+  fullPageFallback?: boolean;
 }): { useOffscreen: boolean; index: number | undefined } {
   // Export as image: the whole page / whole deck, off-screen and
   // viewport-independent.
@@ -1014,7 +1029,15 @@ export function planDeckImageCapture(opts: {
   // current-slide uses the off-screen renderer at the active slide ONLY when the
   // viewer tracks it; a runtime-managed deck with no tracked active slide also
   // falls back to the visible snapshot (we can't tell which slide it's on).
-  if (!opts.deck || opts.trackedActive === null) return { useOffscreen: false, index: undefined };
+  if (!opts.deck || opts.trackedActive === null) {
+    // Ordinary page with no compositor behind the fallback: a full-page render
+    // is a degraded answer, but the alternative is no capture at all. An
+    // untracked runtime deck is deliberately excluded — off-screen with no
+    // index stitches EVERY slide, which is a wrong answer to "capture the
+    // current slide" rather than a degraded one.
+    if (opts.fullPageFallback && !opts.deck) return { useOffscreen: true, index: undefined };
+    return { useOffscreen: false, index: undefined };
+  }
   return { useOffscreen: true, index: opts.trackedActive };
 }
 

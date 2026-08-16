@@ -10639,7 +10639,19 @@ function HtmlViewer({
     setDeployMenuOpen((v) => !v);
   };
   const captureExportImageSnapshot = useCallback(async (
-    options?: { wholeDeck?: boolean; context?: HtmlVersionExportContext | null },
+    options?: {
+      wholeDeck?: boolean;
+      context?: HtmlVersionExportContext | null;
+      /**
+       * Set by callers that composite NOTHING onto the returned snapshot, which
+       * is what makes the daemon's off-screen render substitutable for a
+       * viewport-matched one. Copy screenshot and Export as image qualify;
+       * annotation capture does not — PreviewDrawOverlay re-paints its marks
+       * onto the result scaled against the preview frame's rect, so handing it
+       * an off-screen render would land them on the wrong pixels.
+       */
+      allowOffscreenRender?: boolean;
+    },
   ) => {
     const exportContext = options?.context ?? null;
     const imageDeckSignal = deckExportSignalForContext(exportContext);
@@ -10651,7 +10663,7 @@ function HtmlViewer({
     // in the browser screenshot flow (DesignBrowserPanel).
     await waitForAnimationFrame();
     await waitForAnimationFrame();
-    // Prefer the daemon's off-screen render (desktop only): isolated from the
+    // Prefer the daemon's off-screen render: isolated from the
     // preview pane and, rendering the artifact alone in a hidden window, it can
     // never capture Open Design's own UI. Page exports use the selected preview
     // preset; desktop pages and decks retain the renderer defaults. `wholeDeck`
@@ -10660,7 +10672,21 @@ function HtmlViewer({
     // reports; otherwise (Copy screenshot, Mark/Draw capture) it grabs the
     // CURRENT slide, mirroring what's on screen. An ordinary page is its
     // full-page capture either way.
-    if (isOpenDesignHostAvailable() && projectId && file.name) {
+    // `isOpenDesignHostAvailable()` alone used to gate this, and it is the
+    // wrong question: it asks whether the CURRENT BROWSER is the Electron
+    // shell, while the renderer it guards lives in the daemon (Playwright
+    // Chromium, reached over plain HTTP) and answers any browser. This fork
+    // ships no Electron shell, so that gate was permanently false in the web
+    // Studio and every capture fell through to the foreignObject bridge, which
+    // fails on real artifacts.
+    //
+    // It stays as one disjunct so a desktop host keeps its exact prior
+    // behaviour for every caller, and `allowOffscreenRender` adds the browser
+    // path only for callers that composite nothing onto the result. A runtime
+    // that genuinely has no renderer answers 501, which
+    // `exportProjectImageDataUrl` reports as `unavailable`, and we fall through
+    // below exactly as before.
+    if ((isOpenDesignHostAvailable() || options?.allowOffscreenRender === true) && projectId && file.name) {
       // Deck-vs-page uses the same signal as PDF export — broader than the viewer's nav
       // signal — so runtime-managed decks (`<deck-stage>` / `data-screen-label`,
       // no literal `.slide`) export as a deck instead of a single page-mode shot
@@ -10674,7 +10700,15 @@ function HtmlViewer({
       // visible host snapshot (= the slide on screen). Whole-deck / pages /
       // tracked `.slide` decks still render off-screen.
       const trackedActive = slideState?.active ?? htmlPreviewSlideState.get(previewStateKey)?.active ?? null;
-      const plan = planDeckImageCapture({ deck: imageDeckSignal, wholeDeck, trackedActive });
+      const plan = planDeckImageCapture({
+        deck: imageDeckSignal,
+        wholeDeck,
+        trackedActive,
+        // Only for an opted-in caller AND only when there is no compositor to
+        // produce the viewport capture the plan would otherwise ask for. With a
+        // host present this stays false, so desktop behaviour is untouched.
+        fullPageFallback: options?.allowOffscreenRender === true && !isOpenDesignHostAvailable(),
+      });
       if (plan.useOffscreen) {
         const exportViewport = !imageDeckSignal && previewViewport !== 'desktop'
           ? PREVIEW_VIEWPORT_PRESETS.find((preset) => preset.id === previewViewport)
@@ -10761,7 +10795,7 @@ function HtmlViewer({
     screenshotInFlightRef.current = true;
     setExportToast({ message: t('fileViewer.screenshotCopying'), tone: 'loading' });
     try {
-      const snap = await captureExportImageSnapshot();
+      const snap = await captureExportImageSnapshot({ allowOffscreenRender: true });
       if (!snap) {
         setExportToast({ message: t('fileViewer.screenshotPreviewLoading'), tone: 'error' });
         return;
@@ -10886,6 +10920,12 @@ function HtmlViewer({
         // Export as image of a deck = the whole deck stitched into one long
         // image (every slide), matching the count the viewer reports. Copy
         // screenshot keeps the current slide.
+        // Deliberately NOT `allowOffscreenRender` — see CANVAS-17. Export as
+        // image has the same defect Copy screenshot had, but flipping it here
+        // reorders the precedence that eight specs in
+        // `file-viewer-image-export.test.tsx` pin (host absent → snapshot
+        // bridge), and rewriting those belongs with its own red spec rather
+        // than riding along on the screenshot fix.
         const snap = await captureExportImageSnapshot({ wholeDeck: true, context });
         if (!snap) {
           setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });

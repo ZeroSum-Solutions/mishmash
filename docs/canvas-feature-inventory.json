@@ -456,14 +456,17 @@
       "name": "Screenshot copy",
       "user_action": "Click the screenshot icon while in preview mode",
       "expected_result": "Captures the current preview frame and copies it to clipboard as an image",
-      "risk": "low",
+      "risk": "high",
       "verifiable_by": "manual-browser",
       "source_files": [
-        "apps/web/src/components/FileViewer.tsx"
+        "apps/web/src/components/FileViewer.tsx",
+        "apps/web/src/runtime/exports.ts"
       ],
       "proof_tests": [
-        "apps/web/tests/components/file-viewer-screenshot-tooltip.test.tsx"
-      ]
+        "apps/web/tests/components/file-viewer-screenshot-tooltip.test.tsx",
+        "apps/web/tests/runtime/exports.test.ts"
+      ],
+      "coverage_note": "The tooltip spec was this feature's ONLY proof until 2026-08-16, which is how the run that catalogued it recorded the feature as covered while capture was broken end-to-end in every browser: the daemon renderer was gated behind an Electron-only predicate and the fallback bridge failed. Naming a test is not the same as proving the behaviour. exports.test.ts now pins the capture-tier decision itself; the clipboard hand-off after it is still browser-gated (CANVAS-15)."
     },
     {
       "id": "comment-side-panel",

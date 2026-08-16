@@ -69,6 +69,34 @@ functions and all twelve disqualifier branches are covered by
 > checked but no caller ever sets them — see CANVAS-3 in `docs/KNOWN-ISSUES-CANVAS.md`. The
 > pure function is correct; nothing feeds it.
 
+## Capturing pixels has three tiers, and only one of them works here
+
+`captureExportImageSnapshot` in `FileViewer.tsx` walks them in order:
+
+| tier | mechanism | available here? |
+|---|---|---|
+| **Off-screen render** | `POST /api/projects/:id/export/image` → daemon → `desktop-renderer` sidecar → Playwright Chromium | **yes** — plain HTTP, any browser |
+| **Host compositor** | Electron `webContents.capturePage` of the visible preview region | **no** — this fork ships no Electron shell |
+| **In-iframe bridge** | SVG `<foreignObject>` rasterised to a canvas inside the artifact | present, but fails on real artifacts |
+
+The middle tier is the one the original design leaned on for anything needing *viewport*
+pixels, and it is gone. The bottom tier is a last resort that Chromium frequently refuses to
+paint; it answers `snapshot image failed` or `empty-render` and the code treats a uniform canvas
+as a failure rather than shipping a blank frame.
+
+So: **the off-screen renderer is the only capture path that actually works in the web Studio.**
+It is not gated on `isOpenDesignHostAvailable()` — that predicate asks whether the current
+*browser* is Electron, which has nothing to do with whether the *daemon* can render. A runtime
+genuinely without a renderer answers 501, which the client reports as `unavailable` so the older
+fallbacks still apply.
+
+The catch is that it renders `fullPage: true` — the whole document, never the visible viewport.
+That is fine for anything that just hands you an image (Copy screenshot, Export as image) and
+wrong for anything that composites onto it: `PreviewDrawOverlay` scales the user's marks against
+the preview frame's rect, so a full-page image would place them on the wrong pixels. Callers
+therefore opt in explicitly with `allowOffscreenRender`, and annotation capture does not — see
+CANVAS-13.
+
 ## What the canvas can do
 
 81 capabilities are catalogued in `docs/canvas-feature-inventory.json`, grouped as below.

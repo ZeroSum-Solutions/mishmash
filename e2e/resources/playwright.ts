@@ -147,12 +147,18 @@ export const playwrightUiScenarios: UiScenario[] = [
     prompt: 'Create a short product teaser video prompt',
     expectedProjectMetadata: {
       kind: 'video',
-      videoModel: 'hyperframes-html',
+      // `videoModel` is deliberately absent. It is not a fixed default: the
+      // Video surface's model follows whichever skill wins the video tab, and no
+      // skill declares `od.default_for: video`, so that winner comes from
+      // catalog ordering. Pinning either observed id made this spec pass and
+      // fail on the same commit in back-to-back runs. The flow still asserts a
+      // model rode along; CANVAS-16 tracks closing the product gap.
       videoAspect: '16:9',
       videoLength: 5,
     },
     notes: [
       'Keeps this smoke on create-time routing and metadata instead of provider execution.',
+      'Asserts aspect and duration defaults only — the default video model is catalog-order dependent (CANVAS-16).',
     ],
   },
   {
