@@ -919,6 +919,11 @@ const SUBCOMMAND_MAP = {
   usage: runUsage,
   cover: runCover,
   route: runRoute,
+  // `runShell` shipped complete but unregistered, so `od shell` reported an
+  // unknown subcommand while the handler sat unreferenced. That left the
+  // in-app terminal reachable from the web UI only, which the "Capability
+  // exposure" rule in AGENTS.md treats as a regression.
+  shell: runShell,
 };
 
 const EXPORT_STRING_FLAGS = new Set([
