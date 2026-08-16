@@ -10,9 +10,9 @@
 // the route resolves the real path BEFORE running containment checks.
 
 import type http from 'node:http';
-import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
-import os, { tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -109,18 +109,45 @@ describe('POST /api/import/folder — validation', () => {
     expect(await errorMessage(resp)).toMatch(/system or credential directory/i);
   });
 
-  it('rejects ~/.ssh as a project root with 400', async () => {
-    const sshDir = path.join(os.homedir(), '.ssh');
-    const resp = await importFolder({ baseDir: sshDir });
-    // Only assert the block when the credential dir actually exists on this
-    // machine — a fresh CI box may not have one, and creating it here would
-    // reach outside the sandboxed temp tree this test suite otherwise stays
-    // inside.
-    if (resp.status === 400) {
-      expect(await errorMessage(resp)).toMatch(/system or credential directory/i);
-    } else {
-      expect(resp.status).toBe(400); // fails loudly with the real status for visibility
+  // Both credential-directory cases below run against a HOME this file creates,
+  // not the machine's own. An earlier version read the real ~/.ssh and tried to
+  // skip when it was absent, which was wrong twice over: it gated on
+  // `resp.status === 400`, but "folder not found" is ALSO a 400, so on a runner
+  // without ~/.ssh the skip never triggered and the assertion ran against the
+  // wrong rejection reason; and the symlink case gated on symlinkSync throwing,
+  // which it does not — a dangling symlink is perfectly legal, so that guard
+  // never fired either. Both passed on a developer machine (~/.ssh exists) and
+  // failed on CI (it does not).
+  //
+  // `blockedProjectRootReason` derives the credential dirs from
+  // `realpath(os.homedir())` on every request, and Node's os.homedir() returns
+  // $HOME on POSIX, so pointing HOME at a temp tree makes the check operate on
+  // a directory this test owns. That removes the machine dependency entirely:
+  // the block is exercised everywhere instead of silently skipped wherever the
+  // real ~/.ssh happens to be missing.
+  async function withFakeHomeCredentialDir(
+    run: (credentialDir: string) => Promise<void>,
+  ): Promise<void> {
+    const home = makeFolder();
+    const credentialDir = path.join(home, '.ssh');
+    mkdirSync(credentialDir);
+    const realHome = process.env.HOME;
+    process.env.HOME = home;
+    try {
+      await run(credentialDir);
+    } finally {
+      if (realHome === undefined) delete process.env.HOME;
+      else process.env.HOME = realHome;
     }
+  }
+
+  it('rejects a credential directory (~/.ssh) as a project root with 400', async () => {
+    if (process.platform === 'win32') return; // os.homedir() ignores $HOME on Windows
+    await withFakeHomeCredentialDir(async (credentialDir) => {
+      const resp = await importFolder({ baseDir: credentialDir });
+      expect(resp.status).toBe(400);
+      expect(await errorMessage(resp)).toMatch(/system or credential directory/i);
+    });
   });
 
   // Security-relevant: a symlink inside an otherwise-importable folder must
@@ -129,18 +156,14 @@ describe('POST /api/import/folder — validation', () => {
   // symlink pointing at ~/.ssh must resolve to ~/.ssh's real path and be
   // rejected exactly like importing ~/.ssh directly would be.
   it('rejects a symlink that resolves into a credential directory (path-traversal via symlink)', async () => {
-    const sshDir = path.join(os.homedir(), '.ssh');
-    const folder = makeFolder();
-    const link = path.join(folder, 'sneaky-link');
-    try {
-      symlinkSync(sshDir, link, 'dir');
-    } catch {
-      // .ssh doesn't exist or symlinking isn't permitted on this machine —
-      // nothing to prove here.
-      return;
-    }
-    const resp = await importFolder({ baseDir: link });
-    expect(resp.status).toBe(400);
-    expect(await errorMessage(resp)).toMatch(/system or credential directory/i);
+    if (process.platform === 'win32') return;
+    await withFakeHomeCredentialDir(async (credentialDir) => {
+      const folder = makeFolder();
+      const link = path.join(folder, 'sneaky-link');
+      symlinkSync(credentialDir, link, 'dir');
+      const resp = await importFolder({ baseDir: link });
+      expect(resp.status).toBe(400);
+      expect(await errorMessage(resp)).toMatch(/system or credential directory/i);
+    });
   });
 });
