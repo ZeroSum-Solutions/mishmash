@@ -17,7 +17,7 @@ vi.mock('../../src/analytics/events', async (importOriginal) => {
 import { ChatComposer, type ChatComposerHandle } from '../../src/components/ChatComposer';
 import { I18nProvider } from '../../src/i18n';
 import type { Locale } from '../../src/i18n/types';
-import type { AppliedPluginSnapshot, ProjectMetadata } from '@open-design/contracts';
+import type { AppliedPluginSnapshot, ConnectorDetail, ProjectMetadata } from '@open-design/contracts';
 import { composerText, pressEnter, typeAndSettle } from '../helpers/lexical-composer';
 
 const COMMUNITY_PLUGIN = {
@@ -94,6 +94,28 @@ const MCP_SERVER = {
   command: 'slack-mcp',
 };
 
+// connector-mention-context fixtures. ChatComposer only ever stages a
+// connector it fetched with status 'connected' (see the composerEngaged
+// mount effect filtering `fetchConnectorCatalogSnapshot()` rows) — a
+// connector sitting at any other status is invisible to the @ picker
+// entirely, which is the "invalid input" case this file proves below.
+const CONNECTOR_FIGMA: ConnectorDetail = {
+  id: 'figma',
+  name: 'Figma',
+  provider: 'figma',
+  category: 'design',
+  status: 'connected',
+  tools: [],
+};
+const CONNECTOR_SLACK_PENDING: ConnectorDetail = {
+  id: 'slack-connector',
+  name: 'Slack Connector',
+  provider: 'slack',
+  category: 'productivity',
+  status: 'available',
+  tools: [],
+};
+
 const APPLY_RESULT = {
   ok: true,
   query: 'Run plugin.',
@@ -128,6 +150,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let plugins = [COMMUNITY_PLUGIN, USER_PLUGIN];
 let skills = [SKILL];
 let servers = [MCP_SERVER];
+let connectors: ConnectorDetail[] = [];
 let openFolderPaths: string[];
 let deferNextProjectPatch = false;
 let rejectNextProjectPatch = false;
@@ -201,6 +224,7 @@ beforeEach(() => {
   plugins = [COMMUNITY_PLUGIN, USER_PLUGIN];
   skills = [SKILL];
   servers = [MCP_SERVER];
+  connectors = [];
   openFolderPaths = ['/Users/me/reference-dir'];
   deferNextProjectPatch = false;
   rejectNextProjectPatch = false;
@@ -228,6 +252,18 @@ beforeEach(() => {
     }
     if (url === '/api/skills') {
       return new Response(JSON.stringify({ skills }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (url === '/api/connectors') {
+      return new Response(JSON.stringify({ connectors }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (url === '/api/connectors/status') {
+      return new Response(JSON.stringify({ statuses: {} }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
@@ -989,6 +1025,63 @@ describe('ChatComposer context pickers', () => {
     fireEvent.click(screen.getByLabelText('Remove Slack MCP'));
     await waitFor(() => expect(composerText().trim()).toBe(''));
     expect(screen.queryByTestId('staged-contexts')).toBeNull();
+  });
+
+  // connector-mention-context: insertConnectorMention (ChatComposer.tsx)
+  // stages the picked connector, inserts the inline @-token, and
+  // currentRunContextMeta() serializes stagedConnectors into
+  // meta.context.connectorIds on send.
+  it('selects a connector from @ search, stages it, and sends connectorIds context', async () => {
+    connectors = [CONNECTOR_FIGMA];
+    const onSend = vi.fn();
+    renderComposer({ onSend });
+    await flushMounts();
+
+    await typeAndSettle('@fig');
+
+    await waitFor(() => expect(screen.getByText('Figma')).toBeTruthy());
+    fireEvent.click(screen.getByText('Figma'));
+
+    await waitFor(() => expect(composerText()).toBe('@Figma '));
+    const pill = screen
+      .getByTestId('chat-composer-input')
+      .querySelector('.composer-inline-mention');
+    expect(pill?.textContent).toBe('@Figma');
+    expect(pill?.getAttribute('data-mention-kind')).toBe('connector');
+    expect(screen.getByTestId('staged-contexts').textContent).toContain('@Figma');
+
+    fireEvent.click(screen.getByTestId('chat-send'));
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(onSend.mock.calls[0]?.[3]?.context?.connectorIds).toEqual(['figma']);
+
+    // Removing the staged chip clears both the inline token and the pick.
+    await waitFor(() => expect(screen.queryByTestId('staged-contexts')).toBeNull());
+  });
+
+  // Invalid-input side of the same capability: a connector that exists in
+  // the catalog but is not `status: 'connected'` never reaches the @ picker
+  // at all (the composerEngaged mount effect filters it out before it ever
+  // becomes selectable) — there is no error message because there is
+  // nothing to reject; it is simply never offered.
+  it('excludes a not-yet-connected connector from the @ picker entirely', async () => {
+    connectors = [CONNECTOR_SLACK_PENDING];
+    renderComposer();
+    await flushMounts();
+
+    await typeAndSettle('@slack');
+
+    await waitFor(() => expect(screen.getByTestId('mention-popover')).toBeTruthy());
+    expect(screen.queryByText('Slack Connector')).toBeNull();
+    // The "Connectors" tab itself still renders (it is always present, even
+    // with zero connectors — see 'opens the @ panel even when every source
+    // is empty' above); what must be absent is the *section*, which the
+    // popover only renders when `connectors.length > 0`.
+    const sectionLabels = Array.from(
+      screen.getByTestId('mention-popover').querySelectorAll('.mention-section-label'),
+      (node) => node.textContent,
+    );
+    expect(sectionLabels).not.toContain('Connectors');
   });
 
   it('applies a skill from @ search and reports the active project skill', async () => {

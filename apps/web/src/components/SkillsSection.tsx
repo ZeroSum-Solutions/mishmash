@@ -358,7 +358,6 @@ export function SkillsSection({ cfg, setCfg, onSkillsRefresh, onSkillsChanged }:
     setDraftSaving(false);
     if ('error' in result) {
       setDraftError(result.error.message);
-      return;
     }
     const updated = result.skill;
     await refresh();

@@ -2785,6 +2785,7 @@ export const en: Dict = {
   'fileViewer.jsxModuleCta': 'Open the page that renders it:',
   'fileViewer.comment': 'Comment',
   'fileViewer.edit': 'Edit',
+  'fileViewer.inspect': 'Inspect',
   'fileViewer.draw': 'Draw',
   'fileViewer.mark': 'Mark',
   'fileViewer.markTool': 'Mark tool',

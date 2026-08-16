@@ -222,8 +222,13 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
 
   // POST /api/skills/import — write a new SKILL.md under USER_SKILLS_DIR
   // from a UI-supplied body. The next /api/skills request surfaces it
-  // automatically because listSkills walks USER_SKILLS_DIR first.
+  // automatically because listSkills walks USER_SKILLS_DIR first. Gated by
+  // requireLocalOrigin like every other mutation route in this file (skills
+  // install/delete, design-system install/import/delete) — this route was
+  // missing that check even though it writes to disk exactly like its
+  // siblings.
   app.post('/api/skills/import', async (req, res) => {
+    if (!requireLocalOrigin(req, res)) return;
     try {
       const result = await importUserSkill(USER_SKILLS_DIR, req.body || {});
       const skills = await listAllSkills();
@@ -245,7 +250,8 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       });
     } catch (err: any) {
       if (err instanceof SkillImportError) {
-        const status = err.code === 'NOT_FOUND' ? 404 : err.code === 'BAD_REQUEST' ? 400 : 500;
+        const status =
+          err.code === 'NOT_FOUND' ? 404 : err.code === 'BAD_REQUEST' ? 400 : err.code === 'CONFLICT' ? 409 : 500;
         return sendApiError(res, status, err.code, err.message);
       }
       sendApiError(res, 500, 'INTERNAL_ERROR', String(err));
