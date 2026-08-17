@@ -71,13 +71,108 @@ describe('POST /api/projects — catalogue template start', () => {
       project: { skillId: string; metadata: { kind: string; entryFile?: string } };
     };
     expect(body.project.skillId).toBe(CATALOGUE_TEMPLATE_SKILL_ID);
-    expect(body.project.metadata.entryFile).toBe('template.html');
+    // Was 'template.html' when the copy step flattened assets/ into the project
+    // root. The copy now preserves the catalogue entry's directory shape, because
+    // flattening is what made `example.html`'s `./assets/...` references
+    // unresolvable and blocked the fix for the other 342 entries. Same artifact,
+    // now at the path it actually occupies.
+    expect(body.project.metadata.entryFile).toBe('assets/template.html');
 
     const filesResp = await fetch(`${baseUrl}/api/projects/${encodeURIComponent(id)}/files`);
     expect(filesResp.status).toBe(200);
     const filesBody = (await filesResp.json()) as { files: Array<{ name: string }> };
     const names = filesBody.files.map((f) => f.name);
-    expect(names).toContain('template.html');
+    expect(names).toContain('assets/template.html');
+  });
+
+  // The spec above passes because `trading-analysis-dashboard-template` keeps its
+  // HTML *inside* assets/ (assets/template.html) — one of only 10 templates in the
+  // 352-entry catalogue shaped that way. The other 342 keep `example.html` at the
+  // template root, beside assets/, and the copy step only ever reads assets/. So
+  // those projects were created with no HTML at all and the canvas opened empty:
+  // 242 got assets with no entry file, and 100 that ship no assets/ dir got a
+  // completely empty project. Measured 2026-08-17 against the on-disk catalogue.
+  //
+  // These two specs pin the dominant shape rather than the convenient one.
+  const ROOT_EXAMPLE_TEMPLATE_SKILL_ID = 'aethera-cinematic-hero'; // kind: vite, example.html + assets/
+  const NO_ASSETS_TEMPLATE_SKILL_ID = 'animated-text-rotate-hero'; // example.html only, no assets/ dir
+
+  it('copies a root-level example.html template and sets entryFile', async () => {
+    const id = uniqueId('p');
+    const resp = await createProject({
+      id,
+      name: 'Aethera from catalogue',
+      skillId: ROOT_EXAMPLE_TEMPLATE_SKILL_ID,
+      designSystemId: null,
+      metadata: { kind: 'template', animations: false },
+    });
+    expect(resp.status).toBe(200);
+    projectsToClean.push(id);
+    const body = (await resp.json()) as {
+      project: { metadata: { entryFile?: string } };
+    };
+    // Without an entry file the canvas has nothing to open.
+    expect(body.project.metadata.entryFile).toBeDefined();
+
+    const filesResp = await fetch(`${baseUrl}/api/projects/${encodeURIComponent(id)}/files`);
+    const filesBody = (await filesResp.json()) as { files: Array<{ name: string }> };
+    const names = filesBody.files.map((f) => f.name);
+    expect(names.some((name) => /\.html?$/i.test(name))).toBe(true);
+
+    // The bundle the page mounts into must travel with it, at the path the
+    // HTML actually references — a vite template renders <div id="root"></div>
+    // and nothing else, so a missing or moved bundle is a blank white page.
+    const entry = body.project.metadata.entryFile as string;
+    const rawResp = await fetch(
+      `${baseUrl}/api/projects/${encodeURIComponent(id)}/raw/${entry}`,
+    );
+    expect(rawResp.status).toBe(200);
+    const html = await rawResp.text();
+    const scriptSrc = /<script[^>]*\ssrc="([^"]+)"/i.exec(html)?.[1];
+    expect(scriptSrc).toBeDefined();
+    const assetResp = await fetch(
+      `${baseUrl}/api/projects/${encodeURIComponent(id)}/raw/${(scriptSrc as string).replace(/^\.\//, '')}`,
+    );
+    expect(assetResp.status).toBe(200);
+  });
+
+  it('copies a template that ships no assets/ directory at all', async () => {
+    const id = uniqueId('p');
+    const resp = await createProject({
+      id,
+      name: 'Animated text from catalogue',
+      skillId: NO_ASSETS_TEMPLATE_SKILL_ID,
+      designSystemId: null,
+      metadata: { kind: 'template', animations: false },
+    });
+    expect(resp.status).toBe(200);
+    projectsToClean.push(id);
+    const body = (await resp.json()) as { project: { metadata: { entryFile?: string } } };
+    expect(body.project.metadata.entryFile).toBeDefined();
+
+    const filesResp = await fetch(`${baseUrl}/api/projects/${encodeURIComponent(id)}/files`);
+    const filesBody = (await filesResp.json()) as { files: Array<{ name: string }> };
+    expect(filesBody.files.length).toBeGreaterThan(0);
+  });
+
+  it('does not copy authoring metadata into the project', async () => {
+    const id = uniqueId('p');
+    const resp = await createProject({
+      id,
+      name: 'Aethera metadata check',
+      skillId: ROOT_EXAMPLE_TEMPLATE_SKILL_ID,
+      designSystemId: null,
+      metadata: { kind: 'template', animations: false },
+    });
+    expect(resp.status).toBe(200);
+    projectsToClean.push(id);
+
+    const filesResp = await fetch(`${baseUrl}/api/projects/${encodeURIComponent(id)}/files`);
+    const filesBody = (await filesResp.json()) as { files: Array<{ name: string }> };
+    const names = filesBody.files.map((f) => f.name);
+    // SKILL.md is agent instruction, not project content, and it is large.
+    expect(names).not.toContain('SKILL.md');
+    expect(names).not.toContain('template.json');
   });
 
   it('does not affect the unrelated saved-template flow (metadata.templateId set, skillId null)', async () => {

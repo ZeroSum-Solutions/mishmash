@@ -71,6 +71,35 @@ import { markAllReferencedProjectAssetsBroken, materializeProjectLibraryAssets }
 import { designLibraryRoot } from '../../design-library/root.js';
 import type { createFilesystemWriteGateway } from '../../filesystem/write-gateway.js';
 
+/**
+ * Authoring metadata that describes a catalogue entry to the agent but is not
+ * part of the artifact a person opens. `SKILL.md` in particular runs to tens of
+ * kilobytes of instruction; copying it into every project started from a
+ * template would put agent prompt text in the user's file tree.
+ */
+const TEMPLATE_AUTHORING_FILE_NAMES = ['SKILL.md', 'template.json', 'LICENSE'];
+
+const TEMPLATE_START_EXCLUDED_FILE_NAMES = new Set([
+  ...START_PROJECT_EXCLUDED_FILE_NAMES,
+  ...TEMPLATE_AUTHORING_FILE_NAMES,
+]);
+
+/**
+ * Entry file for a project started from the design-templates catalogue.
+ *
+ * Prefers `assets/template.html` when present. Ten catalogue entries pair that
+ * authored artifact with a root `example.html` that is only a gallery preview
+ * wrapper — a title bar around an `<iframe src="./assets/template.html">`. The
+ * generic heuristic takes root-level HTML first and would hand the user the
+ * wrapper to edit instead of the template. Everywhere else there is no
+ * `assets/template.html` and this falls straight through.
+ */
+async function detectTemplateEntryFile(projectRoot: string): Promise<string | undefined> {
+  const authored = path.join(projectRoot, 'assets', 'template.html');
+  if (existsSync(authored)) return 'assets/template.html';
+  return detectEntryFile(projectRoot);
+}
+
 export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {
   // Optional (not part of `ServerContext`, unlike RegisterLibraryRoutesDeps's
   // required `filesystem` — route-context-contract.ts asserts `ServerContext`
@@ -1896,30 +1925,41 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         try {
           const skillDir = await resolveSkillDir(normalizedSkillId);
           if (typeof skillDir === 'string') {
-            const assetsDir: string = path.join(skillDir, 'assets');
-            if (existsSync(assetsDir)) {
-              const projectRoot = await ensureProject(PROJECTS_DIR, id, projectMetadata);
-              const state: CopyDirectoryState = {
-                copiedFiles: 0,
-                copiedBytes: 0,
-                skippedFiles: 0,
-                warnings: [],
-              };
-              await copyDirectoryContents(assetsDir, projectRoot, state, {
-                excludedDirNames: START_PROJECT_EXCLUDED_DIR_NAMES,
-                excludedFileNames: START_PROJECT_EXCLUDED_FILE_NAMES,
-                limits: { maxFiles: startProjectMaxFiles(), maxBytes: startProjectMaxBytes() },
-                onIncomplete: (reason, relPath) => {
-                  throw new Error(`template asset copy incomplete: ${reason} (${relPath})`);
-                },
+            const projectRoot = await ensureProject(PROJECTS_DIR, id, projectMetadata);
+            const state: CopyDirectoryState = {
+              copiedFiles: 0,
+              copiedBytes: 0,
+              skippedFiles: 0,
+              warnings: [],
+            };
+            // Copy the whole catalogue entry, preserving its directory shape.
+            //
+            // This used to copy only `<skill>/assets/*`, flattened into the
+            // project root. That worked for the 10 catalogue entries that keep
+            // their artifact inside assets/ (assets/template.html) and silently
+            // failed for the other 342, whose artifact is `example.html` beside
+            // assets/ — never copied, so detectEntryFile found nothing and the
+            // canvas opened empty. Of those, 100 ship no assets/ directory at
+            // all, so the old `existsSync(assetsDir)` guard skipped the copy
+            // entirely and produced a project with zero files.
+            //
+            // Preserving the shape rather than flattening also keeps every
+            // `./assets/...` reference in the copied HTML resolving to the same
+            // relative path it had on disk.
+            await copyDirectoryContents(skillDir, projectRoot, state, {
+              excludedDirNames: START_PROJECT_EXCLUDED_DIR_NAMES,
+              excludedFileNames: TEMPLATE_START_EXCLUDED_FILE_NAMES,
+              limits: { maxFiles: startProjectMaxFiles(), maxBytes: startProjectMaxBytes() },
+              onIncomplete: (reason, relPath) => {
+                throw new Error(`template asset copy incomplete: ${reason} (${relPath})`);
+              },
+            });
+            const entryFile = await detectTemplateEntryFile(projectRoot);
+            if (entryFile) {
+              const updated = updateProject(db, id, {
+                metadata: { ...projectMetadata, entryFile },
               });
-              const entryFile = await detectEntryFile(projectRoot);
-              if (entryFile) {
-                const updated = updateProject(db, id, {
-                  metadata: { ...projectMetadata, entryFile },
-                });
-                if (updated) project = updated;
-              }
+              if (updated) project = updated;
             }
           }
         } catch (err) {
