@@ -12,6 +12,7 @@
 // audit what runs at boot.
 
 import { installLongTaskObserver } from './long-task';
+import { installRequestHealthObserver } from './request-health';
 import { installResourceErrorObserver } from './resource-error';
 import { installBootTimingObserver } from './boot-timing';
 import { installVisibilityObserver } from './visibility';
@@ -26,6 +27,9 @@ export function installWebObservability(): () => void {
 
   const teardowns: Array<() => void> = [
     installLongTaskObserver(),
+    // First among the observers that touch `window.fetch`, so it wraps the
+    // native implementation rather than someone else's wrapper.
+    installRequestHealthObserver(),
     installResourceErrorObserver(),
     installBootTimingObserver(),
     installVisibilityObserver(),

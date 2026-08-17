@@ -175,6 +175,39 @@ Every user-facing capability must be reachable through both the web UI **and** t
 - The PR template's Surface area checklist must reflect *both* surfaces. If you ticked UI, tick CLI too — and vice-versa — or explain in the PR body why the missing surface is genuinely not applicable (e.g. an internal-only daemon health probe). "I'll do the CLI later" is not a valid reason.
 - Existing reference points: `od automation …` mirrors the Automations tab against `/api/routines`; `od plugin …`, `od ui …`, `od project …`, `od media …`, `od mcp …`, `od research …` follow the same shape. Copy that pattern for new capabilities.
 
+## Anomaly log
+
+The anomaly log is the local record of what the product got WRONG while it was
+being used — not analytics. Read it before hunting a reported problem by hand; it
+often already names the failure.
+
+- Why it exists: the observability probes in `apps/web/src/observability/` detect
+  UI stalls, white screens, failed sub-resources, dead preview iframes, and
+  stalled runs, but they report through `reportSafetyEvent` → PostHog, and
+  `apps/daemon/src/analytics.ts` is a **no-op without a build-time
+  `POSTHOG_KEY`**. Every detection was discarded during ordinary local use. The
+  log is the sink those probes needed.
+- Store: `apps/daemon/src/anomaly-log.ts`, an append-only JSONL file whose path
+  derives from the resolved data root per **Daemon data directory contract**
+  above. Size-capped with one retained previous generation; secrets are redacted
+  and oversized `detail` payloads bounded on write.
+- Record shape and kinds: `packages/contracts/src/api/anomalies.ts`. `AnomalyKind`
+  is a **closed union** — add a kind there deliberately rather than inventing a
+  string at a call site.
+- Surfaces: `POST/GET/DELETE /api/anomalies`
+  (`apps/daemon/src/routes/anomalies.ts`); CLI `od anomalies [--json] [--kind]
+  [--severity] [--since] [--limit] [--clear]`; UI via Settings → About → Export
+  diagnostics, which bundles the log.
+- Detectors: one Express observer in `routes/anomalies.ts` records the daemon's
+  own 5xx/408/429 and over-budget requests, and `apps/web/src/observability/
+  request-health.ts` wraps `fetch` to catch calls that failed, never connected,
+  or ran slow. `apps/web/src/observability/anomaly-report.ts` holds the
+  **allowlist** mapping existing safety events onto anomaly records.
+- What does NOT belong in it: normal-operation telemetry (boot timings,
+  visibility changes, a run recovering) and an ordinary 4xx. A log that fills
+  with healthy events cannot be skimmed for the unhealthy ones — that is the
+  property every new detector has to preserve.
+
 ## Git commit policy
 
 - Git commits must not include `Co-authored-by` trailers or any other co-author metadata.

@@ -256,6 +256,8 @@ const LIBRARY_ASSET_STRING_FLAGS = new Set([
 const LIBRARY_ASSET_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const DIAGNOSTICS_STRING_FLAGS = new Set(['daemon-url', 'output']);
 const DIAGNOSTICS_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+const ANOMALIES_STRING_FLAGS = new Set(['daemon-url', 'limit', 'kind', 'severity', 'since']);
+const ANOMALIES_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'clear']);
 const CONFIG_STRING_FLAGS = new Set(['daemon-url', 'value', 'value-json']);
 const CONFIG_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const AMR_STRING_FLAGS = new Set(['daemon-url']);
@@ -904,6 +906,7 @@ const SUBCOMMAND_MAP = {
   'design-systems': runDesignSystems,
   craft: runCraft,
   diagnostics: runDiagnostics,
+  anomalies: runAnomalies,
   export: runExport,
   status: runStatus,
   version: runVersion,
@@ -9257,9 +9260,10 @@ async function runDiagnostics(args) {
     console.log(`Usage:
   od diagnostics export [<path>] [--output <path>] [--json] [--daemon-url <url>]
 
-Bundles daemon/web/desktop logs, machine info, and recent crash reports
-into a zip. The bundle is the same one Settings → About → Export
-diagnostics produces.
+Bundles daemon/web/desktop logs, machine info, recent crash reports, and the
+anomaly log into a zip. The bundle is the same one Settings → About → Export
+diagnostics produces. Run "od anomalies --help" to read the anomaly log
+directly.
 
   <path>                 Where to write the zip. Defaults to
                          ./mishmash-diagnostics-<timestamp>.zip in the
@@ -9312,6 +9316,115 @@ diagnostics produces.
     return;
   }
   console.log(`Wrote diagnostics bundle to ${targetPath} (${buf.length} bytes).`);
+}
+
+/**
+ * `od anomalies` — the CLI half of the anomaly log.
+ *
+ * Same endpoint the web reports into, so an external agent driving `od` sees
+ * exactly what the app sees. `--json` prints the records verbatim for piping;
+ * the default view is grouped by kind, because the useful question after a
+ * testing session is "what kept happening", not "what happened at 14:03".
+ */
+async function runAnomalies(args) {
+  if (args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    console.log(`Usage:
+  od anomalies [--limit <n>] [--kind <kind>] [--severity <warn|error>]
+               [--since <iso>] [--clear] [--json] [--daemon-url <url>]
+
+Reads the local anomaly log: what the product got wrong or did inconsistently
+while it was being used. Newest first, grouped by kind.
+
+  --limit <n>            Show at most n records. Default 50.
+  --kind <kind>          Filter to one category (ui-lag, white-screen,
+                         resource-failed, preview-error, run-stuck,
+                         request-failed, request-unreachable, request-slow,
+                         unhandled-error).
+  --severity <level>     Filter to warn or error.
+  --since <iso>          Only records at or after an ISO timestamp.
+  --clear                Discard every record. Use to start a clean testing
+                         session; prints how many went away.
+  --json                 Print the raw records for piping into jq.
+  --daemon-url <url>     Override the daemon HTTP base URL.
+
+The same records ride along in "od diagnostics export" and in
+Settings → About → Export diagnostics.`);
+    process.exit(0);
+  }
+  const flags = parseFlags(args, {
+    string: ANOMALIES_STRING_FLAGS,
+    boolean: ANOMALIES_BOOLEAN_FLAGS,
+  });
+  const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
+
+  if (flags.clear) {
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/anomalies`, { method: 'DELETE' });
+    } catch (err) {
+      return exitWithStructuredError({
+        code:    'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return process.stdout.write(JSON.stringify(data) + '\n');
+    console.log(`Cleared ${data?.cleared ?? 0} anomal${data?.cleared === 1 ? 'y' : 'ies'}.`);
+    return;
+  }
+
+  const query = new URLSearchParams();
+  query.set('limit', typeof flags.limit === 'string' && flags.limit ? flags.limit : '50');
+  if (typeof flags.kind === 'string' && flags.kind) query.set('kind', flags.kind);
+  if (typeof flags.severity === 'string' && flags.severity) query.set('severity', flags.severity);
+  if (typeof flags.since === 'string' && flags.since) query.set('since', flags.since);
+
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/anomalies?${query.toString()}`);
+  } catch (err) {
+    return exitWithStructuredError({
+      code:    'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+    });
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const data = await resp.json();
+
+  if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+
+  const anomalies = Array.isArray(data?.anomalies) ? data.anomalies : [];
+  if (anomalies.length === 0) {
+    console.log('No anomalies recorded.');
+    console.log(`Log: ${data?.path ?? '(unknown)'}`);
+    return;
+  }
+
+  const byKind = new Map();
+  for (const record of anomalies) {
+    const list = byKind.get(record.kind) ?? [];
+    list.push(record);
+    byKind.set(record.kind, list);
+  }
+  // Errors before warnings, then most-frequent first: what to look at first.
+  const groups = [...byKind.entries()].sort((a, b) => {
+    const aError = a[1].some((r) => r.severity === 'error') ? 0 : 1;
+    const bError = b[1].some((r) => r.severity === 'error') ? 0 : 1;
+    return aError - bError || b[1].length - a[1].length;
+  });
+
+  console.log(`${anomalies.length} of ${data?.total ?? anomalies.length} anomalies (newest first)\n`);
+  for (const [kind, records] of groups) {
+    console.log(`${kind} — ${records.length}`);
+    for (const record of records) {
+      const when = String(record.at ?? '').replace('T', ' ').replace(/\.\d+Z$/, 'Z');
+      const mark = record.severity === 'error' ? '!' : '·';
+      console.log(`  ${mark} ${when}  [${record.source}] ${record.summary}`);
+    }
+    console.log('');
+  }
+  console.log(`Log: ${data?.path ?? '(unknown)'}`);
 }
 
 async function runVersion(args) {

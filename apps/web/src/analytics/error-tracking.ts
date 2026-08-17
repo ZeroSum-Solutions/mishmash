@@ -34,6 +34,7 @@
 // single source of truth for browser exception capture.
 
 import { scrubExceptionList, scrubFilePath } from './scrub';
+import { reportAnomalyForSafetyEvent } from '../observability/anomaly-report';
 
 interface ExceptionTrackingContext {
   apiKey: string;
@@ -209,6 +210,14 @@ export function reportSafetyEvent(
   eventName: string,
   properties: Record<string, unknown> = {},
 ): void {
+  // Second destination: the local anomaly log. PostHog is a no-op without a
+  // build-time key, which meant every probe's detection was buffered and
+  // dropped during ordinary local use. Only events the map recognises as
+  // FAILURES are forwarded — normal-operation measurements stay analytics-only,
+  // because a log full of healthy events cannot be skimmed for the unhealthy
+  // ones. Deliberately before `enqueue` so the local record survives even if
+  // the PostHog path throws.
+  reportAnomalyForSafetyEvent(eventName, properties);
   const merged: Record<string, unknown> = {
     ...properties,
     $current_url: scrubUrl(typeof window !== 'undefined' ? window.location.href : ''),
