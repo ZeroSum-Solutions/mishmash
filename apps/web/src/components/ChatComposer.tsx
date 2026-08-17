@@ -1864,6 +1864,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       function onAnnotation(e: Event) {
         const detail = (e as CustomEvent<AnnotationEventDetail>).detail;
         if (!detail) return;
+        // Synchronous, before any await: tells the dispatcher a composer exists
+        // and has taken this annotation, so "nobody was listening" never looks
+        // like "the acknowledgement is taking a while".
+        detail.claim?.();
         void (async () => {
           let acked = false;
           const ack = (result: { ok: boolean; message?: string }) => {
