@@ -319,6 +319,47 @@ describe('diagnostics export handler — run event logs', () => {
     }
   });
 
+  it('bundles the anomaly log, which is the UI-side read surface for it', async () => {
+    // `od diagnostics anomalies` is the CLI read surface; this bundle is how the
+    // same records reach someone who is not at a terminal (Settings → About →
+    // Export diagnostics). If this entry goes missing, the anomaly log becomes
+    // CLI-only.
+    const dataDir = join(tmpdir(), `od-diag-anomalies-${randomUUID()}`);
+    const anomalyPath = join(dataDir, 'anomalies', 'anomalies.jsonl');
+    const marker = 'POST /api/runs answered 500';
+    try {
+      await mkdir(dirname(anomalyPath), { recursive: true });
+      await writeFile(
+        anomalyPath,
+        `${JSON.stringify({
+          id: 'a1',
+          at: '2026-08-16T12:00:00.000Z',
+          kind: 'request-failed',
+          severity: 'error',
+          source: 'daemon',
+          summary: marker,
+        })}\n`,
+        'utf8',
+      );
+
+      const handler = createDiagnosticsExportHandler({
+        runtime: null,
+        projectRoot: '/tmp/test-project',
+        dataDir,
+      });
+      const res = mockResponse();
+      await handler({} as never, res as never, () => undefined);
+
+      expect(res.capturedStatus).toBe(200);
+      const zip = await JSZip.loadAsync(res.capturedPayload!);
+      const entry = zip.file('anomalies/anomalies.jsonl');
+      expect(entry).not.toBeNull();
+      expect(await entry!.async('string')).toContain(marker);
+    } finally {
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  });
+
   it('warns when runsDir is set but no per-run event logs were found', async () => {
     // An empty/absent runs dir adds no manifest file entries, so without an
     // explicit warning an empty bundle is indistinguishable from a healthy run

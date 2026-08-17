@@ -659,6 +659,7 @@ import { registerSocialShareRoutes } from './routes/social-share.js';
 import { registerOpenDesignPublicMetadataRoutes } from './routes/open-design-public-metadata.js';
 import { registerWhatsNewRoutes } from './routes/whats-new.js';
 import { registerMemoryRoutes } from './routes/memory.js';
+import { createAnomalySurface, registerAnomalyRoutes } from './routes/anomalies.js';
 import { registerTelemetryRoutes } from './routes/telemetry.js';
 import {
   assembleExample,
@@ -2132,6 +2133,17 @@ export async function startServer({
 
   const app = express();
   installRouteRegistrationGuard(app);
+  // Anomaly log. The observer mounts FIRST, before any route: Express matches
+  // its stack in registration order, so an observer added later would silently
+  // stop seeing every route registered above it. It only reads response status
+  // and elapsed time on `finish`, so it cannot alter or delay a response. The
+  // endpoints register further down with the other route modules, where the API
+  // auth middleware is already in front of them.
+  const anomalies = createAnomalySurface({
+    dataDir: RUNTIME_DATA_DIR,
+    createGateway: createRouteFilesystemWriteGateway,
+  });
+  app.use(anomalies.observer);
   // Clipper page captures are self-contained HTML with inlined images plus a
   // Figma IR, which for an image-heavy site (The Economist, news front pages)
   // runs to tens of MB — far past a normal JSON body. Give the ingest route a
@@ -2662,6 +2674,8 @@ export async function startServer({
   // from garnet need to be re-integrated into routes/project/index.ts as a
   // follow-up — see reconcile decision log.
   // (legacy POST /api/projects body deleted — see registerProjectRoutes below.)
+
+  registerAnomalyRoutes(app, { log: anomalies.log });
 
   const telemetry = registerTelemetryRoutes(app, {
     dataDir: RUNTIME_DATA_DIR,

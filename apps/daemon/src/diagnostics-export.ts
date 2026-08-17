@@ -23,6 +23,7 @@ import {
   type SidecarRuntimeContext,
 } from '@open-design/sidecar';
 
+import { createAnomalyLog } from './anomaly-log.js';
 import { readCurrentAppVersionInfo } from './app-version.js';
 import { agentCliEnvForAgent, readAppConfig } from './app-config.js';
 import { spawnEnvForAgent } from './agents.js';
@@ -132,6 +133,26 @@ function buildSidecarLogSources(runtime: SidecarRuntimeContext<SidecarStamp> | n
   return sources;
 }
 
+/**
+ * The local anomaly log, so the UI's Settings → About → Export diagnostics
+ * carries what the product got wrong — not just its raw logs. This is the read
+ * surface for anyone who is not at a terminal; `od diagnostics anomalies` is the
+ * same data for anyone who is.
+ *
+ * Path comes from `createAnomalyLog`, which derives it from the data root, so
+ * this file does not restate a path convention of its own.
+ */
+function buildAnomalyLogSources(dataDir: string | null | undefined): LogSource[] {
+  if (!dataDir) return [];
+  const { path } = createAnomalyLog({ dataDir });
+  return [
+    { name: 'anomalies/anomalies.jsonl', absolutePath: path, kind: 'json', tailBytes: TAIL_BYTES_PER_LOG },
+    // The rotated generation, when one exists. Missing files become a manifest
+    // entry rather than an error, so listing it unconditionally is safe.
+    { name: 'anomalies/anomalies.jsonl.1', absolutePath: `${path}.1`, kind: 'json', tailBytes: TAIL_BYTES_PER_LOG },
+  ];
+}
+
 export function createDiagnosticsExportHandler(options: DiagnosticsHandlerOptions): RequestHandler {
   return async (_req, res) => {
     try {
@@ -142,6 +163,7 @@ export function createDiagnosticsExportHandler(options: DiagnosticsHandlerOption
       const runEventSources = await buildRunEventLogSources(options.runsDir);
       const sources = [
         ...buildSidecarLogSources(options.runtime),
+        ...buildAnomalyLogSources(options.dataDir),
         ...runEventSources,
         ...(await buildAgentCliLogSources({
           homeDir: home,

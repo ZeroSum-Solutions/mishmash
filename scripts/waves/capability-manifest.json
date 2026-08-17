@@ -811,6 +811,26 @@
     "knownNamespaceRoutes": []
   },
   {
+    "capability": "anomalies",
+    "uiEntryPoint": "Settings > About > Export diagnostics (bundles anomalies/anomalies.jsonl)",
+    "cliArgs": [
+      "anomalies",
+      "--limit",
+      "1",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/anomalies",
+    "outputSchema": "{ anomalies: [...], total, path }",
+    "parityApplicable": true,
+    "reason": "Read-only list is the representative surface, so the parity probe is idempotent. The namespace's other two routes are deliberately excluded from cliArgs: POST /api/anomalies is the web reporter's ingest (the CLI has no reason to file a fabricated record), and DELETE is destructive -- `od anomalies --clear` reaches it, but a gate probe must not wipe the log it is grading. Both are snapshotted in knownNamespaceRoutes below.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/anomalies",
+      "GET /api/anomalies",
+      "POST /api/anomalies"
+    ]
+  },
+  {
     "capability": "export",
     "uiEntryPoint": "Project export (PDF/image/PPTX) menu",
     "cliArgs": [
@@ -1186,8 +1206,7 @@
       "GET /api/projects/:param/cover"
     ],
     "probeBody": {}
-  }
-  ,
+  },
   {
     "capability": "route",
     "uiEntryPoint": "Not registered in any view yet -- apps/web/src/components/routing/RoutingPanel.tsx is exported but has no lease-granted mount point (WR wave P0 skeleton); a later tranche wires it up once one exists.",
