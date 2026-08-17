@@ -272,6 +272,7 @@ export function rewriteInlinedCssAssetRefs(
   cssFilePath: string,
   projectFilePaths: ReadonlySet<string> | null,
   toRawUrl: (projectPath: string) => string,
+  dataUrls: ReadonlyMap<string, string> | null = null,
 ): string {
   return css.replace(CSS_URL, (match, quote: string, value: string) => {
     const trimmed = value.trim();
@@ -280,8 +281,125 @@ export function rewriteInlinedCssAssetRefs(
       projectFilePaths === null ? null : rootRelativeProjectAssetPath(trimmed, projectFilePaths);
     const projectPath = rootPath ?? resolveRelativeAssetPath(cssFilePath, trimmed);
     if (!projectPath) return match;
+    // A data: URL needs no network request, so it is the only form that
+    // resolves inside the preview's opaque-origin frame. The absolute raw URL
+    // is kept as the fallback: it is what over-budget assets get, and it is
+    // still correct on the URL-load preview path, which has a real origin.
+    const dataUrl = dataUrls?.get(projectPath);
+    if (dataUrl) return `url(${quote}${dataUrl}${quote})`;
     return `url(${quote}${toRawUrl(projectPath)}${suffix}${quote})`;
   });
+}
+
+/**
+ * Extensions whose bytes cannot be inlined as text by the stylesheet/script
+ * pass, and therefore have to become `data:` URLs to render inside the
+ * preview's opaque-origin frame.
+ *
+ * SVG is textual but belongs here anyway: `<img src="x.svg">` fetches it as a
+ * subresource, so it fails in an opaque origin exactly like a PNG.
+ */
+const BINARY_PREVIEW_ASSET_EXT =
+  /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|svg|mp4|webm|mov|m4v|ogv|mp3|wav|ogg|m4a|flac|woff2?|ttf|otf|eot)$/i;
+
+export function isBinaryPreviewAssetPath(path: string): boolean {
+  return BINARY_PREVIEW_ASSET_EXT.test(splitRefSuffix(path).path);
+}
+
+/** Resolve one ref to a confirmed project file path, root-relative or relative. */
+function confirmedAssetPath(
+  ref: string,
+  ownerFilePath: string,
+  projectFilePaths: ReadonlySet<string>,
+): string | null {
+  const trimmed = ref.trim();
+  if (!trimmed || isBlockedInlineScheme(trimmed)) return null;
+  const rootPath = rootRelativeProjectAssetPath(trimmed, projectFilePaths);
+  if (rootPath) return rootPath;
+  const relPath = resolveRelativeAssetPath(ownerFilePath, trimmed);
+  return relPath && projectFilePaths.has(relPath) ? relPath : null;
+}
+
+/** `data:`/`blob:`/`http(s):`/`javascript:` refs are never project files. */
+function isBlockedInlineScheme(ref: string): boolean {
+  return /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(ref);
+}
+
+/**
+ * Every binary project asset the document references, so the caller can fetch
+ * them (in the parent, which is same-origin and works) and build data: URLs.
+ *
+ * Scripts and stylesheets are absent by construction — their extensions are not
+ * binary — because `inlineRelativeAssets` already inlines those as text.
+ */
+export function collectBinaryPreviewAssetPaths(
+  html: string,
+  ownerFilePath: string,
+  projectFilePaths: ReadonlySet<string>,
+): string[] {
+  const paths = new Set<string>();
+  eachAssetRef(html, (ref) => {
+    const projectPath = confirmedAssetPath(ref, ownerFilePath, projectFilePaths);
+    if (projectPath && isBinaryPreviewAssetPath(projectPath)) paths.add(projectPath);
+  });
+  return [...paths];
+}
+
+/**
+ * Swap confirmed binary asset refs for the `data:` URLs the caller resolved.
+ *
+ * A ref with no entry in `dataUrls` is left exactly as it was — that is the
+ * over-budget path, and it must degrade to today's behaviour for that one
+ * asset rather than throwing or blanking the document.
+ */
+export function inlineBinaryAssetRefs(
+  html: string,
+  ownerFilePath: string,
+  projectFilePaths: ReadonlySet<string>,
+  dataUrls: ReadonlyMap<string, string>,
+): string {
+  if (dataUrls.size === 0) return html;
+  const swap = (ref: string): string | null => {
+    const projectPath = confirmedAssetPath(ref, ownerFilePath, projectFilePaths);
+    if (!projectPath || !isBinaryPreviewAssetPath(projectPath)) return null;
+    return dataUrls.get(projectPath) ?? null;
+  };
+
+  let next = html.replace(
+    ASSET_ATTR,
+    (match, space: string, name: string, eq: string, quote: string, value: string) => {
+      const dataUrl = swap(value);
+      return dataUrl ? `${space}${name}${eq}${quote}${dataUrl}${quote}` : match;
+    },
+  );
+  next = next.replace(LINK_TAG, (tag) =>
+    tag.replace(LINK_HREF, (hrefMatch, prefix: string, quote: string, value: string) => {
+      const dataUrl = swap(value);
+      return dataUrl ? `${prefix}${quote}${dataUrl}${quote}` : hrefMatch;
+    }),
+  );
+  next = next.replace(SRCSET_ATTR, (match, prefix: string, quote: string, value: string) => {
+    let changed = false;
+    const rewritten = value
+      .split(',')
+      .map((candidate) => {
+        const body = candidate.trim();
+        if (!body) return candidate;
+        const [url = '', ...descriptors] = body.split(/\s+/);
+        const dataUrl = swap(url);
+        if (!dataUrl) return candidate;
+        changed = true;
+        const leading = candidate.match(/^\s*/)?.[0] ?? '';
+        return `${leading}${[dataUrl, ...descriptors].join(' ')}`;
+      })
+      .join(',');
+    return changed ? `${prefix}${quote}${rewritten}${quote}` : match;
+  });
+  next = next.replace(CSS_URL, (match, quote: string, value: string) => {
+    const dataUrl = swap(value);
+    return dataUrl ? `url(${quote}${dataUrl}${quote})` : match;
+  });
+  return next;
 }
 
 /**

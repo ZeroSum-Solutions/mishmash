@@ -150,8 +150,10 @@ import {
   type UrlLoadDecision,
 } from './file-viewer-render-mode';
 import {
+  collectBinaryPreviewAssetPaths,
   collectPreviewAssetPaths,
   htmlHasRootRelativeProjectAssetRefs,
+  inlineBinaryAssetRefs,
   normalizeRootRelativeProjectAssetRefs,
   rewriteInlinedCssAssetRefs,
   rewriteInlinedScriptAssetRefs,
@@ -13735,24 +13737,52 @@ async function inlineRelativeAssets(
     ? normalizeRootRelativeProjectAssetRefs(html, fileName, projectFilePaths)
     : html;
 
-  const replacements: Array<Promise<{ from: string; to: string } | null>> = [];
-  const links = normalized.match(/<link\b[^>]*>/gi) ?? [];
-  for (const tag of links) {
+  // Stylesheets are fetched BEFORE the binary pass so a font or background
+  // image referenced only from inside a stylesheet is collected too — those
+  // fail in the preview frame for exactly the same reason the entry HTML's
+  // media does.
+  const linkTags = (normalized.match(/<link\b[^>]*>/gi) ?? []).filter((tag) => {
     const rel = readHtmlAttr(tag, 'rel');
-    const href = readHtmlAttr(tag, 'href');
-    if (!rel || !/\bstylesheet\b/i.test(rel) || !href) continue;
+    return !!rel && /\bstylesheet\b/i.test(rel) && !!readHtmlAttr(tag, 'href');
+  });
+  const sheets = await Promise.all(
+    linkTags.map(async (tag) => ({
+      tag,
+      href: readHtmlAttr(tag, 'href') as string,
+      asset: await fetchProjectRelativeText(projectId, fileName, readHtmlAttr(tag, 'href') as string),
+    })),
+  );
+
+  // Binary assets (images, video, audio, fonts) must become data: URLs. The
+  // srcDoc preview runs sandboxed WITHOUT allow-same-origin, so its document
+  // has an opaque origin and cannot load ANY subresource from the daemon —
+  // measured, and independent of CSP, autoplay policy, and URL resolution. The
+  // fetches happen HERE, in the parent, which is same-origin and works.
+  const binaryDataUrls = projectFilePaths
+    ? await resolveBinaryAssetDataUrls(projectId, [
+        ...collectBinaryPreviewAssetPaths(normalized, fileName, projectFilePaths),
+        ...sheets.flatMap(({ asset }) =>
+          asset ? collectBinaryPreviewAssetPaths(asset.text, asset.filePath, projectFilePaths) : [],
+        ),
+      ])
+    : new Map<string, string>();
+
+  const replacements: Array<Promise<{ from: string; to: string } | null>> = [];
+  for (const { tag, href, asset } of sheets) {
+    if (asset == null) continue;
     replacements.push(
-      fetchProjectRelativeText(projectId, fileName, href).then((asset) =>
-        asset == null
-          ? null
-          : {
-              from: tag,
-              to:
-                `<style data-od-inline-asset="${escapeHtmlAttr(href)}">\n` +
-                `${rewriteInlinedCssAssetRefs(asset.text, asset.filePath, projectFilePaths, toRawUrl)
-                  .replace(/<\/style/gi, '<\\/style')}\n</style>`,
-            },
-      ),
+      Promise.resolve({
+        from: tag,
+        to:
+          `<style data-od-inline-asset="${escapeHtmlAttr(href)}">\n` +
+          `${rewriteInlinedCssAssetRefs(
+            asset.text,
+            asset.filePath,
+            projectFilePaths,
+            toRawUrl,
+            binaryDataUrls,
+          ).replace(/<\/style/gi, '<\\/style')}\n</style>`,
+      }),
     );
   }
 
@@ -13782,7 +13812,75 @@ async function inlineRelativeAssets(
   const resolved = (await Promise.all(replacements)).filter(
     (item): item is { from: string; to: string } => item !== null,
   );
-  return resolved.reduce((next, { from, to }) => next.replace(from, () => to), normalized);
+  const inlined = resolved.reduce((next, { from, to }) => next.replace(from, () => to), normalized);
+  // Last, so it also covers refs the stylesheet/script inlining moved into the
+  // document. Refs with no data: URL (over budget, or fetch failed) are left
+  // untouched — that degrades one asset to today's behaviour rather than the
+  // whole document.
+  return projectFilePaths
+    ? inlineBinaryAssetRefs(inlined, fileName, projectFilePaths, binaryDataUrls)
+    : inlined;
+}
+
+/**
+ * Per-asset ceiling. base64 inflates by ~33%, so an 8 MiB asset costs ~11 MiB
+ * of srcdoc string.
+ *
+ * Measured against the real catalogue (2026-08-17): 184 of 352 templates
+ * reference at least one binary asset, median total payload 522 KB. At a 4 MiB
+ * cap every one of them inlined fully except `aurora-onboarding`, whose single
+ * 5.99 MB `assets/aurora-hero.mp4` is the largest referenced asset in the
+ * catalogue. 8 MiB admits it and takes coverage to 184/184; the whole-document
+ * budget below is what actually bounds a pathological project.
+ */
+const BINARY_ASSET_MAX_BYTES = 8 * 1024 * 1024;
+
+/** Whole-document ceiling, so a template with many large assets cannot add up. */
+const BINARY_ASSET_TOTAL_BUDGET_BYTES = 16 * 1024 * 1024;
+
+/**
+ * Fetch each binary asset from the raw route and turn it into a data: URL.
+ *
+ * Sequential on purpose: the budget can then stop early instead of committing
+ * to every fetch up front, and these are loopback requests.
+ */
+async function resolveBinaryAssetDataUrls(
+  projectId: string,
+  paths: readonly string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  let spent = 0;
+  for (const path of new Set(paths)) {
+    if (spent >= BINARY_ASSET_TOTAL_BUDGET_BYTES) break;
+    try {
+      const resp = await fetch(projectRawUrl(projectId, path));
+      if (!resp.ok) continue;
+      const blob = await resp.blob();
+      if (blob.size > BINARY_ASSET_MAX_BYTES) continue;
+      if (spent + blob.size > BINARY_ASSET_TOTAL_BUDGET_BYTES) continue;
+      const dataUrl = await blobToDataUrl(blob);
+      if (!dataUrl) continue;
+      out.set(path, dataUrl);
+      spent += blob.size;
+    } catch {
+      // Leave the ref as-is; a missing asset must never break the preview.
+    }
+  }
+  return out;
+}
+
+function blobToDataUrl(blob: Blob): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = () =>
+        resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    } catch {
+      resolve(null);
+    }
+  });
 }
 
 async function fetchProjectRelativeText(
