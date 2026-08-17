@@ -834,6 +834,10 @@
 .df-tip-link:hover {
   color: var(--accent);
 }
+/* Solid, never blinking. This caret sits in the panel's permanent footer, so a
+   blink here strobes for as long as the workbench is open — the one caret with
+   no activity to signal and no end state. Steady, it still terminates the typed
+   tip; it just stops competing with the artifact for the eye. */
 .df-tip-caret {
   display: inline-block;
   width: 1px;
@@ -841,17 +845,6 @@
   margin-left: 1px;
   vertical-align: text-bottom;
   background: var(--accent);
-  animation: df-tip-caret-blink 1s steps(1) infinite;
-}
-@keyframes df-tip-caret-blink {
-  0%, 50% { opacity: 1; }
-  50.01%, 100% { opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .df-tip-caret {
-    animation: none;
-    opacity: 0;
-  }
 }
 
 /* Drag-to-upload: the whole panel is a drop target. While dragging files
