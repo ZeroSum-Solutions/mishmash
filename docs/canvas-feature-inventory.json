@@ -467,9 +467,9 @@
     {
       "id": "screenshot-copy",
       "group": "canvas-surface",
-      "name": "Screenshot copy",
+      "name": "Screenshot capture into the chat composer (and clipboard)",
       "user_action": "Click the screenshot icon while in preview mode",
-      "expected_result": "Captures the current preview frame and copies it to clipboard as an image",
+      "expected_result": "Captures the current preview frame, stages it as an attachment on the chat composer over the annotation transport (opendesign:annotation with action='draft', so nothing is sent on the user's behalf), and also copies it to the clipboard so the same shot can still be pasted outside the app. A composer claims the annotation synchronously, so a surface with no composer mounted reports the clipboard result instead of waiting on an acknowledgement that never arrives",
       "risk": "high",
       "verifiable_by": "manual-browser",
       "source_files": [
@@ -477,12 +477,13 @@
         "apps/web/src/runtime/exports.ts"
       ],
       "proof_tests": [
+        "apps/web/tests/components/file-viewer-screenshot-to-chat.test.tsx",
         "apps/web/tests/components/file-viewer-screenshot-tooltip.test.tsx",
         "apps/web/tests/runtime/exports.test.ts",
         "apps/web/tests/components/file-viewer-image-export.test.tsx"
       ],
       "coverage_note": "The tooltip spec was this feature's ONLY proof until 2026-08-16, which is how the run that catalogued it recorded the feature as covered while capture was broken end-to-end in every browser: the daemon renderer was gated behind an Electron-only predicate and the fallback bridge failed. Naming a test is not the same as proving the behaviour. exports.test.ts now pins the capture-tier decision itself; the clipboard hand-off after it is still browser-gated (CANVAS-15).",
-      "proof_note": "Asserts the capture plan routes to the daemon's off-screen renderer in a browser and to the host snapshot where a compositor exists, and that the clipboard write settles ('unfocused' / timeout) instead of stranding the button. The tooltip spec is kept but proves only the label -- for one run it was effectively this row's whole proof while capture was broken in every browser, which is why high-risk rows now have to say what they assert."
+      "proof_note": "file-viewer-screenshot-to-chat.test.tsx is the destination proof: the click stages a draft annotation carrying a real PNG File, fabricates no markKind/bounds (a full-frame shot marks no region), still writes the clipboard, reports the chat as the destination once acknowledged, surfaces a claimed-but-failed staging, and falls back to the clipboard message when nothing claims the capture. Mutation-verified: routing the annotation as action='send' instead of 'draft' fails it. exports.test.ts asserts the capture plan routes to the daemon's off-screen renderer in a browser and to the host snapshot where a compositor exists, and that the clipboard write settles ('unfocused' / timeout) instead of stranding the button. The tooltip spec is kept but proves only the label -- for one run it was effectively this row's whole proof while capture was broken in every browser, which is why high-risk rows now have to say what they assert."
     },
     {
       "id": "comment-side-panel",

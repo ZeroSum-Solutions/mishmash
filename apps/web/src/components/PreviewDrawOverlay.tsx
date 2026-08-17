@@ -57,6 +57,15 @@ export interface AnnotationEventDetail {
   target?: CaptureTarget | null;
   /** Images the user attached in the markup composer to combine with the mark. */
   extraFiles?: File[];
+  /**
+   * Called SYNCHRONOUSLY by a composer that is taking this annotation, before it
+   * starts any async work. Because `dispatchEvent` runs its listeners
+   * synchronously, a dispatcher knows the moment dispatch returns whether a
+   * composer was mounted to receive the annotation at all — which is a
+   * different outcome from one that received it and failed, and cannot
+   * otherwise be told apart from an acknowledgement that is merely slow.
+   */
+  claim?: () => void;
   ack?: (result: { ok: boolean; message?: string }) => void;
 }
 

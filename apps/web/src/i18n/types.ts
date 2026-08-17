@@ -3688,7 +3688,8 @@ export interface Dict {
   'fileViewer.shareAfterGenerationComplete': string;
   'fileViewer.copyProviderLink': string;
   'fileViewer.copyCloudflareLink': string;
-  'fileViewer.screenshotCopying': string;
+  'fileViewer.screenshotCapturing': string;
+  'fileViewer.screenshotAddedToChat': string;
   'fileViewer.screenshotCopied': string;
   'fileViewer.screenshotClipboardDenied': string;
   'fileViewer.screenshotClipboardUnfocused': string;

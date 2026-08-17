@@ -170,7 +170,12 @@ import { Icon } from './Icon';
 import { RemixIcon } from './RemixIcon';
 import { SocialShareGrid } from './SocialShareGrid';
 import { Toast } from './Toast';
-import { PreviewDrawOverlay, type DrawToolbarElement } from './PreviewDrawOverlay';
+import {
+  ANNOTATION_EVENT,
+  PreviewDrawOverlay,
+  type AnnotationEventDetail,
+  type DrawToolbarElement,
+} from './PreviewDrawOverlay';
 import {
   buildBoardCommentAttachments,
   commentSnapshotEqual,
@@ -5965,6 +5970,14 @@ function DocumentPreviewViewer({
   );
 }
 
+/**
+ * How long a composer that has CLAIMED a staged screenshot may go without
+ * answering before the capture flow gives up on it. Purely a liveness backstop
+ * so the screenshot button always re-arms; it is far above any real upload, so
+ * a slow network reports its true result rather than tripping this.
+ */
+const STAGE_ACK_LIVENESS_TIMEOUT_MS = 60_000;
+
 function HtmlViewer({
   projectId,
   projectKind,
@@ -10832,18 +10845,116 @@ function HtmlViewer({
     [captureExportImageSnapshot],
   );
 
+  /**
+   * Hands a captured frame to the chat composer, so the shot the user just took
+   * is already attached to their next message instead of waiting on the
+   * clipboard and a manual paste.
+   *
+   * Reuses the Mark/Draw overlay's annotation transport with `action: 'draft'`,
+   * which is the composer's append-to-draft branch — the capture is staged for
+   * the user to write alongside, never sent on their behalf. No `markKind` or
+   * `bounds` ride along: a full-frame screenshot marks no region, and inventing
+   * those fields would claim an anchor the user never drew.
+   *
+   * Resolves to how far it got. `not-staged` covers the two ways the capture can
+   * fail to reach a composer at all — no composer was mounted to claim it, or the
+   * snapshot could not be turned into a file — and leaves the caller to report
+   * the clipboard, which is then the only place the shot exists. `rejected` is
+   * different: a composer did take the file and failed, and it says why.
+   *
+   * Whether a composer exists is known synchronously from the claim, so the
+   * common no-composer case never waits.
+   */
+  const stageScreenshotInComposer = useCallback(
+    async (
+      dataUrl: string,
+    ): Promise<{ outcome: 'staged' | 'rejected' | 'not-staged'; message?: string }> => {
+      let screenshotFile: File;
+      try {
+        const blob = await imageDataUrlToBlob(dataUrl, 'png');
+        screenshotFile = new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' });
+      } catch (err) {
+        console.warn('[stageScreenshotInComposer] could not build a file from the capture:', err);
+        return { outcome: 'not-staged' };
+      }
+      let claimed = false;
+      const acknowledged = new Promise<{ ok: boolean; message?: string }>((resolve) => {
+        window.dispatchEvent(
+          new CustomEvent<AnnotationEventDetail>(ANNOTATION_EVENT, {
+            detail: {
+              file: screenshotFile,
+              note: '',
+              action: 'draft',
+              filePath: file.name,
+              claim: () => {
+                claimed = true;
+              },
+              ack: resolve,
+            },
+          }),
+        );
+      });
+      if (!claimed) return { outcome: 'not-staged' };
+      // Liveness guard, not a destination check. ChatComposer answers on every
+      // path including its own catch, so this should never fire — but an
+      // acknowledgement that never arrives would leave the caller awaiting
+      // forever, and its `finally` is what re-arms the screenshot button. Well
+      // above any real upload, so a slow network still reports truthfully.
+      const result = await Promise.race([
+        acknowledged,
+        new Promise<null>((resolve) => {
+          setTimeout(() => resolve(null), STAGE_ACK_LIVENESS_TIMEOUT_MS);
+        }),
+      ]);
+      if (!result) {
+        console.warn('[stageScreenshotInComposer] composer claimed the capture but never answered');
+        return { outcome: 'not-staged' };
+      }
+      return result.ok ? { outcome: 'staged' } : { outcome: 'rejected', message: result.message };
+    },
+    [file.name],
+  );
+
   const handleCopyScreenshot = useCallback(async () => {
     fireArtifactToolbarClick('screenshot');
     if (screenshotInFlightRef.current) return;
     screenshotInFlightRef.current = true;
-    setExportToast({ message: t('fileViewer.screenshotCopying'), tone: 'loading' });
+    setExportToast({ message: t('fileViewer.screenshotCapturing'), tone: 'loading' });
     try {
       const snap = await captureExportImageSnapshot({ allowOffscreenRender: true });
       if (!snap) {
         setExportToast({ message: t('fileViewer.screenshotPreviewLoading'), tone: 'error' });
         return;
       }
-      const result = await copyImageDataUrlToClipboard(snap.dataUrl);
+      // The clipboard write starts FIRST and is not awaited yet. Safari only
+      // honours `clipboard.write()` close to the originating gesture, and
+      // staging involves a file upload — awaiting that first would push the
+      // write far enough from the click to be refused. Neither result depends
+      // on the other, so they run concurrently and are read below.
+      const clipboardWrite = copyImageDataUrlToClipboard(snap.dataUrl).catch((err) => {
+        console.warn('[handleCopyScreenshot] clipboard write failed:', err);
+        return 'failed' as const;
+      });
+      const staged = await stageScreenshotInComposer(snap.dataUrl);
+      const clipboardResult = await clipboardWrite;
+
+      // The chat box is the destination the user asked for, so it decides the
+      // message. A clipboard refusal alongside a successful staging is not worth
+      // an error: the shot did reach the place it was going.
+      if (staged.outcome === 'staged') {
+        setExportToast({ message: t('fileViewer.screenshotAddedToChat'), tone: 'success' });
+        return;
+      }
+      if (staged.outcome === 'rejected') {
+        setExportToast({
+          message: staged.message || t('fileViewer.screenshotCaptureFailed'),
+          tone: 'error',
+        });
+        return;
+      }
+      // Nothing took the capture, so the clipboard is the only place it now
+      // exists and its result is the whole story.
+      //
       // 'unfocused' is separated from 'denied' because the two need different
       // things from the user: a refusal is out of their hands, while an
       // unfocused tab is fixed by the click they were about to make anyway.
@@ -10853,9 +10964,9 @@ function HtmlViewer({
         failed: 'fileViewer.screenshotCaptureFailed',
       } as const;
       setExportToast(
-        result === 'copied'
+        clipboardResult === 'copied'
           ? { message: t('fileViewer.screenshotCopied'), tone: 'success' }
-          : { message: t(failureKey[result]), tone: 'error' },
+          : { message: t(failureKey[clipboardResult]), tone: 'error' },
       );
     } catch (err) {
       console.warn('[handleCopyScreenshot] failed:', err);
@@ -10866,7 +10977,7 @@ function HtmlViewer({
     } finally {
       screenshotInFlightRef.current = false;
     }
-  }, [captureExportImageSnapshot, t]);
+  }, [captureExportImageSnapshot, stageScreenshotInComposer, t]);
 
   const openImageExportModal = async (context?: HtmlVersionExportContext) => {
     // Don't reopen while an export is still running: reopening resets the shared
