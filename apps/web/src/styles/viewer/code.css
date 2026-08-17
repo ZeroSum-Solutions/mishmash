@@ -993,8 +993,10 @@
   font-size: var(--prose-font-size, 15px);
   letter-spacing: -0.01em;
 }
-/* Streaming caret — a blinking block riding the end of the last prose block,
-   tracking the final character as tokens arrive (Lobe-style typing cursor). */
+/* Streaming caret — a SOLID block riding the end of the last prose block,
+   tracking the final character as tokens arrive. Its presence is what reports
+   "still streaming"; it does not need to blink to say so, and it blinked for
+   the whole length of a long answer. */
 .prose-block[data-stream-cursor="true"] > *:last-child::after {
   content: "";
   display: inline-block;
@@ -1004,14 +1006,6 @@
   vertical-align: text-bottom;
   background: var(--purple);
   border-radius: 1px;
-  animation: stream-caret-blink 1s steps(2, start) infinite;
-}
-@keyframes stream-caret-blink {
-  0%, 50% { opacity: 1; }
-  50.01%, 100% { opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .prose-block[data-stream-cursor="true"] > *:last-child::after { animation: none; opacity: 1; }
 }
 .prose-block .md-p { margin: 0; }
 .prose-block .md-p + .md-p { margin-top: 14px; }
@@ -1785,6 +1779,7 @@
 .live-code-pre code {
   font-family: inherit;
 }
+/* Solid — matches the streaming prose caret above. */
 .live-code-caret {
   display: inline-block;
   width: 2px;
@@ -1793,8 +1788,4 @@
   vertical-align: text-bottom;
   background: var(--purple);
   border-radius: 1px;
-  animation: stream-caret-blink 1s steps(2, start) infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .live-code-caret { animation: none; opacity: 1; }
 }
