@@ -1,6 +1,6 @@
 @font-face {
   font-family: "Chakra Petch";
-  src: url("./chakra-petch-400-italic-latin-ext-07416604b0.woff2") format("woff2");
+  src: url("./chakra-petch-latin-ext-0195107f65.woff2") format("woff2");
   font-weight: 400;
   font-style: italic;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -8,7 +8,7 @@
 }
 @font-face {
   font-family: "Chakra Petch";
-  src: url("./chakra-petch-400-italic-latin-88f2d643a8.woff2") format("woff2");
+  src: url("./chakra-petch-latin-345b0f4eeb.woff2") format("woff2");
   font-weight: 400;
   font-style: italic;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -16,7 +16,7 @@
 }
 @font-face {
   font-family: "Chakra Petch";
-  src: url("./chakra-petch-300-latin-ext-1f15653407.woff2") format("woff2");
+  src: url("./chakra-petch-latin-ext-4ede43d1e8.woff2") format("woff2");
   font-weight: 300;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -24,7 +24,7 @@
 }
 @font-face {
   font-family: "Chakra Petch";
-  src: url("./chakra-petch-300-latin-210c80f908.woff2") format("woff2");
+  src: url("./chakra-petch-latin-3ae8233d3a.woff2") format("woff2");
   font-weight: 300;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -32,7 +32,7 @@
 }
 @font-face {
   font-family: "Chakra Petch";
-  src: url("./chakra-petch-400-latin-ext-53417c6ac3.woff2") format("woff2");
+  src: url("./chakra-petch-latin-ext-c2086b274b.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -40,7 +40,7 @@
 }
 @font-face {
   font-family: "Chakra Petch";
-  src: url("./chakra-petch-400-latin-26993995a9.woff2") format("woff2");
+  src: url("./chakra-petch-latin-e592818029.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -48,7 +48,7 @@
 }
 @font-face {
   font-family: "Chakra Petch";
-  src: url("./chakra-petch-500-latin-ext-cf1bddcc06.woff2") format("woff2");
+  src: url("./chakra-petch-latin-ext-b821fcd551.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -56,7 +56,7 @@
 }
 @font-face {
   font-family: "Chakra Petch";
-  src: url("./chakra-petch-500-latin-5f8f361620.woff2") format("woff2");
+  src: url("./chakra-petch-latin-adf007cd27.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -64,7 +64,7 @@
 }
 @font-face {
   font-family: "Chakra Petch";
-  src: url("./chakra-petch-600-latin-ext-2dc0944310.woff2") format("woff2");
+  src: url("./chakra-petch-latin-ext-140bd5c457.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -72,7 +72,7 @@
 }
 @font-face {
   font-family: "Chakra Petch";
-  src: url("./chakra-petch-600-latin-b491624f7e.woff2") format("woff2");
+  src: url("./chakra-petch-latin-4d6d5f0b31.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -80,7 +80,7 @@
 }
 @font-face {
   font-family: "Chakra Petch";
-  src: url("./chakra-petch-700-latin-ext-4d257eebb8.woff2") format("woff2");
+  src: url("./chakra-petch-latin-ext-afe317b164.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -88,7 +88,7 @@
 }
 @font-face {
   font-family: "Chakra Petch";
-  src: url("./chakra-petch-700-latin-ead203d106.woff2") format("woff2");
+  src: url("./chakra-petch-latin-3c2433eb16.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -96,7 +96,7 @@
 }
 @font-face {
   font-family: "Space Mono";
-  src: url("./space-mono-400-latin-ext-af349a5bb5.woff2") format("woff2");
+  src: url("./space-mono-latin-ext-b4f90459ad.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -104,7 +104,7 @@
 }
 @font-face {
   font-family: "Space Mono";
-  src: url("./space-mono-400-latin-7da795270a.woff2") format("woff2");
+  src: url("./space-mono-latin-e0c8e616bd.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -112,7 +112,7 @@
 }
 @font-face {
   font-family: "Space Mono";
-  src: url("./space-mono-700-latin-ext-f2a7874687.woff2") format("woff2");
+  src: url("./space-mono-latin-ext-512458b32b.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -120,7 +120,7 @@
 }
 @font-face {
   font-family: "Space Mono";
-  src: url("./space-mono-700-latin-c9371b6af0.woff2") format("woff2");
+  src: url("./space-mono-latin-af7cf6d2b8.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -128,7 +128,7 @@
 }
 @font-face {
   font-family: "Tektur";
-  src: url("./tektur-400-latin-ext-cbeb48fb68.woff2") format("woff2");
+  src: url("./tektur-latin-ext-0d400551a3.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -136,7 +136,7 @@
 }
 @font-face {
   font-family: "Tektur";
-  src: url("./tektur-400-latin-19f705d233.woff2") format("woff2");
+  src: url("./tektur-latin-468f3e6023.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -144,7 +144,7 @@
 }
 @font-face {
   font-family: "Tektur";
-  src: url("./tektur-500-latin-ext-cbeb48fb68.woff2") format("woff2");
+  src: url("./tektur-latin-ext-0d400551a3.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -152,7 +152,7 @@
 }
 @font-face {
   font-family: "Tektur";
-  src: url("./tektur-500-latin-19f705d233.woff2") format("woff2");
+  src: url("./tektur-latin-468f3e6023.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -160,7 +160,7 @@
 }
 @font-face {
   font-family: "Tektur";
-  src: url("./tektur-600-latin-ext-cbeb48fb68.woff2") format("woff2");
+  src: url("./tektur-latin-ext-0d400551a3.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -168,7 +168,7 @@
 }
 @font-face {
   font-family: "Tektur";
-  src: url("./tektur-600-latin-19f705d233.woff2") format("woff2");
+  src: url("./tektur-latin-468f3e6023.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -176,7 +176,7 @@
 }
 @font-face {
   font-family: "Tektur";
-  src: url("./tektur-700-latin-ext-cbeb48fb68.woff2") format("woff2");
+  src: url("./tektur-latin-ext-0d400551a3.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -184,7 +184,7 @@
 }
 @font-face {
   font-family: "Tektur";
-  src: url("./tektur-700-latin-19f705d233.woff2") format("woff2");
+  src: url("./tektur-latin-468f3e6023.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -192,7 +192,7 @@
 }
 @font-face {
   font-family: "Tektur";
-  src: url("./tektur-800-latin-ext-cbeb48fb68.woff2") format("woff2");
+  src: url("./tektur-latin-ext-0d400551a3.woff2") format("woff2");
   font-weight: 800;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -200,7 +200,7 @@
 }
 @font-face {
   font-family: "Tektur";
-  src: url("./tektur-800-latin-19f705d233.woff2") format("woff2");
+  src: url("./tektur-latin-468f3e6023.woff2") format("woff2");
   font-weight: 800;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -208,7 +208,7 @@
 }
 @font-face {
   font-family: "Tektur";
-  src: url("./tektur-900-latin-ext-cbeb48fb68.woff2") format("woff2");
+  src: url("./tektur-latin-ext-0d400551a3.woff2") format("woff2");
   font-weight: 900;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -216,7 +216,7 @@
 }
 @font-face {
   font-family: "Tektur";
-  src: url("./tektur-900-latin-19f705d233.woff2") format("woff2");
+  src: url("./tektur-latin-468f3e6023.woff2") format("woff2");
   font-weight: 900;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;

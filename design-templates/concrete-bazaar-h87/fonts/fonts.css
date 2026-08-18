@@ -1,6 +1,6 @@
 @font-face {
   font-family: "Poppins";
-  src: url("./poppins-300-latin-ext-7fc42a89d1.woff2") format("woff2");
+  src: url("./poppins-latin-ext-c2857fb5c3.woff2") format("woff2");
   font-weight: 300;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -8,7 +8,7 @@
 }
 @font-face {
   font-family: "Poppins";
-  src: url("./poppins-300-latin-c37b5b9837.woff2") format("woff2");
+  src: url("./poppins-latin-643e38d8c2.woff2") format("woff2");
   font-weight: 300;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -16,7 +16,7 @@
 }
 @font-face {
   font-family: "Poppins";
-  src: url("./poppins-400-latin-ext-6d40a11dfa.woff2") format("woff2");
+  src: url("./poppins-latin-ext-1fae5e73d2.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -24,7 +24,7 @@
 }
 @font-face {
   font-family: "Poppins";
-  src: url("./poppins-400-latin-1cc38dbbba.woff2") format("woff2");
+  src: url("./poppins-latin-3dc5d0c524.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -32,7 +32,7 @@
 }
 @font-face {
   font-family: "Poppins";
-  src: url("./poppins-500-latin-ext-da0fb98a11.woff2") format("woff2");
+  src: url("./poppins-latin-ext-f8f0c28661.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -40,7 +40,7 @@
 }
 @font-face {
   font-family: "Poppins";
-  src: url("./poppins-500-latin-7a5af73078.woff2") format("woff2");
+  src: url("./poppins-latin-289e0afc8b.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -48,7 +48,7 @@
 }
 @font-face {
   font-family: "Poppins";
-  src: url("./poppins-600-latin-ext-d8f85c7ee3.woff2") format("woff2");
+  src: url("./poppins-latin-ext-72efc6a32c.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -56,7 +56,7 @@
 }
 @font-face {
   font-family: "Poppins";
-  src: url("./poppins-600-latin-4ded8bef26.woff2") format("woff2");
+  src: url("./poppins-latin-872e862918.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -64,7 +64,7 @@
 }
 @font-face {
   font-family: "Poppins";
-  src: url("./poppins-700-latin-ext-d5f46b7621.woff2") format("woff2");
+  src: url("./poppins-latin-ext-2477683a4b.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -72,7 +72,7 @@
 }
 @font-face {
   font-family: "Poppins";
-  src: url("./poppins-700-latin-b838bb5283.woff2") format("woff2");
+  src: url("./poppins-latin-197a3cbd72.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -80,7 +80,7 @@
 }
 @font-face {
   font-family: "Poppins";
-  src: url("./poppins-800-latin-ext-33a54d4e1a.woff2") format("woff2");
+  src: url("./poppins-latin-ext-db859b9cbc.woff2") format("woff2");
   font-weight: 800;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -88,7 +88,7 @@
 }
 @font-face {
   font-family: "Poppins";
-  src: url("./poppins-800-latin-adb9a252e4.woff2") format("woff2");
+  src: url("./poppins-latin-4ef5511d8e.woff2") format("woff2");
   font-weight: 800;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;

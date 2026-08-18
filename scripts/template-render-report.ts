@@ -18,31 +18,31 @@
  * skillId = template id) — no `autoSendFirstMessage`, so no agent turn ever
  * runs; this script only exercises the synchronous file-copy step.
  *
- * That materialization step turned out to have its own, CSP-independent
- * defect: it copies `<templateDir>/assets/*` into the project root but
- * never copies `example.html` (the template's only HTML file), so
- * `detectEntryFile()` finds nothing and a freshly-started template project
- * has no entry file at all. Where that happens, this harness uploads the
- * template's own `example.html` as `index.html` via the real
- * `POST /api/projects/:id/upload` endpoint before rendering, so the CSP
- * question can still be measured on genuine HTML content instead of on an
- * empty project. Every record says which path it took (`htmlSource`) so the
- * two effects — missing entry file vs. CSP-blocked subresource — are never
- * conflated in the counts.
+ * If materialization produces no detectable HTML entry, this harness may
+ * upload the template's own `example.html` as `index.html` through the real
+ * `POST /api/projects/:id/upload` endpoint. Every record says which path it
+ * took (`htmlSource`) so fallback seeding and normal project materialization
+ * are never conflated in the counts. A full-scale acceptance census should
+ * report (and normally require) zero fallback-seeded rows.
  *
  * Run: pnpm tsx scripts/template-render-report.ts [--json] [--limit=N]
- *   --json   also print a machine-readable summary object to stdout
- *   --limit=N  cap catalogue items processed per surface (debugging only)
+ *   --json                  print a machine-readable summary object to stdout
+ *   --limit=N               cap catalogue items processed per surface (debugging only)
+ *   --surface=both|gallery|canvas
+ *   --canvas=sample|all     use the stratified sample or every API catalogue entry
+ *   --artifact-prefix=NAME  select clean JSONL/TXT output names in the proof directory
  *
  * Output:
  *   ~/.claude/goal-state/mishmash-creative-loop/proof/C1-baseline.jsonl
- *   ~/.claude/goal-state/mishmash-creative-loop/proof/C1 template-render-harness-baseline.txt
+ *   ~/.claude/goal-state/mishmash-creative-loop/proof/C1-baseline.txt
  */
 import { createRequire } from "node:module";
 import { existsSync } from "node:fs";
-import { appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+
+import { replaceJsonLinesAtomically } from "./template-render-report-lib.ts";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -56,8 +56,6 @@ const DESIGN_TEMPLATES_DIR = path.join(REPO_ROOT, "design-templates");
 const OD_DESIGN_TEMPLATES_DIR = path.join(REPO_ROOT, ".od", "design-templates");
 
 const PROOF_DIR = path.join(os.homedir(), ".claude", "goal-state", "mishmash-creative-loop", "proof");
-const JSONL_PATH = path.join(PROOF_DIR, "C1-baseline.jsonl");
-const TXT_PATH = path.join(PROOF_DIR, "C1 template-render-harness-baseline.txt");
 
 const PER_ITEM_TIMEOUT_MS = 20_000;
 const NETWORK_IDLE_TIMEOUT_MS = 12_000;
@@ -69,6 +67,19 @@ const argv = process.argv.slice(2);
 const jsonFlag = argv.includes("--json");
 const limitArg = argv.find((a) => a.startsWith("--limit="));
 const ITEM_LIMIT = limitArg ? Number(limitArg.slice("--limit=".length)) : null;
+const surfaceArg = argv.find((a) => a.startsWith("--surface="))?.slice("--surface=".length) ?? "both";
+const canvasArg = argv.find((a) => a.startsWith("--canvas="))?.slice("--canvas=".length) ?? "sample";
+const artifactPrefix =
+  argv.find((a) => a.startsWith("--artifact-prefix="))?.slice("--artifact-prefix=".length) ?? "C1-baseline";
+if (!new Set(["both", "gallery", "canvas"]).has(surfaceArg)) throw new Error(`invalid --surface: ${surfaceArg}`);
+if (!new Set(["sample", "all"]).has(canvasArg)) throw new Error(`invalid --canvas: ${canvasArg}`);
+if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(artifactPrefix)) {
+  throw new Error(`invalid --artifact-prefix: ${artifactPrefix}`);
+}
+const RUN_GALLERY = surfaceArg === "both" || surfaceArg === "gallery";
+const RUN_CANVAS = surfaceArg === "both" || surfaceArg === "canvas";
+const JSONL_PATH = path.join(PROOF_DIR, `${artifactPrefix}.jsonl`);
+const TXT_PATH = path.join(PROOF_DIR, `${artifactPrefix}.txt`);
 
 // ---------------------------------------------------------------------------
 // Playwright — only e2e/package.json declares @playwright/test as a
@@ -175,16 +186,35 @@ async function scanOnDisk(dir: string): Promise<OnDiskEntry[]> {
   return out;
 }
 
-function resolveTemplateDir(id: string): { dir: string; root: "design-templates" | ".od/design-templates" } | null {
+type TemplateSourceRoot = "design-templates" | ".od/design-templates" | "derived";
+
+function resolveTemplateSource(
+  id: string,
+): { dir: string; examplePath: string; root: TemplateSourceRoot } | null {
   const rootDir = path.join(DESIGN_TEMPLATES_DIR, id);
-  if (existsSync(path.join(rootDir, "example.html"))) return { dir: rootDir, root: "design-templates" };
+  const rootExample = path.join(rootDir, "example.html");
+  if (existsSync(rootExample)) return { dir: rootDir, examplePath: rootExample, root: "design-templates" };
   const odDir = path.join(OD_DESIGN_TEMPLATES_DIR, id);
-  if (existsSync(path.join(odDir, "example.html"))) return { dir: odDir, root: ".od/design-templates" };
+  const odExample = path.join(odDir, "example.html");
+  if (existsSync(odExample)) return { dir: odDir, examplePath: odExample, root: ".od/design-templates" };
+
+  const separator = id.indexOf(":");
+  if (separator > 0 && separator < id.length - 1) {
+    const parentId = id.slice(0, separator);
+    const childKey = id.slice(separator + 1);
+    if (/^[A-Za-z0-9._-]+$/.test(childKey) && !childKey.startsWith(".")) {
+      for (const parentRoot of [DESIGN_TEMPLATES_DIR, OD_DESIGN_TEMPLATES_DIR]) {
+        const parentDir = path.join(parentRoot, parentId);
+        const examplePath = path.join(parentDir, "examples", `${childKey}.html`);
+        if (existsSync(examplePath)) return { dir: parentDir, examplePath, root: "derived" };
+      }
+    }
+  }
   return null;
 }
 
-async function usesExternalCdn(exampleHtmlPath: string): Promise<boolean> {
-  if (!existsSync(exampleHtmlPath)) return false;
+async function usesExternalCdn(exampleHtmlPath: string | null): Promise<boolean> {
+  if (!exampleHtmlPath || !existsSync(exampleHtmlPath)) return false;
   const html = await readFile(exampleHtmlPath, "utf8");
   return /(?:src|href)\s*=\s*["']https:\/\//i.test(html) || /url\(\s*['"]?https:\/\//i.test(html);
 }
@@ -222,6 +252,8 @@ interface RenderRecord {
   blockedSubresources: BlockedEntry[];
   blockedCspCount: number;
   blockedOtherCount: number;
+  blockedLocal404Count?: number;
+  blockedLocalProbeStatusCounts?: Record<string, number>;
   consoleErrorCount: number;
   consoleErrorSample: string[];
   renderedTextLength: number;
@@ -245,6 +277,7 @@ interface RenderRecord {
   materializationGap?: boolean;
   htmlSource?: "materialized" | "manually-seeded-example.html" | "no-html-available";
   copiedFileCount?: number;
+  sourceExampleAvailable?: boolean;
 }
 
 // Raw source string, NOT a real TS function: Playwright's frame.evaluate()
@@ -319,6 +352,37 @@ function dedupeBlocked(blocked: BlockedEntry[]): { cspCount: number; otherCount:
     else otherCount++;
   }
   return { cspCount, otherCount, byUrl };
+}
+
+async function probeLocalFailures(
+  blocked: BlockedEntry[],
+): Promise<{ local404Count: number; statusCounts: Record<string, number> }> {
+  const origin = new URL(WEB_ORIGIN).origin;
+  const candidates = [...dedupeBlocked(blocked).byUrl.values()]
+    .filter((entry) => entry.reason !== "csp")
+    .map((entry) => entry.url)
+    .filter((url) => {
+      try {
+        return new URL(url).origin === origin;
+      } catch {
+        return false;
+      }
+    });
+  let local404Count = 0;
+  const statusCounts: Record<string, number> = {};
+  await runPool([...new Set(candidates)], 12, async (url) => {
+    try {
+      const response = await fetch(url, { method: "HEAD" });
+      const key = String(response.status);
+      statusCounts[key] = (statusCounts[key] ?? 0) + 1;
+      if (response.status === 404) local404Count++;
+    } catch {
+      statusCounts["network-error"] = (statusCounts["network-error"] ?? 0) + 1;
+      // The original browser observation remains a non-CSP failure. This
+      // follow-up only labels local failures whose 404 status is confirmed.
+    }
+  });
+  return { local404Count, statusCounts };
 }
 
 async function renderUrl(
@@ -468,16 +532,6 @@ async function runPool<T>(items: T[], concurrency: number, worker: (item: T, ind
 }
 
 // ---------------------------------------------------------------------------
-// JSONL writer (serialized so concurrent workers never interleave writes)
-// ---------------------------------------------------------------------------
-
-let writeChain: Promise<void> = Promise.resolve();
-function appendJsonLine(record: RenderRecord): Promise<void> {
-  writeChain = writeChain.then(() => appendFile(JSONL_PATH, `${JSON.stringify(record)}\n`, "utf8"));
-  return writeChain;
-}
-
-// ---------------------------------------------------------------------------
 // Surface A — gallery card
 // ---------------------------------------------------------------------------
 
@@ -530,7 +584,6 @@ async function runSurfaceA(
       kind: disk?.kind ?? null,
     };
     results[index] = record;
-    await appendJsonLine(record);
     if ((index + 1) % 50 === 0) {
       process.stderr.write(`  surface A: ${index + 1}/${items.length}\n`);
     }
@@ -549,7 +602,7 @@ function sanitizeForProjectId(id: string): string {
 
 async function materializeProject(
   id: string,
-  templateDir: string,
+  examplePath: string | null,
 ): Promise<{
   projectId: string;
   createOk: boolean;
@@ -599,8 +652,7 @@ async function materializeProject(
   let renderEntryFile = materializedEntryFile;
 
   if (materializationGap) {
-    const examplePath = path.join(templateDir, "example.html");
-    if (existsSync(examplePath)) {
+    if (examplePath && existsSync(examplePath)) {
       const buf = await readFile(examplePath);
       const form = new FormData();
       form.append("files", new Blob([buf], { type: "text/html" }), "index.html");
@@ -632,7 +684,9 @@ async function deleteProject(projectId: string): Promise<void> {
 interface SampleItem {
   id: string;
   kind: string | null;
-  dir: string;
+  examplePath: string | null;
+  onDiskRoot: TemplateSourceRoot | "unmatched";
+  sourceExampleAvailable: boolean;
 }
 
 async function buildSurfaceBSample(onDiskRoot: OnDiskEntry[], catalogueIds: Set<string>): Promise<{ items: SampleItem[]; method: string[] }> {
@@ -670,12 +724,37 @@ async function buildSurfaceBSample(onDiskRoot: OnDiskEntry[], catalogueIds: Set<
 
   const items: SampleItem[] = [];
   for (const id of sampledIds) {
-    const resolved = resolveTemplateDir(id);
+    const resolved = resolveTemplateSource(id);
     if (!resolved) continue;
     const onDisk = eligible.find((e) => e.id === id);
-    items.push({ id, kind: onDisk?.kind ?? null, dir: resolved.dir });
+    items.push({
+      id,
+      kind: onDisk?.kind ?? null,
+      examplePath: resolved.examplePath,
+      onDiskRoot: resolved.root,
+      sourceExampleAvailable: true,
+    });
   }
   return { items: items.sort((a, b) => a.id.localeCompare(b.id)), method };
+}
+
+function buildSurfaceBFull(
+  catalogue: CatalogueEntry[],
+  onDiskById: Map<string, { root: string; kind: string | null }>,
+): { items: SampleItem[]; method: string[] } {
+  return {
+    items: catalogue.map((entry) => {
+      const resolved = resolveTemplateSource(entry.id);
+      return {
+        id: entry.id,
+        kind: onDiskById.get(entry.id)?.kind ?? null,
+        examplePath: resolved?.examplePath ?? null,
+        onDiskRoot: resolved?.root ?? "unmatched",
+        sourceExampleAvailable: resolved != null,
+      };
+    }),
+    method: [`all ${catalogue.length} entries returned by GET /api/design-templates`],
+  };
 }
 
 async function runSurfaceB(browser: PWBrowser, sample: SampleItem[]): Promise<RenderRecord[]> {
@@ -683,8 +762,8 @@ async function runSurfaceB(browser: PWBrowser, sample: SampleItem[]): Promise<Re
   const results: RenderRecord[] = new Array(items.length);
 
   await runPool(items, CONCURRENCY, async (item, index) => {
-    const cdn = await usesExternalCdn(path.join(item.dir, "example.html"));
-    const mat = await materializeProject(item.id, item.dir);
+    const cdn = await usesExternalCdn(item.examplePath);
+    const mat = await materializeProject(item.id, item.examplePath);
 
     if (!mat.createOk || !mat.renderEntryFile) {
       const record: RenderRecord = {
@@ -700,6 +779,8 @@ async function runSurfaceB(browser: PWBrowser, sample: SampleItem[]): Promise<Re
         blockedSubresources: [],
         blockedCspCount: 0,
         blockedOtherCount: 0,
+        blockedLocal404Count: 0,
+        blockedLocalProbeStatusCounts: {},
         consoleErrorCount: 0,
         consoleErrorSample: [],
         renderedTextLength: 0,
@@ -722,9 +803,10 @@ async function runSurfaceB(browser: PWBrowser, sample: SampleItem[]): Promise<Re
         materializationGap: mat.materializationGap,
         htmlSource: mat.htmlSource,
         copiedFileCount: mat.copiedFileCount,
+        onDiskRoot: item.onDiskRoot,
+        sourceExampleAvailable: item.sourceExampleAvailable,
       };
       results[index] = record;
-      await appendJsonLine(record);
       await deleteProject(mat.projectId);
       return;
     }
@@ -737,6 +819,7 @@ async function runSurfaceB(browser: PWBrowser, sample: SampleItem[]): Promise<Re
       out = { metrics: null, blocked: [], consoleErrors: [], httpStatus: null, timedOut: false, errorMessage: String(err) };
     }
     const { cspCount, otherCount } = dedupeBlocked(out.blocked);
+    const localProbe = await probeLocalFailures(out.blocked);
     const verdict = computeVerdict({ timedOut: out.timedOut, errorMessage: out.errorMessage, metrics: out.metrics, cspCount, otherCount });
     const notes: string[] = [];
     if (mat.htmlSource === "manually-seeded-example.html") {
@@ -757,6 +840,8 @@ async function runSurfaceB(browser: PWBrowser, sample: SampleItem[]): Promise<Re
       blockedSubresources: out.blocked,
       blockedCspCount: cspCount,
       blockedOtherCount: otherCount,
+      blockedLocal404Count: localProbe.local404Count,
+      blockedLocalProbeStatusCounts: localProbe.statusCounts,
       consoleErrorCount: out.consoleErrors.length,
       consoleErrorSample: out.consoleErrors.slice(0, 3),
       renderedTextLength: out.metrics?.textLen ?? 0,
@@ -775,9 +860,10 @@ async function runSurfaceB(browser: PWBrowser, sample: SampleItem[]): Promise<Re
       materializationGap: mat.materializationGap,
       htmlSource: mat.htmlSource,
       copiedFileCount: mat.copiedFileCount,
+      onDiskRoot: item.onDiskRoot,
+      sourceExampleAvailable: item.sourceExampleAvailable,
     };
     results[index] = record;
-    await appendJsonLine(record);
     await deleteProject(mat.projectId);
     if ((index + 1) % 10 === 0) {
       process.stderr.write(`  surface B: ${index + 1}/${items.length}\n`);
@@ -829,8 +915,6 @@ function countHttpsBlocks(records: RenderRecord[], kind: "font" | "img" | "scrip
 
 async function main(): Promise<void> {
   await mkdir(PROOF_DIR, { recursive: true });
-  await writeFile(JSONL_PATH, "", "utf8"); // start clean for this run
-
   process.stderr.write(`fetching catalogue from ${DAEMON_ORIGIN}/api/design-templates ...\n`);
   const catalogue = await fetchCatalogue();
 
@@ -853,16 +937,31 @@ async function main(): Promise<void> {
   );
 
   const browser = await pw.chromium.launch({ headless: true });
-
-  process.stderr.write(`surface A: rendering ${ITEM_LIMIT ?? catalogue.length} catalogue entries via gallery-card path ...\n`);
-  const surfaceA = await runSurfaceA(browser, catalogue, onDiskById);
-
-  process.stderr.write("building surface B stratified sample ...\n");
-  const { items: sampleB, method: sampleMethod } = await buildSurfaceBSample(onDiskRoot, catalogueIds);
-  process.stderr.write(`surface B: rendering ${sampleB.length} sampled templates via canvas/raw-file path ...\n`);
-  const surfaceB = await runSurfaceB(browser, sampleB);
-
-  await browser.close();
+  let surfaceA: RenderRecord[] = [];
+  let surfaceB: RenderRecord[] = [];
+  let canvasItems: SampleItem[] = [];
+  let canvasMethod: string[] = [];
+  try {
+    if (RUN_GALLERY) {
+      process.stderr.write(`surface A: rendering ${ITEM_LIMIT ?? catalogue.length} catalogue entries via gallery-card path ...\n`);
+      surfaceA = await runSurfaceA(browser, catalogue, onDiskById);
+    }
+    if (RUN_CANVAS) {
+      const selection = canvasArg === "all"
+        ? buildSurfaceBFull(catalogue, onDiskById)
+        : await buildSurfaceBSample(onDiskRoot, catalogueIds);
+      canvasItems = selection.items;
+      canvasMethod = selection.method;
+      process.stderr.write(
+        `surface B: rendering ${ITEM_LIMIT ?? canvasItems.length} ${canvasArg === "all" ? "catalogue" : "sampled"} ` +
+          `templates via canvas/raw-file path ...\n`,
+      );
+      surfaceB = await runSurfaceB(browser, canvasItems);
+    }
+  } finally {
+    await browser.close();
+  }
+  await replaceJsonLinesAtomically(JSONL_PATH, [...surfaceA, ...surfaceB]);
 
   const tallyA = tally(surfaceA);
   const tallyB = tally(surfaceB);
@@ -870,6 +969,25 @@ async function main(): Promise<void> {
   const blockedB = surfaceB.filter((r) => dedupeBlocked(r.blockedSubresources).byUrl.size > 0).length;
   const cspBlockedA = surfaceA.filter((r) => r.blockedCspCount > 0).length;
   const cspBlockedB = surfaceB.filter((r) => r.blockedCspCount > 0).length;
+  const cspRequestCountB = surfaceB.reduce((total, record) => total + record.blockedCspCount, 0);
+  const otherRequestCountB = surfaceB.reduce((total, record) => total + record.blockedOtherCount, 0);
+  const local404CountB = surfaceB.reduce((total, record) => total + (record.blockedLocal404Count ?? 0), 0);
+  const local404TemplateCountB = surfaceB.filter((record) => (record.blockedLocal404Count ?? 0) > 0).length;
+  const localProbeStatusCountsB: Record<string, number> = {};
+  for (const record of surfaceB) {
+    for (const [status, count] of Object.entries(record.blockedLocalProbeStatusCounts ?? {})) {
+      localProbeStatusCountsB[status] = (localProbeStatusCountsB[status] ?? 0) + count;
+    }
+  }
+  const zeroBlockedB = surfaceB.filter((record) => record.blockedCspCount === 0 && record.blockedOtherCount === 0).length;
+  const zeroCspB = surfaceB.filter((record) => record.blockedCspCount === 0).length;
+  const rootExampleB = surfaceB.filter(
+    (record) => record.onDiskRoot === "design-templates" && record.sourceExampleAvailable,
+  );
+  const rootExampleZeroBlockedB = rootExampleB.filter(
+    (record) => record.blockedCspCount === 0 && record.blockedOtherCount === 0,
+  ).length;
+  const rootExampleZeroCspB = rootExampleB.filter((record) => record.blockedCspCount === 0).length;
 
   const httpsFontsA = countHttpsBlocks(surfaceA, "font");
   const httpsImgA = countHttpsBlocks(surfaceA, "img");
@@ -884,15 +1002,13 @@ async function main(): Promise<void> {
   const seededCount = surfaceB.filter((r) => r.htmlSource === "manually-seeded-example.html").length;
   const noHtmlCount = surfaceB.filter((r) => r.htmlSource === "no-html-available").length;
 
-  const webglRecords = surfaceB.filter((r) => r.id === "webgl-experience" || r.id === "woven-light-hero");
-
   const topBlockedA = topBlockedReasons(surfaceA, 5);
   const topBlockedAll = topBlockedReasons([...surfaceA, ...surfaceB], 5);
 
-  const command = `pnpm tsx scripts/template-render-report.ts${jsonFlag ? " --json" : ""}`;
+  const command = `pnpm tsx scripts/template-render-report.ts${argv.length > 0 ? ` ${argv.join(" ")}` : ""}`;
 
   const lines: string[] = [];
-  lines.push("C1 — template-render-harness-baseline");
+  lines.push(`${artifactPrefix} — template render census`);
   lines.push("=".repeat(72));
   lines.push(`command: ${command}`);
   lines.push(`daemon: ${DAEMON_ORIGIN}  web: ${WEB_ORIGIN}`);
@@ -913,46 +1029,43 @@ async function main(): Promise<void> {
   lines.push("");
   lines.push("Surface A — gallery card (/api/skills/:id/example, sandbox=\"allow-scripts\", no CSP header set)");
   lines.push("-".repeat(72));
-  lines.push(`rendered: ${surfaceA.length}`);
-  lines.push(`  ok: ${tallyA.ok}  degraded: ${tallyA.degraded}  blank: ${tallyA.blank}  timeout: ${tallyA.timeout}  error: ${tallyA.error}`);
-  lines.push(`  with >=1 blocked subresource: ${blockedA}`);
-  lines.push(`  with >=1 CSP-attributed block: ${cspBlockedA}  (route sets no CSP header — see apps/daemon/src/routes/static-resource.ts:470)`);
-  lines.push(`  https: blocked by CSP — font-src: ${httpsFontsA}  img-src: ${httpsImgA}  script-src: ${httpsScriptA}  style-src: ${httpsStyleA}`);
+  if (!RUN_GALLERY) {
+    lines.push("skipped by --surface=canvas");
+  } else {
+    lines.push(`rendered: ${surfaceA.length}`);
+    lines.push(`  ok: ${tallyA.ok}  degraded: ${tallyA.degraded}  blank: ${tallyA.blank}  timeout: ${tallyA.timeout}  error: ${tallyA.error}`);
+    lines.push(`  with >=1 blocked subresource: ${blockedA}`);
+    lines.push(`  with >=1 CSP-attributed block: ${cspBlockedA} (this route sets no CSP header)`);
+    lines.push(`  https: blocked by CSP — font-src: ${httpsFontsA}  img-src: ${httpsImgA}  script-src: ${httpsScriptA}  style-src: ${httpsStyleA}`);
+  }
   lines.push("");
   lines.push("Surface B — canvas/FileViewer (/api/projects/:id/raw/:file, sandbox=\"allow-scripts allow-downloads\",");
   lines.push("  projectRawFileCsp genuinely in force per apps/daemon/src/server.ts:3489)");
   lines.push("-".repeat(72));
-  lines.push(`stratified sample size: ${surfaceB.length} (method below)`);
-  lines.push(`  ok: ${tallyB.ok}  degraded: ${tallyB.degraded}  blank: ${tallyB.blank}  timeout: ${tallyB.timeout}  error: ${tallyB.error}`);
-  lines.push(`  with >=1 blocked subresource: ${blockedB}`);
-  lines.push(`  with >=1 CSP-attributed block: ${cspBlockedB}`);
-  lines.push(`  https: blocked by CSP — font-src: ${httpsFontsB}  img-src: ${httpsImgB}  script-src: ${httpsScriptB}  style-src: ${httpsStyleB}`);
+  if (!RUN_CANVAS) {
+    lines.push("skipped by --surface=gallery");
+  } else {
+    lines.push(`${canvasArg === "all" ? "full catalogue" : "stratified sample"} size: ${surfaceB.length}`);
+    lines.push(`  ok: ${tallyB.ok}  degraded: ${tallyB.degraded}  blank: ${tallyB.blank}  timeout: ${tallyB.timeout}  error: ${tallyB.error}`);
+    lines.push(`  with >=1 blocked subresource: ${blockedB}; zero blocked: ${zeroBlockedB}/${surfaceB.length}`);
+    lines.push(`  CSP: ${cspRequestCountB} blocked requests across ${cspBlockedB} templates; zero CSP blocks: ${zeroCspB}/${surfaceB.length}`);
+    lines.push(`  non-CSP: ${otherRequestCountB} blocked requests`);
+    lines.push(`  confirmed local 404 subset: ${local404CountB} requests across ${local404TemplateCountB} templates`);
+    lines.push(`  local failed-request HEAD probe statuses: ${JSON.stringify(localProbeStatusCountsB)}`);
+    lines.push(`  non-CSP after removing confirmed local 404s: ${otherRequestCountB - local404CountB} blocked requests`);
+    lines.push(`  repo example.html cohort: ${rootExampleB.length}; zero blocked: ${rootExampleZeroBlockedB}/${rootExampleB.length}; zero CSP blocks: ${rootExampleZeroCspB}/${rootExampleB.length}`);
+    lines.push(`  https: blocked by CSP — font-src: ${httpsFontsB}  img-src: ${httpsImgB}  script-src: ${httpsScriptB}  style-src: ${httpsStyleB}`);
+  }
   lines.push("");
   lines.push("  Materialization (POST /api/projects with skillId=<template>, metadata.kind='template' — the exact");
-  lines.push("  path EntryShell.startProjectFromTemplate/routes/project/index.ts:1889 takes):");
-  lines.push(`    projects where the copy-assets/ step produced NO html entry file: ${materializationGapCount} / ${surfaceB.length}`);
+  lines.push("  path EntryShell.startProjectFromTemplate takes):");
+  lines.push(`    projects where materialization produced NO html entry file: ${materializationGapCount} / ${surfaceB.length}`);
   lines.push(`      -> of those, example.html seeded via real POST /api/projects/:id/upload: ${seededCount}`);
   lines.push(`      -> of those, no html available at all (no example.html on disk): ${noHtmlCount}`);
-  lines.push("    NOTE: this gap is independent of CSP. routes/project/index.ts only copies <template>/assets/*");
-  lines.push("    (flattened into the project root) — example.html itself is never copied, so a freshly-created");
-  lines.push("    template project has nothing detectEntryFile() can find. Where assets/ is missing entirely");
-  lines.push("    (baked-html kind templates typically have no assets/ dir), the project starts completely empty.");
   lines.push("");
-  lines.push("  WebGL templates (both known instances in the catalogue):");
-  for (const r of webglRecords) {
-    lines.push(`    ${r.id}: verdict=${r.verdict} painted=${r.painted} materializationGap=${r.materializationGap} htmlSource=${r.htmlSource} blockedCsp=${r.blockedCspCount}`);
-  }
-  if (webglRecords.length === 0) lines.push("    (none matched in this run's sample — see JSONL for the full sample list)");
-  lines.push("    Both are self-contained (webgl-experience: inline script, no assets/ dir at all; woven-light-hero:");
-  lines.push("    vite-bundled three.js under assets/, no CDN dependency). For both, the materialization gap — not");
-  lines.push("    CSP — is what leaves the canvas blank: neither ever gets an HTML entry file copied into the project.");
-  lines.push("    Separately, FileViewer auto-routes SharedArrayBuffer/Worker/WASM/WebGL2/OffscreenCanvas content to a");
-  lines.push("    CSP-free 'powered preview' path (file-viewer-render-mode.ts:233); plain WebGL1 canvases (both of");
-  lines.push("    these) are explicitly excluded from that path and stay on the restrictive projectRawFileCsp route.");
-  lines.push("");
-  lines.push("  Surface B sampling method (documented, not hidden):");
-  for (const m of sampleMethod) lines.push(`    - ${m}`);
-  lines.push(`  sampled ids: ${sampleB.map((s) => s.id).join(", ")}`);
+  lines.push("  Surface B selection method:");
+  for (const method of canvasMethod) lines.push(`    - ${method}`);
+  if (canvasArg === "sample") lines.push(`  sampled ids: ${canvasItems.map((item) => item.id).join(", ")}`);
   lines.push("");
   lines.push("Top 5 blocked-resource reasons by frequency (surface A)");
   lines.push("-".repeat(72));
@@ -963,21 +1076,12 @@ async function main(): Promise<void> {
   lines.push("-".repeat(72));
   for (const { reason, count } of topBlockedAll) lines.push(`  ${count}x  ${reason}`);
   lines.push("");
-  lines.push("CSP hypothesis — measured, not assumed");
+  lines.push("CSP/non-CSP boundary — measured, not assumed");
   lines.push("-".repeat(72));
-  lines.push(`  Surface A (gallery card): ${cspBlockedA} / ${surfaceA.length} renders show a CSP-attributed block.`);
-  lines.push("    Expected near-zero: static-resource.ts's /api/skills/:id/example handler never sets a");
-  lines.push("    Content-Security-Policy header, so the CSP-split hypothesis does not apply to this surface.");
-  lines.push(`  Surface B (canvas/raw-file): ${cspBlockedB} / ${surfaceB.length} sampled renders show a CSP-attributed block`);
-  lines.push(`    (of which ${seededCount} were only renderable at all because this harness manually seeded`);
-  lines.push("    example.html — see htmlSource field; their blocked-subresource counts may also include");
-  lines.push("    path-mismatch 404s from using the un-rewritten example.html, flagged in their notes field,");
-  lines.push("    which are NOT CSP blocks and are excluded from the CSP counts above).");
-  lines.push("  Verdict: the CSP split IS real and DOES degrade surface B once HTML content exists (confirmed live —");
-  lines.push("  e.g. Google Fonts stylesheet links blocked by style-src lacking https:). But it is NOT the dominant");
-  lines.push("  cause of 'templates don't load': the materialization gap above means most template-started projects");
-  lines.push("  never get real HTML into the canvas in the first place, CSP or not. Fixing CSP alone (t2) would not");
-  lines.push("  fix the majority of blank canvases measured here; the materialization gap needs its own fix.");
+  lines.push(`  Surface A: ${cspBlockedA}/${surfaceA.length} templates have CSP-attributed blocks; this surface has no CSP header.`);
+  lines.push(`  Surface B: ${cspBlockedB}/${surfaceB.length} templates have ${cspRequestCountB} CSP-attributed blocked requests.`);
+  lines.push(`  Surface B non-CSP failures: ${otherRequestCountB}, including ${local404CountB} confirmed local 404s.`);
+  lines.push("  Confirmed local 404s remain in blockedOtherCount and are excluded from blockedCspCount.");
   lines.push("");
   lines.push("Exit");
   lines.push("-".repeat(72));
@@ -999,7 +1103,25 @@ async function main(): Promise<void> {
           onDiskRootWithExampleHtml: rootWithExampleHtml,
           onDiskOdDirs: onDiskOd.length,
           surfaceA: { total: surfaceA.length, ...tallyA, blockedCount: blockedA, cspBlockedCount: cspBlockedA },
-          surfaceB: { total: surfaceB.length, ...tallyB, blockedCount: blockedB, cspBlockedCount: cspBlockedB, materializationGapCount },
+          surfaceB: {
+            total: surfaceB.length,
+            ...tallyB,
+            blockedCount: blockedB,
+            zeroBlockedCount: zeroBlockedB,
+            cspBlockedTemplateCount: cspBlockedB,
+            cspBlockedRequestCount: cspRequestCountB,
+            zeroCspCount: zeroCspB,
+            otherBlockedRequestCount: otherRequestCountB,
+            confirmedLocal404Count: local404CountB,
+            confirmedLocal404TemplateCount: local404TemplateCountB,
+            localFailedRequestProbeStatusCounts: localProbeStatusCountsB,
+            materializationGapCount,
+            repoExampleCohort: {
+              total: rootExampleB.length,
+              zeroBlockedCount: rootExampleZeroBlockedB,
+              zeroCspCount: rootExampleZeroCspB,
+            },
+          },
           proof: { jsonl: JSONL_PATH, txt: TXT_PATH },
         },
         null,

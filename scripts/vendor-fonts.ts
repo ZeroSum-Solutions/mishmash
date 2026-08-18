@@ -6,10 +6,15 @@ import {
   fetchWebfontStylesheet,
   fontFaceCss,
   parseWebfontFaces,
-  webfontFileSlug,
-  webfontFormatExtension,
   type FontFaceRef,
 } from '../apps/daemon/src/brands/webfonts.ts';
+import {
+  dedupeFontDirectory,
+  findFontProviderReferences,
+  fontContentIdentity,
+  rewriteNonLoadingFontReferences,
+  vendoredFontFileName,
+} from './vendor-fonts-lib.ts';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const catalogueRoot = path.join(repoRoot, 'design-templates');
@@ -357,7 +362,7 @@ function rewriteSource(source: TemplateSource, templateDir: string): string {
       return `@import url("${href}");`;
     },
   );
-  return content.replace(/^[\t ]+$/gm, '');
+  return rewriteNonLoadingFontReferences(content).replace(/^[\t ]+$/gm, '');
 }
 
 async function vendorTemplate(
@@ -424,14 +429,18 @@ async function vendorTemplate(
     return { families: [], files: 0, bytes: 0 };
   }
 
+  const fileByContent = new Map<string, string>();
   const localFonts: LocalFont[] = downloaded.flatMap((item) => {
     if (!item) return [];
     const { face, buffer } = item;
+    const identity = fontContentIdentity(buffer);
+    const file = fileByContent.get(identity) ?? vendoredFontFileName(face, buffer);
+    fileByContent.set(identity, file);
     return [{
       family: face.family,
       weight: face.weight,
       style: face.style,
-      file: `${webfontFileSlug(face)}${webfontFormatExtension(face.format)}`,
+      file,
       format: face.format,
       sourceUrl: face.url,
       bytes: buffer.length,
@@ -440,9 +449,11 @@ async function vendorTemplate(
   });
   const fontsDir = path.join(templateDir, 'fonts');
   await fs.mkdir(fontsDir, { recursive: true });
+  const physicalFiles = new Map<string, Buffer>();
   for (const [index, item] of downloaded.entries()) {
-    if (item) await fs.writeFile(path.join(fontsDir, localFonts[index]!.file), item.buffer);
+    if (item) physicalFiles.set(localFonts[index]!.file, item.buffer);
   }
+  for (const [file, buffer] of physicalFiles) await fs.writeFile(path.join(fontsDir, file), buffer);
   await fs.writeFile(
     path.join(fontsDir, 'fonts.css'),
     `${fontFaceCss(localFonts, './').trimEnd()}\n`,
@@ -453,9 +464,11 @@ async function vendorTemplate(
     if (rewritten !== source.content) await fs.writeFile(source.file, rewritten, 'utf8');
   }
   const families = [...new Set(localFonts.map((font) => font.family))].sort();
-  const bytes = localFonts.reduce((total, font) => total + font.bytes, 0);
-  process.stdout.write(`VENDORED ${template}: ${families.join(', ')} (${localFonts.length} files, ${bytes} bytes)\n`);
-  return { families, files: localFonts.length, bytes };
+  const bytes = [...physicalFiles.values()].reduce((total, buffer) => total + buffer.length, 0);
+  process.stdout.write(
+    `VENDORED ${template}: ${families.join(', ')} (${localFonts.length} faces, ${physicalFiles.size} files, ${bytes} bytes)\n`,
+  );
+  return { families, files: physicalFiles.size, bytes };
 }
 
 async function main(): Promise<void> {
@@ -470,7 +483,22 @@ async function main(): Promise<void> {
   let templatesVendored = 0;
   let fontFiles = 0;
   let fontBytes = 0;
+  let fontFilesBeforeDeduplication = 0;
+  let fontBytesBeforeDeduplication = 0;
+  let fontFilesAfterDeduplication = 0;
+  let fontBytesAfterDeduplication = 0;
   for (const template of entries) {
+    const deduplication = await dedupeFontDirectory(path.join(catalogueRoot, template, 'fonts'));
+    fontFilesBeforeDeduplication += deduplication.filesBefore;
+    fontBytesBeforeDeduplication += deduplication.bytesBefore;
+    fontFilesAfterDeduplication += deduplication.filesAfter;
+    fontBytesAfterDeduplication += deduplication.bytesAfter;
+    if (deduplication.filesBefore > deduplication.filesAfter) {
+      process.stdout.write(
+        `DEDUPED ${template}: ${deduplication.filesBefore} -> ${deduplication.filesAfter} files, ` +
+          `${deduplication.bytesBefore} -> ${deduplication.bytesAfter} bytes\n`,
+      );
+    }
     const result = await vendorTemplate(template, failures, droppedSubsets);
     if (result == null) continue;
     templatesWithRemoteFonts += 1;
@@ -480,6 +508,21 @@ async function main(): Promise<void> {
     fontBytes += result.bytes;
   }
 
+  const residualReferences: Array<{ template: string; file: string; hosts: string[] }> = [];
+  for (const template of entries) {
+    const templateDir = path.join(catalogueRoot, template);
+    for (const source of await readTemplateSources(templateDir)) {
+      const hosts = findFontProviderReferences(source.content);
+      if (hosts.length === 0) continue;
+      residualReferences.push({
+        template,
+        file: path.relative(catalogueRoot, source.file).split(path.sep).join('/'),
+        hosts,
+      });
+    }
+  }
+  const residualTemplates = new Set(residualReferences.map((item) => item.template));
+
   const report = {
     generatedAt: new Date().toISOString(),
     catalogueRoot,
@@ -488,15 +531,23 @@ async function main(): Promise<void> {
     templatesVendored,
     fontFiles,
     fontBytes,
+    deduplication: {
+      filesBefore: fontFilesBeforeDeduplication,
+      bytesBefore: fontBytesBeforeDeduplication,
+      filesAfter: fontFilesAfterDeduplication,
+      bytesAfter: fontBytesAfterDeduplication,
+    },
     familiesVendored: [...families].sort(),
     failures,
     droppedSubsets,
+    residualReferenceTemplates: [...residualTemplates].sort(),
+    residualReferences,
   };
   await fs.mkdir(path.dirname(reportPath), { recursive: true });
   await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
   process.stdout.write(`REPORT ${reportPath}\n`);
   process.stdout.write(
-    `SUMMARY templates=${templatesVendored}/${templatesWithRemoteFonts} families=${families.size} files=${fontFiles} bytes=${fontBytes} failures=${failures.length} dropped=${droppedSubsets.length}\n`,
+    `SUMMARY templates=${templatesVendored}/${templatesWithRemoteFonts} families=${families.size} files=${fontFiles} bytes=${fontBytes} failures=${failures.length} residualTemplates=${residualTemplates.size} dropped=${droppedSubsets.length}\n`,
   );
   if (failures.length > 0) process.exitCode = 1;
 }

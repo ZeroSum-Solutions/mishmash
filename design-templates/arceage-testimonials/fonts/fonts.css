@@ -1,6 +1,6 @@
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-100-italic-latin-ext-714688e03a.woff2") format("woff2");
+  src: url("./barlow-latin-ext-6c21e9c8fc.woff2") format("woff2");
   font-weight: 100;
   font-style: italic;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -8,7 +8,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-100-italic-latin-98ddcfd75f.woff2") format("woff2");
+  src: url("./barlow-latin-2eab999936.woff2") format("woff2");
   font-weight: 100;
   font-style: italic;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -16,7 +16,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-200-italic-latin-ext-c726342a4c.woff2") format("woff2");
+  src: url("./barlow-latin-ext-9e0549d3cf.woff2") format("woff2");
   font-weight: 200;
   font-style: italic;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -24,7 +24,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-200-italic-latin-54a94453ac.woff2") format("woff2");
+  src: url("./barlow-latin-3ec91bc0a2.woff2") format("woff2");
   font-weight: 200;
   font-style: italic;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -32,7 +32,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-300-italic-latin-ext-a5323d622e.woff2") format("woff2");
+  src: url("./barlow-latin-ext-1d69ef4ddd.woff2") format("woff2");
   font-weight: 300;
   font-style: italic;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -40,7 +40,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-300-italic-latin-a66611430c.woff2") format("woff2");
+  src: url("./barlow-latin-4c738debc0.woff2") format("woff2");
   font-weight: 300;
   font-style: italic;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -48,7 +48,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-400-italic-latin-ext-f2af935eb4.woff2") format("woff2");
+  src: url("./barlow-latin-ext-e9d58895aa.woff2") format("woff2");
   font-weight: 400;
   font-style: italic;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -56,7 +56,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-400-italic-latin-49d52d6bdc.woff2") format("woff2");
+  src: url("./barlow-latin-b0c1a6bb98.woff2") format("woff2");
   font-weight: 400;
   font-style: italic;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -64,7 +64,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-500-italic-latin-ext-33541fdca4.woff2") format("woff2");
+  src: url("./barlow-latin-ext-7de95c537b.woff2") format("woff2");
   font-weight: 500;
   font-style: italic;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -72,7 +72,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-500-italic-latin-4fd597d8d1.woff2") format("woff2");
+  src: url("./barlow-latin-bf0d088f7b.woff2") format("woff2");
   font-weight: 500;
   font-style: italic;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -80,7 +80,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-600-italic-latin-ext-2b6d35b6f5.woff2") format("woff2");
+  src: url("./barlow-latin-ext-cf1812edca.woff2") format("woff2");
   font-weight: 600;
   font-style: italic;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -88,7 +88,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-600-italic-latin-151168ad91.woff2") format("woff2");
+  src: url("./barlow-latin-af3203d235.woff2") format("woff2");
   font-weight: 600;
   font-style: italic;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -96,7 +96,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-700-italic-latin-ext-b5408c7b8c.woff2") format("woff2");
+  src: url("./barlow-latin-ext-05e0ea4022.woff2") format("woff2");
   font-weight: 700;
   font-style: italic;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -104,7 +104,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-700-italic-latin-8c02d1dc9b.woff2") format("woff2");
+  src: url("./barlow-latin-fab52d0559.woff2") format("woff2");
   font-weight: 700;
   font-style: italic;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -112,7 +112,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-800-italic-latin-ext-31f31fc209.woff2") format("woff2");
+  src: url("./barlow-latin-ext-85dc97e702.woff2") format("woff2");
   font-weight: 800;
   font-style: italic;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -120,7 +120,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-800-italic-latin-45cff9f653.woff2") format("woff2");
+  src: url("./barlow-latin-47e14ddb1d.woff2") format("woff2");
   font-weight: 800;
   font-style: italic;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -128,7 +128,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-900-italic-latin-ext-91de8c6f6a.woff2") format("woff2");
+  src: url("./barlow-latin-ext-c099892d71.woff2") format("woff2");
   font-weight: 900;
   font-style: italic;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -136,7 +136,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-900-italic-latin-2d3b415f3f.woff2") format("woff2");
+  src: url("./barlow-latin-35ea4bb20b.woff2") format("woff2");
   font-weight: 900;
   font-style: italic;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -144,7 +144,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-100-latin-ext-f0d8e7e127.woff2") format("woff2");
+  src: url("./barlow-latin-ext-b0bcdc95fe.woff2") format("woff2");
   font-weight: 100;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -152,7 +152,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-100-latin-104bc60f61.woff2") format("woff2");
+  src: url("./barlow-latin-993b4fdb61.woff2") format("woff2");
   font-weight: 100;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -160,7 +160,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-200-latin-ext-d1ab0b4709.woff2") format("woff2");
+  src: url("./barlow-latin-ext-bd1b19f24b.woff2") format("woff2");
   font-weight: 200;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -168,7 +168,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-200-latin-ee1e2aa3ac.woff2") format("woff2");
+  src: url("./barlow-latin-889c195d15.woff2") format("woff2");
   font-weight: 200;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -176,7 +176,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-300-latin-ext-d3154c70d2.woff2") format("woff2");
+  src: url("./barlow-latin-ext-d9a34b35ab.woff2") format("woff2");
   font-weight: 300;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -184,7 +184,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-300-latin-7195dd625c.woff2") format("woff2");
+  src: url("./barlow-latin-13717d5594.woff2") format("woff2");
   font-weight: 300;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -192,7 +192,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-400-latin-ext-236980eea0.woff2") format("woff2");
+  src: url("./barlow-latin-ext-bac411df68.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -200,7 +200,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-400-latin-c433d70984.woff2") format("woff2");
+  src: url("./barlow-latin-7a686e7631.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -208,7 +208,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-500-latin-ext-d76606d053.woff2") format("woff2");
+  src: url("./barlow-latin-ext-7985f1abf1.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -216,7 +216,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-500-latin-b97cd9f860.woff2") format("woff2");
+  src: url("./barlow-latin-80e7dc5605.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -224,7 +224,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-600-latin-ext-06442896a7.woff2") format("woff2");
+  src: url("./barlow-latin-ext-67dfa555a7.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -232,7 +232,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-600-latin-9aa20a8af3.woff2") format("woff2");
+  src: url("./barlow-latin-488b580981.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -240,7 +240,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-700-latin-ext-360f724496.woff2") format("woff2");
+  src: url("./barlow-latin-ext-2b0e32435d.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -248,7 +248,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-700-latin-aa21ecf81e.woff2") format("woff2");
+  src: url("./barlow-latin-98aa8b5c25.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -256,7 +256,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-800-latin-ext-4db9905bce.woff2") format("woff2");
+  src: url("./barlow-latin-ext-a28a4c8343.woff2") format("woff2");
   font-weight: 800;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -264,7 +264,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-800-latin-5bc4e03c07.woff2") format("woff2");
+  src: url("./barlow-latin-621caf4a8f.woff2") format("woff2");
   font-weight: 800;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -272,7 +272,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-900-latin-ext-7fb0104f9c.woff2") format("woff2");
+  src: url("./barlow-latin-ext-588ef75fba.woff2") format("woff2");
   font-weight: 900;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -280,7 +280,7 @@
 }
 @font-face {
   font-family: "Barlow";
-  src: url("./barlow-900-latin-d159b665fc.woff2") format("woff2");
+  src: url("./barlow-latin-6acec3ba2e.woff2") format("woff2");
   font-weight: 900;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;

@@ -1,6 +1,6 @@
 @font-face {
   font-family: "Barlow Condensed";
-  src: url("./barlow-condensed-500-latin-ext-fa3ed836d0.woff2") format("woff2");
+  src: url("./barlow-condensed-latin-ext-f8ec026d88.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -8,7 +8,7 @@
 }
 @font-face {
   font-family: "Barlow Condensed";
-  src: url("./barlow-condensed-500-latin-6a13c677ec.woff2") format("woff2");
+  src: url("./barlow-condensed-latin-31ff5e6e96.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -16,7 +16,7 @@
 }
 @font-face {
   font-family: "Barlow Condensed";
-  src: url("./barlow-condensed-600-latin-ext-e9c18f8d12.woff2") format("woff2");
+  src: url("./barlow-condensed-latin-ext-a2f92ada1d.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -24,7 +24,7 @@
 }
 @font-face {
   font-family: "Barlow Condensed";
-  src: url("./barlow-condensed-600-latin-ff9b6c239a.woff2") format("woff2");
+  src: url("./barlow-condensed-latin-5bc49d41f3.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -32,7 +32,7 @@
 }
 @font-face {
   font-family: "Barlow Condensed";
-  src: url("./barlow-condensed-700-latin-ext-f94015b6c4.woff2") format("woff2");
+  src: url("./barlow-condensed-latin-ext-0c1655655b.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -40,7 +40,7 @@
 }
 @font-face {
   font-family: "Barlow Condensed";
-  src: url("./barlow-condensed-700-latin-cf567538f5.woff2") format("woff2");
+  src: url("./barlow-condensed-latin-e3e520cb74.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -48,7 +48,7 @@
 }
 @font-face {
   font-family: "Barlow Condensed";
-  src: url("./barlow-condensed-800-latin-ext-7c99f348c3.woff2") format("woff2");
+  src: url("./barlow-condensed-latin-ext-14480fbcd1.woff2") format("woff2");
   font-weight: 800;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -56,7 +56,7 @@
 }
 @font-face {
   font-family: "Barlow Condensed";
-  src: url("./barlow-condensed-800-latin-646aa99e3e.woff2") format("woff2");
+  src: url("./barlow-condensed-latin-89eec21b1a.woff2") format("woff2");
   font-weight: 800;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -64,7 +64,7 @@
 }
 @font-face {
   font-family: "Barlow Condensed";
-  src: url("./barlow-condensed-900-latin-ext-1e2fc1ca5f.woff2") format("woff2");
+  src: url("./barlow-condensed-latin-ext-617496b8f7.woff2") format("woff2");
   font-weight: 900;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -72,7 +72,7 @@
 }
 @font-face {
   font-family: "Barlow Condensed";
-  src: url("./barlow-condensed-900-latin-3f4237870f.woff2") format("woff2");
+  src: url("./barlow-condensed-latin-2036f7f4aa.woff2") format("woff2");
   font-weight: 900;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -80,7 +80,7 @@
 }
 @font-face {
   font-family: "Bowlby One";
-  src: url("./bowlby-one-400-latin-0997ad3326.woff2") format("woff2");
+  src: url("./bowlby-one-latin-12274488e8.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -88,7 +88,7 @@
 }
 @font-face {
   font-family: "Inter";
-  src: url("./inter-400-latin-ext-b4515613da.woff2") format("woff2");
+  src: url("./inter-latin-ext-a28eb6d3cc.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -96,7 +96,7 @@
 }
 @font-face {
   font-family: "Inter";
-  src: url("./inter-400-latin-7f005d9a64.woff2") format("woff2");
+  src: url("./inter-latin-c940764593.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -104,7 +104,7 @@
 }
 @font-face {
   font-family: "Inter";
-  src: url("./inter-500-latin-ext-b4515613da.woff2") format("woff2");
+  src: url("./inter-latin-ext-a28eb6d3cc.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -112,7 +112,7 @@
 }
 @font-face {
   font-family: "Inter";
-  src: url("./inter-500-latin-7f005d9a64.woff2") format("woff2");
+  src: url("./inter-latin-c940764593.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -120,7 +120,7 @@
 }
 @font-face {
   font-family: "Inter";
-  src: url("./inter-600-latin-ext-b4515613da.woff2") format("woff2");
+  src: url("./inter-latin-ext-a28eb6d3cc.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -128,7 +128,7 @@
 }
 @font-face {
   font-family: "Inter";
-  src: url("./inter-600-latin-7f005d9a64.woff2") format("woff2");
+  src: url("./inter-latin-c940764593.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -136,7 +136,7 @@
 }
 @font-face {
   font-family: "Stardos Stencil";
-  src: url("./stardos-stencil-400-latin-3e55c584cc.woff2") format("woff2");
+  src: url("./stardos-stencil-latin-acd6af2d22.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -144,7 +144,7 @@
 }
 @font-face {
   font-family: "Stardos Stencil";
-  src: url("./stardos-stencil-700-latin-a4e49dc48c.woff2") format("woff2");
+  src: url("./stardos-stencil-latin-d6f96df606.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
