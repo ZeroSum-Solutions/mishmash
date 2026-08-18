@@ -18,6 +18,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import net from 'node:net';
 import { executionProfileFromStreamFormat, PLUGIN_SHARE_ACTION_PLUGIN_IDS } from '@open-design/contracts';
+import { matchCatalogue, renderCatalogueMatchBlock } from '@open-design/contracts';
 import { isTodoWriteToolName, stopReasonIsTruncation, todoItemsFromTodoWriteInput } from '@open-design/contracts';
 // WR wave (t9 fix-round, Sol review MED-3): validates a raw chat-body
 // `routingOverride` field before it ever reaches resolveDispatchRouting.
@@ -660,6 +661,7 @@ import { registerOpenDesignPublicMetadataRoutes } from './routes/open-design-pub
 import { registerWhatsNewRoutes } from './routes/whats-new.js';
 import { registerMemoryRoutes } from './routes/memory.js';
 import { createAnomalySurface, registerAnomalyRoutes } from './routes/anomalies.js';
+import { buildCatalogueCandidates, registerCatalogueMatchRoutes } from './routes/catalogue-match.js';
 import { registerTelemetryRoutes } from './routes/telemetry.js';
 import {
   assembleExample,
@@ -2677,6 +2679,11 @@ export async function startServer({
 
   registerAnomalyRoutes(app, { log: anomalies.log });
 
+  registerCatalogueMatchRoutes(app, {
+    listAllSkillLikeEntries,
+    designTemplateRoots: DESIGN_TEMPLATE_ROOTS,
+  });
+
   const telemetry = registerTelemetryRoutes(app, {
     dataDir: RUNTIME_DATA_DIR,
     readAppConfig,
@@ -3904,6 +3911,11 @@ export async function startServer({
     freeformDeckSignal,
     mediaHintSignal,
     platformHintSignal,
+    // The user's raw brief text, scanned for a catalogue-match shortlist
+    // below — see the "Brief -> library matcher shortlist" block near the
+    // composeSystemPrompt() call in this function. Optional: callers that
+    // never pass it simply get no shortlist, same as an empty match.
+    briefText,
   }) => {
     const project =
       typeof projectId === 'string' && projectId
@@ -4447,6 +4459,31 @@ export async function startServer({
       }
     }
 
+    // Brief -> library matcher shortlist. 561 design templates and 164
+    // skills carry curated `triggers`, but nothing ever compared a user's
+    // brief against them — a free-form project got skillId: null and this
+    // composed prompt never mentioned the catalogue existed. Only fills the
+    // vacuum: a run that already resolved an explicit skill/template
+    // (skillBody non-empty) skips this entirely, so an explicit choice is
+    // never second-guessed. See packages/contracts/src/api/catalogue-match.ts
+    // for the ranking engine and apps/daemon/src/routes/catalogue-match.ts
+    // for the identical HTTP surface the UI/CLI call.
+    let catalogueMatchBlock;
+    if (
+      (!skillBody || skillBody.trim().length === 0)
+      && typeof briefText === 'string'
+      && briefText.trim().length > 0
+    ) {
+      try {
+        const allSkills = await loadAllSkills();
+        const candidates = buildCatalogueCandidates(allSkills, DESIGN_TEMPLATE_ROOTS);
+        const matches = matchCatalogue(candidates, briefText);
+        if (matches.length > 0) catalogueMatchBlock = renderCatalogueMatchBlock(matches);
+      } catch (err) {
+        console.warn(`[catalogue-match] shortlist build failed: ${(err)?.message ?? err}`);
+      }
+    }
+
     const prompt = composeSystemPrompt({
       agentId,
       includeCodexImagegenOverride: false,
@@ -4464,6 +4501,7 @@ export async function startServer({
       designSystemImportMode,
       craftBody,
       craftSections,
+      catalogueMatchBlock,
       memoryBody,
       memoryHooks,
       metadata,
@@ -5086,6 +5124,13 @@ export async function startServer({
         freeformDeckSignal: intentSignals.deck,
         mediaHintSignal: intentSignals.media,
         platformHintSignal: intentSignals.platform,
+        // Same user-authored-only text the intent signals above scan — a
+        // transcript-resending agent's re-sent assistant copy (discovery
+        // form options, delivery summaries) must not drive the catalogue
+        // shortlist any more than it should flip an intent signal.
+        briefText: intentSignalTexts
+          .filter((t): t is string => typeof t === 'string' && t.length > 0)
+          .join('\n\n'),
       });
 
     run.designSystemId = designSystemSelection?.id ?? null;

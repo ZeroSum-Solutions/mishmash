@@ -3180,6 +3180,11 @@ export interface Dict {
   'home.recommendation.defaultProjectName': string;
   'home.recommendation.startFailed': string;
 
+  // Home brief -> library matcher shortlist (catalogue-match)
+  'home.catalogueMatch.heading': string;
+  'home.catalogueMatch.applyAria': string;
+  'home.catalogueMatch.dismiss': string;
+
   // Home featured row — UI8 template starters + tool starter cards
   // (docs/plans/2026-08-01-ui8-kit-starters-and-home-restructure.md §Stream B)
   'home.featured.title': string;

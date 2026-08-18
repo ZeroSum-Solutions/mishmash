@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Dialog, DialogFooter, DialogTitle } from '@open-design/components';
 import type {
   ApplyResult,
+  CatalogueMatch,
   ChatSessionMode,
   ConnectorDetail,
   InputFieldSpec,
@@ -108,6 +109,7 @@ import { localizePluginTitle } from './plugins-home/localization';
 import type { PluginUseAction } from './plugins-home/useActions';
 import { examplePresetSeedPrompt } from './plugins-home/presetSeedPrompt';
 import { localizePluginDescription } from './plugins-home/localization';
+import { CatalogueMatchSuggestions } from './CatalogueMatchSuggestions';
 import { RecentProjectsStrip } from './RecentProjectsStrip';
 import { RecommendedStartRegion } from './RecommendedStartRegion';
 import type { Recommendation } from '../onboarding/recommendation';
@@ -1560,6 +1562,22 @@ export function HomeView({
     focusPromptAtEnd();
   }
 
+  // Accepting a CatalogueMatchSuggestions chip. Deliberately NOT useSkill():
+  // useSkill also resets the plugin/scenario state and can replace the
+  // composer's text with the skill's own example prompt, which is right for
+  // an explicit chip-rail pick but wrong here — the user's own brief is what
+  // scored the match in the first place, and overwriting it would defeat
+  // the "suggest, never hijack" rule the shortlist is built on. Only sets
+  // the active-skill pill; `skills` is the functional-skills + design-
+  // templates union (see EntryView's `skills` prop doc), so every id
+  // `matchCatalogue` can return resolves here.
+  function applyCatalogueMatch(match: CatalogueMatch) {
+    const skill = skills.find((s) => s.id === match.id);
+    if (!skill) return;
+    setActiveSkill(skill);
+    setError(null);
+  }
+
   function useMcpServer(_server: McpServerConfig, nextPrompt: string) {
     setSelectedMcpContexts((current) => (
       current.some((item) => item.server.id === _server.id)
@@ -2232,6 +2250,12 @@ export function HomeView({
             />
           ) : artifactUpgradeSlot
         }
+      />
+
+      <CatalogueMatchSuggestions
+        prompt={prompt}
+        disabled={Boolean(activeSkill)}
+        onAccept={applyCatalogueMatch}
       />
 
       <RecentProjectsStrip

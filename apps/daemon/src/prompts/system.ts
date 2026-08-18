@@ -697,6 +697,14 @@ export interface ComposeInput {
   // (letter-spacing, accent caps, anti-slop) cover everything below.
   craftBody?: string | undefined;
   craftSections?: string[] | undefined;
+  // Pre-rendered `## Library shortlist` block (see
+  // packages/contracts/src/prompts/catalogue-match-block.ts /
+  // renderCatalogueMatchBlock) — the daemon only computes and passes this
+  // when the run has no explicit skill/template resolved (skillBody was
+  // empty at compose time), so an explicit user pick is never
+  // second-guessed. Undefined/empty means no shortlist scored well enough
+  // to surface; the block is a suggestion the agent is free to ignore.
+  catalogueMatchBlock?: string | undefined;
   // Markdown built from the user's auto-memory store
   // (<dataDir>/memory/*.md). Folded in before the active design system so
   // tone/voice/preferences extracted from past chats win over the
@@ -818,6 +826,7 @@ export function composeSystemPrompt({
   designSystemImportMode,
   craftBody,
   craftSections,
+  catalogueMatchBlock,
   memoryBody,
   memoryHooks,
   metadata,
@@ -1206,6 +1215,21 @@ export function composeSystemPrompt({
     parts.push(
       `\n\n## Active skill${skillName ? ` — ${skillName}` : ''}\n\nFollow this skill's workflow exactly.${preflight}\n\n${skillBody.trim()}`,
     );
+  }
+
+  // Enforced here, not just by the daemon-side gate that computes
+  // catalogueMatchBlock (server.ts's composeDaemonSystemPrompt): an active
+  // skill/template ALWAYS wins over the shortlist, even if a caller passes
+  // both. This is a suggestion for the vacuum, never a second-guess of an
+  // explicit pick. Skipped in ask mode: chat turns aren't building an
+  // artifact.
+  if (
+    !isAskMode
+    && (!skillBody || skillBody.trim().length === 0)
+    && catalogueMatchBlock
+    && catalogueMatchBlock.trim().length > 0
+  ) {
+    parts.push(catalogueMatchBlock);
   }
 
   if (!isAskMode) {
