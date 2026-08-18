@@ -56,4 +56,51 @@ describe('shared webfont harvesting primitives', () => {
     );
     expect(face?.subset).toBeUndefined();
   });
+
+  it('drops font faces whose CSS descriptor values fail the allowlist', () => {
+    const css = fontFaceCss(
+      [
+        {
+          family: 'Safe Variable',
+          weight: '100 900',
+          style: 'oblique 12deg',
+          unicodeRange: 'U+0000-00FF, U+4??',
+          file: 'safe.woff2',
+          format: 'woff2',
+        },
+        {
+          family: 'Bad Weight',
+          weight: '400; } body { color: red',
+          style: 'normal',
+          file: 'bad-weight.woff2',
+          format: 'woff2',
+        },
+        {
+          family: 'Bad Style',
+          weight: '400',
+          style: 'italic; } body { color: blue',
+          file: 'bad-style.woff2',
+          format: 'woff2',
+        },
+        {
+          family: 'Bad Range',
+          weight: '400',
+          style: 'normal',
+          unicodeRange: 'U+0000-00FF; } body { color: green',
+          file: 'bad-range.woff2',
+          format: 'woff2',
+        },
+      ],
+      './',
+    );
+
+    expect(css.match(/@font-face/g)).toHaveLength(1);
+    expect(css).toContain('font-weight: 100 900;');
+    expect(css).toContain('font-style: oblique 12deg;');
+    expect(css).toContain('unicode-range: U+0000-00FF, U+4??;');
+    expect(css).not.toContain('bad-weight.woff2');
+    expect(css).not.toContain('bad-style.woff2');
+    expect(css).not.toContain('bad-range.woff2');
+    expect(css).not.toContain('body {');
+  });
 });

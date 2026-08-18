@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { rm } from 'node:fs/promises';
+import { realpath, rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { Express, Response } from 'express';
 import {
@@ -98,6 +98,25 @@ async function detectTemplateEntryFile(projectRoot: string): Promise<string | un
   const authored = path.join(projectRoot, 'assets', 'template.html');
   if (existsSync(authored)) return 'assets/template.html';
   return detectEntryFile(projectRoot);
+}
+
+async function isDesignTemplateDirectory(
+  candidateDir: string,
+  templateRoots: readonly string[],
+): Promise<boolean> {
+  try {
+    const candidateReal = await realpath(candidateDir);
+    for (const root of templateRoots) {
+      const rootReal = await realpath(root);
+      const relative = path.relative(rootReal, candidateReal);
+      if (relative && !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative)) {
+        return true;
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
 }
 
 export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {
@@ -1276,7 +1295,16 @@ const RESERVED_PROJECT_IDS = new Set(['storyboard-media']);
 export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDeps) {
   const { db, design } = ctx;
   const { sendApiError, createSseResponse } = ctx.http;
-  const { DESIGN_SYSTEMS_DIR, PROJECTS_DIR, SKILLS_DIR, BRANDS_DIR, USER_DESIGN_SYSTEMS_DIR, LIBRARY_DIR } = ctx.paths;
+  const {
+    DESIGN_SYSTEMS_DIR,
+    DESIGN_TEMPLATES_DIR,
+    PROJECTS_DIR,
+    SKILLS_DIR,
+    BRANDS_DIR,
+    USER_DESIGN_SYSTEMS_DIR,
+    USER_DESIGN_TEMPLATES_DIR,
+    LIBRARY_DIR,
+  } = ctx.paths;
   const createWriteGateway = () => {
     if (!ctx.filesystem) {
       // Only reachable if a caller assembles RegisterProjectRoutesDeps by
@@ -1924,7 +1952,13 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       ) {
         try {
           const skillDir = await resolveSkillDir(normalizedSkillId);
-          if (typeof skillDir === 'string') {
+          if (
+            typeof skillDir === 'string' &&
+            await isDesignTemplateDirectory(skillDir, [
+              DESIGN_TEMPLATES_DIR,
+              USER_DESIGN_TEMPLATES_DIR,
+            ])
+          ) {
             const projectRoot = await ensureProject(PROJECTS_DIR, id, projectMetadata);
             const state: CopyDirectoryState = {
               copiedFiles: 0,

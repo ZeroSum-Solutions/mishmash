@@ -43,7 +43,7 @@ describe('POST /api/projects — catalogue template start', () => {
       }).catch(() => {});
     }
     await new Promise<void>((resolve) => server.close(() => resolve()));
-  });
+  }, 120_000);
 
   function uniqueId(prefix: string): string {
     return `${prefix}-${randomUUID()}`;
@@ -220,6 +220,25 @@ describe('POST /api/projects — catalogue template start', () => {
     // SKILL.md is agent instruction, not project content, and it is large.
     expect(names).not.toContain('SKILL.md');
     expect(names).not.toContain('template.json');
+  });
+
+  it('does not copy a functional skill tree when an API caller labels it as a template', async () => {
+    const id = uniqueId('p');
+    const resp = await createProject({
+      id,
+      name: 'Functional skill boundary check',
+      skillId: 'data-report',
+      designSystemId: null,
+      metadata: { kind: 'template', animations: false },
+    });
+    expect(resp.status).toBe(200);
+    projectsToClean.push(id);
+
+    const body = (await resp.json()) as { project: { metadata: { entryFile?: string } } };
+    expect(body.project.metadata.entryFile).toBeUndefined();
+    const filesResp = await fetch(`${baseUrl}/api/projects/${encodeURIComponent(id)}/files`);
+    const filesBody = (await filesResp.json()) as { files: Array<{ name: string }> };
+    expect(filesBody.files.map((file) => file.name)).not.toContain('example.html');
   });
 
   it('does not affect the unrelated saved-template flow (metadata.templateId set, skillId null)', async () => {

@@ -194,9 +194,56 @@ export function webfontFileSlug(ref: FontFaceRef): string {
   return `${family}-${weight}${style}${subset}-${identity}`;
 }
 
+function isSafeFontWeight(value: string): boolean {
+  const parts = value.trim().split(/\s+/);
+  if (parts.length < 1 || parts.length > 2) return false;
+  const weights = parts.map((part) => (/^\d{1,4}$/.test(part) ? Number(part) : Number.NaN));
+  if (weights.some((weight) => !Number.isInteger(weight) || weight < 1 || weight > 1000)) {
+    return false;
+  }
+  return weights.length === 1 || weights[0]! <= weights[1]!;
+}
+
+function isSafeFontStyle(value: string): boolean {
+  return /^(?:normal|italic|oblique(?:\s+[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:deg|grad|rad|turn))?)$/i.test(
+    value.trim(),
+  );
+}
+
+function isSafeUnicodeRange(value: string): boolean {
+  const tokens = value.split(',').map((token) => token.trim());
+  if (tokens.length === 0 || tokens.some((token) => token.length === 0)) return false;
+  return tokens.every((token) => {
+    const match = /^U\+([0-9a-f?]{1,6})(?:-([0-9a-f]{1,6}))?$/i.exec(token);
+    if (!match?.[1]) return false;
+    const start = match[1];
+    const end = match[2];
+    if (end) {
+      if (start.includes('?')) return false;
+      const first = Number.parseInt(start, 16);
+      const last = Number.parseInt(end, 16);
+      return first <= last && last <= 0x10ffff;
+    }
+    if (start.includes('?')) {
+      if (!/^[0-9a-f]*\?+$/i.test(start)) return false;
+      return Number.parseInt(start.replace(/\?/g, 'f'), 16) <= 0x10ffff;
+    }
+    return Number.parseInt(start, 16) <= 0x10ffff;
+  });
+}
+
+function hasSafeFontFaceDescriptors(file: FontFaceCssFile): boolean {
+  return (
+    isSafeFontWeight(file.weight) &&
+    isSafeFontStyle(file.style) &&
+    (file.unicodeRange == null || isSafeUnicodeRange(file.unicodeRange))
+  );
+}
+
 /** Re-emit @font-face rules with URLs rooted at `urlPrefix`. */
 export function fontFaceCss(files: readonly FontFaceCssFile[], urlPrefix: string): string {
   return files
+    .filter(hasSafeFontFaceDescriptors)
     .map((file) =>
       [
         '@font-face {',
