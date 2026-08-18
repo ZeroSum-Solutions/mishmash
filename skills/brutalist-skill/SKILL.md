@@ -22,6 +22,7 @@ od:
     requires:
       - typography
       - color
+      - composition
   example_prompt: |
     Create an industrial-brutalist interface with rigid grids, tactical telemetry motifs, strong typography, and mechanical precision.
 ---

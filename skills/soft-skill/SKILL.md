@@ -23,6 +23,7 @@ od:
       - typography
       - color
       - anti-ai-slop
+      - composition
   example_prompt: |
     Create a calm high-end landing page with refined typography, soft contrast, premium spacing, subtle depth, and restrained motion.
 ---

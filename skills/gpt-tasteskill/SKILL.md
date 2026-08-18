@@ -24,6 +24,7 @@ od:
       - color
       - anti-ai-slop
       - animation-discipline
+      - composition
   example_prompt: |
     Build a high-variance landing page with gpt-taste: editorial typography, non-generic layout, calibrated color, and tasteful GSAP-style motion where the stack supports it.
 ---
