@@ -125,6 +125,22 @@ const RESEARCH_SEARCH_BOOLEAN_FLAGS = new Set([
   'h',
 ]);
 
+// Hoisted next to the other subcommand flag sets for the same TDZ reason
+// documented above MEDIA_GENERATE_STRING_FLAGS: `od catalogue match`
+// dispatches through the top-of-file SUBCOMMAND_MAP[first](rest) call, and
+// runCatalogueMatch references these `const` Sets during that call.
+const CATALOGUE_MATCH_STRING_FLAGS = new Set([
+  'prompt',
+  'prompt-file',
+  'limit',
+  'daemon-url',
+]);
+const CATALOGUE_MATCH_BOOLEAN_FLAGS = new Set([
+  'help',
+  'h',
+  'json',
+]);
+
 const DESIGN_BROWSER_FRAME_CHECK_STRING_FLAGS = new Set([
   'url',
   'daemon-url',
@@ -882,6 +898,7 @@ const SUBCOMMAND_MAP = {
   amr: runAmr,
   'message-center': runMessageCenter,
   research: runResearch,
+  catalogue: runCatalogue,
   plugin: runPlugin,
   ui: runUi,
   marketplace: runMarketplace,
@@ -1833,6 +1850,125 @@ Output is JSON only on stdout:
 Flags:
   --query        Required search query.
   --max-sources  Optional source cap. Defaults to 5, clamped to Tavily's max.
+  --daemon-url   Local daemon URL. Defaults to OD_DAEMON_URL, OD_SIDECAR_IPC_PATH discovery, or http://127.0.0.1:7456.`);
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: od catalogue match …
+//
+// The CLI half of the brief -> library matcher (see
+// packages/contracts/src/api/catalogue-match.ts for why this exists, and
+// apps/web/src/components/CatalogueMatchSuggestions.tsx for the UI half).
+// Both call the same POST /api/catalogue/match endpoint the daemon exposes
+// via apps/daemon/src/routes/catalogue-match.ts, per AGENTS.md "Capability
+// exposure" — no divergent shape between the two callers.
+// ---------------------------------------------------------------------------
+
+async function runCatalogue(args) {
+  const sub = args.find((a) => !a.startsWith('-')) || '';
+  if (sub === 'help' || args.includes('--help') || args.includes('-h')) {
+    printCatalogueHelp();
+    process.exit(0);
+  }
+  if (sub === '') {
+    printCatalogueHelp();
+    process.exit(2);
+  }
+  if (sub !== 'match') {
+    console.error(`unknown subcommand: od catalogue ${sub}`);
+    printCatalogueHelp();
+    process.exit(2);
+  }
+  const idx = args.indexOf(sub);
+  const subArgs = [...args.slice(0, idx), ...args.slice(idx + 1)];
+  return runCatalogueMatch(subArgs);
+}
+
+async function runCatalogueMatch(rawArgs) {
+  let flags;
+  try {
+    flags = parseFlags(rawArgs, {
+      string: CATALOGUE_MATCH_STRING_FLAGS,
+      boolean: CATALOGUE_MATCH_BOOLEAN_FLAGS,
+    });
+  } catch (err) {
+    console.error(err.message);
+    printCatalogueHelp();
+    process.exit(2);
+  }
+  if (flags.help || flags.h) {
+    printCatalogueHelp();
+    process.exit(0);
+  }
+
+  // Long-form briefs arrive via --prompt-file <path|-> (stdin) per the CLI
+  // contract; readPromptFromFlags prefers an inline --prompt and otherwise
+  // reads the file/stdin, matching od media generate / od research search.
+  const text = await readPromptFromFlags(flags);
+  if (!text || !text.trim()) {
+    console.error('--prompt or --prompt-file required');
+    printCatalogueHelp();
+    process.exit(2);
+  }
+
+  const limitRaw = flags.limit == null ? undefined : Number(flags.limit);
+  const limit = Number.isFinite(limitRaw) ? limitRaw : undefined;
+
+  const daemonUrl = await cliDaemonUrl(flags);
+  const url = `${daemonUrl.replace(/\/$/, '')}/api/catalogue/match`;
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        ...(limit != null ? { limit } : {}),
+      }),
+    });
+  } catch (err) {
+    surfaceFetchError(err, daemonUrl);
+    process.exit(3);
+  }
+  if (!resp.ok) {
+    const errText = await resp.text();
+    console.error(`daemon ${resp.status}: ${errText}`);
+    process.exit(4);
+  }
+  const data = await resp.json();
+
+  if (flags.json) {
+    console.log(JSON.stringify(data, null, 2));
+    return;
+  }
+
+  const matches = Array.isArray(data?.matches) ? data.matches : [];
+  if (matches.length === 0) {
+    console.log('No catalogue matches — nothing in design-templates/skills scored well enough to suggest.');
+    return;
+  }
+  for (const m of matches) {
+    const terms = Array.isArray(m.matchedTerms) ? m.matchedTerms.join(', ') : '';
+    console.log(`${m.id}  [${m.kind}]  score=${m.score}${terms ? `  matched: ${terms}` : ''}`);
+    if (m.description) console.log(`  ${m.description}`);
+  }
+}
+
+function printCatalogueHelp() {
+  console.log(`Usage:
+  od catalogue match --prompt "<brief>" [--limit 5] [--json] [--daemon-url <url>]
+  od catalogue match --prompt-file <path|-> [--limit 5] [--json]
+
+Matches a project brief against the design-templates/skills catalogue by
+keyword/trigger overlap. Deterministic and local — no network or model call.
+Returns a ranked shortlist; nothing is ever auto-applied to a project.
+
+Flags:
+  --prompt       Inline brief text.
+  --prompt-file  Read brief text from a file, or - for stdin.
+  --limit        Shortlist cap. Defaults to 5, clamped to 6.
+  --json         Print the daemon response as JSON:
+                   { "matches": [{ "id", "kind", "name", "description", "score", "matchedTerms" }] }
   --daemon-url   Local daemon URL. Defaults to OD_DAEMON_URL, OD_SIDECAR_IPC_PATH discovery, or http://127.0.0.1:7456.`);
 }
 

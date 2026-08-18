@@ -2421,6 +2421,10 @@ export const en: Dict = {
   'home.recommendation.defaultProjectName': 'New project',
   'home.recommendation.startFailed': "Couldn't start creating. Please try again.",
 
+  'home.catalogueMatch.heading': 'From the catalogue:',
+  'home.catalogueMatch.applyAria': 'Use {name} from the catalogue',
+  'home.catalogueMatch.dismiss': 'Dismiss catalogue suggestions',
+
   'home.featured.title': 'Featured starters',
   'home.featured.badge': 'UI8 licensed',
   'home.featured.startError': "Couldn't start a project from this template. Make sure the daemon is reachable, then try again.",

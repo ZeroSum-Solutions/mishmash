@@ -188,6 +188,27 @@
     }
   },
   {
+    "capability": "catalogue",
+    "uiEntryPoint": "Home composer — CatalogueMatchSuggestions shortlist row (apps/web/src/components/CatalogueMatchSuggestions.tsx)",
+    "cliArgs": [
+      "catalogue",
+      "match",
+      "--prompt",
+      "w0 manifest check"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/catalogue/match",
+    "outputSchema": "{ matches: [{ id, kind, name, description, score, matchedTerms }] }",
+    "parityApplicable": true,
+    "reason": "Pure and read-only: matchCatalogue (packages/contracts/src/api/catalogue-match.ts) only ranks the existing design-templates/skills registry against the supplied text and never mutates a project or the on-disk catalogue, so a repeated probe with the same body is idempotent and safe to run from a live gate. The probe text deliberately shares no vocabulary with any shipped trigger/description, so both surfaces return the same empty `{ matches: [] }`.",
+    "knownNamespaceRoutes": [
+      "POST /api/catalogue/match"
+    ],
+    "probeBody": {
+      "text": "w0 manifest check"
+    }
+  },
+  {
     "capability": "plugin",
     "uiEntryPoint": "Plugins marketplace / installed-plugins panel",
     "cliArgs": [
