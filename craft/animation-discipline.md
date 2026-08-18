@@ -115,6 +115,105 @@ confetti, level-up bursts, and shimmer: avoid rapid flashing unless
 tested against the thresholds, and prefer one-shot animations over
 loops.
 
+## Scroll-triggered entrance
+
+Composition-governed pages (`craft/composition.md`: landing pages,
+marketing sites, portfolios, blogs — any surface built from multiple
+sections a visitor scrolls through) need this by default. Dashboards,
+forms, and other app chrome (`state-coverage.md` territory) do not — that
+content must be usable the instant it renders, not paced by a scroll
+trigger. Skip it on a page with only one or two sections; there isn't
+enough scroll distance for pacing to read as anything but a flicker. A
+version of this pattern already appears, unspecified, across some of this
+repository's own generated and vendored output — this section turns that
+ad hoc convention into a named default and fixes the bug the ad hoc
+version carries (below).
+
+**Granularity: the section, not the element.** Give each section one
+reveal trigger. Where a section legitimately has an internal group (a
+3-4 card row, a stat block), that group may stagger with each child
+offset 60-90ms from the previous, capped around 5-6 children — past that
+cap, treat the row as one shared block instead of continuing to stagger
+individual items. Reveal-per-element across an entire page is the worst
+outcome measured: a page where every one of 300 elements pops in
+individually reads busier than a page with no motion at all. Restraint
+here is the craft, not the mechanism.
+
+**Motion shape.** `translateY(16-24px)` + `opacity: 0 → 1`; opacity-only
+for dense text blocks where a vertical shift would jostle reading. Use
+the 200-300ms "Entering UI" duration band from the table above and the
+M3 standard ease-out curve — a section arriving is UI entering, not a
+gesture, so it takes a curve, never a spring (see "Curve vs spring").
+Never scale from 0 (existing rule; applies here too). Fire once, on
+first entry, and `unobserve` the element once it has — never re-hide on
+scroll-up. A one-shot reveal means "the reader arrived here," not a
+toggle.
+
+**Mechanism: `IntersectionObserver` + a CSS class — not GSAP, not
+`animation-timeline: view()`.** This is the default motion for an
+ordinary generated page, not authored choreography. GSAP is the
+deliberate, opt-in path for a page that wants real scroll-scrubbed
+motion (`plugins/_official/scenarios/od-scroll-animations`) and carries
+the vendoring/pinning obligations `docs/decisions/gsap-licensing.md`
+sets out; reaching for it here would put a licensed, pinned, vendored
+dependency on every generated page's default path for what is, in the
+default case, a one-shot fade. `animation-timeline: view()` is the
+right long-term primitive — no JS at all — but as of August 2026
+Firefox still ships it disabled by default while Chromium and Safari
+both support it; a feature with no universal fallback is not a safe
+default yet.
+
+**The failure mode this must not ship: content stuck invisible.** The
+naive version of this pattern sets the pre-reveal state as the
+element's *only* CSS rule — `opacity: 0` outside of any conditional —
+so a blocked script, a CSP violation, or a JS error anywhere upstream
+of the observer leaves the content permanently invisible. This exact
+bug already exists in generated output in this repository. The base
+state must always be visible; JavaScript's job is to opt elements
+*into* the hidden pre-reveal state, never the reverse:
+
+```css
+/* Base state: fully visible. No JS required to read this page. */
+.reveal { opacity: 1; transform: none; }
+
+/* Only once JS has confirmed it can run the reveal, hide-then-restore. */
+.js-reveal-ready .reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 250ms cubic-bezier(0.2, 0, 0, 1),
+    transform 250ms cubic-bezier(0.2, 0, 0, 1);
+}
+.js-reveal-ready .reveal.is-visible { opacity: 1; transform: none; }
+```
+
+```js
+// Reduced motion and "IntersectionObserver missing" both take the same
+// exit: skip adding the ready class, so .reveal never leaves its
+// visible base state and nothing needs undoing.
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (!reduced && 'IntersectionObserver' in window) {
+  document.documentElement.classList.add('js-reveal-ready');
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        e.target.classList.add('is-visible');
+        io.unobserve(e.target);
+      }
+    },
+    { threshold: 0.15, rootMargin: '0px 0px -10% 0px' },
+  );
+  document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+}
+```
+
+Three independent failure paths — JS never runs, `IntersectionObserver`
+is unavailable, `prefers-reduced-motion` is set — all resolve to the
+same state: the base CSS, fully visible, nothing to strip. That is also
+why this pattern needs no separate reduced-motion CSS override, unlike
+other motion in this file: the reveal was never applied in the first
+place.
+
 ## Repeated and ambient motion
 
 The rules above target one-shot transitions. Looping motion (skeleton
@@ -152,3 +251,6 @@ consistency, pick one motion vocabulary and apply it everywhere.
 - Curve-based animation on a `transform: scale()` that should feel physical. Use a spring.
 - Hero choreography in productivity tools. Motion budget belongs inside the product on functional micro-feedback, not on landing-page sequences.
 - Decorative motion in the working canvas of a productivity tool.
+- A scroll-reveal element's hidden state (`opacity: 0`) written as its unconditional base CSS rule instead of gated behind a script-confirmed class — any JS failure between page load and the observer wiring leaves the content invisible forever.
+- Scroll-reveal applied per element instead of per section. Busier and worse than no motion at all.
+- A whole page with zero scroll-triggered motion. On a page long enough to have multiple sections, that reads as inert next to any competitor whose sections arrive as the reader reaches them — see "Scroll-triggered entrance" above.
