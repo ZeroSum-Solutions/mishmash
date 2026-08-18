@@ -60,7 +60,73 @@ above are what must vary regardless of which sequence of section types a
 page uses — reordering the same five identical sections doesn't satisfy this
 rule any more than keeping the default order does.
 
+## Sibling-instance variation — the strongest composed-vs-tiled signal measured so far
+
+The vectors above govern section-to-section variation. A second, independent
+axis governs variation *within* one section: consecutive instances of a
+repeated component that carries its own identity per instance — a
+portfolio/case-study row, a gallery entry, a timeline item, an alternating
+features row. This is the "reuse one card class for every list item" half of
+the failure mode named at the top of this file; earlier drafts of this
+document only ever operationalized the section-level half.
+
+Two blind comparisons, run to try to break this claim rather than confirm
+it, converged on it as the stronger signal — ahead of both grid-cell shape
+variety and the out-of-flow/transform evidence `layout-risk-flat` checks
+for. A page with zero elements ever leaving document flow still read as
+composed because each work-sample row alternated which side its image sat
+on and how wide the text column ran. A competing page with *more* distinct
+rectangle shapes and *more* boundary-crossing elements still read as tiled,
+because the row underneath its hero repeated one stat-card arrangement
+down the page with no positional variation. The critic's own framing:
+repetition count beat both shape variety and boundary-crossing.
+
+**The rule:** for a repeated component that appears 3+ times as siblings
+and carries per-instance identity (each row is about a different project,
+person, moment, or story — not an interchangeable slot), consecutive
+instances must not share an identical internal arrangement. Vary at least
+one of:
+
+- which side the media sits on (`flex-direction: row` vs `row-reverse`, or
+  swap the grid column order)
+- the text column's width relative to the media
+- where the caption/label sits relative to the media (above, below, beside,
+  overlapping a corner)
+- the media's own aspect ratio or crop
+
+```css
+.work-row:nth-child(even) { flex-direction: row-reverse; }
+.work-row:nth-child(3n)   { --media-width: 62%; }   /* vary the split too, not only the side */
+```
+
+There is no single prescribed alternation pattern to reuse project to
+project — per this repository's design authority, a rule that stamps the
+same alternation rhythm on every generated page just relocates the tiling
+one level down. Pick a variation that fits the content (odd/even, a fixed
+cycle of three, or content-driven — the row for the largest project runs
+wider).
+
+**This does not apply to every repeated grid.** A pricing-tier row, an
+icon+label feature grid, or a testimonial card wall is *supposed* to read
+as uniform — that repetition is what makes it scannable, and alternating
+those would read as broken, not composed. This rule targets content with
+per-instance identity, not an interchangeable card slot.
+
+**Grid-breaking moves (below) are a secondary, complementary tool — not a
+substitute for this.** An overlapping hero card or a full-bleed plate can
+sit directly above six identically-arranged work rows; the hero reads as
+composed and the list beneath it still tiles. Fix the repetition first;
+reach for a grid-breaking move to mark a genuine tonal shift on top of it,
+not instead of it.
+
 ## Grid-breaking moves — named, and when each earns its place
+
+**Read the sibling-instance rule above first.** These five moves are a
+legitimate, page-level tool for marking a real tonal shift — they are not
+the primary fix for a page that reads as tiled, and pushing a generated
+page toward overlap/bleed on every build is its own uniformity problem.
+Reach for one of these to punctuate a page whose repeated components
+already vary internally, not as a substitute for that variation.
 
 | Move | Definition | Appropriate when | Gratuitous when |
 |---|---|---|---|
@@ -69,6 +135,72 @@ rule any more than keeping the default order does.
 | Offset / asymmetric columns | A two-column section whose split isn't 50/50, or whose columns don't align to the page's outer margins | The asymmetry mirrors content weight — a large image against a short caption | Every two-column section uses the same ratio — a narrower version of the equal-margins tell |
 | Edge-bleeding type | Display type sized or placed so a glyph, word, or wordmark crops at the viewport edge or crowds a corner instead of centering | Once, on the section carrying the page's single dominant first-viewport move | On every headline — then nothing reads as a bleed, everything just looks cropped |
 | Cross-boundary element | One element (a photo, headline, or mockup) visually spans two adjacent sections, breaking the section-as-box assumption | It does real compositional work — anchoring a scroll transition, tying two ideas together | Present without a legible reason — reads as something that didn't fit, not a decision |
+
+### CSS starting points — so "break the grid" isn't just a mood
+
+Four measured generation rounds landed on more grid-cell shapes and
+aspect ratios each time, but zero elements ever left document flow and
+zero transforms ever appeared — including a round built under an
+explicit grid-breaking instruction. Naming the moves in prose wasn't
+enough for the model to reach for the right primitive. These are
+minimal, adapt-in-place starting points for the moves above — swap in
+the page's own tokens (`var(--surface)`, `var(--accent)`, real spacing
+scale), not the literal values shown.
+
+**Overlap** — a positioned ancestor plus a negative offset that pulls
+the child up onto the section above it:
+
+```css
+.section { position: relative; }        /* the ancestor the overlap positions against */
+.stat-card {
+  position: relative;
+  margin-top: -4rem;                    /* pulls the card up over the section boundary */
+  z-index: 2;
+}
+```
+
+**Cross-boundary element** — take the element out of flow entirely so
+it can render past its own section's edge:
+
+```css
+.hero { position: relative; overflow: visible; }
+.hero-mockup {
+  position: absolute;
+  bottom: -12%;                         /* hangs past the hero's own bottom edge */
+  z-index: 3;
+}
+```
+
+**Full-bleed against contained** — vary the container, not just the
+section's background color:
+
+```css
+.section--contained { max-width: 1120px; margin-inline: auto; padding-inline: 2rem; }
+.section--bleed { width: 100vw; margin-inline: calc(50% - 50vw); }
+```
+
+**Offset / asymmetric columns** — an intentionally uneven split, not
+50/50:
+
+```css
+.split { display: grid; grid-template-columns: 7fr 3fr; gap: 2rem; }
+```
+
+**Edge-bleeding type** — let the display line ignore the page's own
+container instead of centering inside it:
+
+```css
+.display-line {
+  font-size: clamp(96px, 12vw, 200px);
+  line-height: 0.9;
+  margin-inline: -2rem;                 /* crowds/crops the frame edge instead of centering */
+}
+```
+
+`transform: translateY(...)` (or `rotate`/`scale`) is a second route to
+overlap or edge-bleeding when a negative margin would fight the
+surrounding grid/flex layout — either primitive counts as evidence to
+the auto-check below.
 
 **Layout risk (binary, verifiable from a screenshot):** a page scores 1 when
 at least one of the five moves above appears anywhere on it. A page where
@@ -82,18 +214,24 @@ otherwise orderly page clears it.
 in `apps/daemon/src/lint-artifact.ts`).** A rendered layout engine can see
 whether a move landed; static source inspection cannot — so the linter
 checks only for the CSS primitives every one of the five moves needs to
-exist at all: `position: absolute`/`sticky` paired with `z-index`
-(overlap, cross-boundary elements), or a non-hover `transform`
-(offset/edge-bleeding moves). It fires only when a page carries 6+
-`<section>` elements (below that, total uniformity is an expected shape,
-not a finding — see the file-level scoping note in `craft/README.md`) and
-neither primitive appears anywhere in the artifact — proof no move could
-have been used even once. Presence of the primitive is not proof a move
-was used well; the linter cannot tell a deliberate overlap from a sticky
-nav, so it only ever flags demonstrated absence. Web-clone runs are
-exempt (a clone reproducing a uniform target is not a defect) the same
-way `resolveRequestedCraft` in `craft.ts` already skips this file's
-injection for those runs.
+exist at all: `position: absolute` paired with `z-index` (overlap,
+cross-boundary elements), or a non-hover `transform` (offset/edge-bleeding
+moves). `position: sticky` does not count as evidence — it pins an
+element in place during scroll (nav bars, table headers) and never
+crosses a section boundary or overlaps a neighbor, so a page whose only
+positioned element is a sticky nav is exactly as flat as one with none;
+an earlier version of this check credited sticky and a measured
+generated page slipped through on a sticky nav alone. It fires only
+when a page carries 5+ `<section>` elements (below that, total
+uniformity is an expected shape, not a finding — see the file-level
+scoping note in `craft/README.md`) and neither primitive appears
+anywhere in the artifact — proof no move could have been used even
+once. Presence of the primitive is not proof a move was used well; the
+linter cannot tell a deliberate overlap from a modal's own `position` +
+`z-index`, so it only ever flags demonstrated absence. Web-clone runs
+are exempt (a clone reproducing a uniform target is not a defect) the
+same way `resolveRequestedCraft` in `craft.ts` already skips this
+file's injection for those runs.
 
 ## First-viewport composition
 
@@ -184,10 +322,16 @@ sitting under it unresolved.
       density) differ.
 - [ ] Every apparent ground change comes from the page's own surface tokens,
       not from an embedded screenshot or third-party image.
+- [ ] A repeated component with per-instance identity (work sample,
+      case study, timeline entry, alternating features row) varies its
+      internal arrangement — media side, column width, or caption
+      placement — across consecutive instances. A uniform pricing tier,
+      feature-icon, or testimonial grid is exempt; that repetition is the
+      point there.
 - [ ] At least one grid-breaking move (full-bleed-against-contained,
       overlap, offset columns, edge-bleeding type, cross-boundary element)
       appears somewhere on the page. *(Its absence half is auto-checked
-      on pages with 6+ `<section>`s — see `layout-risk-flat` above.)*
+      on pages with 5+ `<section>`s — see `layout-risk-flat` above.)*
 - [ ] The hero resolves to one dominant move within the first viewport, not
       two competing ones and not zero. A contained, body-width photo next
       to a section-heading-sized label is zero, not one.
