@@ -28,6 +28,7 @@ import {
   detectDeckIntentSignal,
   detectMediaIntentSignal,
   detectPlatformIntentSignal,
+  extractOpeningUserBriefText,
   extractUserAuthoredSignalText,
   renderConnectedExternalMcpDirective,
   resolveExclusiveSurface,
@@ -550,6 +551,7 @@ import {
   insertScheduledRoutineRun,
   insertTemplate,
   latchConversationIntentSignals,
+  latchConversationOpeningBrief,
   findTemplateByNameAndProject,
   updateTemplate,
   listProjectsAwaitingInput,
@@ -5162,13 +5164,23 @@ export async function startServer({
         freeformDeckSignal: intentSignals.deck,
         mediaHintSignal: intentSignals.media,
         platformHintSignal: intentSignals.platform,
-        // Same user-authored-only text the intent signals above scan — a
-        // transcript-resending agent's re-sent assistant copy (discovery
-        // form options, delivery summaries) must not drive the catalogue
-        // shortlist any more than it should flip an intent signal.
-        briefText: intentSignalTexts
-          .filter((t): t is string => typeof t === 'string' && t.length > 0)
-          .join('\n\n'),
+        // The conversation's OPENING user turn only — not this turn's text.
+        // Same user-authored-only rule the intent signals above follow (a
+        // transcript-resending agent's re-sent assistant copy must not drive
+        // the shortlist), plus one more: the shortlist lands in
+        // `systemPrompt`, which is part of `stableInstructionFingerprint`.
+        // Ranking it against text that grows each turn re-sends the entire
+        // stable instruction block on every resume turn, because turn 2's
+        // form answers re-rank the templates. A brief is a property of the
+        // conversation, so pin it to the turn that opened it.
+        briefText: latchConversationOpeningBrief(
+          db,
+          run.conversationId,
+          extractOpeningUserBriefText(message)
+            || intentSignalTexts
+              .filter((t): t is string => typeof t === 'string' && t.length > 0)
+              .join('\n\n'),
+        ),
       });
 
     run.designSystemId = designSystemSelection?.id ?? null;

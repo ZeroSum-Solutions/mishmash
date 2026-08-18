@@ -88,6 +88,7 @@ function migrate(db: SqliteDb): void {
       title TEXT,
       session_mode TEXT NOT NULL DEFAULT 'design',
       intent_signals_json TEXT,
+      opening_brief TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
@@ -276,6 +277,9 @@ function migrate(db: SqliteDb): void {
   }
   if (!conversationCols.some((c: DbRow) => c.name === 'intent_signals_json')) {
     db.exec(`ALTER TABLE conversations ADD COLUMN intent_signals_json TEXT`);
+  }
+  if (!conversationCols.some((c: DbRow) => c.name === 'opening_brief')) {
+    db.exec(`ALTER TABLE conversations ADD COLUMN opening_brief TEXT`);
   }
   const messageCols = db.prepare(`PRAGMA table_info(messages)`).all() as DbRow[];
   if (!messageCols.some((c: DbRow) => c.name === 'agent_id')) {
@@ -1345,6 +1349,43 @@ export function latchConversationIntentSignals(
       );
     }
     return effective;
+  });
+  return latch.immediate();
+}
+
+/**
+ * The brief this conversation opened with, written once and never rewritten.
+ *
+ * Anything derived from the brief that lands in the system prompt also lands
+ * in `stableInstructionFingerprint` (server.ts). Recomputing it from each
+ * turn's text therefore re-sends the whole stable instruction block on every
+ * resume turn — turn 2 appends form answers, a brief-derived block re-ranks,
+ * the hash moves, the cache misses. Latching mirrors what
+ * `latchConversationIntentSignals` does for intent signals, for the same
+ * reason.
+ *
+ * Returns the stored brief when one exists, otherwise stores and returns
+ * `candidate`. A blank candidate is never stored, so the first turn carrying
+ * real text wins.
+ */
+export function latchConversationOpeningBrief(
+  db: SqliteDb,
+  conversationId: string,
+  candidate: string,
+): string {
+  const latch = db.transaction((): string => {
+    const row = db
+      .prepare(`SELECT opening_brief AS openingBrief FROM conversations WHERE id = ?`)
+      .get(conversationId) as DbRow | undefined;
+    const stored = typeof row?.openingBrief === 'string' ? row.openingBrief : '';
+    if (stored.trim().length > 0) return stored;
+    const next = typeof candidate === 'string' ? candidate : '';
+    if (next.trim().length === 0) return '';
+    db.prepare(`UPDATE conversations SET opening_brief = ? WHERE id = ?`).run(
+      next,
+      conversationId,
+    );
+    return next;
   });
   return latch.immediate();
 }

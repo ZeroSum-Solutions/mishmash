@@ -398,17 +398,20 @@ function narrowFormAnswerSignalText(body: string): string {
  * - `[form answers — <id>]` blocks in either shape are narrowed to the value
  *   part of each `- label: value` line (see narrowFormAnswerSignalText).
  */
-export function extractUserAuthoredSignalText(
-  message: string | null | undefined,
-): string {
-  if (typeof message !== 'string' || message.length === 0) return '';
+/**
+ * Every user-authored section of `message`, in order, already narrowed for
+ * form answers. One entry per `## user` section of a packed transcript, or a
+ * single entry for a plain (unmarked) message.
+ */
+function userAuthoredSections(message: string | null | undefined): string[] {
+  if (typeof message !== 'string' || message.length === 0) return [];
   // Marker lines are compared with any trailing CR stripped so CRLF
   // transcripts parse identically to the LF ones the web builder emits.
   const lines = message.split('\n').map((line) =>
     line.endsWith('\r') ? line.slice(0, -1) : line,
   );
   if (!isPackedTranscriptShape(lines)) {
-    return narrowFormAnswerSignalText(message);
+    return [narrowFormAnswerSignalText(message)];
   }
   const userSections: string[][] = [];
   // null = dropped region: pre-marker text (`## context warning` included)
@@ -426,9 +429,41 @@ export function extractUserAuthoredSignalText(
     }
     currentUserSection?.push(line);
   }
-  return userSections
-    .map((sectionLines) => narrowFormAnswerSignalText(sectionLines.join('\n')))
-    .join('\n\n');
+  return userSections.map((sectionLines) =>
+    narrowFormAnswerSignalText(sectionLines.join('\n')),
+  );
+}
+
+export function extractUserAuthoredSignalText(
+  message: string | null | undefined,
+): string {
+  return userAuthoredSections(message).join('\n\n');
+}
+
+/**
+ * The user-authored text of the conversation's OPENING turn only.
+ *
+ * `extractUserAuthoredSignalText` joins EVERY user section, so its result
+ * grows with each turn. That is right for intent signals, which latch
+ * monotonically ON and so tolerate a growing haystack. It is wrong for
+ * anything whose output lands in the stable instruction slice: the
+ * catalogue-match shortlist re-ranks when turn 2 appends form answers, which
+ * changes `systemPrompt`, which changes `stableInstructionFingerprint`,
+ * which re-sends the entire stable block on every resume turn.
+ *
+ * For a plain unmarked message this turn's text is all the daemon has, and
+ * such agents do not resume sessions, so they never consult the stable
+ * cache.
+ */
+export function extractOpeningUserBriefText(
+  message: string | null | undefined,
+): string {
+  const [opening = ''] = userAuthoredSections(message);
+  // Trimmed only here. `extractUserAuthoredSignalText` joins sections with a
+  // blank line and must keep its exact bytes — the intent-signal scan is
+  // pinned to them — but a section carries the blank line that preceded the
+  // next role marker, which has no business in a brief.
+  return opening.trim();
 }
 
 export const BASE_SYSTEM_PROMPT = renderOfficialDesignerPrompt('filesystem');
