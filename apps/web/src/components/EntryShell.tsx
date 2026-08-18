@@ -98,6 +98,7 @@ import { LibrarySection } from './LibrarySection';
 import { DesignLibrarySection } from './DesignLibrarySection';
 import { StoryboardSection } from './storyboard/StoryboardSection';
 import { TemplatesSection } from './TemplatesSection';
+import { TypefacesSection } from './TypefacesSection';
 import { metadataForSkill } from './skill-project-metadata';
 import { UpdaterPopup } from './UpdaterPopup';
 import { WhatsNewPopup } from './WhatsNewPopup';
@@ -1389,6 +1390,9 @@ export function EntryShell({
             </div>
             <div data-testid="entry-view-storyboard" data-active={view === 'storyboard' ? 'true' : 'false'} {...inactiveViewProps(view === 'storyboard')}>
               <StoryboardSection active={view === 'storyboard'} />
+            </div>
+            <div data-testid="entry-view-typefaces" data-active={view === 'typefaces' ? 'true' : 'false'} {...inactiveViewProps(view === 'typefaces')}>
+              <TypefacesSection />
             </div>
             {view === 'integrations' ? (
               <IntegrationsView

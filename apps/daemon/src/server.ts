@@ -631,6 +631,7 @@ import {
 import { registerStoryboardRoutes } from './routes/storyboard.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes } from './routes/project/index.js';
 import { registerCoverRoutes } from './routes/covers.js';
+import { registerTypefaceRoutes } from './routes/typefaces.js';
 import { sweepOrphanedRenderProcesses } from './covers/render-pid-registry.js';
 import { registerVelaRoutes } from './routes/vela.js';
 import { velaWalletSnapshotReader } from './integrations/vela-wallet.js';
@@ -3517,6 +3518,13 @@ export async function startServer({
     projectPreviewScopes,
   });
   registerCoverRoutes(app, {
+    db,
+    paths: pathDeps,
+    projectStore: projectStoreDeps,
+    projectFiles: projectFileDeps,
+  });
+  registerTypefaceRoutes(app, {
+    http: httpDeps,
     db,
     paths: pathDeps,
     projectStore: projectStoreDeps,

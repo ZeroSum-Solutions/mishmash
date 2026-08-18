@@ -51,8 +51,8 @@ export type FontManifest = { format: "brand-fonts/1"; files: FontFile[] };
 const MAX_FONT_FILES = 16;
 const MAX_TOTAL_BYTES = 12 * 1024 * 1024;
 
-/** Icon/symbol faces are UI chrome, not brand typography. */
-const ICON_FAMILY_RE = /icon|awesome|glyph|symbols|emoji|icomoon|fontello|pictogram/i;
+/** Icon/symbol faces are UI chrome, not brand typography. Exported for reuse by the typeface catalogue. */
+export const ICON_FAMILY_RE = /icon|awesome|glyph|symbols|emoji|icomoon|fontello|pictogram/i;
 
 /** Parse every usable @font-face rule out of a CSS blob. Pure. */
 export function parseFontFaces(css: string, baseUrl: string): FontFaceRef[] {

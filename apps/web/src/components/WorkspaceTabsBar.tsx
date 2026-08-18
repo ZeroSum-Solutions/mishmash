@@ -1199,6 +1199,7 @@ function displayTabFor(
     'design-library': t('entry.navDesignLibrary'),
     storyboard: t('entry.navStoryboard'),
     templates: t('entry.navTemplates'),
+    typefaces: t('entry.navTypefaces'),
     integrations: t('entry.navIntegrations'),
   };
   const entryIcon: Record<EntryHomeView, IconName> = {
@@ -1212,6 +1213,7 @@ function displayTabFor(
     'design-library': 'swatchbook',
     storyboard: 'film',
     templates: 'layout',
+    typefaces: 'file-text',
     integrations: 'link',
   };
   return {

@@ -1024,7 +1024,14 @@ export interface Dict {
   'entry.navDesignLibrary': string;
   'entry.navStoryboard': string;
   'entry.navTemplates': string;
+  'entry.navTypefaces': string;
   'entry.navIntegrations': string;
+  // Typefaces gallery
+  'typefaces.title': string;
+  'typefaces.subtitle': string;
+  'typefaces.search': string;
+  'typefaces.loading': string;
+  'typefaces.empty': string;
   // Templates gallery
   'templates.title': string;
   'templates.subtitle': string;

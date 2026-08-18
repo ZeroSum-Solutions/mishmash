@@ -258,6 +258,8 @@ const DIAGNOSTICS_STRING_FLAGS = new Set(['daemon-url', 'output']);
 const DIAGNOSTICS_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const ANOMALIES_STRING_FLAGS = new Set(['daemon-url', 'limit', 'kind', 'severity', 'since']);
 const ANOMALIES_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'clear']);
+const TYPEFACES_STRING_FLAGS = new Set(['daemon-url', 'query', 'project', 'dir']);
+const TYPEFACES_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'monospace', 'condensed']);
 const CONFIG_STRING_FLAGS = new Set(['daemon-url', 'value', 'value-json']);
 const CONFIG_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const AMR_STRING_FLAGS = new Set(['daemon-url']);
@@ -907,6 +909,7 @@ const SUBCOMMAND_MAP = {
   craft: runCraft,
   diagnostics: runDiagnostics,
   anomalies: runAnomalies,
+  typefaces: runTypefaces,
   export: runExport,
   status: runStatus,
   version: runVersion,
@@ -9425,6 +9428,140 @@ Settings → About → Export diagnostics.`);
     console.log('');
   }
   console.log(`Log: ${data?.path ?? '(unknown)'}`);
+}
+
+/**
+ * `od typefaces` — the CLI half of the typeface catalogue
+ * (`apps/daemon/src/typefaces/catalogue.ts`). Same `/api/typefaces*`
+ * endpoints the web Typefaces panel calls, so an external agent driving `od`
+ * can discover and install a real self-hosted webfont without ever opening
+ * the UI. `list` is deliberately compact (family + one-line classification,
+ * no per-face detail) — the point is that an agent probes this on demand via
+ * `--help`/`od typefaces list`, instead of the catalogue being spliced into
+ * every system prompt regardless of whether a run ever needs a font.
+ */
+async function runTypefaces(args) {
+  const sub = args[0];
+  if (sub === 'help' || args.includes('--help') || args.includes('-h') || !sub) {
+    console.log(`Usage:
+  od typefaces list [--query <text>] [--monospace] [--condensed] [--json]
+  od typefaces show <family> [--json]
+  od typefaces install <family> --project <id> [--dir <path>] [--json]
+
+Browses and installs the self-hosted webfonts already vendored under
+design-templates/*/fonts/ — real families (Archivo, Instrument Serif, Space
+Grotesk, Inter, ...) rather than the browser's default UI stack. Only
+families that clear the redistribution-licence gate are listed; run "od
+typefaces show <family>" on an excluded name (e.g. "clash-display") to see
+why.
+
+  list                    Compact list: id, family, weights, styles.
+  show <family>           Full detail for one family, including every
+                          installable @font-face rule.
+  install <family>        Copies the family's woff2 files into a project and
+                          writes an @font-face fonts.css referencing them.
+    --project <id>         Target project id (required).
+    --dir <path>            Destination dir, relative to the project root.
+                          Defaults to assets/fonts/<family-id>/.
+
+  --query <text>          list: case-insensitive substring match on family.
+  --monospace             list: only monospace families.
+  --condensed             list: only families whose name says
+                          Condensed/Narrow.
+  --json                  Print raw JSON instead of a human-readable table.
+  --daemon-url <url>      Override the daemon HTTP base URL.`);
+    process.exit(sub === 'help' || args.includes('--help') || args.includes('-h') ? 0 : 2);
+  }
+
+  const rest = args.slice(1);
+  const flags = parseFlags(rest, { string: TYPEFACES_STRING_FLAGS, boolean: TYPEFACES_BOOLEAN_FLAGS });
+  const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
+  const positional = rest.filter((a) => !a.startsWith('-'));
+
+  if (sub === 'list') {
+    const query = new URLSearchParams();
+    if (typeof flags.query === 'string' && flags.query) query.set('q', flags.query);
+    if (flags.monospace) query.set('monospace', 'true');
+    if (flags.condensed) query.set('condensed', 'true');
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/typefaces?${query.toString()}`);
+    } catch (err) {
+      return exitWithStructuredError({ code: 'daemon-not-running', message: `Cannot reach daemon at ${base}: ${err?.message ?? err}` });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return process.stdout.write(JSON.stringify(data) + '\n');
+    const typefaces = Array.isArray(data?.typefaces) ? data.typefaces : [];
+    console.log(`${typefaces.length} installable typefaces (of ${data?.scannedFamilies ?? '?'} families found in the catalogue)\n`);
+    for (const t of typefaces) {
+      const weights = t.classification?.variableWeightRange
+        ? `${t.classification.variableWeightRange[0]}-${t.classification.variableWeightRange[1]} (variable)`
+        : (t.classification?.weights ?? []).join(',');
+      const hints = (t.classification?.nameHints ?? []).join(' ');
+      console.log(`  ${t.id}  —  ${t.family}  [weights ${weights}]${hints ? ` [${hints}]` : ''}  (${t.license?.spdx})`);
+    }
+    return;
+  }
+
+  if (sub === 'show') {
+    const family = positional[0];
+    if (!family) {
+      console.error('usage: od typefaces show <family>');
+      process.exit(2);
+    }
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/typefaces/${encodeURIComponent(family)}`);
+    } catch (err) {
+      return exitWithStructuredError({ code: 'daemon-not-running', message: `Cannot reach daemon at ${base}: ${err?.message ?? err}` });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return process.stdout.write(JSON.stringify(data) + '\n');
+    const t = data?.typeface;
+    console.log(`${t?.family} (${t?.id})`);
+    console.log(`License: ${t?.license?.spdx} — ${t?.license?.sourceLabel}`);
+    console.log(`Faces (${t?.faces?.length ?? 0}):`);
+    for (const face of t?.faces ?? []) {
+      console.log(`  weight=${face.weight} style=${face.style}${face.unicodeRange ? ` subset=${face.unicodeRange}` : ''} file=${face.file}`);
+    }
+    return;
+  }
+
+  if (sub === 'install') {
+    const family = positional[0];
+    if (!family) {
+      console.error('usage: od typefaces install <family> --project <id>');
+      process.exit(2);
+    }
+    if (typeof flags.project !== 'string' || !flags.project) {
+      console.error('usage: od typefaces install <family> --project <id>');
+      process.exit(2);
+    }
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/typefaces/${encodeURIComponent(family)}/install`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: flags.project,
+          ...(typeof flags.dir === 'string' && flags.dir ? { dir: flags.dir } : {}),
+        }),
+      });
+    } catch (err) {
+      return exitWithStructuredError({ code: 'daemon-not-running', message: `Cannot reach daemon at ${base}: ${err?.message ?? err}` });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return process.stdout.write(JSON.stringify(data) + '\n');
+    console.log(`Installed ${data?.family} into ${data?.dir}/ (${data?.files?.length ?? 0} files)`);
+    console.log(`CSS: ${data?.cssFile}`);
+    return;
+  }
+
+  console.error(`unknown subcommand: od typefaces ${sub}`);
+  process.exit(2);
 }
 
 async function runVersion(args) {

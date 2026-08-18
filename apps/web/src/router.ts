@@ -21,6 +21,7 @@ export type EntryHomeView =
   | 'design-library'
   | 'storyboard'
   | 'templates'
+  | 'typefaces'
   | 'integrations';
 
 export type Route =
@@ -127,6 +128,9 @@ export function parseRoute(pathname: string): Route {
   if (parts[0] === 'templates' && !parts[1]) {
     return { kind: 'home', view: 'templates' };
   }
+  if (parts[0] === 'typefaces' && !parts[1]) {
+    return { kind: 'home', view: 'typefaces' };
+  }
   if (parts[0] === 'integrations') {
     return { kind: 'home', view: 'integrations' };
   }
@@ -159,6 +163,7 @@ export function buildPath(route: Route): string {
         : '/storyboard';
     }
     if (route.view === 'templates') return '/templates';
+    if (route.view === 'typefaces') return '/typefaces';
     if (route.view === 'integrations') return '/integrations';
     return '/';
   }
