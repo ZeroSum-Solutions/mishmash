@@ -1737,24 +1737,50 @@ function useRoutingIntentForRun(
   return intent;
 }
 
+// Renders as a native <details>/<summary> disclosure, collapsed by default
+// (same pattern as FileViewer's "Advanced debug metadata" raw payload dump)
+// rather than the plain always-visible <span role="status"> this used to be.
+// A sixth-grade usability pass (docs/gauntlet baseline) flagged the old
+// unconditional rendering as the first thing a new user reads after their
+// very first message -- a raw routing-policy sentence with no explanation,
+// indistinguishable from a message addressed to them. The routing detail
+// itself is unchanged and still verbatim available; it just now takes a
+// deliberate click from someone who wants it, instead of narrating itself
+// into the middle of the conversation.
 function RoutingIntentStatus({ intent }: { intent: RoutingIntentStatus }) {
+  const t = useT();
   const label = `Routed to ${intent.routedModel} on lane "${intent.routedLane}" for stage "${intent.stage}"${
     intent.templateId ? ` (template ${intent.templateId})` : ""
   } — routing policy v${intent.policyVersion}.`;
   return (
-    <span
+    <details
       className="assistant-model-routing assistant-routing-intent"
-      role="status"
-      aria-label={label}
-      style={{
-        ...MODEL_ROUTING_STATUS_BASE_STYLE,
-        color: "#4a4a4a",
-        background: "#eef0f2",
-        border: "1px solid #d7dbe0",
-      }}
+      data-testid="assistant-routing-intent"
+      style={{ marginTop: "2px", marginBottom: "4px", width: "fit-content" }}
     >
-      {label}
-    </span>
+      <summary
+        style={{
+          fontSize: "11px",
+          lineHeight: "1.5",
+          color: "#9a9fa6",
+          cursor: "pointer",
+        }}
+      >
+        {t("chat.routingIntent.debugSummary")}
+      </summary>
+      <span
+        style={{
+          ...MODEL_ROUTING_STATUS_BASE_STYLE,
+          display: "block",
+          marginTop: "4px",
+          color: "#4a4a4a",
+          background: "#eef0f2",
+          border: "1px solid #d7dbe0",
+        }}
+      >
+        {label}
+      </span>
+    </details>
   );
 }
 

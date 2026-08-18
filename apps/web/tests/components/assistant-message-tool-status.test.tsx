@@ -268,8 +268,10 @@ describe('AssistantMessage tool status', () => {
     );
 
     const activity = screen.getByTestId('task-activity-current');
-    expect(activity.textContent).toContain('Bash');
+    expect(activity.textContent).toContain('Running a command');
     expect(activity.textContent).toContain('Run guard');
+    // Raw tool name stays reachable on hover instead of showing as chat text.
+    expect(activity.querySelector('.op-title')?.getAttribute('title')).toBe('Bash');
     expect(activity.getAttribute('data-run-state')).toBe('running');
     expect(screen.queryByTestId('task-activity-toggle')).toBeNull();
     expect(activity.querySelector('.task-activity-complete-icon')).toBeNull();

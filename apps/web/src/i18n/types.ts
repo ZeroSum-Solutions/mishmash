@@ -2731,6 +2731,7 @@ export interface Dict {
   'chat.mode.plan.costNote': string;
   'chat.mode.design.cost': string;
   'chat.mode.design.costNote': string;
+  'chat.routingIntent.debugSummary': string;
   'chat.composerHint': string;
   'chat.cliSettingsTitle': string;
   'chat.cliSettingsAria': string;
@@ -3918,6 +3919,12 @@ export interface Dict {
   'tool.grep': string;
   'tool.fetch': string;
   'tool.search': string;
+  'tool.toolSearch': string;
+  'tool.generateImage': string;
+  'tool.generateVideo': string;
+  'tool.generateAudio': string;
+  'tool.chooseGenerationTool': string;
+  'tool.waitForGeneration': string;
   'tool.lines': string;
   'tool.changeSingular': string;
   'tool.changePlural': string;

@@ -10,6 +10,7 @@
  */
 import { useState } from 'react';
 import { useT } from '../i18n';
+import type { Dict } from '../i18n/types';
 import { isTodoWriteToolName, parseTodoWriteInput } from '../runtime/todos';
 import { getToolRenderer, toRenderProps } from '../runtime/tool-renderers';
 import type { AgentEvent } from '../types';
@@ -77,6 +78,41 @@ export function toolCategoryForName(name: string): ToolCategory {
   return 'other';
 }
 
+// Human labels for tool names that would otherwise render verbatim as a raw
+// wire-format identifier (MCP `mcp__<server>__<method>` names in particular
+// -- see GenericCard below, the fallback for any tool without a dedicated
+// family card). Extends the same tool.* label set the family cards already
+// read from (tool.bash, tool.todos, tool.search, ...) instead of starting a
+// second mapping. Keyed by exact tool name since MCP method names are the
+// server's own naming, not something this app controls; an unmapped MCP
+// tool still gets its double-underscore wire format turned into words
+// rather than showing the raw identifier.
+//
+// 'TodoWrite' covers TodoCard's own fallback (a todo call whose input didn't
+// parse into a todo list) -- it always renders GenericCard with that exact
+// literal name regardless of which raw tool-name alias triggered it, so this
+// one entry is complete without enumerating isTodoWriteToolName's aliases.
+const TOOL_LABEL_KEYS: Record<string, keyof Dict> = {
+  TodoWrite: 'tool.todos',
+  'mcp__higgsfield-openclaw__generate_image': 'tool.generateImage',
+  'mcp__higgsfield-openclaw__generate_image_batch': 'tool.generateImage',
+  'mcp__higgsfield-openclaw__generate_video': 'tool.generateVideo',
+  'mcp__higgsfield-openclaw__generate_video_batch': 'tool.generateVideo',
+  'mcp__higgsfield-openclaw__generate_audio': 'tool.generateAudio',
+  'mcp__higgsfield-openclaw__models_explore': 'tool.chooseGenerationTool',
+  'mcp__higgsfield-openclaw__jobs_wait': 'tool.waitForGeneration',
+  'mcp__higgsfield-openclaw__jobs_status': 'tool.waitForGeneration',
+};
+
+function friendlyToolName(name: string, t: ReturnType<typeof useT>): string {
+  const key = TOOL_LABEL_KEYS[name];
+  if (key) return t(key);
+  if (!name.startsWith('mcp__')) return name;
+  const parts = name.split('__').filter(Boolean);
+  const method = (parts[parts.length - 1] ?? name).replace(/_/g, ' ').trim();
+  return method || name;
+}
+
 export function ToolCard({
   use,
   result,
@@ -110,7 +146,7 @@ export function ToolCard({
     return <FileEditCard input={use.input} result={result} runStreaming={isStreaming} runSucceeded={isSucceeded} ctx={ctx} />;
   if (category === 'read')
     return <FileReadCard input={use.input} result={result} runStreaming={isStreaming} runSucceeded={isSucceeded} ctx={ctx} />;
-  if (category === 'run') return <BashCard input={use.input} result={result} runStreaming={isStreaming} runSucceeded={isSucceeded} />;
+  if (category === 'run') return <BashCard rawName={name} input={use.input} result={result} runStreaming={isStreaming} runSucceeded={isSucceeded} />;
   if (category === 'search') return <SearchCard toolName={name} input={use.input} result={result} runStreaming={isStreaming} runSucceeded={isSucceeded} />;
   if (category === 'fetch') return <WebFetchCard input={use.input} result={result} runStreaming={isStreaming} runSucceeded={isSucceeded} />;
   if (category === 'ask')
@@ -493,7 +529,7 @@ function FileReadCard({
   );
 }
 
-function BashCard({ input, result, runStreaming, runSucceeded }: { input: unknown; result?: Props['result']; runStreaming: boolean; runSucceeded: boolean }) {
+function BashCard({ rawName, input, result, runStreaming, runSucceeded }: { rawName: string; input: unknown; result?: Props['result']; runStreaming: boolean; runSucceeded: boolean }) {
   const t = useT();
   const obj = (input ?? {}) as { command?: string; description?: string };
   const command = obj.command ?? '';
@@ -504,7 +540,7 @@ function BashCard({ input, result, runStreaming, runSucceeded }: { input: unknow
     <div className="op-card op-bash">
       <button type="button" className="op-card-head" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <ResultBadge category="run" result={result} runStreaming={runStreaming} runSucceeded={runSucceeded} />
-        <span className={`op-title${isRunning ? ' shimmer-text' : ''}`}>{t('tool.bash')}</span>
+        <span className={`op-title${isRunning ? ' shimmer-text' : ''}`} title={rawName}>{t('tool.bash')}</span>
         {desc ? <span className="op-meta op-desc">{desc}</span> : null}
         <span className="op-expand-chev" aria-hidden>
           <Icon name={open ? "chevron-down" : "chevron-right"} size={11} />
@@ -528,13 +564,19 @@ function SearchCard({ toolName, input, result, runStreaming, runSucceeded }: { t
   const t = useT();
   const obj = (input ?? {}) as { query?: string; pattern?: string; glob?: string; path?: string };
   const query = obj.query ?? obj.pattern ?? obj.glob ?? '*';
-  const isWebSearch = toolName.toLowerCase().includes('web');
+  const normalizedName = toolName.trim().toLowerCase().replace(/[\s-]+/g, '_');
+  // The agent's own deferred-tool lookup (`ToolSearch`) takes a query like
+  // "select:TodoWrite,mcp__server__method" -- showing that verbatim would
+  // leak the exact raw tool identifiers this file otherwise humanizes.
+  const isToolSearch = normalizedName === 'toolsearch';
+  const isWebSearch = !isToolSearch && toolName.toLowerCase().includes('web');
   return (
     <CompactResultCard
       className={isWebSearch ? 'op-web' : 'op-search'}
       category="search"
-      title={t('tool.search')}
-      summary={`${query}${obj.path ? ` in ${obj.path}` : ''}`}
+      title={isToolSearch ? t('tool.toolSearch') : t('tool.search')}
+      summary={isToolSearch ? '' : `${query}${obj.path ? ` in ${obj.path}` : ''}`}
+      rawName={toolName}
       result={result}
       runStreaming={runStreaming}
       runSucceeded={runSucceeded}
@@ -563,6 +605,7 @@ function CompactResultCard({
   category,
   title,
   summary,
+  rawName,
   result,
   runStreaming,
   runSucceeded,
@@ -571,12 +614,17 @@ function CompactResultCard({
   category: ToolCategory;
   title: string;
   summary: string;
+  // Raw wire-format tool name, shown as a hover tooltip only when it
+  // differs from the human `title` -- keeps it reachable without
+  // reintroducing it as visible text.
+  rawName?: string;
   result?: Props['result'];
   runStreaming: boolean;
   runSucceeded: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const hasOutput = !!result?.content.trim() && !result.isError;
+  const headTitle = rawName && rawName !== title ? rawName : undefined;
   const head = (
     <>
       <ResultBadge category={category} result={result} runStreaming={runStreaming} runSucceeded={runSucceeded} />
@@ -596,12 +644,13 @@ function CompactResultCard({
           type="button"
           className="op-card-head"
           aria-expanded={open}
+          title={headTitle}
           onClick={() => setOpen((value) => !value)}
         >
           {head}
         </button>
       ) : (
-        <div className="op-card-head op-card-head--static">{head}</div>
+        <div className="op-card-head op-card-head--static" title={headTitle}>{head}</div>
       )}
       {hasOutput ? (
         <div className={`accordion-collapsible${open ? ' open' : ''}`}>
@@ -631,12 +680,14 @@ function GenericCard({
   runStreaming: boolean;
   runSucceeded: boolean;
 }) {
+  const t = useT();
   const summary = describeInput(input);
+  const label = friendlyToolName(name, t);
   return (
     <div className="op-card op-generic">
       <div className="op-card-head">
         <ResultBadge category={category} result={result} runStreaming={runStreaming} runSucceeded={runSucceeded} />
-        <span className="op-title">{name}</span>
+        <span className="op-title" title={label === name ? undefined : name}>{label}</span>
         {summary ? <span className="op-meta">{truncate(summary, 200)}</span> : null}
       </div>
     </div>
