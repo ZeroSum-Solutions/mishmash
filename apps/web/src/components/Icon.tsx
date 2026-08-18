@@ -5,6 +5,7 @@ export type IconName =
   | 'arrow-left'
   | 'arrow-up'
   | 'attach'
+  | 'bar-chart'
   | 'bell'
   | 'blocks'
   | 'check'
@@ -144,6 +145,17 @@ export function Icon({ name, size = 14, strokeWidth = 1.6, ...rest }: Props) {
       return (
         <svg {...common}>
           <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+        </svg>
+      );
+    case 'bar-chart':
+      // Three ascending bars on an L axis: reads as a usage/consumption
+      // meter at 13px, where a dial or needle would blur into a circle.
+      return (
+        <svg {...common}>
+          <path d="M3 3v18h18" />
+          <rect x="7" y="15" width="3" height="6" rx="1" />
+          <rect x="12" y="11" width="3" height="10" rx="1" />
+          <rect x="17" y="7" width="3" height="14" rx="1" />
         </svg>
       );
     case 'bell':

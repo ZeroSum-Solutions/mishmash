@@ -1191,6 +1191,9 @@ export function EntryShell({
                 aria-label="Project usage"
                 data-testid="entry-usage-button"
               >
+                <span className="use-everywhere-chip__icon" aria-hidden>
+                  <Icon name="bar-chart" size={13} />
+                </span>
                 <span className="use-everywhere-chip__label">Usage</span>
               </button>
             </div>
