@@ -165,6 +165,51 @@ describe('composition-metrics bridge — out-of-flow + transform (CSS-cascade, r
     // the :hover rule — this is real browser semantics, not a bridge special case.
     expect(metrics?.transformedElementCount).toBe(0);
   });
+
+  it('never counts a closed modal/lightbox (display:none) as out-of-flow or transformed', async () => {
+    // Real-world regression: a genuine generated artifact carries a
+    // `.lightbox { position: fixed; z-index: 90; display: none; }` — an
+    // entirely ordinary closed-by-default overlay. Counting it would credit
+    // the page for a move nobody looking at a screenshot could ever see.
+    const body = `
+      <style>
+        .lightbox { position: fixed; z-index: 90; display: none; transform: scale(0.9); }
+      </style>
+      <section data-rect-w="800">Content</section>
+      <div class="lightbox">Closed by default</div>
+    `;
+    const { win, parentPostMessage } = await setupBridge(body);
+    const metrics = await requestMeasurement(win, parentPostMessage);
+    expect(metrics?.outOfFlowElementCount).toBe(0);
+    expect(metrics?.transformedElementCount).toBe(0);
+  });
+
+  it('never counts a visibility:hidden element either', async () => {
+    const body = `
+      <style>
+        .drawer { position: absolute; z-index: 10; visibility: hidden; }
+      </style>
+      <section data-rect-w="800">Content</section>
+      <div class="drawer">Hidden drawer</div>
+    `;
+    const { win, parentPostMessage } = await setupBridge(body);
+    const metrics = await requestMeasurement(win, parentPostMessage);
+    expect(metrics?.outOfFlowElementCount).toBe(0);
+  });
+
+  it('still counts a VISIBLE positioned element once its display:none sibling is excluded', async () => {
+    const body = `
+      <style>
+        .toast { position: fixed; z-index: 20; }
+        .lightbox { position: fixed; z-index: 90; display: none; }
+      </style>
+      <section data-rect-w="800"><div class="toast">Visible toast</div></section>
+      <div class="lightbox">Closed</div>
+    `;
+    const { win, parentPostMessage } = await setupBridge(body);
+    const metrics = await requestMeasurement(win, parentPostMessage);
+    expect(metrics?.outOfFlowElementCount).toBe(1);
+  });
 });
 
 describe('composition-metrics bridge — distinct section backgrounds (real getComputedStyle)', () => {
@@ -224,6 +269,23 @@ describe('composition-metrics bridge — display:body font ratio (real getComput
     expect(metrics?.bodyFontSizePx).toBe(14);
     expect(metrics?.maxDisplayFontSizePx).toBe(140);
     expect(metrics?.displayToBodyFontRatio).toBeCloseTo(10, 1);
+  });
+});
+
+describe('composition-metrics bridge — hidden sections excluded', () => {
+  it('does not count a display:none section toward sectionCount or the background/width tallies', async () => {
+    const body = `
+      <style>
+        .a { background-color: #ffffff; }
+        .hidden-panel { display: none; background-color: #000000; }
+      </style>
+      <section class="a" data-rect-w="800">Visible</section>
+      <section class="hidden-panel" data-rect-w="800">Never shown</section>
+    `;
+    const { win, parentPostMessage } = await setupBridge(body);
+    const metrics = await requestMeasurement(win, parentPostMessage);
+    expect(metrics?.sectionCount).toBe(1);
+    expect(metrics?.distinctSectionBackgroundCount).toBe(1);
   });
 });
 

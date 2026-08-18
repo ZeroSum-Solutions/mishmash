@@ -848,11 +848,31 @@ function injectCompositionMetricsBridge(doc: string): string {
   // by a fraction of a pixel (subpixel layout rounding, not a real design
   // difference) don't count as two distinct widths.
   function roundedWidth(px){ return Math.round(px / 4) * 4; }
+  // True for an element that generates no box at all right now — a closed
+  // modal/lightbox/drawer (display:none) or a visibility:hidden node. Real
+  // artifacts use exactly this pattern for their own overlay chrome (a
+  // baseline build measured during this feature's own validation carried a
+  // position:fixed;z-index lightbox that never once counted toward the
+  // evidence table's "0 positioned" precisely because it renders nothing
+  // until opened) — counting it as an out-of-flow/transformed element would
+  // credit (or blame) the page for a move nobody watching it would ever see.
+  // Same two computed properties pruneHiddenSnapshotNodes above checks;
+  // this only inspects the element's OWN computed style, not its ancestor
+  // chain, so a node buried inside a hidden ancestor without being hidden
+  // itself is not caught here — the common "modal container is display:none"
+  // shape is, which is what real artifacts actually do.
+  function isHiddenAtRest(computed){
+    return computed.display === 'none' || computed.visibility === 'hidden';
+  }
   function measure(){
     var root = document.documentElement;
     var body = document.body || root;
     var bodyFontSizePx = parseFloat(getComputedStyle(body).fontSize) || 0;
-    var sections = document.querySelectorAll('section');
+    var sectionsRaw = document.querySelectorAll('section');
+    var sections = [];
+    for (var s = 0; s < sectionsRaw.length; s++){
+      if (!isHiddenAtRest(getComputedStyle(sectionsRaw[s]))) sections.push(sectionsRaw[s]);
+    }
 
     var bgSeen = {};
     for (var i = 0; i < sections.length; i++){
@@ -885,6 +905,7 @@ function injectCompositionMetricsBridge(doc: string): string {
     var maxDisplayFontSizePx = bodyFontSizePx;
     for (var k = 0; k < scanCount; k++){
       var cs = getComputedStyle(all[k]);
+      if (isHiddenAtRest(cs)) continue;
       if (OUT_OF_FLOW_POSITIONS[cs.position] && cs.zIndex !== 'auto') outOfFlowElementCount++;
       if (cs.transform && cs.transform !== 'none') transformedElementCount++;
       var fontSizePx = parseFloat(cs.fontSize);

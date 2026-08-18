@@ -72,6 +72,14 @@ export interface UrlLoadDecision {
    * buildSrcdoc) is present to detect and break the loop.
    */
   needsRedirectGuard?: boolean;
+  /**
+   * The artifact looks like a multi-section page worth measuring for
+   * rendered layout risk (see `CompositionMetrics` in `@open-design/
+   * contracts`) — `injectCompositionMetricsBridge` (buildSrcdoc) has no
+   * URL-load equivalent, so this forces srcDoc the same way `tweaksBridge`
+   * does. See `htmlLooksMeasurableForCompositionMetrics` for the threshold.
+   */
+  compositionMetricsBridge?: boolean;
 }
 
 /**
@@ -83,6 +91,31 @@ export interface UrlLoadDecision {
 export function hasTweaksTemplate(source: string | null | undefined): boolean {
   if (!source) return false;
   return /\btw-(?:panel|hidden)\b/.test(source);
+}
+
+/**
+ * Above this many `<section>` elements, "did this page ever leave document
+ * flow" is a real question worth measuring — matches
+ * `LAYOUT_RISK_SECTION_THRESHOLD` in `apps/daemon/src/lint-artifact.ts`'s
+ * `layout-risk-flat` check (same corpus evidence: not shared by import
+ * because `apps/web` must not depend on daemon internals — see AGENTS.md
+ * "Boundary constraints" — so the constant is duplicated deliberately here).
+ * Below it, a single-viewport hero, a form, or a docs page never having a
+ * grid-breaking move is expected shape, not a defect.
+ */
+export const COMPOSITION_METRICS_SECTION_THRESHOLD = 5;
+
+/**
+ * Return true when the HTML source has enough `<section>` elements that
+ * measuring its rendered layout risk (see `CompositionMetrics` in
+ * `@open-design/contracts`) is worth forcing the srcDoc path for — the
+ * `injectCompositionMetricsBridge` bridge only exists there, with no
+ * URL-load equivalent. Pure string scan, same shape as `hasTweaksTemplate`.
+ */
+export function htmlLooksMeasurableForCompositionMetrics(source: string | null | undefined): boolean {
+  if (!source) return false;
+  const matches = source.match(/<section\b/gi);
+  return (matches?.length ?? 0) >= COMPOSITION_METRICS_SECTION_THRESHOLD;
 }
 
 /**
@@ -111,6 +144,10 @@ export function shouldUrlLoadHtmlPreview(d: UrlLoadDecision): boolean {
   // is never injected, so the toolbar toggle would stay disabled even though
   // the artifact ships a `.tw-panel`.
   if (d.tweaksBridge) return false;
+  // The layout-risk measurement bridge only exists on the srcDoc path — see
+  // htmlLooksMeasurableForCompositionMetrics for why this is scoped to
+  // multi-section pages rather than forcing srcDoc for every HTML preview.
+  if (d.compositionMetricsBridge) return false;
   if (d.forceInline) return false;
   if (d.needsFocusGuard) return false;
   // A self-redirecting document must go through srcDoc so buildSrcdoc's

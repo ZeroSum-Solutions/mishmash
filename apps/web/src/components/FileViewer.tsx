@@ -145,6 +145,7 @@ import {
 import {
   hasTweaksTemplate,
   hasUrlModeBridge,
+  htmlLooksMeasurableForCompositionMetrics,
   htmlNeedsFocusGuard,
   htmlNeedsPoweredPreview,
   htmlNeedsRedirectGuard,
@@ -7344,6 +7345,16 @@ function HtmlViewer({
     const s = routingHtmlSource;
     return s != null && hasTweaksTemplate(s);
   }, [passiveLargeHtmlPreview, routingHtmlSource]);
+  // Layout-risk measurement (see CompositionMetrics in @open-design/
+  // contracts) only runs on the srcDoc path — injectCompositionMetricsBridge
+  // has no URL-load equivalent. Scoped to multi-section pages (see
+  // htmlLooksMeasurableForCompositionMetrics) rather than forcing srcDoc for
+  // every HTML preview, so a form or docs page keeps URL-load's benefits.
+  const compositionMetricsBridgeNeeded = useMemo(() => {
+    if (passiveLargeHtmlPreview) return false;
+    const s = routingHtmlSource;
+    return s != null && htmlLooksMeasurableForCompositionMetrics(s);
+  }, [passiveLargeHtmlPreview, routingHtmlSource]);
   // Set by the injected guard's `od:redirect-loop-blocked` postMessage. The
   // browser makes `window.location` unforgeable, so a runaway reload can only be
   // stopped host-side — parking the srcDoc iframe on static content below. File-
@@ -7443,6 +7454,7 @@ function HtmlViewer({
     inspectMode,
     drawMode: drawOverlayOpen,
     tweaksBridge: tweaksTemplateBridge,
+    compositionMetricsBridge: compositionMetricsBridgeNeeded,
     forceInline: (forceInline || needsSandboxShim) && !needsPowered,
     needsFocusGuard: needsFocusGuard && !needsPowered,
     needsRedirectGuard: needsRedirectGuard && !needsPowered,

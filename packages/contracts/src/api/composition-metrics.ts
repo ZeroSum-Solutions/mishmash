@@ -44,13 +44,17 @@ export interface CompositionMetrics {
    * Elements at rest (not just on `:hover`/`:focus`) whose computed
    * `position` is `absolute`, `fixed`, or `sticky` AND whose computed
    * `z-index` is not `auto` — the exact pair `layout-risk-flat` greps
-   * source for, measured here on the rendered box tree instead.
+   * source for, measured here on the rendered box tree instead. Excludes
+   * an element whose own computed `display` is `none` or `visibility` is
+   * `hidden` — a closed modal/lightbox/drawer renders nothing, so it
+   * cannot be evidence of a move a viewer would ever see.
    */
   outOfFlowElementCount: number;
   /**
    * Elements at rest whose computed `transform` is not `none`. A
    * hover/focus-only transform never appears here, because it is measured
-   * on the DOM's resting state, not a simulated pseudo-class.
+   * on the DOM's resting state, not a simulated pseudo-class. Excludes
+   * hidden elements for the same reason as `outOfFlowElementCount`.
    */
   transformedElementCount: number;
   /** Distinct `getComputedStyle(section).backgroundColor` values across every `<section>`. */
