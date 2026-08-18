@@ -1,11 +1,23 @@
 import { describe, expect, it } from 'vitest';
 
+import * as previewAssets from '../../src/components/file-viewer-preview-assets';
 import {
   collectBinaryPreviewAssetPaths,
   inlineBinaryAssetRefs,
   isBinaryPreviewAssetPath,
   rewriteInlinedCssAssetRefs,
 } from '../../src/components/file-viewer-preview-assets';
+
+type InlineRelativeAssets = (
+  html: string,
+  projectId: string,
+  fileName: string,
+  projectFilePaths: ReadonlySet<string> | null,
+  access: {
+    fetch: typeof globalThis.fetch;
+    rawUrl: (projectId: string, filePath: string) => string;
+  },
+) => Promise<string>;
 
 // WHY THIS EXISTS
 //
@@ -198,5 +210,81 @@ describe('rewriteInlinedCssAssetRefs — data urls for binary refs', () => {
     expect(rewriteInlinedCssAssetRefs(css, 'main.css', files, toRawUrl)).toContain(
       '/api/projects/p1/raw/img/bg.png',
     );
+  });
+});
+
+describe('inlineRelativeAssets', () => {
+  it('runs the complete parent-side text and binary inlining pipeline through one shared export', async () => {
+    const inlineRelativeAssets = (
+      previewAssets as typeof previewAssets & { inlineRelativeAssets?: InlineRelativeAssets }
+    ).inlineRelativeAssets;
+    expect(typeof inlineRelativeAssets).toBe('function');
+    if (!inlineRelativeAssets) return;
+
+    const origin = 'http://127.0.0.1:59920';
+    const rawUrl = (projectId: string, filePath: string) =>
+      `${origin}/api/projects/${encodeURIComponent(projectId)}/raw/${filePath
+        .split('/')
+        .map((part) => encodeURIComponent(part))
+        .join('/')}`;
+    const responses = new Map<string, Response>([
+      [
+        rawUrl('project 1', 'fonts/fonts.css'),
+        new Response("@font-face{font-family:Local;src:url('./local.woff2')}", {
+          headers: { 'content-type': 'text/css' },
+        }),
+      ],
+      [
+        rawUrl('project 1', 'assets/app.js'),
+        new Response('window.__previewLoaded = true;', {
+          headers: { 'content-type': 'text/javascript' },
+        }),
+      ],
+      [
+        rawUrl('project 1', 'fonts/local.woff2'),
+        new Response(new Uint8Array([0, 1, 2, 3]), {
+          headers: { 'content-type': 'font/woff2' },
+        }),
+      ],
+      [
+        rawUrl('project 1', 'assets/logo.png'),
+        new Response(new Uint8Array([137, 80, 78, 71]), {
+          headers: { 'content-type': 'image/png' },
+        }),
+      ],
+    ]);
+    const fetchFixture: typeof globalThis.fetch = async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const response = responses.get(url);
+      return response?.clone() ?? new Response('missing fixture', { status: 404 });
+    };
+    const html = [
+      '<!doctype html><html><head>',
+      '<link rel="stylesheet" href="../fonts/fonts.css">',
+      '</head><body>',
+      '<img src="../assets/logo.png">',
+      '<script src="../assets/app.js"></script>',
+      '</body></html>',
+    ].join('');
+
+    const inlined = await inlineRelativeAssets(
+      html,
+      'project 1',
+      'pages/index.html',
+      new Set([
+        'pages/index.html',
+        'fonts/fonts.css',
+        'fonts/local.woff2',
+        'assets/logo.png',
+        'assets/app.js',
+      ]),
+      { fetch: fetchFixture, rawUrl },
+    );
+
+    expect(inlined).toContain('<style data-od-inline-asset="../fonts/fonts.css">');
+    expect(inlined).toContain('window.__previewLoaded = true;');
+    expect(inlined).toContain('data:font/woff2;base64,AAECAw==');
+    expect(inlined).toContain('data:image/png;base64,iVBORw==');
+    expect(inlined).not.toContain('<script src="../assets/app.js"></script>');
   });
 });

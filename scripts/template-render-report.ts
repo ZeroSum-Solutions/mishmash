@@ -9,16 +9,16 @@
  * `sandbox="allow-scripts"` iframe, exactly as `TemplatesSection.tsx`
  * embeds it (`exampleUrl()` + the `templates-viewer__stage` frame).
  *
- * Surface B — canvas / FileViewer: the URL-load iframe FileViewer mounts by
- * default (`sandbox="allow-scripts allow-downloads"`, non-powered path),
- * pointed at `/api/projects/:id/raw/:file` so `projectRawFileCsp` (see
- * apps/daemon/src/server.ts) is genuinely in force. A project is
- * materialized through the REAL `POST /api/projects` code path used by
+ * Surface B — canvas / FileViewer: fetches the daemon-declared entry HTML in
+ * the parent, runs FileViewer's shared text/binary asset inliner, builds the
+ * same srcdoc wrapper, and mounts it with
+ * `sandbox="allow-scripts allow-downloads"`. A project is materialized through
+ * the REAL `POST /api/projects` code path used by
  * `EntryShell.startProjectFromTemplate` (metadata `{kind:'template'}`,
  * skillId = template id) — no `autoSendFirstMessage`, so no agent turn ever
  * runs; this script only exercises the synchronous file-copy step.
  *
- * If materialization produces no detectable HTML entry, this harness may
+ * If the daemon returns no `project.metadata.entryFile`, this harness may
  * upload the template's own `example.html` as `index.html` through the real
  * `POST /api/projects/:id/upload` endpoint. Every record says which path it
  * took (`htmlSource`) so fallback seeding and normal project materialization
@@ -42,7 +42,13 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { replaceJsonLinesAtomically } from "./template-render-report-lib.ts";
+import {
+  prepareCanvasRenderDocument,
+  projectEntryFile,
+  replaceJsonLinesAtomically,
+  summarizeBlockedEvents,
+  type BlockedResourceEvent,
+} from "./template-render-report-lib.ts";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -51,9 +57,10 @@ import { replaceJsonLinesAtomically } from "./template-render-report-lib.ts";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DAEMON_ORIGIN = process.env.OD_BASELINE_DAEMON_ORIGIN ?? "http://127.0.0.1:59919";
 const WEB_ORIGIN = process.env.OD_BASELINE_WEB_ORIGIN ?? "http://127.0.0.1:59920";
+const BASELINE_DATA_DIR = process.env.OD_BASELINE_DATA_DIR ?? path.join(REPO_ROOT, ".od");
 
 const DESIGN_TEMPLATES_DIR = path.join(REPO_ROOT, "design-templates");
-const OD_DESIGN_TEMPLATES_DIR = path.join(REPO_ROOT, ".od", "design-templates");
+const OD_DESIGN_TEMPLATES_DIR = path.join(BASELINE_DATA_DIR, "design-templates");
 
 const PROOF_DIR = path.join(os.homedir(), ".claude", "goal-state", "mishmash-creative-loop", "proof");
 
@@ -112,6 +119,7 @@ interface PWFrame {
 }
 interface PWPage {
   setContent(html: string, opts?: { waitUntil?: string }): Promise<void>;
+  evaluate<T>(fn: string | (() => T)): Promise<T>;
   waitForLoadState(state?: string, opts?: { timeout?: number }): Promise<void>;
   waitForTimeout(ms: number): Promise<void>;
   frames(): PWFrame[];
@@ -223,11 +231,7 @@ async function usesExternalCdn(exampleHtmlPath: string | null): Promise<boolean>
 // Shared render measurement
 // ---------------------------------------------------------------------------
 
-interface BlockedEntry {
-  url: string;
-  reason: "csp" | "requestfailed" | "http-error";
-  detail: string;
-}
+type BlockedEntry = BlockedResourceEvent;
 
 interface FrameMetrics {
   textLen: number;
@@ -250,8 +254,11 @@ interface RenderRecord {
   errorMessage: string | null;
   httpStatus: number | null;
   blockedSubresources: BlockedEntry[];
+  blockedEventCount: number;
+  blockedDistinctUrlCount: number;
   blockedCspCount: number;
-  blockedOtherCount: number;
+  blockedRemoteCount: number;
+  blockedLocalCount: number;
   blockedLocal404Count?: number;
   blockedLocalProbeStatusCounts?: Record<string, number>;
   consoleErrorCount: number;
@@ -334,31 +341,11 @@ async function measureFrame(frame: PWFrame): Promise<FrameMetrics> {
   return frame.evaluate<FrameMetrics>(MEASURE_FRAME_SCRIPT);
 }
 
-function dedupeBlocked(blocked: BlockedEntry[]): { cspCount: number; otherCount: number; byUrl: Map<string, BlockedEntry> } {
-  const byUrl = new Map<string, BlockedEntry>();
-  for (const entry of blocked) {
-    const existing = byUrl.get(entry.url);
-    // A single blocked request often surfaces on both channels (a
-    // securitypolicyviolation event AND a requestfailed with errorText
-    // "csp"). Prefer the 'csp' classification when either channel reports it.
-    if (!existing || (existing.reason !== "csp" && entry.reason === "csp")) {
-      byUrl.set(entry.url, entry);
-    }
-  }
-  let cspCount = 0;
-  let otherCount = 0;
-  for (const entry of byUrl.values()) {
-    if (entry.reason === "csp" || entry.detail === "csp") cspCount++;
-    else otherCount++;
-  }
-  return { cspCount, otherCount, byUrl };
-}
-
 async function probeLocalFailures(
   blocked: BlockedEntry[],
 ): Promise<{ local404Count: number; statusCounts: Record<string, number> }> {
   const origin = new URL(WEB_ORIGIN).origin;
-  const candidates = [...dedupeBlocked(blocked).byUrl.values()]
+  const candidates = [...summarizeBlockedEvents(blocked).byUrl.values()]
     .filter((entry) => entry.reason !== "csp")
     .map((entry) => entry.url)
     .filter((url) => {
@@ -389,6 +376,7 @@ async function renderUrl(
   browser: PWBrowser,
   targetUrl: string,
   sandbox: string,
+  prepared?: { srcdoc: string; httpStatus: number },
 ): Promise<{
   metrics: FrameMetrics | null;
   blocked: BlockedEntry[];
@@ -400,7 +388,7 @@ async function renderUrl(
   const context = await browser.newContext();
   const blocked: BlockedEntry[] = [];
   const consoleErrors: string[] = [];
-  let httpStatus: number | null = null;
+  let httpStatus: number | null = prepared?.httpStatus ?? null;
   let timedOut = false;
   let errorMessage: string | null = null;
   let metrics: FrameMetrics | null = null;
@@ -455,9 +443,15 @@ async function renderUrl(
     });
 
     const wrapper = `<!doctype html><html><body style="margin:0;background:#fff">` +
-      `<iframe sandbox="${sandbox}" style="width:1280px;height:900px;border:0" ` +
-      `src="${targetUrl}"></iframe></body></html>`;
+      `<iframe id="od-render-frame" sandbox="${sandbox}" ` +
+      `style="width:1280px;height:900px;border:0"` +
+      `${prepared ? "" : ` src="${targetUrl}"`}></iframe></body></html>`;
     await page.setContent(wrapper, { waitUntil: "domcontentloaded" });
+    if (prepared) {
+      await page.evaluate(
+        `document.getElementById("od-render-frame").srcdoc = ${JSON.stringify(prepared.srcdoc)}`,
+      );
+    }
     try {
       await page.waitForLoadState("networkidle", { timeout: NETWORK_IDLE_TIMEOUT_MS });
     } catch {
@@ -500,8 +494,7 @@ function computeVerdict(opts: {
   timedOut: boolean;
   errorMessage: string | null;
   metrics: FrameMetrics | null;
-  cspCount: number;
-  otherCount: number;
+  blockedCount: number;
 }): Verdict {
   if (opts.timedOut) return "timeout";
   if (opts.errorMessage && !opts.metrics) return "error";
@@ -509,7 +502,7 @@ function computeVerdict(opts: {
   const painted = opts.metrics.paintedCanvasCount > 0 || opts.metrics.loadedImgCount > 0 || opts.metrics.loadedVideoCount > 0;
   const hasContent = opts.metrics.textLen > 0 || painted;
   if (!hasContent) return "blank";
-  if (opts.cspCount > 0 || opts.otherCount > 0) return "degraded";
+  if (opts.blockedCount > 0) return "degraded";
   return "ok";
 }
 
@@ -552,8 +545,13 @@ async function runSurfaceA(
     } catch (err) {
       out = { metrics: null, blocked: [], consoleErrors: [], httpStatus: null, timedOut: false, errorMessage: String(err) };
     }
-    const { cspCount, otherCount } = dedupeBlocked(out.blocked);
-    const verdict = computeVerdict({ timedOut: out.timedOut, errorMessage: out.errorMessage, metrics: out.metrics, cspCount, otherCount });
+    const blockedSummary = summarizeBlockedEvents(out.blocked);
+    const verdict = computeVerdict({
+      timedOut: out.timedOut,
+      errorMessage: out.errorMessage,
+      metrics: out.metrics,
+      blockedCount: blockedSummary.distinctUrlCount,
+    });
     const record: RenderRecord = {
       id: entry.id,
       surface: "gallery-card",
@@ -563,8 +561,11 @@ async function runSurfaceA(
       errorMessage: out.errorMessage,
       httpStatus: out.httpStatus,
       blockedSubresources: out.blocked,
-      blockedCspCount: cspCount,
-      blockedOtherCount: otherCount,
+      blockedEventCount: blockedSummary.eventCount,
+      blockedDistinctUrlCount: blockedSummary.distinctUrlCount,
+      blockedCspCount: blockedSummary.cspCount,
+      blockedRemoteCount: blockedSummary.remoteCount,
+      blockedLocalCount: blockedSummary.localCount,
       consoleErrorCount: out.consoleErrors.length,
       consoleErrorSample: out.consoleErrors.slice(0, 3),
       renderedTextLength: out.metrics?.textLen ?? 0,
@@ -593,7 +594,7 @@ async function runSurfaceA(
 }
 
 // ---------------------------------------------------------------------------
-// Surface B — canvas / FileViewer (raw project file, real materialization)
+// Surface B — canvas / FileViewer (shared srcdoc pipeline, real materialization)
 // ---------------------------------------------------------------------------
 
 function sanitizeForProjectId(id: string): string {
@@ -611,6 +612,7 @@ async function materializeProject(
   htmlSource: "materialized" | "manually-seeded-example.html" | "no-html-available";
   renderEntryFile: string | null;
   copiedFileCount: number;
+  projectFilePaths: string[];
   errorMessage: string | null;
 }> {
   const projectId = `t1b-${sanitizeForProjectId(id)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -635,17 +637,17 @@ async function materializeProject(
       htmlSource: "no-html-available",
       renderEntryFile: null,
       copiedFileCount: 0,
+      projectFilePaths: [],
       errorMessage: `create failed (${createRes.status}): ${text.slice(0, 300)}`,
     };
   }
 
+  const createJson = (await createRes.json()) as { project?: unknown };
+  const materializedEntryFile = projectEntryFile(createJson.project);
   const filesRes = await fetch(`${DAEMON_ORIGIN}/api/projects/${projectId}/files`);
   const filesJson = filesRes.ok ? ((await filesRes.json()) as { files: { name: string }[] }) : { files: [] };
   const names = filesJson.files.map((f) => f.name);
   const copiedFileCount = names.length;
-  let materializedEntryFile: string | null = names.includes("index.html")
-    ? "index.html"
-    : (names.find((n) => /\.html?$/i.test(n)) ?? null);
   const materializationGap = materializedEntryFile === null;
 
   let htmlSource: "materialized" | "manually-seeded-example.html" | "no-html-available" = "materialized";
@@ -660,6 +662,7 @@ async function materializeProject(
       if (uploadRes.ok) {
         htmlSource = "manually-seeded-example.html";
         renderEntryFile = "index.html";
+        names.push("index.html");
       } else {
         htmlSource = "no-html-available";
         renderEntryFile = null;
@@ -670,7 +673,17 @@ async function materializeProject(
     }
   }
 
-  return { projectId, createOk: true, materializedEntryFile, materializationGap, htmlSource, renderEntryFile, copiedFileCount, errorMessage: null };
+  return {
+    projectId,
+    createOk: true,
+    materializedEntryFile,
+    materializationGap,
+    htmlSource,
+    renderEntryFile,
+    copiedFileCount,
+    projectFilePaths: names,
+    errorMessage: null,
+  };
 }
 
 async function deleteProject(projectId: string): Promise<void> {
@@ -777,8 +790,11 @@ async function runSurfaceB(browser: PWBrowser, sample: SampleItem[]): Promise<Re
         errorMessage: mat.errorMessage,
         httpStatus: null,
         blockedSubresources: [],
+        blockedEventCount: 0,
+        blockedDistinctUrlCount: 0,
         blockedCspCount: 0,
-        blockedOtherCount: 0,
+        blockedRemoteCount: 0,
+        blockedLocalCount: 0,
         blockedLocal404Count: 0,
         blockedLocalProbeStatusCounts: {},
         consoleErrorCount: 0,
@@ -814,13 +830,25 @@ async function runSurfaceB(browser: PWBrowser, sample: SampleItem[]): Promise<Re
     const targetUrl = `${WEB_ORIGIN}/api/projects/${mat.projectId}/raw/${mat.renderEntryFile}`;
     let out: Awaited<ReturnType<typeof renderUrl>>;
     try {
-      out = await renderUrl(browser, targetUrl, "allow-scripts allow-downloads");
+      const prepared = await prepareCanvasRenderDocument({
+        projectId: mat.projectId,
+        entryFile: mat.renderEntryFile,
+        projectFilePaths: new Set(mat.projectFilePaths),
+        webOrigin: WEB_ORIGIN,
+        fetch: globalThis.fetch.bind(globalThis),
+      });
+      out = await renderUrl(browser, targetUrl, "allow-scripts allow-downloads", prepared);
     } catch (err) {
       out = { metrics: null, blocked: [], consoleErrors: [], httpStatus: null, timedOut: false, errorMessage: String(err) };
     }
-    const { cspCount, otherCount } = dedupeBlocked(out.blocked);
+    const blockedSummary = summarizeBlockedEvents(out.blocked);
     const localProbe = await probeLocalFailures(out.blocked);
-    const verdict = computeVerdict({ timedOut: out.timedOut, errorMessage: out.errorMessage, metrics: out.metrics, cspCount, otherCount });
+    const verdict = computeVerdict({
+      timedOut: out.timedOut,
+      errorMessage: out.errorMessage,
+      metrics: out.metrics,
+      blockedCount: blockedSummary.distinctUrlCount,
+    });
     const notes: string[] = [];
     if (mat.htmlSource === "manually-seeded-example.html") {
       notes.push(
@@ -838,8 +866,11 @@ async function runSurfaceB(browser: PWBrowser, sample: SampleItem[]): Promise<Re
       errorMessage: out.errorMessage,
       httpStatus: out.httpStatus,
       blockedSubresources: out.blocked,
-      blockedCspCount: cspCount,
-      blockedOtherCount: otherCount,
+      blockedEventCount: blockedSummary.eventCount,
+      blockedDistinctUrlCount: blockedSummary.distinctUrlCount,
+      blockedCspCount: blockedSummary.cspCount,
+      blockedRemoteCount: blockedSummary.remoteCount,
+      blockedLocalCount: blockedSummary.localCount,
       blockedLocal404Count: localProbe.local404Count,
       blockedLocalProbeStatusCounts: localProbe.statusCounts,
       consoleErrorCount: out.consoleErrors.length,
@@ -886,7 +917,7 @@ function tally(records: RenderRecord[]): Record<Verdict, number> {
 function topBlockedReasons(records: RenderRecord[], n: number): Array<{ reason: string; count: number }> {
   const counts = new Map<string, number>();
   for (const r of records) {
-    const { byUrl } = dedupeBlocked(r.blockedSubresources);
+    const { byUrl } = summarizeBlockedEvents(r.blockedSubresources);
     for (const entry of byUrl.values()) {
       const key = entry.reason === "csp" ? `csp: ${entry.detail}` : `${entry.reason}: ${entry.detail}`;
       counts.set(key, (counts.get(key) ?? 0) + 1);
@@ -901,7 +932,7 @@ function topBlockedReasons(records: RenderRecord[], n: number): Array<{ reason: 
 function countHttpsBlocks(records: RenderRecord[], kind: "font" | "img" | "script" | "style" | "media" | "connect"): number {
   let count = 0;
   for (const r of records) {
-    const { byUrl } = dedupeBlocked(r.blockedSubresources);
+    const { byUrl } = summarizeBlockedEvents(r.blockedSubresources);
     for (const entry of byUrl.values()) {
       if (entry.reason !== "csp") continue;
       if (!entry.detail.includes(`${kind}-src`)) continue;
@@ -954,7 +985,7 @@ async function main(): Promise<void> {
       canvasMethod = selection.method;
       process.stderr.write(
         `surface B: rendering ${ITEM_LIMIT ?? canvasItems.length} ${canvasArg === "all" ? "catalogue" : "sampled"} ` +
-          `templates via canvas/raw-file path ...\n`,
+          `templates via canvas/shared-srcdoc path ...\n`,
       );
       surfaceB = await runSurfaceB(browser, canvasItems);
     }
@@ -965,12 +996,19 @@ async function main(): Promise<void> {
 
   const tallyA = tally(surfaceA);
   const tallyB = tally(surfaceB);
-  const blockedA = surfaceA.filter((r) => dedupeBlocked(r.blockedSubresources).byUrl.size > 0).length;
-  const blockedB = surfaceB.filter((r) => dedupeBlocked(r.blockedSubresources).byUrl.size > 0).length;
+  const blockedA = surfaceA.filter((r) => r.blockedDistinctUrlCount > 0).length;
+  const blockedB = surfaceB.filter((r) => r.blockedDistinctUrlCount > 0).length;
   const cspBlockedA = surfaceA.filter((r) => r.blockedCspCount > 0).length;
   const cspBlockedB = surfaceB.filter((r) => r.blockedCspCount > 0).length;
-  const cspRequestCountB = surfaceB.reduce((total, record) => total + record.blockedCspCount, 0);
-  const otherRequestCountB = surfaceB.reduce((total, record) => total + record.blockedOtherCount, 0);
+  const rawEventCountA = surfaceA.reduce((total, record) => total + record.blockedEventCount, 0);
+  const rawEventCountB = surfaceB.reduce((total, record) => total + record.blockedEventCount, 0);
+  const distinctUrlCountA = surfaceA.reduce((total, record) => total + record.blockedDistinctUrlCount, 0);
+  const distinctUrlCountB = surfaceB.reduce((total, record) => total + record.blockedDistinctUrlCount, 0);
+  const cspUrlCountB = surfaceB.reduce((total, record) => total + record.blockedCspCount, 0);
+  const remoteUrlCountB = surfaceB.reduce((total, record) => total + record.blockedRemoteCount, 0);
+  const localUrlCountB = surfaceB.reduce((total, record) => total + record.blockedLocalCount, 0);
+  const remoteBlockedB = surfaceB.filter((record) => record.blockedRemoteCount > 0).length;
+  const localBlockedB = surfaceB.filter((record) => record.blockedLocalCount > 0).length;
   const local404CountB = surfaceB.reduce((total, record) => total + (record.blockedLocal404Count ?? 0), 0);
   const local404TemplateCountB = surfaceB.filter((record) => (record.blockedLocal404Count ?? 0) > 0).length;
   const localProbeStatusCountsB: Record<string, number> = {};
@@ -979,13 +1017,21 @@ async function main(): Promise<void> {
       localProbeStatusCountsB[status] = (localProbeStatusCountsB[status] ?? 0) + count;
     }
   }
-  const zeroBlockedB = surfaceB.filter((record) => record.blockedCspCount === 0 && record.blockedOtherCount === 0).length;
+  const zeroBlockedB = surfaceB.filter((record) => record.blockedDistinctUrlCount === 0).length;
+  const zeroRemoteB = surfaceB.filter((record) => record.blockedRemoteCount === 0).length;
+  const zeroLocalB = surfaceB.filter((record) => record.blockedLocalCount === 0).length;
   const zeroCspB = surfaceB.filter((record) => record.blockedCspCount === 0).length;
   const rootExampleB = surfaceB.filter(
     (record) => record.onDiskRoot === "design-templates" && record.sourceExampleAvailable,
   );
   const rootExampleZeroBlockedB = rootExampleB.filter(
-    (record) => record.blockedCspCount === 0 && record.blockedOtherCount === 0,
+    (record) => record.blockedDistinctUrlCount === 0,
+  ).length;
+  const rootExampleZeroRemoteB = rootExampleB.filter(
+    (record) => record.blockedRemoteCount === 0,
+  ).length;
+  const rootExampleZeroLocalB = rootExampleB.filter(
+    (record) => record.blockedLocalCount === 0,
   ).length;
   const rootExampleZeroCspB = rootExampleB.filter((record) => record.blockedCspCount === 0).length;
 
@@ -1012,6 +1058,7 @@ async function main(): Promise<void> {
   lines.push("=".repeat(72));
   lines.push(`command: ${command}`);
   lines.push(`daemon: ${DAEMON_ORIGIN}  web: ${WEB_ORIGIN}`);
+  lines.push(`daemon data snapshot: ${BASELINE_DATA_DIR}`);
   lines.push(`run at: ${new Date().toISOString()}`);
   lines.push("");
   lines.push("Catalogue reconciliation");
@@ -1022,10 +1069,9 @@ async function main(): Promise<void> {
   lines.push(`  derived <parent>:<child> ids (examples/ subfolders): ${derivedCount}`);
   lines.push(`  unaccounted for: ${unmatched}`);
   lines.push(`design-templates/ on disk: ${onDiskRoot.length} dirs, ${rootWithExampleHtml} with example.html (task-stated baseline: 352 / 344)`);
-  lines.push(`.od/design-templates/ on disk: ${onDiskOd.length} dirs — this is RUNTIME_DATA_DIR (defaults to <repo>/.od when`);
-  lines.push(`  OD_DATA_DIR is unset; see apps/daemon/src/daemon-paths.ts resolveDataDir), gitignored, not part of the repo.`);
-  lines.push(`  It is the second DESIGN_TEMPLATE_ROOTS entry (server.ts:936) and accounts for the gap between 561 API`);
-  lines.push(`  entries and the 352/344 repo-tracked dirs the task description cites.`);
+  lines.push(`daemon-data design-templates/: ${onDiskOd.length} dirs from the explicit census data snapshot above.`);
+  lines.push(`  This is the second DESIGN_TEMPLATE_ROOTS entry and is reported separately from the repo-tracked`);
+  lines.push(`  352/344 cohort used by C2.`);
   lines.push("");
   lines.push("Surface A — gallery card (/api/skills/:id/example, sandbox=\"allow-scripts\", no CSP header set)");
   lines.push("-".repeat(72));
@@ -1035,12 +1081,13 @@ async function main(): Promise<void> {
     lines.push(`rendered: ${surfaceA.length}`);
     lines.push(`  ok: ${tallyA.ok}  degraded: ${tallyA.degraded}  blank: ${tallyA.blank}  timeout: ${tallyA.timeout}  error: ${tallyA.error}`);
     lines.push(`  with >=1 blocked subresource: ${blockedA}`);
+    lines.push(`  raw blocked events: ${rawEventCountA}; distinct URL observations: ${distinctUrlCountA}`);
     lines.push(`  with >=1 CSP-attributed block: ${cspBlockedA} (this route sets no CSP header)`);
     lines.push(`  https: blocked by CSP — font-src: ${httpsFontsA}  img-src: ${httpsImgA}  script-src: ${httpsScriptA}  style-src: ${httpsStyleA}`);
   }
   lines.push("");
-  lines.push("Surface B — canvas/FileViewer (/api/projects/:id/raw/:file, sandbox=\"allow-scripts allow-downloads\",");
-  lines.push("  projectRawFileCsp genuinely in force per apps/daemon/src/server.ts:3489)");
+  lines.push("Surface B — canvas/FileViewer (parent fetch -> shared text/binary inlining -> buildSrcdoc,");
+  lines.push("  sandbox=\"allow-scripts allow-downloads\")");
   lines.push("-".repeat(72));
   if (!RUN_CANVAS) {
     lines.push("skipped by --surface=gallery");
@@ -1048,12 +1095,13 @@ async function main(): Promise<void> {
     lines.push(`${canvasArg === "all" ? "full catalogue" : "stratified sample"} size: ${surfaceB.length}`);
     lines.push(`  ok: ${tallyB.ok}  degraded: ${tallyB.degraded}  blank: ${tallyB.blank}  timeout: ${tallyB.timeout}  error: ${tallyB.error}`);
     lines.push(`  with >=1 blocked subresource: ${blockedB}; zero blocked: ${zeroBlockedB}/${surfaceB.length}`);
-    lines.push(`  CSP: ${cspRequestCountB} blocked requests across ${cspBlockedB} templates; zero CSP blocks: ${zeroCspB}/${surfaceB.length}`);
-    lines.push(`  non-CSP: ${otherRequestCountB} blocked requests`);
-    lines.push(`  confirmed local 404 subset: ${local404CountB} requests across ${local404TemplateCountB} templates`);
+    lines.push(`  raw blocked events: ${rawEventCountB}; distinct URL observations: ${distinctUrlCountB}`);
+    lines.push(`  remote distinct URLs: ${remoteUrlCountB} across ${remoteBlockedB} templates; zero remote: ${zeroRemoteB}/${surfaceB.length}`);
+    lines.push(`  local distinct URLs: ${localUrlCountB} across ${localBlockedB} templates; zero local: ${zeroLocalB}/${surfaceB.length}`);
+    lines.push(`  CSP-attributed distinct URLs: ${cspUrlCountB} across ${cspBlockedB} templates; zero CSP: ${zeroCspB}/${surfaceB.length}`);
+    lines.push(`  confirmed local 404 subset: ${local404CountB} distinct URLs across ${local404TemplateCountB} templates`);
     lines.push(`  local failed-request HEAD probe statuses: ${JSON.stringify(localProbeStatusCountsB)}`);
-    lines.push(`  non-CSP after removing confirmed local 404s: ${otherRequestCountB - local404CountB} blocked requests`);
-    lines.push(`  repo example.html cohort: ${rootExampleB.length}; zero blocked: ${rootExampleZeroBlockedB}/${rootExampleB.length}; zero CSP blocks: ${rootExampleZeroCspB}/${rootExampleB.length}`);
+    lines.push(`  repo example.html cohort: ${rootExampleB.length}; zero blocked: ${rootExampleZeroBlockedB}/${rootExampleB.length}; zero remote: ${rootExampleZeroRemoteB}/${rootExampleB.length}; zero local: ${rootExampleZeroLocalB}/${rootExampleB.length}; zero CSP: ${rootExampleZeroCspB}/${rootExampleB.length}`);
     lines.push(`  https: blocked by CSP — font-src: ${httpsFontsB}  img-src: ${httpsImgB}  script-src: ${httpsScriptB}  style-src: ${httpsStyleB}`);
   }
   lines.push("");
@@ -1076,12 +1124,12 @@ async function main(): Promise<void> {
   lines.push("-".repeat(72));
   for (const { reason, count } of topBlockedAll) lines.push(`  ${count}x  ${reason}`);
   lines.push("");
-  lines.push("CSP/non-CSP boundary — measured, not assumed");
+  lines.push("Blocked-resource buckets — distinct by URL, measured, not assumed");
   lines.push("-".repeat(72));
   lines.push(`  Surface A: ${cspBlockedA}/${surfaceA.length} templates have CSP-attributed blocks; this surface has no CSP header.`);
-  lines.push(`  Surface B: ${cspBlockedB}/${surfaceB.length} templates have ${cspRequestCountB} CSP-attributed blocked requests.`);
-  lines.push(`  Surface B non-CSP failures: ${otherRequestCountB}, including ${local404CountB} confirmed local 404s.`);
-  lines.push("  Confirmed local 404s remain in blockedOtherCount and are excluded from blockedCspCount.");
+  lines.push(`  Surface B: ${remoteUrlCountB} remote and ${localUrlCountB} local distinct URL observations.`);
+  lines.push(`  CSP attribution overlaps host buckets: ${cspUrlCountB} distinct URLs were CSP-attributed.`);
+  lines.push(`  Raw retry/event noise is diagnostic only: ${rawEventCountB} events produced ${distinctUrlCountB} per-entry distinct URL observations.`);
   lines.push("");
   lines.push("Exit");
   lines.push("-".repeat(72));
@@ -1102,16 +1150,30 @@ async function main(): Promise<void> {
           onDiskRootDirs: onDiskRoot.length,
           onDiskRootWithExampleHtml: rootWithExampleHtml,
           onDiskOdDirs: onDiskOd.length,
-          surfaceA: { total: surfaceA.length, ...tallyA, blockedCount: blockedA, cspBlockedCount: cspBlockedA },
+          surfaceA: {
+            total: surfaceA.length,
+            ...tallyA,
+            blockedCount: blockedA,
+            cspBlockedCount: cspBlockedA,
+            blockedEventCount: rawEventCountA,
+            blockedDistinctUrlCount: distinctUrlCountA,
+          },
           surfaceB: {
             total: surfaceB.length,
             ...tallyB,
             blockedCount: blockedB,
             zeroBlockedCount: zeroBlockedB,
+            blockedEventCount: rawEventCountB,
+            blockedDistinctUrlCount: distinctUrlCountB,
+            blockedRemoteCount: remoteUrlCountB,
+            blockedRemoteTemplateCount: remoteBlockedB,
+            zeroRemoteCount: zeroRemoteB,
+            blockedLocalCount: localUrlCountB,
+            blockedLocalTemplateCount: localBlockedB,
+            zeroLocalCount: zeroLocalB,
             cspBlockedTemplateCount: cspBlockedB,
-            cspBlockedRequestCount: cspRequestCountB,
+            cspBlockedDistinctUrlCount: cspUrlCountB,
             zeroCspCount: zeroCspB,
-            otherBlockedRequestCount: otherRequestCountB,
             confirmedLocal404Count: local404CountB,
             confirmedLocal404TemplateCount: local404TemplateCountB,
             localFailedRequestProbeStatusCounts: localProbeStatusCountsB,
@@ -1119,6 +1181,8 @@ async function main(): Promise<void> {
             repoExampleCohort: {
               total: rootExampleB.length,
               zeroBlockedCount: rootExampleZeroBlockedB,
+              zeroRemoteCount: rootExampleZeroRemoteB,
+              zeroLocalCount: rootExampleZeroLocalB,
               zeroCspCount: rootExampleZeroCspB,
             },
           },

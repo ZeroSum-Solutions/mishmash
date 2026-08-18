@@ -450,3 +450,200 @@ function confirmedRelativeScriptRef(
   const resolved = resolveRelativeAssetPath(scriptFilePath, ref);
   return resolved && projectFilePaths.has(resolved) ? resolved : null;
 }
+
+export function hasRelativeAssetRefs(html: string): boolean {
+  const attr = /\s(?:src|href)\s*=\s*["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = attr.exec(html)) !== null) {
+    const value = match[1]?.trim();
+    if (!value) continue;
+    if (/^(?:https?:|data:|blob:|mailto:|tel:|#|\/)/i.test(value)) continue;
+    return true;
+  }
+  return false;
+}
+
+export interface PreviewAssetAccess {
+  fetch: typeof globalThis.fetch;
+  rawUrl: (projectId: string, filePath: string) => string;
+}
+
+/**
+ * Parent-side preparation for the sandboxed FileViewer srcdoc path.
+ *
+ * This is intentionally shared by FileViewer and render measurements: text
+ * assets are fetched and embedded first, then every referenced binary asset
+ * that fits the preview budget becomes a data URL before buildSrcdoc runs.
+ */
+export async function inlineRelativeAssets(
+  html: string,
+  projectId: string,
+  fileName: string,
+  projectFilePaths: ReadonlySet<string> | null,
+  access: PreviewAssetAccess,
+): Promise<string> {
+  const toRawUrl = (projectPath: string) => access.rawUrl(projectId, projectPath);
+  const normalized = projectFilePaths
+    ? normalizeRootRelativeProjectAssetRefs(html, fileName, projectFilePaths)
+    : html;
+
+  const linkTags = (normalized.match(/<link\b[^>]*>/gi) ?? []).filter((tag) => {
+    const rel = readHtmlAttr(tag, 'rel');
+    return !!rel && /\bstylesheet\b/i.test(rel) && !!readHtmlAttr(tag, 'href');
+  });
+  const sheets = await Promise.all(
+    linkTags.map(async (tag) => ({
+      tag,
+      href: readHtmlAttr(tag, 'href') as string,
+      asset: await fetchProjectRelativeText(
+        projectId,
+        fileName,
+        readHtmlAttr(tag, 'href') as string,
+        access,
+      ),
+    })),
+  );
+
+  const binaryDataUrls = projectFilePaths
+    ? await resolveBinaryAssetDataUrls(
+        projectId,
+        [
+          ...collectBinaryPreviewAssetPaths(normalized, fileName, projectFilePaths),
+          ...sheets.flatMap(({ asset }) =>
+            asset
+              ? collectBinaryPreviewAssetPaths(asset.text, asset.filePath, projectFilePaths)
+              : [],
+          ),
+        ],
+        access,
+      )
+    : new Map<string, string>();
+
+  const replacements: Array<Promise<{ from: string; to: string } | null>> = [];
+  for (const { tag, href, asset } of sheets) {
+    if (asset == null) continue;
+    replacements.push(
+      Promise.resolve({
+        from: tag,
+        to:
+          `<style data-od-inline-asset="${escapeHtmlAttr(href)}">\n` +
+          `${rewriteInlinedCssAssetRefs(
+            asset.text,
+            asset.filePath,
+            projectFilePaths,
+            toRawUrl,
+            binaryDataUrls,
+          ).replace(/<\/style/gi, '<\\/style')}\n</style>`,
+      }),
+    );
+  }
+
+  const scripts =
+    normalized.match(/<script\b[^>]*\bsrc\s*=\s*["'][^"']+["'][^>]*>\s*<\/script>/gi) ?? [];
+  for (const tag of scripts) {
+    const src = readHtmlAttr(tag, 'src');
+    if (!src) continue;
+    replacements.push(
+      fetchProjectRelativeText(projectId, fileName, src, access).then((asset) => {
+        if (asset == null) return null;
+        const js = projectFilePaths
+          ? rewriteInlinedScriptAssetRefs(asset.text, asset.filePath, projectFilePaths, toRawUrl)
+          : asset.text;
+        const open = tag.match(/^<script\b[^>]*>/i)?.[0] ?? '<script>';
+        const attrs = open
+          .replace(/^<script/i, '')
+          .replace(/>$/i, '')
+          .replace(/\ssrc\s*=\s*(['"])[\s\S]*?\1/i, '');
+        return {
+          from: tag,
+          to: `<script${attrs}>\n${js.replace(/<\/script/gi, '<\\/script')}\n</script>`,
+        };
+      }),
+    );
+  }
+
+  const resolved = (await Promise.all(replacements)).filter(
+    (item): item is { from: string; to: string } => item !== null,
+  );
+  const inlined = resolved.reduce(
+    (next, { from, to }) => next.replace(from, () => to),
+    normalized,
+  );
+  return projectFilePaths
+    ? inlineBinaryAssetRefs(inlined, fileName, projectFilePaths, binaryDataUrls)
+    : inlined;
+}
+
+const BINARY_ASSET_MAX_BYTES = 8 * 1024 * 1024;
+const BINARY_ASSET_TOTAL_BUDGET_BYTES = 16 * 1024 * 1024;
+
+async function resolveBinaryAssetDataUrls(
+  projectId: string,
+  paths: readonly string[],
+  access: PreviewAssetAccess,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  let spent = 0;
+  for (const path of new Set(paths)) {
+    if (spent >= BINARY_ASSET_TOTAL_BUDGET_BYTES) break;
+    try {
+      const resp = await access.fetch(access.rawUrl(projectId, path));
+      if (!resp.ok) continue;
+      const blob = await resp.blob();
+      if (blob.size > BINARY_ASSET_MAX_BYTES) continue;
+      if (spent + blob.size > BINARY_ASSET_TOTAL_BUDGET_BYTES) continue;
+      const dataUrl = await blobToDataUrl(blob);
+      if (!dataUrl) continue;
+      out.set(path, dataUrl);
+      spent += blob.size;
+    } catch {
+      // Leave the ref as-is; one missing asset must not break the preview.
+    }
+  }
+  return out;
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string | null> {
+  try {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = '';
+    const chunkSize = 32_768;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+    }
+    const mime = blob.type || 'application/octet-stream';
+    return `data:${mime};base64,${btoa(binary)}`;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchProjectRelativeText(
+  projectId: string,
+  ownerFileName: string,
+  assetRef: string,
+  access: PreviewAssetAccess,
+): Promise<{ filePath: string; text: string } | null> {
+  const filePath = resolveRelativeAssetPath(ownerFileName, assetRef);
+  if (!filePath) return null;
+  try {
+    const resp = await access.fetch(access.rawUrl(projectId, filePath));
+    if (!resp.ok) return null;
+    return { filePath, text: await resp.text() };
+  } catch {
+    return null;
+  }
+}
+
+function readHtmlAttr(tag: string, name: string): string | null {
+  const match = tag.match(new RegExp(`\\s${name}\\s*=\\s*(['"])([\\s\\S]*?)\\1`, 'i'));
+  return match?.[2] ?? null;
+}
+
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
