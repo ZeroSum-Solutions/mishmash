@@ -34,7 +34,11 @@
 // single source of truth for browser exception capture.
 
 import { scrubExceptionList, scrubFilePath } from './scrub';
-import { reportAnomalyForSafetyEvent } from '../observability/anomaly-report';
+import {
+  reportAnomalyForSafetyEvent,
+  reportUncaughtExceptionAnomaly,
+  type UncaughtExceptionInput,
+} from '../observability/anomaly-report';
 
 interface ExceptionTrackingContext {
   apiKey: string;
@@ -99,9 +103,20 @@ export function installErrorHandlers(): void {
   installed = true;
 
   window.addEventListener('error', (event) => {
+    const filename = typeof event.filename === 'string' ? event.filename : undefined;
+    const lineno = typeof event.lineno === 'number' ? event.lineno : undefined;
+    // Local sink first, for the same reason `reportSafetyEvent` files before it
+    // enqueues: the on-disk record must survive even if the PostHog path throws.
+    // Hooked beside the listener rather than inside `captureException` because
+    // that function's specs assert exact transport call counts.
+    fileUncaughtAnomaly({
+      message: event.message ?? defaultMessage(event.error),
+      source: filename,
+      lineno,
+    });
     captureException(event.error, event.message ?? 'Uncaught error', {
-      filename: typeof event.filename === 'string' ? event.filename : undefined,
-      lineno: typeof event.lineno === 'number' ? event.lineno : undefined,
+      filename,
+      lineno,
       colno: typeof event.colno === 'number' ? event.colno : undefined,
     });
   });
@@ -110,8 +125,31 @@ export function installErrorHandlers(): void {
     const reason = event.reason;
     const fallback =
       typeof reason === 'string' ? reason : 'Unhandled promise rejection';
+    fileUncaughtAnomaly({
+      message: typeof reason === 'string' ? reason : defaultMessage(reason),
+      rejection: true,
+    });
     captureException(reason, fallback);
   });
+}
+
+/**
+ * Files an uncaught failure to the local anomaly log, except when it is a bare
+ * fetch failure.
+ *
+ * That exception is not cosmetic. A telemetry beacon that cannot reach its
+ * destination rejects with exactly these wordings, the rejection reaches the
+ * listener above, and filing it would POST again — telemetry manufacturing
+ * telemetry, and a loop whenever the daemon is the thing that is down.
+ *
+ * Nothing is lost by skipping them: real request failures are already recorded
+ * with URL, status and timing by the request-health probe
+ * (`apps/web/src/observability/request-health.ts`), which is a far better record
+ * than a stack-less `Failed to fetch`.
+ */
+function fileUncaughtAnomaly(input: UncaughtExceptionInput): void {
+  if (FETCH_FAILURE_MESSAGES.has(input.message.trim())) return;
+  reportUncaughtExceptionAnomaly(input);
 }
 
 // Public entry point for code paths that catch their own error but still

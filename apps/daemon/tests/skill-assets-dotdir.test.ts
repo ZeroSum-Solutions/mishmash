@@ -36,14 +36,25 @@ beforeAll(async () => {
   const dataDir = path.join(tmpRoot, '.od');
   const entryDir = path.join(dataDir, 'design-templates', ENTRY_ID);
   mkdirSync(path.join(entryDir, 'assets'), { recursive: true });
+  mkdirSync(path.join(entryDir, 'fonts'), { recursive: true });
   writeFileSync(path.join(entryDir, 'assets', 'index.html'), ASSET_BODY);
   writeFileSync(path.join(entryDir, 'assets', 'styles.css'), 'body { color: rebeccapurple; }');
+  writeFileSync(
+    path.join(entryDir, 'fonts', 'fonts.css'),
+    '@font-face { font-family: "Fixture"; src: url("./fixture.woff2") format("woff2"); }',
+  );
+  writeFileSync(path.join(entryDir, 'fonts', 'fixture.woff2'), Buffer.from('wOF2fixture'));
+  writeFileSync(path.join(entryDir, 'fonts', 'notes.txt'), 'not a font resource');
   // A skill folder is user-supplied content, so the route must not follow a
   // symlink out of the entry, and must not hand over a dot-prefixed leaf.
   writeFileSync(path.join(tmpRoot, 'outside-the-entry.txt'), 'SECRET');
   symlinkSync(
     path.join(tmpRoot, 'outside-the-entry.txt'),
     path.join(entryDir, 'assets', 'leak.txt'),
+  );
+  symlinkSync(
+    path.join(tmpRoot, 'outside-the-entry.txt'),
+    path.join(entryDir, 'fonts', 'leak.woff2'),
   );
   writeFileSync(path.join(entryDir, 'assets', '.env'), 'TOKEN=secret');
   // A dot-prefixed DIRECTORY, not just a dot-prefixed leaf. `dotfiles: 'allow'`
@@ -112,6 +123,57 @@ it('serves passive subresources requested by a sandboxed template preview', asyn
 
   expect(resp.status).toBe(200);
   await expect(resp.text()).resolves.toBe('body { color: rebeccapurple; }');
+});
+
+it('serves vendored font stylesheets and binaries to a sandboxed template preview', async () => {
+  const cssResp = await fetch(`${baseUrl}/api/skills/${ENTRY_ID}/fonts/fonts.css`, {
+    headers: {
+      Origin: 'null',
+      'Sec-Fetch-Dest': 'style',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'cross-site',
+    },
+  });
+
+  expect(cssResp.status).toBe(200);
+  expect(cssResp.headers.get('content-type')).toContain('text/css');
+  expect(cssResp.headers.get('access-control-allow-origin')).toBe('*');
+  await expect(cssResp.text()).resolves.toContain('./fixture.woff2');
+
+  const fontResp = await fetch(`${baseUrl}/api/skills/${ENTRY_ID}/fonts/fixture.woff2`, {
+    headers: {
+      Origin: 'null',
+      'Sec-Fetch-Dest': 'font',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'cross-site',
+    },
+  });
+
+  expect(fontResp.status).toBe(200);
+  expect(fontResp.headers.get('content-type')).toContain('font/woff2');
+  expect(fontResp.headers.get('access-control-allow-origin')).toBe('*');
+  expect(Buffer.from(await fontResp.arrayBuffer())).toEqual(Buffer.from('wOF2fixture'));
+});
+
+it('keeps the vendored-font route passive and confined', async () => {
+  const [scripted, traversal, escapedSymlink, disallowed] = await Promise.all([
+    fetch(`${baseUrl}/api/skills/${ENTRY_ID}/fonts/fonts.css`, {
+      headers: {
+        Origin: 'null',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'cross-site',
+      },
+    }),
+    fetch(`${baseUrl}/api/skills/${ENTRY_ID}/fonts/..%2F..%2FSKILL.md`),
+    fetch(`${baseUrl}/api/skills/${ENTRY_ID}/fonts/leak.woff2`),
+    fetch(`${baseUrl}/api/skills/${ENTRY_ID}/fonts/notes.txt`),
+  ]);
+
+  expect(scripted.status).toBe(403);
+  expect(traversal.status).not.toBe(200);
+  expect(escapedSymlink.status).not.toBe(200);
+  expect(disallowed.status).not.toBe(200);
 });
 
 it('still rejects scripted reads from a sandboxed template origin', async () => {

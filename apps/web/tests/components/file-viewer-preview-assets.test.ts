@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  assetBaseDirFor,
   collectPreviewAssetPaths,
+  hasRelativeAssetRefs,
   htmlHasRootRelativeProjectAssetRefs,
+  inlineRelativeAssets,
   normalizeRootRelativeProjectAssetRefs,
   ownerRelativeAssetPath,
   resolveRelativeAssetPath,
@@ -12,6 +15,90 @@ import {
 } from '../../src/components/file-viewer-preview-assets';
 
 const toRawUrl = (path: string) => `/api/projects/p1/raw/${path}`;
+
+describe('hasRelativeAssetRefs', () => {
+  it('routes a document whose only project asset is a relative poster through srcdoc', () => {
+    expect(hasRelativeAssetRefs('<video poster="media/cover.jpg"></video>')).toBe(true);
+  });
+});
+
+describe('FileViewer shared-extraction parity', () => {
+  it('preserves base directories and clamps parent segments at the project root', () => {
+    expect(assetBaseDirFor('pages/nested/index.html')).toBe('pages/nested/');
+    expect(assetBaseDirFor('index.html')).toBe('');
+    expect(resolveRelativeAssetPath('pages/nested/index.html', '../images/hero.png')).toBe(
+      'pages/images/hero.png',
+    );
+    expect(resolveRelativeAssetPath('index.html', '../images/hero.png')).toBe('images/hero.png');
+  });
+
+  it('continues to block every non-project preview scheme', () => {
+    for (const ref of [
+      'javascript:alert(1)',
+      'java\nscript:alert(1)',
+      'data:text/html,hello',
+      'blob:https://od.local/id',
+      'mailto:test@example.com',
+      'tel:+15551212',
+    ]) {
+      expect(resolveRelativeAssetPath('pages/index.html', ref), ref).toBeNull();
+    }
+  });
+
+  it('preserves root-relative normalization and query/hash suffixes', () => {
+    const files = new Set(['assets/hero.png']);
+    expect(
+      normalizeRootRelativeProjectAssetRefs(
+        '<img src="/assets/hero.png?width=1200#hero">',
+        'pages/nested/index.html',
+        files,
+      ),
+    ).toBe('<img src="../../assets/hero.png?width=1200#hero">');
+    expect(
+      resolveRelativeAssetPath(
+        'pages/index.html',
+        '../styles/site.css?theme=dark#critical',
+      ),
+    ).toBe('styles/site.css');
+  });
+
+  it('keeps no-binary inlining byte-identical to the pre-refactor pipeline', async () => {
+    const html =
+      '<!doctype html><link rel="stylesheet" href="../styles/site.css?theme=dark#top">' +
+      '<script src="../scripts/app.js?cache=1#boot"></script>';
+    const rawUrl = (_projectId: string, filePath: string) => `http://preview.test/raw/${filePath}`;
+    const responses = new Map([
+      [
+        rawUrl('project-1', 'styles/site.css'),
+        new Response('body { color: tomato; }', { headers: { 'content-type': 'text/css' } }),
+      ],
+      [
+        rawUrl('project-1', 'scripts/app.js'),
+        new Response('window.previewReady = true;', {
+          headers: { 'content-type': 'text/javascript' },
+        }),
+      ],
+    ]);
+    const fetchFixture: typeof globalThis.fetch = async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      return responses.get(url)?.clone() ?? new Response('missing', { status: 404 });
+    };
+
+    const output = await inlineRelativeAssets(
+      html,
+      'project-1',
+      'pages/index.html',
+      new Set(['pages/index.html', 'styles/site.css', 'scripts/app.js']),
+      { fetch: fetchFixture, rawUrl },
+    );
+
+    expect(output).toBe(
+      '<!doctype html><style data-od-inline-asset="../styles/site.css?theme=dark#top">\n' +
+        'body { color: tomato; }\n</style><script>\n' +
+        'window.previewReady = true;\n</script>',
+    );
+  });
+});
 
 describe('rootRelativeProjectAssetPath', () => {
   const files = new Set(['reference-assets/main.css', 'icon/font 01.otf', 'zh/index.html']);
@@ -115,7 +202,7 @@ describe('collectPreviewAssetPaths', () => {
     ]);
   });
 
-  it('rejects external schemes, navigation links, and traversal refs', () => {
+  it('rejects external schemes and navigation links while clamping parent traversal', () => {
     const html = [
       '<img src="https://cdn.example.com/a.png">',
       '<img src="data:image/png;base64,xx">',
@@ -123,7 +210,7 @@ describe('collectPreviewAssetPaths', () => {
       '<a href="images/hero.png">open</a>',
     ].join('\n');
 
-    expect(collectPreviewAssetPaths(html, 'index.html', files)).toEqual([]);
+    expect(collectPreviewAssetPaths(html, 'index.html', files)).toEqual(['escape.png']);
   });
 });
 
@@ -157,11 +244,11 @@ describe('resolveRelativeAssetPath', () => {
     );
   });
 
-  it('rejects schemes, root-relative refs, and root escapes', () => {
+  it('rejects schemes and root-relative refs while clamping parent segments at project root', () => {
     expect(resolveRelativeAssetPath('a/main.css', 'https://x.test/a.png')).toBeNull();
     expect(resolveRelativeAssetPath('a/main.css', 'data:image/png;base64,x')).toBeNull();
     expect(resolveRelativeAssetPath('a/main.css', '/root.png')).toBeNull();
-    expect(resolveRelativeAssetPath('a/main.css', '../../escape.png')).toBeNull();
+    expect(resolveRelativeAssetPath('a/main.css', '../../escape.png')).toBe('escape.png');
     expect(resolveRelativeAssetPath('a/main.css', '#frag')).toBeNull();
   });
 });

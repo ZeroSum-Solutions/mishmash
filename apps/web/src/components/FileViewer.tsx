@@ -150,11 +150,11 @@ import {
   type UrlLoadDecision,
 } from './file-viewer-render-mode';
 import {
+  assetBaseDirFor,
   collectPreviewAssetPaths,
+  hasRelativeAssetRefs,
   htmlHasRootRelativeProjectAssetRefs,
-  normalizeRootRelativeProjectAssetRefs,
-  rewriteInlinedCssAssetRefs,
-  rewriteInlinedScriptAssetRefs,
+  inlineRelativeAssets,
 } from './file-viewer-preview-assets';
 import { resolvePoweredPreviewUrl } from '../runtime/powered-preview';
 import { saveTemplate } from '../state/projects';
@@ -2727,7 +2727,7 @@ export function fileVersionPreviewOptions(
 ) {
   return {
     deck: sourceLooksLikeDeckPreview(source),
-    baseHref: projectRawUrl(projectId, baseDirFor(fileName)),
+    baseHref: projectRawUrl(projectId, assetBaseDirFor(fileName)),
   };
 }
 
@@ -7611,7 +7611,10 @@ function HtmlViewer({
     if (projectRootAssetRefs && projectFilePathSet === null) return;
     if (!hasRelativeAssetRefs(source) && !projectRootAssetRefs) return;
     let cancelled = false;
-    void inlineRelativeAssets(source, projectId, file.name, projectFilePathSet).then((next) => {
+    void inlineRelativeAssets(source, projectId, file.name, projectFilePathSet, {
+      fetch: globalThis.fetch.bind(globalThis),
+      rawUrl: projectRawUrl,
+    }).then((next) => {
       if (!cancelled) setInlinedSource(next);
     });
     return () => {
@@ -7631,7 +7634,7 @@ function HtmlViewer({
   const srcDoc = useMemo(
     () => (previewSource ? buildSrcdoc(previewSource, {
       deck: effectiveDeck,
-      baseHref: projectRawUrl(projectId, baseDirFor(file.name)),
+      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
       initialSlideIndex: htmlPreviewSlideState.get(previewStateKey)?.active ?? 0,
       hideDeckChrome: effectiveDeck,
       selectionBridge: true,
@@ -7659,7 +7662,7 @@ function HtmlViewer({
   const presentationSrcDoc = useMemo(
     () => (deckVisualSource && inTabPresent ? buildSrcdoc(deckVisualSource, {
       deck: effectiveDeck,
-      baseHref: projectRawUrl(projectId, baseDirFor(file.name)),
+      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
       initialSlideIndex: htmlPreviewSlideState.get(previewStateKey)?.active ?? 0,
       hideDeckChrome: effectiveDeck,
       deckClickNavigation: effectiveDeck,
@@ -7676,7 +7679,7 @@ function HtmlViewer({
   const buildDeckThumbnailSrcDoc = useCallback(
     (index: number) => buildSrcdoc(deckVisualSource ?? '', {
       deck: true,
-      baseHref: projectRawUrl(projectId, baseDirFor(file.name)),
+      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
       initialSlideIndex: index,
       hideDeckChrome: true,
       previewFocusGuard: true,
@@ -7692,7 +7695,10 @@ function HtmlViewer({
   // fallback via `parsedDeck = null`.
   const parsedDeckThumbnails = useMemo(() => {
     if (!effectiveDeck || !deckVisualSource) return null;
-    const parsed = parseDeckThumbnails(deckVisualSource, projectRawUrl(projectId, baseDirFor(file.name)));
+    const parsed = parseDeckThumbnails(
+      deckVisualSource,
+      projectRawUrl(projectId, assetBaseDirFor(file.name)),
+    );
     return parsed.renderable ? parsed : null;
   }, [effectiveDeck, deckVisualSource, projectId, file.name]);
   // Stable thunk so HtmlViewer's frequent re-renders (slide state, streaming
@@ -9217,7 +9223,7 @@ function HtmlViewer({
     const count = Math.max(deckSlideCount, speakerNotes.length, 1);
     const presenterPreviewHtmlBySlide = Array.from({ length: count }, (_, index) => buildSrcdoc(deckVisualSource, {
       deck: true,
-      baseHref: projectRawUrl(projectId, baseDirFor(file.name)),
+      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
       initialSlideIndex: index,
       hideDeckChrome: true,
       previewFocusGuard: true,
@@ -9661,7 +9667,7 @@ function HtmlViewer({
     if (!source) return;
     openSandboxedPreviewInNewTab(source, exportTitle, {
       deck: effectiveDeck,
-      baseHref: projectRawUrl(projectId, baseDirFor(file.name)),
+      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
       initialSlideIndex: htmlPreviewSlideState.get(previewStateKey)?.active ?? 0,
       hideDeckChrome: effectiveDeck,
       deckClickNavigation: effectiveDeck,
@@ -13665,11 +13671,6 @@ function HtmlViewer({
   );
 }
 
-function baseDirFor(fileName: string): string {
-  const idx = fileName.lastIndexOf('/');
-  return idx >= 0 ? fileName.slice(0, idx + 1) : '';
-}
-
 function toOwnerRelativePath(ownerFileName: string, targetPath: string): string {
   const normalize = (value: string) => decodeURIComponent(value).replace(/^\/+/, '');
   const squash = (parts: string[]) => {
@@ -13684,7 +13685,7 @@ function toOwnerRelativePath(ownerFileName: string, targetPath: string): string 
     }
     return out;
   };
-  const ownerDirPath = normalize(baseDirFor(ownerFileName));
+  const ownerDirPath = normalize(assetBaseDirFor(ownerFileName));
   const targetFilePath = normalize(targetPath);
   const ownerParts = squash(ownerDirPath.split('/'));
   const targetParts = squash(targetFilePath.split('/'));
@@ -13702,131 +13703,6 @@ function toOwnerRelativePath(ownerFileName: string, targetPath: string): string 
   const down = targetParts.slice(common);
   const rel = [...up, ...down].join('/');
   return rel || '.';
-}
-
-function isBlockedPreviewAssetScheme(assetRef: string): boolean {
-  const clean = assetRef.replace(/[\s\u0000-\u001F\u007F-\u009F]/g, '');
-  return /^(?:javascript|data):/i.test(clean);
-}
-
-function hasRelativeAssetRefs(html: string): boolean {
-  const attr = /\s(?:src|href)\s*=\s*["']([^"']+)["']/gi;
-  let match: RegExpExecArray | null;
-  while ((match = attr.exec(html)) !== null) {
-    const value = match[1]?.trim();
-    if (!value) continue;
-    if (/^(?:https?:|data:|blob:|mailto:|tel:|#|\/)/i.test(value)) continue;
-    return true;
-  }
-  return false;
-}
-
-async function inlineRelativeAssets(
-  html: string,
-  projectId: string,
-  fileName: string,
-  projectFilePaths: ReadonlySet<string> | null = null,
-): Promise<string> {
-  const toRawUrl = (projectPath: string) => projectRawUrl(projectId, projectPath);
-  // Root-relative project asset refs (confirmed against the real file list)
-  // become owner-relative first, so the stylesheet/script inlining below and
-  // the srcDoc <base href> rebasing treat them like any other relative ref.
-  const normalized = projectFilePaths
-    ? normalizeRootRelativeProjectAssetRefs(html, fileName, projectFilePaths)
-    : html;
-
-  const replacements: Array<Promise<{ from: string; to: string } | null>> = [];
-  const links = normalized.match(/<link\b[^>]*>/gi) ?? [];
-  for (const tag of links) {
-    const rel = readHtmlAttr(tag, 'rel');
-    const href = readHtmlAttr(tag, 'href');
-    if (!rel || !/\bstylesheet\b/i.test(rel) || !href) continue;
-    replacements.push(
-      fetchProjectRelativeText(projectId, fileName, href).then((asset) =>
-        asset == null
-          ? null
-          : {
-              from: tag,
-              to:
-                `<style data-od-inline-asset="${escapeHtmlAttr(href)}">\n` +
-                `${rewriteInlinedCssAssetRefs(asset.text, asset.filePath, projectFilePaths, toRawUrl)
-                  .replace(/<\/style/gi, '<\\/style')}\n</style>`,
-            },
-      ),
-    );
-  }
-
-  const scripts = normalized.match(/<script\b[^>]*\bsrc\s*=\s*["'][^"']+["'][^>]*>\s*<\/script>/gi) ?? [];
-  for (const tag of scripts) {
-    const src = readHtmlAttr(tag, 'src');
-    if (!src) continue;
-    replacements.push(
-      fetchProjectRelativeText(projectId, fileName, src).then((asset) => {
-        if (asset == null) return null;
-        const js = projectFilePaths
-          ? rewriteInlinedScriptAssetRefs(asset.text, asset.filePath, projectFilePaths, toRawUrl)
-          : asset.text;
-        const open = tag.match(/^<script\b[^>]*>/i)?.[0] ?? '<script>';
-        const attrs = open
-          .replace(/^<script/i, '')
-          .replace(/>$/i, '')
-          .replace(/\ssrc\s*=\s*(['"])[\s\S]*?\1/i, '');
-        return {
-          from: tag,
-          to: `<script${attrs}>\n${js.replace(/<\/script/gi, '<\\/script')}\n</script>`,
-        };
-      }),
-    );
-  }
-
-  const resolved = (await Promise.all(replacements)).filter(
-    (item): item is { from: string; to: string } => item !== null,
-  );
-  return resolved.reduce((next, { from, to }) => next.replace(from, () => to), normalized);
-}
-
-async function fetchProjectRelativeText(
-  projectId: string,
-  ownerFileName: string,
-  assetRef: string,
-): Promise<{ filePath: string; text: string } | null> {
-  const filePath = resolveProjectRelativePath(ownerFileName, assetRef);
-  if (!filePath) return null;
-  try {
-    const resp = await fetch(projectRawUrl(projectId, filePath));
-    if (!resp.ok) return null;
-    return { filePath, text: await resp.text() };
-  } catch {
-    return null;
-  }
-}
-
-function resolveProjectRelativePath(ownerFileName: string, assetRef: string): string | null {
-  if (isBlockedPreviewAssetScheme(assetRef)) return null;
-  if (/^(?:https?:|data:|blob:|mailto:|tel:|#|\/)/i.test(assetRef)) return null;
-  try {
-    const url = new URL(assetRef, `https://od.local/${baseDirFor(ownerFileName)}`);
-    if (url.origin !== 'https://od.local') return null;
-    const decodedPath = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
-    const parts = decodedPath.split(/[/\\]/);
-    if (parts.some((part) => part === '..' || part.trim() === '..')) return null;
-    return decodedPath;
-  } catch {
-    return null;
-  }
-}
-
-function readHtmlAttr(tag: string, name: string): string | null {
-  const match = tag.match(new RegExp(`\\s${name}\\s*=\\s*(['"])([\\s\\S]*?)\\1`, 'i'));
-  return match?.[2] ?? null;
-}
-
-function escapeHtmlAttr(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
 }
 
 function ImageViewer({

@@ -119,6 +119,108 @@ export function anomalyForSafetyEvent(
   };
 }
 
+/**
+ * How long an identical failure stays suppressed after it is filed once.
+ * A thrown exception inside a render loop repeats every frame; without this the
+ * log would fill with one signature and rotate away the history a reader needs.
+ */
+const UNCAUGHT_SUPPRESS_WINDOW_MS = 60_000;
+
+/**
+ * Ceiling on how many DISTINCT signatures one session may file. A loop whose
+ * message varies (an index, a timestamp) defeats signature suppression, so the
+ * count is bounded too. Matches the 50-entry cap the PostHog buffer in
+ * `error-tracking.ts` already uses for the same reason.
+ */
+const UNCAUGHT_MAX_DISTINCT = 50;
+
+const uncaughtLastFiledAt = new Map<string, number>();
+
+/**
+ * Test seam. Module state would otherwise leak the suppression window between
+ * specs and make them order-dependent.
+ */
+export function resetUncaughtExceptionAnomalyState(): void {
+  uncaughtLastFiledAt.clear();
+}
+
+/**
+ * Decides whether this exception is worth a record. Returns true the first time
+ * a signature is seen, false while it is repeating, and false for every new
+ * signature once the session has filed `UNCAUGHT_MAX_DISTINCT` of them.
+ *
+ * Deliberately not a rate limit on the total: a burst of genuinely different
+ * failures is exactly the situation worth recording in full.
+ */
+export function shouldFileUncaughtException(signature: string): boolean {
+  const now = Date.now();
+  const last = uncaughtLastFiledAt.get(signature);
+  if (last != null && now - last < UNCAUGHT_SUPPRESS_WINDOW_MS) return false;
+  if (last == null && uncaughtLastFiledAt.size >= UNCAUGHT_MAX_DISTINCT) return false;
+  uncaughtLastFiledAt.set(signature, now);
+  return true;
+}
+
+/** What the window listeners observed about one uncaught failure. */
+export interface UncaughtExceptionInput {
+  message: string;
+  /** Script URL the exception came from, when the engine reported one. */
+  source?: string;
+  lineno?: number;
+  /** True for `unhandledrejection`, false/absent for a thrown `error`. */
+  rejection?: boolean;
+}
+
+/** Last path segment, so the summary names a file rather than a full URL. */
+function sourceLabel(source: string | undefined): string | null {
+  if (!source) return null;
+  const withoutQuery = source.split(/[?#]/u)[0] ?? source;
+  const segments = withoutQuery.split('/').filter(Boolean);
+  const last = segments[segments.length - 1];
+  return last && last.length > 0 ? last : null;
+}
+
+/**
+ * Builds the anomaly record for an uncaught error or an unhandled rejection.
+ *
+ * `AnomalyKind` has declared `'unhandled-error'` since the log landed but
+ * nothing produced it — browser exceptions went only to PostHog, which is a
+ * no-op without a build-time key, so during ordinary local use they vanished.
+ */
+export function anomalyForUncaughtException(
+  input: UncaughtExceptionInput,
+): ReportAnomalyRequest {
+  const rejection = input.rejection === true;
+  const message = input.message.trim();
+  const label = sourceLabel(input.source);
+  const where = label ? ` at ${label}${input.lineno != null ? `:${input.lineno}` : ''}` : '';
+  const what = message.length > 0 ? message : 'no message reported';
+  const prefix = rejection ? 'Unhandled promise rejection' : 'Uncaught error';
+
+  return {
+    kind: 'unhandled-error',
+    severity: 'error',
+    summary: `${prefix}: ${what}${where}`,
+    detail: {
+      ...(input.source ? { source: input.source } : {}),
+      ...(input.lineno != null ? { lineno: input.lineno } : {}),
+      ...(rejection ? { rejection: true } : {}),
+    },
+  };
+}
+
+/**
+ * Bridge called from the window listeners in `error-tracking.ts`. Applies the
+ * flood guard, then posts. Kept here rather than inside the PostHog transport
+ * so the two sinks stay independent — the transport's specs assert exact call
+ * counts, which is why this hook was deferred when the anomaly log landed.
+ */
+export function reportUncaughtExceptionAnomaly(input: UncaughtExceptionInput): void {
+  const signature = `${input.rejection === true ? 'rejection' : 'error'}:${input.message}:${input.source ?? ''}`;
+  if (!shouldFileUncaughtException(signature)) return;
+  reportAnomaly(anomalyForUncaughtException(input));
+}
+
 /** Endpoint the daemon exposes for client-reported anomalies. */
 export const ANOMALY_ENDPOINT = '/api/anomalies';
 

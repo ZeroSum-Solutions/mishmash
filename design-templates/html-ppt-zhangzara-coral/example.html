@@ -6,7 +6,7 @@
     <title>Plan a Community-Growth Campaign like a Head of Growth - Marketing &amp; GTM</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;600;700&display=swap');
+        @import url("fonts/fonts.css");
 
         :root {
             --coral: #E85D5D;
@@ -1080,9 +1080,9 @@
             <div class="top-section">
                 <div class="zigzag-layer">
                     <svg viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice">
-                        <polyline points="-50,320 50,120 150,320 250,120 350,320 450,120 550,320 650,120 750,320 850,120 950,320 1050,120 1150,320 1250,120" 
+                        <polyline points="-50,320 50,120 150,320 250,120 350,320 450,120 550,320 650,120 750,320 850,120 950,320 1050,120 1150,320 1250,120"
                                   fill="none" stroke="#1A1A1A" stroke-width="18" stroke-linejoin="miter" stroke-linecap="butt" opacity="0.22"/>
-                        <polyline points="-50,380 50,180 150,380 250,180 350,380 450,180 550,380 650,180 750,380 850,180 950,380 1050,180 1150,380 1250,180" 
+                        <polyline points="-50,380 50,180 150,380 250,180 350,380 450,180 550,380 650,180 750,380 850,180 950,380 1050,180 1150,380 1250,180"
                                   fill="none" stroke="#1A1A1A" stroke-width="12" stroke-linejoin="miter" stroke-linecap="butt" opacity="0.15"/>
                     </svg>
                 </div>
@@ -1373,11 +1373,11 @@
 
             // Check if current slide has light background for dark nav elements
             const currentSlideEl = slides[currentSlide];
-            const isLight = currentSlideEl.classList.contains('slide-2') || 
-                           currentSlideEl.classList.contains('slide-4') || 
-                           currentSlideEl.classList.contains('slide-6') || 
+            const isLight = currentSlideEl.classList.contains('slide-2') ||
+                           currentSlideEl.classList.contains('slide-4') ||
+                           currentSlideEl.classList.contains('slide-6') ||
                            currentSlideEl.classList.contains('slide-8');
-            
+
             dots.forEach(d => d.classList.toggle('dark', isLight));
             slideCounter.classList.toggle('dark', isLight);
             prevArrow.classList.toggle('dark', isLight);
