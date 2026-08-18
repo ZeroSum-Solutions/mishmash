@@ -165,24 +165,33 @@ describe('resolveRequestedCraft', () => {
       designSystemCraftExemptions: ['anti-ai-slop'],
       isVisualSurface: true,
     });
-    expect(r).toEqual(['typography', 'color', 'composition', 'animation-discipline']);
+    expect(r).toEqual([
+      'typography',
+      'typography-hierarchy',
+      'color',
+      'composition',
+      'animation-discipline',
+    ]);
   });
 
-  // Plan A11 — `animation-discipline` joined the floor alongside `composition`.
-  // A blind critic scored a default-path build against a commercial Framer
-  // template and lost only on motion; driving both pages in a real browser
-  // showed the generated page moved zero elements on scroll while the
-  // Framer page moved 285. See `craft/animation-discipline.md`'s
-  // "Scroll-triggered entrance" section for the default the floor now
-  // injects, and `apps/daemon/src/craft.ts`'s `CRAFT_FLOOR` comment for the
-  // full rationale.
-  it('the floor is small and defensible: exactly typography, color, anti-ai-slop, composition, animation-discipline', () => {
+  // Two rulebooks joined the floor alongside `composition`, each for its own
+  // measured reason. `animation-discipline` (A11): a blind critic scored a
+  // default-path build against a commercial Framer template and it lost only
+  // on motion; driving both pages in a real browser showed the generated page
+  // moved zero elements on scroll while the Framer page moved 285.
+  // `typography-hierarchy` (A13): composition.md's hero rule delegates the
+  // actual scale ratio to that file, but it was never loaded on the same
+  // default path, so a floor run got the requirement with none of the guidance
+  // for meeting it. See each file and `CRAFT_FLOOR`'s comment in
+  // `apps/daemon/src/craft.ts` for the full rationale.
+  it('the floor is small and defensible: exactly typography, typography-hierarchy, color, anti-ai-slop, composition, animation-discipline', () => {
     expect([...CRAFT_FLOOR].sort()).toEqual([
       'animation-discipline',
       'anti-ai-slop',
       'color',
       'composition',
       'typography',
+      'typography-hierarchy',
     ]);
   });
 });

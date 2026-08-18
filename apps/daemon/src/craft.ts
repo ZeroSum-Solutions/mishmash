@@ -73,8 +73,21 @@ export async function loadCraftSections(craftDir: string, requested: unknown[]) 
 // gap -- a single default reveal pattern, gated so it degrades to fully
 // visible content with no JS, no IntersectionObserver, or
 // prefers-reduced-motion set.
+//
+// `typography-hierarchy` joins for the same measured reason, not a new one.
+// `composition.md`'s hero rule explicitly delegates the actual scale ratio
+// to this file ("typography.md and typography-hierarchy.md govern the
+// actual scale ratios and vectors once a vector has been chosen to carry
+// the hero") -- but until now that delegation target was never loaded on
+// the same default path composition.md ships on, so a floor run got the
+// requirement ("roughly 8:1 or higher") with none of the genre-banded
+// guidance for satisfying it. Measured output against a real commercial
+// "restrained" template (Framer "Salix", 5.3:1) confirmed the flat number
+// was also the wrong universal target, not just unreachable in isolation --
+// see typography-hierarchy.md's "Hero display ratio" section.
 export const CRAFT_FLOOR: readonly string[] = [
   "typography",
+  "typography-hierarchy",
   "color",
   "anti-ai-slop",
   "composition",

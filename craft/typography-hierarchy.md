@@ -135,6 +135,50 @@ two simultaneous primaries within the same visual region.
 
 ---
 
+## Hero display ratio
+
+When scale is the vector chosen to carry the hero (`composition.md`'s
+First-viewport composition rule — "when type carries the hero, size it
+against a stated ratio, not a feeling"), the ratio that makes the display
+line read as an event rather than an oversized paragraph is genre-dependent,
+not one number repeated across every brief. This repository has no house
+aesthetic (see `AGENTS.md` "Design authority"); the bands below are where a
+*quiet* direction and a *loud* one legitimately diverge, and each should sit
+in its own band rather than be pulled toward a single default.
+
+| Direction (idiom) | Typical hero ratio | Grounding |
+|---|---|---|
+| Loud / maximal / physical — "wants to be the boldest thing in the room," oversized type, real graphic risk | 8:1–12:1+, sometimes far higher for a wordmark-led hero | A single-word loud hero can clear 30:1+ on real commercial templates |
+| Confident default — SaaS, product, most agency/portfolio work | 6.5:1–8:1 | Matches most professionally sold marketplace templates measured against this rubric |
+| Quiet / restrained / editorial — "Nordic restraint," quiet-luxury, architecture/photography studios | 5:1–7:1 | Real, commercially sold restrained templates ship around 5:1, not 8:1+ |
+
+**Restraint is a color and ornament discipline, not a scale discipline.** A
+brief asking for quiet, confident, Nordic restraint is asking the generator
+to spend less on saturated color, gradients, and chrome — not to shrink the
+one line carrying the hero. `composition.md`'s "mirror image" anti-pattern
+names the failure directly: a modest caption next to a contained photo, with
+no display-scale line anywhere, "reads as timid, not restrained." A
+restrained direction still needs its hero line to be the single largest,
+most isolated type on the page; the direction changes how loud everything
+*around* that line gets, not whether the line itself commits.
+
+**The floor does not disappear below 8:1 — it moves.** Even in the quietest
+band, a ratio under roughly 4:1 is still a flat hierarchy by this file's own
+definition (see "Hierarchy rhythm" above): the "headline" sits too close in
+scale to ordinary body/section-heading sizes to read as a distinct tier, no
+matter how much whitespace surrounds it. Whitespace and tracking can
+substitute for scale entirely (see "Controlled violations" above — "Zero
+scale contrast... carried entirely by spacing or tracking") but that is a
+deliberate, all-in substitution, not a reason to land at a fraction of a
+scale-led hero's ratio and call it restraint.
+
+**Never close the gap by shrinking body copy.** Body-copy readability
+(`typography.md`'s 15–18px range) is independent of the hero ratio; widen
+the gap by growing the display line, not by shrinking body toward 12px to
+hit a number cheaply.
+
+---
+
 ## Anti-patterns
 
 - **Graduated weight ladder** — regular → medium → semibold → bold → extrabold,
@@ -163,3 +207,7 @@ two simultaneous primaries within the same visual region.
 - [ ] Semantic/visual role inversions remain structurally readable.
 - [ ] Flat hierarchy: scale steps between levels are ≥1.25× apart OR compensated by a weight or spacing jump. (guidance)
 - [ ] Noise hierarchy: no more than one element reads as primary above the fold.
+- [ ] When a display line carries the hero, its ratio against the page's own
+      body copy size falls inside the band for the active direction (see
+      "Hero display ratio" above) — quiet/restrained work still clears
+      roughly 4:1, loud work runs materially higher. (guidance)
