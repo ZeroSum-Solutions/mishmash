@@ -171,10 +171,11 @@ describe('resolveRequestedCraft', () => {
       'color',
       'composition',
       'animation-discipline',
+      'accessibility-baseline',
     ]);
   });
 
-  // Two rulebooks joined the floor alongside `composition`, each for its own
+  // Three rulebooks joined the floor alongside `composition`, each for its own
   // measured reason. `animation-discipline` (A11): a blind critic scored a
   // default-path build against a commercial Framer template and it lost only
   // on motion; driving both pages in a real browser showed the generated page
@@ -182,10 +183,13 @@ describe('resolveRequestedCraft', () => {
   // `typography-hierarchy` (A13): composition.md's hero rule delegates the
   // actual scale ratio to that file, but it was never loaded on the same
   // default path, so a floor run got the requirement with none of the guidance
-  // for meeting it. See each file and `CRAFT_FLOOR`'s comment in
-  // `apps/daemon/src/craft.ts` for the full rationale.
-  it('the floor is small and defensible: exactly typography, typography-hierarchy, color, anti-ai-slop, composition, animation-discipline', () => {
+  // for meeting it. `accessibility-baseline` (A14): a floor-path run shipped a
+  // nav that collapsed to one link below 760px with no replacement, stranding
+  // four sections on touch, keyboard, and screen reader. See each file and
+  // `CRAFT_FLOOR`'s comment in `apps/daemon/src/craft.ts`.
+  it('the floor is small and defensible: exactly typography, typography-hierarchy, color, anti-ai-slop, composition, animation-discipline, accessibility-baseline', () => {
     expect([...CRAFT_FLOOR].sort()).toEqual([
+      'accessibility-baseline',
       'animation-discipline',
       'anti-ai-slop',
       'color',

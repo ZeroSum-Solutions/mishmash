@@ -16,7 +16,7 @@ od:
   mode: prototype
   category: web-artifacts
   craft:
-    requires: [typography, typography-hierarchy, color, anti-ai-slop, composition, animation-discipline]
+    requires: [typography, typography-hierarchy, color, anti-ai-slop, composition, animation-discipline, accessibility-baseline]
   design_system:
     requires: true
     sections: [color, typography, layout, components]

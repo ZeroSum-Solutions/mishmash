@@ -25,6 +25,7 @@ od:
       - anti-ai-slop
       - animation-discipline
       - composition
+      - accessibility-baseline
   example_prompt: |
     Create a polished marketing page using design-taste-frontend-v1 with strong typography, spacing, motion, and anti-slop guardrails.
 ---
