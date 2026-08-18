@@ -10,7 +10,9 @@ import {
 } from '../apps/daemon/src/brands/webfonts.ts';
 import {
   dedupeFontDirectory,
+  findLoadingFontProviderReferences,
   findFontProviderReferences,
+  fontDirectoryNeedsDeduplication,
   fontContentIdentity,
   rewriteNonLoadingFontReferences,
   vendoredFontFileName,
@@ -66,6 +68,16 @@ const familyFallbacks = new Map<string, FamilyFallback>([
   ['intertight', { provider: 'google', canonicalFamily: 'Inter Tight' }],
   ['jetmono', { provider: 'google', canonicalFamily: 'JetBrains Mono' }],
   ['geistsans', { provider: 'google', canonicalFamily: 'Geist' }],
+  // claude-directory includes locally licensed commercial faces that its
+  // importer intentionally replaces with a CDN request. Google cannot serve
+  // those names, so retain the declared family as an alias over a close,
+  // self-hostable fallback instead of leaving a permanently broken request.
+  ['helveticaregular', { provider: 'google', canonicalFamily: 'Inter' }],
+  ['helveticanowdisplaybold', { provider: 'google', canonicalFamily: 'Inter' }],
+  ['helveticanowdisplaymedium', { provider: 'google', canonicalFamily: 'Inter' }],
+  ['helveticanowdisplayw01rg', { provider: 'google', canonicalFamily: 'Inter' }],
+  ['ttnormspro', { provider: 'google', canonicalFamily: 'Inter' }],
+  ['ppmondwest', { provider: 'fontshare', canonicalFamily: 'Gambarino', slug: 'gambarino' }],
 ]);
 
 const stylesheetCache = new Map<string, Promise<string>>();
@@ -476,6 +488,31 @@ async function main(): Promise<void> {
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith('_'))
     .map((entry) => entry.name)
     .sort();
+  if (process.argv.includes('--check')) {
+    const dirty = new Set<string>();
+    for (const template of entries) {
+      const templateDir = path.join(catalogueRoot, template);
+      if (await fontDirectoryNeedsDeduplication(path.join(templateDir, 'fonts'))) {
+        dirty.add(`${template}/fonts`);
+      }
+      for (const source of await readTemplateSources(templateDir)) {
+        if (
+          findLoadingFontProviderReferences(source.content).length > 0
+          || rewriteSource(source, templateDir) !== source.content
+        ) {
+          dirty.add(path.relative(catalogueRoot, source.file).split(path.sep).join('/'));
+        }
+      }
+    }
+    if (dirty.size > 0) {
+      process.stderr.write(`DIRTY font vendoring would change ${dirty.size} catalogue paths:\n`);
+      for (const file of [...dirty].sort()) process.stderr.write(`  - ${file}\n`);
+      process.exitCode = 1;
+    } else {
+      process.stdout.write(`CLEAN font vendoring is idempotent across ${entries.length} catalogue entries\n`);
+    }
+    return;
+  }
   const failures: Failure[] = [];
   const droppedSubsets: DroppedSubset[] = [];
   const families = new Set<string>();

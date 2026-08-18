@@ -7,6 +7,7 @@ import {
   fontFaceCss,
   parseWebfontFaces,
   webfontFormatExtension,
+  type FontFaceCssFile,
   type FontFaceRef,
 } from "../apps/daemon/src/brands/webfonts.ts";
 
@@ -17,7 +18,12 @@ export interface FontDirectoryDeduplication {
   bytesAfter: number;
 }
 
-const fontProviderHostSource = String.raw`(?:fonts\.googleapis\.com|fonts\.gstatic\.com|rsms\.me|api\.fontshare\.com)`;
+const fontProviderHostSource = String.raw`(?:fonts\.googleapis\.com|fonts\.gstatic\.com|rsms\.me|api\.fontshare\.com|cdn\.fontshare\.com)`;
+
+export type LoadingFontProviderReference = {
+  kind: "link" | "import" | "url";
+  host: string;
+};
 
 export function findFontProviderReferences(source: string): string[] {
   const hosts = new Set<string>();
@@ -25,6 +31,24 @@ export function findFontProviderReferences(source: string): string[] {
     if (match[1]) hosts.add(match[1].toLowerCase());
   }
   return [...hosts].sort();
+}
+
+/** Find only provider references that a browser can load, ignoring inert comments. */
+export function findLoadingFontProviderReferences(source: string): LoadingFontProviderReference[] {
+  const withoutComments = source.replace(/<!--[\s\S]*?-->|\/\*[\s\S]*?\*\//g, "");
+  const references = new Map<string, LoadingFontProviderReference>();
+  const collect = (kind: LoadingFontProviderReference["kind"], candidate: string) => {
+    for (const host of findFontProviderReferences(candidate)) {
+      references.set(`${kind}:${host}`, { kind, host });
+    }
+  };
+
+  for (const match of withoutComments.matchAll(/<link\b[^>]*>/gi)) collect("link", match[0]);
+  for (const match of withoutComments.matchAll(/@import\b[^;]*(?:;|$)/gi)) collect("import", match[0]);
+  for (const match of withoutComments.matchAll(/url\(\s*[^)]*\)/gi)) collect("url", match[0]);
+  return [...references.values()].sort((left, right) =>
+    `${left.kind}:${left.host}`.localeCompare(`${right.kind}:${right.host}`),
+  );
 }
 
 export function rewriteNonLoadingFontReferences(source: string): string {
@@ -77,14 +101,24 @@ export function fontContentIdentity(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
-export async function dedupeFontDirectory(fontsDir: string): Promise<FontDirectoryDeduplication> {
+type FontDirectoryDeduplicationPlan = {
+  result: FontDirectoryDeduplication;
+  css: string;
+  rewrittenCss: string;
+  sourceFiles: Map<string, Buffer>;
+  targetFiles: Map<string, Buffer>;
+};
+
+async function planFontDirectoryDeduplication(
+  fontsDir: string,
+): Promise<FontDirectoryDeduplicationPlan | null> {
   const cssPath = path.join(fontsDir, "fonts.css");
   let css: string;
   try {
     css = await fs.readFile(cssPath, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { filesBefore: 0, bytesBefore: 0, filesAfter: 0, bytesAfter: 0 };
+      return null;
     }
     throw error;
   }
@@ -93,7 +127,7 @@ export async function dedupeFontDirectory(fontsDir: string): Promise<FontDirecto
   const sourceFiles = new Map<string, Buffer>();
   const targetFiles = new Map<string, Buffer>();
   const targetFileByContent = new Map<string, string>();
-  const localFaces = [];
+  const localFaces: FontFaceCssFile[] = [];
 
   for (const face of faces) {
     const url = new URL(face.url);
@@ -124,20 +158,45 @@ export async function dedupeFontDirectory(fontsDir: string): Promise<FontDirecto
   }
 
   if (localFaces.length === 0) {
-    return { filesBefore: 0, bytesBefore: 0, filesAfter: 0, bytesAfter: 0 };
+    return null;
   }
 
-  for (const [file, buffer] of targetFiles) await fs.writeFile(path.join(fontsDir, file), buffer);
   const rewrittenCss = `${fontFaceCss(localFaces, "./").trimEnd()}\n`;
-  if (rewrittenCss !== css) await fs.writeFile(cssPath, rewrittenCss, "utf8");
-  for (const sourceFile of sourceFiles.keys()) {
-    if (!targetFiles.has(sourceFile)) await fs.unlink(path.join(fontsDir, sourceFile));
-  }
-
   return {
-    filesBefore: sourceFiles.size,
-    bytesBefore: [...sourceFiles.values()].reduce((total, buffer) => total + buffer.length, 0),
-    filesAfter: targetFiles.size,
-    bytesAfter: [...targetFiles.values()].reduce((total, buffer) => total + buffer.length, 0),
+    result: {
+      filesBefore: sourceFiles.size,
+      bytesBefore: [...sourceFiles.values()].reduce((total, buffer) => total + buffer.length, 0),
+      filesAfter: targetFiles.size,
+      bytesAfter: [...targetFiles.values()].reduce((total, buffer) => total + buffer.length, 0),
+    },
+    css,
+    rewrittenCss,
+    sourceFiles,
+    targetFiles,
   };
+}
+
+/** True when another local deduplication pass would alter CSS or font files. */
+export async function fontDirectoryNeedsDeduplication(fontsDir: string): Promise<boolean> {
+  const plan = await planFontDirectoryDeduplication(fontsDir);
+  if (!plan) return false;
+  if (plan.rewrittenCss !== plan.css || plan.sourceFiles.size !== plan.targetFiles.size) return true;
+  for (const [file, target] of plan.targetFiles) {
+    if (!plan.sourceFiles.get(file)?.equals(target)) return true;
+  }
+  return false;
+}
+
+export async function dedupeFontDirectory(fontsDir: string): Promise<FontDirectoryDeduplication> {
+  const plan = await planFontDirectoryDeduplication(fontsDir);
+  if (!plan) return { filesBefore: 0, bytesBefore: 0, filesAfter: 0, bytesAfter: 0 };
+
+  for (const [file, buffer] of plan.targetFiles) await fs.writeFile(path.join(fontsDir, file), buffer);
+  if (plan.rewrittenCss !== plan.css) {
+    await fs.writeFile(path.join(fontsDir, "fonts.css"), plan.rewrittenCss, "utf8");
+  }
+  for (const sourceFile of plan.sourceFiles.keys()) {
+    if (!plan.targetFiles.has(sourceFile)) await fs.unlink(path.join(fontsDir, sourceFile));
+  }
+  return plan.result;
 }

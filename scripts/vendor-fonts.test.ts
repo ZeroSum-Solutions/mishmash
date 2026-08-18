@@ -1,15 +1,31 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import {
   dedupeFontDirectory,
   findFontProviderReferences,
+  findLoadingFontProviderReferences,
   rewriteNonLoadingFontReferences,
 } from "./vendor-fonts-lib.ts";
+
+const catalogueRoot = path.resolve(import.meta.dirname, "..", "design-templates");
+const execFileAsync = promisify(execFile);
+
+async function listCatalogueTextFiles(dir: string): Promise<string[]> {
+  const files: string[] = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...await listCatalogueTextFiles(file));
+    else if (entry.isFile() && /\.(?:css|html?)$/i.test(entry.name)) files.push(file);
+  }
+  return files;
+}
 
 test("dedupeFontDirectory shares one content-addressed file across variable-font weights", async () => {
   const fontsDir = await mkdtemp(path.join(os.tmpdir(), "mishmash-vendor-fonts-"));
@@ -73,4 +89,26 @@ test("the residual census finds provider names in inert comments and cleans only
   assert.match(rewritten, /Inter Font: self-hosted/);
   assert.match(rewritten, /Inter Variable, self-hosted/);
   assert.match(rewritten, /<link rel="stylesheet" href="https:\/\/rsms\.me\/inter\/inter\.css">/);
+  assert.deepEqual(findLoadingFontProviderReferences(source), [{ kind: "link", host: "rsms.me" }]);
+});
+
+test("the real catalogue contains no provider-loading link, import, or url refs", async () => {
+  const residuals: string[] = [];
+  for (const file of await listCatalogueTextFiles(catalogueRoot)) {
+    const source = await readFile(file, "utf8");
+    const references = findLoadingFontProviderReferences(source);
+    if (references.length === 0) continue;
+    const relative = path.relative(catalogueRoot, file).split(path.sep).join("/");
+    residuals.push(`${relative} [${references.map(({ kind, host }) => `${kind}:${host}`).join(", ")}]`);
+  }
+  assert.deepEqual(residuals.sort(), []);
+});
+
+test("a second font-vendoring run is clean across the real catalogue", async () => {
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    ["--import", "tsx", path.resolve(import.meta.dirname, "vendor-fonts.ts"), "--check"],
+    { cwd: path.resolve(import.meta.dirname, "..") },
+  );
+  assert.match(stdout, /CLEAN font vendoring is idempotent across 352 catalogue entries/);
 });
