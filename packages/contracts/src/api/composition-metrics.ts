@@ -55,6 +55,21 @@ export interface CompositionMetrics {
    * hover/focus-only transform never appears here, because it is measured
    * on the DOM's resting state, not a simulated pseudo-class. Excludes
    * hidden elements for the same reason as `outOfFlowElementCount`.
+   *
+   * Known source of noise, left uncorrected on purpose (same one-directional
+   * philosophy as `layout-risk-flat`): a scroll-triggered reveal animation
+   * (an off-screen element still sitting at its pre-reveal
+   * `translateY(...)`, waiting on an IntersectionObserver that has not
+   * fired yet because it is below the fold) reads as a "transformed
+   * element" here even though it is a motion technique, not a compositional
+   * one. Verified on a real generated artifact: 21 of its transformed
+   * elements were `.reveal`-class scroll animations mid-flight, not
+   * deliberate offsets. Distinguishing the two from computed style alone
+   * would mean guessing at animation intent (a class-name heuristic, or
+   * inferring IntersectionObserver usage) — exactly the fragile inference
+   * this codebase's static checks already avoid, so this field reports the
+   * raw count and leaves the interpretation to the reader, same as every
+   * other field here.
    */
   transformedElementCount: number;
   /** Distinct `getComputedStyle(section).backgroundColor` values across every `<section>`. */
