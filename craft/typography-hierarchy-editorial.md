@@ -38,6 +38,15 @@ it is a visual event.
 The gap between display and deck is the editorial signature. A small step
 here reads as SaaS, not editorial.
 
+**This is the editorial genre's own value for `typography-hierarchy.md`'s
+"Hero display ratio," not a separate number.** Editorial sits in that
+file's quiet/restrained band (5:1–7:1 against body, not 8:1+) — but only
+when the display line lands in the upper half of the 56–96px row above.
+The low end of that row against an 18px body produces close to 3:1, which
+reads as flat, not editorial. When the brief asks for a premium,
+authoritative register — a studio positioned to "charge premium rates,"
+not a budget blog — favor the top of the 56–96px band over the bottom.
+
 ### 2. Whitespace carries hierarchy
 
 Editorial hierarchy is not announced by a heavy heading. It is created by

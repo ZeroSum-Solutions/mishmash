@@ -21,6 +21,18 @@ Use a multiplicative scale (1.2 or 1.25). Cap at 6–8 sizes per artifact.
 | Small | 13–14 px |
 | Caption | 11–12 px |
 
+**The Display row is a section-heading ceiling, not a hero ceiling.** It
+sizes in-page headings — the H1 introducing a features section, a card
+title, an H2 above a pricing table. A page's single first-viewport hero
+line (`composition.md`'s "First-viewport composition" rule) is a distinct
+role with its own, larger allowance: when scale is the vector chosen to
+carry the hero, size that one line against the ratio guidance in
+`typography-hierarchy.md`'s "Hero display ratio" section, not against this
+table. Capping a hero line at 72px because that is what "Display" says
+here produces exactly the failure that rule warns about — an oversized
+in-page heading standing in for a hero, which reads as a bigger paragraph,
+not an authored dominant move.
+
 ## Line height (leading)
 
 | Text size | Line height |
@@ -78,6 +90,29 @@ Most well-crafted UIs use exactly 3 weights:
 
 Weight 700+ is rarely needed. If your design uses bold for "emphasis on
 emphasis," it likely lacks weight discipline elsewhere.
+
+## Inline emphasis inside a display line
+
+Mixing weight or face *within* one display line is a real authority move
+that spends zero additional vertical space — cheaper than a bigger font
+size, and it reads as considered rather than loud. A hero line set
+entirely in one weight leans on scale as the only lever; letting one word
+or phrase carry a different weight, an italic aside, or the secondary
+face against the primary gives the line internal hierarchy the way a
+print masthead does.
+
+- Vary weight, not size, within the line — e.g. a light "We build" next
+  to a heavy "quiet confidence."
+- A single italic word or short phrase inside an upright line reads as a
+  spoken aside without breaking the line's scale.
+- One inline variation per line, not several. A line with a weight change
+  *and* an italic *and* a color change reads as noise — the same failure
+  `typography-hierarchy.md`'s Noise hierarchy names for whole surfaces,
+  compressed into one line.
+- This is additive to, not a substitute for, the scale ratio in
+  `typography-hierarchy.md`'s "Hero display ratio" section — a
+  correctly-sized hero line with no inline mixing still passes; inline
+  mixing does not rescue an undersized one.
 
 ## Common mistakes (lint these)
 
