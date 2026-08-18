@@ -138,6 +138,7 @@ are noted per item.
 - **Heading hierarchy** (1.3.1 Info and Relationships Level A; 2.4.6 Headings and Labels Level AA): WCAG requires programmatically-determined structure and descriptive headings, not a specific outline shape. OD craft convention layers on: prefer one `<h1>` per page and don't skip levels (`<h1>` → `<h3>` without `<h2>`). Visual size and heading level are independent.
 - **Landmarks** (1.3.1, 2.4.1 Bypass Blocks Level A): use `<header>` `<nav>` `<main>` `<aside>` `<footer>` rather than `<div role="banner">` etc. AT users navigate by landmark; a page with no landmarks is a wall of divs.
 - **Text alternatives** (1.1.1 Non-text Content, Level A): `<img alt="...">` for content images, `alt=""` for decorative; `aria-label` on icon-only buttons; long-form description for charts and SVG data viz. A chart without a text alternative is unreadable to a screen reader.
+- **Mobile nav reachability** (anchored on 2.1.1 Keyboard + 2.4.1 Bypass Blocks, Level A): a responsive breakpoint rule is allowed to hide primary `<nav>` links, but only when something in the document still lets a keyboard, screen-reader, or touch user reach what got hidden — a disclosure button, a checkbox/`<details>` menu, an in-page drawer, anything with a real open/close state. A `<nav>` with three or more links that collapses to at most one reachable link below a breakpoint, with no such affordance anywhere in the page, is a keyboard and screen-reader dead end, not a responsive design choice — the sections it linked to are still on the page, just unreachable from the nav. A nav with only one or two links can usually sit on one line at any width and does not need a menu at all. The rule is reachability, not a prescribed widget: no specific pattern (hamburger, `<details>`, checkbox hack) is required, only that one actually exists.
 
 ## ARIA discipline
 
@@ -183,6 +184,7 @@ reader path.
 
 ## Common mistakes (lint these)
 
+- Hiding nav links below a breakpoint with `display: none` / `visibility: hidden` and nothing to replace them. If the CSS says `.nav a:not(.last){ display: none; }` at some max-width, something else on the page must open the rest — a toggle, a drawer, a `<details>` menu. Otherwise the sections those links pointed at are still live but unreachable on a phone, on a keyboard, and to a screen reader.
 - "Target Size 44×44" cited as the AA bar. 44×44 is **AAA** (2.5.5). AA is **24×24** (2.5.8).
 - "18 px = large text" — wrong. Threshold is 18 *pt* regular (~24 px) or 14 pt bold (~18.5 px).
 - "EAA = WCAG 2.2 AA" — wrong. EN 301 549 v3.2.1 is anchored to WCAG 2.1.

@@ -61,11 +61,20 @@ export async function loadCraftSections(craftDir: string, requested: unknown[]) 
 // largest measured quality gap on the default path -- which is precisely the
 // path the floor governs. A skill that opts in explicitly still wins outright,
 // so a skill deliberately omitting composition keeps that choice.
+// `accessibility-baseline` is here because a real floor-path run shipped a
+// <nav> that collapsed to the wordmark plus one link below 760px with no
+// hamburger, disclosure, or any other replacement -- a keyboard and
+// screen-reader dead end to sections that were still on the page. No skill
+// or design system had requested the craft section that would have told the
+// model to avoid it, and the floor is exactly the path that had nothing to
+// fall back on. See craft/accessibility-baseline.md's "Mobile nav
+// reachability" rule.
 export const CRAFT_FLOOR: readonly string[] = [
   "typography",
   "color",
   "anti-ai-slop",
   "composition",
+  "accessibility-baseline",
 ];
 
 /**

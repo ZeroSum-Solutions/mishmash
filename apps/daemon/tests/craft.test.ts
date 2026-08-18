@@ -165,11 +165,17 @@ describe('resolveRequestedCraft', () => {
       designSystemCraftExemptions: ['anti-ai-slop'],
       isVisualSurface: true,
     });
-    expect(r).toEqual(['typography', 'color', 'composition']);
+    expect(r).toEqual(['typography', 'color', 'composition', 'accessibility-baseline']);
   });
 
-  it('the floor is small and defensible: exactly typography, color, anti-ai-slop, composition', () => {
-    expect([...CRAFT_FLOOR].sort()).toEqual(['anti-ai-slop', 'color', 'composition', 'typography']);
+  it('the floor is small and defensible: exactly typography, color, anti-ai-slop, composition, accessibility-baseline', () => {
+    expect([...CRAFT_FLOOR].sort()).toEqual([
+      'accessibility-baseline',
+      'anti-ai-slop',
+      'color',
+      'composition',
+      'typography',
+    ]);
   });
 });
 
