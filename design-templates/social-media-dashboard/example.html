@@ -5,9 +5,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MishMash · Social Analytics</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+
+  <link rel="stylesheet" href="fonts/fonts.css">
   <style>
     :root {
       /* Totality Festival Design System — bind palette */
@@ -930,9 +930,9 @@
 
   <!-- Ask Bar -->
   <section class="ask-bar" data-od-id="ask">
-    <input 
-      type="text" 
-      class="ask-input" 
+    <input
+      type="text"
+      class="ask-input"
       id="ask-input"
       placeholder="Ask across your posts — 'top performing last week', 'comments from verified accounts'..."
     >
@@ -1508,7 +1508,7 @@
         const lastPoint = chartBaseData[chartBaseData.length - 1];
         lastPoint.y += (Math.random() - 0.5) * 4;
         lastPoint.y = Math.max(40, Math.min(200, lastPoint.y));
-        
+
         const linePoints = chartBaseData.map(d => `${d.x},${d.y}`).join(' ');
         const line = document.getElementById('chart-line');
         if (line) {

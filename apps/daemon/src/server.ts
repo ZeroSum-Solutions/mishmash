@@ -2297,7 +2297,7 @@ export async function startServer({
 
   function sandboxedPreviewAssetScope(pathname: string): string | null {
     const apiRelativePath = pathname.startsWith('/api/') ? pathname.slice(4) : pathname;
-    const skill = /^\/skills\/([^/]+)\/assets\//u.exec(apiRelativePath);
+    const skill = /^\/skills\/([^/]+)\/(?:assets|fonts)\//u.exec(apiRelativePath);
     if (skill?.[1]) {
       try {
         return `skill:${decodeURIComponent(skill[1])}`;

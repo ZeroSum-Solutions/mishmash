@@ -203,6 +203,7 @@ describe('server route inventory', () => {
     const staticCatalogRouteKeys = [
       'GET /api/skills/:id/example',
       'GET /api/skills/:id/assets/*splat',
+      'GET /api/skills/:id/fonts/*splat',
       'GET /api/atoms',
       'GET /api/atoms/:id',
     ];

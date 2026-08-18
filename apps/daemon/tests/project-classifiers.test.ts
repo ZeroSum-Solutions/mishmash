@@ -137,6 +137,11 @@ describe('mimeFor', () => {
     expect(mimeFor('a.mp3')).toBe('audio/mpeg');
     expect(mimeFor('a.wav')).toBe('audio/wav');
     expect(mimeFor('a.m4a')).toBe('audio/mp4');
+    expect(mimeFor('a.woff2')).toBe('font/woff2');
+    expect(mimeFor('a.woff')).toBe('font/woff');
+    expect(mimeFor('a.ttf')).toBe('font/ttf');
+    expect(mimeFor('a.otf')).toBe('font/otf');
+    expect(mimeFor('a.eot')).toBe('application/vnd.ms-fontobject');
   });
 
   it('falls back to application/octet-stream for unmapped extensions', () => {

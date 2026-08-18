@@ -126,7 +126,7 @@
         <div class="logo">OD</div>
         <span>{{data.repository.name}}</span>
       </div>
-      
+
       <section>
         <div class="group-label"><span class="dot-ring"></span> Repository</div>
         <div class="nav">
@@ -136,7 +136,7 @@
           <a href="#community" class="nav-item">Community</a>
         </div>
       </section>
-      
+
       <section>
         <div class="group-label"><span class="dot-ring"></span> Metrics</div>
         <div class="nav">
@@ -146,7 +146,7 @@
           <a href="#activity" class="nav-item">PR Velocity</a>
         </div>
       </section>
-      
+
       <section>
         <div class="group-label"><span class="dot-ring"></span> Quick Links</div>
         <div class="nav">
@@ -156,7 +156,7 @@
         </div>
       </section>
     </aside>
-    
+
     <main class="main">
       <div class="topbar" data-od-id="topbar">
         <div class="topbar-title">
@@ -170,7 +170,7 @@
           <button>⟳ Refresh</button>
         </div>
       </div>
-      
+
       <div class="content">
         <header class="page-head" data-od-id="repo-header" id="overview">
           <div>
@@ -181,7 +181,7 @@
             <a class="button" href="{{data.repository.url}}">View on GitHub →</a>
           </div>
         </header>
-        
+
         <section class="card">
           <div class="tabs" role="tablist" aria-label="Dashboard sections">
             <a href="#overview" class="tab active" role="tab">Metrics</a>
@@ -189,7 +189,7 @@
             <a href="#contributors" class="tab" role="tab">Contributors</a>
             <a href="#community" class="tab" role="tab">Community</a>
           </div>
-          
+
           <div class="kpis" style="margin-top:16px" data-od-id="kpi-strip">
             <div class="kpi">
               <div class="kpi-top">
@@ -199,7 +199,7 @@
               <div class="kpi-num">{{data.metrics.stars.total}}</div>
               <div class="kpi-trend">+{{data.metrics.stars.growth}} this week</div>
             </div>
-            
+
             <div class="kpi">
               <div class="kpi-top">
                 <span class="glyph">⑂</span>
@@ -208,7 +208,7 @@
               <div class="kpi-num">{{data.metrics.forks.total}}</div>
               <div class="kpi-trend">+{{data.metrics.forks.growth}} this week</div>
             </div>
-            
+
             <div class="kpi">
               <div class="kpi-top">
                 <span class="glyph">◎</span>
@@ -217,7 +217,7 @@
               <div class="kpi-num">{{data.metrics.contributors.total}}</div>
               <div class="kpi-trend">{{data.metrics.contributors.active}} active</div>
             </div>
-            
+
             <div class="kpi">
               <div class="kpi-top">
                 <span class="glyph">◌</span>
@@ -226,7 +226,7 @@
               <div class="kpi-num">{{data.metrics.issues.open}}</div>
               <div class="kpi-trend down">{{data.metrics.issues.total}} total</div>
             </div>
-            
+
             <div class="kpi">
               <div class="kpi-top">
                 <span class="glyph">↑</span>
@@ -237,7 +237,7 @@
             </div>
           </div>
         </section>
-        
+
         <section class="grid">
           <div class="card" data-od-id="growth-chart" id="growth-chart">
             <div class="card-title"><span class="dot-ring"></span> Star Growth (Last 30 Days)</div>
@@ -258,7 +258,7 @@
               </div>
             </div>
           </div>
-          
+
           <aside class="card" data-od-id="contributors" id="contributors">
             <div class="card-title"><span class="dot-ring"></span> Top Contributors</div>
             <div class="tick-rule"></div>
@@ -326,7 +326,7 @@
             </div>
           </aside>
         </section>
-        
+
         <section class="grid-full">
           <div class="card" data-od-id="activity" id="activity">
             <div class="card-title"><span class="dot-ring"></span> Recent Activity</div>
@@ -413,7 +413,7 @@
             </div>
           </div>
         </section>
-        
+
         <section class="grid">
           <div class="card" id="fork-trend">
             <div class="card-title"><span class="dot-ring"></span> Fork Trend (Last 30 Days)</div>
@@ -433,7 +433,7 @@
               </div>
             </div>
           </div>
-          
+
           <div class="card">
             <div class="card-title"><span class="dot-ring"></span> Repository Stats</div>
             <div class="tick-rule"></div>

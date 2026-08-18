@@ -1,4 +1,4 @@
-import type { Express } from 'express';
+import type { Express, Request, Response } from 'express';
 import type Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -95,6 +95,70 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
     if (isLocalSameOrigin(req, resolvedPortRef.current)) return true;
     sendApiError(res, 403, 'FORBIDDEN', 'local origin required');
     return false;
+  };
+  const sendSkillSubresource = async (
+    req: Request,
+    res: Response,
+    rootName: 'assets' | 'fonts',
+    allowedExtensions?: ReadonlySet<string>,
+  ) => {
+    const skills = await listAllSkillLikeEntries();
+    const skill = findSkillById(skills, req.params.id);
+    if (!skill) {
+      return res.status(404).type('text/plain').send('skill not found');
+    }
+
+    const splatParam = (req.params as { splat?: string | string[] }).splat;
+    const relPath = Array.isArray(splatParam) ? splatParam.join('/') : String(splatParam || '');
+    if (allowedExtensions && !allowedExtensions.has(path.extname(relPath).toLowerCase())) {
+      return res.status(404).type('text/plain').send('resource not found');
+    }
+
+    const resourceRoot = path.resolve(skill.dir, rootName);
+    const target = path.resolve(resourceRoot, relPath);
+    if (target !== resourceRoot && !target.startsWith(resourceRoot + path.sep)) {
+      return res.status(400).type('text/plain').send(`invalid ${rootName} path`);
+    }
+    if (!fs.existsSync(target)) {
+      return res.status(404).type('text/plain').send('resource not found');
+    }
+
+    // `sendFile` follows symlinks, so lexical containment is not sufficient
+    // for user-supplied entries. Resolve both the root and target and enforce
+    // containment again before serving anything.
+    let resourceRootReal: string;
+    let targetReal: string;
+    try {
+      resourceRootReal = await fsp.realpath(resourceRoot);
+      targetReal = await fsp.realpath(target);
+    } catch {
+      return res.status(404).type('text/plain').send('resource not found');
+    }
+    if (
+      targetReal !== resourceRootReal
+      && !targetReal.startsWith(resourceRootReal + path.sep)
+    ) {
+      return res.status(400).type('text/plain').send(`invalid ${rootName} path`);
+    }
+    if (allowedExtensions) {
+      const stat = await fsp.stat(targetReal);
+      if (!stat.isFile()) {
+        return res.status(404).type('text/plain').send('resource not found');
+      }
+    }
+
+    if (req.headers.origin === 'null') {
+      res.header('Access-Control-Allow-Origin', '*');
+    }
+
+    // A relative path keeps dot-prefixed daemon-data ancestors out of
+    // Express's dotfile check while still rejecting dot segments below the
+    // resource root.
+    const relFromRoot = path.relative(resourceRootReal, targetReal);
+    if (!relFromRoot) {
+      return res.status(404).type('text/plain').send('resource not found');
+    }
+    await res.type(mimeFor(targetReal)).sendFile(relFromRoot, { root: resourceRootReal });
   };
   const importedDesignSystemResponse = async <T extends { id: string }>(designSystem: T) => {
     let tokenContractRebuild: DesignSystemTokenContractRebuildJobResponse | undefined;
@@ -595,72 +659,16 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   // contributors can preview `example.html` straight from disk.
   app.get('/api/skills/:id/assets/*splat', async (req, res) => {
     try {
-      // Same rationale as /example above — assets need to resolve whether
-      // the owning skill folder lives under skills/ or design-templates/.
-      const skills = await listAllSkillLikeEntries();
-      const skill = findSkillById(skills, req.params.id);
-      if (!skill) {
-        return res.status(404).type('text/plain').send('skill not found');
-      }
-      const splatParam = (req.params as { splat?: string | string[] }).splat;
-      const relPath = Array.isArray(splatParam) ? splatParam.join('/') : String(splatParam || '');
-      const assetsRoot = path.resolve(skill.dir, 'assets');
-      const target = path.resolve(assetsRoot, relPath);
-      if (target !== assetsRoot && !target.startsWith(assetsRoot + path.sep)) {
-        return res.status(400).type('text/plain').send('invalid asset path');
-      }
-      if (!fs.existsSync(target)) {
-        return res.status(404).type('text/plain').send('asset not found');
-      }
-      // The lexical check above compares path STRINGS; `sendFile` follows
-      // symlinks. A skill folder is user-supplied content (local installs do
-      // not reject nested symlinks), so `assets/leak.txt -> /etc/passwd`
-      // passes the string check and then serves the target. Resolve both
-      // sides and re-check. Comparing against the root's own realpath is
-      // deliberate: the root itself can legitimately sit behind an OS-level
-      // symlink (macOS `/var` -> `/private/var`, which every tmpdir-backed
-      // fixture resolves through).
-      let assetsRootReal: string;
-      let targetReal: string;
-      try {
-        assetsRootReal = await fsp.realpath(assetsRoot);
-        targetReal = await fsp.realpath(target);
-      } catch {
-        return res.status(404).type('text/plain').send('asset not found');
-      }
-      if (
-        targetReal !== assetsRootReal
-        && !targetReal.startsWith(assetsRootReal + path.sep)
-      ) {
-        return res.status(400).type('text/plain').send('invalid asset path');
-      }
-      // The example HTML is rendered inside a sandboxed iframe (Origin: null).
-      // Mirror the project /raw route's allowance so the iframe can fetch the
-      // image bytes; same-origin web callers do not need this header.
-      if (req.headers.origin === 'null') {
-        res.header('Access-Control-Allow-Origin', '*');
-      }
-      // The user design-template root lives under the daemon data directory,
-      // whose name is dot-prefixed. Express's `send` defaults to
-      // `dotfiles: 'ignore'`, which 404s any path with a dot-segment
-      // ancestor — so every asset belonging to a user-root entry was
-      // unreachable while the same entry's `/example` (plain `res.send`)
-      // returned 200.
-      //
-      // Send the path RELATIVE to the assets root instead of an absolute one.
-      // `send` only applies its dotfiles policy to the segments below `root`,
-      // so the dot-prefixed data-directory ancestor stops being examined while
-      // the default `'ignore'` still refuses every dot segment inside the
-      // entry — the leaf (`assets/.env`) and, unlike a basename check, a
-      // dot-prefixed directory (`assets/.hidden/secret.txt`) too. That matters
-      // because this route answers `Origin: null` callers with
-      // `Access-Control-Allow-Origin: *`, so a sandboxed template iframe can
-      // read another template's assets.
-      const relFromRoot = path.relative(assetsRootReal, targetReal);
-      if (!relFromRoot) {
-        return res.status(404).type('text/plain').send('asset not found');
-      }
-      await res.type(mimeFor(targetReal)).sendFile(relFromRoot, { root: assetsRootReal });
+      await sendSkillSubresource(req, res, 'assets');
+    } catch (err: any) {
+      res.status(500).type('text/plain').send(String(err));
+    }
+  });
+
+  const FONT_RESOURCE_EXTENSIONS = new Set(['.css', '.woff2', '.woff', '.ttf', '.otf', '.eot']);
+  app.get('/api/skills/:id/fonts/*splat', async (req, res) => {
+    try {
+      await sendSkillSubresource(req, res, 'fonts', FONT_RESOURCE_EXTENSIONS);
     } catch (err: any) {
       res.status(500).type('text/plain').send(String(err));
     }

@@ -1,5 +1,8 @@
 import type http from 'node:http';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { startServer } from '../src/server.js';
@@ -96,6 +99,7 @@ describe('POST /api/projects — catalogue template start', () => {
   // These two specs pin the dominant shape rather than the convenient one.
   const ROOT_EXAMPLE_TEMPLATE_SKILL_ID = 'aethera-cinematic-hero'; // kind: vite, example.html + assets/
   const NO_ASSETS_TEMPLATE_SKILL_ID = 'animated-text-rotate-hero'; // example.html only, no assets/ dir
+  const REMOTE_FONT_TEMPLATE_SKILL_ID = 'lexington-enlightr';
 
   it('copies a root-level example.html template and sets entryFile', async () => {
     const id = uniqueId('p');
@@ -153,6 +157,49 @@ describe('POST /api/projects — catalogue template start', () => {
     const filesResp = await fetch(`${baseUrl}/api/projects/${encodeURIComponent(id)}/files`);
     const filesBody = (await filesResp.json()) as { files: Array<{ name: string }> };
     expect(filesBody.files.length).toBeGreaterThan(0);
+  });
+
+  it('copies self-hosted catalogue fonts and serves every referenced font file', async () => {
+    const templateDir = fileURLToPath(
+      new URL(`../../../design-templates/${REMOTE_FONT_TEMPLATE_SKILL_ID}/`, import.meta.url),
+    );
+    const entryHtml = fs.readFileSync(path.join(templateDir, 'example.html'), 'utf8');
+    expect(entryHtml).not.toMatch(
+      /fonts\.googleapis\.com|fonts\.gstatic\.com|rsms\.me|api\.fontshare\.com/i,
+    );
+
+    const stylesheetHref = /<link[^>]+href="([^"]*fonts\/fonts\.css)"[^>]*>/i.exec(entryHtml)?.[1];
+    expect(stylesheetHref).toBe('fonts/fonts.css');
+    if (!stylesheetHref) throw new Error('Expected vendored font stylesheet link');
+
+    const stylesheetPath = path.resolve(templateDir, stylesheetHref);
+    const stylesheet = fs.readFileSync(stylesheetPath, 'utf8');
+    const fontRefs = [...stylesheet.matchAll(/url\(["']?([^"')]+)["']?\)/gi)].flatMap(
+      (match) => (match[1] ? [match[1]] : []),
+    );
+    expect(fontRefs.length).toBeGreaterThan(0);
+    for (const fontRef of fontRefs) {
+      expect(fs.existsSync(path.resolve(path.dirname(stylesheetPath), fontRef))).toBe(true);
+    }
+
+    const id = uniqueId('p');
+    const resp = await createProject({
+      id,
+      name: 'Enlightr self-hosted font check',
+      skillId: REMOTE_FONT_TEMPLATE_SKILL_ID,
+      designSystemId: null,
+      metadata: { kind: 'template', animations: false },
+    });
+    expect(resp.status).toBe(200);
+    projectsToClean.push(id);
+
+    for (const fontRef of fontRefs) {
+      const projectFontPath = `fonts/${fontRef.replace(/^\.\//, '')}`;
+      const fontResp = await fetch(
+        `${baseUrl}/api/projects/${encodeURIComponent(id)}/raw/${projectFontPath}`,
+      );
+      expect(fontResp.status, projectFontPath).toBe(200);
+    }
   });
 
   it('does not copy authoring metadata into the project', async () => {
