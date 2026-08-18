@@ -274,6 +274,8 @@ const DIAGNOSTICS_STRING_FLAGS = new Set(['daemon-url', 'output']);
 const DIAGNOSTICS_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const ANOMALIES_STRING_FLAGS = new Set(['daemon-url', 'limit', 'kind', 'severity', 'since']);
 const ANOMALIES_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'clear']);
+const COMPOSITION_METRICS_STRING_FLAGS = new Set(['daemon-url', 'project', 'file']);
+const COMPOSITION_METRICS_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const TYPEFACES_STRING_FLAGS = new Set(['daemon-url', 'query', 'project', 'dir']);
 const TYPEFACES_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'monospace', 'condensed']);
 const CONFIG_STRING_FLAGS = new Set(['daemon-url', 'value', 'value-json']);
@@ -930,6 +932,7 @@ const SUBCOMMAND_MAP = {
   craft: runCraft,
   diagnostics: runDiagnostics,
   anomalies: runAnomalies,
+  'composition-metrics': runCompositionMetrics,
   typefaces: runTypefaces,
   export: runExport,
   status: runStatus,
@@ -9607,6 +9610,106 @@ Settings → About → Export diagnostics.`);
     console.log('');
   }
   console.log(`Log: ${data?.path ?? '(unknown)'}`);
+}
+
+/**
+ * `od composition-metrics` — the CLI half of the rendered layout-risk
+ * measurement (see `CompositionMetrics` in `@open-design/contracts` and
+ * `injectCompositionMetricsBridge` in `apps/web/src/runtime/srcdoc.ts`).
+ *
+ * Reads the SAME `/api/composition-metrics` endpoint the web preview's
+ * readout calls — it does not, and cannot, measure anything itself: the
+ * measurement only exists once a browser has rendered the artifact and the
+ * preview bridge has reported it. An artifact nobody has ever previewed
+ * has no record, and this prints that honestly rather than guessing.
+ */
+async function runCompositionMetrics(args) {
+  if (args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    console.log(`Usage:
+  od composition-metrics <artifact-path> [--json] [--daemon-url <url>]
+  od composition-metrics --project <id> --file <relPath> [--json]
+
+Reads the last rendered layout-risk measurement reported for an artifact:
+section count, elements out of document flow, transformed elements, distinct
+section background/width counts, and the display:body font-size ratio.
+Computed in the browser from the rendered preview (getComputedStyle /
+getBoundingClientRect) — the daemon has no browser and cannot take this
+measurement itself, so it only ever reads back what a preview already
+reported. Prints "no measurement recorded yet" if the artifact has never
+been opened in preview.
+
+  <artifact-path>       Absolute path to a file under a managed project
+                         (e.g. .../.od/projects/<id>/index.html). Resolved
+                         into project id + file server-side.
+  --project <id>        Project id (use with --file instead of a path).
+  --file <relPath>       File path relative to the project root.
+  --json                 Print the raw record for piping into jq.
+  --daemon-url <url>     Override the daemon HTTP base URL.
+
+These are raw counts, not a score — read craft/composition.md for what each
+one is evidence of.`);
+    process.exit(0);
+  }
+  let flags;
+  try {
+    flags = parseFlags(args, {
+      string: COMPOSITION_METRICS_STRING_FLAGS,
+      boolean: COMPOSITION_METRICS_BOOLEAN_FLAGS,
+    });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const artifactPath = positionalArgs(args, COMPOSITION_METRICS_STRING_FLAGS)[0];
+  const base = await cliDaemonBaseUrl(flags);
+
+  const query = new URLSearchParams();
+  if (typeof flags.project === 'string' && flags.project && typeof flags.file === 'string' && flags.file) {
+    query.set('projectId', flags.project);
+    query.set('file', flags.file);
+  } else if (artifactPath) {
+    query.set('artifactPath', artifactPath);
+  } else {
+    console.error('Usage: od composition-metrics <artifact-path> | --project <id> --file <relPath>');
+    process.exit(2);
+  }
+
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/composition-metrics?${query.toString()}`);
+  } catch (err) {
+    return exitWithStructuredError({
+      code: 'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+    });
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const data = await resp.json();
+
+  if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+
+  const record = data?.record ?? null;
+  if (!record) {
+    console.log('No measurement recorded yet for this artifact.');
+    console.log('Open it in the preview so the composition-metrics bridge can measure it, then retry.');
+    return;
+  }
+  if (record.isWebCloneRun) {
+    console.log(`${record.file} (project ${record.projectId}) is a web-clone run — layout-risk`);
+    console.log('is measured against the clone target, not this repository\'s own floor. Raw counts:');
+  }
+  const m = record.metrics;
+  console.log(`${record.file} (project ${record.projectId}), measured ${m.measuredAt}:`);
+  console.log(`  sections:                        ${m.sectionCount}`);
+  console.log(`  out-of-flow elements (pos+z):     ${m.outOfFlowElementCount}`);
+  console.log(`  transformed elements:             ${m.transformedElementCount}`);
+  console.log(`  distinct section backgrounds:     ${m.distinctSectionBackgroundCount}`);
+  console.log(`  distinct section widths:          ${m.distinctSectionWidthCount}`);
+  console.log(`  full-bleed next to contained:     ${m.fullBleedAgainstContained}`);
+  console.log(`  body font-size:                   ${m.bodyFontSizePx}px`);
+  console.log(`  max display font-size:            ${m.maxDisplayFontSizePx}px`);
+  console.log(`  display:body ratio:               ${m.displayToBodyFontRatio.toFixed(1)}x`);
+  console.log(`Reported: ${record.reportedAt}`);
 }
 
 /**

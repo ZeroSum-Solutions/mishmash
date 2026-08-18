@@ -443,7 +443,9 @@ export function buildSrcdoc(
   // visible flash) every time the host toggle flips.
   const withTweaks = injectTweaksBridge(withEdit);
   const withTransport = injectSrcdocTransportActivationBridge(
-    injectExportCaptureBridge(injectSnapshotBridge(injectPreviewContentSizeBridge(withTweaks))),
+    injectExportCaptureBridge(
+      injectSnapshotBridge(injectCompositionMetricsBridge(injectPreviewContentSizeBridge(withTweaks))),
+    ),
   );
   // Embed the reload counter so the srcdoc string differs across reloads even
   // when the underlying HTML bytes are identical.  This ensures the browser
@@ -790,6 +792,135 @@ function injectPreviewContentSizeBridge(doc: string): string {
       if (document.body) observer.observe(document.body);
     } catch (_) {}
   }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', schedule);
+  } else {
+    setTimeout(schedule, 0);
+  }
+  setTimeout(schedule, 80);
+  setTimeout(schedule, 260);
+  if (document.fonts && document.fonts.ready) {
+    Promise.race([document.fonts.ready, new Promise(function(r){ setTimeout(r, ${PREVIEW_FONTS_READY_TIMEOUT_MS}); })]).then(schedule).catch(function(){});
+  }
+})();</script>`;
+  return injectBeforeBodyEnd(doc, script);
+}
+
+// Rendered layout-risk measurement bridge. See `CompositionMetrics` in
+// `@open-design/contracts` for the full field-by-field rationale; this
+// comment covers only why the measurement has to happen HERE.
+//
+// `craft/composition.md`'s `layout-risk-flat` lint
+// (`apps/daemon/src/lint-artifact.ts`) greps source HTML for the CSS
+// primitives a grid-breaking move needs — it cannot see whether one
+// actually rendered. Four rounds of blind comparison against professionally
+// sold templates scored MishMash output 0/1 on layout risk every time, and
+// a page carrying a single `position: sticky` nav satisfies the source scan
+// while never once breaking its grid. The only place that failure is
+// visible is the rendered box tree, so this bridge measures it there and
+// reports the numbers to the host — the daemon has no browser in its
+// runtime dependencies to take this measurement itself (and must not grow
+// one; see AGENTS.md's daemon data directory / design authority
+// boundaries), so "measured in the browser, reported to the daemon" is the
+// only honest shape this can take.
+//
+// Always injected (like the tweaks and content-size bridges above) — it's a
+// passive listener, cheap until asked to measure, and tying it to a
+// `SrcdocOptions` flag would force an iframe reload every time some other
+// part of the host flips a bridge on. Auto-measures on the same cadence as
+// `injectPreviewContentSizeBridge` (DOMContentLoaded, a couple of settle
+// timers, fonts-ready, resize) so the host gets a fresh reading without
+// having to ask, and answers `od:composition-metrics-request` on demand for
+// an explicit re-measure (e.g. after the user finishes an edit).
+//
+// Protocol:
+//   in:  { type: 'od:composition-metrics-request' }
+//   out: { type: 'od:composition-metrics', metrics: CompositionMetrics }
+function injectCompositionMetricsBridge(doc: string): string {
+  const script = `<script data-od-composition-metrics-bridge>(function(){
+  if (window.__odCompositionMetricsBridge) return;
+  window.__odCompositionMetricsBridge = true;
+  var pending = false;
+  // Elements at rest with one of these positions AND a real z-index are
+  // "out of flow" — the exact pair layout-risk-flat greps source for.
+  var OUT_OF_FLOW_POSITIONS = { absolute: true, fixed: true, sticky: true };
+  // Rounds a rendered width to the nearest 4px so two sections that differ
+  // by a fraction of a pixel (subpixel layout rounding, not a real design
+  // difference) don't count as two distinct widths.
+  function roundedWidth(px){ return Math.round(px / 4) * 4; }
+  function measure(){
+    var root = document.documentElement;
+    var body = document.body || root;
+    var bodyFontSizePx = parseFloat(getComputedStyle(body).fontSize) || 0;
+    var sections = document.querySelectorAll('section');
+
+    var bgSeen = {};
+    for (var i = 0; i < sections.length; i++){
+      bgSeen[getComputedStyle(sections[i]).backgroundColor || ''] = true;
+    }
+
+    var viewportWidth = root.clientWidth || window.innerWidth || 0;
+    var widthSeen = {};
+    var hasFullBleed = false;
+    var hasContained = false;
+    var FULL_BLEED_TOLERANCE_PX = 4;
+    for (var j = 0; j < sections.length; j++){
+      var rect = sections[j].getBoundingClientRect();
+      widthSeen[roundedWidth(rect.width)] = true;
+      if (viewportWidth > 0) {
+        if (Math.abs(rect.width - viewportWidth) <= FULL_BLEED_TOLERANCE_PX) hasFullBleed = true;
+        else if (rect.width < viewportWidth - FULL_BLEED_TOLERANCE_PX) hasContained = true;
+      }
+    }
+
+    // Whole-document scan (capped, matching the snapshot bridge's own
+    // 3500-node cap above) for out-of-flow elements, transforms, and the
+    // page's largest computed font-size. getComputedStyle reflects the
+    // DOM's resting state — a hover/focus-only transform or position never
+    // shows up here, because nothing is hovering while this runs.
+    var all = document.querySelectorAll('*');
+    var scanCount = Math.min(all.length, 5000);
+    var outOfFlowElementCount = 0;
+    var transformedElementCount = 0;
+    var maxDisplayFontSizePx = bodyFontSizePx;
+    for (var k = 0; k < scanCount; k++){
+      var cs = getComputedStyle(all[k]);
+      if (OUT_OF_FLOW_POSITIONS[cs.position] && cs.zIndex !== 'auto') outOfFlowElementCount++;
+      if (cs.transform && cs.transform !== 'none') transformedElementCount++;
+      var fontSizePx = parseFloat(cs.fontSize);
+      if (isFinite(fontSizePx) && fontSizePx > maxDisplayFontSizePx) maxDisplayFontSizePx = fontSizePx;
+    }
+
+    return {
+      sectionCount: sections.length,
+      outOfFlowElementCount: outOfFlowElementCount,
+      transformedElementCount: transformedElementCount,
+      distinctSectionBackgroundCount: Object.keys(bgSeen).length,
+      distinctSectionWidthCount: Object.keys(widthSeen).length,
+      fullBleedAgainstContained: hasFullBleed && hasContained,
+      bodyFontSizePx: bodyFontSizePx,
+      maxDisplayFontSizePx: maxDisplayFontSizePx,
+      displayToBodyFontRatio: bodyFontSizePx > 0 ? (maxDisplayFontSizePx / bodyFontSizePx) : 0,
+      measuredAt: new Date().toISOString()
+    };
+  }
+  function post(){
+    try { window.parent.postMessage({ type: 'od:composition-metrics', metrics: measure() }, '*'); } catch (_) {}
+  }
+  function schedule(){
+    if (pending) return;
+    pending = true;
+    window.requestAnimationFrame(function(){
+      pending = false;
+      post();
+    });
+  }
+  window.addEventListener('message', function(ev){
+    var data = ev && ev.data;
+    if (!data || data.type !== 'od:composition-metrics-request') return;
+    schedule();
+  });
+  window.addEventListener('resize', schedule);
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', schedule);
   } else {

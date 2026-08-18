@@ -666,6 +666,8 @@ import { registerOpenDesignPublicMetadataRoutes } from './routes/open-design-pub
 import { registerWhatsNewRoutes } from './routes/whats-new.js';
 import { registerMemoryRoutes } from './routes/memory.js';
 import { createAnomalySurface, registerAnomalyRoutes } from './routes/anomalies.js';
+import { createCompositionMetricsStore } from './composition-metrics-store.js';
+import { registerCompositionMetricsRoutes } from './routes/composition-metrics.js';
 import { buildCatalogueCandidates, registerCatalogueMatchRoutes } from './routes/catalogue-match.js';
 import { registerTelemetryRoutes } from './routes/telemetry.js';
 import {
@@ -2470,6 +2472,15 @@ export async function startServer({
   projectMetadataLookup = (id) => {
     try { return getProject(db, id)?.metadata ?? null; } catch { return null; }
   };
+  // Rendered layout-risk measurement store — see routes/composition-metrics.js
+  // and CompositionMetrics in @open-design/contracts for what this holds and
+  // why it can only be reported here, never computed here (no browser in the
+  // daemon's runtime deps). isWebCloneRun is resolved the same way lintArtifact
+  // and craft.ts already resolve it for their own web-clone exemptions.
+  const compositionMetricsStore = createCompositionMetricsStore({
+    dataDir: RUNTIME_DATA_DIR,
+    createGateway: createRouteFilesystemWriteGateway,
+  });
   configureConnectorCredentialStore(new FileConnectorCredentialStore(RUNTIME_DATA_DIR));
   configureComposioConfigStore(RUNTIME_DATA_DIR);
   composioConnectorProvider.configureCatalogCache(RUNTIME_DATA_DIR);
@@ -2683,6 +2694,12 @@ export async function startServer({
   // (legacy POST /api/projects body deleted — see registerProjectRoutes below.)
 
   registerAnomalyRoutes(app, { log: anomalies.log });
+
+  registerCompositionMetricsRoutes(app, {
+    store: compositionMetricsStore,
+    projectsDir: PROJECTS_DIR,
+    isWebCloneRun: (id) => projectMetadataLookup?.(id)?.intent === 'web-clone',
+  });
 
   registerCatalogueMatchRoutes(app, {
     listAllSkillLikeEntries,
