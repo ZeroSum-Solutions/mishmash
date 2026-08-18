@@ -1222,3 +1222,174 @@ describe('trust-gradient', () => {
     expect(findings.find((f) => f.id === 'trust-gradient')).toBeDefined();
   });
 });
+
+describe('layout-risk-flat', () => {
+  function flatPageHtml(sectionCount: number): string {
+    const sections = Array.from(
+      { length: sectionCount },
+      (_, i) => `<section><h2>Section ${i}</h2><p>Copy.</p></section>`,
+    ).join('\n');
+    return `<style>.wrap { max-width: 1200px; margin: 0 auto; }</style>${sections}`;
+  }
+
+  it('flags a page at the section threshold with zero positioning/transform evidence', () => {
+    const html = flatPageHtml(6);
+    const findings = lintArtifact(html);
+    const hit = requiredFinding(findings, 'layout-risk-flat');
+    expect(hit.severity).toBe('P1');
+  });
+
+  it('does not flag a page one section below the threshold', () => {
+    const html = flatPageHtml(5);
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeUndefined();
+  });
+
+  it('does not flag a page with very few sections (single-viewport shape)', () => {
+    const html = flatPageHtml(1);
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeUndefined();
+  });
+
+  it('does not flag when a <style> rule pairs position: absolute with z-index', () => {
+    const html = `
+      <style>
+        .badge { position: absolute; top: -20px; right: 24px; z-index: 5; }
+      </style>
+      ${flatPageHtml(6)}
+    `;
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeUndefined();
+  });
+
+  it('does not flag when position: sticky pairs with z-index (sticky nav)', () => {
+    const html = `
+      <style>
+        nav { position: sticky; top: 0; z-index: 20; }
+      </style>
+      ${flatPageHtml(6)}
+    `;
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeUndefined();
+  });
+
+  it('still flags when position: absolute appears without a paired z-index', () => {
+    // Position alone isn't enough evidence: it's the common shape for a
+    // purely decorative background element, not an overlap/cross-
+    // boundary move. The measured metric pairs the two.
+    const html = `
+      <style>
+        .blob { position: absolute; top: 0; left: 0; }
+      </style>
+      ${flatPageHtml(6)}
+    `;
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeDefined();
+  });
+
+  it('does not flag when an inline style pairs position: absolute with z-index', () => {
+    const html = `
+      ${flatPageHtml(5)}
+      <section><div style="position: absolute; top: 10px; z-index: 3;">Floating</div></section>
+    `;
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeUndefined();
+  });
+
+  it('does not flag when a <style> rule declares a non-hover transform', () => {
+    const html = `
+      <style>
+        .stat-card { transform: rotate(-3deg); }
+      </style>
+      ${flatPageHtml(6)}
+    `;
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeUndefined();
+  });
+
+  it('still flags when the only transform is a hover microinteraction', () => {
+    // A hover-only lift is a microinteraction, not proof the base
+    // layout ever breaks its grid — crediting it would make this check
+    // fire on almost nothing.
+    const html = `
+      <style>
+        .btn:hover { transform: translateY(-2px); }
+      </style>
+      ${flatPageHtml(6)}
+    `;
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeDefined();
+  });
+
+  it('still flags when the only transform is "transform: none" (animation-library at-rest state)', () => {
+    const html = `
+      <style>
+        .reveal { transform: none; opacity: 1; }
+      </style>
+      ${flatPageHtml(6)}
+    `;
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeDefined();
+  });
+
+  it('does not flag when a bare utility class carries position + z-index (Tailwind-style markup)', () => {
+    const html = `
+      ${flatPageHtml(5)}
+      <section><div class="absolute z-20 top-0">Overlay badge</div></section>
+    `;
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeUndefined();
+  });
+
+  it('does not flag when a bare utility class carries a transform (Tailwind-style markup)', () => {
+    const html = `
+      ${flatPageHtml(5)}
+      <section><div class="rotate-3">Tilted card</div></section>
+    `;
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeUndefined();
+  });
+
+  it('still flags when the only utility-class transform is variant-prefixed (hover:/md:)', () => {
+    const html = `
+      ${flatPageHtml(6)}
+      <section><div class="hover:rotate-3 md:-translate-y-2">Card</div></section>
+    `;
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeDefined();
+  });
+
+  it('does not flag a deck-shaped artifact regardless of section count', () => {
+    const slides = Array.from(
+      { length: 8 },
+      (_, i) => `<section class="slide light"><h2>Slide ${i}</h2></section>`,
+    ).join('\n');
+    const findings = lintArtifact(slides);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeUndefined();
+  });
+
+  it('does not flag a web-clone run even with zero evidence over the section threshold', () => {
+    const html = flatPageHtml(10);
+    const findings = lintArtifact(html, { isWebCloneRun: true });
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeUndefined();
+  });
+
+  it('flags the same page when isWebCloneRun is not passed (defaults to false)', () => {
+    const html = flatPageHtml(10);
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeDefined();
+  });
+
+  it('does not double up when both a style-block and a utility class carry evidence', () => {
+    const html = `
+      <style>
+        .badge { position: absolute; z-index: 5; }
+      </style>
+      ${flatPageHtml(5)}
+      <section><div class="rotate-3">Card</div></section>
+    `;
+    const findings = lintArtifact(html);
+    const hits = findings.filter((f) => f.id === 'layout-risk-flat');
+    expect(hits.length).toBe(0);
+  });
+});

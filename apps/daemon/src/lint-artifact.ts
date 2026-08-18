@@ -27,6 +27,23 @@ export type LintFinding = {
   snippet?: string;
 };
 
+export type LintArtifactOptions = {
+  /**
+   * True when this artifact came from a web-clone run. A clone must
+   * reproduce its target; if the target's own layout is uniform, so is a
+   * faithful clone (see AGENTS.md "Design authority" — the target's own
+   * computed CSS/layout is the specification, outranking every craft
+   * preference below it). Mirrors the same boolean `resolveRequestedCraft`
+   * in `craft.ts` already uses to skip injecting `craft/composition.md`
+   * for clone runs — a check whose finding second-guesses the target's
+   * own layout must honour the identical exemption. Defaults to `false`
+   * so callers that don't yet thread run metadata through keep today's
+   * behavior; see `layout-risk-flat` below for the one check that reads
+   * it.
+   */
+  isWebCloneRun?: boolean;
+};
+
 type CssDeclaration = { prop: string; value: string };
 type CssTokenScope = {
   selectors: string[];
@@ -109,17 +126,25 @@ const FILLER_PATTERNS = [
 const DISPLAY_SANS_RE =
   /(?:h1|h2|h3|\.h-?(?:hero|xl|lg|md))[^{}]*\{[^}]*font-family\s*:\s*["']?(?:Inter|Roboto|Arial|-apple-system|system-ui|SF\s+Pro)/i;
 
+// Minimum <section> count before "the page never leaves flow" is treated
+// as a finding rather than an expected shape (single-viewport hero, form,
+// docs page, data table, email template). See the `layout-risk-flat`
+// check's own comment for the corpus evidence behind this number.
+const LAYOUT_RISK_SECTION_THRESHOLD = 6;
+
 /**
  * Run all checks against an HTML artifact body. Returns an array of
  * findings. The checks are intentionally independent so adding a new
  * one only means appending to this function.
  *
  * @param {string} html
+ * @param {LintArtifactOptions} [opts]
  * @returns {LintFinding[]}
  */
-export function lintArtifact(rawHtml: unknown): LintFinding[] {
+export function lintArtifact(rawHtml: unknown, opts?: LintArtifactOptions): LintFinding[] {
   const out: LintFinding[] = [];
   if (typeof rawHtml !== 'string' || rawHtml.length === 0) return out;
+  const isWebCloneRun = opts?.isWebCloneRun === true;
 
   // Strip HTML comments before any pattern matching — comments often contain
   // pedagogical examples ("paste a `<section class="slide">` here") that
@@ -445,11 +470,71 @@ export function lintArtifact(rawHtml: unknown): LintFinding[] {
     });
   }
 
+  const sections = html.match(/<section\b[^>]*>/gi) ?? [];
+
+  // ── P1-4: layout risk — zero evidence the page ever leaves flow ────
+  // Two independent blind critiques of MishMash-generated marketing
+  // pages, judging without knowing which side was which, named the
+  // identical cause unprompted: every section is a centered, equal-
+  // margin grid — nothing overlaps, rotates, or breaks frame.
+  // `craft/composition.md`'s "Layout risk" lint (binary, verifiable
+  // from a screenshot) scores a page 0 when none of its five named
+  // grid-breaking moves (full-bleed-against-contained, overlap,
+  // offset/asymmetric columns, edge-bleeding type, cross-boundary
+  // element) appear anywhere on it.
+  //
+  // Static source inspection cannot see a grid-breaking move itself —
+  // that needs a rendered layout — but every one of the five moves
+  // requires one of two CSS primitives to exist SOMEWHERE in the
+  // artifact: an element taken out of document flow via
+  // `position: absolute`/`sticky` paired with `z-index` (the mechanism
+  // behind overlap and cross-boundary elements), or a `transform` that
+  // rotates, skews, translates, or scales an element outside a hover/
+  // focus/transition microinteraction (the mechanism behind offset
+  // composition and edge-bleeding type). Their total ABSENCE across the
+  // whole artifact is the detectable proxy: if neither primitive
+  // appears anywhere, no grid-breaking move could have been used even
+  // once, so the page is provably — not just probably — flat. Presence
+  // does not prove a deliberate break was made (a sticky nav or a modal
+  // overlay also uses `position` + `z-index`), so this check is
+  // one-directional by design: it only ever fires on demonstrated
+  // absence, never asserts that presence means the page is well
+  // composed.
+  //
+  // Scoped to pages long enough that total uniformity is a real
+  // finding, per this file's own docblock ("does NOT parse HTML") and
+  // the composition rule's own scope note (not for a single component,
+  // a form, a docs page, a data table, a deck slide, or an email
+  // template). A census of `design-templates/*/example.html` — 300+
+  // professionally composed pages, both MishMash-native and vendored
+  // real-world templates — found the false-positive rate for "zero
+  // evidence" is already 0% once a page carries 4 or more <section>
+  // elements, and stays 0% through every larger bucket measured up to
+  // 18. The floor below is set at 6 for headroom above that measured
+  // cutoff — it also matches the exact section count the task's own
+  // measured "baseline, no craft" MishMash build carried when both
+  // signals were independently reported as 0. Deck-shaped artifacts
+  // (`.slide`) are excluded the same way P2-2 below identifies them:
+  // slides are not a scrolling composition and legitimately never
+  // leave flow.
+  if (
+    !isWebCloneRun &&
+    sections.length >= LAYOUT_RISK_SECTION_THRESHOLD &&
+    !isDeckShapedArtifact(html) &&
+    !hasGridBreakingEvidence(html)
+  ) {
+    out.push({
+      severity: 'P1',
+      id: 'layout-risk-flat',
+      message: `${sections.length} sections and no evidence anywhere in the artifact of an element leaving document flow (no position: absolute/sticky + z-index, no transform outside a hover/focus state) — craft/composition.md's layout-risk floor.`,
+      fix: 'Add at least one grid-breaking move from craft/composition.md: an overlap, a full-bleed band next to a contained one, offset/asymmetric columns, edge-bleeding display type, or a cross-boundary element. This is a pass/fail floor, not a per-section requirement — one deliberate break on an otherwise orderly page clears it.',
+    });
+  }
+
   // ── P2-1: missing comment-mode anchor on <section> ────────────────
   // Either `data-od-id` (web/mobile prototypes) or `data-screen-label`
   // (decks) counts. Whichever the artifact uses, every <section> should
   // carry one so the chat layer can target it.
-  const sections = html.match(/<section\b[^>]*>/gi) ?? [];
   const tagged = sections.filter(
     (s) => /data-od-id\s*=/.test(s) || /data-screen-label\s*=/.test(s),
   ).length;
@@ -570,6 +655,118 @@ function detectBlueCyanTrustGradient(html: string): string | null {
     if (hasBlue && hasCyan) return m[0];
   }
   return null;
+}
+
+// Deck-shaped artifacts (`.slide`) are not a scrolling composition and
+// legitimately never leave flow. Same heuristic the P2-2 slide-theme
+// check above already uses to decide whether an artifact is a deck.
+function isDeckShapedArtifact(html: string): boolean {
+  return /class\s*=\s*["'][^"']*\bslide\b/.test(html);
+}
+
+// Bare (non-variant-prefixed) Tailwind-style utility classes that carry
+// the same two primitives the <style>-block scan below looks for.
+// Variant-prefixed forms (`hover:`, `md:`, `group-hover:`, …) are
+// deliberately excluded: a hover-only or breakpoint-only transform is a
+// microinteraction, not evidence the base layout ever breaks its grid.
+const UTILITY_POSITION_RE = /^(?:absolute|sticky|fixed)$/;
+const UTILITY_Z_INDEX_RE = /^-?z-(?:\[[^\]]+\]|\d+)$/;
+const UTILITY_TRANSFORM_RE =
+  /^-?(?:rotate|translate-x|translate-y|scale|skew-x|skew-y)-(?:\[[^\]]+\]|\d+)$/;
+
+// True when ANY `class="..."` attribute in the artifact carries both a
+// positioning utility (`absolute`/`sticky`/`fixed`) and a `z-index`
+// utility, or a transform utility (`rotate-*`, `translate-x/y-*`,
+// `scale-*`, `skew-x/y-*`) — the utility-class equivalent of the
+// <style>-block signals `hasGridBreakingEvidence` also checks. Needed
+// because a meaningful share of the corpus (vendored real-world
+// templates, framework-exported static builds) expresses position and
+// transform entirely through class names rather than `<style>` rules or
+// inline `style=""` — see the `layout-risk-flat` check's comment for
+// the corpus evidence.
+function hasUtilityGridBreakEvidence(html: string): boolean {
+  for (const m of html.matchAll(/class\s*=\s*["']([^"']*)["']/gi)) {
+    const tokens = (m[1] ?? '').split(/\s+/);
+    const hasPositioned = tokens.some((t) => UTILITY_POSITION_RE.test(t));
+    const hasZIndex = tokens.some((t) => UTILITY_Z_INDEX_RE.test(t));
+    if (hasPositioned && hasZIndex) return true;
+    if (tokens.some((t) => UTILITY_TRANSFORM_RE.test(t))) return true;
+  }
+  return false;
+}
+
+// True when a <style>-block rule declares BOTH `position: absolute` or
+// `position: sticky` AND `z-index` in the same rule body — the CSS
+// mechanism an overlap or cross-boundary element needs. Body alternation
+// mirrors the rest of this file's rule scans (`[^{}]*`, not `[^}]*`) so
+// only innermost `selector { body }` rules match, not an outer @media
+// wrapper.
+function hasPositionedZIndexInStyleBlocks(html: string): boolean {
+  for (const styleBlock of html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)) {
+    const css = (styleBlock[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const ruleRe = /([^{}]*)\{([^{}]*)\}/g;
+    let m;
+    while ((m = ruleRe.exec(css)) !== null) {
+      const body = m[2] ?? '';
+      if (
+        /position\s*:\s*(?:absolute|sticky)\b/i.test(body) &&
+        /z-index\s*:/i.test(body)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Same check as `hasPositionedZIndexInStyleBlocks`, for an inline
+// `style="..."` attribute instead of a <style>-block rule.
+function hasPositionedZIndexInline(html: string): boolean {
+  for (const m of html.matchAll(/(?:^|\s)style\s*=\s*(["'])([\s\S]*?)\1/gi)) {
+    const decl = m[2] ?? '';
+    if (
+      /position\s*:\s*(?:absolute|sticky)\b/i.test(decl) &&
+      /z-index\s*:/i.test(decl)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// True when a <style>-block rule declares a real `transform` (anything
+// but the explicit `transform: none` a JS animation library often sets
+// as its at-rest base state) OUTSIDE a hover/focus/active/transition
+// selector. Hover-only transforms are excluded for the same reason the
+// utility-class scan excludes variant-prefixed ones: a button's hover
+// lift is a microinteraction, not proof the base layout ever leaves
+// flow, and crediting it would make this check fire on almost nothing.
+function hasNonHoverTransformInStyleBlocks(html: string): boolean {
+  for (const styleBlock of html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)) {
+    const css = (styleBlock[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const ruleRe = /([^{}]*)\{([^{}]*)\}/g;
+    let m;
+    while ((m = ruleRe.exec(css)) !== null) {
+      const selector = m[1] ?? '';
+      const body = m[2] ?? '';
+      if (/:hover|:focus|:active|transition/i.test(selector)) continue;
+      if (/transform\s*:\s*(?!none\b)[a-z]/i.test(body)) return true;
+    }
+  }
+  return false;
+}
+
+// True when the artifact shows ANY evidence, anywhere, of an element
+// leaving normal document flow the way a grid-breaking composition move
+// requires. See the `layout-risk-flat` check's own comment (in
+// `lintArtifact`) for what this proxies and why it's one-directional.
+function hasGridBreakingEvidence(html: string): boolean {
+  return (
+    hasPositionedZIndexInStyleBlocks(html) ||
+    hasPositionedZIndexInline(html) ||
+    hasNonHoverTransformInStyleBlocks(html) ||
+    hasUtilityGridBreakEvidence(html)
+  );
 }
 
 // True when the declaration body has letter-spacing satisfying the
