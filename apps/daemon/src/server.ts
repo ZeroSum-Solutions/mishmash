@@ -431,7 +431,7 @@ import {
 } from './design/index.js';
 import { buildDocumentPreview } from './document-preview.js';
 import { lintArtifact, renderFindingsForAgent } from './lint-artifact.js';
-import { loadCraftSections } from './craft.js';
+import { isVisualCraftSurface, loadCraftSections, resolveRequestedCraft } from './craft.js';
 import { skillCwdAliasSegment, stageActiveSkill } from './cwd-aliases.js';
 import { buildDesktopArtifactExportInput, buildDesktopPdfExportInput } from './pdf-export.js';
 import { generateMedia } from './media/index.js';
@@ -4261,13 +4261,44 @@ export async function startServer({
       }
     }
 
-    const excludedCraft = new Set(designSystemCraftExemptions);
-    // Web-clone fidelity exemption — see `isWebCloneRun` above.
-    const requestedCraft = isWebCloneRun
-      ? []
-      : Array.from(
-          new Set([...skillCraftRequires, ...designSystemCraftApplies]),
-        ).filter((slug) => !excludedCraft.has(slug));
+    // Computed early (not just for critique gating below) so the craft
+    // floor can gate on the same "will this run emit styled visual
+    // output" signal instead of inventing a new one. `metadata`,
+    // `skillMode`, and `skillModes` are already final by this point —
+    // the plugin-snapshot skill override above is the last thing that
+    // can touch them.
+    const resolvedExclusiveSurface = resolveExclusiveSurface({
+      metadata,
+      skillMode,
+      skillModes: skillModes.size > 0 ? Array.from(skillModes) : undefined,
+    });
+    const isMediaSurface =
+      resolvedExclusiveSurface === 'image'
+      || resolvedExclusiveSurface === 'video'
+      || resolvedExclusiveSurface === 'audio';
+    // Craft floor eligibility: a "styled visual surface" run is one that
+    // is not a raw media generation (image/video/audio — deck stays
+    // eligible, it still renders as styled HTML/CSS slides) and not a
+    // chat-only or plan-only turn (CHAT_MODE_OVERRIDE / PLAN_MODE_OVERRIDE
+    // produce no styled artifact, so typography/color rules would be
+    // dead weight).
+    const craftFloorSessionMode = normalizeConversationSessionMode(sessionMode);
+    // Web-clone fidelity exemption — see `isWebCloneRun` above. Beyond
+    // that, an explicit skill/design-system craft request always wins;
+    // the floor (typography, color, anti-ai-slop — see craft.ts) only
+    // fills in when nothing explicit was requested for a run that will
+    // still emit styled visual output, e.g. a plain website brief typed
+    // into the composer with no skill and no design system selected.
+    const requestedCraft = resolveRequestedCraft({
+      isWebCloneRun,
+      skillCraftRequires,
+      designSystemCraftApplies,
+      designSystemCraftExemptions,
+      isVisualSurface: isVisualCraftSurface({
+        isMediaSurface,
+        sessionMode: craftFloorSessionMode,
+      }),
+    });
     if (requestedCraft.length > 0) {
       const loaded = await loadCraftSections(CRAFT_DIR, requestedCraft);
       if (loaded.body) {
@@ -4352,15 +4383,10 @@ export async function startServer({
     // panel addendum has to be suppressed here too: otherwise the model
     // is instructed to emit Critique Theater tags that no orchestrator
     // consumes.
-    const resolvedExclusiveSurface = resolveExclusiveSurface({
-      metadata,
-      skillMode,
-      skillModes: skillModes.size > 0 ? Array.from(skillModes) : undefined,
-    });
-    const isMediaSurface =
-      resolvedExclusiveSurface === 'image'
-      || resolvedExclusiveSurface === 'video'
-      || resolvedExclusiveSurface === 'audio';
+    //
+    // `resolvedExclusiveSurface` / `isMediaSurface` are computed earlier
+    // now (see the craft-floor block above), before craft resolution
+    // needed the same signal.
     const isPlainAdapter = (streamFormat ?? 'plain') === 'plain';
     const critiqueShouldRun = critiqueEnabledForRun
       && critiqueBrand !== undefined
