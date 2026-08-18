@@ -61,11 +61,24 @@ export async function loadCraftSections(craftDir: string, requested: unknown[]) 
 // largest measured quality gap on the default path -- which is precisely the
 // path the floor governs. A skill that opts in explicitly still wins outright,
 // so a skill deliberately omitting composition keeps that choice.
+//
+// `animation-discipline` joined for the same class of reason. A blind critic
+// scored a default-path build against a commercial Framer template and lost
+// only on motion; driving both pages in a real browser (not a screenshot)
+// showed why -- the Framer page moves 285 elements on scroll, the generated
+// page moved zero, on both builds measured. Nothing else on the page was
+// deficient: it declared *more* CSS transitions than the Framer page, just
+// none of them scroll-triggered. `craft/animation-discipline.md`'s "Scroll-
+// triggered entrance" section is what the floor now injects to close that
+// gap -- a single default reveal pattern, gated so it degrades to fully
+// visible content with no JS, no IntersectionObserver, or
+// prefers-reduced-motion set.
 export const CRAFT_FLOOR: readonly string[] = [
   "typography",
   "color",
   "anti-ai-slop",
   "composition",
+  "animation-discipline",
 ];
 
 /**

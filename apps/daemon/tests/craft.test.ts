@@ -165,11 +165,25 @@ describe('resolveRequestedCraft', () => {
       designSystemCraftExemptions: ['anti-ai-slop'],
       isVisualSurface: true,
     });
-    expect(r).toEqual(['typography', 'color', 'composition']);
+    expect(r).toEqual(['typography', 'color', 'composition', 'animation-discipline']);
   });
 
-  it('the floor is small and defensible: exactly typography, color, anti-ai-slop, composition', () => {
-    expect([...CRAFT_FLOOR].sort()).toEqual(['anti-ai-slop', 'color', 'composition', 'typography']);
+  // Plan A11 — `animation-discipline` joined the floor alongside `composition`.
+  // A blind critic scored a default-path build against a commercial Framer
+  // template and lost only on motion; driving both pages in a real browser
+  // showed the generated page moved zero elements on scroll while the
+  // Framer page moved 285. See `craft/animation-discipline.md`'s
+  // "Scroll-triggered entrance" section for the default the floor now
+  // injects, and `apps/daemon/src/craft.ts`'s `CRAFT_FLOOR` comment for the
+  // full rationale.
+  it('the floor is small and defensible: exactly typography, color, anti-ai-slop, composition, animation-discipline', () => {
+    expect([...CRAFT_FLOOR].sort()).toEqual([
+      'animation-discipline',
+      'anti-ai-slop',
+      'color',
+      'composition',
+      'typography',
+    ]);
   });
 });
 

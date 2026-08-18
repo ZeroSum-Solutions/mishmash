@@ -24,7 +24,7 @@ od:
     requires: true
     sections: [color, typography, layout, components]
   craft:
-    requires: [laws-of-ux, composition]
+    requires: [laws-of-ux, composition, animation-discipline]
 ---
 
 # Pricing Page Skill
