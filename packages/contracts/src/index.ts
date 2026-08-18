@@ -35,6 +35,7 @@ export * from './api/memory.js';
 export * from './api/orbit.js';
 export * from './api/plugin-candidates.js';
 export * from './api/previews.js';
+export * from './api/project-reference.js';
 export * from './api/providerModels.js';
 export * from './api/projects.js';
 export * from './api/proxy.js';

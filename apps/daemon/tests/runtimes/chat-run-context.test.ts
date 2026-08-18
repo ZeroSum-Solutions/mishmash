@@ -161,3 +161,133 @@ describe('connector-mention-context', () => {
     expect(prompt).not.toContain('Selected connectors');
   });
 });
+
+// project-reference-context: proves the persisted-reference -> every-turn
+// prompt pipeline for B2-borrow's "reference another project + say what I
+// want from it" capability. POST /api/projects/:id/reference (UI and `od
+// project reference` both call it) writes metadata.projectReferences;
+// projectMetadataContextSelection folds those into workspaceItems on every
+// turn — not only the turn the reference was staged on — the same way
+// contextPlugins/etc. already do above. Covered end to end (HTTP) in
+// apps/daemon/tests/project-reference.test.ts.
+describe('project-reference-context', () => {
+  it('projectMetadataContextSelection turns persisted projectReferences into workspace items carrying intent', () => {
+    expect(
+      projectMetadataContextSelection({
+        projectReferences: [
+          {
+            id: 'project:other-project',
+            targetProjectId: 'other-project',
+            label: 'Other Project',
+            absolutePath: '/tmp/open-design/other-project',
+            intent: 'the bento cards',
+          },
+          // Malformed entries (no absolutePath / no targetProjectId) drop
+          // silently rather than throwing or emitting a broken item.
+          { id: 'project:missing-path', targetProjectId: 'missing-path' },
+          { absolutePath: '/tmp/open-design/no-id' },
+        ],
+      }),
+    ).toEqual({
+      pluginIds: [],
+      mcpServerIds: [],
+      connectorIds: [],
+      workspaceItems: [
+        {
+          id: 'project:other-project',
+          kind: 'project',
+          label: 'Other Project',
+          title: 'Other Project',
+          path: 'other-project',
+          absolutePath: '/tmp/open-design/other-project',
+          intent: 'the bento cards',
+        },
+      ],
+    });
+  });
+
+  it('projectMetadataContextSelection omits workspaceItems entirely when there are no project references (unchanged shape)', () => {
+    expect(
+      projectMetadataContextSelection({ contextConnectors: [{ id: 'figma', name: 'Figma' }] }),
+    ).toEqual({
+      pluginIds: [],
+      mcpServerIds: [],
+      connectorIds: ['figma'],
+    });
+  });
+
+  it('renders a persisted project reference on every turn, without the composer resending it, including its intent', () => {
+    // No per-turn `selection.workspaceItems` at all — this simulates a run
+    // started by `od run start` / a CLI-driven turn with no live composer.
+    const prompt = renderRunContextPrompt(
+      {},
+      {
+        projectReferences: [
+          {
+            id: 'project:bento-source',
+            targetProjectId: 'bento-source',
+            label: 'Bento Source',
+            absolutePath: '/tmp/open-design/bento-source',
+            intent: 'the bento cards',
+          },
+        ],
+      },
+    );
+
+    expect(prompt).toContain('## Selected run context');
+    expect(prompt).toContain('project: Bento Source (`project:bento-source`)');
+    expect(prompt).toContain('intent: "the bento cards"');
+    // The pointer-plus-instruction hint: scope to the intent, don't import
+    // the whole referenced project.
+    expect(prompt).toContain('Referenced projects:');
+    expect(prompt).toContain('scope your search and what you reuse to that');
+  });
+
+  it('per-turn ephemeral workspaceItems and the persisted metadata record dedupe by id instead of double-listing', () => {
+    const prompt = renderRunContextPrompt(
+      {
+        workspaceItems: [
+          {
+            kind: 'project',
+            id: 'project:bento-source',
+            label: 'Bento Source',
+            absolutePath: '/tmp/open-design/bento-source',
+            intent: 'the bento cards',
+          },
+        ],
+      },
+      {
+        projectReferences: [
+          {
+            id: 'project:bento-source',
+            targetProjectId: 'bento-source',
+            label: 'Bento Source',
+            absolutePath: '/tmp/open-design/bento-source',
+            intent: 'the bento cards',
+          },
+        ],
+      },
+    );
+
+    expect(prompt.match(/project: Bento Source/g)).toHaveLength(1);
+  });
+
+  it('a reference with no intent stays valid — the item renders with no intent detail', () => {
+    const prompt = renderRunContextPrompt(
+      {},
+      {
+        projectReferences: [
+          {
+            id: 'project:plain-source',
+            targetProjectId: 'plain-source',
+            label: 'Plain Source',
+            absolutePath: '/tmp/open-design/plain-source',
+          },
+        ],
+      },
+    );
+
+    expect(prompt).toContain('project: Plain Source (`project:plain-source`)');
+    expect(prompt).not.toContain('intent:');
+  });
+});

@@ -13,6 +13,10 @@ import {
   type ProjectFileVersionPromptSource,
   type ProjectFileVersionSource,
   type ProjectFileVersionWarning,
+  type ProjectReferenceRecord,
+  type ProjectReferenceRequest,
+  type ProjectReferenceResponse,
+  type WorkspaceContextItem,
 } from '@open-design/contracts';
 import { readMeta as readBrandMeta } from '../../brands/store.js';
 import { createProjectArtifactFile } from '../../artifacts/create.js';
@@ -78,6 +82,11 @@ import type { createFilesystemWriteGateway } from '../../filesystem/write-gatewa
  * template would put agent prompt text in the user's file tree.
  */
 const TEMPLATE_AUTHORING_FILE_NAMES = ['SKILL.md', 'template.json', 'LICENSE'];
+
+// Cap on a cross-project reference's free-text intent (see POST
+// /api/projects/:id/reference below) — long enough for a paragraph, short
+// enough that a runaway --prompt-file can't blow out the run prompt.
+const PROJECT_REFERENCE_INTENT_MAX_LENGTH = 4000;
 
 const TEMPLATE_START_EXCLUDED_FILE_NAMES = new Set([
   ...START_PROJECT_EXCLUDED_FILE_NAMES,
@@ -2460,6 +2469,123 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       res.json(body);
     } catch (err: any) {
       sendApiError(res, 400, 'BAD_REQUEST', String(err));
+    }
+  });
+
+  // Cross-project reference: "Reference project" (ProjectReferenceModal) and
+  // `od project reference` (CLI) both call this one endpoint. It resolves
+  // and materializes the referenced project's directory, links it into the
+  // *referencing* project's linkedDirs (same effect the composer's own
+  // addLinkedDirs already produces), and persists a ProjectReferenceRecord
+  // (path + optional intent) onto the referencing project's metadata so
+  // projectMetadataContextSelection folds it into every future turn — not
+  // only the turn the reference was added on.
+  app.post('/api/projects/:id/reference', async (req, res) => {
+    try {
+      const locations = await configuredProjectLocations();
+      const project = getProject(db, req.params.id);
+      if (!project || !projectVisibleForLocations(project, locations))
+        return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
+
+      const requestBody = (req.body ?? {}) as Partial<ProjectReferenceRequest>;
+      const targetProjectId = typeof requestBody.targetProjectId === 'string'
+        ? requestBody.targetProjectId.trim()
+        : '';
+      if (!targetProjectId) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'targetProjectId is required');
+      }
+      if (targetProjectId === project.id) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'a project cannot reference itself');
+      }
+      const targetProject = getProject(db, targetProjectId);
+      if (!targetProject || !projectVisibleForLocations(targetProject, locations)) {
+        return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'referenced project not found');
+      }
+      const intent = typeof requestBody.intent === 'string'
+        ? requestBody.intent.trim().slice(0, PROJECT_REFERENCE_INTENT_MAX_LENGTH)
+        : '';
+
+      try {
+        await ensureReferencedProjectDir(PROJECTS_DIR, targetProject, ensureProject);
+      } catch (err: any) {
+        return sendApiError(
+          res,
+          500,
+          'PROJECT_DIR_MATERIALIZATION_FAILED',
+          String(err?.message || err),
+        );
+      }
+      const resolvedDir = projectDetailResolvedDir(PROJECTS_DIR, targetProject, resolveProjectDir);
+      const validated = validateLinkedDirs([resolvedDir]);
+      if (validated.error || !validated.dirs?.[0]) {
+        return sendApiError(
+          res,
+          400,
+          'INVALID_LINKED_DIR',
+          validated.error || 'referenced project has no resolvable directory',
+        );
+      }
+      const canonicalDir = validated.dirs[0];
+
+      const baseMetadata: Record<string, unknown> =
+        project.metadata && typeof project.metadata === 'object'
+          ? { ...project.metadata }
+          : { kind: 'prototype' };
+      const existingLinkedDirs: string[] = Array.isArray(baseMetadata.linkedDirs)
+        ? (baseMetadata.linkedDirs as string[])
+        : [];
+      const nextLinkedDirs = existingLinkedDirs.includes(canonicalDir)
+        ? existingLinkedDirs
+        : [...existingLinkedDirs, canonicalDir];
+
+      const referenceId = `project:${targetProject.id}`;
+      const label = targetProject.name || targetProject.id;
+      const existingReferences: ProjectReferenceRecord[] = Array.isArray(baseMetadata.projectReferences)
+        ? (baseMetadata.projectReferences as ProjectReferenceRecord[])
+        : [];
+      const referenceRecord: ProjectReferenceRecord = {
+        id: referenceId,
+        targetProjectId: targetProject.id,
+        label,
+        absolutePath: canonicalDir,
+        ...(intent ? { intent } : {}),
+        addedAt: new Date().toISOString(),
+      };
+      const nextReferences = [
+        ...existingReferences.filter((ref) => ref?.id !== referenceId),
+        referenceRecord,
+      ];
+
+      const updated = updateProject(db, project.id, {
+        metadata: {
+          ...baseMetadata,
+          linkedDirs: nextLinkedDirs,
+          projectReferences: nextReferences,
+        },
+      });
+      if (!updated) {
+        return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
+      }
+
+      const workspaceItem: WorkspaceContextItem = {
+        id: referenceId,
+        kind: 'project',
+        label,
+        title: label,
+        path: targetProject.id,
+        absolutePath: canonicalDir,
+        ...(intent ? { intent } : {}),
+      };
+      const body: ProjectReferenceResponse = {
+        ok: true,
+        project: updated,
+        targetProject,
+        resolvedDir: canonicalDir,
+        workspaceItem,
+      };
+      res.json(body);
+    } catch (err: any) {
+      sendApiError(res, 400, 'BAD_REQUEST', String(err?.message || err));
     }
   });
 

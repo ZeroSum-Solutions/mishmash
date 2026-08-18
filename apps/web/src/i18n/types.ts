@@ -38,6 +38,8 @@ export interface Dict {
   'chat.referenceProject.emptyAll': string;
   'chat.referenceProject.loadFailed': string;
   'chat.referenceProject.confirm': string;
+  'chat.referenceProject.intentLabel': string;
+  'chat.referenceProject.intentPlaceholder': string;
   'chat.contextPrompt.referenceProject': string;
   'chat.contextPrompt.localCode': string;
   'chat.figmaHelp.title': string;

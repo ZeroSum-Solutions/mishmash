@@ -20,6 +20,9 @@ export interface WorkspaceContextItem {
   absolutePath?: string;
   url?: string;
   title?: string;
+  // Free-text "what to take from this" note — see the doc comment on
+  // WorkspaceContextItem in packages/contracts/src/api/context.ts.
+  intent?: string;
 }
 
 export interface RunContextSelection {
@@ -45,6 +48,7 @@ type ProjectMetadataContext = {
   contextPlugins?: unknown;
   contextMcpServers?: unknown;
   contextConnectors?: unknown;
+  projectReferences?: unknown;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -76,12 +80,44 @@ export function normalizeWorkspaceContextItems(items: unknown): WorkspaceContext
     const absolutePath = cleanString(item.absolutePath, 1000);
     const url = cleanString(item.url, 1000);
     const title = cleanString(item.title, 500);
+    const intent = cleanString(item.intent, 4000);
     if (tabId) normalized.tabId = tabId;
     if (pathValue) normalized.path = pathValue;
     if (absolutePath) normalized.absolutePath = absolutePath;
     if (url) normalized.url = url;
     if (title) normalized.title = title;
+    if (intent) normalized.intent = intent;
     out.push(normalized);
+  }
+  return out;
+}
+
+/**
+ * Turn a project's persisted `metadata.projectReferences` (cross-project
+ * references added via "Reference project" or `od project reference`) into
+ * workspace context items, mirroring how `contextPlugins`/etc. below reach
+ * every turn from metadata alone. Only the pointer (absolute path) + optional
+ * intent travel here — never the referenced project's file contents.
+ */
+function workspaceItemsFromProjectReferences(refs: unknown): WorkspaceContextItem[] {
+  if (!Array.isArray(refs)) return [];
+  const out: WorkspaceContextItem[] = [];
+  for (const ref of refs) {
+    if (!isRecord(ref)) continue;
+    const targetProjectId = cleanString(ref.targetProjectId, 240);
+    const absolutePath = cleanString(ref.absolutePath, 1000);
+    if (!targetProjectId || !absolutePath) continue;
+    const label = cleanString(ref.label, 240) || targetProjectId;
+    const intent = cleanString(ref.intent, 4000);
+    out.push({
+      id: `project:${targetProjectId}`,
+      kind: 'project',
+      label,
+      title: label,
+      path: targetProjectId,
+      absolutePath,
+      ...(intent ? { intent } : {}),
+    });
   }
   return out;
 }
@@ -153,10 +189,14 @@ export function projectMetadataContextSelection(metadata: unknown): RunContextSe
           .filter((id): id is string => typeof id === 'string')
       : []
   );
+  const projectReferenceItems = workspaceItemsFromProjectReferences(contextMetadata.projectReferences);
   return {
     pluginIds: idsFromRefs(contextMetadata.contextPlugins),
     mcpServerIds: idsFromRefs(contextMetadata.contextMcpServers),
     connectorIds: idsFromRefs(contextMetadata.contextConnectors),
+    // Only set when non-empty so callers that assert this function's exact
+    // shape (no projectReferences on the input metadata) keep passing.
+    ...(projectReferenceItems.length > 0 ? { workspaceItems: projectReferenceItems } : {}),
   };
 }
 
@@ -199,6 +239,7 @@ function formatWorkspaceContextList(items: WorkspaceContextItem[]) {
         item.url ? `url: ${item.url}` : null,
         item.title ? `title: ${item.title}` : null,
         item.tabId ? `tab: \`${item.tabId}\`` : null,
+        item.intent ? `intent: "${item.intent}"` : null,
       ].filter(Boolean).join(' | ');
       return `${index + 1}. ${item.kind}: ${item.label} (\`${item.id}\`)${details ? ` — ${details}` : ''}`;
     })
@@ -226,7 +267,7 @@ function renderWorkspaceContextToolHints(items: WorkspaceContextItem[]) {
   }
   if (kinds.has('project')) {
     hints.push(
-      '- Referenced projects: use the absolute path as a read-only reference project when present. Search and read relevant files before applying ideas to the current project; do not edit the referenced project unless the user explicitly asks.',
+      '- Referenced projects: use the absolute path as a read-only reference project when present. Search and read relevant files before applying ideas to the current project; do not edit the referenced project unless the user explicitly asks. When an item below carries an `intent` note, that is the specific thing to take from it (e.g. "the bento cards") — scope your search and what you reuse to that, do not import the whole referenced project.',
     );
   }
   if (kinds.has('local-code')) {

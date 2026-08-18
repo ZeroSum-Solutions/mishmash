@@ -4,6 +4,7 @@ import type {
   ProjectContextConnectorRef,
   ProjectContextMcpServerRef,
   ProjectContextPluginRef,
+  ProjectReferenceRecord,
 } from './context.js';
 
 export type ProjectKind =
@@ -198,6 +199,12 @@ export interface ProjectMetadata {
   promptTemplate?: PromptTemplateMetadata;
   // Absolute paths to local code folders the agent can read via --add-dir.
   linkedDirs?: string[];
+  // Cross-project references added via "Reference project" (UI) or `od
+  // project reference` (CLI) — see `ProjectReferenceRecord` in ./context.js.
+  // Each entry's `absolutePath` also lands in `linkedDirs` above for
+  // filesystem access; this array is only the pointer + optional intent
+  // layered on top, read every turn by `projectMetadataContextSelection`.
+  projectReferences?: ProjectReferenceRecord[];
   // Batch/API-created projects can opt out of the initial discovery form so
   // the first agent turn builds immediately from the submitted brief.
   skipDiscoveryBrief?: boolean;
