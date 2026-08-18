@@ -168,8 +168,8 @@ describe('resolveRequestedCraft', () => {
     expect(r).toEqual(['typography', 'color']);
   });
 
-  it('the floor is small and defensible: exactly typography, color, anti-ai-slop', () => {
-    expect([...CRAFT_FLOOR].sort()).toEqual(['anti-ai-slop', 'color', 'typography']);
+  it('the floor is small and defensible: exactly typography, color, anti-ai-slop, composition', () => {
+    expect([...CRAFT_FLOOR].sort()).toEqual(['anti-ai-slop', 'color', 'composition', 'typography']);
   });
 });
 

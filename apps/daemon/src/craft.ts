@@ -52,7 +52,21 @@ export async function loadCraftSections(craftDir: string, requested: unknown[]) 
 // just extends that same default consideration to runs where no skill or
 // design system made the request explicitly (e.g. a plain website brief
 // with no skill and no design system selected).
-export const CRAFT_FLOOR: readonly string[] = ["typography", "color", "anti-ai-slop"];
+// `composition` is here for a measured reason rather than symmetry. Two
+// independent blind comparisons against professionally designed, commercially
+// sold templates scored generated output 0/1 on layout risk and 2-3/5 on
+// typographic authority, and both named the same cause unprompted: every
+// section keeps equal symmetric margins and no headline ever spikes to a
+// dominant display size. That is page-level composition, and it is the single
+// largest measured quality gap on the default path -- which is precisely the
+// path the floor governs. A skill that opts in explicitly still wins outright,
+// so a skill deliberately omitting composition keeps that choice.
+export const CRAFT_FLOOR: readonly string[] = [
+  "typography",
+  "color",
+  "anti-ai-slop",
+  "composition",
+];
 
 /**
  * Whether a run will emit styled visual output eligible for the craft
