@@ -70,7 +70,7 @@ motion.
 
 Craft files mix auto-checked rules and guidance.
 
-- **Auto-checked.** Rules wired into `apps/daemon/src/lint-artifact.ts` — currently the P0 list in `anti-ai-slop.md` (Tailwind-indigo accent, two-stop hero gradients, emoji-as-icons, etc.). The linter reports these as findings back to the UI (for P0/P1 badges) and to the agent (as a system reminder for self-correction). Artifact persistence is not currently hard-blocked on P0 hits.
+- **Auto-checked.** Rules wired into `apps/daemon/src/lint-artifact.ts` — the P0 list in `anti-ai-slop.md` (Tailwind-indigo accent, two-stop hero gradients, emoji-as-icons, etc.) plus one P1 rule from `composition.md` (`layout-risk-flat`: a long, multi-section page with zero source-level evidence of any grid-breaking move). The linter reports these as findings back to the UI (for P0/P1 badges) and to the agent (as a system reminder for self-correction). Artifact persistence is not currently hard-blocked on P0 (or P1) hits.
 - **Guidance.** The rest. The agent reads the rules, reviewers apply them, the linter doesn't check them.
 
 A purely behavioral craft file (state-coverage, animation-discipline) is guidance unless a specific rule is later promoted into `lint-artifact.ts`.

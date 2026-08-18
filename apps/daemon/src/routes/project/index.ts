@@ -2712,7 +2712,7 @@ export function registerProjectArtifactRoutes(app: Express, ctx: RegisterProject
   // chat layer can splice them into a system reminder for the agent.
   app.post('/api/artifacts/save', (req, res) => {
     try {
-      const { identifier, title, html } = req.body || {};
+      const { identifier, title, html, isWebCloneRun } = req.body || {};
       if (typeof html !== 'string' || html.length === 0) {
         return res.status(400).json({ error: 'html required' });
       }
@@ -2722,7 +2722,13 @@ export function registerProjectArtifactRoutes(app: Express, ctx: RegisterProject
       fs.mkdirSync(dir, { recursive: true });
       const file = path.join(dir, 'index.html');
       fs.writeFileSync(file, html, 'utf8');
-      const findings = lintArtifact(html);
+      // `isWebCloneRun` is an optional caller-supplied hint (see
+      // `LintArtifactOptions` in lint-artifact.ts) — neither this route
+      // nor /api/artifacts/lint below currently receives a projectId or
+      // any other run/project context, so nothing threads the flag
+      // through automatically yet. Reading it here only makes the
+      // exemption usable the moment a caller starts sending it.
+      const findings = lintArtifact(html, { isWebCloneRun: isWebCloneRun === true });
       res.json({
         path: file,
         url: `/artifacts/${path.basename(dir)}/index.html`,
@@ -2738,11 +2744,11 @@ export function registerProjectArtifactRoutes(app: Express, ctx: RegisterProject
   // them to disk first, so a P0 issue can be surfaced before save.
   app.post('/api/artifacts/lint', (req, res) => {
     try {
-      const { html } = req.body || {};
+      const { html, isWebCloneRun } = req.body || {};
       if (typeof html !== 'string' || html.length === 0) {
         return res.status(400).json({ error: 'html required' });
       }
-      const findings = lintArtifact(html);
+      const findings = lintArtifact(html, { isWebCloneRun: isWebCloneRun === true });
       res.json({
         findings,
         agentMessage: renderFindingsForAgent(findings),

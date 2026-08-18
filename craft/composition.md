@@ -78,6 +78,23 @@ refined the typography or color inside those containers is. This is a
 pass/fail floor, not a per-section requirement: one deliberate break on an
 otherwise orderly page clears it.
 
+**The absence half of this floor is auto-checked (P1, `layout-risk-flat`
+in `apps/daemon/src/lint-artifact.ts`).** A rendered layout engine can see
+whether a move landed; static source inspection cannot — so the linter
+checks only for the CSS primitives every one of the five moves needs to
+exist at all: `position: absolute`/`sticky` paired with `z-index`
+(overlap, cross-boundary elements), or a non-hover `transform`
+(offset/edge-bleeding moves). It fires only when a page carries 6+
+`<section>` elements (below that, total uniformity is an expected shape,
+not a finding — see the file-level scoping note in `craft/README.md`) and
+neither primitive appears anywhere in the artifact — proof no move could
+have been used even once. Presence of the primitive is not proof a move
+was used well; the linter cannot tell a deliberate overlap from a sticky
+nav, so it only ever flags demonstrated absence. Web-clone runs are
+exempt (a clone reproducing a uniform target is not a defect) the same
+way `resolveRequestedCraft` in `craft.ts` already skips this file's
+injection for those runs.
+
 ## First-viewport composition
 
 The hero must resolve to **one dominant move** that reads before any
@@ -96,6 +113,24 @@ oversized-type element carrying visible weight. This composes to the same
 silhouette regardless of brand and is the most replicable hero shape there
 is.
 
+**A second anti-pattern, the mirror image (checkable):** a modest,
+contained photo, a small caption line (~12–14px, often set in caps), and a
+section label sized the same as every other section heading on the page —
+with no headline anywhere. This reads as timid, not restrained: the photo
+never goes full-bleed or oversized enough to itself be the dominant move,
+and there is no display-scale line to compensate, so the first viewport
+carries zero dominant moves instead of one. A photo-led hero only
+satisfies this rule when the photo is genuinely full-bleed or large enough
+to anchor the viewport by itself — a bordered, contained image sitting at
+the same width as body content, next to a caption-sized headline, is not a
+dominant move regardless of how good the photo is. Two independent blind
+critiques of MishMash-generated output named exactly this shape: measured
+max display size across three generated builds was 104px/82px/109px
+against ~12–14px body (9.0×, 6.8×, 7.8× ratios) versus 140px/~13px (10.8×)
+for a professionally sold reference template — and the ratio did not
+improve when section count did, confirming this is a distinct gap from the
+grid-breaking one above, not a side effect of it.
+
 **Which vector should carry the hero is genre-dependent, not universal.** A
 portfolio or agency hero can carry the moment through scale alone — an
 oversized wordmark or a single-line statement. A product/SaaS hero more
@@ -104,6 +139,19 @@ product itself is the credibility signal. `typography.md` and
 `typography-hierarchy.md` govern the actual scale ratios and vectors once a
 vector has been chosen to carry the hero; this file only requires that some
 vector actually does.
+
+**When type carries the hero, size it against a stated ratio, not a
+feeling.** A display line only reads as the dominant move at roughly an
+**8:1 ratio or higher** against the page's own body copy size — for
+example a 120–160px display line against 14–16px body. Below that ratio
+the "headline" reads as a slightly larger paragraph, not a hero, which is
+exactly the failure named above: a 48–56px line is the same size as an
+ordinary section heading elsewhere on the page, so it cannot also be the
+one thing that makes the first viewport dominant. Let the display line
+bleed to the frame edge instead of sitting inside the same centered
+container as the rest of the page — that placement is this file's
+Edge-bleeding type grid-breaking move (see the table above), applied
+specifically to the hero's dominant line.
 
 ## Density rhythm
 
@@ -138,9 +186,15 @@ sitting under it unresolved.
       not from an embedded screenshot or third-party image.
 - [ ] At least one grid-breaking move (full-bleed-against-contained,
       overlap, offset columns, edge-bleeding type, cross-boundary element)
-      appears somewhere on the page.
+      appears somewhere on the page. *(Its absence half is auto-checked
+      on pages with 6+ `<section>`s — see `layout-risk-flat` above.)*
 - [ ] The hero resolves to one dominant move within the first viewport, not
-      two competing ones and not zero.
+      two competing ones and not zero. A contained, body-width photo next
+      to a section-heading-sized label is zero, not one.
+- [ ] When type carries the hero, the display line sits at roughly an 8:1
+      ratio or higher against the page's own body copy size, and bleeds to
+      the frame edge rather than sitting in the same centered container as
+      the rest of the page.
 - [ ] At least one meaningfully dense section sits near at least one
       meaningfully sparse one — whitespace varies, it isn't a flat line.
 - [ ] No block of empty space exists without content on both sides that
