@@ -92,6 +92,37 @@ export const PREVIEW_REDIRECT_GUARD_SELF_REFRESH_MIN_DELAY_MS = 2000;
 /** postMessage type the injected guard sends the host when it trips. */
 export const PREVIEW_REDIRECT_LOOP_MESSAGE = 'od:redirect-loop-blocked';
 
+// --- Preview navigation bridge -------------------------------------------
+//
+// A previewed document's own in-page links (a generated multi-page site's nav
+// bar: `<a href="meetings.html">`) must resolve exactly like they would once
+// downloaded and opened directly — relative to the file's own directory —
+// no matter which render mode loaded them. `injectBaseHref` already makes
+// that true for the FIRST document: `<base href>` points at the raw-file API
+// directory, so the browser resolves `meetings.html` to the correct URL.
+//
+// But clicking that link is a real browser navigation: the sandboxed iframe
+// (deliberately `sandbox="allow-scripts allow-downloads"`, no
+// `allow-same-origin` — see file-viewer-render-mode.ts) leaves the srcDoc
+// document entirely and loads the raw file straight from the API, bypassing
+// buildSrcdoc/inlineRelativeAssets for that page. The destination document is
+// then a bare, un-injected page with an opaque origin, and Chromium's Opaque
+// Response Blocking refuses its own `<link>`/`<script src>`/`<img>` fetches
+// even though they're correctly typed and same-host — every asset the new
+// page references fails, so it renders unstyled with broken images.
+//
+// injectPreviewNavigationBridge intercepts that click before the browser
+// acts on it and asks the host to open the target file through the SAME path
+// the file browser already uses successfully (confirmed correct end-to-end:
+// resolve, fetch, buildSrcdoc, inlineRelativeAssets) instead of letting the
+// iframe navigate itself. Only in-project links qualify: at click time
+// `document.baseURI` already reflects the injected `<base>`, so a link whose
+// resolved URL starts with that base names a sibling project file; anything
+// else (external sites, `mailto:`, `#fragment`, `target="_blank"`, a
+// modified click, a `download` link) is left to the browser's normal
+// handling, unchanged.
+export const PREVIEW_NAVIGATE_MESSAGE = 'od:preview-navigate';
+
 /**
  * A previewed document's `document.fonts.ready` never waits longer than
  * this. The browser gives that promise no timeout of its own: an
@@ -395,7 +426,13 @@ export function buildSrcdoc(
   const withOdIds = annotateMissingOdIds(withSafeTitle);
   const withSourcePaths = options.editBridge ? annotateManualEditSourcePaths(withOdIds) : withOdIds;
   const withBase = options.baseHref ? injectBaseHref(withSourcePaths, options.baseHref) : withSourcePaths;
-  const withShim = injectSandboxShim(withBase);
+  // Decks handle their own click-driven navigation (slide advance); a
+  // standalone HTML/multi-page preview is the case that needs its in-page
+  // links routed back through the host instead of navigating the iframe.
+  const withNavigationBridge = options.baseHref && !options.deck
+    ? injectPreviewNavigationBridge(withBase)
+    : withBase;
+  const withShim = injectSandboxShim(withNavigationBridge);
   const blockLoadTimeScriptRedirect = htmlHasLoadTimeLocationNavigation(withBase);
   // Always on: a redirect loop can freeze ANY previewed artifact, and the guard
   // is inert on documents that never self-redirect. Injected right after the
@@ -1412,6 +1449,44 @@ function injectBaseHref(doc: string, baseHref: string): string {
     return doc.replace(/<html[^>]*>/i, (m) => `${m}<head>${tag}</head>`);
   }
   return tag + doc;
+}
+
+/**
+ * Intercept clicks on the previewed document's own in-page links that target
+ * a sibling project file, so the host can re-render the target through the
+ * srcDoc pipeline instead of letting the sandboxed iframe navigate itself to
+ * the raw file (see the "Preview navigation bridge" note above
+ * `PREVIEW_NAVIGATE_MESSAGE`). Only called when `injectBaseHref` already ran,
+ * since the click handler trusts `document.baseURI` to name the project's
+ * raw-file directory.
+ */
+function injectPreviewNavigationBridge(doc: string): string {
+  const script = `<script data-od-preview-navigation-bridge>(function(){
+  var MESSAGE_TYPE = ${JSON.stringify(PREVIEW_NAVIGATE_MESSAGE)};
+  document.addEventListener('click', function(ev){
+    if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!a || (a.hasAttribute && a.hasAttribute('download'))) return;
+    var target = a.getAttribute('target');
+    if (target && target !== '_self') return;
+    var href = a.getAttribute('href') || '';
+    if (!href || href.charAt(0) === '#') return;
+    var base;
+    try { base = document.baseURI; } catch (_) { return; }
+    if (!base) return;
+    var resolved;
+    try { resolved = new URL(href, base).href; } catch (_) { return; }
+    if (resolved.indexOf(base) !== 0) return;
+    var rel = resolved.slice(base.length).split(/[?#]/)[0];
+    if (!rel) return;
+    try {
+      if (!window.parent || window.parent === window) return;
+      window.parent.postMessage({ type: MESSAGE_TYPE, path: rel }, '*');
+    } catch (_) { return; }
+    ev.preventDefault();
+  }, true);
+})();</script>`;
+  return injectAfterHeadOpen(doc, script);
 }
 
 function escapeAttr(value: string): string {

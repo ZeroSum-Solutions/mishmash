@@ -127,6 +127,7 @@ import {
   buildRedirectLoopBlockedDoc,
   buildSrcdoc,
   canActivateSrcDocTransport,
+  PREVIEW_NAVIGATE_MESSAGE,
   PREVIEW_REDIRECT_LOOP_MESSAGE,
 } from '../runtime/srcdoc';
 import { DeckThumbnailRail } from './DeckThumbnailRail';
@@ -1338,6 +1339,12 @@ interface Props {
   // atomic tab-state update. The React module pointer uses this to jump to the
   // HTML entry that renders a module and drop the dead-end module tab.
   onOpenFileReplacing?: (openName: string, closeName: string) => void;
+  // Open `name` as a tab, focusing it, without closing anything. HtmlViewer
+  // uses this so a click on the previewed site's own in-page nav link opens
+  // the target file through the same path the file browser already renders
+  // correctly, instead of navigating the preview iframe itself (see
+  // PREVIEW_NAVIGATE_MESSAGE in runtime/srcdoc.ts).
+  onOpenFile?: (name: string) => void;
   commentPortalId?: string;
   onCommentModeChange?: (active: boolean) => void;
   // Bumped nonce asking this viewer to open its Share/Export menu (chat-side
@@ -1373,6 +1380,7 @@ export const FileViewer = memo(function FileViewer({
   onFileSaved,
   onBrandExtractionStopRequest,
   onOpenFileReplacing,
+  onOpenFile,
   commentPortalId,
   onCommentModeChange,
   shareRequest,
@@ -1417,6 +1425,7 @@ export const FileViewer = memo(function FileViewer({
         onSendBoardCommentAttachments={onSendBoardCommentAttachments}
         onFileSaved={onFileSaved}
         onBrandExtractionStopRequest={onBrandExtractionStopRequest}
+        onOpenFile={onOpenFile}
         commentPortalId={commentPortalId}
         onCommentModeChange={onCommentModeChange}
         shareRequest={shareRequest}
@@ -5999,6 +6008,7 @@ function HtmlViewer({
   onSendBoardCommentAttachments,
   onFileSaved,
   onBrandExtractionStopRequest,
+  onOpenFile,
   commentPortalId,
   onCommentModeChange,
   shareRequest,
@@ -6020,6 +6030,8 @@ function HtmlViewer({
   onSendBoardCommentAttachments?: (attachments: ChatCommentAttachment[], images?: File[]) => Promise<boolean | void> | boolean | void;
   onFileSaved?: () => Promise<void> | void;
   onBrandExtractionStopRequest?: () => void;
+  // Open `name` as a tab, focusing it. See PREVIEW_NAVIGATE_MESSAGE handling below.
+  onOpenFile?: (name: string) => void;
   commentPortalId?: string;
   onCommentModeChange?: (active: boolean) => void;
   shareRequest?: { nonce: number } | null;
@@ -7563,6 +7575,40 @@ function HtmlViewer({
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, []);
+
+  // The injected navigation bridge (runtime/srcdoc.ts) posts
+  // `od:preview-navigate` when the user clicks the previewed site's own
+  // in-page nav link. Left alone, that click would navigate the sandboxed
+  // iframe straight to the raw-file API URL — a real browser navigation that
+  // escapes buildSrcdoc/inlineRelativeAssets, so the destination page's own
+  // relative CSS/JS/image refs get loaded by an opaque-origin iframe with no
+  // asset rewriting and no `<base>`, and Chromium's ORB blocks every one of
+  // them: unstyled text, broken images. Route the target file through the
+  // same "open a project file" path the file browser already renders
+  // correctly instead. `path` is untrusted iframe content, so it is only
+  // acted on when it names a real file in this project's own file list.
+  useEffect(() => {
+    function onMessage(ev: MessageEvent) {
+      const fromPreview =
+        ev.source === srcDocPreviewIframeRef.current?.contentWindow ||
+        ev.source === urlPreviewIframeRef.current?.contentWindow;
+      if (!fromPreview) return;
+      const data = ev.data as { type?: string; path?: string } | null;
+      if (data?.type !== PREVIEW_NAVIGATE_MESSAGE) return;
+      const rawPath = typeof data.path === 'string' ? data.path : '';
+      if (!rawPath) return;
+      let targetName: string;
+      try {
+        targetName = rawPath.split('/').map(decodeURIComponent).join('/');
+      } catch {
+        return;
+      }
+      if (!projectFilePathSet?.has(targetName)) return;
+      onOpenFile?.(targetName);
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [projectFilePathSet, onOpenFile]);
 
   // Resolve the cross-origin powered-preview URL for artifacts that need it.
   // `resolved:false` means the (cached) daemon isolation probe is still in

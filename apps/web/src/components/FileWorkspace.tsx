@@ -2744,6 +2744,7 @@ export function FileWorkspace({
     [slideNavRequest, activeFile?.name, slideNavDeliverableNonce],
   );
   const stableOpenFileReplacing = useStableHandler(openFileReplacing);
+  const stableOpenFile = useStableHandler(openFile);
 
   const activeWorkspaceContext = useMemo<WorkspaceContextItem | null>(() => {
     if (activeTab === DESIGN_SYSTEM_TAB && designSystemProject) {
@@ -3771,6 +3772,7 @@ export function FileWorkspace({
             }
             onFileSaved={onRefreshFiles}
             onOpenFileReplacing={stableOpenFileReplacing}
+            onOpenFile={stableOpenFile}
             commentPortalId={commentPortalId}
             onCommentModeChange={onCommentModeChange}
             shareRequest={activeFileShareRequest}
