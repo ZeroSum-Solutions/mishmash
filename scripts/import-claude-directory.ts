@@ -23,10 +23,12 @@
 //
 // Weight policy: upstream vendors its own webfonts, print-resolution imagery,
 // and multi-megabyte hero footage (~700MB across the three families). Local
-// `@font-face` rules are rewritten to the Google Fonts CDN — the same thing 61
-// existing templates already do — and media is re-encoded through ImageMagick
-// and ffmpeg. Anything still over `OPAQUE_ASSET_BYTE_CEILING` is dropped along
-// with its reference, so a skipped asset leaves a gap rather than a 404.
+// `@font-face` rules are rewritten to temporary provider requests for the
+// follow-up `scripts/vendor-fonts.ts` self-hosting pass, and media is re-encoded
+// through ImageMagick and ffmpeg. `pnpm guard` rejects an import that still has
+// provider-loading references or is dirty on a second vendoring pass. Anything
+// still over `OPAQUE_ASSET_BYTE_CEILING` is dropped along with its reference, so
+// a skipped asset leaves a gap rather than a 404.
 //
 // Requires `magick` and `ffmpeg` on PATH. Without them the import still runs,
 // but every asset ships at its original size.
