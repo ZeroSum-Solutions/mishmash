@@ -11,7 +11,7 @@ import express from 'express';
 import multer from 'multer';
 import JSZip from 'jszip';
 import { execFile, spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -133,6 +133,10 @@ import {
   scanRunEventsForFinishedProps,
   scanRunEventsForRetrySideEffects,
 } from './runtimes/run-lifecycle-analytics.js';
+import {
+  extractToolFilePath,
+  WRITE_OR_EDIT_TOOL_NAMES,
+} from './runtimes/run-artifacts.js';
 import {
   computeRunUsageRecord,
   ensureUsageTable,
@@ -4551,6 +4555,14 @@ export async function startServer({
       activeSkillDir,
       activeSkillDirs,
       critiqueShouldRun,
+      // Threaded down to startChatRun so the mid-run artifact linter (see
+      // the `def.streamFormat === 'claude-stream-json'` block below) can
+      // pass the same web-clone exemption `lintArtifact` already accepts
+      // via `LintArtifactOptions.isWebCloneRun` — reusing this value keeps
+      // the exemption in lockstep with the one `resolveRequestedCraft`
+      // applies for `craft/composition.md` above, instead of re-deriving it
+      // from `metadata?.intent` a second time.
+      isWebCloneRun,
       designSystemSelection: {
         id: activeDesignSystemId,
         requestedId: effectiveDesignSystemId,
@@ -5101,6 +5113,7 @@ export async function startServer({
       critiqueShouldRun,
       designSystemSelection,
       promptTelemetryParts,
+      isWebCloneRun,
     } =
       await composeDaemonSystemPrompt({
         agentId,
@@ -5137,6 +5150,11 @@ export async function startServer({
     run.designSystemRequestedId = designSystemSelection?.requestedId ?? null;
     run.designSystemSelectionSource = designSystemSelection?.source ?? 'none';
     run.designSystemDigest = designSystemSelection?.digest ?? null;
+    // Read by the mid-run artifact linter below (`def.streamFormat ===
+    // 'claude-stream-json'`) so a web-clone run gets the same
+    // `LintArtifactOptions.isWebCloneRun` exemption `craft.ts` already
+    // applies to `craft/composition.md` for these runs.
+    run.isWebCloneRun = isWebCloneRun === true;
 
     // Make skill side files reachable through three layers, in order of
     // preference. The skill preamble emitted by `withSkillRootPreamble()`
@@ -8090,6 +8108,70 @@ export async function startServer({
       return true;
     };
 
+
+    // A7: mid-run anti-slop feedback. `claude-stream-json` is the one
+    // runtime whose stdin the daemon keeps open across a turn (see
+    // `applyClaudeStreamJsonRunBookkeeping` below) — that channel is what
+    // makes an in-turn correction possible at all; every other runtime's
+    // stdin closes with the initial prompt, so this lint pass is Claude-only
+    // by construction, not by an extra guard. Track each Write/Edit tool_use
+    // that targets an `.html`/`.htm` path, and once its tool_result confirms
+    // a non-error write, read the file back off disk (the CLI has already
+    // applied the write to disk by the time tool_result fires — it is the
+    // agent's own file tool, not a daemon-proxied one), lint it, and — only
+    // on a P0 finding — splice `renderFindingsForAgent`'s text back onto the
+    // child's stdin as a follow-up stream-json user message so the agent
+    // can self-correct before the turn ends. Never reads a file the run
+    // only opened with Read, never fires on a copy made via Bash, and never
+    // blocks the write itself — this is advisory feedback layered on top of
+    // an already-committed save (see AGENTS.md "Anomaly log": a lint
+    // finding on a healthy run is normal operation, not an anomaly, so
+    // nothing here touches the anomaly log).
+    const pendingHtmlWriteToolUseId = new Map<string, string>();
+    const lastLintedHtmlHashByPath = new Map<string, string>();
+    function noteClaudeToolUseForArtifactLint(ev: any) {
+      if (ev?.type !== 'tool_use') return;
+      if (typeof ev.name !== 'string' || !WRITE_OR_EDIT_TOOL_NAMES.has(ev.name)) return;
+      const filePath = extractToolFilePath(ev.input);
+      const id = typeof ev.id === 'string' ? ev.id : null;
+      if (!filePath || !id || !/\.html?$/i.test(filePath)) return;
+      const absPath = path.isAbsolute(filePath) ? filePath : path.join(effectiveCwd, filePath);
+      pendingHtmlWriteToolUseId.set(id, absPath);
+    }
+    function feedbackArtifactLintForClaudeToolResult(ev: any) {
+      if (ev?.type !== 'tool_result') return;
+      const toolUseId = typeof ev.toolUseId === 'string' ? ev.toolUseId : null;
+      if (!toolUseId) return;
+      const absPath = pendingHtmlWriteToolUseId.get(toolUseId);
+      if (!absPath) return;
+      pendingHtmlWriteToolUseId.delete(toolUseId);
+      if (ev.isError === true) return; // a failed write produced no new artifact
+      if (!run.stdinOpen || !child.stdin || child.stdin.destroyed) return; // turn already closed
+      let html: string;
+      try {
+        html = fs.readFileSync(absPath, 'utf8');
+      } catch {
+        return; // best-effort — a race with a later Edit/delete just skips this pass
+      }
+      const contentHash = createHash('sha1').update(html).digest('hex');
+      if (lastLintedHtmlHashByPath.get(absPath) === contentHash) return; // lint once per distinct content
+      lastLintedHtmlHashByPath.set(absPath, contentHash);
+      const findings = lintArtifact(html, { isWebCloneRun: run.isWebCloneRun === true });
+      // P0 only: P1/P2 stay UI-badge-style advisories (once a UI surface
+      // exists — see craft/README.md), not a reason to interrupt a live run.
+      if (!findings.some((f) => f.severity === 'P0')) return;
+      const agentMessage = renderFindingsForAgent(findings);
+      const userMessage = JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: agentMessage }] },
+      });
+      try {
+        child.stdin.write(`${userMessage}\n`, 'utf8');
+      } catch (err: any) {
+        if (err && err.code !== 'EPIPE') throw err;
+      }
+    }
+
     if (def.streamFormat === 'claude-stream-json') {
       const claude = createClaudeStreamHandler((ev) => {
         // First parsed claude-stream-json event = CLI ready (#3408 §4); the
@@ -8208,6 +8290,12 @@ export async function startServer({
         //   - usage (session result at EOF in single-shot mode).
         try {
           applyClaudeStreamJsonRunBookkeeping(run, ev);
+        } catch {}
+        // Never let the lint side-channel break the run's own event
+        // handling — mirrors the onEventEmitted observer guard in runs.ts.
+        try {
+          noteClaudeToolUseForArtifactLint(ev);
+          feedbackArtifactLintForClaudeToolResult(ev);
         } catch {}
       }, { suppressHtmlArtifactsAfterFileWrite: def.id === 'claude' });
       child.stdout.on('data', (chunk) => claude.feed(chunk));
