@@ -25,6 +25,7 @@ export type EntryView =
   | 'design-library'
   | 'storyboard'
   | 'templates'
+  | 'typefaces'
   | 'integrations';
 
 interface Props {
@@ -183,6 +184,15 @@ export function EntryNavRail({
           testId="entry-nav-templates"
         >
           <Icon name="layout" size={18} />
+        </NavButton>
+        <NavButton
+          active={view === 'typefaces'}
+          ariaLabel={t('entry.navTypefaces')}
+          tooltip={t('entry.navTypefaces')}
+          onClick={() => selectView('typefaces')}
+          testId="entry-nav-typefaces"
+        >
+          <Icon name="file-text" size={18} />
         </NavButton>
         <NavButton
           active={view === 'design-library'}

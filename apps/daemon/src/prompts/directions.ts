@@ -37,6 +37,19 @@ export interface DesignDirection {
   bodyFont: string;
   /** Optional mono override; falls back to ui-monospace. */
   monoFont?: string;
+  /**
+   * Typeface catalogue ids (`apps/daemon/src/typefaces/catalogue.ts`, same
+   * ids `od typefaces show <id>` accepts) that this direction's font stacks
+   * name and can self-host. Every family listed here is already license-
+   * cleared and vendored under design-templates/*\/fonts/ — see
+   * apps/daemon/src/typefaces/allowlist.ts. Without an actual self-host
+   * step, naming a font in `displayFont`/`bodyFont`/`monoFont` only changes
+   * which name the browser tries first; it still silently falls through to
+   * the next stack entry on any machine that doesn't have that font
+   * installed. `renderDirectionSpec()` turns this list into the install
+   * instruction the agent runs before binding the stacks below.
+   */
+  selfHostTypefaces?: string[];
   /** Six palette values in OKLch — bind directly to seed `:root`. */
   palette: {
     bg: string;
@@ -57,9 +70,14 @@ export const DESIGN_DIRECTIONS: DesignDirection[] = [
     mood:
       'Print-magazine feel for explicitly editorial or publishing briefs. Generous whitespace, large serif headlines, restrained palette of neutral paper + ink + a single brand-justified accent. Do not use this as the default for commerce, SaaS, dashboards, or product utilities.',
     references: ['Monocle', 'The Financial Times Weekend', 'NYT Magazine', 'It\'s Nice That'],
-    displayFont: "'Iowan Old Style', 'Charter', Georgia, serif",
+    // 'Iowan Old Style' is Apple-only and silently falls back to Charter/
+    // Georgia everywhere else, so the approved preview and what a Windows/
+    // Linux visitor sees were two different sites. Fraunces is a warm,
+    // editorial-weight serif in the same register — self-hosted below.
+    displayFont: "'Fraunces', 'Charter', Georgia, serif",
     bodyFont:
       "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+    selfHostTypefaces: ['fraunces'],
     palette: {
       bg:      'oklch(98% 0.004 95)',     // neutral paper, not beige wash
       surface: 'oklch(100% 0.002 95)',
@@ -81,10 +99,15 @@ export const DESIGN_DIRECTIONS: DesignDirection[] = [
     mood:
       'Quiet, precise, software-native. System fonts, crisp neutral foundations, and a small but visible product palette (primary + secondary + status/accent) so the interface feels shipped rather than greyscale. The chrome stays restrained while interaction states, illustrations, charts, and product moments carry color.',
     references: ['Linear', 'Vercel', 'Notion 2024', 'Stripe docs'],
+    // 'SF Pro Display' is Apple-only. Geist is Vercel's own open-sourced
+    // product typeface — one of this direction's own references — so it is
+    // a truer match than a system font ever was, and it renders identically
+    // on every platform. Self-hosted below.
     displayFont:
-      "-apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
+      "'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
     bodyFont:
       "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif",
+    selfHostTypefaces: ['geist'],
     palette: {
       bg:      'oklch(99% 0.002 240)',
       surface: 'oklch(100% 0 0)',
@@ -107,10 +130,15 @@ export const DESIGN_DIRECTIONS: DesignDirection[] = [
     mood:
       'Friendly and tactile without the generic cozy canvas. Uses a clean neutral background, product-led color system, generous radii, and clear hierarchy. Good for consumer tools, marketplaces, wellness, education, translation, AI assistants, and indie SaaS when the brand has not supplied a palette.',
     references: ['Airbnb', 'Duolingo product surfaces', 'Miro', 'Mercury'],
+    // 'Söhne' is a paid commercial face almost no visitor has installed, so
+    // this stack has always rendered as its system fallback in practice. DM
+    // Sans carries the same warm, friendly-app character and is free to
+    // self-host.
     displayFont:
-      "'Söhne', 'Avenir Next', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+      "'DM Sans', 'Avenir Next', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
     bodyFont:
       "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif",
+    selfHostTypefaces: ['dm-sans'],
     palette: {
       bg:      'oklch(98% 0.004 240)',
       surface: 'oklch(100% 0 0)',
@@ -133,11 +161,16 @@ export const DESIGN_DIRECTIONS: DesignDirection[] = [
     mood:
       'Data-dense, monospace-friendly, dark or light + grid. Made for engineers and operators who want information per square inch, not vibes.',
     references: ['Datadog', 'GitHub', 'Cloudflare dashboard', 'Sentry'],
+    // This stack already named 'Inter' and 'JetBrains Mono' — both are
+    // vendored in design-templates/ already — but put them after the
+    // system-font names, so they were never actually reached, let alone
+    // self-hosted. Moved to the front now that both are self-hosted below.
     displayFont:
-      "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif",
+      "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
     bodyFont:
-      "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif",
+      "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
     monoFont: "'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace",
+    selfHostTypefaces: ['inter', 'jetbrains-mono'],
     palette: {
       bg:      'oklch(98% 0.005 250)',
       surface: 'oklch(100% 0 0)',
@@ -160,10 +193,16 @@ export const DESIGN_DIRECTIONS: DesignDirection[] = [
     mood:
       'Loud type. Visible grid. System sans + a single oversized serif. Deliberate ugliness as confidence. Great for art, indie, agency, manifesto pages.',
     references: ['Are.na', 'Yale Center for British Art', 'mschf', 'Read.cv'],
+    // 'Times New Roman' is genuinely near-universal (it is the mood's own
+    // reference point) so it stays first. Its fallback was 'Iowan Old
+    // Style' — Apple-only — for the rare machine without Times New Roman;
+    // Bodoni Moda is a real, self-hosted, equally high-drama didone serif
+    // for that case instead.
     displayFont:
-      "'Times New Roman', 'Iowan Old Style', Georgia, serif",
+      "'Times New Roman', 'Bodoni Moda', Georgia, serif",
     bodyFont:
       "ui-monospace, 'IBM Plex Mono', 'JetBrains Mono', Menlo, monospace",
+    selfHostTypefaces: ['bodoni-moda'],
     palette: {
       bg:      'oklch(98% 0.004 240)',   // neutral printer paper
       surface: 'oklch(100% 0 0)',
@@ -248,6 +287,29 @@ export function renderDirectionSpec(d: DesignDirection): string {
   lines.push('');
   lines.push(`**References:** ${d.references.join(', ')}.`);
   lines.push('');
+  if (d.selfHostTypefaces?.length) {
+    // The font names in the :root block below only resolve to a real
+    // rendered face once these are actually self-hosted — otherwise the
+    // browser silently falls through to whatever the visitor's OS happens
+    // to have installed, which is the exact defect this instruction fixes.
+    // Every id here is already license-cleared and copies from local disk
+    // (apps/daemon/src/typefaces/catalogue.ts) — no network fetch, so this
+    // cannot hang waiting on a remote font like a CDN `<link>` would.
+    lines.push(
+      `**Self-host the named webfont(s) before binding the stacks below** — otherwise \`--font-display\`/\`--font-body\`/\`--font-mono\` silently fall through to whichever system font the visitor happens to have:`,
+    );
+    lines.push('');
+    lines.push('```sh');
+    for (const id of d.selfHostTypefaces) {
+      lines.push(`"$OD_NODE_BIN" "$OD_BIN" typefaces install ${id} --project "$OD_PROJECT_ID"`);
+    }
+    lines.push('```');
+    lines.push('');
+    lines.push(
+      'Each call copies real woff2 files into the project and writes an `@font-face` `fonts.css` next to them (path printed in the command\'s output). Add a `<link rel="stylesheet" href="<printed dir>/fonts.css">` to the page before the `:root` block renders, then use the stacks verbatim — the named family now resolves to the self-hosted face instead of a fallback.',
+    );
+    lines.push('');
+  }
   lines.push('**Palette (drop into `:root`):**');
   lines.push('');
   lines.push('```css');

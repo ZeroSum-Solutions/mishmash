@@ -688,7 +688,14 @@ export const en: Dict = {
   'entry.navDesignLibrary': 'Design Library',
   'entry.navStoryboard': 'Storyboard',
   'entry.navTemplates': 'Templates',
+  'entry.navTypefaces': 'Typefaces',
   'entry.navIntegrations': 'Integrations',
+  'typefaces.title': 'Typefaces',
+  'typefaces.subtitle':
+    'Self-hosted webfonts already vendored in the template catalogue — install one into any project instead of falling back to the system font stack.',
+  'typefaces.search': 'Search typefaces',
+  'typefaces.loading': 'Loading typeface catalogue…',
+  'typefaces.empty': 'No typefaces match your search.',
   'templates.title': 'Templates',
   'templates.subtitle':
     'Every renderable design template in the catalogue. Open one to inspect it, or start a project from it.',

@@ -1269,5 +1269,24 @@
       "rows": 24
     },
     "knownNamespaceRoutes": []
+  },
+  {
+    "capability": "typefaces",
+    "uiEntryPoint": "Left nav rail > Typefaces (EntryShell 'typefaces' view)",
+    "cliArgs": [
+      "typefaces",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/typefaces",
+    "outputSchema": "{ typefaces: [...], scannedFamilies }",
+    "parityApplicable": true,
+    "reason": "Read-only list is the representative surface, so the parity probe is idempotent. The namespace's other two routes are excluded from cliArgs: GET /api/typefaces/:id needs a real family id as a path param the gate probe cannot supply generically, and POST /api/typefaces/:id/install writes files into a real project, which a parity probe must not do as a side effect of grading. Both are snapshotted in knownNamespaceRoutes below.",
+    "knownNamespaceRoutes": [
+      "GET /api/typefaces",
+      "GET /api/typefaces/:param",
+      "POST /api/typefaces/:param/install"
+    ]
   }
 ]
