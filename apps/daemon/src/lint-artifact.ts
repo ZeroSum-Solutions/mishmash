@@ -12,9 +12,28 @@
  * to extend. It does NOT parse HTML — false positives are tolerable
  * because each finding includes a snippet so the agent can verify.
  *
- * Wired into the artifact save flow (POST /api/artifacts/save) and
- * exposed standalone at POST /api/artifacts/lint for the chat UI to
- * surface badges next to each saved artifact.
+ * Wired into the live generation path: `apps/daemon/src/server.ts`'s
+ * `def.streamFormat === 'claude-stream-json'` run handler lints every
+ * `.html`/`.htm` file the RUN ITSELF wrote (a Write/Edit/MultiEdit
+ * tool_use whose tool_result confirms success — never a file the agent
+ * merely read or copied), once per distinct file content, and on a P0
+ * finding writes `renderFindingsForAgent`'s text back onto the child's
+ * still-open stdin as a follow-up stream-json user message, so the agent
+ * sees it and can self-correct before the turn ends. This channel exists
+ * only for the Claude runtime (the one whose stdin the daemon keeps open
+ * mid-turn — see `apps/daemon/src/runtimes/chat-run-lifecycle.ts`); other
+ * runtimes close stdin with the initial prompt, so a run on those gets no
+ * in-turn feedback. `isWebCloneRun` is threaded through from the run's
+ * `metadata.intent === 'web-clone'` check, matching the exemption
+ * `craft.ts` already gives clone runs for `craft/composition.md`.
+ *
+ * `POST /api/artifacts/save` and `POST /api/artifacts/lint`
+ * (`apps/daemon/src/routes/project/index.ts`) also call `lintArtifact`,
+ * but neither route has a caller anywhere in this codebase today — they
+ * predate the live-generation wiring above and are not part of the
+ * enforced path. There is still no UI surface for lint findings (no P0/P1
+ * badge); this file's findings currently reach only the agent, not the
+ * user. Persistence is never blocked on a finding, at any severity.
  */
 
 type LintSeverity = 'P0' | 'P1' | 'P2';
