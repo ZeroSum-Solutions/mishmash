@@ -14,7 +14,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { hasOdCard } from '@open-design/contracts';
+import { DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID, hasOdCard } from '@open-design/contracts';
 import { useAnalytics } from '../analytics/provider';
 import { getResolvedDeviceId } from '../analytics/client';
 import { trackChatPanelClick, trackMessageQueueClick, trackRunFailedToastSurfaceView } from '../analytics/events';
@@ -2936,7 +2936,14 @@ function ChatRows({
       const pluginSnapshot = message.appliedPluginSnapshot ?? activePluginSnapshot ?? null;
       const contextItems: AppliedContextItem[] = [];
 
-      if (pluginSnapshot) {
+      // The hidden fallback scenario (od-default, "Default design router")
+      // binds itself whenever the user didn't pick a plugin -- surfacing
+      // "Using Default design router" here every time tells the user
+      // nothing they chose and names an internal routing mechanism instead
+      // (sixth-grade usability baseline, docs/gauntlet). It stays hidden
+      // from the plugin picker for the same reason; skip it here too so a
+      // free-form Home prompt shows no plugin line rather than a jargon one.
+      if (pluginSnapshot && pluginSnapshot.pluginId !== DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID) {
         contextItems.push({
           kind: 'plugin',
           title: pluginSnapshot.pluginTitle ?? pluginSnapshot.pluginId,
@@ -2945,6 +2952,7 @@ function ChatRows({
       }
       for (const pluginId of message.runContext?.pluginIds ?? []) {
         if (pluginSnapshot?.pluginId === pluginId) continue;
+        if (pluginId === DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID) continue;
         contextItems.push({ kind: 'plugin', title: pluginId, pluginId });
       }
       for (const skillId of message.runContext?.skillIds ?? []) {
