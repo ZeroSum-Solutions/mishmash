@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { loadCraftSections } from '../src/craft.js';
+import { CRAFT_FLOOR, isVisualCraftSurface, loadCraftSections, resolveRequestedCraft } from '../src/craft.js';
 
 let craftDir: string;
 
@@ -67,5 +67,126 @@ describe('loadCraftSections', () => {
       'typography',
     ]);
     expect(r.sections).toEqual(['typography']);
+  });
+});
+
+// Plan A1 — the craft floor. Before this change, `requestedCraft` in
+// server.ts was `isWebCloneRun ? [] : union(skillCraftRequires,
+// designSystemCraftApplies).filter(...)`: a plain website brief (no
+// skill picked, no design system selected) resolved to zero craft
+// sections on the single most common path in the product. See
+// AGENTS.md "Design authority" for why web-clone must stay exempt.
+describe('resolveRequestedCraft', () => {
+  const noExplicitCraft = {
+    isWebCloneRun: false,
+    skillCraftRequires: [],
+    designSystemCraftApplies: [],
+    designSystemCraftExemptions: [],
+  };
+
+  it('the defect: with the pre-fix inputs (no skill, no design system) a visual run got nothing', () => {
+    // This is the exact `union(...).filter(...)` server.ts used to run,
+    // with none of `isVisualSurface` in play — reproduced here as the
+    // "before" baseline so the floor test below reads as its fix.
+    const preFixFormula = ({ isWebCloneRun, skillCraftRequires, designSystemCraftApplies, designSystemCraftExemptions }: {
+      isWebCloneRun: boolean;
+      skillCraftRequires: string[];
+      designSystemCraftApplies: string[];
+      designSystemCraftExemptions: string[];
+    }) => {
+      const excluded = new Set(designSystemCraftExemptions);
+      return isWebCloneRun
+        ? []
+        : Array.from(new Set([...skillCraftRequires, ...designSystemCraftApplies])).filter(
+            (slug) => !excluded.has(slug),
+          );
+    };
+    expect(preFixFormula(noExplicitCraft)).toEqual([]);
+  });
+
+  it('applies the craft floor for a skill-less, design-system-less visual run', () => {
+    const r = resolveRequestedCraft({ ...noExplicitCraft, isVisualSurface: true });
+    expect(r).toEqual([...CRAFT_FLOOR]);
+    expect(r.length).toBeGreaterThan(0);
+  });
+
+  it('keeps web-clone runs at zero craft even when the run is visual', () => {
+    const r = resolveRequestedCraft({
+      ...noExplicitCraft,
+      isWebCloneRun: true,
+      isVisualSurface: true,
+    });
+    expect(r).toEqual([]);
+  });
+
+  it('keeps a non-visual run (audio/video/chat/plan) at zero craft even with no explicit request', () => {
+    const r = resolveRequestedCraft({ ...noExplicitCraft, isVisualSurface: false });
+    expect(r).toEqual([]);
+  });
+
+  it('an explicit skill request wins outright and is NOT unioned with the floor', () => {
+    const r = resolveRequestedCraft({
+      isWebCloneRun: false,
+      skillCraftRequires: ['motion'],
+      designSystemCraftApplies: [],
+      designSystemCraftExemptions: [],
+      isVisualSurface: true,
+    });
+    // The skill deliberately requires only `motion` — the floor must not
+    // silently add typography/color/anti-ai-slop on top of that choice.
+    expect(r).toEqual(['motion']);
+  });
+
+  it('unions an explicit skill request with an explicit design-system request', () => {
+    const r = resolveRequestedCraft({
+      isWebCloneRun: false,
+      skillCraftRequires: ['typography'],
+      designSystemCraftApplies: ['motion'],
+      designSystemCraftExemptions: [],
+      isVisualSurface: true,
+    });
+    expect(r.sort()).toEqual(['motion', 'typography']);
+  });
+
+  it('design-system exemptions win over an explicit request', () => {
+    const r = resolveRequestedCraft({
+      isWebCloneRun: false,
+      skillCraftRequires: ['typography', 'color'],
+      designSystemCraftApplies: [],
+      designSystemCraftExemptions: ['color'],
+      isVisualSurface: true,
+    });
+    expect(r).toEqual(['typography']);
+  });
+
+  it('design-system exemptions also win over the floor', () => {
+    const r = resolveRequestedCraft({
+      ...noExplicitCraft,
+      designSystemCraftExemptions: ['anti-ai-slop'],
+      isVisualSurface: true,
+    });
+    expect(r).toEqual(['typography', 'color']);
+  });
+
+  it('the floor is small and defensible: exactly typography, color, anti-ai-slop', () => {
+    expect([...CRAFT_FLOOR].sort()).toEqual(['anti-ai-slop', 'color', 'typography']);
+  });
+});
+
+describe('isVisualCraftSurface', () => {
+  it('is true for a plain design-mode run (the default, no media surface)', () => {
+    expect(isVisualCraftSurface({ isMediaSurface: false, sessionMode: 'design' })).toBe(true);
+  });
+
+  it('is false for image/video/audio media generation', () => {
+    expect(isVisualCraftSurface({ isMediaSurface: true, sessionMode: 'design' })).toBe(false);
+  });
+
+  it('is false for a chat-only (Ask mode) turn', () => {
+    expect(isVisualCraftSurface({ isMediaSurface: false, sessionMode: 'chat' })).toBe(false);
+  });
+
+  it('is false for a plan-only turn', () => {
+    expect(isVisualCraftSurface({ isMediaSurface: false, sessionMode: 'plan' })).toBe(false);
   });
 });
