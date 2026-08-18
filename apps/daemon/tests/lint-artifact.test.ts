@@ -1239,8 +1239,15 @@ describe('layout-risk-flat', () => {
     expect(hit.severity).toBe('P1');
   });
 
-  it('does not flag a page one section below the threshold', () => {
+  it('flags a page at the threshold', () => {
     const html = flatPageHtml(5);
+    const findings = lintArtifact(html);
+    const hit = requiredFinding(findings, 'layout-risk-flat');
+    expect(hit.severity).toBe('P1');
+  });
+
+  it('does not flag a page one section below the threshold', () => {
+    const html = flatPageHtml(4);
     const findings = lintArtifact(html);
     expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeUndefined();
   });

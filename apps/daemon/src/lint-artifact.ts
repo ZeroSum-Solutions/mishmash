@@ -149,7 +149,17 @@ const DISPLAY_SANS_RE =
 // as a finding rather than an expected shape (single-viewport hero, form,
 // docs page, data table, email template). See the `layout-risk-flat`
 // check's own comment for the corpus evidence behind this number.
-const LAYOUT_RISK_SECTION_THRESHOLD = 6;
+//
+// Set to 5, not 6. The corpus measurement behind this rule found zero false
+// positives at every bucket from 4 sections upward across 168 of the 344
+// design-templates/*/example.html files; 6 was chosen as extra headroom
+// above that clean cutoff. Measured generated pages then landed at 5-10
+// sections, so 6 silently exempted real instances of exactly the shape the
+// rule exists to catch -- one build scored 121px display type over a
+// 5-section page with one positioned element and zero transforms, and never
+// tripped. 5 stays a full section above the measured-clean cutoff of 4
+// while covering the observed failure shape.
+const LAYOUT_RISK_SECTION_THRESHOLD = 5;
 
 /**
  * Run all checks against an HTML artifact body. Returns an array of

@@ -8165,9 +8165,23 @@ export async function startServer({
       if (lastLintedHtmlHashByPath.get(absPath) === contentHash) return; // lint once per distinct content
       lastLintedHtmlHashByPath.set(absPath, contentHash);
       const findings = lintArtifact(html, { isWebCloneRun: run.isWebCloneRun === true });
-      // P0 only: P1/P2 stay UI-badge-style advisories (once a UI surface
-      // exists — see craft/README.md), not a reason to interrupt a live run.
-      if (!findings.some((f) => f.severity === 'P0')) return;
+      // P0, plus the one P1 that earns the channel. P1/P2 are otherwise
+      // UI-badge-style advisories (once a UI surface exists — see
+      // craft/README.md), not a reason to interrupt a live run.
+      //
+      // `layout-risk-flat` is the exception because it is the only rule here
+      // measuring the gap this feedback loop was built for. Three blind
+      // comparisons against professionally designed templates scored
+      // generated output 0/1 on layout risk, and prose guidance in
+      // craft/composition.md did not move it across four builds — the
+      // positioned/transformed element count stayed at zero every time.
+      // Gating it behind P0 would leave the one finding that names that gap
+      // unable to reach the agent at all, which is the disconnect this
+      // condition exists to close. It is still advisory: nothing is blocked,
+      // the agent simply gets told before its turn ends.
+      const feedbackWorthy = (f: { severity: string; id: string }) =>
+        f.severity === 'P0' || f.id === 'layout-risk-flat';
+      if (!findings.some(feedbackWorthy)) return;
       const agentMessage = renderFindingsForAgent(findings);
       const userMessage = JSON.stringify({
         type: 'user',
