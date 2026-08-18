@@ -5,10 +5,14 @@ import { APP_CHROME_FILE_ACTIONS_ID, APP_CHROME_FILE_ACTIONS_SELECTOR } from './
 import {
   buildSocialSharePayload,
   OPEN_DESIGN_GITHUB_REPO_URL,
+  type CompositionMetrics,
+  type CompositionMetricsRecord,
   type ProjectFileVersion,
   type SocialShareRequest,
   type SocialShareResponse,
 } from '@open-design/contracts';
+import { reportCompositionMetrics } from '../runtime/composition-metrics-report';
+import { CompositionMetricsReadout } from './CompositionMetricsReadout';
 import {
   anonymizeArtifactId,
   artifactKindToTracking,
@@ -141,6 +145,7 @@ import {
 import {
   hasTweaksTemplate,
   hasUrlModeBridge,
+  htmlLooksMeasurableForCompositionMetrics,
   htmlNeedsFocusGuard,
   htmlNeedsPoweredPreview,
   htmlNeedsRedirectGuard,
@@ -6410,6 +6415,14 @@ function HtmlViewer({
     { width: number; viewportWidth: number | null } | null
   >(null);
   const desktopPreviewContentWidth = desktopPreviewContentMetrics?.width ?? null;
+  // Rendered layout-risk measurement (see CompositionMetrics in
+  // @open-design/contracts and injectCompositionMetricsBridge in
+  // runtime/srcdoc.ts). Reset on file change alongside the content-size
+  // metrics below, and populated from the daemon's stored record once the
+  // bridge's own measurement round-trips through reportCompositionMetrics.
+  const [compositionMetricsRecord, setCompositionMetricsRecord] = useState<CompositionMetricsRecord | null>(null);
+  const [compositionMetricsPanelOpen, setCompositionMetricsPanelOpen] = useState(false);
+  const compositionMetricsMenuRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const urlPreviewIframeRef = useRef<HTMLIFrameElement | null>(null);
   const srcDocPreviewIframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -6525,6 +6538,7 @@ function HtmlViewer({
     setManualEditSrcDocActive(false);
     setManualEditFrozenSource(null);
     setDesktopPreviewContentMetrics(null);
+    setCompositionMetricsRecord(null);
   }, [projectId, file.name]);
   useEffect(() => {
     onCommentModeChange?.(commentPanelOpen);
@@ -7331,6 +7345,16 @@ function HtmlViewer({
     const s = routingHtmlSource;
     return s != null && hasTweaksTemplate(s);
   }, [passiveLargeHtmlPreview, routingHtmlSource]);
+  // Layout-risk measurement (see CompositionMetrics in @open-design/
+  // contracts) only runs on the srcDoc path — injectCompositionMetricsBridge
+  // has no URL-load equivalent. Scoped to multi-section pages (see
+  // htmlLooksMeasurableForCompositionMetrics) rather than forcing srcDoc for
+  // every HTML preview, so a form or docs page keeps URL-load's benefits.
+  const compositionMetricsBridgeNeeded = useMemo(() => {
+    if (passiveLargeHtmlPreview) return false;
+    const s = routingHtmlSource;
+    return s != null && htmlLooksMeasurableForCompositionMetrics(s);
+  }, [passiveLargeHtmlPreview, routingHtmlSource]);
   // Set by the injected guard's `od:redirect-loop-blocked` postMessage. The
   // browser makes `window.location` unforgeable, so a runaway reload can only be
   // stopped host-side — parking the srcDoc iframe on static content below. File-
@@ -7430,6 +7454,7 @@ function HtmlViewer({
     inspectMode,
     drawMode: drawOverlayOpen,
     tweaksBridge: tweaksTemplateBridge,
+    compositionMetricsBridge: compositionMetricsBridgeNeeded,
     forceInline: (forceInline || needsSandboxShim) && !needsPowered,
     needsFocusGuard: needsFocusGuard && !needsPowered,
     needsRedirectGuard: needsRedirectGuard && !needsPowered,
@@ -8004,17 +8029,35 @@ function HtmlViewer({
         return { width: measuredWidth, viewportWidth: frameViewportWidth };
       });
     }
+    // Rendered layout-risk measurement (see injectCompositionMetricsBridge in
+    // runtime/srcdoc.ts). The bridge auto-measures and posts on its own
+    // cadence — this handler just relays whatever it reports to the daemon
+    // (reportCompositionMetrics is fire-and-forget/best-effort, same shape as
+    // reportAnomaly) and mirrors the daemon's stored record into state so the
+    // readout has something to show without a second round trip.
+    function onCompositionMetricsMessage(ev: MessageEvent) {
+      if (!isOurPreviewIframeSource(ev.source)) return;
+      if (!isActivePreviewIframeSource(ev.source)) return;
+      const data = ev.data as { type?: string; metrics?: CompositionMetrics } | null;
+      if (!data || data.type !== 'od:composition-metrics' || !data.metrics) return;
+      reportCompositionMetrics(
+        { projectId, file: file.path || file.name, metrics: data.metrics },
+        (record) => setCompositionMetricsRecord(record),
+      );
+    }
     window.addEventListener('message', onMessage);
     window.addEventListener('message', onRestoreRequest);
     window.addEventListener('message', onDcViewportMessage);
     window.addEventListener('message', onContentSizeMessage);
+    window.addEventListener('message', onCompositionMetricsMessage);
     return () => {
       window.removeEventListener('message', onMessage);
       window.removeEventListener('message', onRestoreRequest);
       window.removeEventListener('message', onDcViewportMessage);
       window.removeEventListener('message', onContentSizeMessage);
+      window.removeEventListener('message', onCompositionMetricsMessage);
     };
-  }, [isActivePreviewIframeSource, isOurPreviewIframeSource]);
+  }, [isActivePreviewIframeSource, isOurPreviewIframeSource, projectId, file.path, file.name]);
 
   useEffect(() => {
     if (!effectiveDeck) {
@@ -9521,6 +9564,23 @@ function HtmlViewer({
       document.removeEventListener('keydown', onKey);
     };
   }, [zoomMenuOpen]);
+
+  useEffect(() => {
+    if (!compositionMetricsPanelOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!compositionMetricsMenuRef.current) return;
+      if (!compositionMetricsMenuRef.current.contains(e.target as Node)) setCompositionMetricsPanelOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setCompositionMetricsPanelOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [compositionMetricsPanelOpen]);
 
   useEffect(() => {
     if (!toolbarMoreOpen) return;
@@ -11987,6 +12047,30 @@ function HtmlViewer({
               >
                 <Icon name="tweaks" size={15} />
               </button>
+              <span className="viewer-toolbar-tool-divider" aria-hidden />
+              {source !== null && mode === 'preview' ? (
+                <div className="zoom-menu viewer-toolbar-zoom" ref={compositionMetricsMenuRef}>
+                  <button
+                    type="button"
+                    className={`viewer-action viewer-action-icon od-tooltip${compositionMetricsPanelOpen ? ' active' : ''}`}
+                    data-testid="composition-metrics-toggle"
+                    data-tooltip={t('fileViewer.compositionMetrics')}
+                    data-tooltip-placement="bottom"
+                    title={t('fileViewer.compositionMetrics')}
+                    aria-label={t('fileViewer.compositionMetrics')}
+                    aria-haspopup="true"
+                    aria-expanded={compositionMetricsPanelOpen}
+                    onClick={() => setCompositionMetricsPanelOpen((v) => !v)}
+                  >
+                    <RemixIcon name="ruler-2-line" size={15} />
+                  </button>
+                  {compositionMetricsPanelOpen ? (
+                    <div className="zoom-menu-popover" role="menu" aria-label={t('fileViewer.compositionMetricsPanelTitle')}>
+                      <CompositionMetricsReadout record={compositionMetricsRecord} />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <span className="viewer-toolbar-tool-divider" aria-hidden />
               <button
                 type="button"

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  COMPOSITION_METRICS_SECTION_THRESHOLD,
   hasTweaksTemplate,
   hasUrlModeBridge,
+  htmlLooksMeasurableForCompositionMetrics,
   htmlNeedsFocusGuard,
   htmlNeedsPoweredPreview,
   htmlNeedsRedirectGuard,
@@ -68,6 +70,14 @@ describe('shouldUrlLoadHtmlPreview', () => {
     expect(shouldUrlLoadHtmlPreview({ ...base, tweaksBridge: true })).toBe(false);
   });
 
+  it('falls back to srcDoc when the artifact looks measurable for composition metrics', () => {
+    // injectCompositionMetricsBridge (buildSrcdoc) has no URL-load
+    // equivalent — without this, a multi-section marketing page would
+    // URL-load by default and the layout-risk readout would silently never
+    // receive a measurement.
+    expect(shouldUrlLoadHtmlPreview({ ...base, compositionMetricsBridge: true })).toBe(false);
+  });
+
   it('falls back to srcDoc when the user opts in via forceInline', () => {
     expect(shouldUrlLoadHtmlPreview({ ...base, forceInline: true })).toBe(false);
   });
@@ -126,6 +136,32 @@ describe('hasTweaksTemplate', () => {
     expect(hasTweaksTemplate('')).toBe(false);
     expect(hasTweaksTemplate(null)).toBe(false);
     expect(hasTweaksTemplate(undefined)).toBe(false);
+  });
+});
+
+describe('htmlLooksMeasurableForCompositionMetrics', () => {
+  function pageWithSections(count: number): string {
+    const sections = Array.from({ length: count }, (_, i) => `<section>${i}</section>`).join('');
+    return `<!doctype html><html><body>${sections}</body></html>`;
+  }
+
+  it(`returns false below the ${COMPOSITION_METRICS_SECTION_THRESHOLD}-section threshold`, () => {
+    expect(htmlLooksMeasurableForCompositionMetrics(pageWithSections(COMPOSITION_METRICS_SECTION_THRESHOLD - 1))).toBe(false);
+  });
+
+  it(`returns true at and above the ${COMPOSITION_METRICS_SECTION_THRESHOLD}-section threshold`, () => {
+    expect(htmlLooksMeasurableForCompositionMetrics(pageWithSections(COMPOSITION_METRICS_SECTION_THRESHOLD))).toBe(true);
+    expect(htmlLooksMeasurableForCompositionMetrics(pageWithSections(COMPOSITION_METRICS_SECTION_THRESHOLD + 4))).toBe(true);
+  });
+
+  it('returns false for empty / null / undefined input', () => {
+    expect(htmlLooksMeasurableForCompositionMetrics('')).toBe(false);
+    expect(htmlLooksMeasurableForCompositionMetrics(null)).toBe(false);
+    expect(htmlLooksMeasurableForCompositionMetrics(undefined)).toBe(false);
+  });
+
+  it('returns false for a form or docs page with only a couple of sections', () => {
+    expect(htmlLooksMeasurableForCompositionMetrics('<section>Contact form</section>')).toBe(false);
   });
 });
 

@@ -3561,6 +3561,17 @@ export interface Dict {
   'fileViewer.source': string;
   'fileViewer.tweaks': string;
   'fileViewer.tweaksUnavailable': string;
+  'fileViewer.compositionMetrics': string;
+  'fileViewer.compositionMetricsPanelTitle': string;
+  'fileViewer.compositionMetricsEmpty': string;
+  'fileViewer.compositionMetricsCloneExempt': string;
+  'fileViewer.compositionMetricsSections': string;
+  'fileViewer.compositionMetricsOutOfFlow': string;
+  'fileViewer.compositionMetricsTransformed': string;
+  'fileViewer.compositionMetricsBackgrounds': string;
+  'fileViewer.compositionMetricsWidths': string;
+  'fileViewer.compositionMetricsFullBleed': string;
+  'fileViewer.compositionMetricsFontRatio': string;
   'fileViewer.jsxModuleTitle': string;
   'fileViewer.jsxModuleBody': string;
   'fileViewer.jsxModuleCta': string;
