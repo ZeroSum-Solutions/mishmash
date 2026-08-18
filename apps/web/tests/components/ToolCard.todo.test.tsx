@@ -60,4 +60,21 @@ describe('TodoCard completion disclosure', () => {
     fireEvent.click(toggle!);
     expect(toggle?.getAttribute('aria-expanded')).toBe('false');
   });
+
+  // A payload TodoCard can't parse into a real list (e.g. a double-encoded
+  // `todos` string that still fails to decode) falls back to GenericCard --
+  // that fallback must never dump the raw input as visible JSON text.
+  it('falls back to a plain label instead of dumping raw JSON for an unparseable payload', () => {
+    const { container } = render(
+      <TodoCard
+        input={{ todos: 'not valid json' }}
+        runStreaming={false}
+        runSucceeded
+      />,
+    );
+
+    expect(container.querySelector('.op-generic')).not.toBeNull();
+    expect(container.textContent).not.toContain('not valid json');
+    expect(container.querySelector('.op-meta')).toBeNull();
+  });
 });
