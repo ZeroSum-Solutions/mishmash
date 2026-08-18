@@ -9641,7 +9641,7 @@ been opened in preview.
   <artifact-path>       Absolute path to a file under a managed project
                          (e.g. .../.od/projects/<id>/index.html). Resolved
                          into project id + file server-side.
-  --project <id>        Project id (use with --file instead of a path).
+  --project <id>         Project id (use with --file instead of a path).
   --file <relPath>       File path relative to the project root.
   --json                 Print the raw record for piping into jq.
   --daemon-url <url>     Override the daemon HTTP base URL.
