@@ -21,7 +21,7 @@ od:
     requires: true
     sections: [color, typography, layout, components]
   craft:
-    requires: [typography, color, anti-ai-slop, laws-of-ux]
+    requires: [typography, color, anti-ai-slop, laws-of-ux, composition]
   inputs:
     - name: product_name
       type: string

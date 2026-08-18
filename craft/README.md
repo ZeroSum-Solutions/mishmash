@@ -84,6 +84,7 @@ A purely behavioral craft file (state-coverage, animation-discipline) is guidanc
 | `typography-hierarchy-editorial.md` | `typography-hierarchy-editorial` | Skills whose primary artifact is a sustained reading surface: `blog-post`, `docs-page`, `digital-eguide`. Requires `typography` + `typography-hierarchy`. |
 | `color.md` | `color` | Any skill that emits styled output (~all skills) |
 | `anti-ai-slop.md` | `anti-ai-slop` | Marketing pages, landing pages, decks |
+| `composition.md` | `composition` | Skills that assemble multiple distinct sections into one scrolling page and own the page-level layout decision: marketing pages, landing pages, portfolio/agency sites. Not for a single component, a fixed vendored template whose composition already ships baked-in, or a surface with no cross-section rhythm to get right (dashboards, forms — see `laws-of-ux` and `state-coverage` instead). |
 | `state-coverage.md` | `state-coverage` | Any skill with stateful UI (dashboards, mobile apps, forms, list/table views) |
 | `animation-discipline.md` | `animation-discipline` | Any skill that ships motion: mobile apps, multi-screen flows, gamified UI, transitions, microinteractions |
 | `accessibility-baseline.md` | `accessibility-baseline` | Any skill that ships interactive UI: dashboards, forms, mobile flows, anything with focus/labels/keyboard paths |
