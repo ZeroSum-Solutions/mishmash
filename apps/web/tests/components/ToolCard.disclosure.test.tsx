@@ -135,4 +135,27 @@ describe('ToolCard secondary result disclosures', () => {
     expect(container.textContent).toContain('pnpm typecheck');
     expect(container.textContent).toContain('Done');
   });
+
+  // Long output collapses to a summary line on principle (any tool result
+  // over the shared line threshold, not a per-command allowlist) -- the
+  // collapsed head names the scale of what's hidden instead of staying
+  // silent about it.
+  it('shows a line-count summary on the closed head for long command output, not for short output', () => {
+    const longOutput = Array.from({ length: 93 }, (_, i) => `line ${i}`).join('\n');
+    const { container: longContainer } = renderTool(
+      { kind: 'tool_use', id: 'bash-long', name: 'Bash', input: { command: 'od typefaces list' } },
+      { kind: 'tool_result', toolUseId: 'bash-long', content: longOutput, isError: false },
+    );
+    const longHead = longContainer.querySelector<HTMLButtonElement>('.op-bash .op-card-head');
+    const longDisclosure = longContainer.querySelector('.op-bash .accordion-collapsible');
+    expect(longHead?.getAttribute('aria-expanded')).toBe('false');
+    expect(longDisclosure?.classList.contains('open')).toBe(false);
+    expect(longContainer.querySelector('.op-output-size')?.textContent).toBe('93 lines');
+
+    const { container: shortContainer } = renderTool(
+      { kind: 'tool_use', id: 'bash-short', name: 'Bash', input: { command: 'pwd' } },
+      { kind: 'tool_result', toolUseId: 'bash-short', content: '/repo', isError: false },
+    );
+    expect(shortContainer.querySelector('.op-output-size')).toBeNull();
+  });
 });

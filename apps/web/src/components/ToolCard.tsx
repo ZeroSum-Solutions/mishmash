@@ -502,12 +502,14 @@ function FileReadCard({
   const file = obj.file_path ?? obj.filePath ?? obj.path ?? '(unnamed)';
   const baseName = file.split('/').pop() ?? file;
   const isRunning = runStreaming && !result;
+  const outputLines = longOutputLineCount(result?.content, result?.isError);
   return (
     <div className="op-card op-file">
       <button type="button" className="op-card-head" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <ResultBadge category="read" result={result} runStreaming={runStreaming} runSucceeded={runSucceeded} />
         <span className={`op-title${isRunning ? ' shimmer-text' : ''}`}>{t('tool.read')}</span>
         <span className="op-meta">{baseName}</span>
+        {outputLines !== null ? <span className="op-meta op-output-size">{t('tool.lines', { n: outputLines })}</span> : null}
         <span className="op-expand-chev" aria-hidden>
           <Icon name={open ? "chevron-down" : "chevron-right"} size={11} />
         </span>
@@ -536,12 +538,14 @@ function BashCard({ rawName, input, result, runStreaming, runSucceeded }: { rawN
   const desc = obj.description;
   const [open, setOpen] = useState(false);
   const isRunning = runStreaming && !result;
+  const outputLines = longOutputLineCount(result?.content, result?.isError);
   return (
     <div className="op-card op-bash">
       <button type="button" className="op-card-head" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <ResultBadge category="run" result={result} runStreaming={runStreaming} runSucceeded={runSucceeded} />
         <span className={`op-title${isRunning ? ' shimmer-text' : ''}`} title={rawName}>{t('tool.bash')}</span>
         {desc ? <span className="op-meta op-desc">{desc}</span> : null}
+        {outputLines !== null ? <span className="op-meta op-output-size">{t('tool.lines', { n: outputLines })}</span> : null}
         <span className="op-expand-chev" aria-hidden>
           <Icon name={open ? "chevron-down" : "chevron-right"} size={11} />
         </span>
@@ -622,14 +626,17 @@ function CompactResultCard({
   runStreaming: boolean;
   runSucceeded: boolean;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const hasOutput = !!result?.content.trim() && !result.isError;
   const headTitle = rawName && rawName !== title ? rawName : undefined;
+  const outputLines = longOutputLineCount(result?.content, result?.isError);
   const head = (
     <>
       <ResultBadge category={category} result={result} runStreaming={runStreaming} runSucceeded={runSucceeded} />
       <span className="op-title">{title}</span>
       {summary ? <span className="op-meta">{summary}</span> : null}
+      {outputLines !== null ? <span className="op-meta op-output-size">{t('tool.lines', { n: outputLines })}</span> : null}
       {hasOutput ? (
         <span className="op-expand-chev" aria-hidden>
           <Icon name={open ? 'chevron-down' : 'chevron-right'} size={11} />
@@ -681,7 +688,13 @@ function GenericCard({
   runSucceeded: boolean;
 }) {
   const t = useT();
-  const summary = describeInput(input);
+  // A todo call whose input didn't parse into a real list (see
+  // parseTodoWriteInput / TodoCard above) has no presentable input shape --
+  // describeInput's JSON.stringify fallback would dump the raw payload
+  // (possibly a double-encoded JSON string) as visible chat text. The "Todos"
+  // label already says what this is; skip the summary rather than show raw
+  // JSON.
+  const summary = category === 'todo' ? '' : describeInput(input);
   const label = friendlyToolName(name, t);
   return (
     <div className="op-card op-generic">
@@ -745,4 +758,22 @@ function describeInput(input: unknown): string {
 function truncate(s: string, n: number): string {
   if (s.length <= n) return s;
   return s.slice(0, n - 1) + '…';
+}
+
+// Long tool output collapses to a summary line on principle, not per-command
+// (a 93-entry font catalogue is not special-cased -- any result over this
+// many lines gets the same treatment). Matches CODE_COLLAPSE_LINE_THRESHOLD
+// in runtime/markdown.tsx, the equivalent "fold tall content" bar already
+// established for markdown code blocks elsewhere in the transcript, so the
+// whole product agrees on one "this counts as long" line.
+const TOOL_OUTPUT_LONG_LINE_THRESHOLD = 16;
+
+// Line count behind an unopened output accordion -- so the collapsed head
+// can say how much is hidden ("93 lines") instead of nothing at all. Returns
+// null for short output, where a size badge would just be clutter next to
+// content that's about to be shown in full anyway.
+function longOutputLineCount(content: string | undefined, isError: boolean | undefined): number | null {
+  if (!content || isError) return null;
+  const lines = content.split('\n').length;
+  return lines > TOOL_OUTPUT_LONG_LINE_THRESHOLD ? lines : null;
 }

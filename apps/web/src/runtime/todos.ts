@@ -16,7 +16,7 @@ export function parseTodoWriteInput(input: unknown): TodoItem[] {
     ? obj.todos
     : Array.isArray(obj.plan)
       ? obj.plan
-      : [];
+      : parseStringifiedTodoArray(obj.todos) ?? parseStringifiedTodoArray(obj.plan) ?? [];
   return rawItems
     .map((todo): TodoItem | null => {
       if (!todo || typeof todo !== 'object') return null;
@@ -47,6 +47,23 @@ export function parseTodoWriteInput(input: unknown): TodoItem[] {
       };
     })
     .filter((todo): todo is TodoItem => todo !== null);
+}
+
+// Some runtimes double-encode the todo list -- `todos`/`plan` arrives as a
+// JSON string ("[{\"content\":...}]") instead of a real array, so the
+// `Array.isArray` checks above miss it and the card falls back to dumping
+// the raw string as JSON text (see GenericCard in ToolCard.tsx). Recover the
+// real list when the string does parse into an array; any other shape (or a
+// parse failure) returns null so the caller's plain [] fallback still applies
+// -- never throws, never surfaces the parse error to the user.
+function parseStringifiedTodoArray(value: unknown): unknown[] | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeTodoStatus(status: unknown): TodoStatus {

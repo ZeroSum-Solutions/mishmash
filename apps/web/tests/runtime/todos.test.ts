@@ -121,6 +121,34 @@ describe('todo event helpers', () => {
     ]);
   });
 
+  // A malformed/double-encoded payload -- `todos` arrives as a JSON string
+  // instead of a real array -- used to fall through the Array.isArray
+  // checks entirely and render as a raw JSON dump in chat (GenericCard's
+  // fallback). Recovering it here means the card renders as a real todo
+  // checklist instead.
+  it('recovers a todo list whose `todos` field is a JSON-encoded string', () => {
+    const stringified = JSON.stringify([
+      { content: 'Bind editorial-monocle tokens', status: 'completed' },
+      { content: 'Generate real photography', status: 'in_progress' },
+    ]);
+    expect(parseTodoWriteInput({ todos: stringified })).toEqual([
+      { content: 'Bind editorial-monocle tokens', status: 'completed', activeForm: undefined },
+      { content: 'Generate real photography', status: 'in_progress', activeForm: undefined },
+    ]);
+  });
+
+  it('recovers a todo list whose `plan` field is a JSON-encoded string', () => {
+    const stringified = JSON.stringify([{ step: 'Ship the plan', status: 'pending' }]);
+    expect(parseTodoWriteInput({ plan: stringified })).toEqual([
+      { content: 'Ship the plan', status: 'pending', activeForm: undefined },
+    ]);
+  });
+
+  it('degrades to an empty list rather than throwing on unparseable todos text', () => {
+    expect(parseTodoWriteInput({ todos: 'not json at all' })).toEqual([]);
+    expect(parseTodoWriteInput({ todos: '{"not":"an array"}' })).toEqual([]);
+  });
+
   it('accepts native task item text aliases used by different agents', () => {
     expect(parseTodoWriteInput({
       todos: [
