@@ -88,6 +88,9 @@ export const DESIGN_DIRECTIONS: DesignDirection[] = [
     },
     posture: [
       'serif display, sans body, mono for metadata only',
+      // Magazines are not flat. A page where every section runs at one
+      // measure has no editorial rhythm, whatever its type is doing.
+      'vary the measure between sections — a full-bleed plate against a narrow text column is the magazine move; never run every section at the same width',
       'no shadows, no rounded cards — borders + whitespace do the work',
       'one decisive image, cropped only at the bottom',
       'kicker / eyebrow in mono uppercase, one accent color, used at most twice; never create peach/pink/orange-beige page washes unless the brand/reference requires them',
@@ -118,6 +121,9 @@ export const DESIGN_DIRECTIONS: DesignDirection[] = [
     },
     posture: [
       'tight letter-spacing on display sizes (-0.02em)',
+      // Restraint here means quiet, not flat. Product sites in this
+      // register still put something out of flow.
+      'let at least one element sit out of flow — an overlapping product card crossing a section boundary, a panel bleeding past its column — so the page reads as composed rather than stacked',
       'hairline borders only, no shadows except dropdowns/modals',
       'mono numerics with `font-variant-numeric: tabular-nums`',
       'sticky frosted nav, content-led layouts with one product illustration, device mockup, or data visualization when it clarifies the product',
@@ -149,6 +155,9 @@ export const DESIGN_DIRECTIONS: DesignDirection[] = [
     },
     posture: [
       'sans display with strong weight contrast, system body for readability',
+      // Approachable does not mean uniform; identical stacked rows read
+      // as a template, which is the opposite of human.
+      'stagger the grid — offset columns, or a card that breaks its container edge — so adjacent sections never read as the same row repeated',
       'comfortable radii (12–18px) paired with crisp grid alignment',
       'primary action color plus a secondary/domain accent and clear status colors; use color to separate panels, states, and product moments',
       'subtle elevation only on interactive cards; tasteful gradients/glows are allowed for hero/device/product moments, never as a full-page beige/pastel wash',
@@ -181,6 +190,10 @@ export const DESIGN_DIRECTIONS: DesignDirection[] = [
     },
     posture: [
       'sans display + sans body (one family) is OK here — utility trumps editorial',
+      // Deliberately NOT a grid-breaking instruction: overlap and bleed
+      // would fight what this direction is for. Density is how a utility
+      // surface earns rhythm instead.
+      'vary density rather than layout — alternate dense tables against sparse summary rows, so the page has pacing without decoration',
       'tabular numerics everywhere, mono for code / IDs / hashes',
       'dense tables with hairline borders, no row striping',
       'inline status pills (success / warn / danger) with restrained tinted backgrounds',
