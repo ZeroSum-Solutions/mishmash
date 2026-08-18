@@ -112,6 +112,8 @@ export const en: Dict = {
   'chat.referenceProject.emptyAll': 'No other projects yet',
   'chat.referenceProject.loadFailed': 'Could not load projects. Check that the daemon is running and try again.',
   'chat.referenceProject.confirm': 'Reference project',
+  'chat.referenceProject.intentLabel': 'What do you want from it? (optional)',
+  'chat.referenceProject.intentPlaceholder': 'e.g. the bento cards, or the scrolling animations and the WebGL hero',
   'chat.contextPrompt.referenceProject': 'Use the MishMash project “{name}” as reference context. Its local path is: {path}. Before designing or modifying anything, search and read this directory when useful.',
   'chat.contextPrompt.localCode': 'Use the local code folder “{name}” as code reference. Its absolute path is: {path}. Read relevant files when useful and stay consistent with the existing implementation.',
   'chat.figmaHelp.title': 'How to download a .fig file',

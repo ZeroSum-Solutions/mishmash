@@ -10,6 +10,8 @@ import styles from './ProjectReferenceModal.module.css';
 export interface ProjectReferenceSelection {
   project: Project;
   resolvedDir: string;
+  /** Free-text "what to take from this" note, typed in the same modal at pick time. */
+  intent?: string;
 }
 
 interface Props {
@@ -39,6 +41,7 @@ export function ProjectReferenceModal({ currentProjectId, onClose, onSelect }: P
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [query, setQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [intent, setIntent] = useState('');
   const [pending, setPending] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +106,11 @@ export function ProjectReferenceModal({ currentProjectId, onClose, onSelect }: P
     setPending(true);
     setError(null);
     try {
+      // One intent applies to every project picked in this confirm — picking
+      // several projects with different asks each is still a second
+      // reference, one at a time; this keeps "pick + say what you want"
+      // one action for the common single-reference case.
+      const trimmedIntent = intent.trim();
       const selections: ProjectReferenceSelection[] = [];
       for (const project of selectedProjects) {
         // `ensureDir` materializes a managed project's folder before we read
@@ -115,7 +123,11 @@ export function ProjectReferenceModal({ currentProjectId, onClose, onSelect }: P
           setError(t('homeWorkingDir.applyFailed'));
           return;
         }
-        selections.push({ project: detail.project, resolvedDir });
+        selections.push({
+          project: detail.project,
+          resolvedDir,
+          ...(trimmedIntent ? { intent: trimmedIntent } : {}),
+        });
       }
       onSelect(selections);
     } finally {
@@ -208,6 +220,19 @@ export function ProjectReferenceModal({ currentProjectId, onClose, onSelect }: P
               })
             )}
           </div>
+          {selectedProjects.length > 0 ? (
+            <label className={styles.intentField}>
+              <span className={styles.intentLabel}>{t('chat.referenceProject.intentLabel')}</span>
+              <textarea
+                className={styles.intentInput}
+                value={intent}
+                onChange={(event) => setIntent(event.target.value)}
+                placeholder={t('chat.referenceProject.intentPlaceholder')}
+                rows={2}
+                disabled={pending}
+              />
+            </label>
+          ) : null}
           {error ? (
             <div className={styles.error} role="alert">
               {error}

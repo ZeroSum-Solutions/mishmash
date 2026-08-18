@@ -165,6 +165,7 @@ let referenceProjects: Array<{
   metadata: { kind: 'prototype' };
 }>;
 let referenceProjectDetails: Record<string, { project: (typeof referenceProjects)[number]; resolvedDir: string | null }>;
+let referenceRequestBodies: Array<{ targetProjectId?: string; intent?: string }>;
 
 function composerElement(
   overrides: Partial<ComponentProps<typeof ChatComposer>> = {},
@@ -231,6 +232,7 @@ beforeEach(() => {
   resolveDeferredProjectPatch = null;
   referenceProjects = [];
   referenceProjectDetails = {};
+  referenceRequestBodies = [];
   fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === '/api/mcp/servers') {
       return new Response(JSON.stringify({ servers, templates: [] }), {
@@ -270,6 +272,34 @@ beforeEach(() => {
     }
     if (url === '/api/projects') {
       return new Response(JSON.stringify({ projects: referenceProjects }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (url === '/api/projects/project-1/reference' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body ?? '{}')) as { targetProjectId?: string; intent?: string };
+      referenceRequestBodies.push(body);
+      return new Response(JSON.stringify({
+        ok: true,
+        project: {
+          id: 'project-1',
+          name: 'Project',
+          skillId: null,
+          designSystemId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          metadata: { kind: 'prototype' },
+        },
+        targetProject: { id: body.targetProjectId, name: 'Reference Target' },
+        resolvedDir: `/tmp/open-design/${body.targetProjectId}`,
+        workspaceItem: {
+          id: `project:${body.targetProjectId}`,
+          kind: 'project',
+          label: 'Reference Target',
+          absolutePath: `/tmp/open-design/${body.targetProjectId}`,
+          ...(body.intent ? { intent: body.intent } : {}),
+        },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
@@ -611,6 +641,65 @@ describe('ChatComposer context pickers', () => {
         }),
       }),
     );
+  });
+
+  it('captures the intent typed in the reference-project modal in one action and threads it into this turn\'s context and persistence', async () => {
+    const referenceA = {
+      id: 'reference-a',
+      name: 'Reference A',
+      skillId: null,
+      designSystemId: null,
+      createdAt: 1,
+      updatedAt: 1,
+      metadata: { kind: 'prototype' as const },
+    };
+    referenceProjects = [referenceA];
+    referenceProjectDetails = {
+      'reference-a': { project: referenceA, resolvedDir: '/tmp/open-design/reference-a' },
+    };
+    const onSend = vi.fn();
+    renderComposer({ onSend });
+    await flushMounts();
+
+    fireEvent.click(screen.getByTestId('chat-plus-trigger'));
+    fireEvent.click(await screen.findByTestId('composer-plus-reference-project'));
+    await screen.findByText('Reference A');
+    // Single project in the list: it is already the default selection, so
+    // typing the intent and confirming is the whole action — no separate
+    // pick step required.
+    fireEvent.change(
+      screen.getByPlaceholderText('e.g. the bento cards, or the scrolling animations and the WebGL hero'),
+      { target: { value: 'the bento cards' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Reference project' }));
+
+    await waitFor(() => {
+      expect(projectPatchBodies()).toHaveLength(1);
+    });
+    // The intent reaches the daemon through the same endpoint `od project
+    // reference` calls, persisted onto project-1's metadata — not only kept
+    // in this turn's ephemeral composer state.
+    await waitFor(() => {
+      expect(referenceRequestBodies).toEqual([
+        { targetProjectId: 'reference-a', intent: 'the bento cards' },
+      ]);
+    });
+
+    await waitFor(() => {
+      const stagedText = screen.getByTestId('staged-contexts').textContent ?? '';
+      expect(stagedText).toContain('ProjectReference A');
+    });
+    fireEvent.click(screen.getByTestId('chat-send'));
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    // The intent also reaches this turn's run context immediately, without
+    // waiting on the persistence round-trip.
+    expect(onSend.mock.calls[0]?.[3]?.context?.workspaceItems).toEqual([
+      expect.objectContaining({
+        kind: 'project',
+        id: 'project:reference-a',
+        intent: 'the bento cards',
+      }),
+    ]);
   });
 
   it('does not stage referenced project context when linking its directory is rejected', async () => {

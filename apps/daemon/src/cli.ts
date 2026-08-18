@@ -293,6 +293,10 @@ const PROJECT_STRING_FLAGS = new Set([
   'agent', 'model', 'snapshot-id', 'inputs', 'grant-caps', 'editor',
   'title', 'label', 'against', 'seed-from', 'fork-after', 'mode',
   'source', 'root', 'out',
+  // `od project reference <targetId> --project <id> --intent "<text>"` —
+  // the intent short flag mirrors `od feedback`'s `--note` + `--prompt-file`
+  // pattern (readPromptFromFlags already reads `--prompt`/`--prompt-file`).
+  'intent',
   // Guided create flow (PRD C8) — `od project create --skill <id>` is the
   // template-start path's CLI mirror (Templates tab "Start"), so it carries
   // the same brief flags as `od design-library start-project`.
@@ -6939,6 +6943,14 @@ async function runProject(args) {
   od project open-in <id> --editor <slug> Open the project's working directory
                                           in the chosen editor (cursor, zed,
                                           vscode, finder, terminal, …).
+  od project reference <targetId> --project <id>
+                    [--intent "<text>" | --prompt-file <path|->] [--json]
+                    Reference another project from <id> — resolves and
+                    materializes <targetId>'s directory, links it into <id>'s
+                    linkedDirs, and persists an optional free-text intent
+                    ("the bento cards", "the scrolling animations and the
+                    WebGL hero") so future runs know what to take from it.
+                    Mirrors the composer's "Reference project" action.
   od project handoff <id> --conversation <id> --api-key <key> --model <model>
                     [--base-url <url>] [--max-tokens <n>]
                     Synthesize a resume-conversation handoff prompt.
@@ -7239,6 +7251,37 @@ Common options:
       }
       if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       console.log(`[project] opened ${id} in ${editor} (${data.path ?? ''})`);
+      return;
+    }
+    case 'reference': {
+      const targetProjectId = positionalArgs(rest, PROJECT_STRING_FLAGS)[0];
+      const currentProjectId = typeof flags.project === 'string' ? flags.project : '';
+      if (!targetProjectId || !currentProjectId) {
+        console.error(
+          'Usage: od project reference <targetProjectId> --project <currentProjectId> '
+          + '[--intent "<text>" | --prompt-file <path|->] [--json]',
+        );
+        process.exit(2);
+      }
+      let intent;
+      try {
+        intent = typeof flags.intent === 'string' ? flags.intent : await readPromptFromFlags(flags);
+      } catch (err) {
+        console.error(`failed to read --intent: ${err.message}`);
+        process.exit(2);
+      }
+      intent = (intent ?? '').trim();
+      const body = { targetProjectId, ...(intent ? { intent } : {}) };
+      const data = await postJsonToDaemon(
+        base,
+        `/api/projects/${encodeURIComponent(currentProjectId)}/reference`,
+        body,
+      );
+      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      console.log(
+        `[project] ${currentProjectId} now references ${data.targetProject?.name ?? targetProjectId} `
+        + `(${data.resolvedDir ?? '-'})${intent ? ` — intent: ${intent}` : ''}`,
+      );
       return;
     }
     default:

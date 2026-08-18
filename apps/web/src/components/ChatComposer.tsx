@@ -38,7 +38,7 @@ import { sessionModeToTracking } from '@open-design/contracts/analytics';
 import { deriveUploadCohort } from '../analytics/upload-tracking';
 import { projectRawUrl, uploadProjectFiles, openFolderDialog, fetchRecentLinkedDirs, pushRecentLinkedDir, dirExists, applyLibraryAsset, fetchLibraryAssetElementHtml } from "../providers/registry";
 import { WorkingDirPicker } from './WorkingDirPicker';
-import { duplicatePluginAsProject, patchProject } from "../state/projects";
+import { duplicatePluginAsProject, patchProject, referenceProject } from "../state/projects";
 import { navigate } from '../router';
 import { fetchMcpServers } from "../state/mcp";
 import type { McpServerConfig, McpTemplate } from "../state/mcp";
@@ -1368,7 +1368,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     }
 
     async function handleReferenceProjects(selections: ProjectReferenceSelection[]) {
-      const items = selections.map(({ project, resolvedDir }) => {
+      const items = selections.map(({ project, resolvedDir, intent }) => {
         const path = resolvedDir.trim();
         return {
           id: `project:${project.id}`,
@@ -1377,6 +1377,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
           title: project.name || project.id,
           path: project.id,
           ...(path ? { absolutePath: path } : {}),
+          ...(intent ? { intent } : {}),
         } satisfies WorkspaceContextItem;
       });
       const trackedByDir = await addLinkedDirs(items.map((item) => workspaceContextLinkedDir(item) ?? ''));
@@ -1411,6 +1412,20 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       }
       if (Object.keys(trackedAdds).length > 0) {
         setWorkspaceLinkedDirAdds((current) => ({ ...current, ...trackedAdds }));
+      }
+      // Persist the reference (+ optional intent) server-side through the
+      // same POST /api/projects/:id/reference endpoint `od project
+      // reference` calls, so projectMetadataContextSelection folds it into
+      // every future turn — not only this one. The mention chip + linkedDirs
+      // above are already live for this turn even if this best-effort call
+      // fails, so a failure here does not need its own error path.
+      if (projectId) {
+        void Promise.all(selections.map(({ project, intent }) => (
+          referenceProject(projectId, {
+            targetProjectId: project.id,
+            ...(intent ? { intent } : {}),
+          })
+        )));
       }
     }
 
@@ -1679,7 +1694,17 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       const base = projectMetadata ?? { kind: 'prototype' as const };
       const currentLinkedDirs = base.linkedDirs ?? [...tracked.previousLinkedDirs, tracked.dir];
       const nextLinkedDirs = currentLinkedDirs.filter((dir) => dir !== tracked.dir);
-      const metadata: ProjectMetadata = { ...base, linkedDirs: nextLinkedDirs };
+      // Drop any persisted project-reference record for this dir too, so a
+      // removed chip does not leave a stale intent note reaching future
+      // turns after the mention/linkedDirs entry it belonged to is gone.
+      const nextProjectReferences = base.projectReferences?.filter(
+        (ref) => ref.absolutePath !== tracked.dir,
+      );
+      const metadata: ProjectMetadata = {
+        ...base,
+        linkedDirs: nextLinkedDirs,
+        ...(nextProjectReferences ? { projectReferences: nextProjectReferences } : {}),
+      };
       const result = await patchProject(projectId, { metadata });
       if (!result?.metadata) {
         onShowToast?.(t('homeWorkingDir.applyFailed'));

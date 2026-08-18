@@ -22,6 +22,8 @@ import type {
   PluginInstallOutcome,
   PluginShareAction,
   ProjectPluginFolderInstallRequest,
+  ProjectReferenceRequest,
+  ProjectReferenceResponse,
   TerminalSession,
 } from '@open-design/contracts';
 import { randomUUID } from '../utils/uuid';
@@ -78,6 +80,32 @@ export async function getProjectDetail(
       project: json.project,
       resolvedDir: typeof json.resolvedDir === 'string' ? json.resolvedDir : null,
     };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reference another project from `projectId` — the same endpoint `od
+ * project reference` calls. Resolves and links the target project's
+ * directory into `projectId`'s linkedDirs and persists the optional intent
+ * so future turns (and CLI-driven runs) see it automatically, not only the
+ * turn the reference was staged on. See ProjectReferenceModal / ChatComposer
+ * `handleReferenceProjects` for the UI call site.
+ */
+export async function referenceProject(
+  projectId: string,
+  request: ProjectReferenceRequest,
+): Promise<ProjectReferenceResponse | null> {
+  try {
+    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/reference`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) return null;
+    const json = (await resp.json()) as ProjectReferenceResponse;
+    return json?.ok ? json : null;
   } catch {
     return null;
   }

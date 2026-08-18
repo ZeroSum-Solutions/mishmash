@@ -71,6 +71,22 @@ async function startProjectStubServer(): Promise<StubServer> {
         }));
         return;
       }
+      if (captured.method === 'POST' && captured.url === '/api/projects/source-project/reference') {
+        res.statusCode = 200;
+        res.end(JSON.stringify({
+          ok: true,
+          project: { id: 'source-project', name: 'Source Project' },
+          targetProject: { id: 'reference-target', name: 'Reference Target' },
+          resolvedDir: '/tmp/open-design/reference-target',
+          workspaceItem: {
+            id: 'project:reference-target',
+            kind: 'project',
+            label: 'Reference Target',
+            absolutePath: '/tmp/open-design/reference-target',
+          },
+        }));
+        return;
+      }
       if (captured.method === 'POST' && captured.url === '/api/projects') {
         res.statusCode = 201;
         res.end(JSON.stringify({
@@ -474,5 +490,102 @@ describe('od project CLI', () => {
     expect(JSON.parse(result.stderr)).toMatchObject({
       error: { code: 'FILE_NOT_FOUND', message: 'root not found' },
     });
+  });
+
+  // `od project reference` — the CLI form of "Reference project"
+  // (ProjectReferenceModal). See AGENTS.md "Capability exposure": this is
+  // the same POST /api/projects/:id/reference the UI calls.
+  it('references another project with a short --intent flag', async () => {
+    stub = await startProjectStubServer();
+
+    const result = await runCli([
+      'project',
+      'reference',
+      'reference-target',
+      '--project',
+      'source-project',
+      '--intent',
+      'the bento cards',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(stub.requests).toHaveLength(1);
+    expect(stub.requests[0]).toMatchObject({
+      method: 'POST',
+      url: '/api/projects/source-project/reference',
+    });
+    expect(JSON.parse(stub.requests[0]!.body)).toEqual({
+      targetProjectId: 'reference-target',
+      intent: 'the bento cards',
+    });
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: true,
+      targetProject: { id: 'reference-target', name: 'Reference Target' },
+      resolvedDir: '/tmp/open-design/reference-target',
+    });
+  });
+
+  it('references another project with long intent text from --prompt-file', async () => {
+    stub = await startProjectStubServer();
+    tempRoot = mkdtempSync(join(tmpdir(), 'od-project-cli-reference-'));
+    const intentPath = join(tempRoot, 'intent.md');
+    writeFileSync(intentPath, 'The scrolling animations and the WebGL hero.\n', 'utf8');
+
+    const result = await runCli([
+      'project',
+      'reference',
+      'reference-target',
+      '--project',
+      'source-project',
+      '--prompt-file',
+      intentPath,
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(JSON.parse(stub.requests[0]!.body)).toEqual({
+      targetProjectId: 'reference-target',
+      intent: 'The scrolling animations and the WebGL hero.',
+    });
+  });
+
+  it('omits intent from the request body when no --intent or --prompt-file is given', async () => {
+    stub = await startProjectStubServer();
+
+    const result = await runCli([
+      'project',
+      'reference',
+      'reference-target',
+      '--project',
+      'source-project',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(JSON.parse(stub.requests[0]!.body)).toEqual({ targetProjectId: 'reference-target' });
+  });
+
+  it('prints usage and exits 2 when --project is missing', async () => {
+    stub = await startProjectStubServer();
+
+    const result = await runCli([
+      'project',
+      'reference',
+      'reference-target',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('Usage: od project reference');
+    expect(stub.requests).toHaveLength(0);
   });
 });
