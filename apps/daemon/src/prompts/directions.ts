@@ -121,9 +121,12 @@ export const DESIGN_DIRECTIONS: DesignDirection[] = [
     },
     posture: [
       'tight letter-spacing on display sizes (-0.02em)',
-      // Restraint here means quiet, not flat. Product sites in this
-      // register still put something out of flow.
-      'let at least one element sit out of flow — an overlapping product card crossing a section boundary, a panel bleeding past its column — so the page reads as composed rather than stacked',
+      // Restraint here means quiet, not flat. But two blind comparisons
+      // found that alternating a repeated row's own arrangement — not
+      // overlap — is what actually reads as composed; a page entirely in
+      // normal flow won a comparison against one with more out-of-flow
+      // elements once its content rows stopped repeating the same layout.
+      'in any repeated row with per-instance content — a changelog entry, feature row, or case-study card, not a uniform logo wall — alternate which side the media sits on and how wide the text column runs row to row; a lone out-of-flow panel on an otherwise identical grid still reads as stacked',
       'hairline borders only, no shadows except dropdowns/modals',
       'mono numerics with `font-variant-numeric: tabular-nums`',
       'sticky frosted nav, content-led layouts with one product illustration, device mockup, or data visualization when it clarifies the product',
@@ -156,8 +159,10 @@ export const DESIGN_DIRECTIONS: DesignDirection[] = [
     posture: [
       'sans display with strong weight contrast, system body for readability',
       // Approachable does not mean uniform; identical stacked rows read
-      // as a template, which is the opposite of human.
-      'stagger the grid — offset columns, or a card that breaks its container edge — so adjacent sections never read as the same row repeated',
+      // as a template, which is the opposite of human. Alternating the
+      // row itself — not offsetting or overlapping it — is what a blind
+      // comparison actually credited as "composed."
+      'in any list of stories, reviews, or use-cases with per-instance content, alternate image side and column width row to row so adjacent rows never share the same arrangement; offset columns or an edge-breaking card are a garnish on top of that, not the fix by themselves',
       'comfortable radii (12–18px) paired with crisp grid alignment',
       'primary action color plus a secondary/domain accent and clear status colors; use color to separate panels, states, and product moments',
       'subtle elevation only on interactive cards; tasteful gradients/glows are allowed for hero/device/product moments, never as a full-page beige/pastel wash',
@@ -229,6 +234,10 @@ export const DESIGN_DIRECTIONS: DesignDirection[] = [
       'body = monospace — yes, monospace as body, deliberately',
       'borders are full-strength fg (1.5–2px), not muted greys',
       'asymmetric layouts: one column 70%, the other 30%',
+      // A 70/30 split repeated identically down every entry is still a
+      // stamped template — brutalism reads as designed when the entries
+      // themselves refuse to match, not from any single overlap trick.
+      'in a repeated list of entries (works, manifesto points, archive items), refuse to let two adjacent ones share a crop, column split, or caption position — a brutalist page that repeats its own arrangement reads as a lazier template than a polite one would',
       'almost no border-radius (0–2px). No shadows. No gradients.',
       'underline links, no hover decoration — let the typography carry it',
     ],

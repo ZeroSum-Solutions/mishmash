@@ -516,19 +516,28 @@ export function lintArtifact(rawHtml: unknown, opts?: LintArtifactOptions): Lint
   // that needs a rendered layout — but every one of the five moves
   // requires one of two CSS primitives to exist SOMEWHERE in the
   // artifact: an element taken out of document flow via
-  // `position: absolute`/`sticky` paired with `z-index` (the mechanism
-  // behind overlap and cross-boundary elements), or a `transform` that
+  // `position: absolute` paired with `z-index` (the mechanism behind
+  // overlap and cross-boundary elements), or a `transform` that
   // rotates, skews, translates, or scales an element outside a hover/
   // focus/transition microinteraction (the mechanism behind offset
   // composition and edge-bleeding type). Their total ABSENCE across the
   // whole artifact is the detectable proxy: if neither primitive
   // appears anywhere, no grid-breaking move could have been used even
   // once, so the page is provably — not just probably — flat. Presence
-  // does not prove a deliberate break was made (a sticky nav or a modal
-  // overlay also uses `position` + `z-index`), so this check is
+  // does not prove a deliberate break was made (a modal overlay also
+  // uses `position: absolute` + `z-index`), so this check is
   // one-directional by design: it only ever fires on demonstrated
   // absence, never asserts that presence means the page is well
   // composed.
+  //
+  // `position: sticky` does NOT count as evidence, deliberately —
+  // sticky pins an element in place during scroll (nav bars, table
+  // headers) and never crosses a section boundary or overlaps a
+  // neighbor, so it cannot be the mechanism behind any of the five
+  // named moves. An earlier version of this check credited sticky, and
+  // a measured generated page (source-level: a single `position:
+  // sticky` nav rule, rendered: one positioned element, zero
+  // transforms) slipped through it as a false negative.
   //
   // Scoped to pages long enough that total uniformity is a real
   // finding, per this file's own docblock ("does NOT parse HTML") and
@@ -539,13 +548,12 @@ export function lintArtifact(rawHtml: unknown, opts?: LintArtifactOptions): Lint
   // real-world templates — found the false-positive rate for "zero
   // evidence" is already 0% once a page carries 4 or more <section>
   // elements, and stays 0% through every larger bucket measured up to
-  // 18. The floor below is set at 6 for headroom above that measured
-  // cutoff — it also matches the exact section count the task's own
-  // measured "baseline, no craft" MishMash build carried when both
-  // signals were independently reported as 0. Deck-shaped artifacts
-  // (`.slide`) are excluded the same way P2-2 below identifies them:
-  // slides are not a scrolling composition and legitimately never
-  // leave flow.
+  // 18; re-run after excluding `sticky` from the evidence set, the rate
+  // is still 0% at every bucket from 4 sections up (see
+  // `LAYOUT_RISK_SECTION_THRESHOLD`'s own comment for the exact
+  // threshold history). Deck-shaped artifacts (`.slide`) are excluded
+  // the same way P2-2 below identifies them: slides are not a
+  // scrolling composition and legitimately never leave flow.
   if (
     !isWebCloneRun &&
     sections.length >= LAYOUT_RISK_SECTION_THRESHOLD &&
@@ -555,7 +563,7 @@ export function lintArtifact(rawHtml: unknown, opts?: LintArtifactOptions): Lint
     out.push({
       severity: 'P1',
       id: 'layout-risk-flat',
-      message: `${sections.length} sections and no evidence anywhere in the artifact of an element leaving document flow (no position: absolute/sticky + z-index, no transform outside a hover/focus state) — craft/composition.md's layout-risk floor.`,
+      message: `${sections.length} sections and no evidence anywhere in the artifact of an element leaving document flow (no position: absolute + z-index, no transform outside a hover/focus state) — craft/composition.md's layout-risk floor.`,
       fix: 'Add at least one grid-breaking move from craft/composition.md: an overlap, a full-bleed band next to a contained one, offset/asymmetric columns, edge-bleeding display type, or a cross-boundary element. This is a pass/fail floor, not a per-section requirement — one deliberate break on an otherwise orderly page clears it.',
     });
   }
@@ -694,25 +702,31 @@ function isDeckShapedArtifact(html: string): boolean {
 }
 
 // Bare (non-variant-prefixed) Tailwind-style utility classes that carry
-// the same two primitives the <style>-block scan below looks for.
+// the same primitive the <style>-block scan below looks for.
 // Variant-prefixed forms (`hover:`, `md:`, `group-hover:`, …) are
 // deliberately excluded: a hover-only or breakpoint-only transform is a
 // microinteraction, not evidence the base layout ever breaks its grid.
-const UTILITY_POSITION_RE = /^(?:absolute|sticky|fixed)$/;
+// `sticky` and `fixed` are deliberately excluded from the position set
+// too, for the same reason `hasPositionedZIndexInStyleBlocks` only
+// matches `absolute` below: both pin an element in place (scroll
+// position / viewport) rather than crossing a section boundary or
+// overlapping a neighbor, so neither is the mechanism any of
+// `craft/composition.md`'s five grid-breaking moves actually needs.
+const UTILITY_POSITION_RE = /^absolute$/;
 const UTILITY_Z_INDEX_RE = /^-?z-(?:\[[^\]]+\]|\d+)$/;
 const UTILITY_TRANSFORM_RE =
   /^-?(?:rotate|translate-x|translate-y|scale|skew-x|skew-y)-(?:\[[^\]]+\]|\d+)$/;
 
-// True when ANY `class="..."` attribute in the artifact carries both a
-// positioning utility (`absolute`/`sticky`/`fixed`) and a `z-index`
-// utility, or a transform utility (`rotate-*`, `translate-x/y-*`,
-// `scale-*`, `skew-x/y-*`) — the utility-class equivalent of the
-// <style>-block signals `hasGridBreakingEvidence` also checks. Needed
-// because a meaningful share of the corpus (vendored real-world
-// templates, framework-exported static builds) expresses position and
-// transform entirely through class names rather than `<style>` rules or
-// inline `style=""` — see the `layout-risk-flat` check's comment for
-// the corpus evidence.
+// True when ANY `class="..."` attribute in the artifact carries both an
+// `absolute` positioning utility and a `z-index` utility, or a
+// transform utility (`rotate-*`, `translate-x/y-*`, `scale-*`,
+// `skew-x/y-*`) — the utility-class equivalent of the <style>-block
+// signals `hasGridBreakingEvidence` also checks. Needed because a
+// meaningful share of the corpus (vendored real-world templates,
+// framework-exported static builds) expresses position and transform
+// entirely through class names rather than `<style>` rules or inline
+// `style=""` — see the `layout-risk-flat` check's comment for the
+// corpus evidence.
 function hasUtilityGridBreakEvidence(html: string): boolean {
   for (const m of html.matchAll(/class\s*=\s*["']([^"']*)["']/gi)) {
     const tokens = (m[1] ?? '').split(/\s+/);
@@ -724,12 +738,16 @@ function hasUtilityGridBreakEvidence(html: string): boolean {
   return false;
 }
 
-// True when a <style>-block rule declares BOTH `position: absolute` or
-// `position: sticky` AND `z-index` in the same rule body — the CSS
-// mechanism an overlap or cross-boundary element needs. Body alternation
-// mirrors the rest of this file's rule scans (`[^{}]*`, not `[^}]*`) so
-// only innermost `selector { body }` rules match, not an outer @media
-// wrapper.
+// True when a <style>-block rule declares BOTH `position: absolute` AND
+// `z-index` in the same rule body — the CSS mechanism an overlap or
+// cross-boundary element needs. `position: sticky` does not qualify:
+// see `layout-risk-flat`'s own comment (in `lintArtifact`) for why —
+// sticky pins an element during scroll rather than crossing a section
+// boundary, and crediting it as evidence let a real generated page with
+// nothing but a sticky nav slip past this check as "composed." Body
+// alternation mirrors the rest of this file's rule scans (`[^{}]*`, not
+// `[^}]*`) so only innermost `selector { body }` rules match, not an
+// outer @media wrapper.
 function hasPositionedZIndexInStyleBlocks(html: string): boolean {
   for (const styleBlock of html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)) {
     const css = (styleBlock[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
@@ -738,7 +756,7 @@ function hasPositionedZIndexInStyleBlocks(html: string): boolean {
     while ((m = ruleRe.exec(css)) !== null) {
       const body = m[2] ?? '';
       if (
-        /position\s*:\s*(?:absolute|sticky)\b/i.test(body) &&
+        /position\s*:\s*absolute\b/i.test(body) &&
         /z-index\s*:/i.test(body)
       ) {
         return true;
@@ -754,7 +772,7 @@ function hasPositionedZIndexInline(html: string): boolean {
   for (const m of html.matchAll(/(?:^|\s)style\s*=\s*(["'])([\s\S]*?)\1/gi)) {
     const decl = m[2] ?? '';
     if (
-      /position\s*:\s*(?:absolute|sticky)\b/i.test(decl) &&
+      /position\s*:\s*absolute\b/i.test(decl) &&
       /z-index\s*:/i.test(decl)
     ) {
       return true;

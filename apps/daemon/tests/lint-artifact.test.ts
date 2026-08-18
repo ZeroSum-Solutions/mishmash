@@ -1269,7 +1269,13 @@ describe('layout-risk-flat', () => {
     expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeUndefined();
   });
 
-  it('does not flag when position: sticky pairs with z-index (sticky nav)', () => {
+  it('still flags when the only positioning evidence is a sticky nav', () => {
+    // position: sticky pins in place during scroll — it never crosses a
+    // section boundary or overlaps a neighbor, so it isn't the
+    // mechanism behind any of craft/composition.md's five named moves.
+    // A real generated page slipped past this check on exactly this
+    // shape (one sticky nav rule, nothing else) before sticky was
+    // removed from the evidence set.
     const html = `
       <style>
         nav { position: sticky; top: 0; z-index: 20; }
@@ -1277,7 +1283,17 @@ describe('layout-risk-flat', () => {
       ${flatPageHtml(6)}
     `;
     const findings = lintArtifact(html);
-    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeUndefined();
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeDefined();
+  });
+
+  it('still flags when the only utility-class positioning evidence is sticky or fixed', () => {
+    const html = `
+      ${flatPageHtml(6)}
+      <section><div class="sticky top-0 z-20">Nav</div></section>
+      <section><div class="fixed bottom-4 z-50">Chat widget</div></section>
+    `;
+    const findings = lintArtifact(html);
+    expect(findings.find((f) => f.id === 'layout-risk-flat')).toBeDefined();
   });
 
   it('still flags when position: absolute appears without a paired z-index', () => {
