@@ -33,6 +33,8 @@ const ASSET_ATTR = /(\s)(src|poster|data-src)(\s*=\s*)(["'])([^"']*)\4/gi;
 const LINK_TAG = /<link\b[^>]*>/gi;
 const LINK_HREF = /(\shref\s*=\s*)(["'])([^"']*)\2/i;
 const SRCSET_ATTR = /(\ssrcset\s*=\s*)(["'])([^"']*)\2/gi;
+const SRC_ATTR = /(\ssrc\s*=\s*)(["'])([^"']*)\2/i;
+const HTML_START_TAG = /<[a-z][^>]*>/gi;
 // css url(...) — covers inline <style> blocks and style="" attributes when
 // run over an HTML document, and stylesheet bodies when run over CSS text.
 const CSS_URL = /url\(\s*(['"]?)([^'")]+)\1\s*\)/gi;
@@ -167,11 +169,12 @@ export function ownerRelativeAssetPath(ownerFilePath: string, targetPath: string
 /**
  * Resolve a relative ref against its owner file's directory into a project
  * file path, or null when the ref is not a plain relative path (schemes,
- * root-relative, fragment-only) or escapes the project root.
+ * root-relative, fragment-only). Parent segments clamp at the project root,
+ * matching FileViewer's pre-extraction URL resolution.
  */
 export function resolveRelativeAssetPath(ownerFilePath: string, ref: string): string | null {
   const trimmed = ref.trim();
-  if (!trimmed || /^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(trimmed)) return null;
+  if (!trimmed || isBlockedInlineScheme(trimmed) || /^(?:\/|#)/.test(trimmed)) return null;
   const { path } = splitRefSuffix(trimmed);
   if (!path) return null;
   let decoded = path;
@@ -185,8 +188,7 @@ export function resolveRelativeAssetPath(ownerFilePath: string, ref: string): st
   for (const part of parts) {
     if (!part || part === '.') continue;
     if (part === '..') {
-      if (out.length === 0) return null; // escapes the project root
-      out.pop();
+      if (out.length > 0) out.pop();
       continue;
     }
     out.push(part);
@@ -299,11 +301,40 @@ export function rewriteInlinedCssAssetRefs(
  * SVG is textual but belongs here anyway: `<img src="x.svg">` fetches it as a
  * subresource, so it fails in an opaque origin exactly like a PNG.
  */
-const BINARY_PREVIEW_ASSET_EXT =
-  /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|svg|mp4|webm|mov|m4v|ogv|mp3|wav|ogg|m4a|flac|woff2?|ttf|otf|eot)$/i;
+const BINARY_PREVIEW_ASSET_MIME: Readonly<Record<string, string>> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  avif: 'image/avif',
+  bmp: 'image/bmp',
+  ico: 'image/x-icon',
+  svg: 'image/svg+xml',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+  m4v: 'video/x-m4v',
+  ogv: 'video/ogg',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  m4a: 'audio/mp4',
+  flac: 'audio/flac',
+  woff: 'font/woff',
+  woff2: 'font/woff2',
+  ttf: 'font/ttf',
+  otf: 'font/otf',
+  eot: 'application/vnd.ms-fontobject',
+};
+
+function binaryPreviewAssetMime(path: string): string | null {
+  const extension = /\.([a-z0-9]+)$/i.exec(splitRefSuffix(path).path)?.[1]?.toLowerCase();
+  return extension ? (BINARY_PREVIEW_ASSET_MIME[extension] ?? null) : null;
+}
 
 export function isBinaryPreviewAssetPath(path: string): boolean {
-  return BINARY_PREVIEW_ASSET_EXT.test(splitRefSuffix(path).path);
+  return binaryPreviewAssetMime(path) !== null;
 }
 
 /** Resolve one ref to a confirmed project file path, root-relative or relative. */
@@ -322,7 +353,8 @@ function confirmedAssetPath(
 
 /** `data:`/`blob:`/`http(s):`/`javascript:` refs are never project files. */
 function isBlockedInlineScheme(ref: string): boolean {
-  return /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(ref);
+  const clean = ref.replace(/[\s\u0000-\u001F\u007F-\u009F]/g, '');
+  return /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(clean);
 }
 
 /**
@@ -378,22 +410,32 @@ export function inlineBinaryAssetRefs(
       return dataUrl ? `${prefix}${quote}${dataUrl}${quote}` : hrefMatch;
     }),
   );
-  next = next.replace(SRCSET_ATTR, (match, prefix: string, quote: string, value: string) => {
-    let changed = false;
-    const rewritten = value
-      .split(',')
-      .map((candidate) => {
-        const body = candidate.trim();
-        if (!body) return candidate;
-        const [url = '', ...descriptors] = body.split(/\s+/);
-        const dataUrl = swap(url);
-        if (!dataUrl) return candidate;
-        changed = true;
-        const leading = candidate.match(/^\s*/)?.[0] ?? '';
-        return `${leading}${[dataUrl, ...descriptors].join(' ')}`;
-      })
-      .join(',');
-    return changed ? `${prefix}${quote}${rewritten}${quote}` : match;
+  next = next.replace(HTML_START_TAG, (tag) => {
+    let selectedDataUrl: string | null = null;
+    let selectedQuote = '"';
+    const withoutInlinedSrcset = tag.replace(
+      SRCSET_ATTR,
+      (match, _prefix: string, quote: string, value: string) => {
+        for (const candidate of value.split(',')) {
+          const [url = ''] = candidate.trim().split(/\s+/);
+          const dataUrl = swap(url);
+          if (dataUrl) {
+            selectedDataUrl = dataUrl;
+            selectedQuote = quote;
+            break;
+          }
+        }
+        return selectedDataUrl ? '' : match;
+      },
+    );
+    if (!selectedDataUrl) return tag;
+    if (SRC_ATTR.test(withoutInlinedSrcset)) {
+      return withoutInlinedSrcset.replace(
+        SRC_ATTR,
+        (_match, prefix: string, quote: string) => `${prefix}${quote}${selectedDataUrl}${quote}`,
+      );
+    }
+    return withoutInlinedSrcset.replace(/\s*(\/?>)$/, ` src=${selectedQuote}${selectedDataUrl}${selectedQuote}$1`);
   });
   next = next.replace(CSS_URL, (match, quote: string, value: string) => {
     const dataUrl = swap(value);
@@ -452,15 +494,14 @@ function confirmedRelativeScriptRef(
 }
 
 export function hasRelativeAssetRefs(html: string): boolean {
-  const attr = /\s(?:src|href)\s*=\s*["']([^"']+)["']/gi;
-  let match: RegExpExecArray | null;
-  while ((match = attr.exec(html)) !== null) {
-    const value = match[1]?.trim();
-    if (!value) continue;
-    if (/^(?:https?:|data:|blob:|mailto:|tel:|#|\/)/i.test(value)) continue;
-    return true;
-  }
-  return false;
+  let found = false;
+  eachAssetRef(html, (ref) => {
+    if (found) return;
+    const value = ref.trim();
+    if (!value || isBlockedInlineScheme(value) || /^(?:#|\/)/.test(value)) return;
+    found = true;
+  });
+  return found;
 }
 
 export interface PreviewAssetAccess {
@@ -592,7 +633,9 @@ async function resolveBinaryAssetDataUrls(
       const blob = await resp.blob();
       if (blob.size > BINARY_ASSET_MAX_BYTES) continue;
       if (spent + blob.size > BINARY_ASSET_TOTAL_BUDGET_BYTES) continue;
-      const dataUrl = await blobToDataUrl(blob);
+      const mime = binaryPreviewAssetMime(path);
+      if (!mime) continue;
+      const dataUrl = await blobToDataUrl(blob, mime);
       if (!dataUrl) continue;
       out.set(path, dataUrl);
       spent += blob.size;
@@ -603,7 +646,7 @@ async function resolveBinaryAssetDataUrls(
   return out;
 }
 
-async function blobToDataUrl(blob: Blob): Promise<string | null> {
+async function blobToDataUrl(blob: Blob, mime: string): Promise<string | null> {
   try {
     const bytes = new Uint8Array(await blob.arrayBuffer());
     let binary = '';
@@ -611,7 +654,6 @@ async function blobToDataUrl(blob: Blob): Promise<string | null> {
     for (let offset = 0; offset < bytes.length; offset += chunkSize) {
       binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
     }
-    const mime = blob.type || 'application/octet-stream';
     return `data:${mime};base64,${btoa(binary)}`;
   } catch {
     return null;

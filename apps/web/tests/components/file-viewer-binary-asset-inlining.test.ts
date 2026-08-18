@@ -1,3 +1,4 @@
+import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
 import * as previewAssets from '../../src/components/file-viewer-preview-assets';
@@ -137,7 +138,12 @@ describe('collectBinaryPreviewAssetPaths', () => {
 });
 
 describe('inlineBinaryAssetRefs', () => {
-  const files = new Set(['assets/hero-bg.mp4', 'assets/hero-poster.jpg', 'img/wide.png']);
+  const files = new Set([
+    'assets/hero-bg.mp4',
+    'assets/hero-poster.jpg',
+    'img/narrow.png',
+    'img/wide.png',
+  ]);
   const dataUrls = new Map([
     ['assets/hero-bg.mp4', 'data:video/mp4;base64,AAAAvideo'],
     ['assets/hero-poster.jpg', 'data:image/jpeg;base64,AAAAposter'],
@@ -157,6 +163,26 @@ describe('inlineBinaryAssetRefs', () => {
     expect(inlineBinaryAssetRefs(html, 'example.html', files, dataUrls)).toContain(
       'url("data:image/jpeg;base64,AAAAposter")',
     );
+  });
+
+  it('collapses an inlined multi-candidate srcset to one valid image source', () => {
+    const narrow = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB';
+    const wide = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAAB';
+    const html = '<img alt="hero" srcset="img/narrow.png 600w, img/wide.png 1200w">';
+    const out = inlineBinaryAssetRefs(
+      html,
+      'example.html',
+      files,
+      new Map([
+        ['img/narrow.png', narrow],
+        ['img/wide.png', wide],
+      ]),
+    );
+
+    const image = new JSDOM(out).window.document.querySelector('img');
+    expect(image?.getAttribute('src')).toBe(narrow);
+    expect(image?.hasAttribute('srcset')).toBe(false);
+    expect(out.match(/data:image\/png;base64,/g)).toHaveLength(1);
   });
 
   // The budget case. A template whose media exceeds the cap must degrade to
@@ -214,6 +240,26 @@ describe('rewriteInlinedCssAssetRefs — data urls for binary refs', () => {
 });
 
 describe('inlineRelativeAssets', () => {
+  it('derives data-url MIME from the asset extension instead of hostile response metadata', async () => {
+    const rawUrl = (_projectId: string, filePath: string) => `http://preview.test/raw/${filePath}`;
+    const hostileType = 'image/png;payload="breakout)"';
+    const fetchFixture: typeof globalThis.fetch = async () =>
+      new Response(new Uint8Array([137, 80, 78, 71]), {
+        headers: { 'content-type': hostileType },
+      });
+
+    const inlined = await previewAssets.inlineRelativeAssets(
+      '<img src="assets/logo.png">',
+      'project-1',
+      'index.html',
+      new Set(['index.html', 'assets/logo.png']),
+      { fetch: fetchFixture, rawUrl },
+    );
+
+    expect(inlined).toContain('src="data:image/png;base64,iVBORw=="');
+    expect(inlined).not.toContain('payload');
+  });
+
   it('runs the complete parent-side text and binary inlining pipeline through one shared export', async () => {
     const inlineRelativeAssets = (
       previewAssets as typeof previewAssets & { inlineRelativeAssets?: InlineRelativeAssets }
