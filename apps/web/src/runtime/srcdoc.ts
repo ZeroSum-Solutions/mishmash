@@ -92,6 +92,21 @@ export const PREVIEW_REDIRECT_GUARD_SELF_REFRESH_MIN_DELAY_MS = 2000;
 /** postMessage type the injected guard sends the host when it trips. */
 export const PREVIEW_REDIRECT_LOOP_MESSAGE = 'od:redirect-loop-blocked';
 
+/**
+ * A previewed document's `document.fonts.ready` never waits longer than
+ * this. The browser gives that promise no timeout of its own: an
+ * `@font-face` whose network request stalls (a slow or unreachable host, a
+ * dropped connection) leaves it pending forever — verified against a real
+ * browser, where a `@font-face` pointed at an unroutable host leaves
+ * `document.fonts.ready` pending indefinitely and `page.screenshot()`
+ * (which awaits it internally) never returns either. Every wait on
+ * `document.fonts.ready` in this file must race it against this timeout and
+ * fall back to fallback-font metrics instead of stalling — a preview that
+ * renders with a fallback font is strictly better than a preview that never
+ * renders.
+ */
+export const PREVIEW_FONTS_READY_TIMEOUT_MS = 2000;
+
 export interface RedirectGuardState {
   /** Meta-refresh navigations counted in the current window. */
   hops: number;
@@ -783,7 +798,7 @@ function injectPreviewContentSizeBridge(doc: string): string {
   setTimeout(schedule, 80);
   setTimeout(schedule, 260);
   if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(schedule).catch(function(){});
+    Promise.race([document.fonts.ready, new Promise(function(r){ setTimeout(r, ${PREVIEW_FONTS_READY_TIMEOUT_MS}); })]).then(schedule).catch(function(){});
   }
 })();</script>`;
   return injectBeforeBodyEnd(doc, script);
@@ -814,7 +829,9 @@ function injectExportCaptureBridge(doc: string): string {
   const script = `<script data-od-export-capture-bridge>(function(){
   function raf(){ return new Promise(function(r){ requestAnimationFrame(function(){ r(); }); }); }
   function settle(){
-    var fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready.catch(function(){}) : Promise.resolve();
+    var fonts = (document.fonts && document.fonts.ready)
+      ? Promise.race([document.fonts.ready, new Promise(function(r){ setTimeout(r, ${PREVIEW_FONTS_READY_TIMEOUT_MS}); })]).catch(function(){})
+      : Promise.resolve();
     var imgs = Promise.all(Array.prototype.slice.call(document.images||[]).map(function(img){
       if (img.complete) return Promise.resolve();
       return new Promise(function(r){ img.addEventListener('load', r, {once:true}); img.addEventListener('error', r, {once:true}); });
