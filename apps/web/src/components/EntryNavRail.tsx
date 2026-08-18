@@ -26,6 +26,7 @@ export type EntryView =
   | 'storyboard'
   | 'templates'
   | 'typefaces'
+  | 'academy'
   | 'integrations';
 
 interface Props {
@@ -184,6 +185,15 @@ export function EntryNavRail({
           testId="entry-nav-templates"
         >
           <Icon name="layout" size={18} />
+        </NavButton>
+        <NavButton
+          active={view === 'academy'}
+          ariaLabel={t('entry.navAcademy')}
+          tooltip={t('entry.navAcademy')}
+          onClick={() => selectView('academy')}
+          testId="entry-nav-academy"
+        >
+          <Icon name="lightbulb" size={18} />
         </NavButton>
         <NavButton
           active={view === 'typefaces'}

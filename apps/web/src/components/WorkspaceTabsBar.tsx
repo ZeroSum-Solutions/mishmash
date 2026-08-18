@@ -1200,6 +1200,7 @@ function displayTabFor(
     storyboard: t('entry.navStoryboard'),
     templates: t('entry.navTemplates'),
     typefaces: t('entry.navTypefaces'),
+    academy: t('entry.navAcademy'),
     integrations: t('entry.navIntegrations'),
   };
   const entryIcon: Record<EntryHomeView, IconName> = {
@@ -1214,6 +1215,7 @@ function displayTabFor(
     storyboard: 'film',
     templates: 'layout',
     typefaces: 'file-text',
+    academy: 'lightbulb',
     integrations: 'link',
   };
   return {

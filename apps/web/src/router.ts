@@ -22,6 +22,7 @@ export type EntryHomeView =
   | 'storyboard'
   | 'templates'
   | 'typefaces'
+  | 'academy'
   | 'integrations';
 
 export type Route =
@@ -131,6 +132,9 @@ export function parseRoute(pathname: string): Route {
   if (parts[0] === 'typefaces' && !parts[1]) {
     return { kind: 'home', view: 'typefaces' };
   }
+  if (parts[0] === 'academy' && !parts[1]) {
+    return { kind: 'home', view: 'academy' };
+  }
   if (parts[0] === 'integrations') {
     return { kind: 'home', view: 'integrations' };
   }
@@ -164,6 +168,7 @@ export function buildPath(route: Route): string {
     }
     if (route.view === 'templates') return '/templates';
     if (route.view === 'typefaces') return '/typefaces';
+    if (route.view === 'academy') return '/academy';
     if (route.view === 'integrations') return '/integrations';
     return '/';
   }

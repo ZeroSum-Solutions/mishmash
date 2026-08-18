@@ -687,6 +687,7 @@ export const en: Dict = {
   'entry.navLibrary': 'Assets',
   'entry.navDesignLibrary': 'Design Library',
   'entry.navStoryboard': 'Storyboard',
+  'entry.navAcademy': 'Academy',
   'entry.navTemplates': 'Templates',
   'entry.navTypefaces': 'Typefaces',
   'entry.navIntegrations': 'Integrations',
