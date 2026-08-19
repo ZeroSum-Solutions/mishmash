@@ -5,15 +5,11 @@ import { createPortal } from 'react-dom';
 import { useI18n, type Locale } from '../i18n';
 import {
   clearAnonymousState,
-  isAmrLoggedIn,
   markAccountMessageRead,
   markAllAccountMessagesRead,
   pullMessageCenter,
-  readAnonymousMessages,
-  readAnonymousReadIds,
   type MessageCenterFilter,
   type MessageCenterMessage,
-  writeAnonymousState,
 } from '../message-center-client';
 import { Icon } from './Icon';
 import styles from './MessageCenter.module.css';
@@ -43,65 +39,49 @@ export function MessageCenter({ onOpenNotificationSettings }: Props) {
   const [filter, setFilter] = useState<MessageCenterFilter>('all');
   const [messages, setMessages] = useState<MessageCenterMessage[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
-  const [loggedIn, setLoggedIn] = useState(false);
   const [syncState, setSyncState] = useState<SyncState>('loading');
-  const loggedInRef = useRef(false);
   const messagesRef = useRef<MessageCenterMessage[]>([]);
   const readIdsRef = useRef<Set<string>>(new Set());
   const pendingReadIdsRef = useRef<Set<string>>(new Set());
   const syncRequestIdRef = useRef(0);
 
   const commitState = useCallback(
-    (nextMessages: MessageCenterMessage[], nextReadIds: Set<string>, options?: { persistAnonymous?: boolean }) => {
+    (nextMessages: MessageCenterMessage[], nextReadIds: Set<string>) => {
       messagesRef.current = nextMessages;
       readIdsRef.current = nextReadIds;
       setMessages(nextMessages);
       setReadIds(nextReadIds);
-      if (options?.persistAnonymous) writeAnonymousState(window.localStorage, nextMessages, nextReadIds);
     },
     [],
   );
 
   const sync = useCallback(async () => {
+    // The message-center backend is local-only and answers the same way
+    // regardless of sign-in state (R1) — there is nothing left for this sync
+    // to gate on login status for. Checking it here used to mean every sync
+    // (mount, 60s interval, visibility change) first hit
+    // `/api/integrations/vela/status`, which — for a signed-in account — runs
+    // real AMR billing/model probes with a 60s cache TTL that lined up
+    // exactly with this interval, and could 500 and abort the sync entirely
+    // before the local endpoint was ever reached. Pulling the local endpoint
+    // directly removes both problems.
     const requestId = syncRequestIdRef.current + 1;
     syncRequestIdRef.current = requestId;
     if (messagesRef.current.length === 0) setSyncState('loading');
-    const account = await isAmrLoggedIn();
-    const wasAccount = loggedInRef.current;
-    loggedInRef.current = account;
-    setLoggedIn(account);
-    if (wasAccount && !account) {
-      readIdsRef.current = new Set();
-      pendingReadIdsRef.current = new Set();
-    }
-    const pulled = await pullMessageCenter({ locale, loggedIn: account });
+    const pulled = await pullMessageCenter({ locale });
     if (requestId !== syncRequestIdRef.current) return;
     const serverReadIds = new Set(pulled.filter((message) => Boolean(message.readAt)).map((message) => message.id));
-    if (account) {
-      pendingReadIdsRef.current = new Set(
-        [...pendingReadIdsRef.current].filter((messageId) => !serverReadIds.has(messageId)),
-      );
-    }
-    const overlayReadIds = new Set([
-      ...serverReadIds,
-      ...(account ? pendingReadIdsRef.current : []),
-      ...(!account ? readIdsRef.current : []),
-    ]);
+    pendingReadIdsRef.current = new Set(
+      [...pendingReadIdsRef.current].filter((messageId) => !serverReadIds.has(messageId)),
+    );
+    const overlayReadIds = new Set([...serverReadIds, ...pendingReadIdsRef.current]);
     const merged = pulled.map((message) => ({
       ...message,
       readAt: message.readAt ?? (overlayReadIds.has(message.id) ? new Date().toISOString() : null),
     }));
-    if (account) clearAnonymousState(window.localStorage);
-    commitState(merged, overlayReadIds, { persistAnonymous: !account });
+    commitState(merged, overlayReadIds);
     setSyncState('ready');
   }, [commitState, locale]);
-
-  const resolveLoggedInForWrite = useCallback(async () => {
-    const account = await isAmrLoggedIn();
-    loggedInRef.current = account;
-    setLoggedIn(account);
-    return account;
-  }, []);
 
   const retrySync = useCallback(() => {
     void sync().catch(() => setSyncState('error'));
@@ -111,12 +91,17 @@ export function MessageCenter({ onOpenNotificationSettings }: Props) {
     syncRequestIdRef.current += 1;
   }, []);
 
+  // Purge the cached vendor feed instead of hydrating from it.
+  //
+  // This effect used to seed the panel from localStorage synchronously on
+  // mount, before the network sync resolved. On an install that had already
+  // cached vendor messages, that meant a real flash of someone else's
+  // announcements on every load. The feed is local and empty now, so there is
+  // nothing worth hydrating — and leaving the keys in place would keep that
+  // flash alive on exactly the installs that have the problem.
   useEffect(() => {
-    commitState(
-      readAnonymousMessages(window.localStorage),
-      readAnonymousReadIds(window.localStorage),
-    );
-  }, [commitState]);
+    clearAnonymousState(window.localStorage);
+  }, []);
 
   useEffect(() => {
     retrySync();
@@ -167,31 +152,23 @@ export function MessageCenter({ onOpenNotificationSettings }: Props) {
   const markRead = async (messageId: string) => {
     const message = messagesRef.current.find((item) => item.id === messageId);
     if (!message || message.readAt) return;
-    const account = await resolveLoggedInForWrite();
     const readAt = new Date().toISOString();
-    if (account) await markAccountMessageRead(messageId);
+    await markAccountMessageRead(messageId);
+    pendingReadIdsRef.current = new Set(pendingReadIdsRef.current).add(messageId);
     const nextIds = new Set(readIdsRef.current).add(messageId);
     const nextMessages = messagesRef.current.map((item) => (item.id === messageId ? { ...item, readAt } : item));
-    if (account) {
-      pendingReadIdsRef.current = new Set(pendingReadIdsRef.current).add(messageId);
-      clearAnonymousState(window.localStorage);
-    }
     invalidateSyncResponses();
-    commitState(nextMessages, nextIds, { persistAnonymous: !account });
+    commitState(nextMessages, nextIds);
   };
 
   const markAllRead = async () => {
-    const account = await resolveLoggedInForWrite();
-    if (account) await markAllAccountMessagesRead();
+    await markAllAccountMessagesRead();
     const readAt = new Date().toISOString();
     const nextIds = new Set(messagesRef.current.map((message) => message.id));
     const nextMessages = messagesRef.current.map((message) => ({ ...message, readAt: message.readAt ?? readAt }));
-    if (account) {
-      pendingReadIdsRef.current = new Set(nextIds);
-      clearAnonymousState(window.localStorage);
-    }
+    pendingReadIdsRef.current = new Set(nextIds);
     invalidateSyncResponses();
-    commitState(nextMessages, nextIds, { persistAnonymous: !account });
+    commitState(nextMessages, nextIds);
   };
 
   const openLabel = unreadCount > 0 ? `${t('messageCenter.openAria')} (${t('messageCenter.unreadCount', { count: unreadCount })})` : t('messageCenter.openAria');

@@ -15,6 +15,7 @@ export * from './api/community.js';
 export * from './api/composition-metrics.js';
 export * from './api/context.js';
 export * from './api/connectors.js';
+export * from './api/message-center.js';
 export * from './api/model-routing.js';
 export * from './api/comments.js';
 export * from './api/connectionTest.js';

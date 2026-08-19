@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from 'express';
+import { emptyMessageCenterPage } from '@open-design/contracts';
 import dns from 'node:dns';
-import http from 'node:http';
 import https from 'node:https';
 
 import {
@@ -24,7 +24,6 @@ import {
   parseVelaLoginAttribution,
   peekVelaLiveAccount,
   readVelaCredentialRevision,
-  readVelaControlApiContext,
   readVelaLoginStatus,
   setVelaLiveAccount,
   shouldRefreshVelaLiveAccount,
@@ -108,10 +107,136 @@ export function pipeProxyStreamWithGuard(
   source.pipe(dest);
 }
 
+// The Message Center is first-party and answers locally; this generic proxy
+// must not offer a second way to reach the vendor's copy of it.
+//
+// Closing the client call alone was not enough. This route forwards any
+// `/api/v1/...` suffix straight upstream, so the vendor's feed stayed
+// reachable through a MishMash URL for anything that asked directly — a stale
+// bundle mid-deploy, an extension, a curl. The rest of the AMR surface (login,
+// wallet, model catalogue) is untouched and still proxies normally.
+const AMR_PROXY_DENIED_PREFIX = '/api/v1/message-center';
+const AMR_PROXY_ALLOWED_PREFIX = '/api/v1/';
+
+// Compare what the *upstream* will route on, not the bytes we were handed.
+// `URL.pathname` does not percent-decode, so `message%2Dcenter` would sail
+// past a raw compare and still resolve to the vendor's real endpoint.
+//
+// Every decode stage is classified, not just the last one, because the two
+// failure modes pull in opposite directions. Refusing anything that will not
+// decode cleanly broke `%25` (an escaped literal percent), which decodes once
+// to a bare `%` and then legitimately cannot decode again — a real path on a
+// real resource id. Classifying only the fully decoded form would miss a
+// vendor endpoint that only appears at an intermediate stage. Looking at all
+// of them costs nothing and is wrong in neither direction.
+function removeDotSegments(pathname: string): string {
+  const out: string[] = [];
+  for (const segment of pathname.split('/')) {
+    if (segment === '.') continue;
+    if (segment === '..') {
+      if (out.length > 1) out.pop();
+      continue;
+    }
+    out.push(segment);
+  }
+  return out.join('/') || '/';
+}
+
+function settlePathname(pathname: string): string {
+  // Dot-segments resolve the same way client- and server-side (RFC 3986),
+  // and a backslash is a path separator to plenty of HTTP stacks — both are
+  // safe to normalize before comparing.
+  //
+  // Deliberately NOT done here: cutting the pathname at a `?`/`#`, and
+  // case-folding it. A `?`/`#` that shows up only because WE percent-decoded
+  // a triplet is not a real delimiter — `URL` already split the raw request
+  // into path/query/fragment before any of this runs, so a literal delimiter
+  // can never survive into `pathname` in the first place, and percent-
+  // encoding a reserved character is precisely what keeps it from acting as
+  // one. Treating a decoded `#` as a cut point 404s a request whose actual
+  // outbound target (`new URL(suffix, AMR_API_UPSTREAM_ORIGIN)` below) keeps
+  // the `%23` intact — `/api/v1/message-center%23anything` proxies to that
+  // literal path, not to `/api/v1/message-center`. Case-folding has the same
+  // problem in the other direction: nothing here establishes the upstream
+  // router is case-insensitive, and HTTP paths are case-sensitive by
+  // default, so folding would deny a differently-cased path that is a
+  // distinct, legitimate endpoint upstream.
+  return removeDotSegments(pathname.replace(/\\/g, '/')).replace(/\/{2,}/g, '/');
+}
+
+const PERCENT_RUN_RE = /(?:%[0-9a-fA-F]{2})+/g;
+
+/**
+ * Percent-decode what decodes, leave what does not.
+ *
+ * `decodeURIComponent` is all-or-nothing across the whole string: one bare
+ * `%` anywhere makes it throw, and the gate then had to choose between
+ * refusing the path (which 404ed `%25`, a legitimate escaped percent) and
+ * classifying it un-decoded (which would stop the loop before the denied
+ * segment appeared). Decoding what decodes removes the choice. Runs are
+ * decoded together so multi-byte sequences (`%C3%A9`) survive, then triplet
+ * by triplet if the run itself is not valid UTF-8.
+ *
+ * No request carrying a bare `%` was reachable here — Express refuses a
+ * malformed escape in the path with a 400 of its own — so this closes the
+ * class rather than a demonstrated hole.
+ */
+function decodePercentTolerant(input: string): string {
+  return input.replace(PERCENT_RUN_RE, (run) => {
+    try {
+      return decodeURIComponent(run);
+    } catch {
+      return run.replace(/%[0-9a-fA-F]{2}/g, (triplet) => {
+        try {
+          return decodeURIComponent(triplet);
+        } catch {
+          return triplet;
+        }
+      });
+    }
+  });
+}
+
+/**
+ * Every form of the path an upstream might route on, most-encoded first.
+ * Returns null only when the suffix cannot be parsed at all, or when it is
+ * still decoding after the pass budget — a shape no real path has, and the
+ * one case where refusing beats guessing.
+ */
+function amrProxyPathStages(suffix: string): string[] | null {
+  let pathname: string;
+  try {
+    pathname = new URL(suffix, 'http://amr-proxy.local').pathname;
+  } catch {
+    return null;
+  }
+  const stages = [settlePathname(pathname)];
+  for (let pass = 0; pass < 4; pass += 1) {
+    const decoded = decodePercentTolerant(pathname);
+    if (decoded === pathname) return stages;
+    pathname = decoded;
+    stages.push(settlePathname(pathname));
+  }
+  return decodePercentTolerant(pathname) === pathname ? stages : null;
+}
+
+function isAmrProxyDeniedPath(pathname: string): boolean {
+  return pathname === AMR_PROXY_DENIED_PREFIX || pathname.startsWith(`${AMR_PROXY_DENIED_PREFIX}/`);
+}
+
 function proxyAmrApiRequest(req: Request, res: Response): void {
   const suffix = req.originalUrl.slice(AMR_API_PROXY_PREFIX.length);
   if (!suffix.startsWith('/api/v1/')) {
     res.status(404).json({ error: 'unknown_amr_api_proxy_path' });
+    return;
+  }
+  const stages = amrProxyPathStages(suffix);
+  if (stages === null || !stages[stages.length - 1]!.startsWith(AMR_PROXY_ALLOWED_PREFIX)) {
+    res.status(404).json({ error: 'unknown_amr_api_proxy_path' });
+    return;
+  }
+  if (stages.some(isAmrProxyDeniedPath)) {
+    res.status(404).json({ error: 'message_center_is_local' });
     return;
   }
   const target = new URL(suffix, AMR_API_UPSTREAM_ORIGIN);
@@ -175,68 +300,16 @@ function proxyAmrApiRequest(req: Request, res: Response): void {
   }
 }
 
-function isAllowedMessageCenterRequest(method: string, pathname: string): boolean {
-  if (method === 'GET' && pathname === '/messages') return true;
+/**
+ * Paths the local Message Center answers as a read acknowledgement.
+ *
+ * Kept as an explicit allowlist rather than a catch-all so an unknown path
+ * still 404s. `GET /messages` is handled separately because it returns a page
+ * rather than an acknowledgement.
+ */
+function isLocalMessageCenterReadPath(method: string, pathname: string): boolean {
   if (method !== 'POST') return false;
   return pathname === '/read-all' || /^\/messages\/[^/]+\/read$/.test(pathname);
-}
-
-function proxyVelaMessageCenterRequest(
-  req: Request,
-  res: Response,
-  context: { apiUrl: string; controlKey: string },
-): void {
-  const suffix = req.originalUrl.slice(VELA_MESSAGE_CENTER_PREFIX.length);
-  const parsedSuffix = new URL(suffix, 'http://message-center.local');
-  if (!isAllowedMessageCenterRequest(req.method, parsedSuffix.pathname)) {
-    res.status(404).json({ error: 'unknown_message_center_path' });
-    return;
-  }
-  const target = new URL(
-    `/api/v1/message-center${parsedSuffix.pathname}${parsedSuffix.search}`,
-    context.apiUrl,
-  );
-  if (target.protocol !== 'http:' && target.protocol !== 'https:') {
-    res.status(500).json({ error: 'invalid_vela_api_url' });
-    return;
-  }
-  const body = velaProxyRequestBody(req);
-  const headers: Record<string, string> = {
-    accept: typeof req.headers.accept === 'string' ? req.headers.accept : 'application/json',
-    authorization: `Bearer ${context.controlKey}`,
-  };
-  if (typeof req.headers['content-type'] === 'string') {
-    headers['content-type'] = req.headers['content-type'];
-  }
-  if (body) headers['content-length'] = String(body.length);
-  const transport = target.protocol === 'https:' ? https : http;
-  const upstream = transport.request(
-    target,
-    { method: req.method, headers },
-    (upstreamRes) => {
-      res.status(upstreamRes.statusCode ?? 502);
-      for (const [key, value] of Object.entries(upstreamRes.headers)) {
-        if (value !== undefined) res.setHeader(key, value);
-      }
-      pipeProxyStreamWithGuard(upstreamRes, res, (err) => {
-        if (!res.headersSent) {
-          res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
-        } else {
-          res.end();
-        }
-      });
-    },
-  );
-  upstream.setTimeout(30_000, () => upstream.destroy(new Error('Vela Message Center timed out')));
-  upstream.on('error', (err) => {
-    if (!res.headersSent) {
-      res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
-    } else {
-      res.end();
-    }
-  });
-  if (body) upstream.write(body);
-  upstream.end();
 }
 
 export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): void {
@@ -431,19 +504,36 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
 
   app.all('/api/integrations/vela/api-proxy/*splat', proxyAmrApiRequest);
 
-  app.all('/api/integrations/vela/message-center/*splat', async (req, res) => {
-    try {
-      const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
-      const configuredEnv = agentCliEnvForAgent(appConfig.agentCliEnv, 'amr');
-      const context = readVelaControlApiContext(env, configuredEnv);
-      if (!context) {
-        res.status(401).json({ error: 'vela_control_key_required' });
-        return;
-      }
-      proxyVelaMessageCenterRequest(req, res, context);
-    } catch (err) {
-      res.status(500).json({ error: String(err) });
+  // The Message Center is a first-party surface and answers locally.
+  //
+  // This route used to proxy to the AMR vendor's own message feed, so the
+  // panel presented someone else's announcements as if they were MishMash's,
+  // and polled that vendor every 60 seconds whether or not anyone had opened
+  // the panel. The route, its shape, the web panel and `od message-center` all
+  // stay exactly as they were — only what answers them changed, which is what
+  // keeps the UI/CLI pair and the capability manifest intact.
+  //
+  // Empty is the honest answer until there is a first-party source of
+  // messages. Deliberately not a 404 or a 501: the capability exists, it just
+  // has nothing to report.
+  //
+  // No control-key gate any more. That gate authorized the vendor call, and
+  // there is no vendor call left to authorize; keeping it would only mean a
+  // 401 on a route that reads local, empty data.
+  app.all('/api/integrations/vela/message-center/*splat', (req, res) => {
+    const suffix = req.originalUrl.slice(VELA_MESSAGE_CENTER_PREFIX.length);
+    const pathname = new URL(suffix, 'http://message-center.local').pathname;
+    if (req.method === 'GET' && pathname === '/messages') {
+      res.json(emptyMessageCenterPage());
+      return;
     }
+    if (isLocalMessageCenterReadPath(req.method, pathname)) {
+      // Nothing to mark: there are no messages. Acknowledged rather than
+      // errored, so a client that optimistically marks read still succeeds.
+      res.json({ ok: true });
+      return;
+    }
+    res.status(404).json({ error: 'unknown_message_center_path' });
   });
 
   app.post('/api/integrations/vela/login', async (req, res) => {
