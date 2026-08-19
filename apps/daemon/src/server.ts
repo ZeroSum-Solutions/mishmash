@@ -664,6 +664,7 @@ import { createTerminalService } from './terminals.js';
 import { confinePreviewCwd, createPreviewService } from './previews.js';
 import { registerPreviewRoutes } from './routes/preview.js';
 import { registerSocialShareRoutes } from './routes/social-share.js';
+import { registerInterviewRoutes } from './routes/interviews.js';
 import { registerOpenDesignPublicMetadataRoutes } from './routes/open-design-public-metadata.js';
 import { registerWhatsNewRoutes } from './routes/whats-new.js';
 import { registerMemoryRoutes } from './routes/memory.js';
@@ -3312,6 +3313,7 @@ export async function startServer({
     });
   });
   registerSocialShareRoutes(app, { http: httpDeps });
+  registerInterviewRoutes(app, { http: httpDeps });
   registerProjectRoutes(app, {
     db,
     design,
