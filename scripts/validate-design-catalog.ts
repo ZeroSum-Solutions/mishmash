@@ -199,6 +199,7 @@ type Report = {
   'catalog-description-short': Violation[];
   'catalog-cover-missing': Violation[];
   'catalog-duplicate': Violation[];
+  'catalog-blocked-pending-license': Violation[];
 };
 
 // checkType -> array of { subject, detail }
@@ -214,6 +215,7 @@ function newReport(): Report {
     'catalog-description-short': [],
     'catalog-cover-missing': [],
     'catalog-duplicate': [],
+    'catalog-blocked-pending-license': [],
   };
 }
 
@@ -354,6 +356,17 @@ function checkCatalog(report: Report, libraryDir: string, items: CatalogItem[]):
       }
     }
 
+    // Zero-blockers policy (F009): fail loudly on any item still resolving
+    // to blocked-pending-license instead of letting it sit unnoticed. This
+    // is an on-demand check, not a pnpm guard/CI gate — libraryDir defaults
+    // to a machine-local path that does not exist in CI (see DEFAULT_LIBRARY_DIR).
+    if (item.allowed_use === 'blocked-pending-license') {
+      report['catalog-blocked-pending-license'].push({
+        subject: id,
+        detail: typeof item.rel === 'string' ? item.rel : '(no rel)',
+      });
+    }
+
     const fp = fingerprint(item);
     if (fp === null) continue; // no metadata signal — excluded from duplicate detection
     const group = fingerprintGroups.get(fp);
@@ -397,6 +410,7 @@ const SECTION_TITLES: Record<keyof Report, string> = {
   'catalog-description-short': `Catalog — description under ${MIN_DESCRIPTION_LENGTH} chars`,
   'catalog-cover-missing': 'Catalog — cover (thumb) missing or file not found',
   'catalog-duplicate': 'Catalog — duplicate fingerprint (no duplicate_of)',
+  'catalog-blocked-pending-license': 'Catalog — items blocked-pending-license (zero-blockers policy)',
 };
 
 function printReport(report: Report, templateCount: number, catalogCount: number): number {
