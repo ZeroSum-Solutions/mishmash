@@ -3219,7 +3219,12 @@ export async function startServer({
     critiqueArtifactsRoot: CRITIQUE_ARTIFACTS_DIR,
     critiqueResponseCapBytes: critiqueCfg.parserMaxBlockBytes,
     critiqueRunRegistry,
-    critiqueSkillRoots: SKILL_ROOTS,
+    // The spawn gate resolves a project's skill policy across BOTH functional
+    // skills and design templates, and a project may legitimately bind its
+    // skillId to a template. Reading only SKILL_ROOTS here made the status
+    // endpoint report the opposite of what a real run would do for those
+    // projects, because a skill policy outranks the env and project overrides.
+    critiqueSkillRoots: ALL_SKILL_LIKE_ROOTS,
   };
 
   // External services

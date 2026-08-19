@@ -377,8 +377,6 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
   // ---- Critique Theater endpoints (Phase 6) --------------------------------
 
   // GET /api/projects/:projectId/critique/status
-  // Registered ahead of the :runId routes: 'status' is a literal segment and
-  // must not be read as a run id.
   app.get(
     '/api/projects/:projectId/critique/status',
     handleCritiqueStatus(db, { skillsRoots: critiqueSkillRoots }),

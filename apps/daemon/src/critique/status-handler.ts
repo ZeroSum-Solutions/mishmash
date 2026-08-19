@@ -15,10 +15,13 @@ import { narrowProjectCritiqueOverride } from './spawn-inputs.js';
  * run one and read the daemon's stdout — which is how the feature came to be
  * believed unwired while it was in fact live.
  *
- * The skill policy is resolved from the project's currently bound skill only.
- * The spawn path additionally merges ad-hoc skills a single prompt adds by
- * @-mention, which do not exist until a request is composed, so the answer is
- * reported as approximate rather than quietly presented as exact.
+ * This answers the ROLLOUT POLICY layer only. A real generation also needs a
+ * resolved design system, a non-media surface, a plain-stream adapter and a
+ * daemon below its concurrency cap — all request-dependent, none knowable
+ * from a project id. The skill policy is also resolved from the project's
+ * bound skill alone, so ad-hoc skills a prompt adds by @-mention are
+ * invisible. Both limits are why the response is marked `approximate`
+ * rather than quietly presented as exact.
  */
 export function handleCritiqueStatus(
   db: Database.Database,

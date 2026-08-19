@@ -16,10 +16,15 @@ export type SkillCritiquePolicy = 'required' | 'opt-in' | 'opt-out' | null;
 export interface CritiqueStatusResponse {
   projectId: string;
   /**
-   * What `isCritiqueEnabled` resolves to for this project's currently bound
-   * skill. It does not account for ad-hoc skills a single prompt adds by
-   * @-mention, which only exist once a generation request is composed — see
-   * `resolution.approximate`.
+   * The ROLLOUT POLICY answer — what `isCritiqueEnabled` resolves to from
+   * phase, skill policy, project override and env — and nothing else.
+   *
+   * A real generation has to clear more gates than this: it needs a resolved
+   * design system, a non-media surface, a plain-stream adapter, and a daemon
+   * below `OD_CRITIQUE_MAX_CONCURRENT_RUNS`. Those depend on the request, not
+   * on the project, so they cannot be answered here. `enabled: true` means
+   * "policy permits it", not "the next run will critique". Read it with
+   * `resolution` and `approximate`, both of which say where the answer stops.
    */
   enabled: boolean;
   resolution: {
@@ -28,9 +33,13 @@ export interface CritiqueStatusResponse {
     projectOverride: boolean | null;
     envOverride: boolean | null;
     /**
-     * True while the skill policy is resolved from `project.skillId` alone.
-     * Always true today; it exists so a caller can tell an approximation from
-     * an exact answer if the endpoint is ever taught the full resolution.
+     * True while this is a policy-layer answer rather than a full
+     * spawn-time one. Two things are outside it: the skill policy is
+     * resolved from `project.skillId` alone, so ad-hoc skills a single
+     * prompt adds by @-mention are invisible; and the request-dependent
+     * gates named on `enabled` are not evaluated. Always true today; it
+     * exists so a caller can tell an approximation from an exact answer if
+     * the endpoint is ever taught the rest.
      */
     approximate: boolean;
   };

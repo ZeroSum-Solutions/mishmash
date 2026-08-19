@@ -68,6 +68,10 @@ describe('logCritique structured events (Phase 12)', () => {
       namespace: 'critique',
     });
     expect(typeof lines[0]!.timestamp).toBe('string');
+    // The whole point of carrying the config: a run that died on a threshold
+    // or never started because of the cap has to be explainable from the log
+    // line alone, so the values have to actually reach it.
+    expect(lines[0]!.config).toEqual(defaultCritiqueConfig());
   });
 
   it('emits round_closed with composite / mustFix / decision', () => {

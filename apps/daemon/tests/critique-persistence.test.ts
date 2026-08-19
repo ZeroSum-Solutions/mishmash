@@ -234,6 +234,35 @@ describe('critique persistence', () => {
     legacy.close();
   });
 
+  it('adds only the column that is missing when a database has one of the two', () => {
+    // The columns are checked independently, so a database that picked up one
+    // of them (a partial upgrade, a hand-run ALTER) must not have the ALTER
+    // for the one it already has re-run against it.
+    const partial = new Database(':memory:');
+    partial.exec(`
+      CREATE TABLE critique_runs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        conversation_id TEXT,
+        artifact_path TEXT,
+        status TEXT NOT NULL,
+        score REAL,
+        rounds_json TEXT NOT NULL DEFAULT '[]',
+        transcript_path TEXT,
+        protocol_version INTEGER NOT NULL,
+        total_tokens INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    `);
+    expect(() => migrateCritique(partial)).not.toThrow();
+    const columns = (partial.prepare(`PRAGMA table_info(critique_runs)`).all() as { name: string }[])
+      .map((column) => column.name);
+    expect(columns.filter((name) => name === 'total_tokens')).toHaveLength(1);
+    expect(columns).toContain('cost_usd');
+    partial.close();
+  });
+
   it('CASCADEs critique_runs deletion when project is deleted', () => {
     insertCritiqueRun(db, { id: 'doomed', projectId: 'p2', status: 'shipped', protocolVersion: 1 });
     db.prepare(`DELETE FROM projects WHERE id = ?`).run('p2');

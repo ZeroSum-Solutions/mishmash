@@ -26,6 +26,7 @@ let db: Database.Database;
 let server: http.Server;
 let baseUrl: string;
 let skillsRoot: string;
+let templatesRoot: string;
 
 function createDb(): Database.Database {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-critique-status-'));
@@ -38,7 +39,10 @@ async function start(): Promise<void> {
   app.use(express.json());
   app.get(
     '/api/projects/:projectId/critique/status',
-    handleCritiqueStatus(db, { skillsRoots: [skillsRoot] }),
+    // Both roots, mirroring the daemon: a project may bind its skillId to a
+    // design template, and a template's critique policy outranks every other
+    // input.
+    handleCritiqueStatus(db, { skillsRoots: [skillsRoot, templatesRoot] }),
   );
   server = http.createServer(app);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -52,7 +56,8 @@ beforeEach(async () => {
   delete process.env['OD_CRITIQUE_ROLLOUT_PHASE'];
   db = createDb();
   skillsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'od-critique-skills-'));
-  tempDirs.push(skillsRoot);
+  templatesRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'od-critique-templates-'));
+  tempDirs.push(skillsRoot, templatesRoot);
   const now = Date.now();
   insertProject(db, { id: 'p1', name: 'Project 1', createdAt: now, updatedAt: now });
   await start();
@@ -65,6 +70,27 @@ afterEach(async () => {
   closeDatabase();
   for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
+
+function writeSkill(root: string, id: string, policy: string): void {
+  const dir = path.join(root, id);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, 'SKILL.md'),
+    [
+      '---',
+      `name: ${id}`,
+      `description: "Fixture skill for the critique status endpoint."`,
+      'od:',
+      '  critique:',
+      `    policy: ${policy}`,
+      '---',
+      '',
+      `# ${id}`,
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+}
 
 async function getStatus(projectId: string): Promise<{ status: number; body: any }> {
   const resp = await fetch(`${baseUrl}/api/projects/${projectId}/critique/status`);
@@ -105,6 +131,29 @@ describe('GET /api/projects/:projectId/critique/status', () => {
     const { body } = await getStatus('p1');
     expect(body.resolution.projectOverride).toBeNull();
     expect(body.enabled).toBe(false);
+  });
+
+  it('reads a skill policy from every root it is given, not just the first', async () => {
+    // The defect this pins: resolving only the functional-skill root made the
+    // endpoint report the OPPOSITE of a real run for any project bound to a
+    // design template, because a skill policy outranks the env override.
+    writeSkill(templatesRoot, 'poster-template', 'opt-out');
+    updateProject(db, 'p1', { skillId: 'poster-template' });
+    process.env['OD_CRITIQUE_ENABLED'] = '1';
+
+    const { body } = await getStatus('p1');
+    expect(body.resolution.skillPolicy).toBe('opt-out');
+    expect(body.resolution.envOverride).toBe(true);
+    // opt-out vetoes outright; reporting `true` here would be an inverted answer.
+    expect(body.enabled).toBe(false);
+  });
+
+  it('lets a required skill policy enable a project nothing else would', async () => {
+    writeSkill(skillsRoot, 'critique-required', 'required');
+    updateProject(db, 'p1', { skillId: 'critique-required' });
+    const { body } = await getStatus('p1');
+    expect(body.resolution.skillPolicy).toBe('required');
+    expect(body.enabled).toBe(true);
   });
 
   it('404s an unknown project', async () => {
