@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from 'express';
+import { emptyMessageCenterPage } from '@open-design/contracts';
 import dns from 'node:dns';
 import http from 'node:http';
 import https from 'node:https';
@@ -24,7 +25,6 @@ import {
   parseVelaLoginAttribution,
   peekVelaLiveAccount,
   readVelaCredentialRevision,
-  readVelaControlApiContext,
   readVelaLoginStatus,
   setVelaLiveAccount,
   shouldRefreshVelaLiveAccount,
@@ -108,10 +108,29 @@ export function pipeProxyStreamWithGuard(
   source.pipe(dest);
 }
 
+// The Message Center is first-party and answers locally; this generic proxy
+// must not offer a second way to reach the vendor's copy of it.
+//
+// Closing the client call alone was not enough. This route forwards any
+// `/api/v1/...` suffix straight upstream, so the vendor's feed stayed
+// reachable through a MishMash URL for anything that asked directly — a stale
+// bundle mid-deploy, an extension, a curl. The rest of the AMR surface (login,
+// wallet, model catalogue) is untouched and still proxies normally.
+const AMR_PROXY_DENIED_PREFIX = '/api/v1/message-center';
+
+function isAmrProxyDeniedPath(suffix: string): boolean {
+  const pathname = new URL(suffix, 'http://amr-proxy.local').pathname;
+  return pathname === AMR_PROXY_DENIED_PREFIX || pathname.startsWith(`${AMR_PROXY_DENIED_PREFIX}/`);
+}
+
 function proxyAmrApiRequest(req: Request, res: Response): void {
   const suffix = req.originalUrl.slice(AMR_API_PROXY_PREFIX.length);
   if (!suffix.startsWith('/api/v1/')) {
     res.status(404).json({ error: 'unknown_amr_api_proxy_path' });
+    return;
+  }
+  if (isAmrProxyDeniedPath(suffix)) {
+    res.status(404).json({ error: 'message_center_is_local' });
     return;
   }
   const target = new URL(suffix, AMR_API_UPSTREAM_ORIGIN);
@@ -175,68 +194,16 @@ function proxyAmrApiRequest(req: Request, res: Response): void {
   }
 }
 
-function isAllowedMessageCenterRequest(method: string, pathname: string): boolean {
-  if (method === 'GET' && pathname === '/messages') return true;
+/**
+ * Paths the local Message Center answers as a read acknowledgement.
+ *
+ * Kept as an explicit allowlist rather than a catch-all so an unknown path
+ * still 404s. `GET /messages` is handled separately because it returns a page
+ * rather than an acknowledgement.
+ */
+function isLocalMessageCenterReadPath(method: string, pathname: string): boolean {
   if (method !== 'POST') return false;
   return pathname === '/read-all' || /^\/messages\/[^/]+\/read$/.test(pathname);
-}
-
-function proxyVelaMessageCenterRequest(
-  req: Request,
-  res: Response,
-  context: { apiUrl: string; controlKey: string },
-): void {
-  const suffix = req.originalUrl.slice(VELA_MESSAGE_CENTER_PREFIX.length);
-  const parsedSuffix = new URL(suffix, 'http://message-center.local');
-  if (!isAllowedMessageCenterRequest(req.method, parsedSuffix.pathname)) {
-    res.status(404).json({ error: 'unknown_message_center_path' });
-    return;
-  }
-  const target = new URL(
-    `/api/v1/message-center${parsedSuffix.pathname}${parsedSuffix.search}`,
-    context.apiUrl,
-  );
-  if (target.protocol !== 'http:' && target.protocol !== 'https:') {
-    res.status(500).json({ error: 'invalid_vela_api_url' });
-    return;
-  }
-  const body = velaProxyRequestBody(req);
-  const headers: Record<string, string> = {
-    accept: typeof req.headers.accept === 'string' ? req.headers.accept : 'application/json',
-    authorization: `Bearer ${context.controlKey}`,
-  };
-  if (typeof req.headers['content-type'] === 'string') {
-    headers['content-type'] = req.headers['content-type'];
-  }
-  if (body) headers['content-length'] = String(body.length);
-  const transport = target.protocol === 'https:' ? https : http;
-  const upstream = transport.request(
-    target,
-    { method: req.method, headers },
-    (upstreamRes) => {
-      res.status(upstreamRes.statusCode ?? 502);
-      for (const [key, value] of Object.entries(upstreamRes.headers)) {
-        if (value !== undefined) res.setHeader(key, value);
-      }
-      pipeProxyStreamWithGuard(upstreamRes, res, (err) => {
-        if (!res.headersSent) {
-          res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
-        } else {
-          res.end();
-        }
-      });
-    },
-  );
-  upstream.setTimeout(30_000, () => upstream.destroy(new Error('Vela Message Center timed out')));
-  upstream.on('error', (err) => {
-    if (!res.headersSent) {
-      res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
-    } else {
-      res.end();
-    }
-  });
-  if (body) upstream.write(body);
-  upstream.end();
 }
 
 export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): void {
@@ -431,19 +398,36 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
 
   app.all('/api/integrations/vela/api-proxy/*splat', proxyAmrApiRequest);
 
-  app.all('/api/integrations/vela/message-center/*splat', async (req, res) => {
-    try {
-      const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
-      const configuredEnv = agentCliEnvForAgent(appConfig.agentCliEnv, 'amr');
-      const context = readVelaControlApiContext(env, configuredEnv);
-      if (!context) {
-        res.status(401).json({ error: 'vela_control_key_required' });
-        return;
-      }
-      proxyVelaMessageCenterRequest(req, res, context);
-    } catch (err) {
-      res.status(500).json({ error: String(err) });
+  // The Message Center is a first-party surface and answers locally.
+  //
+  // This route used to proxy to the AMR vendor's own message feed, so the
+  // panel presented someone else's announcements as if they were MishMash's,
+  // and polled that vendor every 60 seconds whether or not anyone had opened
+  // the panel. The route, its shape, the web panel and `od message-center` all
+  // stay exactly as they were — only what answers them changed, which is what
+  // keeps the UI/CLI pair and the capability manifest intact.
+  //
+  // Empty is the honest answer until there is a first-party source of
+  // messages. Deliberately not a 404 or a 501: the capability exists, it just
+  // has nothing to report.
+  //
+  // No control-key gate any more. That gate authorized the vendor call, and
+  // there is no vendor call left to authorize; keeping it would only mean a
+  // 401 on a route that reads local, empty data.
+  app.all('/api/integrations/vela/message-center/*splat', (req, res) => {
+    const suffix = req.originalUrl.slice(VELA_MESSAGE_CENTER_PREFIX.length);
+    const pathname = new URL(suffix, 'http://message-center.local').pathname;
+    if (req.method === 'GET' && pathname === '/messages') {
+      res.json(emptyMessageCenterPage());
+      return;
     }
+    if (isLocalMessageCenterReadPath(req.method, pathname)) {
+      // Nothing to mark: there are no messages. Acknowledged rather than
+      // errored, so a client that optimistically marks read still succeeds.
+      res.json({ ok: true });
+      return;
+    }
+    res.status(404).json({ error: 'unknown_message_center_path' });
   });
 
   app.post('/api/integrations/vela/login', async (req, res) => {

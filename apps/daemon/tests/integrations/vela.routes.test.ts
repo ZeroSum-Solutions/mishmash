@@ -1485,8 +1485,10 @@ describe('ALL /api/integrations/vela/api-proxy/*', () => {
       return req;
     }) as typeof https.request);
     try {
+      // Any legitimate AMR path exercises the lookup; this used to use a
+      // message-center URL, which the proxy now refuses outright.
       const resp = await fetch(
-        `${baseUrl}/api/integrations/vela/api-proxy/api/v1/message-center/messages?locale=en-US&filter=all&limit=100`,
+        `${baseUrl}/api/integrations/vela/api-proxy/api/v1/models?limit=10`,
       );
       expect(resp.status).toBe(200);
       expect(capturedLookup).toBeTypeOf('function');
@@ -1503,20 +1505,54 @@ describe('ALL /api/integrations/vela/api-proxy/*', () => {
   });
 });
 
+describe('the generic AMR proxy refuses the vendor message feed', () => {
+  // Closing the client call was not enough on its own: this proxy forwards any
+  // /api/v1/... suffix upstream, so the vendor's message-center stayed
+  // reachable through a first-party URL for anything that asked directly.
+  it('404s message-center paths without calling upstream', async () => {
+    const requestSpy = vi.spyOn(https, 'request');
+    seedLogin('local');
+    try {
+      for (const path of [
+        'api/v1/message-center/messages?locale=en-US&limit=100',
+        'api/v1/message-center/messages/release/read',
+        'api/v1/message-center/read-all',
+        'api/v1/message-center',
+      ]) {
+        const response = await fetch(`${baseUrl}/api/integrations/vela/api-proxy/${path}`);
+        expect(response.status, path).toBe(404);
+        expect(await response.json()).toEqual({ error: 'message_center_is_local' });
+      }
+      expect(requestSpy).not.toHaveBeenCalled();
+    } finally {
+      requestSpy.mockRestore();
+    }
+  });
+});
+
 describe('ALL /api/integrations/vela/message-center/*', () => {
-  it('forwards only Message Center routes to the configured profile origin with its control key', async () => {
-    const requests: Array<{ url: string; method: string; authorization: string | undefined }> = [];
+  // This route used to proxy to the AMR vendor's message feed. It answers
+  // locally now, so the tests below assert the opposite of what they used to:
+  // that nothing leaves the machine, whatever the login or key state.
+
+  it('never forwards a message-center request to any configured upstream origin', async () => {
+    const requests: Array<{ url: string; method: string }> = [];
     const upstream = createServer((req, res) => {
-      requests.push({
-        url: req.url ?? '',
-        method: req.method ?? '',
-        authorization: req.headers.authorization,
-      });
+      requests.push({ url: req.url ?? '', method: req.method ?? '' });
       res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({ messages: [], nextCursor: null, unreadCount: 0 }));
+      res.end(
+        JSON.stringify({
+          messages: [{ id: 'vendor-leak', title: 'Vendor announcement' }],
+          nextCursor: null,
+          unreadCount: 1,
+        }),
+      );
     });
     await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve));
     const address = upstream.address() as AddressInfo;
+    // Seeded with a control key and a reachable origin — exactly the state
+    // that used to produce a proxied call. If anything still reaches out, this
+    // upstream records it.
     seedLogin('local', { apiUrl: `http://127.0.0.1:${address.port}` });
     try {
       const response = await fetch(
@@ -1524,75 +1560,52 @@ describe('ALL /api/integrations/vela/message-center/*', () => {
         { headers: { authorization: 'Bearer browser-supplied-key' } },
       );
       expect(response.status).toBe(200);
-      expect(requests).toEqual([
-        {
-          url: '/api/v1/message-center/messages?locale=en-US&limit=30',
-          method: 'GET',
-          authorization: 'Bearer ck-seeded-key',
-        },
-      ]);
+      expect(await response.json()).toEqual({ messages: [], nextCursor: null, unreadCount: 0 });
+
       const markRead = await fetch(
         `${baseUrl}/api/integrations/vela/message-center/messages/release/read`,
         { method: 'POST' },
       );
       expect(markRead.status).toBe(200);
-      expect(requests).toEqual([
-        {
-          url: '/api/v1/message-center/messages?locale=en-US&limit=30',
-          method: 'GET',
-          authorization: 'Bearer ck-seeded-key',
-        },
-        {
-          url: '/api/v1/message-center/messages/release/read',
-          method: 'POST',
-          authorization: 'Bearer ck-seeded-key',
-        },
-      ]);
-      const rejected = await fetch(`${baseUrl}/api/integrations/vela/message-center/wallet/balance`);
-      expect(rejected.status).toBe(404);
-      expect(await rejected.json()).toEqual({ error: 'unknown_message_center_path' });
-      expect(requests).toHaveLength(2);
+
+      const markAll = await fetch(`${baseUrl}/api/integrations/vela/message-center/read-all`, {
+        method: 'POST',
+      });
+      expect(markAll.status).toBe(200);
+
+      expect(requests).toEqual([]);
     } finally {
       await new Promise<void>((resolve) => upstream.close(() => resolve()));
     }
   });
 
-  it('fails visibly when no control key is configured', async () => {
+  it('answers with an empty page when no control key is configured', async () => {
+    // Previously a 401: the control key authorized the vendor call. There is
+    // no vendor call left to authorize, and the panel is readable signed out.
     const response = await fetch(
       `${baseUrl}/api/integrations/vela/message-center/messages?locale=en-US`,
     );
-    expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ error: 'vela_control_key_required' });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ messages: [], nextCursor: null, unreadCount: 0 });
   });
 
-  it('guards upstream response-stream errors after headers without crashing the daemon', async () => {
-    const requestSpy = vi.spyOn(http, 'request').mockImplementation(((target, options, callback) => {
-      const req = new PassThrough() as any;
-      req.on('finish', () => {
-        const upstreamRes = new PassThrough() as any;
-        upstreamRes.statusCode = 200;
-        upstreamRes.headers = { 'content-type': 'application/json' };
-        callback?.(upstreamRes);
-        upstreamRes.write('{"messages":[');
-        setImmediate(() => upstreamRes.emit('error', new Error('mid-stream reset')));
-      });
-      req.setTimeout = () => req;
-      return req;
-    }) as typeof http.request);
+  it('still rejects a path outside the message-center surface', async () => {
+    const rejected = await fetch(`${baseUrl}/api/integrations/vela/message-center/wallet/balance`);
+    expect(rejected.status).toBe(404);
+    expect(await rejected.json()).toEqual({ error: 'unknown_message_center_path' });
+  });
 
+  it('makes no outbound http request at all, even with the transport stubbed', async () => {
+    // The strongest form of the assertion: if the handler ever calls
+    // http.request again, this spy sees it regardless of where it points.
+    const requestSpy = vi.spyOn(http, 'request');
     seedLogin('local', { apiUrl: 'http://127.0.0.1:18080' });
-
     try {
       const response = await fetch(
         `${baseUrl}/api/integrations/vela/message-center/messages?locale=en-US`,
       );
-
       expect(response.status).toBe(200);
-      expect(await response.text()).toBe('{"messages":[');
-
-      const status = await getJson<{ loggedIn: boolean }>(`${baseUrl}/api/integrations/vela/status`);
-      expect(status.status).toBe(200);
-      expect(status.body.loggedIn).toBe(true);
+      expect(requestSpy).not.toHaveBeenCalled();
     } finally {
       requestSpy.mockRestore();
     }

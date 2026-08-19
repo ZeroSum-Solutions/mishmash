@@ -25,11 +25,14 @@ describe('message center client', () => {
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce(Response.json({ messages: [{ id: 'new' }], nextCursor: 'next', unreadCount: 1 }))
       .mockResolvedValueOnce(Response.json({ messages: [{ id: 'old' }], nextCursor: null, unreadCount: 1 })));
-    const result = await pullMessageCenter({ locale: 'en', loggedIn: false });
+    const result = await pullMessageCenter({ locale: 'en' });
     expect(result.map((message) => message.id)).toEqual(['new', 'old']);
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
     const firstUrl = String(vi.mocked(fetch).mock.calls[0]?.[0]);
-    expect(firstUrl).toContain('/api/integrations/vela/api-proxy/api/v1/message-center/messages?');
+    // One local endpoint whatever the sign-in state — the anonymous path used
+    // to go through the generic AMR proxy straight to the vendor's feed.
+    expect(firstUrl).toContain('/api/integrations/vela/message-center/messages?');
+    expect(firstUrl).not.toContain('/api-proxy/');
     expect(firstUrl).not.toContain('startedAt=');
   });
 
@@ -38,7 +41,7 @@ describe('message center client', () => {
       .mockResolvedValueOnce(Response.json({ messages: [{ id: 'new' }], nextCursor: 'stuck', unreadCount: 1 }))
       .mockResolvedValueOnce(Response.json({ messages: [{ id: 'old' }], nextCursor: 'stuck', unreadCount: 1 })));
     await expect(
-      pullMessageCenter({ locale: 'en', loggedIn: false }),
+      pullMessageCenter({ locale: 'en' }),
     ).rejects.toThrow('Message Center pagination cursor did not advance');
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
   });
@@ -47,7 +50,7 @@ describe('message center client', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       Response.json({ messages: [], nextCursor: null, unreadCount: 0 }),
     ));
-    await pullMessageCenter({ locale: 'en', loggedIn: true });
+    await pullMessageCenter({ locale: 'en' });
     expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toContain(
       '/api/integrations/vela/message-center/messages?',
     );

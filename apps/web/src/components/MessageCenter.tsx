@@ -9,11 +9,8 @@ import {
   markAccountMessageRead,
   markAllAccountMessagesRead,
   pullMessageCenter,
-  readAnonymousMessages,
-  readAnonymousReadIds,
   type MessageCenterFilter,
   type MessageCenterMessage,
-  writeAnonymousState,
 } from '../message-center-client';
 import { Icon } from './Icon';
 import styles from './MessageCenter.module.css';
@@ -52,12 +49,11 @@ export function MessageCenter({ onOpenNotificationSettings }: Props) {
   const syncRequestIdRef = useRef(0);
 
   const commitState = useCallback(
-    (nextMessages: MessageCenterMessage[], nextReadIds: Set<string>, options?: { persistAnonymous?: boolean }) => {
+    (nextMessages: MessageCenterMessage[], nextReadIds: Set<string>) => {
       messagesRef.current = nextMessages;
       readIdsRef.current = nextReadIds;
       setMessages(nextMessages);
       setReadIds(nextReadIds);
-      if (options?.persistAnonymous) writeAnonymousState(window.localStorage, nextMessages, nextReadIds);
     },
     [],
   );
@@ -74,7 +70,7 @@ export function MessageCenter({ onOpenNotificationSettings }: Props) {
       readIdsRef.current = new Set();
       pendingReadIdsRef.current = new Set();
     }
-    const pulled = await pullMessageCenter({ locale, loggedIn: account });
+    const pulled = await pullMessageCenter({ locale });
     if (requestId !== syncRequestIdRef.current) return;
     const serverReadIds = new Set(pulled.filter((message) => Boolean(message.readAt)).map((message) => message.id));
     if (account) {
@@ -92,7 +88,7 @@ export function MessageCenter({ onOpenNotificationSettings }: Props) {
       readAt: message.readAt ?? (overlayReadIds.has(message.id) ? new Date().toISOString() : null),
     }));
     if (account) clearAnonymousState(window.localStorage);
-    commitState(merged, overlayReadIds, { persistAnonymous: !account });
+    commitState(merged, overlayReadIds);
     setSyncState('ready');
   }, [commitState, locale]);
 
@@ -111,12 +107,17 @@ export function MessageCenter({ onOpenNotificationSettings }: Props) {
     syncRequestIdRef.current += 1;
   }, []);
 
+  // Purge the cached vendor feed instead of hydrating from it.
+  //
+  // This effect used to seed the panel from localStorage synchronously on
+  // mount, before the network sync resolved. On an install that had already
+  // cached vendor messages, that meant a real flash of someone else's
+  // announcements on every load. The feed is local and empty now, so there is
+  // nothing worth hydrating — and leaving the keys in place would keep that
+  // flash alive on exactly the installs that have the problem.
   useEffect(() => {
-    commitState(
-      readAnonymousMessages(window.localStorage),
-      readAnonymousReadIds(window.localStorage),
-    );
-  }, [commitState]);
+    clearAnonymousState(window.localStorage);
+  }, []);
 
   useEffect(() => {
     retrySync();
@@ -177,7 +178,7 @@ export function MessageCenter({ onOpenNotificationSettings }: Props) {
       clearAnonymousState(window.localStorage);
     }
     invalidateSyncResponses();
-    commitState(nextMessages, nextIds, { persistAnonymous: !account });
+    commitState(nextMessages, nextIds);
   };
 
   const markAllRead = async () => {
@@ -191,7 +192,7 @@ export function MessageCenter({ onOpenNotificationSettings }: Props) {
       clearAnonymousState(window.localStorage);
     }
     invalidateSyncResponses();
-    commitState(nextMessages, nextIds, { persistAnonymous: !account });
+    commitState(nextMessages, nextIds);
   };
 
   const openLabel = unreadCount > 0 ? `${t('messageCenter.openAria')} (${t('messageCenter.unreadCount', { count: unreadCount })})` : t('messageCenter.openAria');

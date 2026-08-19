@@ -66,21 +66,37 @@ describe('MessageCenter', () => {
     });
   });
 
-  it('renders API messages for anonymous clients without a local window', async () => {
+  it('pulls anonymous messages from the local route, never the AMR proxy', async () => {
     renderMessageCenter();
     const dialog = await openCenter();
     expect(within(dialog).getByText('MishMash 0.14 is available')).toBeTruthy();
     expect(localStorage.getItem('open-design.message-center.anonymous-started-at.v1')).toBeNull();
-    const anonymousPull = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('/api-proxy/') && String(url).includes('/messages?'));
-    expect(String(anonymousPull?.[0])).not.toContain('startedAt=');
+    // Assert on the request that was actually made. Looking for an /api-proxy/
+    // call and then asserting something about it is vacuous once that call is
+    // gone — `find` returns undefined and every assertion on it passes.
+    const messagePulls = vi
+      .mocked(fetch)
+      .mock.calls.map(([url]) => String(url))
+      .filter((url) => url.includes('/messages?'));
+    expect(messagePulls.length).toBeGreaterThan(0);
+    for (const url of messagePulls) {
+      expect(url).toContain('/api/integrations/vela/message-center/messages?');
+      expect(url).not.toContain('/api-proxy/');
+      expect(url).not.toContain('startedAt=');
+    }
   });
 
-  it('keeps anonymous read state locally and restores it', async () => {
+  it('marks a message read in the panel without caching anything locally', async () => {
+    // The local cache existed to hold the vendor feed between loads. The feed
+    // is first-party and empty now, so nothing is written — and read state
+    // that outlived a reload was only ever meaningful for cached vendor
+    // messages.
     renderMessageCenter();
     await openCenter();
     fireEvent.click(screen.getByRole('button', { name: /MishMash 0\.14 is available/ }));
     await waitFor(() => expect(screen.queryByLabelText(/unread/)).toBeNull());
-    expect(localStorage.getItem('open-design.message-center.anonymous-read-ids.v1')).toContain('release');
+    expect(localStorage.getItem('open-design.message-center.anonymous-read-ids.v1')).toBeNull();
+    expect(localStorage.getItem('open-design.message-center.anonymous-messages.v1')).toBeNull();
   });
 
   it('uses account read endpoints when logged in', async () => {
@@ -149,37 +165,29 @@ describe('MessageCenter', () => {
     });
   });
 
-  it('uses account mark-read before the first delayed message sync resolves', async () => {
+  it('purges cached vendor messages on mount and never renders them', async () => {
+    // The regression this guards: the panel used to hydrate from localStorage
+    // synchronously on mount, before the network sync resolved. On an install
+    // that had already cached the vendor feed that was a real flash of
+    // someone else's announcements on every load — so the sync here is held
+    // open deliberately, which is exactly the window the flash happened in.
     const cachedMessages = [
-      { ...defaultMessages[0]!, id: 'release', title: 'Release update', readAt: null, ctaLabel: null, ctaUrl: null },
+      { ...defaultMessages[0]!, id: 'release', title: 'Cached vendor update', readAt: null },
     ] satisfies MessageCenterMessage[];
-    let releaseMessages: (() => void) | undefined;
     localStorage.setItem('open-design.message-center.anonymous-started-at.v1', '2026-07-16T00:00:00.000Z');
     localStorage.setItem('open-design.message-center.anonymous-messages.v1', JSON.stringify(cachedMessages));
     localStorage.setItem('open-design.message-center.anonymous-read-ids.v1', JSON.stringify([]));
-    mockFetch({
-      loggedIn: true,
-      onMessages: () =>
-        new Promise<Response>((resolve) => {
-          releaseMessages = () => resolve(Response.json({ messages: cachedMessages, nextCursor: null, unreadCount: 1 }));
-        }),
-    });
+    mockFetch({ onMessages: () => new Promise<Response>(() => {}) });
 
     renderMessageCenter();
-    await openCenter(1);
-    fireEvent.click(screen.getByRole('button', { name: /Release update/ }));
 
     await waitFor(() =>
-      expect(
-        vi.mocked(fetch).mock.calls.some(
-          ([url, init]) => String(url).includes('/messages/release/read') && init?.method === 'POST',
-        ),
-      ).toBe(true),
+      expect(localStorage.getItem('open-design.message-center.anonymous-messages.v1')).toBeNull(),
     );
     expect(localStorage.getItem('open-design.message-center.anonymous-read-ids.v1')).toBeNull();
-
-    releaseMessages?.();
-    await waitFor(() => expect(screen.queryByLabelText(/unread/)).toBeNull());
+    expect(localStorage.getItem('open-design.message-center.anonymous-started-at.v1')).toBeNull();
+    expect(screen.queryByText('Cached vendor update')).toBeNull();
+    expect(screen.queryByLabelText(/unread/)).toBeNull();
   });
 
   it('re-checks auth on write after an anonymous mount so mid-session login uses account reads', async () => {
@@ -268,35 +276,28 @@ describe('MessageCenter', () => {
     expect(messageRequests).toBeGreaterThanOrEqual(2);
   });
 
-  it('hydrates cached anonymous state through the ref-backed source of truth', async () => {
+  it('does not fall back to cached vendor messages when the sync fails', async () => {
+    // A failing sync is the one case where showing something stale is
+    // tempting. It must still show the retry affordance rather than the
+    // vendor's last known feed.
     const cachedMessages = [
-      { ...defaultMessages[0]!, id: 'release', title: 'Release update', readAt: null, ctaLabel: null, ctaUrl: null },
-      { ...defaultMessages[0]!, id: 'security', title: 'Security notice', readAt: null, ctaLabel: null, ctaUrl: null },
+      { ...defaultMessages[0]!, id: 'release', title: 'Cached vendor update', readAt: null },
+      { ...defaultMessages[0]!, id: 'security', title: 'Cached security notice', readAt: null },
     ] satisfies MessageCenterMessage[];
-    localStorage.setItem('open-design.message-center.anonymous-started-at.v1', '2026-07-16T00:00:00.000Z');
     localStorage.setItem('open-design.message-center.anonymous-messages.v1', JSON.stringify(cachedMessages));
     localStorage.setItem('open-design.message-center.anonymous-read-ids.v1', JSON.stringify([]));
-    mockFetch({
-      onMessages: async () => new Response(null, { status: 500 }),
-    });
+    mockFetch({ onMessages: async () => new Response(null, { status: 500 }) });
 
     renderMessageCenter();
-    await openCenter(2);
-    expect(screen.getByText('Release update')).toBeTruthy();
-    expect(screen.getByRole('status')).toHaveTextContent('Check failed. Please retry.');
 
-    fireEvent.click(screen.getByRole('button', { name: /Release update/ }));
+    await waitFor(() => expect(screen.getByTestId('message-center-trigger')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('message-center-trigger'));
     await waitFor(() =>
-      expect(localStorage.getItem('open-design.message-center.anonymous-read-ids.v1')).toContain('release'),
+      expect(screen.getByRole('status')).toHaveTextContent('Check failed. Please retry.'),
     );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Mark all read' }));
-    await waitFor(() =>
-      expect(localStorage.getItem('open-design.message-center.anonymous-read-ids.v1')).toContain('security'),
-    );
-    expect(localStorage.getItem('open-design.message-center.anonymous-read-ids.v1')).toContain('release');
-    expect(localStorage.getItem('open-design.message-center.anonymous-read-ids.v1')).toContain('security');
-    expect(localStorage.getItem('open-design.message-center.anonymous-messages.v1')).toContain('Release update');
+    expect(screen.queryByText('Cached vendor update')).toBeNull();
+    expect(screen.queryByText('Cached security notice')).toBeNull();
+    expect(localStorage.getItem('open-design.message-center.anonymous-messages.v1')).toBeNull();
   });
 
   it('drops account read ids when a mounted session falls back to anonymous', async () => {
@@ -328,7 +329,7 @@ describe('MessageCenter', () => {
     await waitFor(() =>
       expect(screen.getByLabelText(/Open message center \(1 unread\)/)).toBeTruthy(),
     );
-    expect(localStorage.getItem('open-design.message-center.anonymous-read-ids.v1')).not.toContain('release');
+    expect(localStorage.getItem('open-design.message-center.anonymous-read-ids.v1')).toBeNull();
   });
 
   it('reports mark-read failures without throwing an unhandled rejection', async () => {
