@@ -364,16 +364,28 @@ function renderTab(items: DesignSystemSummary[] = librarySystems) {
   );
 }
 
-// The surface pill renders its label and a `.filter-pill-count` span; read
-// the count back by the visible label so assertions describe the UI.
+// The surface facet is now a FilterSelect (packages/components) — a native
+// <select> whose <option> text is "Label (count)" (see optionText in
+// filter-select.tsx). Read the count back off the option matching the
+// visible label so assertions still describe the UI, not the markup.
+function surfaceSelect(): HTMLSelectElement {
+  return screen.getByTestId('design-systems-surface-select') as HTMLSelectElement;
+}
+
 function surfacePillCount(label: string): string | null {
-  for (const pill of screen.getAllByRole('tab')) {
-    const countEl = pill.querySelector('.filter-pill-count');
-    if (!countEl) continue;
-    const labelText = (pill.textContent ?? '').replace(countEl.textContent ?? '', '');
-    if (labelText === label) return countEl.textContent ?? null;
+  for (const option of Array.from(surfaceSelect().options)) {
+    const match = option.textContent?.match(/^(.*) \((\d+)\)$/);
+    if (match && match[1] === label) return match[2];
   }
   return null;
+}
+
+function hasSurfaceOption(value: string): boolean {
+  return Array.from(surfaceSelect().options).some((option) => option.value === value);
+}
+
+function selectSurface(value: string) {
+  fireEvent.change(surfaceSelect(), { target: { value } });
 }
 
 function selectCategory(value: string) {
@@ -411,7 +423,7 @@ describe('DesignSystemsTab surface filtering', () => {
     openOfficialPresets();
     selectCategory('Retro');
 
-    fireEvent.click(screen.getByRole('tab', { name: /^Web/ }));
+    selectSurface('web');
 
     expect(
       (screen.getByTestId('design-systems-category-select') as HTMLSelectElement).value,
@@ -433,31 +445,31 @@ describe('DesignSystemsTab surface filtering', () => {
     ];
     renderTab(webOnlyCategory);
     openOfficialPresets();
-    expect(screen.queryByRole('tab', { name: /^Image/ })).not.toBeNull();
+    expect(hasSurfaceOption('image')).toBe(true);
 
     selectCategory('Tools');
 
-    // Tools has only web systems, so the Image chip no longer applies.
-    expect(screen.queryByRole('tab', { name: /^Image/ })).toBeNull();
+    // Tools has only web systems, so the Image option no longer applies.
+    expect(hasSurfaceOption('image')).toBe(false);
     expect(surfacePillCount('Web')).toBe('1');
   });
 
   it('keeps the active surface chip visible when a search filters out all of its results', () => {
     // PR #2141 review (Looper): the scoped-count hide rule must never remove
-    // the chip the user is currently on. Select Image, then search for text
-    // only web systems match — the Image chip must stay, and stay selected,
-    // so the active filter is visible instead of an empty list with no chip.
+    // the option the user is currently on. Select Image, then search for
+    // text only web systems match — the Image option must stay, and stay
+    // selected, so the active filter is visible instead of an empty list
+    // with no matching option.
     renderTab();
     openOfficialPresets();
-    fireEvent.click(screen.getByRole('tab', { name: /^Image/ }));
+    selectSurface('image');
 
     fireEvent.change(screen.getByTestId('design-systems-search'), {
       target: { value: 'Web' },
     });
 
-    const imageTab = screen.queryByRole('tab', { name: /^Image/ });
-    expect(imageTab).not.toBeNull();
-    expect(imageTab?.getAttribute('aria-selected')).toBe('true');
+    expect(hasSurfaceOption('image')).toBe(true);
+    expect(surfaceSelect().value).toBe('image');
     // ...and it honestly reports zero matches for the current search.
     expect(surfacePillCount('Image')).toBe('0');
   });
