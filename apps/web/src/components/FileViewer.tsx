@@ -6304,10 +6304,13 @@ function HtmlViewer({
   // Keyed so a retained inline survives a re-render of the SAME file but is
   // never read under a different one. Clearing it unconditionally on every
   // effect run is what made the canvas paint the raw document first and the
-  // inlined one a beat later.
-  const [inlinedSource, setInlinedSource] = useState<{ key: string; value: string } | null>(
-    null,
-  );
+  // inlined one a beat later. `forSource` records which `source` string
+  // produced `value`, so a reader can tell a *retained-but-stale* inline
+  // (built from a source the URL-load early return skipped re-inlining for)
+  // apart from a *current* one — see `inlinedSourceUpToDate` below.
+  const [inlinedSource, setInlinedSource] = useState<
+    { key: string; forSource: string; value: string } | null
+  >(null);
   const [zoom, setZoom] = useState(100);
   const [zoomMode, setZoomMode] = useState<'auto' | 'manual'>('auto');
   const fileViewportKey = previewViewportStateKey(projectId, file);
@@ -7299,15 +7302,21 @@ function HtmlViewer({
   const inlinedSourceKey = `${projectId}:${file.name}`;
   const inlinedSourceForKey =
     inlinedSource && inlinedSource.key === inlinedSourceKey ? inlinedSource.value : null;
+  // True only when the retained inline was actually built from the CURRENT
+  // `source`. The URL-load path's early return (below) deliberately leaves a
+  // prior inline in place without refreshing it, so a background source
+  // change while URL-loaded (an agent edit landing while the user is not in
+  // an annotation tool) makes the retained value stale for its key without
+  // clearing it. `inlinedSourceForKey` alone can't tell that apart from a
+  // current one — this can. See the freeze-capture gate below, which is the
+  // consumer that actually needs the distinction.
+  const inlinedSourceUpToDate =
+    inlinedSource !== null &&
+    inlinedSource.key === inlinedSourceKey &&
+    inlinedSource.forSource === source;
   // `source === null` means the preview was deliberately cleared (Reload,
   // issue #4650). A retained inline must never resurrect that content, so it
   // is only read while there is a live source to inline.
-  //
-  // Toggling between the URL-load and srcDoc transports (Draw, Comment,
-  // Inspect) cannot paint a stale rewrite: the key is unchanged by a mode
-  // flip, so what is retained is this same file's own current rewrite, and
-  // the effect re-runs on `useUrlLoadPreview` anyway. No regression is needed
-  // for that path; it is called out here so the question is not re-opened.
   const livePreviewSource =
     source !== null ? (inlinedSourceForKey ?? deckVisualSource) : deckVisualSource;
   // Annotation modes that should hold the preview still while open. Manual
@@ -7315,28 +7324,10 @@ function HtmlViewer({
   // passes (Mark/Draw, Comment, Inspect) that also must not be yanked out
   // from under the user by a background file change.
   const annotationFreezeActive = drawOverlayOpen || boardMode || inspectMode;
-  // Freeze the iframe input on the snapshot taken at Edit-mode entry. Any
-  // source rewrite during edit (1.5s debounced set-style patches) stays
-  // invisible to the iframe — live updates flow through od-edit-preview-style
-  // postMessage instead, so the canvas never has to reload.
-  useEffect(() => {
-    if (manualEditMode && manualEditFrozenSource === null && livePreviewSource != null) {
-      setManualEditFrozenSource(livePreviewSource);
-    }
-  }, [manualEditMode, manualEditFrozenSource, livePreviewSource]);
-  // Capture / release the annotation snapshot at mode entry / exit. Captured
-  // once (the `=== null` guard), so a mid-pass file change can't slip a fresh
-  // snapshot in; cleared on exit so `previewSource` falls back to the latest
-  // live source and the deferred update lands in one clean render.
-  useEffect(() => {
-    if (annotationFreezeActive) {
-      if (annotationFrozenSource === null && livePreviewSource != null) {
-        setAnnotationFrozenSource(livePreviewSource);
-      }
-    } else if (annotationFrozenSource !== null) {
-      setAnnotationFrozenSource(null);
-    }
-  }, [annotationFreezeActive, annotationFrozenSource, livePreviewSource]);
+  // The Manual Edit and annotation freeze-capture effects live further down,
+  // right after `previewNeedsAssetInlining` is computed — they need it (and
+  // `inlinedSourceUpToDate` above) to avoid capturing a raw-or-stale frame as
+  // the permanent frozen snapshot for a URL-load -> srcDoc transition (F004).
   const previewSource = (manualEditMode && manualEditFrozenSource !== null)
     ? manualEditFrozenSource
     : (annotationFreezeActive && annotationFrozenSource !== null)
@@ -7710,6 +7701,45 @@ function HtmlViewer({
       (projectRootAssetRefs || hasRelativeAssetRefs(source)),
     [useUrlLoadPreview, effectiveDeck, source, projectRootAssetRefs],
   );
+  // Freeze-capture gate (F004): once srcDoc is the active transport and the
+  // source needs inlining, `livePreviewSource` can be either the raw
+  // fallback (inlining still pending for THIS source) or a retained inline
+  // that is stale for it (URL-load's early return above left a prior file
+  // rewrite in place without refreshing it). Either one, if captured as the
+  // Manual Edit / annotation freeze snapshot below, would stay on screen for
+  // the entire tool session — freeze is a `=== null` one-shot capture, it
+  // never re-evaluates once set. Hold off capturing until inlining isn't
+  // needed at all, or the retained inline actually matches the current
+  // source.
+  const previewReadyToFreeze = !previewNeedsAssetInlining || inlinedSourceUpToDate;
+
+  // Freeze the iframe input on the snapshot taken at Edit-mode entry. Any
+  // source rewrite during edit (1.5s debounced set-style patches) stays
+  // invisible to the iframe — live updates flow through od-edit-preview-style
+  // postMessage instead, so the canvas never has to reload.
+  useEffect(() => {
+    if (
+      manualEditMode &&
+      manualEditFrozenSource === null &&
+      livePreviewSource != null &&
+      previewReadyToFreeze
+    ) {
+      setManualEditFrozenSource(livePreviewSource);
+    }
+  }, [manualEditMode, manualEditFrozenSource, livePreviewSource, previewReadyToFreeze]);
+  // Capture / release the annotation snapshot at mode entry / exit. Captured
+  // once (the `=== null` guard), so a mid-pass file change can't slip a fresh
+  // snapshot in; cleared on exit so `previewSource` falls back to the latest
+  // live source and the deferred update lands in one clean render.
+  useEffect(() => {
+    if (annotationFreezeActive) {
+      if (annotationFrozenSource === null && livePreviewSource != null && previewReadyToFreeze) {
+        setAnnotationFrozenSource(livePreviewSource);
+      }
+    } else if (annotationFrozenSource !== null) {
+      setAnnotationFrozenSource(null);
+    }
+  }, [annotationFreezeActive, annotationFrozenSource, livePreviewSource, previewReadyToFreeze]);
 
   useEffect(() => {
     if (useUrlLoadPreview) return;
@@ -7742,14 +7772,14 @@ function HtmlViewer({
       rawUrl: projectRawUrl,
     })
       .then((next) => {
-        if (!cancelled) setInlinedSource({ key, value: next });
+        if (!cancelled) setInlinedSource({ key, forSource: source, value: next });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         // Fall back to the raw document rather than holding the loading gate
         // open forever: unstyled but visible beats a frame that never resolves.
         console.error('[FileViewer] inlineRelativeAssets failed, showing raw source:', err);
-        setInlinedSource({ key, value: source });
+        setInlinedSource({ key, forSource: source, value: source });
       });
     return () => {
       cancelled = true;
@@ -9074,7 +9104,15 @@ function HtmlViewer({
       setSource(result.source);
       sourceRef.current = result.source;
       if (patch.kind !== 'set-style') {
-        setManualEditFrozenSource(result.source);
+        // `result.source` is the RAW patched HTML — never inlined (F004:
+        // applyManualEditPatch is a pure source-string transform with no
+        // asset-inlining pass of its own). Freezing it directly would paint
+        // the un-inlined document on an artifact that needs one. Clear
+        // instead: the freeze-capture effect (gated on
+        // `previewReadyToFreeze`) re-captures from `livePreviewSource` once
+        // this generation's inline is ready, the same pattern
+        // `reloadHtmlPreview` already uses for `annotationFrozenSource`.
+        setManualEditFrozenSource(null);
       }
       setManualEditHistory((current) => [entry, ...current]);
       setManualEditUndone([]);
@@ -9167,7 +9205,10 @@ function HtmlViewer({
       }
       setSource(latest.beforeSource);
       sourceRef.current = latest.beforeSource;
-      setManualEditFrozenSource(latest.beforeSource);
+      // Same reasoning as applyManualEdit above: `beforeSource` is raw, not
+      // inlined. Clear and let the gated freeze-capture effect re-pick it up
+      // once inlined (F004).
+      setManualEditFrozenSource(null);
       setManualEditHistory(rest);
       setManualEditUndone((current) => [latest, ...current]);
       setManualEditDraft((current) => ({ ...current, fullSource: latest.beforeSource }));
@@ -9200,7 +9241,10 @@ function HtmlViewer({
       }
       setSource(latest.afterSource);
       sourceRef.current = latest.afterSource;
-      setManualEditFrozenSource(latest.afterSource);
+      // Same reasoning as applyManualEdit/undoManualEdit above: `afterSource`
+      // is raw, not inlined. Clear and let the gated freeze-capture effect
+      // re-pick it up once inlined (F004).
+      setManualEditFrozenSource(null);
       setManualEditUndone(rest);
       setManualEditHistory((current) => [latest, ...current]);
       setManualEditDraft((current) => ({ ...current, fullSource: latest.afterSource }));
