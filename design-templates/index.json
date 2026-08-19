@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-19T16:10:13.673Z",
+  "generatedAt": "2026-08-19T16:58:42.047Z",
   "templates": [
     {
       "slug": "aegis-console-h39",
@@ -15,7 +15,7 @@
       "palette": [
         {
           "hex": "#FF8C42",
-          "role": "muted",
+          "role": "accent",
           "provenance": "SECONDARY WARM ACCENT (USE RARELY, FOR ONE ALERT STATE): `#FF8C42`.",
           "confidence": "high"
         },
@@ -23,7 +23,7 @@
           "hex": "#22C55E",
           "role": "accent",
           "provenance": "LIVE/STATUS GREEN: `#22C55E` FOR \"ONLINE\" PULSE DOTS.",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -45,6 +45,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/aegis-console-h39/example.html",
         "hasExampleHtml": true,
@@ -102,6 +109,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/aethera-cinematic-hero/example.html",
         "hasExampleHtml": true,
@@ -169,6 +183,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/ai-builder-dark-hero/example.html",
         "hasExampleHtml": true,
@@ -204,13 +225,13 @@
           "hex": "#FFFBF0",
           "role": "muted",
           "provenance": "CREAM / BRAND SECONDARY: `#FFFBF0` (WARM BUTTER TINT FOR ALTERNATING SECTIONS)",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#F9F9F7",
           "role": "accent",
           "provenance": "SURFACE: `#F9F9F7` (SOFT NEUTRAL CARD FILL)",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#F0ECE6",
@@ -222,7 +243,7 @@
           "hex": "#666666",
           "role": "muted",
           "provenance": "TEXT SECONDARY: `#666666`",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#1E1E1E",
@@ -234,31 +255,31 @@
           "hex": "#1B1B1B",
           "role": "accent",
           "provenance": "INTERACTIVE REVEAL PALETTE (CYCLES ON HOVER): `#1B1B1B`, `#E87C3E`, `#2D4356`, `#8B4513`, `#4A6741`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#E87C3E",
           "role": "accent",
           "provenance": "INTERACTIVE REVEAL PALETTE (CYCLES ON HOVER): `#1B1B1B`, `#E87C3E`, `#2D4356`, `#8B4513`, `#4A6741`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#2D4356",
           "role": "accent",
           "provenance": "INTERACTIVE REVEAL PALETTE (CYCLES ON HOVER): `#1B1B1B`, `#E87C3E`, `#2D4356`, `#8B4513`, `#4A6741`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#8B4513",
           "role": "accent",
           "provenance": "INTERACTIVE REVEAL PALETTE (CYCLES ON HOVER): `#1B1B1B`, `#E87C3E`, `#2D4356`, `#8B4513`, `#4A6741`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#4A6741",
           "role": "accent",
           "provenance": "INTERACTIVE REVEAL PALETTE (CYCLES ON HOVER): `#1B1B1B`, `#E87C3E`, `#2D4356`, `#8B4513`, `#4A6741`",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -282,6 +303,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/almond-hours-h65/example.html",
         "hasExampleHtml": true,
@@ -311,7 +339,7 @@
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "SURFACE (CARD WHITE): `#FFFFFF` FOR THE OCCASIONAL SOLID PANEL.",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -334,6 +362,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/altitude-index-h38/example.html",
         "hasExampleHtml": true,
@@ -381,13 +416,13 @@
           "hex": "#EFE7DD",
           "role": "accent",
           "provenance": "WARM BUTTON FILL: `#EFE7DD`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "PURE WHITE (CARD SURFACES INSIDE CREAM): `#FFFFFF`",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -410,6 +445,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/amber-foundry-h9/example.html",
         "hasExampleHtml": true,
@@ -433,13 +475,13 @@
           "hex": "#D97706",
           "role": "accent",
           "provenance": "AMBER PRIMARY: `#D97706` (HEADINGS, ACCENTS, BUTTONS, CURSOR).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#FEF3C7",
           "role": "accent",
           "provenance": "BUTTER CREAM: `#FEF3C7` (TINTED PANELS, PILLS, HERO CENTER COLUMN).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#FFFFFF",
@@ -463,7 +505,7 @@
           "hex": "#141415",
           "role": "accent",
           "provenance": "NEAR-BLACK FOR DEEP CONTRAST WHERE NEEDED: `#141415`.",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -487,6 +529,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/amberhaus-pet-atelier-h31/example.html",
         "hasExampleHtml": true,
@@ -523,6 +572,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/animated-text-rotate-hero/example.html",
         "hasExampleHtml": true,
@@ -592,6 +648,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/arceage-contact-form/example.html",
         "hasExampleHtml": true,
@@ -649,6 +712,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/arceage-services-grid/example.html",
         "hasExampleHtml": true,
@@ -718,6 +788,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/arceage-testimonials/example.html",
         "hasExampleHtml": true,
@@ -771,7 +848,7 @@
           "hex": "#9CA3AF",
           "role": "muted",
           "provenance": "TEXT SECONDARY: `#9CA3AF` (GRAY-400)",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#6B7280",
@@ -790,8 +867,8 @@
           "confidence": "low"
         },
         "ui": {
-          "family": "UPPERCASE",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -799,6 +876,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/archway-summit-h21/example.html",
         "hasExampleHtml": true,
@@ -865,6 +949,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 112.5,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/art-landing/example.html",
         "hasExampleHtml": true,
@@ -914,6 +1005,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/asme-hero-landing/example.html",
         "hasExampleHtml": true,
@@ -957,6 +1055,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/asme-liquid-glass-landing/example.html",
         "hasExampleHtml": true,
@@ -1027,6 +1132,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/astral-veil-h6/example.html",
         "hasExampleHtml": true,
@@ -1097,6 +1209,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/atelier-noir-h7/example.html",
         "hasExampleHtml": true,
@@ -1145,8 +1264,8 @@
           "confidence": "high"
         },
         "ui": {
-          "family": "UPPERCASE",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -1155,6 +1274,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/atelier-press-h51/example.html",
         "hasExampleHtml": true,
@@ -1228,6 +1354,13 @@
       ],
       "density": "low",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/athletic-premium-landing/example.html",
         "hasExampleHtml": true,
@@ -1262,6 +1395,13 @@
       ],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/audio-jingle/example.html",
         "hasExampleHtml": true,
@@ -1329,6 +1469,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 137.5,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/aura-email-landing/example.html",
         "hasExampleHtml": true,
@@ -1365,8 +1512,8 @@
           "confidence": "low"
         },
         "ui": {
-          "family": "13PX",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -1376,6 +1523,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/auric-clinic-glow-h37/example.html",
         "hasExampleHtml": true,
@@ -1441,6 +1595,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 40,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/aurora-onboarding/example.html",
         "hasExampleHtml": true,
@@ -1477,6 +1638,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/auroracast-hls-landing/example.html",
         "hasExampleHtml": true,
@@ -1554,6 +1722,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/axis-quotient-h30/example.html",
         "hasExampleHtml": true,
@@ -1577,13 +1752,13 @@
           "hex": "#0E1726",
           "role": "accent",
           "provenance": "BRAND PRIMARY (DEEP NAVY): `#0E1726`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#16223A",
           "role": "muted",
           "provenance": "BRAND SECONDARY (SLATE PANEL): `#16223A`",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#2F6BFF",
@@ -1607,7 +1782,7 @@
           "hex": "#EEF1F6",
           "role": "accent",
           "provenance": "NEUTRAL SURFACE (OFF-WHITE CARD): `#EEF1F6`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#F5F7FB",
@@ -1642,6 +1817,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/azimuth-realty-engine-h36/example.html",
         "hasExampleHtml": true,
@@ -1699,6 +1881,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/bento-grid-stats/example.html",
         "hasExampleHtml": true,
@@ -1768,6 +1957,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/blog-showcase/example.html",
         "hasExampleHtml": true,
@@ -1804,6 +2000,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/bloom-liquid-glass-hero/example.html",
         "hasExampleHtml": true,
@@ -1833,7 +2036,7 @@
           "hex": "#F43C00",
           "role": "accent",
           "provenance": "BRAND ORANGE: `#F43C00` (ACCENT — DOTS, LINKS, HEADLINE PUNCTUATION, FOOTER BLOCK)",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#000000",
@@ -1845,7 +2048,7 @@
           "hex": "#141414",
           "role": "accent",
           "provenance": "CARD DARK: `#141414` (CARDS ON DARK BLOCKS)",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#FFFFFF",
@@ -1857,7 +2060,7 @@
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "WHITE BLOCK: `#FFFFFF`",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -1880,6 +2083,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/carbon-bloom-h95/example.html",
         "hasExampleHtml": true,
@@ -1950,6 +2160,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/cartwright-relocation-h47/example.html",
         "hasExampleHtml": true,
@@ -2020,6 +2237,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/cerulean-precision-collective-h67/example.html",
         "hasExampleHtml": true,
@@ -2086,6 +2310,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/cinematic-brand-hero/example.html",
         "hasExampleHtml": true,
@@ -2122,6 +2353,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/cinematic-stream-hero/example.html",
         "hasExampleHtml": true,
@@ -2151,13 +2389,13 @@
           "hex": "#161A18",
           "role": "accent",
           "provenance": "SURFACE: `#161A18` (WARM CHARCOAL-OLIVE).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#0E100F",
           "role": "accent",
           "provenance": "SURFACE-DARK: `#0E100F` (DEEPER PANEL).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#2F3126",
@@ -2175,7 +2413,7 @@
           "hex": "#A9AD9B",
           "role": "muted",
           "provenance": "TEXT-SECONDARY / SAGE: `#A9AD9B` (MUTED SAGE-GREY — BODY COPY).",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#000000",
@@ -2186,16 +2424,16 @@
       ],
       "typography": {
         "body": {
-          "family": "18PX",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         },
         "headings": {
           "family": "Inter",
           "confidence": "low"
         },
         "ui": {
-          "family": "SMALL",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -2203,6 +2441,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/citron-atlas-h79/example.html",
         "hasExampleHtml": true,
@@ -2226,7 +2471,7 @@
           "hex": "#7E3F26",
           "role": "accent",
           "provenance": "DEEP CLAY (HOVER / PRESSED): `#7E3F26`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#FFFFFF",
@@ -2241,12 +2486,12 @@
           "confidence": "low"
         },
         "headings": {
-          "family": "LARGE",
-          "confidence": "high"
+          "family": "Archivo",
+          "confidence": "low"
         },
         "ui": {
-          "family": "UPPERCASE",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -2256,6 +2501,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/claywell-solene-h5/example.html",
         "hasExampleHtml": true,
@@ -2328,6 +2580,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 153.1764705882353,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/clearinvoice-saas-hero/example.html",
         "hasExampleHtml": true,
@@ -2362,6 +2621,13 @@
       ],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/clinical-case-report/example.html",
         "hasExampleHtml": true,
@@ -2422,6 +2688,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/cloud-kicks-sneakers/example.html",
         "hasExampleHtml": true,
@@ -2491,6 +2764,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/coastal-estate-realty/example.html",
         "hasExampleHtml": true,
@@ -2530,6 +2810,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/cobalt-repairworks-h78/example.html",
         "hasExampleHtml": true,
@@ -2579,6 +2866,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/codenest-hero/example.html",
         "hasExampleHtml": true,
@@ -2649,6 +2943,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 116.70588235294117,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/codercrest-saas-hero/example.html",
         "hasExampleHtml": true,
@@ -2689,16 +2990,16 @@
       ],
       "typography": {
         "body": {
-          "family": "WEIGHT 400",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         },
         "headings": {
-          "family": "UPPERCASE",
-          "confidence": "high"
+          "family": "Poppins",
+          "confidence": "low"
         },
         "ui": {
-          "family": "UPPERCASE",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -2708,6 +3009,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/concrete-bazaar-h87/example.html",
         "hasExampleHtml": true,
@@ -2765,6 +3073,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/contact-widget/example.html",
         "hasExampleHtml": true,
@@ -2835,6 +3150,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/conversion-hero/example.html",
         "hasExampleHtml": true,
@@ -2902,6 +3224,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/convix-pr-agency-hero/example.html",
         "hasExampleHtml": true,
@@ -2962,8 +3291,8 @@
           "confidence": "low"
         },
         "ui": {
-          "family": "WEIGHT 700",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -2973,6 +3302,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/crimson-cut-studio-h72/example.html",
         "hasExampleHtml": true,
@@ -3005,6 +3341,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "justify",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/critique/example.html",
         "hasExampleHtml": true,
@@ -3072,6 +3415,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/cursor-follow-hero/example.html",
         "hasExampleHtml": true,
@@ -3136,6 +3486,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/cybersecurity-saas/example.html",
         "hasExampleHtml": true,
@@ -3206,6 +3563,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/dashboard-ui/example.html",
         "hasExampleHtml": true,
@@ -3277,6 +3641,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/datacore-saas-hero/example.html",
         "hasExampleHtml": true,
@@ -3344,6 +3715,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/datacore-video-hero/example.html",
         "hasExampleHtml": true,
@@ -3378,6 +3756,13 @@
       ],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/dating-web/example.html",
         "hasExampleHtml": true,
@@ -3410,6 +3795,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": null,
         "hasExampleHtml": false,
@@ -3477,6 +3869,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/design-rocket-email/example.html",
         "hasExampleHtml": true,
@@ -3532,6 +3931,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/designpro-video-hero/example.html",
         "hasExampleHtml": true,
@@ -3555,29 +3961,29 @@
           "hex": "#FDFCFB",
           "role": "accent",
           "provenance": "PAGE BASE / \"BRAND DARK\" (ACTUALLY A WARM OFF-WHITE): `#FDFCFB`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#E6D5D1",
           "role": "accent",
           "provenance": "DUSTY ROSE BLOCK: `#E6D5D1`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#F2EEE3",
           "role": "accent",
           "provenance": "BONE CREAM BLOCK: `#F2EEE3`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#E7E1EC",
           "role": "accent",
           "provenance": "MAUVE / LILAC-GREY BLOCK: `#E7E1EC`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#4B594D",
-          "role": "text",
+          "role": "accent",
           "provenance": "DEEP PINE GREEN (STRUCTURAL INK, CTA FILLS, DARK SECTIONS): `#4B594D`",
           "confidence": "high"
         },
@@ -3620,6 +4026,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/dhara-heritage-edit-h88/example.html",
         "hasExampleHtml": true,
@@ -3654,6 +4067,13 @@
       ],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/digital-eguide/example.html",
         "hasExampleHtml": true,
@@ -3715,6 +4135,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/digital-epoch-hero/example.html",
         "hasExampleHtml": true,
@@ -3749,6 +4176,13 @@
       ],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/docs-page/example.html",
         "hasExampleHtml": true,
@@ -3816,6 +4250,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/dot-daily-calm-landing/example.html",
         "hasExampleHtml": true,
@@ -3888,6 +4329,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/dreamcore-landing/example.html",
         "hasExampleHtml": true,
@@ -3920,6 +4368,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/email-marketing/example.html",
         "hasExampleHtml": true,
@@ -3982,6 +4437,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/ember-dsgn-hero/example.html",
         "hasExampleHtml": true,
@@ -4070,6 +4532,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/ember-quietude-h26/example.html",
         "hasExampleHtml": true,
@@ -4102,6 +4571,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/eng-runbook/example.html",
         "hasExampleHtml": true,
@@ -4138,6 +4614,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/equilibrium-liquid-glass-hero/example.html",
         "hasExampleHtml": true,
@@ -4177,6 +4660,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/evergreen-ledger-h94/example.html",
         "hasExampleHtml": true,
@@ -4220,6 +4710,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/fearless-vision-hero/example.html",
         "hasExampleHtml": true,
@@ -4289,6 +4786,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 145.88235294117646,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/feedback-slider/example.html",
         "hasExampleHtml": true,
@@ -4349,8 +4853,8 @@
           "confidence": "high"
         },
         "ui": {
-          "family": "UPPERCASE",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -4360,6 +4864,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/fernhollow-pet-wellness-h68/example.html",
         "hasExampleHtml": true,
@@ -4426,6 +4937,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/fine-jewelry-shop/example.html",
         "hasExampleHtml": true,
@@ -4497,6 +5015,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 180,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/finlytic-ai-hero/example.html",
         "hasExampleHtml": true,
@@ -4568,6 +5093,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/flowmate-landing/example.html",
         "hasExampleHtml": true,
@@ -4626,6 +5158,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/forecast-center/example.html",
         "hasExampleHtml": true,
@@ -4662,6 +5201,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/forma-video-landing/example.html",
         "hasExampleHtml": true,
@@ -4733,6 +5279,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/freight-command-logistics/example.html",
         "hasExampleHtml": true,
@@ -4768,7 +5321,7 @@
           "hex": "#212121",
           "role": "accent",
           "provenance": "BRAND DARK (CHARCOAL): `#212121` — NIGHT-HIGHWAY PANELS, FOOTER, DARK SECTIONS.",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#F2F2F2",
@@ -4780,13 +5333,13 @@
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "NEUTRAL SURFACE (WHITE): `#FFFFFF` — CARDS, HEADER PILL, FLOATING CARD.",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#F5F5F5",
           "role": "accent",
           "provenance": "NEUTRAL SURFACE ALT: `#F5F5F5` — ROUNDED-TOP SECTION BANDS.",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#D3D3D3",
@@ -4804,13 +5357,13 @@
           "hex": "#636363",
           "role": "muted",
           "provenance": "TEXT SECONDARY: `#636363`",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#7B7B7B",
           "role": "muted",
           "provenance": "TEXT TERTIARY: `#7B7B7B`.",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#FFFFFF",
@@ -4839,6 +5392,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/freightleaf-clean-haul-h80/example.html",
         "hasExampleHtml": true,
@@ -4910,6 +5470,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/futuristic-cinematic-hero/example.html",
         "hasExampleHtml": true,
@@ -4951,6 +5518,13 @@
       ],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/gamified-app/example.html",
         "hasExampleHtml": true,
@@ -5004,6 +5578,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/github-dashboard/example.html",
         "hasExampleHtml": true,
@@ -5076,6 +5657,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/glassmorphic-feature-tabs/example.html",
         "hasExampleHtml": true,
@@ -5146,6 +5734,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/global-cta-footer/example.html",
         "hasExampleHtml": true,
@@ -5181,7 +5776,7 @@
           "hex": "#475569",
           "role": "muted",
           "provenance": "TEXT SECONDARY: `#475569` (SLATE-600).",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#E2E8F0",
@@ -5200,6 +5795,12 @@
           "role": "muted",
           "provenance": "SURFACE / MUTED BACKGROUND: `#F8FAFC` (SLATE-50).",
           "confidence": "high"
+        },
+        {
+          "hex": "#0F172A",
+          "role": "accent",
+          "provenance": "ON-ACCENT TEXT: `#0F172A` (DARK INK ON GREEN).",
+          "confidence": "high"
         }
       ],
       "typography": {
@@ -5212,13 +5813,20 @@
           "confidence": "high"
         },
         "ui": {
-          "family": "10PX",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/graft-modular-h93/example.html",
         "hasExampleHtml": true,
@@ -5275,12 +5883,12 @@
           "confidence": "low"
         },
         "headings": {
-          "family": "WEIGHT 500",
-          "confidence": "high"
+          "family": "Inter Tight",
+          "confidence": "low"
         },
         "ui": {
-          "family": "UPPERCASE",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -5288,6 +5896,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/gridframe-precision-h74/example.html",
         "hasExampleHtml": true,
@@ -5329,7 +5944,7 @@
           "hex": "#E5E5E5",
           "role": "accent",
           "provenance": "GRID LINES / NEUTRAL PRIMARY: `#E5E5E5`.",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#107A4D",
@@ -5347,13 +5962,13 @@
           "hex": "#4A4A4A",
           "role": "muted",
           "provenance": "TEXT SECONDARY: `#4A4A4A`.",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#FFF9EB",
           "role": "accent",
           "provenance": "POSTCARD CREAM (FOR THE ENVELOPE REVEAL): `#FFF9EB`.",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -5375,6 +5990,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/gridwright-h48/example.html",
         "hasExampleHtml": true,
@@ -5442,6 +6064,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/groundai-landing/example.html",
         "hasExampleHtml": true,
@@ -5465,7 +6094,7 @@
           "hex": "#234D2E",
           "role": "accent",
           "provenance": "FOREST GREEN PRIMARY: `#234D2E` (DARK PANELS, HEADINGS ON LIGHT, PRIMARY BUTTONS, BORDERS).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#5C8A3A",
@@ -5483,13 +6112,13 @@
           "hex": "#E7DCC2",
           "role": "accent",
           "provenance": "KRAFT TAN PANEL TINT: `#E7DCC2` (TINTED PANELS, PILLS, ALTERNATE SECTIONS).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#C7622D",
           "role": "accent",
           "provenance": "BURNT-ORANGE / TERRACOTTA POP: `#C7622D` (PRICES, KEY HIGHLIGHTS, TICKER, ONE-OF-A-KIND ACCENTS).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#2A2620",
@@ -5507,7 +6136,7 @@
           "hex": "#FBF8F0",
           "role": "accent",
           "provenance": "OFF-WHITE CARD FILL: `#FBF8F0`.",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -5529,6 +6158,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/grove-kitchen-fresh-h70/example.html",
         "hasExampleHtml": true,
@@ -5595,6 +6231,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/growth-marketing-hero/example.html",
         "hasExampleHtml": true,
@@ -5659,6 +6302,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 175,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/guardnet-benefits/example.html",
         "hasExampleHtml": true,
@@ -5703,6 +6353,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": null,
         "hasExampleHtml": false,
@@ -5770,6 +6427,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/halcyon-mesh-h56/example.html",
         "hasExampleHtml": true,
@@ -5793,7 +6457,7 @@
           "hex": "#C95100",
           "role": "accent",
           "provenance": "BURNT TERRACOTTA PRIMARY: `#C95100`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#260A00",
@@ -5811,7 +6475,7 @@
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "PURE SURFACE WHITE: `#FFFFFF`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#807768",
@@ -5846,6 +6510,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/harbour-hearth-h64/example.html",
         "hasExampleHtml": true,
@@ -5875,13 +6546,13 @@
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "SURFACE / CARDS: `#FFFFFF` (PURE WHITE)",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#FAFAF8",
           "role": "muted",
           "provenance": "SECONDARY SURFACE (BANDS): `#FAFAF8` (NEAR-WHITE BONE)",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#1B1A17",
@@ -5934,6 +6605,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/hearthwell-homeware-h71/example.html",
         "hasExampleHtml": true,
@@ -5980,16 +6658,16 @@
       ],
       "typography": {
         "body": {
-          "family": "WEIGHT 300",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         },
         "headings": {
-          "family": "WEIGHT 400",
-          "confidence": "high"
+          "family": "Inter",
+          "confidence": "low"
         },
         "ui": {
-          "family": "WEIGHT 700",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -5998,6 +6676,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/helix-strata-h76/example.html",
         "hasExampleHtml": true,
@@ -6067,6 +6752,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/helix-vault-h55/example.html",
         "hasExampleHtml": true,
@@ -6099,6 +6791,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/hr-onboarding/example.html",
         "hasExampleHtml": true,
@@ -6172,6 +6871,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 69.25,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/hr-saas-hero/example.html",
         "hasExampleHtml": true,
@@ -6216,6 +6922,13 @@
       ],
       "density": "high",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": null,
         "hasExampleHtml": false,
@@ -6258,6 +6971,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-course-module/example.html",
         "hasExampleHtml": true,
@@ -6299,6 +7019,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-graphify-dark-graph/example.html",
         "hasExampleHtml": true,
@@ -6340,6 +7067,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-hermes-cyber-terminal/example.html",
         "hasExampleHtml": true,
@@ -6381,6 +7115,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-knowledge-arch-blueprint/example.html",
         "hasExampleHtml": true,
@@ -6422,6 +7163,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-obsidian-claude-gradient/example.html",
         "hasExampleHtml": true,
@@ -6464,6 +7212,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-pitch-deck/example.html",
         "hasExampleHtml": true,
@@ -6505,6 +7260,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-presenter-mode-reveal/example.html",
         "hasExampleHtml": true,
@@ -6546,6 +7308,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-product-launch/example.html",
         "hasExampleHtml": true,
@@ -6611,6 +7380,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-taste-brutalist/example.html",
         "hasExampleHtml": true,
@@ -6677,6 +7453,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-taste-editorial/example.html",
         "hasExampleHtml": true,
@@ -6718,6 +7501,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-tech-sharing/example.html",
         "hasExampleHtml": true,
@@ -6759,6 +7549,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-testing-safety-alert/example.html",
         "hasExampleHtml": true,
@@ -6800,6 +7597,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-weekly-report/example.html",
         "hasExampleHtml": true,
@@ -6841,6 +7645,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-xhs-pastel-card/example.html",
         "hasExampleHtml": true,
@@ -6885,6 +7696,13 @@
       ],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-xhs-white-editorial/example.html",
         "hasExampleHtml": true,
@@ -6926,6 +7744,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-8-bit-orbit/example.html",
         "hasExampleHtml": true,
@@ -6970,6 +7795,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-biennale-yellow/example.html",
         "hasExampleHtml": true,
@@ -7013,6 +7845,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-block-frame/example.html",
         "hasExampleHtml": true,
@@ -7056,6 +7895,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-blue-professional/example.html",
         "hasExampleHtml": true,
@@ -7100,6 +7946,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-bold-poster/example.html",
         "hasExampleHtml": true,
@@ -7145,6 +7998,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-broadside/example.html",
         "hasExampleHtml": true,
@@ -7190,6 +8050,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-capsule/example.html",
         "hasExampleHtml": true,
@@ -7235,6 +8102,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-cartesian/example.html",
         "hasExampleHtml": true,
@@ -7279,6 +8153,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-cobalt-grid/example.html",
         "hasExampleHtml": true,
@@ -7324,6 +8205,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-coral/example.html",
         "hasExampleHtml": true,
@@ -7365,6 +8253,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-creative-mode/example.html",
         "hasExampleHtml": true,
@@ -7410,6 +8305,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-daisy-days/example.html",
         "hasExampleHtml": true,
@@ -7453,6 +8355,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-editorial-tri-tone/example.html",
         "hasExampleHtml": true,
@@ -7494,6 +8403,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-grove/example.html",
         "hasExampleHtml": true,
@@ -7538,6 +8454,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-long-table/example.html",
         "hasExampleHtml": true,
@@ -7581,6 +8504,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-mat/example.html",
         "hasExampleHtml": true,
@@ -7622,6 +8552,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-monochrome/example.html",
         "hasExampleHtml": true,
@@ -7667,6 +8604,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-neo-grid-bold/example.html",
         "hasExampleHtml": true,
@@ -7708,6 +8652,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-peoples-platform/example.html",
         "hasExampleHtml": true,
@@ -7752,6 +8703,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-pin-and-paper/example.html",
         "hasExampleHtml": true,
@@ -7795,6 +8753,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-pink-script/example.html",
         "hasExampleHtml": true,
@@ -7840,6 +8805,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-playful/example.html",
         "hasExampleHtml": true,
@@ -7884,6 +8856,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-raw-grid/example.html",
         "hasExampleHtml": true,
@@ -7928,6 +8907,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-retro-windows/example.html",
         "hasExampleHtml": true,
@@ -7971,6 +8957,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-retro-zine/example.html",
         "hasExampleHtml": true,
@@ -8014,6 +9007,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-sakura-chroma/example.html",
         "hasExampleHtml": true,
@@ -8058,6 +9058,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-scatterbrain/example.html",
         "hasExampleHtml": true,
@@ -8101,6 +9108,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-signal/example.html",
         "hasExampleHtml": true,
@@ -8145,6 +9159,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-soft-editorial/example.html",
         "hasExampleHtml": true,
@@ -8188,6 +9209,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-stencil-tablet/example.html",
         "hasExampleHtml": true,
@@ -8229,6 +9257,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-studio/example.html",
         "hasExampleHtml": true,
@@ -8273,6 +9308,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/html-ppt-zhangzara-vellum/example.html",
         "hasExampleHtml": true,
@@ -8332,6 +9374,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": null,
         "hasExampleHtml": false,
@@ -8376,6 +9425,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/ib-pitch-book/example.html",
         "hasExampleHtml": true,
@@ -8411,6 +9467,13 @@
       ],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/image-poster/example.html",
         "hasExampleHtml": true,
@@ -8440,7 +9503,7 @@
           "hex": "#F2EFE9",
           "role": "accent",
           "provenance": "STONE SURFACE: `#F2EFE9` (CARDS / ALTERNATE SECTIONS)",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#E7E5E4",
@@ -8458,7 +9521,7 @@
           "hex": "#57534E",
           "role": "muted",
           "provenance": "TEXT SECONDARY: `#57534E`",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#DC2626",
@@ -8470,11 +9533,11 @@
           "hex": "#991B1B",
           "role": "accent",
           "provenance": "VERMILLION DEEP (HOVER / DARKER): `#991B1B`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#FBBF24",
-          "role": "muted",
+          "role": "accent",
           "provenance": "GOLD SPARK (RARE SECONDARY ACCENT, FOR STARS / BADGES): `#FBBF24`",
           "confidence": "high"
         },
@@ -8492,7 +9555,7 @@
         },
         {
           "hex": "#FFFFFF",
-          "role": "text",
+          "role": "accent",
           "provenance": "TEXT ON ACCENT: `#FFFFFF`",
           "confidence": "high"
         }
@@ -8507,8 +9570,8 @@
           "confidence": "high"
         },
         "ui": {
-          "family": "UPPERCASE",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -8517,6 +9580,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/ink-vermilion-personal-brand-h23/example.html",
         "hasExampleHtml": true,
@@ -8587,6 +9657,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": 145.88235294117646,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/interactive-price-calculator/example.html",
         "hasExampleHtml": true,
@@ -8619,6 +9696,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/invoice/example.html",
         "hasExampleHtml": true,
@@ -8680,6 +9764,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/ironclad-password-hero/example.html",
         "hasExampleHtml": true,
@@ -8750,6 +9841,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/kairos-academy-h0/example.html",
         "hasExampleHtml": true,
@@ -8812,6 +9910,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/kami-deck/example.html",
         "hasExampleHtml": true,
@@ -8878,6 +9983,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/kami-landing/example.html",
         "hasExampleHtml": true,
@@ -8910,6 +10022,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/kanban-board/example.html",
         "hasExampleHtml": true,
@@ -8971,6 +10090,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 170,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/kubric-hero-landing/example.html",
         "hasExampleHtml": true,
@@ -8994,13 +10120,13 @@
           "hex": "#C8553D",
           "role": "accent",
           "provenance": "TERRACOTTA / RUST (PRIMARY): `#C8553D`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#F2D06B",
           "role": "muted",
           "provenance": "MUSTARD GOLD (SECONDARY): `#F2D06B`",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#A8D0C8",
@@ -9024,13 +10150,13 @@
           "hex": "#F9F1DC",
           "role": "accent",
           "provenance": "BEIGE CARD SURFACE: `#F9F1DC`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#FDFDF7",
           "role": "accent",
           "provenance": "NEAR-WHITE SURFACE: `#FDFDF7`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#222222",
@@ -9048,7 +10174,7 @@
           "hex": "#4A3B32",
           "role": "accent",
           "provenance": "DARK COCOA (FOOTER): `#4A3B32`",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -9070,6 +10196,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lantern-broth-midnight-ramen-h8/example.html",
         "hasExampleHtml": true,
@@ -9105,13 +10238,13 @@
           "hex": "#6B6357",
           "role": "muted",
           "provenance": "SECONDARY TEXT: `#6B6357` (MUTED TAUPE).",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#3B2F63",
           "role": "accent",
           "provenance": "PRIMARY BRAND — DEEP INDIGO: `#3B2F63` (USED FOR PRIMARY BUTTONS, LOGO MARK, HEADINGS ACCENT).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#E8A22B",
@@ -9141,31 +10274,31 @@
           "hex": "#E7E0F4",
           "role": "accent",
           "provenance": "SOFT LAVENDER TINT: `#E7E0F4` (CARD FILL VARIANT).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#FAE9C8",
           "role": "accent",
           "provenance": "AMBER LIGHT TINT: `#FAE9C8`, INDIGO TINT: `#E3DEF0`.",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#E3DEF0",
           "role": "accent",
           "provenance": "AMBER LIGHT TINT: `#FAE9C8`, INDIGO TINT: `#E3DEF0`.",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#FFFDF8",
           "role": "accent",
           "provenance": "CARD SURFACE: `#FFFDF8` (WARM OFF-WHITE), BORDERS `#EAE2D2`.",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#EAE2D2",
           "role": "accent",
           "provenance": "CARD SURFACE: `#FFFDF8` (WARM OFF-WHITE), BORDERS `#EAE2D2`.",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -9178,8 +10311,8 @@
           "confidence": "low"
         },
         "ui": {
-          "family": "UPPERCASE",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -9188,6 +10321,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lantern-loft-tutoring-h1/example.html",
         "hasExampleHtml": true,
@@ -9220,6 +10360,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": null,
         "hasExampleHtml": false,
@@ -9258,6 +10405,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-aelen/example.html",
         "hasExampleHtml": true,
@@ -9307,6 +10461,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-alfred/example.html",
         "hasExampleHtml": true,
@@ -9352,6 +10513,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-astromaxsp/example.html",
         "hasExampleHtml": true,
@@ -9388,6 +10556,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-aubergine/example.html",
         "hasExampleHtml": true,
@@ -9457,6 +10632,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-author/example.html",
         "hasExampleHtml": true,
@@ -9493,6 +10675,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 145.88235294117646,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-bastion/example.html",
         "hasExampleHtml": true,
@@ -9538,6 +10727,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-brightlight/example.html",
         "hasExampleHtml": true,
@@ -9576,6 +10772,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-buio/example.html",
         "hasExampleHtml": true,
@@ -9615,6 +10818,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-carbon/example.html",
         "hasExampleHtml": true,
@@ -9664,6 +10874,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-carriera/example.html",
         "hasExampleHtml": true,
@@ -9731,6 +10948,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-carrington/example.html",
         "hasExampleHtml": true,
@@ -9767,6 +10991,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-copperlane/example.html",
         "hasExampleHtml": true,
@@ -9805,6 +11036,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-dusk/example.html",
         "hasExampleHtml": true,
@@ -9843,6 +11081,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-ellamae/example.html",
         "hasExampleHtml": true,
@@ -9910,6 +11155,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-enlightr/example.html",
         "hasExampleHtml": true,
@@ -9953,6 +11205,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-flabbergasted/example.html",
         "hasExampleHtml": true,
@@ -9998,6 +11257,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-flaco/example.html",
         "hasExampleHtml": true,
@@ -10037,6 +11303,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-hemingway/example.html",
         "hasExampleHtml": true,
@@ -10098,6 +11371,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-hirewise/example.html",
         "hasExampleHtml": true,
@@ -10153,6 +11433,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-kotei/example.html",
         "hasExampleHtml": true,
@@ -10191,6 +11478,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-matterhaus/example.html",
         "hasExampleHtml": true,
@@ -10258,6 +11552,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-molle/example.html",
         "hasExampleHtml": true,
@@ -10297,6 +11598,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-mulberry/example.html",
         "hasExampleHtml": true,
@@ -10333,6 +11641,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-navy/example.html",
         "hasExampleHtml": true,
@@ -10372,6 +11687,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-newport/example.html",
         "hasExampleHtml": true,
@@ -10424,6 +11746,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-northbound/example.html",
         "hasExampleHtml": true,
@@ -10469,6 +11798,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-outkast/example.html",
         "hasExampleHtml": true,
@@ -10507,6 +11843,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 182.35294117647058,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-phanatik/example.html",
         "hasExampleHtml": true,
@@ -10550,6 +11893,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-primapersona/example.html",
         "hasExampleHtml": true,
@@ -10588,6 +11938,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-profoliox/example.html",
         "hasExampleHtml": true,
@@ -10633,6 +11990,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-quartiere/example.html",
         "hasExampleHtml": true,
@@ -10684,6 +12048,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-riflesso/example.html",
         "hasExampleHtml": true,
@@ -10722,6 +12093,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-rosewood/example.html",
         "hasExampleHtml": true,
@@ -10758,6 +12136,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-sandstone/example.html",
         "hasExampleHtml": true,
@@ -10828,6 +12213,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-semplice/example.html",
         "hasExampleHtml": true,
@@ -10877,6 +12269,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-simplexity/example.html",
         "hasExampleHtml": true,
@@ -10913,6 +12312,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-snowpeak/example.html",
         "hasExampleHtml": true,
@@ -10980,6 +12386,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-spaziobianco/example.html",
         "hasExampleHtml": true,
@@ -11041,6 +12454,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-streamer/example.html",
         "hasExampleHtml": true,
@@ -11102,6 +12522,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-studiomax/example.html",
         "hasExampleHtml": true,
@@ -11145,6 +12572,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-trendspotter/example.html",
         "hasExampleHtml": true,
@@ -11181,6 +12615,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-vanta/example.html",
         "hasExampleHtml": true,
@@ -11224,6 +12665,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-westend/example.html",
         "hasExampleHtml": true,
@@ -11276,6 +12724,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-williamsburg/example.html",
         "hasExampleHtml": true,
@@ -11312,6 +12767,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lexington-zeroindex/example.html",
         "hasExampleHtml": true,
@@ -11373,6 +12835,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/liquid-glass-agency/example.html",
         "hasExampleHtml": true,
@@ -11413,6 +12882,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/liquid-glass-features/example.html",
         "hasExampleHtml": true,
@@ -11445,6 +12921,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": null,
         "hasExampleHtml": false,
@@ -11480,6 +12963,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/live-dashboard/example.html",
         "hasExampleHtml": true,
@@ -11503,7 +12993,7 @@
           "hex": "#28392C",
           "role": "muted",
           "provenance": "MID FOREST (SECONDARY PANELS, FOOTER): `#28392C`",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#8B8A7E",
@@ -11550,6 +13040,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lumen-grove-h63/example.html",
         "hasExampleHtml": true,
@@ -11591,7 +13088,7 @@
           "hex": "#FBFAF9",
           "role": "accent",
           "provenance": "SURFACE (ALTERNATING SECTIONS): `#FBFAF9`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#92A0E1",
@@ -11603,31 +13100,31 @@
           "hex": "#C2A0E1",
           "role": "muted",
           "provenance": "BRAND SECONDARY (LAVENDER): `#C2A0E1`",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#C2A0E1",
           "role": "accent",
           "provenance": "AURORA GRADIENT STOPS: `#C2A0E1`, `#92A0E1`, `#A8B5F0`, `#D4C5F0`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#92A0E1",
           "role": "accent",
           "provenance": "AURORA GRADIENT STOPS: `#C2A0E1`, `#92A0E1`, `#A8B5F0`, `#D4C5F0`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#A8B5F0",
           "role": "accent",
           "provenance": "AURORA GRADIENT STOPS: `#C2A0E1`, `#92A0E1`, `#A8B5F0`, `#D4C5F0`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#D4C5F0",
           "role": "accent",
           "provenance": "AURORA GRADIENT STOPS: `#C2A0E1`, `#92A0E1`, `#A8B5F0`, `#D4C5F0`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#111111",
@@ -11691,6 +13188,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lumen-launch-h44/example.html",
         "hasExampleHtml": true,
@@ -11732,13 +13236,13 @@
           "hex": "#B4DBFF",
           "role": "accent",
           "provenance": "BRAND BLUE (PASTEL PANEL / HEADLINE WORD): `#B4DBFF`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#FDF070",
           "role": "accent",
           "provenance": "BRAND YELLOW (PASTEL PANEL / HEADLINE WORD): `#FDF070`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#F6C2F4",
@@ -11750,13 +13254,13 @@
           "hex": "#C7CAFF",
           "role": "accent",
           "provenance": "BRAND PURPLE (PASTEL PANEL): `#C7CAFF`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#FDFAE7",
           "role": "accent",
           "provenance": "CARD CREAM (PASTEL PANEL): `#FDFAE7`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#F8F8F8",
@@ -11780,7 +13284,7 @@
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "WHITE: `#FFFFFF`",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -11802,6 +13306,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": 170,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lumen-vector-h92/example.html",
         "hasExampleHtml": true,
@@ -11873,6 +13384,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/lumina-maternite-h2/example.html",
         "hasExampleHtml": true,
@@ -11938,6 +13456,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "left",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/luminara-hero/example.html",
         "hasExampleHtml": true,
@@ -12011,6 +13536,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/luxury-editorial-ecommerce/example.html",
         "hasExampleHtml": true,
@@ -12085,6 +13617,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/luxury-real-estate-landing/example.html",
         "hasExampleHtml": true,
@@ -12126,6 +13665,13 @@
       ],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/magazine-poster/example.html",
         "hasExampleHtml": true,
@@ -12162,6 +13708,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/mainframe-hero-landing/example.html",
         "hasExampleHtml": true,
@@ -12232,6 +13785,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/media-card-carousel/example.html",
         "hasExampleHtml": true,
@@ -12264,6 +13824,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/meeting-notes/example.html",
         "hasExampleHtml": true,
@@ -12331,6 +13898,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/mentality-landing/example.html",
         "hasExampleHtml": true,
@@ -12376,7 +13950,7 @@
         },
         {
           "hex": "#3255FF",
-          "role": "muted",
+          "role": "accent",
           "provenance": "COBALT BLUE (SECONDARY ACCENT, HOVER FILLS, LINKS): `#3255FF`",
           "confidence": "high"
         },
@@ -12384,7 +13958,7 @@
           "hex": "#4F4F4F",
           "role": "muted",
           "provenance": "SECONDARY TEXT: `#4F4F4F`",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#FBF9EF",
@@ -12414,6 +13988,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/meridian-grid-systems-h81/example.html",
         "hasExampleHtml": true,
@@ -12485,6 +14066,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/meridian-precision-clinic-h35/example.html",
         "hasExampleHtml": true,
@@ -12521,6 +14109,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/mindloop-mono-landing/example.html",
         "hasExampleHtml": true,
@@ -12592,6 +14187,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/minimal-workflow-saas/example.html",
         "hasExampleHtml": true,
@@ -12624,6 +14226,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/mobile-app/example.html",
         "hasExampleHtml": true,
@@ -12656,6 +14265,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/mobile-onboarding/example.html",
         "hasExampleHtml": true,
@@ -12716,6 +14332,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/modern-dental-clinic/example.html",
         "hasExampleHtml": true,
@@ -12783,6 +14406,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 175,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/modern-hr-dashboard/example.html",
         "hasExampleHtml": true,
@@ -12842,6 +14472,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/monocrit-studio-h27/example.html",
         "hasExampleHtml": true,
@@ -12881,6 +14518,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/monolith-grid-atelier-h59/example.html",
         "hasExampleHtml": true,
@@ -12939,6 +14583,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/mostar-travel-guide/example.html",
         "hasExampleHtml": true,
@@ -12971,6 +14622,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/motion-frames/example.html",
         "hasExampleHtml": true,
@@ -13042,6 +14700,13 @@
       ],
       "density": "low",
       "motion_level": "high",
+      "layout": {
+        "measureCh": 160,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/mouse-trail-cta/example.html",
         "hasExampleHtml": true,
@@ -13106,6 +14771,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/neural-interface-landing/example.html",
         "hasExampleHtml": true,
@@ -13149,6 +14821,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "left",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/neuralyn-dark-landing/example.html",
         "hasExampleHtml": true,
@@ -13195,6 +14874,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 150,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/nexacore-process-steps/example.html",
         "hasExampleHtml": true,
@@ -13231,6 +14917,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/nexora-automation-hero/example.html",
         "hasExampleHtml": true,
@@ -13288,6 +14981,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/nhm-paleontology-landing/example.html",
         "hasExampleHtml": true,
@@ -13361,6 +15061,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 65.6470588235294,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/nickel-payments-hero/example.html",
         "hasExampleHtml": true,
@@ -13430,6 +15137,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/nimbus-pricing-table/example.html",
         "hasExampleHtml": true,
@@ -13501,6 +15215,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/nimbus-sticky-cards/example.html",
         "hasExampleHtml": true,
@@ -13571,6 +15292,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/noctis-aurum-h69/example.html",
         "hasExampleHtml": true,
@@ -13607,6 +15335,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/noctis-cinematic-hero/example.html",
         "hasExampleHtml": true,
@@ -13676,6 +15411,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/obsidian-lacquer-h57/example.html",
         "hasExampleHtml": true,
@@ -13734,6 +15476,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/obsidian-meridian-h85/example.html",
         "hasExampleHtml": true,
@@ -13787,7 +15536,7 @@
           "hex": "#E9CFA8",
           "role": "accent",
           "provenance": "OCHRE TINT: `#E9CFA8` (SAND) FOR SOFT CARD BACKGROUNDS AND BORDERS.",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -13810,6 +15559,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/ochre-stone-studio-h11/example.html",
         "hasExampleHtml": true,
@@ -13877,6 +15633,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/orbis-nft-landing/example.html",
         "hasExampleHtml": true,
@@ -13942,6 +15705,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "left",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/orbit-general/example.html",
         "hasExampleHtml": true,
@@ -14005,6 +15775,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/orbit-github/example.html",
         "hasExampleHtml": true,
@@ -14068,6 +15845,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/orbit-gmail/example.html",
         "hasExampleHtml": true,
@@ -14131,6 +15915,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/orbit-linear/example.html",
         "hasExampleHtml": true,
@@ -14194,6 +15985,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/orbit-notion/example.html",
         "hasExampleHtml": true,
@@ -14263,6 +16061,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/orbital-frequency-summit-h22/example.html",
         "hasExampleHtml": true,
@@ -14321,6 +16126,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/oyla-ecommerce/example.html",
         "hasExampleHtml": true,
@@ -14350,7 +16162,7 @@
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "SURFACE WHITE: `#FFFFFF`.",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#0B0D12",
@@ -14374,37 +16186,37 @@
           "hex": "#4F46E5",
           "role": "accent",
           "provenance": "CHARGE A — ELECTRIC INDIGO: `#4F46E5` (PRIMARY ACCENT, GRADIENT TO `#3730A3`).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#3730A3",
           "role": "accent",
           "provenance": "CHARGE A — ELECTRIC INDIGO: `#4F46E5` (PRIMARY ACCENT, GRADIENT TO `#3730A3`).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#EC4899",
           "role": "accent",
           "provenance": "CHARGE B — HOT MAGENTA: `#EC4899` (SECONDARY ACCENT, GRADIENT TO `#DB2777`).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#DB2777",
           "role": "accent",
           "provenance": "CHARGE B — HOT MAGENTA: `#EC4899` (SECONDARY ACCENT, GRADIENT TO `#DB2777`).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#10B981",
           "role": "accent",
           "provenance": "SUPPORTING SIGNAL GREEN (LIVE/ACTIVE): `#10B981`.",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#F59E0B",
           "role": "accent",
           "provenance": "SUPPORTING AMBER (WARMING/PAUSED): `#F59E0B`.",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#0E1014",
@@ -14438,6 +16250,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/paper-circuit-agentic-saas-h16/example.html",
         "hasExampleHtml": true,
@@ -14507,6 +16326,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/particle-hero/example.html",
         "hasExampleHtml": true,
@@ -14545,6 +16371,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/pelmatech-health-companion/example.html",
         "hasExampleHtml": true,
@@ -14600,6 +16433,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/performance-run-fitness/example.html",
         "hasExampleHtml": true,
@@ -14657,6 +16497,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/pixel-grid-case-studies/example.html",
         "hasExampleHtml": true,
@@ -14709,6 +16556,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/planet-404/example.html",
         "hasExampleHtml": true,
@@ -14741,6 +16595,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/pm-spec/example.html",
         "hasExampleHtml": true,
@@ -14810,6 +16671,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "high",
+      "layout": {
+        "measureCh": 112,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/portfolio-about-section/example.html",
         "hasExampleHtml": true,
@@ -14871,6 +16739,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/power-ai-hero/example.html",
         "hasExampleHtml": true,
@@ -14903,6 +16778,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/pricing-page/example.html",
         "hasExampleHtml": true,
@@ -14972,6 +16854,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/prisma-noir-h52/example.html",
         "hasExampleHtml": true,
@@ -15042,6 +16931,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 220,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/projects-catalog/example.html",
         "hasExampleHtml": true,
@@ -15085,6 +16981,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": null,
         "hasExampleHtml": false,
@@ -15156,6 +17059,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "high",
+      "layout": {
+        "measureCh": 32.5,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/reveal-hero/example.html",
         "hasExampleHtml": true,
@@ -15185,7 +17095,7 @@
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "SURFACE / CARD WHITE: `#FFFFFF`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#0A0A0A",
@@ -15197,7 +17107,7 @@
           "hex": "#4B5563",
           "role": "muted",
           "provenance": "TEXT SECONDARY: `#4B5563`",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#9CA3AF",
@@ -15209,13 +17119,13 @@
           "hex": "#00C65E",
           "role": "accent",
           "provenance": "RISO GREEN: `#00C65E`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#5C5FEF",
           "role": "accent",
           "provenance": "RISO PURPLE / INDIGO: `#5C5FEF`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#FF5C00",
@@ -15234,8 +17144,8 @@
           "confidence": "high"
         },
         "ui": {
-          "family": "SMALL",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -15245,6 +17155,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/riso-rebel-fest-h20/example.html",
         "hasExampleHtml": true,
@@ -15294,6 +17211,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/rivr-defi-hero/example.html",
         "hasExampleHtml": true,
@@ -15351,6 +17275,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/rocket-faq-accordion/example.html",
         "hasExampleHtml": true,
@@ -15403,6 +17334,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/saaj-heritage-bazaar-h90/example.html",
         "hasExampleHtml": true,
@@ -15435,6 +17373,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/saas-landing/example.html",
         "hasExampleHtml": true,
@@ -15498,6 +17443,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/saas-pricing-flow/example.html",
         "hasExampleHtml": true,
@@ -15556,6 +17508,13 @@
       ],
       "density": "medium",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/scroll-film-hero/example.html",
         "hasExampleHtml": true,
@@ -15625,6 +17584,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/scroll-marquee/example.html",
         "hasExampleHtml": true,
@@ -15668,6 +17634,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/securify-data-hero/example.html",
         "hasExampleHtml": true,
@@ -15738,6 +17711,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/sencha-atelier-h12/example.html",
         "hasExampleHtml": true,
@@ -15808,6 +17788,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/sentinel-meridian-h77/example.html",
         "hasExampleHtml": true,
@@ -15851,6 +17838,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/shape-landing-hero/example.html",
         "hasExampleHtml": true,
@@ -15892,6 +17886,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/simple-deck/example.html",
         "hasExampleHtml": true,
@@ -15941,6 +17942,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/skyelite-jet-hero/example.html",
         "hasExampleHtml": true,
@@ -16011,6 +18019,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/slate-stone-architectural-h73/example.html",
         "hasExampleHtml": true,
@@ -16040,13 +18055,13 @@
           "hex": "#E6D5D1",
           "role": "accent",
           "provenance": "DUSTY ROSE PANEL: `#E6D5D1`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#F2EEE3",
           "role": "accent",
           "provenance": "WARM CREAM PANEL: `#F2EEE3`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#E7E1EC",
@@ -16087,6 +18102,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/slow-roast-atelier-h84/example.html",
         "hasExampleHtml": true,
@@ -16136,6 +18158,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/smart-prosthetics-hero/example.html",
         "hasExampleHtml": true,
@@ -16171,7 +18200,7 @@
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "SURFACE WHITE: `#FFFFFF` (CARD FILL).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#15B5A6",
@@ -16195,7 +18224,7 @@
           "hex": "#6F6A60",
           "role": "muted",
           "provenance": "SECONDARY TEXT: `#6F6A60` (MUTED COPY ON PAPER).",
-          "confidence": "high"
+          "confidence": "medium"
         }
       ],
       "typography": {
@@ -16219,6 +18248,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/snip-and-snout-grooming-h18/example.html",
         "hasExampleHtml": true,
@@ -16251,6 +18287,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/social-media-dashboard/example.html",
         "hasExampleHtml": true,
@@ -16322,6 +18365,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 58.35294117647059,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/solace-sign-in/example.html",
         "hasExampleHtml": true,
@@ -16345,23 +18395,23 @@
           "hex": "#F2EEE3",
           "role": "accent",
           "provenance": "CREAM / OAT PANEL: `#F2EEE3`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#E6D5D1",
           "role": "accent",
           "provenance": "DUSTY ROSE / CLAY PANEL: `#E6D5D1`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#E7E1EC",
           "role": "accent",
           "provenance": "LILAC MIST PANEL: `#E7E1EC`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#4B594D",
-          "role": "text",
+          "role": "accent",
           "provenance": "SAGE / FOREST ACCENT (BUTTONS, INK): `#4B594D`",
           "confidence": "high"
         },
@@ -16369,7 +18419,7 @@
           "hex": "#3C4A3E",
           "role": "accent",
           "provenance": "DEEPER MOSS HOVER: `#3C4A3E`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#3D3D3D",
@@ -16404,6 +18454,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/solace-wellness-grid-h13/example.html",
         "hasExampleHtml": true,
@@ -16440,6 +18497,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/space-voyage-landing/example.html",
         "hasExampleHtml": true,
@@ -16500,8 +18564,8 @@
           "confidence": "high"
         },
         "ui": {
-          "family": "UPPERCASE",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -16509,6 +18573,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/spectral-orbit-novascale-h17/example.html",
         "hasExampleHtml": true,
@@ -16548,6 +18619,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/sprite-animation/example.html",
         "hasExampleHtml": true,
@@ -16605,6 +18683,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 227.5,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/stark-minimal-footer/example.html",
         "hasExampleHtml": true,
@@ -16641,6 +18726,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/stellar-ai-landing-hero/example.html",
         "hasExampleHtml": true,
@@ -16713,6 +18805,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/stellar-launch-landing/example.html",
         "hasExampleHtml": true,
@@ -16784,6 +18883,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 102.11764705882352,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/synapse-dark-hero/example.html",
         "hasExampleHtml": true,
@@ -16851,6 +18957,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/synergeus-landing/example.html",
         "hasExampleHtml": true,
@@ -16915,6 +19028,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/synex-wealth-hero/example.html",
         "hasExampleHtml": true,
@@ -16982,6 +19102,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/taskly-liquid-glass-hero/example.html",
         "hasExampleHtml": true,
@@ -17053,6 +19180,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/taskora-saas-hero/example.html",
         "hasExampleHtml": true,
@@ -17085,6 +19219,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/team-okrs/example.html",
         "hasExampleHtml": true,
@@ -17158,6 +19299,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/technical-specs-tabs/example.html",
         "hasExampleHtml": true,
@@ -17216,6 +19364,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/terra-craft-editorial-h58/example.html",
         "hasExampleHtml": true,
@@ -17286,6 +19441,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/terra-siena-atelier-h14/example.html",
         "hasExampleHtml": true,
@@ -17327,7 +19489,7 @@
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "PURE WHITE (CARDS): `#FFFFFF`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#4A7A93",
@@ -17356,6 +19518,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/tide-table-h82/example.html",
         "hasExampleHtml": true,
@@ -17423,6 +19592,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/toonhub-figurine-carousel/example.html",
         "hasExampleHtml": true,
@@ -17455,6 +19631,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/trading-analysis-dashboard-template/example.html",
         "hasExampleHtml": true,
@@ -17522,6 +19705,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 92,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/transform-data-hero/example.html",
         "hasExampleHtml": true,
@@ -17585,6 +19775,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/tweaks/example.html",
         "hasExampleHtml": true,
@@ -17655,6 +19852,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "high",
+      "layout": {
+        "measureCh": 156.25,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/urban-jungle-landing/example.html",
         "hasExampleHtml": true,
@@ -17706,6 +19910,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/usd-halo-landing/example.html",
         "hasExampleHtml": true,
@@ -17749,6 +19960,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/valmax-photography-landing/example.html",
         "hasExampleHtml": true,
@@ -17792,6 +20010,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/vanguard-hero-landing/example.html",
         "hasExampleHtml": true,
@@ -17862,6 +20087,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/vantix-precision-medicine-h34/example.html",
         "hasExampleHtml": true,
@@ -17929,6 +20161,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/vaultshield-hero/example.html",
         "hasExampleHtml": true,
@@ -17999,6 +20238,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/vellum-apothecary-archive-h32/example.html",
         "hasExampleHtml": true,
@@ -18034,7 +20280,7 @@
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "SURFACE WHITE: `#FFFFFF` (FLOATING QUOTE CARD).",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#C5A059",
@@ -18069,6 +20315,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/vellum-atelier-h33/example.html",
         "hasExampleHtml": true,
@@ -18140,6 +20393,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/veloce-finance-landing/example.html",
         "hasExampleHtml": true,
@@ -18185,6 +20445,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/velorah-hero-landing/example.html",
         "hasExampleHtml": true,
@@ -18208,7 +20475,7 @@
           "hex": "#4A141A",
           "role": "accent",
           "provenance": "BRAND DEEP (DARKER MAROON FOR HOVER/SHADOW): `#4A141A`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#0B0A0A",
@@ -18238,11 +20505,11 @@
           "hex": "#F4F1EC",
           "role": "accent",
           "provenance": "SURFACE (OFF-WHITE CARD): `#F4F1EC`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#C8A24B",
-          "role": "rule",
+          "role": "accent",
           "provenance": "ACCENT GOLD (SPARINGLY, FOR STARS/DOTS/RULES): `#C8A24B`",
           "confidence": "high"
         },
@@ -18250,7 +20517,7 @@
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "WHITE: `#FFFFFF`",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -18274,6 +20541,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 150,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/velvet-vellum-agency-h4/example.html",
         "hasExampleHtml": true,
@@ -18301,7 +20575,7 @@
         },
         {
           "hex": "#F6F4EF",
-          "role": "muted",
+          "role": "background",
           "provenance": "WARM PAPER TINT FOR SECONDARY SECTIONS: `#F6F4EF`.",
           "confidence": "high"
         }
@@ -18326,6 +20600,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/verdant-advisory-h10/example.html",
         "hasExampleHtml": true,
@@ -18383,13 +20664,13 @@
         },
         {
           "hex": "#E2552B",
-          "role": "muted",
+          "role": "accent",
           "provenance": "DEEP ORANGE (SECONDARY ACCENT / CTA): `#E2552B` / HOVER `#C8431D`.",
           "confidence": "high"
         },
         {
           "hex": "#C8431D",
-          "role": "muted",
+          "role": "accent",
           "provenance": "DEEP ORANGE (SECONDARY ACCENT / CTA): `#E2552B` / HOVER `#C8431D`.",
           "confidence": "high"
         }
@@ -18414,6 +20695,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/verdant-atelier-h40/example.html",
         "hasExampleHtml": true,
@@ -18442,16 +20730,16 @@
       ],
       "typography": {
         "body": {
-          "family": "WEIGHT 400",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         },
         "headings": {
-          "family": "WEIGHT 500",
-          "confidence": "high"
+          "family": "Inter Tight",
+          "confidence": "low"
         },
         "ui": {
-          "family": "WEIGHT 600",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -18460,6 +20748,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/verdant-pledge-bento-h49/example.html",
         "hasExampleHtml": true,
@@ -18483,7 +20778,7 @@
           "hex": "#004953",
           "role": "accent",
           "provenance": "BRAND PRIMARY / MIDNIGHT GREEN: `#004953`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#F9F7F2",
@@ -18495,7 +20790,7 @@
           "hex": "#F2EFE8",
           "role": "accent",
           "provenance": "WARMER BEIGE PANEL (ALT SECTION): `#F2EFE8`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#3E2723",
@@ -18507,7 +20802,7 @@
           "hex": "#5D4037",
           "role": "muted",
           "provenance": "TEXT SECONDARY (BODY, LIGHTER BROWN): `#5D4037`",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#F9F7F2",
@@ -18519,7 +20814,7 @@
           "hex": "#3E2723",
           "role": "accent",
           "provenance": "FOOTER GROUND (DEEP COCOA): `#3E2723`",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -18542,6 +20837,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/verdant-salon-h91/example.html",
         "hasExampleHtml": true,
@@ -18589,6 +20891,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/verdant-spine-clinic-h66/example.html",
         "hasExampleHtml": true,
@@ -18630,7 +20939,7 @@
           "hex": "#4A4A4A",
           "role": "muted",
           "provenance": "TEXT SECONDARY: `#4A4A4A`",
-          "confidence": "high"
+          "confidence": "medium"
         },
         {
           "hex": "#070E01",
@@ -18659,6 +20968,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/verdigris-trail-h50/example.html",
         "hasExampleHtml": true,
@@ -18715,12 +21031,12 @@
           "confidence": "low"
         },
         "headings": {
-          "family": "WEIGHT 700",
-          "confidence": "high"
+          "family": "Josefin Sans",
+          "confidence": "low"
         },
         "ui": {
-          "family": "10PX",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -18729,6 +21045,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/vermillion-cram-h3/example.html",
         "hasExampleHtml": true,
@@ -18799,6 +21122,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/vermillion-table-h83/example.html",
         "hasExampleHtml": true,
@@ -18833,6 +21163,13 @@
       ],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/video-shortform/example.html",
         "hasExampleHtml": true,
@@ -18900,6 +21237,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": 95.875,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/viktor-oddy-landing/example.html",
         "hasExampleHtml": true,
@@ -18923,7 +21267,7 @@
           "hex": "#FFFFFF",
           "role": "accent",
           "provenance": "WHITE CARDS: `#FFFFFF`",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -18946,6 +21290,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/voltaic-grid-advisory-h75/example.html",
         "hasExampleHtml": true,
@@ -18987,19 +21338,19 @@
           "hex": "#FAE100",
           "role": "accent",
           "provenance": "PRIMARY (ELECTRIC YELLOW): `#FAE100`",
-          "confidence": "high"
+          "confidence": "low"
         },
         {
           "hex": "#834900",
           "role": "accent",
           "provenance": "PRIMARY-DARK: `#834900`",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
         "body": {
-          "family": "14PX",
-          "confidence": "high"
+          "family": "Inter",
+          "confidence": "low"
         },
         "headings": {
           "family": "Onest",
@@ -19013,6 +21364,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/voltframe-dev-h29/example.html",
         "hasExampleHtml": true,
@@ -19038,8 +21396,8 @@
           "confidence": "high"
         },
         "headings": {
-          "family": "WEIGHT 500",
-          "confidence": "high"
+          "family": "Inter",
+          "confidence": "low"
         },
         "ui": {
           "family": null,
@@ -19052,6 +21410,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/voltic-showroom-h89/example.html",
         "hasExampleHtml": true,
@@ -19075,7 +21440,7 @@
           "hex": "#0A0A0F",
           "role": "accent",
           "provenance": "DEEP SPACE BLACK: `#0a0a0f` (HOVER OVERLAYS, STARFIELD BACKDROP)",
-          "confidence": "high"
+          "confidence": "low"
         }
       ],
       "typography": {
@@ -19097,6 +21462,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/voltline-automation-h60/example.html",
         "hasExampleHtml": true,
@@ -19148,6 +21520,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/waitlist-page/example.html",
         "hasExampleHtml": true,
@@ -19186,6 +21565,13 @@
       ],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/wanderful-cinematic-hero/example.html",
         "hasExampleHtml": true,
@@ -19246,8 +21632,8 @@
           "confidence": "high"
         },
         "ui": {
-          "family": "SMALL UPPERCASE",
-          "confidence": "high"
+          "family": null,
+          "confidence": "low"
         }
       },
       "mood": [
@@ -19256,6 +21642,13 @@
       ],
       "density": "high",
       "motion_level": "high",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/wayfare-expedition-journal-h86/example.html",
         "hasExampleHtml": true,
@@ -19290,6 +21683,13 @@
       ],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/web-prototype/example.html",
         "hasExampleHtml": true,
@@ -19350,6 +21750,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/web-prototype-taste-brutalist/example.html",
         "hasExampleHtml": true,
@@ -19416,6 +21823,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": "mixed",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/web-prototype-taste-editorial/example.html",
         "hasExampleHtml": true,
@@ -19463,6 +21877,13 @@
       ],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/web-prototype-taste-soft/example.html",
         "hasExampleHtml": true,
@@ -19502,6 +21923,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/webgl-experience/example.html",
         "hasExampleHtml": true,
@@ -19543,6 +21971,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/weekly-update/example.html",
         "hasExampleHtml": true,
@@ -19575,6 +22010,13 @@
       "mood": [],
       "density": "low",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/worker-visualizer/example.html",
         "hasExampleHtml": true,
@@ -19611,6 +22053,13 @@
       "mood": [],
       "density": "medium",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/woven-light-hero/example.html",
         "hasExampleHtml": true,
@@ -19643,6 +22092,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "low",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": null,
         "hasExampleHtml": false,
@@ -19710,6 +22166,13 @@
       "mood": [],
       "density": "high",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": 200,
+        "textAlign": "center",
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/xero-encryption-hero/example.html",
         "hasExampleHtml": true,
@@ -19782,6 +22245,13 @@
       ],
       "density": "low",
       "motion_level": "medium",
+      "layout": {
+        "measureCh": null,
+        "textAlign": null,
+        "preservesLineBreaks": null,
+        "hangingIndent": null,
+        "confidence": "low"
+      },
       "preview": {
         "path": "design-templates/yacht-club-landing/example.html",
         "hasExampleHtml": true,
