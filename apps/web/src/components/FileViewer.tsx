@@ -7288,12 +7288,22 @@ function HtmlViewer({
     if (!effectiveDeck || source == null) return source;
     return normalizeDeckVisualSource(removeSpeakerNotesFromHtml(source));
   }, [effectiveDeck, source]);
-  const inlinedSourceKey = `${projectId}:${file.name}`;
+  // `reloadKey` is part of the identity on purpose. Reload skips its own
+  // `setSource(null)` while Manual Edit holds a frozen source, so without it a
+  // rewrite of the PRE-reload document could land under the same key as the
+  // post-reload one and be read as current.
+  const inlinedSourceKey = `${projectId}:${file.name}:${reloadKey}`;
   const inlinedSourceForKey =
     inlinedSource && inlinedSource.key === inlinedSourceKey ? inlinedSource.value : null;
   // `source === null` means the preview was deliberately cleared (Reload,
   // issue #4650). A retained inline must never resurrect that content, so it
   // is only read while there is a live source to inline.
+  //
+  // Toggling between the URL-load and srcDoc transports (Draw, Comment,
+  // Inspect) cannot paint a stale rewrite: the key is unchanged by a mode
+  // flip, so what is retained is this same file's own current rewrite, and
+  // the effect re-runs on `useUrlLoadPreview` anyway. No regression is needed
+  // for that path; it is called out here so the question is not re-opened.
   const livePreviewSource =
     source !== null ? (inlinedSourceForKey ?? deckVisualSource) : deckVisualSource;
   // Annotation modes that should hold the preview still while open. Manual

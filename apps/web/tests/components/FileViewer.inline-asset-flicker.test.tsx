@@ -190,6 +190,9 @@ describe('FileViewer — asset inlining never paints the raw document first', ()
   });
 
   it('does not read a retained inline under a different file', async () => {
+    // A guard, not a repro: `main` clears the retained value on every effect
+    // run, so it cannot leak either. This pins the property the key gating is
+    // there to provide, so removing the key would be caught.
     vi.stubGlobal('fetch', fetchReturning(rawHtml('File A')));
     const { rerender } = render(
       <FileViewer projectId="project-1" projectKind="prototype" file={htmlFile('a.html')} />,
@@ -198,6 +201,7 @@ describe('FileViewer — asset inlining never paints the raw document first', ()
     await waitFor(() => expect(inlineState.calls).toBe(1));
     await settleNextInline({ html: inlinedHtml('File A') });
     await waitFor(() => expect(frameSrcDoc()).toContain('File A'));
+    expect(previewFrame()).not.toBeNull();
 
     vi.stubGlobal('fetch', fetchReturning(rawHtml('File B')));
     await act(async () => {
@@ -206,8 +210,48 @@ describe('FileViewer — asset inlining never paints the raw document first', ()
       );
     });
 
-    // File A's inlined body must not appear under File B's chrome, not even
-    // for the render before B's own rewrite is queued.
+    // File B's own rewrite is pending, so the gate is up. The definite
+    // assertion is that there is no frame at all — not merely that a missing
+    // frame yields no matching string.
+    await waitFor(() => expect(previewFrame()).toBeNull());
+
+    while (inlineState.pending.length > 0) {
+      await settleNextInline({ html: inlinedHtml('File B') });
+    }
+
+    // And once B resolves, B is what is on screen — A's body never appears
+    // under B's chrome.
+    await waitFor(() => expect(previewFrame()).not.toBeNull());
+    expect(frameSrcDoc()).toContain('File B');
     expect(frameSrcDoc()).not.toContain('File A');
+  });
+
+  it('does not paint a rewrite that was already in flight when Reload was pressed', async () => {
+    // Reload skips its own `setSource(null)` while Manual Edit holds a frozen
+    // source, so the retention key carries `reloadKey` as well: a rewrite
+    // belonging to the generation before the Reload must never be read as the
+    // current one, whichever way the effect unwound.
+    vi.stubGlobal('fetch', fetchReturning(rawHtml('Before reload')));
+    render(<FileViewer projectId="project-1" projectKind="prototype" file={htmlFile()} />);
+
+    // Leave the first rewrite in flight — this is the one that must not land.
+    await waitFor(() => expect(inlineState.calls).toBe(1));
+    expect(previewFrame()).toBeNull();
+
+    vi.stubGlobal('fetch', fetchReturning(rawHtml('After reload')));
+    await act(async () => {
+      screen.getByRole('button', { name: /reload preview/i }).click();
+    });
+    await waitFor(() => expect(inlineState.calls).toBeGreaterThanOrEqual(2));
+
+    // Settle the stale one first. It carries the pre-reload document and must
+    // change nothing on screen.
+    await settleNextInline({ html: inlinedHtml('Before reload') });
+    expect(frameSrcDoc()).not.toContain('Before reload');
+
+    while (inlineState.pending.length > 0) {
+      await settleNextInline({ html: inlinedHtml('After reload') });
+    }
+    await waitFor(() => expect(frameSrcDoc()).toContain('After reload'));
   });
 });
