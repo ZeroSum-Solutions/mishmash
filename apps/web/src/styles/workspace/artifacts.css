@@ -654,6 +654,10 @@
 .media-provider-coming-soon[open] {
   padding-bottom: 12px;
 }
+.media-provider-coming-soon-count {
+  font-size: 11px;
+  opacity: 0.7;
+}
 .media-provider-coming-soon-list {
   list-style: none;
   margin: 0;
