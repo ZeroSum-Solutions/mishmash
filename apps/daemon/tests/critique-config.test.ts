@@ -39,6 +39,23 @@ describe('loadCritiqueConfigFromEnv', () => {
     expect(cfg.enabled).toBe(false);
   });
 
+  it('OD_CRITIQUE_MAX_CONCURRENT_RUNS maps correctly', () => {
+    // The contract has named this variable since the config landed, but
+    // nothing read it, so the cap was always whatever the default happened
+    // to be.
+    const cfg = loadCritiqueConfigFromEnv({ OD_CRITIQUE_MAX_CONCURRENT_RUNS: '2' });
+    expect(cfg.maxConcurrentRuns).toBe(2);
+    expect(loadCritiqueConfigFromEnv({}).maxConcurrentRuns).toBe(
+      defaultCritiqueConfig().maxConcurrentRuns,
+    );
+  });
+
+  it('non-numeric OD_CRITIQUE_MAX_CONCURRENT_RUNS throws RangeError', () => {
+    expect(() => loadCritiqueConfigFromEnv({ OD_CRITIQUE_MAX_CONCURRENT_RUNS: 'many' })).toThrow(
+      RangeError,
+    );
+  });
+
   it('OD_CRITIQUE_MAX_ROUNDS maps correctly', () => {
     const cfg = loadCritiqueConfigFromEnv({ OD_CRITIQUE_MAX_ROUNDS: '5' });
     expect(cfg.maxRounds).toBe(5);

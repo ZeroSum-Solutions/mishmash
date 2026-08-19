@@ -10,6 +10,8 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { defaultCritiqueConfig } from '@open-design/contracts/critique';
+
 import { logCritique } from '../../src/logging/critique.js';
 
 let captured: string[] = [];
@@ -53,6 +55,7 @@ describe('logCritique structured events (Phase 12)', () => {
       adapter: 'mock',
       skill: 'unit-test',
       protocolVersion: 1,
+      config: defaultCritiqueConfig(),
     });
     const lines = parseLines();
     expect(lines).toHaveLength(1);
@@ -65,6 +68,10 @@ describe('logCritique structured events (Phase 12)', () => {
       namespace: 'critique',
     });
     expect(typeof lines[0]!.timestamp).toBe('string');
+    // The whole point of carrying the config: a run that died on a threshold
+    // or never started because of the cap has to be explainable from the log
+    // line alone, so the values have to actually reach it.
+    expect(lines[0]!.config).toEqual(defaultCritiqueConfig());
   });
 
   it('emits round_closed with composite / mustFix / decision', () => {
@@ -111,8 +118,9 @@ describe('logCritique structured events (Phase 12)', () => {
   });
 
   it('writes exactly one newline-terminated line per call', () => {
-    logCritique({ event: 'run_started', runId: 'r-1', adapter: 'm', skill: 's', protocolVersion: 1 });
-    logCritique({ event: 'run_started', runId: 'r-2', adapter: 'm', skill: 's', protocolVersion: 1 });
+    const cfg = defaultCritiqueConfig();
+    logCritique({ event: 'run_started', runId: 'r-1', adapter: 'm', skill: 's', protocolVersion: 1, config: cfg });
+    logCritique({ event: 'run_started', runId: 'r-2', adapter: 'm', skill: 's', protocolVersion: 1, config: cfg });
     const joined = captured.join('');
     const lines = joined.split('\n');
     // joined ends with '\n' so split produces a trailing empty string.

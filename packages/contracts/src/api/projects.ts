@@ -268,6 +268,15 @@ export interface ProjectMetadata {
   // cohorts' retention/usage (tracking spec C15 / §6).
   enrichmentStatus?: 'programmatic' | 'ai_refined';
   enrichmentCompletedAt?: number;
+  /**
+   * M1 Critique Theater override, written by the Settings toggle through the
+   * project PATCH and read back by `narrowProjectCritiqueOverride` as the
+   * second-highest input to `isCritiqueEnabled` (after skill policy, before
+   * env and the phase default). A boolean wins outright; the resolver
+   * collapses any other stored value to `null`, so a malformed write can
+   * never switch the feature on by accident.
+   */
+  critiqueTheaterEnabled?: boolean;
 }
 
 export interface Project {

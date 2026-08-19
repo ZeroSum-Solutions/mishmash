@@ -12,6 +12,7 @@ export * from './api/brands.js';
 export * from './api/catalogue-match.js';
 export * from './api/design-advisor.js';
 export * from './api/chat.js';
+export * from './api/critique.js';
 export * from './api/community.js';
 export * from './api/composition-metrics.js';
 export * from './api/context.js';

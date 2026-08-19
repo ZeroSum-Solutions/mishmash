@@ -188,6 +188,30 @@ export async function runOrchestrator(
     throw new RangeError(`runOrchestrator: cfg.parserMaxBlockBytes must be positive, got ${cfg.parserMaxBlockBytes}`);
   }
 
+  // Emit the resolved config HERE — at daemon-side orchestration entry,
+  // before a single byte of stdout is consumed — not on the model's first
+  // <CRITIQUE_RUN> frame.
+  //
+  // The config record exists to explain a run after the fact, and the runs
+  // that most need explaining are the ones that never produced a frame: a
+  // child that crashed on launch, a malformed preamble, a total timeout, an
+  // abort. Logging on `run_started` from the parser meant exactly those runs
+  // finalized as 'failed'/'timed_out' with no record of the values they ran
+  // under — the one case this event was added for.
+  //
+  // `protocolVersion` is the daemon's expected version from cfg. The version
+  // the model actually declares is recorded separately by the
+  // `critiqueProtocolVersion` metric when its frame arrives, so a mismatch is
+  // still observable.
+  logCritique({
+    event: 'run_started',
+    runId,
+    adapter,
+    skill,
+    protocolVersion: cfg.protocolVersion,
+    config: cfg,
+  });
+
   // 1. Insert a 'running' row.
   insertCritiqueRun(db, {
     id: runId,
@@ -286,13 +310,9 @@ export async function runOrchestrator(
 
       switch (event.type) {
         case 'run_started': {
-          logCritique({
-            event: 'run_started',
-            runId,
-            adapter,
-            skill,
-            protocolVersion: event.protocolVersion,
-          });
+          // The log line was already written at orchestration entry above;
+          // re-emitting here would double-count every run. Only the declared
+          // protocol version is new information at this point.
           critiqueProtocolVersion.set(
             { version: String(event.protocolVersion) },
             event.protocolVersion,

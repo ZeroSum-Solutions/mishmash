@@ -172,6 +172,97 @@ describe('critique persistence', () => {
     expect(parsed.recoveryReason).toBe('daemon_restart');
   });
 
+  it('round-trips totalTokens and costUsd, and defaults them to null', () => {
+    // Wall clock from createdAt/updatedAt cannot answer what a run cost: a
+    // panel that argued for four rounds and one that stalled on IO look the
+    // same.
+    const priced = insertCritiqueRun(db, {
+      id: 'priced',
+      projectId: 'p1',
+      status: 'shipped',
+      protocolVersion: 1,
+      totalTokens: 1200,
+      costUsd: 0.04,
+    });
+    expect(priced.totalTokens).toBe(1200);
+    expect(priced.costUsd).toBeCloseTo(0.04);
+    expect(getCritiqueRun(db, 'priced')?.totalTokens).toBe(1200);
+
+    const unpriced = insertCritiqueRun(db, {
+      id: 'unpriced',
+      projectId: 'p1',
+      status: 'shipped',
+      protocolVersion: 1,
+    });
+    expect(unpriced.totalTokens).toBeNull();
+    expect(unpriced.costUsd).toBeNull();
+
+    const patched = updateCritiqueRun(db, 'unpriced', { totalTokens: 7, costUsd: 0.5 });
+    expect(patched?.totalTokens).toBe(7);
+    expect(patched?.costUsd).toBeCloseTo(0.5);
+    // A patch that does not mention them must not wipe them.
+    expect(updateCritiqueRun(db, 'unpriced', { status: 'failed' })?.totalTokens).toBe(7);
+  });
+
+  it('adds the cost columns to a database created before they existed', () => {
+    // `CREATE TABLE IF NOT EXISTS` is a no-op on an existing table, so without
+    // the pragma-guarded ALTER every already-provisioned install would throw
+    // "no such column" on the next insert.
+    const legacy = new Database(':memory:');
+    legacy.exec(`
+      CREATE TABLE critique_runs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        conversation_id TEXT,
+        artifact_path TEXT,
+        status TEXT NOT NULL,
+        score REAL,
+        rounds_json TEXT NOT NULL DEFAULT '[]',
+        transcript_path TEXT,
+        protocol_version INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    `);
+    migrateCritique(legacy);
+    const columns = (legacy.prepare(`PRAGMA table_info(critique_runs)`).all() as { name: string }[])
+      .map((column) => column.name);
+    expect(columns).toContain('total_tokens');
+    expect(columns).toContain('cost_usd');
+    // Idempotent: migrate runs on every boot.
+    expect(() => migrateCritique(legacy)).not.toThrow();
+    legacy.close();
+  });
+
+  it('adds only the column that is missing when a database has one of the two', () => {
+    // The columns are checked independently, so a database that picked up one
+    // of them (a partial upgrade, a hand-run ALTER) must not have the ALTER
+    // for the one it already has re-run against it.
+    const partial = new Database(':memory:');
+    partial.exec(`
+      CREATE TABLE critique_runs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        conversation_id TEXT,
+        artifact_path TEXT,
+        status TEXT NOT NULL,
+        score REAL,
+        rounds_json TEXT NOT NULL DEFAULT '[]',
+        transcript_path TEXT,
+        protocol_version INTEGER NOT NULL,
+        total_tokens INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    `);
+    expect(() => migrateCritique(partial)).not.toThrow();
+    const columns = (partial.prepare(`PRAGMA table_info(critique_runs)`).all() as { name: string }[])
+      .map((column) => column.name);
+    expect(columns.filter((name) => name === 'total_tokens')).toHaveLength(1);
+    expect(columns).toContain('cost_usd');
+    partial.close();
+  });
+
   it('CASCADEs critique_runs deletion when project is deleted', () => {
     insertCritiqueRun(db, { id: 'doomed', projectId: 'p2', status: 'shipped', protocolVersion: 1 });
     db.prepare(`DELETE FROM projects WHERE id = ?`).run('p2');

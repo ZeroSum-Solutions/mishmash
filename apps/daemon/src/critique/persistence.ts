@@ -44,6 +44,34 @@ export interface CritiqueRunRow {
   rounds: CritiqueRoundSummary[];
   transcriptPath: string | null;
   protocolVersion: number;
+  /**
+   * Wall-clock from createdAt/updatedAt cannot answer "what did this run
+   * cost" — a panel that thought hard for four rounds and one that stalled on
+   * IO look identical. These columns exist to carry that answer.
+   *
+   * KNOWN GAP — both are NULL for every production run today, and no
+   * daemon-side wiring can change that on its own. The orchestrator only ever
+   * receives `stdout: AsyncIterable<string>` (raw text, see
+   * `server.ts` -> `runOrchestrator({ stdout })`), and it is reachable only
+   * for `streamFormat: 'plain'` adapters. Usage extraction in this daemon
+   * lives entirely in the STRUCTURED stream decoders — `claude-stream.ts`
+   * (`total_cost_usd`), `qoder-stream.ts`, the json-event-stream decoders, the
+   * ACP and pi-rpc event readers — which feed `usage-tracking.ts`. Those are
+   * exactly the formats the critique gate excludes. The plain adapters that DO
+   * run the panel (antigravity, qwen, deepseek) emit no usage on stdout at
+   * all; where a plain CLI reports tokens it does so on stderr, which the
+   * orchestrator never parses, and the <CRITIQUE_RUN> wire protocol itself has
+   * no usage element.
+   *
+   * So this is a missing data SOURCE, not missing wiring: populating these
+   * honestly requires a plain-stream usage channel that does not exist yet.
+   * Do not fill them with an estimate derived from transcript bytes — the one
+   * question they exist to answer is a cost decision, and a guess labelled
+   * `total_tokens` would corrupt it. Left NULL and documented until that
+   * channel is built.
+   */
+  totalTokens: number | null;
+  costUsd: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -61,6 +89,8 @@ export interface CritiqueRunInsert {
   rounds?: CritiqueRoundSummary[];
   transcriptPath?: string | null;
   protocolVersion: number;
+  totalTokens?: number | null;
+  costUsd?: number | null;
   createdAt?: number;
   updatedAt?: number;
 }
@@ -75,6 +105,8 @@ export interface CritiqueRunPatch {
   rounds?: CritiqueRoundSummary[];
   transcriptPath?: string | null;
   artifactPath?: string | null;
+  totalTokens?: number | null;
+  costUsd?: number | null;
   updatedAt?: number;
 }
 
@@ -131,6 +163,8 @@ interface RawCritiqueRunRow {
   roundsJson: string;
   transcriptPath: string | null;
   protocolVersion: number;
+  totalTokens: number | null;
+  costUsd: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -147,6 +181,8 @@ function normalizeRow(raw: RawCritiqueRunRow): CritiqueRunRow {
     rounds,
     transcriptPath: raw.transcriptPath,
     protocolVersion: Number(raw.protocolVersion),
+    totalTokens: raw.totalTokens,
+    costUsd: raw.costUsd,
     createdAt: Number(raw.createdAt),
     updatedAt: Number(raw.updatedAt),
   };
@@ -162,6 +198,8 @@ const COLS = `
   rounds_json    AS roundsJson,
   transcript_path AS transcriptPath,
   protocol_version AS protocolVersion,
+  total_tokens   AS totalTokens,
+  cost_usd       AS costUsd,
   created_at     AS createdAt,
   updated_at     AS updatedAt
 `;
@@ -184,6 +222,8 @@ export function migrateCritique(db: Database.Database): void {
       rounds_json TEXT NOT NULL DEFAULT '[]',
       transcript_path TEXT,
       protocol_version INTEGER NOT NULL,
+      total_tokens INTEGER,
+      cost_usd REAL,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -196,6 +236,15 @@ export function migrateCritique(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_critique_runs_status
       ON critique_runs(status);
   `);
+
+  // `CREATE TABLE IF NOT EXISTS` is a no-op on a database that already has the
+  // table, so the columns above never reach an existing install. SQLite has no
+  // `ADD COLUMN IF NOT EXISTS`; the pragma check is the idiom db.ts uses for
+  // every post-ship column add.
+  const columns = db.prepare(`PRAGMA table_info(critique_runs)`).all() as { name: string }[];
+  const has = (name: string): boolean => columns.some((column) => column.name === name);
+  if (!has('total_tokens')) db.exec(`ALTER TABLE critique_runs ADD COLUMN total_tokens INTEGER`);
+  if (!has('cost_usd')) db.exec(`ALTER TABLE critique_runs ADD COLUMN cost_usd REAL`);
 }
 
 export function insertCritiqueRun(
@@ -212,8 +261,9 @@ export function insertCritiqueRun(
   db.prepare(
     `INSERT INTO critique_runs
        (id, project_id, conversation_id, artifact_path, status, score,
-        rounds_json, transcript_path, protocol_version, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        rounds_json, transcript_path, protocol_version, total_tokens, cost_usd,
+        created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     input.id,
     input.projectId,
@@ -224,6 +274,8 @@ export function insertCritiqueRun(
     serializeRoundsPayload(rounds),
     input.transcriptPath ?? null,
     input.protocolVersion,
+    input.totalTokens ?? null,
+    input.costUsd ?? null,
     input.createdAt ?? now,
     input.updatedAt ?? now,
   );
@@ -269,6 +321,9 @@ export function updateCritiqueRun(
     'artifactPath' in patch
       ? patch.artifactPath ?? null
       : existing.artifactPath;
+  const totalTokens =
+    'totalTokens' in patch ? patch.totalTokens ?? null : existing.totalTokens;
+  const costUsd = 'costUsd' in patch ? patch.costUsd ?? null : existing.costUsd;
 
   db.prepare(
     `UPDATE critique_runs
@@ -277,6 +332,8 @@ export function updateCritiqueRun(
             rounds_json = ?,
             transcript_path = ?,
             artifact_path = ?,
+            total_tokens = ?,
+            cost_usd = ?,
             updated_at = ?
       WHERE id = ?`,
   ).run(
@@ -285,6 +342,8 @@ export function updateCritiqueRun(
     serializeRoundsPayload(rounds),
     transcriptPath,
     artifactPath,
+    totalTokens,
+    costUsd,
     updatedAt,
     id,
   );

@@ -20,14 +20,35 @@ export interface RunHandle {
   projectId: string;
   abort: AbortController;
   startedAt: number;
+  /**
+   * True while the slot is claimed but the child has not spawned yet. Set by
+   * `reserve()`, cleared by `register()`. Diagnostics-only elsewhere.
+   */
+  reserved?: boolean;
 }
 
 /** Public surface of the in-process run registry. */
 export interface RunRegistry {
   /**
-   * Register a new in-flight handle. Throws if a handle for the same
-   * (projectId, runId) is already registered (indicates a bug in the caller,
-   * not a user error).
+   * Atomically claim one of the `maxConcurrentRuns` slots for a run that has
+   * not spawned yet. Returns false when the registry is already at capacity.
+   *
+   * This exists because capacity has to be decided BEFORE the critique panel
+   * addendum is composed into the prompt, not at spawn time. A run that is
+   * told to emit <CRITIQUE_RUN> tags and then denied an orchestrator streams
+   * raw protocol back to the user as assistant text; deciding first keeps the
+   * prompt and the orchestrator in lockstep. A successful reservation is
+   * upgraded in place by `register()` and freed by `unregister()` — callers
+   * must release on every termination path or the slot leaks for the life of
+   * the daemon.
+   */
+  reserve(projectId: string, runId: string): boolean;
+
+  /**
+   * Register a new in-flight handle. Upgrades a reservation made by
+   * `reserve()` for the same (projectId, runId) in place, so a reserved run
+   * does not consume two slots. Throws if a LIVE handle for the same pair is
+   * already registered (indicates a bug in the caller, not a user error).
    */
   register(handle: RunHandle): void;
 
@@ -72,18 +93,52 @@ function compositeKey(projectId: string, runId: string): string {
  *
  * @see specs/current/critique-theater.md § interrupt endpoint (Task 6.1)
  */
-export function createRunRegistry(): RunRegistry {
+export function createRunRegistry(maxConcurrentRuns: number = Infinity): RunRegistry {
   const store = new Map<string, RunHandle>();
 
   return {
+    reserve(projectId: string, runId: string): boolean {
+      const key = compositeKey(projectId, runId);
+      // Re-reserving the same pair is a no-op success rather than a second
+      // slot, so a retried compose cannot consume capacity twice.
+      if (store.has(key)) return true;
+      if (store.size >= maxConcurrentRuns) return false;
+      store.set(key, {
+        runId,
+        projectId,
+        abort: new AbortController(),
+        startedAt: Date.now(),
+        reserved: true,
+      });
+      return true;
+    },
+
     register(handle: RunHandle): void {
       const key = compositeKey(handle.projectId, handle.runId);
-      if (store.has(key)) {
+      const existing = store.get(key);
+      if (existing !== undefined) {
+        if (!existing.reserved) {
+          throw new Error(
+            `RunRegistry: duplicate (projectId="${handle.projectId}", runId="${handle.runId}"); unregister before re-registering`,
+          );
+        }
+        // Upgrade the reservation in place — the slot is already counted.
+        // An interrupt that landed during the reservation window aborted the
+        // placeholder controller; carry that decision onto the real one so a
+        // cancel issued microseconds before spawn is not silently dropped.
+        if (existing.abort.signal.aborted) {
+          handle.abort.abort(existing.abort.signal.reason);
+        }
+        store.set(key, { ...handle, reserved: false });
+        return;
+      }
+      // Backstop for callers that register without reserving first.
+      if (store.size >= maxConcurrentRuns) {
         throw new Error(
-          `RunRegistry: duplicate (projectId="${handle.projectId}", runId="${handle.runId}"); unregister before re-registering`,
+          `RunRegistry: at capacity (max=${maxConcurrentRuns}, active=${store.size}); cannot register (projectId="${handle.projectId}", runId="${handle.runId}")`,
         );
       }
-      store.set(key, handle);
+      store.set(key, { ...handle, reserved: false });
     },
 
     get(projectId: string, runId: string): RunHandle | null {

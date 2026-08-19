@@ -64,9 +64,11 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
   const {
     handleCritiqueArtifact,
     handleCritiqueInterrupt,
+    handleCritiqueStatus,
     critiqueArtifactsRoot,
     critiqueResponseCapBytes,
     critiqueRunRegistry,
+    critiqueSkillRoots,
   } = ctx.critique;
   const rejectProxyPluginContext = (body: Record<string, unknown>, res: any) => {
     if (
@@ -373,6 +375,12 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
   });
 
   // ---- Critique Theater endpoints (Phase 6) --------------------------------
+
+  // GET /api/projects/:projectId/critique/status
+  app.get(
+    '/api/projects/:projectId/critique/status',
+    handleCritiqueStatus(db, { skillsRoots: critiqueSkillRoots }),
+  );
 
   // POST /api/projects/:projectId/critique/:runId/interrupt
   // Cascades an AbortController to the in-flight orchestrator for the given run.

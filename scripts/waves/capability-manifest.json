@@ -527,6 +527,25 @@
     ]
   },
   {
+    "capability": "critique",
+    "uiEntryPoint": "Settings -> Critique Theater toggle (CritiqueTheaterSection in apps/web/src/components/SettingsDialog.tsx)",
+    "cliArgs": [
+      "critique",
+      "conformance",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/critique/conformance",
+    "outputSchema": "CritiqueConformanceResponse ({ window: { days, history: ConformanceDayDto[] }, decision: RatchetDecisionDto })",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/critique/conformance",
+      "GET /api/critique/conformance:param",
+      "GET /api/projects/:param/critique/status"
+    ],
+    "reason": "cliArgs probes 'conformance' rather than 'status' because 'status' needs a real --project id and the gate has no guaranteed fixture project at run time; 'conformance' is side-effect-free and takes no arguments. Both routes this capability's CLI code reaches are declared: /api/critique/conformance (this row's own namespace, listed with and without the guard's :param suffix because the CLI builds the URL from a template literal carrying an optional query string) and /api/projects/:param/critique/status, whose namespace is 'projects' -- the parity check aggregates knownNamespaceRoutes across all rows by each route's own namespace, so declaring it here is correct. Both surfaces are unreshaped passthroughs of the same daemon JSON; the CLI's non-JSON output is a human summary and --json returns the response verbatim."
+  },
+  {
     "capability": "feedback",
     "uiEntryPoint": "Assistant message Helpful / Not-helpful controls",
     "cliArgs": [
