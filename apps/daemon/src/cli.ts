@@ -141,6 +141,21 @@ const CATALOGUE_MATCH_BOOLEAN_FLAGS = new Set([
   'json',
 ]);
 
+// Hoisted for the same reason as CATALOGUE_MATCH_STRING_FLAGS above:
+// runDesignAdvisorRecommend references these during the top-of-file
+// SUBCOMMAND_MAP[first](rest) dispatch.
+const DESIGN_ADVISOR_STRING_FLAGS = new Set([
+  'prompt',
+  'prompt-file',
+  'limit',
+  'daemon-url',
+]);
+const DESIGN_ADVISOR_BOOLEAN_FLAGS = new Set([
+  'help',
+  'h',
+  'json',
+]);
+
 const DESIGN_BROWSER_FRAME_CHECK_STRING_FLAGS = new Set([
   'url',
   'daemon-url',
@@ -907,6 +922,7 @@ const SUBCOMMAND_MAP = {
   'message-center': runMessageCenter,
   research: runResearch,
   catalogue: runCatalogue,
+  'design-advisor': runDesignAdvisor,
   plugin: runPlugin,
   ui: runUi,
   marketplace: runMarketplace,
@@ -1979,6 +1995,133 @@ Flags:
   --limit        Shortlist cap. Defaults to 5, clamped to 6.
   --json         Print the daemon response as JSON:
                    { "matches": [{ "id", "kind", "name", "description", "score", "matchedTerms" }] }
+  --daemon-url   Local daemon URL. Defaults to OD_DAEMON_URL, OD_SIDECAR_IPC_PATH discovery, or http://127.0.0.1:7456.`);
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: od design-advisor …
+//
+// F001 R6 -- the CLI half of the conversational template advisor's
+// non-GenUI closure: brief -> matched archetype (R4) -> ranked
+// design-templates/index.json candidates with a named rationale (R5). Both
+// this and the web/HTTP caller hit the same POST /api/design-advisor/recommend
+// endpoint (apps/daemon/src/routes/design-advisor.ts), per AGENTS.md
+// "Capability exposure" -- mirrors `od catalogue match`'s flag shape
+// exactly, per F001 R6's own spec.
+//
+// R7 (the `gallery-select` visual surface) is out of scope here -- see
+// NOTES.md. This subcommand only prints/returns the ranked list.
+// ---------------------------------------------------------------------------
+
+async function runDesignAdvisor(args) {
+  const sub = args.find((a) => !a.startsWith('-')) || '';
+  if (sub === 'help' || args.includes('--help') || args.includes('-h')) {
+    printDesignAdvisorHelp();
+    process.exit(0);
+  }
+  if (sub === '') {
+    printDesignAdvisorHelp();
+    process.exit(2);
+  }
+  if (sub !== 'recommend') {
+    console.error(`unknown subcommand: od design-advisor ${sub}`);
+    printDesignAdvisorHelp();
+    process.exit(2);
+  }
+  const idx = args.indexOf(sub);
+  const subArgs = [...args.slice(0, idx), ...args.slice(idx + 1)];
+  return runDesignAdvisorRecommend(subArgs);
+}
+
+async function runDesignAdvisorRecommend(rawArgs) {
+  let flags;
+  try {
+    flags = parseFlags(rawArgs, {
+      string: DESIGN_ADVISOR_STRING_FLAGS,
+      boolean: DESIGN_ADVISOR_BOOLEAN_FLAGS,
+    });
+  } catch (err) {
+    console.error(err.message);
+    printDesignAdvisorHelp();
+    process.exit(2);
+  }
+  if (flags.help || flags.h) {
+    printDesignAdvisorHelp();
+    process.exit(0);
+  }
+
+  const text = await readPromptFromFlags(flags);
+  if (!text || !text.trim()) {
+    console.error('--prompt or --prompt-file required');
+    printDesignAdvisorHelp();
+    process.exit(2);
+  }
+
+  const limitRaw = flags.limit == null ? undefined : Number(flags.limit);
+  const limit = Number.isFinite(limitRaw) ? limitRaw : undefined;
+
+  const daemonUrl = await cliDaemonUrl(flags);
+  const url = `${daemonUrl.replace(/\/$/, '')}/api/design-advisor/recommend`;
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        prompt: text,
+        ...(limit != null ? { limit } : {}),
+      }),
+    });
+  } catch (err) {
+    surfaceFetchError(err, daemonUrl);
+    process.exit(3);
+  }
+  if (!resp.ok) {
+    const errText = await resp.text();
+    console.error(`daemon ${resp.status}: ${errText}`);
+    process.exit(4);
+  }
+  const data = await resp.json();
+
+  if (flags.json) {
+    console.log(JSON.stringify(data, null, 2));
+    return;
+  }
+
+  if (!data?.archetypeId) {
+    console.log('No archetype match — nothing in the domain-knowledge layer recognized this brief (F001 R3 P0 covers "poetry" only).');
+    return;
+  }
+  const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+  console.log(`Matched archetype: ${data.archetypeId}`);
+  if (candidates.length === 0) {
+    console.log('No ranked candidates.');
+    return;
+  }
+  for (const c of candidates) {
+    const rationale = Array.isArray(c.rationale) ? c.rationale.join('; ') : '';
+    console.log(`${c.slug}  score=${c.score}`);
+    if (rationale) console.log(`  ${rationale}`);
+  }
+}
+
+function printDesignAdvisorHelp() {
+  console.log(`Usage:
+  od design-advisor recommend --prompt "<brief>" [--limit 12] [--json] [--daemon-url <url>]
+  od design-advisor recommend --prompt-file <path|-> [--limit 12] [--json]
+
+Matches a project brief against the domain-knowledge archetype layer
+(F001 R3/R4 -- P0 covers the "poetry" archetype only) and ranks
+design-templates/index.json candidates against it with a named rationale
+(F001 R5). Deterministic and local — no network or model call beyond the
+local daemon.
+
+Flags:
+  --prompt       Inline brief text.
+  --prompt-file  Read brief text from a file, or - for stdin.
+  --limit        Result cap. Defaults to 12, clamped to 12.
+  --json         Print the daemon response as JSON:
+                   { "archetypeId", "candidates": [{ "slug", "name", "score", "rationale" }] }
   --daemon-url   Local daemon URL. Defaults to OD_DAEMON_URL, OD_SIDECAR_IPC_PATH discovery, or http://127.0.0.1:7456.`);
 }
 
