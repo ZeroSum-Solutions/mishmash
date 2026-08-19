@@ -9,6 +9,8 @@
 // thin wrapper that passes data and callbacks through to this shell.
 
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -95,7 +97,6 @@ import { DesignsTab } from './DesignsTab';
 import { DesignSystemsTab } from './DesignSystemsTab';
 import { EntryNavRail, type EntryView as EntryViewKind } from './EntryNavRail';
 import { LibrarySection } from './LibrarySection';
-import { DesignLibrarySection } from './DesignLibrarySection';
 import { StoryboardSection } from './storyboard/StoryboardSection';
 import { TemplatesSection } from './TemplatesSection';
 import { TypefacesSection } from './TypefacesSection';
@@ -181,6 +182,10 @@ import {
   type ProviderModelsCache,
 } from './providerModelsCache';
 import { resolveByokModelPreference } from './byok/validation';
+
+const DesignLibrarySection = lazy(() =>
+  import('./DesignLibrarySection').then(({ DesignLibrarySection }) => ({ default: DesignLibrarySection })),
+);
 
 // Persist the entry nav-rail open/collapsed state so it survives both a
 // home -> project -> home navigation (EntryShell unmounts on the project
@@ -627,6 +632,10 @@ export function EntryShell({
   // view from the route rather than keeping it in component state.
   const route = useRoute();
   const view: EntryViewKind = route.kind === 'home' ? route.view : 'home';
+  const [designLibraryVisited, setDesignLibraryVisited] = useState(view === 'design-library');
+  useEffect(() => {
+    if (view === 'design-library') setDesignLibraryVisited(true);
+  }, [view]);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   // Hard block from the pre-run balance gate on a home submit (empty wallet
   // or signed out); non-null renders the AmrBalanceDialog on the home page —
@@ -1357,32 +1366,36 @@ export function EntryShell({
               </div>
             ) : null}
             <div data-testid="entry-view-design-library" data-active={view === 'design-library' ? 'true' : 'false'} {...inactiveViewProps(view === 'design-library')}>
-              <DesignLibrarySection
-                active={view === 'design-library'}
-                onOpenProject={(projectId, conversationId, entryFile, project) => {
-                  // MM-008: startDesignLibraryProject already built the full
-                  // project daemon-side, so route it through the same
-                  // client-cache-insert + auto-send bookkeeping
-                  // handleCreateProject uses (App.tsx's
-                  // onOpenProjectFromDesignLibrary) instead of navigating
-                  // straight to a project the client cache has never seen —
-                  // that used to land on a placeholder "Untitled" project
-                  // (dead canvas) until an async re-fetch caught up.
-                  if (project && onOpenProjectFromDesignLibrary) {
-                    onOpenProjectFromDesignLibrary(project, conversationId, entryFile);
-                    return;
-                  }
-                  navigate({
-                    kind: 'project',
-                    projectId,
-                    conversationId: conversationId ?? null,
-                    // Land on the kit's own entry HTML, so the project opens on
-                    // the page "Open live preview" just showed rather than
-                    // whatever the generic primary-file heuristic ranks first.
-                    fileName: entryFile ?? null,
-                  });
-                }}
-              />
+              {view === 'design-library' || designLibraryVisited ? (
+                <Suspense fallback={<CenteredLoader label={t('common.loading')} />}>
+                  <DesignLibrarySection
+                    active={view === 'design-library'}
+                    onOpenProject={(projectId, conversationId, entryFile, project) => {
+                      // MM-008: startDesignLibraryProject already built the full
+                      // project daemon-side, so route it through the same
+                      // client-cache-insert + auto-send bookkeeping
+                      // handleCreateProject uses (App.tsx's
+                      // onOpenProjectFromDesignLibrary) instead of navigating
+                      // straight to a project the client cache has never seen —
+                      // that used to land on a placeholder "Untitled" project
+                      // (dead canvas) until an async re-fetch caught up.
+                      if (project && onOpenProjectFromDesignLibrary) {
+                        onOpenProjectFromDesignLibrary(project, conversationId, entryFile);
+                        return;
+                      }
+                      navigate({
+                        kind: 'project',
+                        projectId,
+                        conversationId: conversationId ?? null,
+                        // Land on the kit's own entry HTML, so the project opens on
+                        // the page "Open live preview" just showed rather than
+                        // whatever the generic primary-file heuristic ranks first.
+                        fileName: entryFile ?? null,
+                      });
+                    }}
+                  />
+                </Suspense>
+              ) : null}
             </div>
             <div data-testid="entry-view-templates" data-active={view === 'templates' ? 'true' : 'false'} {...inactiveViewProps(view === 'templates')}>
               <TemplatesSection

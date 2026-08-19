@@ -12,6 +12,14 @@ const openDesignLibraryLivePreview =
 const fetchDesignLibraryPromotions = vi.fn(async () => ({ ok: true, response: { promotions: [] } }));
 const createDesignLibraryPromotion = vi.fn();
 const uploadLibraryFile = vi.fn();
+let designThumbInView = true;
+let designThumbRootMargins: string[] = [];
+vi.mock('../../src/components/plugins-home/useInView', () => ({
+  useInView: (options: { rootMargin?: string }) => {
+    designThumbRootMargins.push(options.rootMargin ?? '');
+    return { ref: { current: null }, inView: designThumbInView };
+  },
+}));
 vi.mock('../../src/providers/registry', () => ({
   fetchDesignLibraryCatalog: (...args: unknown[]) => fetchDesignLibraryCatalog(...(args as [])),
   designLibraryThumbUrl: (thumb: string) => `/api/design-library/thumb/${thumb.split('/').pop()}`,
@@ -100,6 +108,8 @@ const CATALOG: DesignLibraryCatalog = {
 };
 
 beforeEach(() => {
+  designThumbInView = true;
+  designThumbRootMargins = [];
   fetchDesignLibraryCatalog.mockReset().mockResolvedValue({ ok: true, catalog: CATALOG });
   openDesignLibraryPath.mockReset().mockResolvedValue(true);
   startDesignLibraryProject.mockReset();
@@ -111,6 +121,14 @@ afterEach(() => {
 });
 
 describe('DesignLibrarySection', () => {
+  it('defers cover bytes until the card is within 100px of the viewport', async () => {
+    designThumbInView = false;
+    render(<DesignLibrarySection active />);
+    const card = (await screen.findByText('Neon Dashboard Kit')).closest('[data-testid="design-library-card"]')!;
+    expect(within(card as HTMLElement).getByTestId('design-library-cover').querySelector('img')).toBeNull();
+    expect(designThumbRootMargins).toContain('100px');
+  });
+
   it('fetches lazily and renders every group and item once the tab is active', async () => {
     render(<DesignLibrarySection active={false} />);
     expect(fetchDesignLibraryCatalog).not.toHaveBeenCalled();
