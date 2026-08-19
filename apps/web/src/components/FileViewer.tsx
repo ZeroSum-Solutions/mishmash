@@ -7717,6 +7717,15 @@ function HtmlViewer({
     // Root-relative project asset refs need the confirmed file list before
     // they can be normalized; wait for it rather than inlining a half-fixed
     // document (the effect re-runs when the set lands).
+    //
+    // Deliberately does NOT clear the retained inline, unlike the branch
+    // below. A rewrite IS coming here — it is waiting on a file-list fetch,
+    // which always resolves — so this is the same continuity as any other
+    // re-inline: hold the last good render rather than blank the canvas and
+    // show a gate. The file list resets on every save, so clearing here would
+    // flash the loading state on every agent edit, which is the flicker this
+    // whole change exists to remove. Pinned by the self-correction test in
+    // FileViewer.inline-asset-flicker.test.tsx.
     if (projectRootAssetRefs && projectFilePathSet === null) return;
     if (!hasRelativeAssetRefs(source) && !projectRootAssetRefs) {
       // Nothing to rewrite for THIS source, so nothing is coming to replace a

@@ -257,6 +257,42 @@ describe('FileViewer — asset inlining never paints the raw document first', ()
     expect(frameSrcDoc()).not.toContain(INLINE_MARKER);
   });
 
+  it('holds the last good render while a root-relative edit waits on the file list, then corrects', async () => {
+    // Review flagged this branch as a second staleness hole. It is not: unlike
+    // the no-refs branch, a rewrite IS coming — it is waiting on a file-list
+    // fetch that always resolves. Clearing here would flash the loading gate
+    // on every save, because the file list resets whenever mtime changes.
+    // What matters is that it self-corrects, so that is what this pins.
+    vi.stubGlobal('fetch', fetchReturning(rawHtml('Before edit')));
+    const { rerender } = render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlFile()} />,
+    );
+
+    await waitFor(() => expect(inlineState.calls).toBe(1));
+    await settleNextInline({ html: inlinedHtml('Before edit') });
+    await waitFor(() => expect(frameSrcDoc()).toContain('Before edit'));
+
+    const rootRelative =
+      `<html><head></head><body><h1>After edit</h1><img src="/logo.png">${SECTIONS}</body></html>`;
+    vi.stubGlobal('fetch', fetchReturning(rootRelative));
+    await act(async () => {
+      rerender(
+        <FileViewer
+          projectId="project-1"
+          projectKind="prototype"
+          file={{ ...htmlFile(), mtime: 1710007777 }}
+        />,
+      );
+    });
+
+    // It corrects on its own once the rewrite lands — no stuck document.
+    while (inlineState.pending.length > 0) {
+      await settleNextInline({ html: inlinedHtml('After edit') });
+    }
+    await waitFor(() => expect(frameSrcDoc()).toContain('After edit'));
+    expect(frameSrcDoc()).not.toContain('Before edit');
+  });
+
   it('does not paint a pre-reload rewrite while Manual Edit holds the source frozen', async () => {
     // A guard, not a repro — it passes on `main` too. Review raised the case:
     // Reload skips its own `setSource(null)` while Manual Edit holds a frozen
