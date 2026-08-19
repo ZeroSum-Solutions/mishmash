@@ -121,34 +121,57 @@ const AMR_PROXY_ALLOWED_PREFIX = '/api/v1/';
 // Compare what the *upstream* will route on, not the bytes we were handed.
 // `URL.pathname` neither percent-decodes nor case-folds, and mainstream HTTP
 // stacks do both — so `message%2Dcenter` and `Message-Center` would sail past
-// a raw compare and still resolve to the vendor's real endpoint. Decode until
-// stable (re-resolving dot segments each pass, so `..%2f` cannot smuggle a
-// path back in), fold case, and collapse repeated separators.
+// a raw compare and still resolve to the vendor's real endpoint.
+//
+// Parse once (which resolves the query, the fragment and any literal dot
+// segments), then decode as a plain string. Re-parsing between passes is what
+// an earlier draft did, and it never converged on a path holding a non-ASCII
+// character or a control byte: `URL` re-encodes those every pass and
+// `decodeURIComponent` undoes it, so every accented AMR path exhausted the
+// loop and was refused. Dot segments are resolved again afterwards because a
+// decode can reveal ones the first parse could not see (`..%2f`).
+//
 // Returns null when the suffix cannot be normalized; the caller refuses those
 // rather than forwarding something it cannot reason about.
-function normalizeAmrProxyPathname(suffix: string): string | null {
-  let current = suffix;
-  for (let pass = 0; pass < 4; pass += 1) {
-    let pathname: string;
-    try {
-      pathname = new URL(current, 'http://amr-proxy.local').pathname;
-    } catch {
-      return null;
+function removeDotSegments(pathname: string): string {
+  const out: string[] = [];
+  for (const segment of pathname.split('/')) {
+    if (segment === '.') continue;
+    if (segment === '..') {
+      if (out.length > 1) out.pop();
+      continue;
     }
-    // A backslash is a path separator to plenty of upstream stacks.
-    pathname = pathname.replace(/\\/g, '/');
-    const settle = (): string => pathname.replace(/\/{2,}/g, '/').toLowerCase();
-    if (!pathname.includes('%')) return settle();
+    out.push(segment);
+  }
+  return out.join('/') || '/';
+}
+
+function normalizeAmrProxyPathname(suffix: string): string | null {
+  let pathname: string;
+  try {
+    pathname = new URL(suffix, 'http://amr-proxy.local').pathname;
+  } catch {
+    return null;
+  }
+  for (let pass = 0; pass < 4 && pathname.includes('%'); pass += 1) {
     let decoded: string;
     try {
       decoded = decodeURIComponent(pathname);
     } catch {
       return null;
     }
-    if (decoded === pathname) return settle();
-    current = decoded;
+    if (decoded === pathname) break;
+    pathname = decoded;
   }
-  return null;
+  // A decoded `?` or `#` is a delimiter to the upstream, so everything after
+  // it is not part of the path it routes on. Cutting here is what stops
+  // `message-center%23anything` from reading as a different endpoint.
+  const delimiter = pathname.search(/[?#]/);
+  if (delimiter !== -1) pathname = pathname.slice(0, delimiter);
+  // A backslash is a path separator to plenty of upstream stacks.
+  return removeDotSegments(pathname.replace(/\\/g, '/'))
+    .replace(/\/{2,}/g, '/')
+    .toLowerCase();
 }
 
 function isAmrProxyDeniedPath(pathname: string): boolean {

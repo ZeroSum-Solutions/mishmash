@@ -1527,12 +1527,49 @@ describe('the generic AMR proxy refuses the vendor message feed', () => {
         'api/v1/message-center//messages',
         'api/v1/wallet/..%2fmessage-center/messages',
         'api/v1/message%252Dcenter/messages',
+        // A decoded `#` is a delimiter upstream, so this reads as the message
+        // centre once it lands there.
+        'api/v1/message-center%23anything',
       ]) {
         const response = await fetch(`${baseUrl}/api/integrations/vela/api-proxy/${path}`);
         expect(response.status, path).toBe(404);
         expect(await response.json()).toEqual({ error: 'message_center_is_local' });
       }
       expect(requestSpy).not.toHaveBeenCalled();
+    } finally {
+      requestSpy.mockRestore();
+    }
+  });
+
+  it('still proxies a path carrying a non-ASCII character or a control byte', async () => {
+    // Regression: an earlier normalizer re-parsed the path on every decode
+    // pass. `URL` re-percent-encodes anything outside ASCII and
+    // `decodeURIComponent` undoes it, so these never converged, exhausted the
+    // pass budget, and were refused — breaking every accented AMR path in the
+    // service of a message-centre rule that has nothing to do with them.
+    const requestSpy = vi.spyOn(https, 'request').mockImplementation(((_t, _o, callback) => {
+      const req = new PassThrough() as any;
+      req.on('finish', () => {
+        const upstreamRes = new PassThrough() as any;
+        upstreamRes.statusCode = 200;
+        upstreamRes.headers = { 'content-type': 'application/json' };
+        (callback as ((r: unknown) => void) | undefined)?.(upstreamRes);
+        upstreamRes.end('{"ok":true}');
+      });
+      req.setTimeout = () => req;
+      return req;
+    }) as typeof https.request);
+    seedLogin('local');
+    try {
+      for (const path of [
+        'api/v1/wallet/r%C3%A9sum%C3%A9',
+        'api/v1/models/%E6%97%A5%E6%9C%AC',
+        'api/v1/wallet/entry%00',
+      ]) {
+        const response = await fetch(`${baseUrl}/api/integrations/vela/api-proxy/${path}`);
+        expect(response.status, path).toBe(200);
+      }
+      expect(requestSpy).toHaveBeenCalledTimes(3);
     } finally {
       requestSpy.mockRestore();
     }
