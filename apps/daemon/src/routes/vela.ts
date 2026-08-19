@@ -154,11 +154,44 @@ function settlePathname(pathname: string): string {
     .toLowerCase();
 }
 
+const PERCENT_RUN_RE = /(?:%[0-9a-fA-F]{2})+/g;
+
+/**
+ * Percent-decode what decodes, leave what does not.
+ *
+ * `decodeURIComponent` is all-or-nothing across the whole string: one bare
+ * `%` anywhere makes it throw, and the gate then had to choose between
+ * refusing the path (which 404ed `%25`, a legitimate escaped percent) and
+ * classifying it un-decoded (which would stop the loop before the denied
+ * segment appeared). Decoding what decodes removes the choice. Runs are
+ * decoded together so multi-byte sequences (`%C3%A9`) survive, then triplet
+ * by triplet if the run itself is not valid UTF-8.
+ *
+ * No request carrying a bare `%` was reachable here — Express refuses a
+ * malformed escape in the path with a 400 of its own — so this closes the
+ * class rather than a demonstrated hole.
+ */
+function decodePercentTolerant(input: string): string {
+  return input.replace(PERCENT_RUN_RE, (run) => {
+    try {
+      return decodeURIComponent(run);
+    } catch {
+      return run.replace(/%[0-9a-fA-F]{2}/g, (triplet) => {
+        try {
+          return decodeURIComponent(triplet);
+        } catch {
+          return triplet;
+        }
+      });
+    }
+  });
+}
+
 /**
  * Every form of the path an upstream might route on, most-encoded first.
  * Returns null only when the suffix cannot be parsed at all, or when it is
- * still decoding after the pass budget — a shape no real path has, and the one
- * case where refusing is safer than guessing.
+ * still decoding after the pass budget — a shape no real path has, and the
+ * one case where refusing beats guessing.
  */
 function amrProxyPathStages(suffix: string): string[] | null {
   let pathname: string;
@@ -169,19 +202,12 @@ function amrProxyPathStages(suffix: string): string[] | null {
   }
   const stages = [settlePathname(pathname)];
   for (let pass = 0; pass < 4; pass += 1) {
-    if (!pathname.includes('%')) return stages;
-    let decoded: string;
-    try {
-      decoded = decodeURIComponent(pathname);
-    } catch {
-      // Nothing further to decode; what we have is what the upstream sees.
-      return stages;
-    }
+    const decoded = decodePercentTolerant(pathname);
     if (decoded === pathname) return stages;
     pathname = decoded;
     stages.push(settlePathname(pathname));
   }
-  return pathname.includes('%') ? null : stages;
+  return decodePercentTolerant(pathname) === pathname ? stages : null;
 }
 
 function isAmrProxyDeniedPath(pathname: string): boolean {

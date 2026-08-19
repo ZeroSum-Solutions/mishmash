@@ -1530,6 +1530,13 @@ describe('the generic AMR proxy refuses the vendor message feed', () => {
         // A decoded `#` is a delimiter upstream, so this reads as the message
         // centre once it lands there.
         'api/v1/message-center%23anything',
+        // Multi-layer encodings that resolve to a stray `%` alongside the
+        // denied segment. These are denied on every version of the gate;
+        // they are here because the class is what the tolerant decoder
+        // exists for, and a future simplification back to a whole-string
+        // decode should have to look at them.
+        'api/v1/message%252Dcenter/messages%2525',
+        'api/v1/message%252Dcenter/%2525',
       ]) {
         const response = await fetch(`${baseUrl}/api/integrations/vela/api-proxy/${path}`);
         expect(response.status, path).toBe(404);
