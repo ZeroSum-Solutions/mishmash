@@ -516,3 +516,66 @@ describe('public MCP get_artifact active context fallbacks', () => {
     expect(body.files?.[0]?.content).toContain('<h1>explicit.html</h1>');
   });
 });
+
+// F011 — a project created before the template-start entry fix records a
+// gallery-preview wrapper as its entryFile. The project-detail route already
+// reports the unwrapped answer as `resolvedCanvasFile`; get_artifact used to
+// read the raw metadata field instead and would bundle the wrapper.
+describe('public MCP get_artifact prefers resolvedCanvasFile over a stale entryFile', () => {
+  let server: http.Server;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    const app = express();
+    // No active context: the entry has to come from the project payload.
+    app.get('/api/active', (_req, res) => res.json({ active: false }));
+    app.get('/api/projects/:id', (req, res) =>
+      res.json({
+        project: {
+          id: req.params.id,
+          name: 'Pre-fix template project',
+          metadata: { kind: 'template', entryFile: 'example.html' },
+        },
+        resolvedCanvasFile: 'assets/index.html',
+      }),
+    );
+    app.get('/api/projects/:id/files', (_req, res) =>
+      res.json({ files: [{ name: 'example.html' }, { name: 'assets/index.html' }] }),
+    );
+    app.get('/api/projects/:id/raw/*splat', (req, res) => {
+      const requested = (req.params as { splat: string[] }).splat.join('/');
+      res
+        .set({ 'content-type': 'text/html' })
+        .send(`<!doctype html><h1>${requested}</h1>`);
+    });
+    const r = await startServer(app);
+    server = r.server;
+    baseUrl = r.baseUrl;
+  });
+
+  afterAll(() => new Promise((resolve) => server.close(resolve)));
+
+  it('bundles the resolved canvas file, not the wrapper named in metadata', async () => {
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      include: 'shallow',
+    });
+    const body = parseArtifactBody(firstText(result.content)) as ArtifactBody & {
+      entryFile?: string;
+    };
+    expect(body.entryFile).toBe('assets/index.html');
+  });
+
+  it('still lets an explicit entry override the resolved canvas file', async () => {
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      entry: 'example.html',
+      include: 'shallow',
+    });
+    const body = parseArtifactBody(firstText(result.content)) as ArtifactBody & {
+      entryFile?: string;
+    };
+    // Asking for a file by name is not a stale default.
+    expect(body.entryFile).toBe('example.html');
+  });
+});

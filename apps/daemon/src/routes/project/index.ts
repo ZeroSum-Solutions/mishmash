@@ -62,6 +62,7 @@ import { auditDesignSystemPackage } from '../../tools-connectors-cli.js';
 import { parseOrchestratorWorkspace } from '../../workspace-contract.js';
 import { buildGuidedBriefSection, foldGuidedBriefIntoPrompt, normalizeGuidedBrief } from '../../prompts/guided-brief.js';
 import { copyDirectoryContents, type CopyDirectoryState } from '../../copy-directory.js';
+import { resolveWrapperTargetOnDisk } from '../../entry-file-wrapper.js';
 import {
   detectEntryFile,
   START_PROJECT_EXCLUDED_DIR_NAMES,
@@ -96,17 +97,59 @@ const TEMPLATE_START_EXCLUDED_FILE_NAMES = new Set([
 /**
  * Entry file for a project started from the design-templates catalogue.
  *
- * Prefers `assets/template.html` when present. Ten catalogue entries pair that
- * authored artifact with a root `example.html` that is only a gallery preview
- * wrapper — a title bar around an `<iframe src="./assets/template.html">`. The
- * generic heuristic takes root-level HTML first and would hand the user the
- * wrapper to edit instead of the template. Everywhere else there is no
- * `assets/template.html` and this falls straight through.
+ * Three layers, in order:
+ *
+ *  1. `assets/template.html`, unconditionally, for the 9 catalogue entries
+ *     shaped that way. This literal preference has to stay literal: 6 of those
+ *     9 also ship a *substantive* root `example.html`, so demoting it to the
+ *     shape check in layer 2 would hand the user the example instead of the
+ *     authored template.
+ *  2. Whatever the generic heuristic picked, unwrapped if it turns out to be a
+ *     gallery-preview wrapper — a file whose whole body is one `<iframe>`
+ *     pointing at the real artifact one directory down. All 199 user-installed
+ *     templates are shaped that way, and before this layer existed every one of
+ *     them opened a blank canvas.
+ *  3. The generic heuristic's own answer, unchanged.
+ *
+ * Only layer 2 is new, and it only ever fires on a file that is already a
+ * wrapper by shape, so the 337 catalogue entries whose root `example.html` IS
+ * the artifact resolve exactly as they did before.
  */
-async function detectTemplateEntryFile(projectRoot: string): Promise<string | undefined> {
+export async function detectTemplateEntryFile(projectRoot: string): Promise<string | undefined> {
   const authored = path.join(projectRoot, 'assets', 'template.html');
   if (existsSync(authored)) return 'assets/template.html';
-  return detectEntryFile(projectRoot);
+  const generic = await detectEntryFile(projectRoot);
+  if (!generic) return generic;
+  const unwrapped = await resolveWrapperTargetOnDisk(projectRoot, generic);
+  return unwrapped ?? generic;
+}
+
+/**
+ * The catalogue entry's own gallery-preview wrapper, if it has one.
+ *
+ * Returns the wrapper's path inside the catalogue entry together with the
+ * artifact it points at, so the copy step can skip the wrapper and still know
+ * what the project's entry file should be.
+ *
+ * Classification happens against the SOURCE tree deliberately. Once the wrapper
+ * is skipped it is gone, and a generic scan of the copied project could not
+ * recover its target: a 50-route site puts `assets/404.html` ahead of
+ * `assets/index.html` alphabetically, so the scan would answer with the error
+ * page. The wrapper's own declaration is the only thing that knows the answer.
+ *
+ * An entry that ships `assets/template.html` is left alone. Its wrapper (only
+ * one catalogue entry has one) is already handled by the literal preference in
+ * `detectTemplateEntryFile`, and skipping files for those entries would change
+ * behaviour that is working.
+ */
+async function templateWrapperForCatalogueEntry(
+  skillDir: string,
+): Promise<{ relPath: string; target: string } | null> {
+  if (existsSync(path.join(skillDir, 'assets', 'template.html'))) return null;
+  const generic = await detectEntryFile(skillDir);
+  if (!generic) return null;
+  const target = await resolveWrapperTargetOnDisk(skillDir, generic);
+  return target ? { relPath: generic, target } : null;
 }
 
 async function isDesignTemplateDirectory(
@@ -1989,15 +2032,23 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
             // Preserving the shape rather than flattening also keeps every
             // `./assets/...` reference in the copied HTML resolving to the same
             // relative path it had on disk.
+            // A gallery-preview wrapper is not part of the artifact — it is a
+            // frame the catalogue draws around it. Copying it leaves a file in
+            // the user's tree that shadows the real page, so it is skipped at
+            // source and its declared target becomes the entry file.
+            const wrapper = await templateWrapperForCatalogueEntry(skillDir);
             await copyDirectoryContents(skillDir, projectRoot, state, {
               excludedDirNames: START_PROJECT_EXCLUDED_DIR_NAMES,
               excludedFileNames: TEMPLATE_START_EXCLUDED_FILE_NAMES,
               limits: { maxFiles: startProjectMaxFiles(), maxBytes: startProjectMaxBytes() },
+              ...(wrapper
+                ? { skipSourcePath: path.resolve(skillDir, ...wrapper.relPath.split('/')) }
+                : {}),
               onIncomplete: (reason, relPath) => {
                 throw new Error(`template asset copy incomplete: ${reason} (${relPath})`);
               },
             });
-            const entryFile = await detectTemplateEntryFile(projectRoot);
+            const entryFile = wrapper?.target ?? (await detectTemplateEntryFile(projectRoot));
             if (entryFile) {
               const updated = updateProject(db, id, {
                 metadata: { ...projectMetadata, entryFile },
@@ -3320,12 +3371,21 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
     res.type(file.mime).send(body);
   }
 
-  function previewFilePathForProject(project: any, queryFile: unknown): string {
+  // An explicit ?file= wins outright — the caller asked for that page. With no
+  // query the project's declared entry answers, unwrapped when it is a
+  // gallery-preview wrapper (whole body is one <iframe> around the real
+  // artifact), so a project created before the template-start entry fix
+  // previews its site instead of an empty frame. Read-only, like every other
+  // consumer of this repair: nothing is written back to metadata.
+  async function previewFilePathForProject(project: any, queryFile: unknown): Promise<string> {
     if (typeof queryFile === 'string' && queryFile.trim().length > 0) {
       return queryFile;
     }
     const entryFile = project?.metadata?.entryFile;
-    return typeof entryFile === 'string' && entryFile.length > 0 ? entryFile : 'index.html';
+    if (typeof entryFile !== 'string' || entryFile.length === 0) return 'index.html';
+    const projectRoot = resolveProjectDir(PROJECTS_DIR, project.id, project.metadata);
+    const target = await resolveWrapperTargetOnDisk(projectRoot, entryFile);
+    return target ?? entryFile;
   }
 
   function encodeProjectPathForUrl(filePath: string): string {
@@ -3501,7 +3561,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
         sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
         return;
       }
-      const requestedPath = previewFilePathForProject(project, req.query.file);
+      const requestedPath = await previewFilePathForProject(project, req.query.file);
       const meta = await resolveProjectFilePath(
         PROJECTS_DIR,
         project.id,

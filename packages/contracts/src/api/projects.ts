@@ -394,9 +394,16 @@ export interface ProjectDetailResponse extends ProjectResponse {
    * The single file the workspace "Canvas" control opens — resolved
    * server-side so the web UI, MCP studio links, and `od project info`
    * agree on one answer. Order: `metadata.entryFile` (when it exists on
-   * disk) → an artifact manifest declaring its file primary → root
+   * disk, and unwrapped to its target when that file is a gallery-preview
+   * wrapper — a page whose whole body is one `<iframe>` around the real
+   * artifact) → an artifact manifest declaring its file primary → root
    * `index.html` → the only root-level `.html`. `null` when no
    * unambiguous canvas exists.
+   *
+   * The unwrap step is what makes a project created before the
+   * template-start entry fix open on its real site instead of a blank
+   * canvas. It is read-only: `metadata.entryFile` is never rewritten, so a
+   * client that reads the raw field can still see what was recorded.
    */
   resolvedCanvasFile: string | null;
 }

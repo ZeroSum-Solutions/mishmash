@@ -36,7 +36,7 @@ interface DesignSystemsPayload { designSystems?: CatalogItem[] }
 interface ResourcePayload { skill?: { body?: string; content?: string }; designSystem?: { body?: string; content?: string }; body?: string; content?: string }
 interface ProjectSummary { id: string; name: string; metadata?: JsonObject }
 interface ProjectsPayload { projects?: ProjectSummary[] }
-interface ProjectPayload { project?: ProjectSummary; id?: string; name?: string; metadata?: JsonObject; resolvedDir?: string }
+interface ProjectPayload { project?: ProjectSummary; id?: string; name?: string; metadata?: JsonObject; resolvedDir?: string; resolvedCanvasFile?: string | null }
 interface ActiveContext { active?: boolean; projectId?: string; projectName?: string | null; fileName?: string | null; ageMs?: number | null }
 type ResolvedProject = { id: string; name: string; source: 'uuid' | 'id' | 'exact' | 'slug' | 'substring' };
 interface ProjectListCache { baseUrl: string; t: number; list: ProjectSummary[] }
@@ -1643,9 +1643,22 @@ async function getArtifact(baseUrl: string, projectArg: unknown, entryArg: unkno
   // metadata.entryFile happens to be.
   const explicitEntry = typeof entryArg === 'string' && entryArg.length > 0;
   const metadataEntry = typeof project.metadata?.entryFile === 'string' ? project.metadata.entryFile : undefined;
+  // The project-detail route owns canvas resolution: it validates that the
+  // declared entry still exists and unwraps it when it is a gallery-preview
+  // wrapper (a page whose whole body is one <iframe> around the real
+  // artifact). Prefer its answer over the raw metadata field, exactly as
+  // resolveProjectEntry above already does, or a project created before the
+  // template-start entry fix bundles the wrapper instead of the site.
+  //
+  // Order matters: this sits BELOW the active file. "Bundle this" while the
+  // user is on landing.html still means landing.html.
+  const resolvedCanvasEntry =
+    typeof data.resolvedCanvasFile === 'string' && data.resolvedCanvasFile.length > 0
+      ? data.resolvedCanvasFile
+      : undefined;
   const entry: string | undefined = explicitEntry
     ? String(entryArg)
-    : (active && active.fileName) || metadataEntry;
+    : (active && active.fileName) || resolvedCanvasEntry || metadataEntry;
   if (!entry) {
     return errorResult(
       `no entry file: pass entry="..." or set the project's metadata.entryFile`,

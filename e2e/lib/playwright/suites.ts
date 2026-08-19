@@ -57,6 +57,7 @@ export const uiP0Groups = {
       "ui/app-design-files.test.ts",
       "ui/app-manual-edit.test.ts",
       "ui/project-management-flows.test.ts",
+      "ui/template-entry-file-shim.test.ts",
       "ui/workspace-keyboard-flows.test.ts",
     ],
   },
@@ -105,6 +106,7 @@ const uiP0CoverageFiles = [
   "ui/settings-connectors-auth-happy-path.test.ts",
   "ui/settings-connectors-auth-recovery.test.ts",
   "ui/settings-local-cli-codex-fallback.test.ts",
+  "ui/template-entry-file-shim.test.ts",
   "ui/workspace-keyboard-flows.test.ts",
 ] as const;
 

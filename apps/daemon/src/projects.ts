@@ -28,6 +28,7 @@ import {
 } from './artifacts/publication-guard.js';
 import { normalizeArtifactRuntimeImports } from './artifacts/runtime-compat.js';
 import { isIgnoredProjectDirName } from './project-ignored-dirs.js';
+import { WRAPPER_HTML_MAX_BYTES, resolveWrapperTargetOnDisk } from './entry-file-wrapper.js';
 import {
   isSandboxImportedProjectRootAllowed,
   isSandboxModeEnabled,
@@ -227,10 +228,11 @@ export function invalidateProjectFileIndex(projectsRoot, projectId, metadata?) {
 // one answer the web UI, MCP studio links, and `od project info` must all
 // agree on (AGENTS.md dual-track: the daemon HTTP layer is the source of
 // truth). Order of authority: the project's declared entryFile (when it
-// still exists on disk), an artifact manifest that declares its file
-// primary (newest first — listFiles sorts mtime-desc), the conventional
-// root index.html, then the only root-level .html. Ambiguity resolves to
-// null rather than a guess.
+// still exists on disk, unwrapped to its target when that file turns out to
+// be a gallery-preview wrapper — see entry-file-wrapper.ts), an artifact
+// manifest that declares its file primary (newest first — listFiles sorts
+// mtime-desc), the conventional root index.html, then the only root-level
+// .html. Ambiguity resolves to null rather than a guess.
 export async function resolveCanvasFile(projectsRoot, project) {
   const metadata = project?.metadata;
   let files;
@@ -241,7 +243,33 @@ export async function resolveCanvasFile(projectsRoot, project) {
   }
   const declared =
     typeof metadata?.entryFile === 'string' && metadata.entryFile.length > 0 ? metadata.entryFile : null;
-  if (declared && files.some((f) => f.path === declared)) return declared;
+  const declaredFile = declared ? files.find((f) => f.path === declared) : undefined;
+  if (declaredFile) {
+    // A declared entry that exists can still be the wrong file: projects
+    // created before the template-start fix recorded a gallery-preview wrapper
+    // — a page whose whole body is one <iframe> around the real artifact — and
+    // opening it paints a blank canvas. Prefer the wrapper's target when the
+    // declared file is one and the target is a real file in this project.
+    //
+    // Read-path only. Nothing is written back, so this repairs every affected
+    // project on its next read without a migration and without the risk of
+    // rewriting metadata for a project that was never broken.
+    //
+    // The size is already in hand from listFiles, so a real site — which is
+    // always far larger than a wrapper — costs nothing here. Only a small HTML
+    // file is worth opening.
+    const worthReading =
+      /\.html?$/i.test(declared as string) &&
+      (typeof declaredFile.size !== 'number' || declaredFile.size <= WRAPPER_HTML_MAX_BYTES);
+    if (worthReading) {
+      const target = await resolveWrapperTargetOnDisk(
+        resolveProjectDir(projectsRoot, project.id, metadata),
+        declared,
+      );
+      if (target && files.some((f) => f.path === target)) return target;
+    }
+    return declared;
+  }
   const primary = files.find((f) => manifestDeclaresPrimaryFile(f));
   if (primary) return primary.path;
   if (files.some((f) => f.path === 'index.html')) return 'index.html';
