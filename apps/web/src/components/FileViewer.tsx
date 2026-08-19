@@ -7288,11 +7288,15 @@ function HtmlViewer({
     if (!effectiveDeck || source == null) return source;
     return normalizeDeckVisualSource(removeSpeakerNotesFromHtml(source));
   }, [effectiveDeck, source]);
-  // `reloadKey` is part of the identity on purpose. Reload skips its own
-  // `setSource(null)` while Manual Edit holds a frozen source, so without it a
-  // rewrite of the PRE-reload document could land under the same key as the
-  // post-reload one and be read as current.
-  const inlinedSourceKey = `${projectId}:${file.name}:${reloadKey}`;
+  // Deliberately not keyed by `reloadKey`. Review raised the case: Reload
+  // skips its own `setSource(null)` while Manual Edit holds a frozen source,
+  // so in principle a rewrite of the pre-reload document could land under the
+  // same key as the post-reload one. It cannot in practice — `reloadKey` is a
+  // dependency of the effect below, so a Reload always re-runs it and its
+  // cleanup sets `cancelled`, and a cancelled rewrite never reaches
+  // `setInlinedSource` at all. Adding it here changed no test either way,
+  // which is the evidence it would be dead weight.
+  const inlinedSourceKey = `${projectId}:${file.name}`;
   const inlinedSourceForKey =
     inlinedSource && inlinedSource.key === inlinedSourceKey ? inlinedSource.value : null;
   // `source === null` means the preview was deliberately cleared (Reload,

@@ -226,17 +226,25 @@ describe('FileViewer — asset inlining never paints the raw document first', ()
     expect(frameSrcDoc()).not.toContain('File A');
   });
 
-  it('does not paint a rewrite that was already in flight when Reload was pressed', async () => {
+  it('does not paint a pre-reload rewrite while Manual Edit holds the source frozen', async () => {
+    // A guard, not a repro — it passes on `main` too. Review raised the case:
     // Reload skips its own `setSource(null)` while Manual Edit holds a frozen
-    // source, so the retention key carries `reloadKey` as well: a rewrite
-    // belonging to the generation before the Reload must never be read as the
-    // current one, whichever way the effect unwound.
+    // source, so a rewrite of the pre-reload document could in principle be
+    // read as the current one after the freeze lifts. It cannot, because the
+    // effect's cleanup cancels the stale rewrite before it can write. This
+    // pins that, so a future change that drops the cancel is caught.
     vi.stubGlobal('fetch', fetchReturning(rawHtml('Before reload')));
     render(<FileViewer projectId="project-1" projectKind="prototype" file={htmlFile()} />);
 
-    // Leave the first rewrite in flight — this is the one that must not land.
     await waitFor(() => expect(inlineState.calls).toBe(1));
-    expect(previewFrame()).toBeNull();
+    await settleNextInline({ html: inlinedHtml('Before reload') });
+    await waitFor(() => expect(frameSrcDoc()).toContain('Before reload'));
+
+    // Enter Manual Edit: this is what makes Reload keep `source` rather than
+    // nulling it.
+    await act(async () => {
+      screen.getByTestId('manual-edit-mode-toggle').click();
+    });
 
     vi.stubGlobal('fetch', fetchReturning(rawHtml('After reload')));
     await act(async () => {
@@ -244,10 +252,17 @@ describe('FileViewer — asset inlining never paints the raw document first', ()
     });
     await waitFor(() => expect(inlineState.calls).toBeGreaterThanOrEqual(2));
 
-    // Settle the stale one first. It carries the pre-reload document and must
-    // change nothing on screen.
+    // Settle the stale generation's rewrite. It must not become the retained
+    // value for the current one.
     await settleNextInline({ html: inlinedHtml('Before reload') });
-    expect(frameSrcDoc()).not.toContain('Before reload');
+
+    // Leaving Manual Edit drops the freeze and the preview goes back to
+    // reading the retained inline. The stale generation's rewrite must not be
+    // what it reads.
+    await act(async () => {
+      screen.getByTestId('manual-edit-mode-toggle').click();
+    });
+    await waitFor(() => expect(frameSrcDoc()).not.toContain('Before reload'));
 
     while (inlineState.pending.length > 0) {
       await settleNextInline({ html: inlinedHtml('After reload') });
