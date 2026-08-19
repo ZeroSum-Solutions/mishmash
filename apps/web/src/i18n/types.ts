@@ -4731,4 +4731,30 @@ export interface Dict {
   'storyboard.revisionEase': string;
   'storyboard.reviewNotes': string;
   'storyboard.reviewFailed': string;
+  // F002 — client discovery interview
+  'interview.back': string;
+  'interview.title': string;
+  'interview.intro': string;
+  'interview.resuming': string;
+  'interview.tier.quick.name': string;
+  'interview.tier.quick.duration': string;
+  'interview.tier.quick.description': string;
+  'interview.tier.standard.name': string;
+  'interview.tier.standard.duration': string;
+  'interview.tier.standard.description': string;
+  'interview.tier.full.name': string;
+  'interview.tier.full.duration': string;
+  'interview.tier.full.description': string;
+  'interview.progress': string;
+  'interview.status.complete': string;
+  'interview.status.needsInfo': string;
+  'interview.openItems.title': string;
+  'interview.projectName.label': string;
+  'interview.defaultProjectName': string;
+  'interview.forceIncomplete.label': string;
+  'interview.startProject': string;
+  'interview.error.start': string;
+  'interview.error.turn': string;
+  'interview.error.resume': string;
+  'interview.error.startProject': string;
 }

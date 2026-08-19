@@ -53,7 +53,12 @@ export type Route =
       fileName: string | null;
     }
   | { kind: 'marketplace' }
-  | { kind: 'marketplace-detail'; pluginId: string };
+  | { kind: 'marketplace-detail'; pluginId: string }
+  // F002 — client discovery interview. Standalone like `marketplace`/
+  // `design-system-create` rather than a home tab: it is not scoped to any
+  // one project. `/interview/:id` deep-links a resumed/in-progress session.
+  | { kind: 'interview' }
+  | { kind: 'interview-session'; sessionId: string };
 
 export function parseRoute(pathname: string): Route {
   const parts = pathname.replace(/\/+$/, '').split('/').filter(Boolean);
@@ -145,6 +150,12 @@ export function parseRoute(pathname: string): Route {
     }
     return { kind: 'marketplace' };
   }
+  if (parts[0] === 'interview') {
+    if (parts[1]) {
+      return { kind: 'interview-session', sessionId: decodeURIComponent(parts[1]) };
+    }
+    return { kind: 'interview' };
+  }
   return { kind: 'home', view: 'home' };
 }
 
@@ -169,6 +180,8 @@ export function buildPath(route: Route): string {
   }
   if (route.kind === 'marketplace') return '/marketplace';
   if (route.kind === 'marketplace-detail') return `/marketplace/${encodeURIComponent(route.pluginId)}`;
+  if (route.kind === 'interview') return '/interview';
+  if (route.kind === 'interview-session') return `/interview/${encodeURIComponent(route.sessionId)}`;
   if (route.kind === 'design-system-create') return '/design-systems/create';
   if (route.kind === 'design-system-detail') {
     return `/design-systems/${encodeURIComponent(route.designSystemId)}`;
