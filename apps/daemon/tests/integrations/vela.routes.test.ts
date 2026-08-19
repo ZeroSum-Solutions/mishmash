@@ -1518,12 +1518,48 @@ describe('the generic AMR proxy refuses the vendor message feed', () => {
         'api/v1/message-center/messages/release/read',
         'api/v1/message-center/read-all',
         'api/v1/message-center',
+        // The gate has to compare what the upstream will route on, not the
+        // bytes we were handed: URL.pathname neither percent-decodes nor
+        // case-folds, and the vendor's stack does both.
+        'api/v1/message%2Dcenter/messages',
+        'api/v1/Message-Center/messages',
+        'api/v1/MESSAGE-CENTER',
+        'api/v1/message-center//messages',
+        'api/v1/wallet/..%2fmessage-center/messages',
+        'api/v1/message%252Dcenter/messages',
       ]) {
         const response = await fetch(`${baseUrl}/api/integrations/vela/api-proxy/${path}`);
         expect(response.status, path).toBe(404);
         expect(await response.json()).toEqual({ error: 'message_center_is_local' });
       }
       expect(requestSpy).not.toHaveBeenCalled();
+    } finally {
+      requestSpy.mockRestore();
+    }
+  });
+
+  it('still proxies a path that only looks like the message centre', async () => {
+    // The gate must not over-block: a neighbouring path with the denied
+    // prefix as a substring is a different endpoint and still proxies.
+    const requestSpy = vi.spyOn(https, 'request').mockImplementation(((_t, _o, callback) => {
+      const req = new PassThrough() as any;
+      req.on('finish', () => {
+        const upstreamRes = new PassThrough() as any;
+        upstreamRes.statusCode = 200;
+        upstreamRes.headers = { 'content-type': 'application/json' };
+        (callback as ((r: unknown) => void) | undefined)?.(upstreamRes);
+        upstreamRes.end('{"ok":true}');
+      });
+      req.setTimeout = () => req;
+      return req;
+    }) as typeof https.request);
+    seedLogin('local');
+    try {
+      const response = await fetch(
+        `${baseUrl}/api/integrations/vela/api-proxy/api/v1/message-centers/list`,
+      );
+      expect(response.status).toBe(200);
+      expect(requestSpy).toHaveBeenCalled();
     } finally {
       requestSpy.mockRestore();
     }

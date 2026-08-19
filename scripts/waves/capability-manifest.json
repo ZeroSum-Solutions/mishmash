@@ -189,7 +189,7 @@
   },
   {
     "capability": "catalogue",
-    "uiEntryPoint": "Home composer — CatalogueMatchSuggestions shortlist row (apps/web/src/components/CatalogueMatchSuggestions.tsx)",
+    "uiEntryPoint": "Home composer \u2014 CatalogueMatchSuggestions shortlist row (apps/web/src/components/CatalogueMatchSuggestions.tsx)",
     "cliArgs": [
       "catalogue",
       "match",
@@ -516,7 +516,7 @@
     "httpPath": "/api/projects/:id/conversations/:conversationId/messages/:messageId",
     "outputSchema": "{ message: { ...persisted message, feedback } }",
     "parityApplicable": false,
-    "reason": "Feedback attaches to an existing assistant turn: the durable write is a PUT of a message that must already exist, and the telemetry leg needs that message's runId. A nonce project created fresh per gate run has no assistant message to rate, so there is no probe body that exercises the real path without first driving a full chat run. The UI has the same precondition — the controls only render on a completed assistant message.",
+    "reason": "Feedback attaches to an existing assistant turn: the durable write is a PUT of a message that must already exist, and the telemetry leg needs that message's runId. A nonce project created fresh per gate run has no assistant message to rate, so there is no probe body that exercises the real path without first driving a full chat run. The UI has the same precondition \u2014 the controls only render on a completed assistant message.",
     "probeBody": {
       "id": "w0-manifest-check-message",
       "role": "assistant",
@@ -1261,7 +1261,7 @@
     "httpPath": "/api/routing/policy",
     "outputSchema": "{ policy: RoutingPolicyDocument, policyVersion: number }",
     "parityApplicable": false,
-    "reason": "WR wave (docs/plans/waves/WR-routing.md). The `route` capability spans policy/decision-preview/meters/telemetry endpoints -- httpPath/outputSchema above describe the `policy` subcommand's representative surface; `preview`/`meters`/`telemetry` are documented in knownNamespaceRoutes below and reachable via `od route preview|meters|telemetry`. `decision/preview` now runs the real advisory decision engine (apps/daemon/src/routing/decision.ts, t5, plan §3.1/§3.2 L2) over the loaded policy + live lane meters; admission control (budgets, t6) and dispatch-time enforcement (t9) still land in later WR tranches. `decision/preview` has BOTH a GET (param-only, no promptText) and a POST (JSON body, promptText allowed) form -- Sol review MED-5: a composed-prompt excerpt is potentially client-confidential and must never ride a query string, so `od route preview --prompt-file <path|->` switches to POST while every other invocation stays GET. `meters` and `telemetry` read real, persisted L5 telemetry (P1 tranche, plan §3.2 L5) once rows exist. UI parity is not yet checkable either way: RoutingPanel has no mount point granted by this wave's lease (apps/web/src/components/routing/** and AssistantMessage.tsx only), so it is exported but unregistered. t8 addition (plan §3.2 L3): `gates` (GET /api/routing/gates registry + POST /api/routing/gates/run) reuses this same capability entry -- reachable via `od route gates list|run`; RoutingPanel now also renders the gate registry (still unregistered in any parent view, same lease limitation as above).",
+    "reason": "WR wave (docs/plans/waves/WR-routing.md). The `route` capability spans policy/decision-preview/meters/telemetry endpoints -- httpPath/outputSchema above describe the `policy` subcommand's representative surface; `preview`/`meters`/`telemetry` are documented in knownNamespaceRoutes below and reachable via `od route preview|meters|telemetry`. `decision/preview` now runs the real advisory decision engine (apps/daemon/src/routing/decision.ts, t5, plan \u00a73.1/\u00a73.2 L2) over the loaded policy + live lane meters; admission control (budgets, t6) and dispatch-time enforcement (t9) still land in later WR tranches. `decision/preview` has BOTH a GET (param-only, no promptText) and a POST (JSON body, promptText allowed) form -- Sol review MED-5: a composed-prompt excerpt is potentially client-confidential and must never ride a query string, so `od route preview --prompt-file <path|->` switches to POST while every other invocation stays GET. `meters` and `telemetry` read real, persisted L5 telemetry (P1 tranche, plan \u00a73.2 L5) once rows exist. UI parity is not yet checkable either way: RoutingPanel has no mount point granted by this wave's lease (apps/web/src/components/routing/** and AssistantMessage.tsx only), so it is exported but unregistered. t8 addition (plan \u00a73.2 L3): `gates` (GET /api/routing/gates registry + POST /api/routing/gates/run) reuses this same capability entry -- reachable via `od route gates list|run`; RoutingPanel now also renders the gate registry (still unregistered in any parent view, same lease limitation as above).",
     "knownNamespaceRoutes": [
       "GET /api/routing/rates",
       "GET /api/routing/policy",

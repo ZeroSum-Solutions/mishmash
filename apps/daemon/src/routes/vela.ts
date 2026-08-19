@@ -1,7 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import { emptyMessageCenterPage } from '@open-design/contracts';
 import dns from 'node:dns';
-import http from 'node:http';
 import https from 'node:https';
 
 import {
@@ -117,9 +116,42 @@ export function pipeProxyStreamWithGuard(
 // bundle mid-deploy, an extension, a curl. The rest of the AMR surface (login,
 // wallet, model catalogue) is untouched and still proxies normally.
 const AMR_PROXY_DENIED_PREFIX = '/api/v1/message-center';
+const AMR_PROXY_ALLOWED_PREFIX = '/api/v1/';
 
-function isAmrProxyDeniedPath(suffix: string): boolean {
-  const pathname = new URL(suffix, 'http://amr-proxy.local').pathname;
+// Compare what the *upstream* will route on, not the bytes we were handed.
+// `URL.pathname` neither percent-decodes nor case-folds, and mainstream HTTP
+// stacks do both — so `message%2Dcenter` and `Message-Center` would sail past
+// a raw compare and still resolve to the vendor's real endpoint. Decode until
+// stable (re-resolving dot segments each pass, so `..%2f` cannot smuggle a
+// path back in), fold case, and collapse repeated separators.
+// Returns null when the suffix cannot be normalized; the caller refuses those
+// rather than forwarding something it cannot reason about.
+function normalizeAmrProxyPathname(suffix: string): string | null {
+  let current = suffix;
+  for (let pass = 0; pass < 4; pass += 1) {
+    let pathname: string;
+    try {
+      pathname = new URL(current, 'http://amr-proxy.local').pathname;
+    } catch {
+      return null;
+    }
+    // A backslash is a path separator to plenty of upstream stacks.
+    pathname = pathname.replace(/\\/g, '/');
+    const settle = (): string => pathname.replace(/\/{2,}/g, '/').toLowerCase();
+    if (!pathname.includes('%')) return settle();
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(pathname);
+    } catch {
+      return null;
+    }
+    if (decoded === pathname) return settle();
+    current = decoded;
+  }
+  return null;
+}
+
+function isAmrProxyDeniedPath(pathname: string): boolean {
   return pathname === AMR_PROXY_DENIED_PREFIX || pathname.startsWith(`${AMR_PROXY_DENIED_PREFIX}/`);
 }
 
@@ -129,7 +161,12 @@ function proxyAmrApiRequest(req: Request, res: Response): void {
     res.status(404).json({ error: 'unknown_amr_api_proxy_path' });
     return;
   }
-  if (isAmrProxyDeniedPath(suffix)) {
+  const normalized = normalizeAmrProxyPathname(suffix);
+  if (normalized === null || !normalized.startsWith(AMR_PROXY_ALLOWED_PREFIX)) {
+    res.status(404).json({ error: 'unknown_amr_api_proxy_path' });
+    return;
+  }
+  if (isAmrProxyDeniedPath(normalized)) {
     res.status(404).json({ error: 'message_center_is_local' });
     return;
   }
