@@ -12465,7 +12465,8 @@ async function runCritique(args) {
     console.log(`  project override:${data.resolution.projectOverride ?? '(none)'}`);
     console.log(`  env override:    ${data.resolution.envOverride ?? '(none)'}`);
     if (data.resolution.approximate) {
-      console.log('  note: this is the rollout-policy answer. A real run also needs a design system,');
+      console.log('  note: this is the rollout-policy answer. A real run also needs a resolved skill,');
+      console.log('        a design system,');
       console.log('        a non-media surface, a plain-stream adapter and spare concurrency, and a');
       console.log('        prompt that adds skills by @-mention can still change the outcome.');
     }

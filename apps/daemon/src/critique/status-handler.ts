@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import type { CritiqueStatusResponse } from '@open-design/contracts';
 
 import { getProject } from '../db.js';
-import { listSkills } from '../skills.js';
+import { findSkillById, listSkills } from '../skills.js';
 import { isCritiqueEnabled, parseEnvEnabled, parseRolloutPhase } from './rollout.js';
 import { narrowProjectCritiqueOverride } from './spawn-inputs.js';
 
@@ -15,9 +15,9 @@ import { narrowProjectCritiqueOverride } from './spawn-inputs.js';
  * run one and read the daemon's stdout — which is how the feature came to be
  * believed unwired while it was in fact live.
  *
- * This answers the ROLLOUT POLICY layer only. A real generation also needs a
- * resolved design system, a non-media surface, a plain-stream adapter and a
- * daemon below its concurrency cap — all request-dependent, none knowable
+ * This answers the ROLLOUT POLICY layer only. A real generation also needs
+ * some skill to resolve at all, a resolved design system, a non-media
+ * surface, a plain-stream adapter and a daemon below its concurrency cap — all request-dependent, none knowable
  * from a project id. The skill policy is also resolved from the project's
  * bound skill alone, so ad-hoc skills a prompt adds by @-mention are
  * invisible. Both limits are why the response is marked `approximate`
@@ -43,9 +43,11 @@ export function handleCritiqueStatus(
     }
 
     const skills = await listSkills(deps.skillsRoots);
-    const boundSkill = project.skillId
-      ? skills.find((skill) => skill.id === project.skillId)
-      : undefined;
+    // `findSkillById`, not a raw `.find()`: skill ids are aliased, and a
+    // direct comparison silently misses every alias. The spawn gate resolves
+    // them, so a raw find here reproduces the inverted answer this endpoint
+    // was written to remove — just through a different door.
+    const boundSkill = findSkillById(skills, project.skillId);
     const skillPolicy = boundSkill?.critiquePolicy ?? null;
     const projectOverride = narrowProjectCritiqueOverride(project.metadata);
     const envOverride = parseEnvEnabled(process.env['OD_CRITIQUE_ENABLED']);

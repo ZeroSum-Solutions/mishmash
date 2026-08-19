@@ -19,10 +19,11 @@ export interface CritiqueStatusResponse {
    * The ROLLOUT POLICY answer — what `isCritiqueEnabled` resolves to from
    * phase, skill policy, project override and env — and nothing else.
    *
-   * A real generation has to clear more gates than this: it needs a resolved
-   * design system, a non-media surface, a plain-stream adapter, and a daemon
-   * below `OD_CRITIQUE_MAX_CONCURRENT_RUNS`. Those depend on the request, not
-   * on the project, so they cannot be answered here. `enabled: true` means
+   * A real generation has to clear more gates than this: some skill must
+   * resolve at all, and it needs a resolved design system, a non-media
+   * surface, a plain-stream adapter, and a daemon below
+   * `OD_CRITIQUE_MAX_CONCURRENT_RUNS`. Those depend on the request, not on
+   * the project, so they cannot be answered here. `enabled: true` means
    * "policy permits it", not "the next run will critique". Read it with
    * `resolution` and `approximate`, both of which say where the answer stops.
    */

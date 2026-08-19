@@ -156,6 +156,20 @@ describe('GET /api/projects/:projectId/critique/status', () => {
     expect(body.enabled).toBe(true);
   });
 
+  it('resolves an aliased skill id the way the spawn gate does', async () => {
+    // Skill ids are aliased. A raw `.find()` on the listing misses every
+    // alias, which reproduces the same inverted answer through a different
+    // door: the spawn gate resolves `taste-skill` to `design-taste-frontend`
+    // and sees its policy; the endpoint saw nothing and said `enabled: true`.
+    writeSkill(skillsRoot, 'design-taste-frontend', 'opt-out');
+    updateProject(db, 'p1', { skillId: 'taste-skill' });
+    process.env['OD_CRITIQUE_ENABLED'] = '1';
+
+    const { body } = await getStatus('p1');
+    expect(body.resolution.skillPolicy).toBe('opt-out');
+    expect(body.enabled).toBe(false);
+  });
+
   it('404s an unknown project', async () => {
     const { status, body } = await getStatus('does-not-exist');
     expect(status).toBe(404);
