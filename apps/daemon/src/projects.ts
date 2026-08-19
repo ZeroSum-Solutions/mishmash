@@ -28,6 +28,7 @@ import {
 } from './artifacts/publication-guard.js';
 import { normalizeArtifactRuntimeImports } from './artifacts/runtime-compat.js';
 import { isIgnoredProjectDirName } from './project-ignored-dirs.js';
+import { resolveWrapperTargetOnDisk } from './entry-file-wrapper.js';
 import {
   isSandboxImportedProjectRootAllowed,
   isSandboxModeEnabled,
@@ -241,7 +242,23 @@ export async function resolveCanvasFile(projectsRoot, project) {
   }
   const declared =
     typeof metadata?.entryFile === 'string' && metadata.entryFile.length > 0 ? metadata.entryFile : null;
-  if (declared && files.some((f) => f.path === declared)) return declared;
+  if (declared && files.some((f) => f.path === declared)) {
+    // A declared entry that exists can still be the wrong file: projects
+    // created before the template-start fix recorded a gallery-preview wrapper
+    // — a page whose whole body is one <iframe> around the real artifact — and
+    // opening it paints a blank canvas. Prefer the wrapper's target when the
+    // declared file is one and the target is a real file in this project.
+    //
+    // Read-path only. Nothing is written back, so this repairs every affected
+    // project on its next read without a migration and without the risk of
+    // rewriting metadata for a project that was never broken.
+    const target = await resolveWrapperTargetOnDisk(
+      resolveProjectDir(projectsRoot, project.id, metadata),
+      declared,
+    );
+    if (target && files.some((f) => f.path === target)) return target;
+    return declared;
+  }
   const primary = files.find((f) => manifestDeclaresPrimaryFile(f));
   if (primary) return primary.path;
   if (files.some((f) => f.path === 'index.html')) return 'index.html';

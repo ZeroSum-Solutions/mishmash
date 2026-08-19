@@ -20,6 +20,7 @@ import {
   type BuildDeckRenderInputOptions,
 } from './deck-export.js';
 import { readProjectFileVersion } from './project-file-versions.js';
+import { resolveWrapperTargetFromFile } from './entry-file-wrapper.js';
 import { authorizeReasoningEgress, sendReasoningEgressDenial } from './reasoning-egress.js';
 import { sandboxImportedProjectRootUnavailableReason } from './sandbox-mode.js';
 import { parseOrchestratorWorkspace } from './workspace-contract.js';
@@ -971,7 +972,7 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
         metadata: project.metadata,
       });
       /** @type {import('@open-design/contracts').ProjectExportManifestResponse} */
-      const body = buildProjectExportManifestResponse({
+      const body = await buildProjectExportManifestResponse({
         project,
         projectId: req.params.id,
         files,
@@ -1336,7 +1337,7 @@ function rewriteViteDistRootAssetUrls(html: string): string {
   );
 }
 
-function buildProjectExportManifestResponse({
+async function buildProjectExportManifestResponse({
   project,
   projectId,
   files,
@@ -1414,7 +1415,7 @@ function buildProjectExportManifestResponse({
     });
   }
 
-  const entryFile = chooseExportManifestEntryFile(project, sortedFiles, filesByName);
+  const entryFile = await chooseExportManifestEntryFile(project, sortedFiles, filesByName);
   note(entryFile, 'project-entry-file');
 
   return {
@@ -1443,15 +1444,29 @@ function isInferredArtifactManifest(manifest: any): boolean {
     manifest.metadata.inferred === true;
 }
 
-function chooseExportManifestEntryFile(
+async function chooseExportManifestEntryFile(
   project: any,
   files: any[],
   filesByName: Map<string, any>,
-): string | null {
+): Promise<string | null> {
   const metadataEntry = typeof project?.metadata?.entryFile === 'string'
     ? project.metadata.entryFile
     : null;
-  if (metadataEntry && filesByName.has(metadataEntry)) return metadataEntry;
+  if (metadataEntry && filesByName.has(metadataEntry)) {
+    // A declared entry that exists in the map can still be a gallery-preview
+    // wrapper — a page whose whole body is one <iframe> around the real
+    // artifact. Naming it `primary` in the manifest exports a frame instead of
+    // the site. Prefer the target when it is also a file in this project.
+    const declaredFile = filesByName.get(metadataEntry);
+    const localPath = typeof declaredFile?.localPath === 'string' ? declaredFile.localPath : null;
+    if (localPath) {
+      const target = await resolveWrapperTargetFromFile(localPath, metadataEntry, (candidate) =>
+        filesByName.has(candidate),
+      );
+      if (target) return target;
+    }
+    return metadataEntry;
+  }
   for (const file of files) {
     const manifest = file.artifactManifest;
     if (!manifest || typeof manifest !== 'object') continue;
