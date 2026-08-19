@@ -76,6 +76,27 @@ export interface DesignIndexPreview {
   thumbnail: null;
 }
 
+// Scoreable typesetting/layout facts (F001 R1, Addendum A.3 / R5). R5's
+// poetry ranker must "deterministically penalize an 80ch or centered-text
+// template" -- these are the per-template fields it checks against an
+// archetype's ArchetypeTypesettingConstraints
+// (apps/daemon/src/design/site-archetypes.ts). Most SKILL.md bodies never
+// state a body-text measure or alignment explicitly, and a bare `max-width`
+// or `text-align` mention in the source may describe an unrelated page
+// element rather than the reading column -- so every field here stays
+// `confidence: 'low'` unless the doc uses a typesetting term specific enough
+// that it isn't plausibly about anything else (`pre-wrap`, "hanging
+// indent"). Absence (null) is the expected common case, not a bug -- R15
+// (P2, rendered-page sampling) is the real fix for raising this past a text
+// scan's ceiling.
+export interface DesignIndexLayout {
+  measureCh: number | null;
+  textAlign: 'left' | 'center' | 'justify' | 'mixed' | null;
+  preservesLineBreaks: boolean | null;
+  hangingIndent: boolean | null;
+  confidence: ConfidenceLevel;
+}
+
 export interface DesignIndexEntry {
   slug: string;
   name: string;
@@ -88,9 +109,24 @@ export interface DesignIndexEntry {
   mood: string[];
   density: DensityLevel;
   motion_level: MotionLevel;
+  layout: DesignIndexLayout;
   preview: DesignIndexPreview;
   sourceHash: string;
 }
+
+// PARKED, not omitted by oversight: F001 Addendum B says this index is
+// shared with F007 and should also carry `sections[]`, `style`, and
+// `theme`. None of those three has a ratified vocabulary yet --
+// CROSS-CUTTING-CORRECTIONS.md's "Decisions required" #12-15 name exactly
+// this gap (`grid` as a Section value unratified; Style descriptor curation
+// undecided; Theme luminance thresholds unset; F007 states outright "none
+// of this vocabulary exists yet"). Addendum B's own binding rule -- "any
+// facet the advisor ranks on must be exposed to the filters, and any facet
+// the filters expose must be rankable" -- means adding these fields here
+// would mean inventing the vocabulary decision, not implementing it. Per
+// F001 Addendum A.3, this branch instead ships the typesetting/layout
+// fields above, which R5 does specify completely (measure, alignment,
+// line-break handling) and which need no owner decision. See NOTES.md.
 
 export interface DesignIndex {
   generatedAt: string;
@@ -106,25 +142,80 @@ const HEX_RE = /#[0-9A-Fa-f]{6}\b/g;
 // Keyword -> role mapping for the "## COLOR PALETTE" build-spec section
 // style used by the better-documented templates (see
 // design-templates/almond-hours-h65/SKILL.md, "## COLOR PALETTE (EXACT)").
-// First keyword match wins; unmatched labels fall back to 'accent'.
-// Order matters and the qualifier wins. A label reading
-// "TEXT-SECONDARY / SAGE (MUTED SAGE-GREY -- BODY COPY)" says muted, and
-// matching TEXT first labelled 31 of the catalogue's high-confidence entries
-// as the primary text colour -- a confident wrong answer, which is worse than
-// an unmarked guess.
-const PALETTE_LABEL_KEYWORDS: [RegExp, PaletteRole][] = [
-  [/MUTED|SECONDARY|SUBTLE|TERTIARY|DIM\b/i, 'muted'],
+//
+// Calibrated against every distinct label across the committed catalogue
+// (`grep`-style scan over every "## COLOR..." section), not just the two
+// examples the audit cited, because the two examples pull in opposite
+// directions and a naive single-tier reorder that fixes one breaks the
+// other:
+//   - "SECONDARY WARM ACCENT" (aegis-console-h39) must resolve 'accent' --
+//     SECONDARY here qualifies a real, explicitly-named accent colour.
+//   - "TEXT-SECONDARY / SAGE" (citron-atlas-h79, value confirms "MUTED
+//     SAGE-GREY -- BODY COPY") must resolve 'muted', not the primary text
+//     colour -- this is the case the *previous* commit on this branch fixed
+//     ("stop the index labelling muted greys as the primary text colour"),
+//     and a same-shape catalogue label ("SECONDARY TEXT / GRAY") appears
+//     elsewhere in the corpus too.
+//
+// Three tiers, checked in order, resolve both without regressing the other:
+//
+// 1. STRONG explicit role words -- naming the role unambiguously enough
+//    that a co-occurring SECONDARY/SUBTLE/TERTIARY/DIM qualifier does not
+//    override it (MUTED, ACCENT/CTA/HIGHLIGHT, BORDER/RULE, BACKGROUND,
+//    INK). BRAND was previously grouped into this tier as an accent
+//    synonym; it is a generic company-name prefix that appears on every
+//    role in the corpus (BRAND BACKGROUND, BRAND BORDER, BRAND PRIMARY /
+//    TEXT-PRIMARY, BRAND ACCENT, ...) and grouping it with ACCENT caused
+//    many non-accent, no-real-signal labels ("BRAND DARK (CHARCOAL)") to
+//    read as a confident accent match -- exactly the "unmatched labels
+//    default to accent while retaining high confidence" failure named
+//    alongside the SECONDARY/ACCENT swap. It is dropped rather than moved.
+// 2. GENERIC qualifiers (SECONDARY, SUBTLE, TERTIARY, DIM) -- consulted only
+//    when tier 1 found nothing, at 'medium' rather than 'high' confidence:
+//    the label never states a role outright, this tier infers one from a
+//    de-emphasis word, and that inference deserves less certainty than an
+//    explicit statement even when the inference is probably right.
+// 3. WEAK explicit -- bare TEXT on its own, checked last: it names a role,
+//    but "TEXT-SECONDARY" and "SECONDARY TEXT" show SECONDARY overriding it
+//    in real catalogue data, so it must lose to tier 2 while still beating
+//    tier 4's fallback for a label that mentions TEXT and nothing else
+//    (e.g. "BRAND PRIMARY / TEXT-PRIMARY").
+//
+// A label that matches no tier carries no real evidence for any role; it
+// returns 'accent' (the least assumptive bucket) at 'low' confidence,
+// never at the same confidence an actual match would carry.
+const STRONG_PALETTE_LABEL_KEYWORDS: [RegExp, PaletteRole][] = [
+  [/MUTED\b/i, 'muted'],
+  [/ACCENT|CTA|HIGHLIGHT/i, 'accent'],
   [/BORDER|HAIRLINE|RULE|DIVIDER/i, 'rule'],
   [/PAPER|BACKGROUND|\bBG\b/i, 'background'],
-  [/INK|TEXT\b/i, 'text'],
-  [/ACCENT|CTA|HIGHLIGHT|BRAND/i, 'accent'],
+  [/INK/i, 'text'],
 ];
 
-function roleForLabel(label: string): PaletteRole {
-  for (const [re, role] of PALETTE_LABEL_KEYWORDS) {
-    if (re.test(label)) return role;
+const QUALIFIER_PALETTE_LABEL_KEYWORDS: [RegExp, PaletteRole][] = [
+  [/SECONDARY|SUBTLE|TERTIARY|DIM\b/i, 'muted'],
+];
+
+const WEAK_PALETTE_LABEL_KEYWORDS: [RegExp, PaletteRole][] = [
+  [/TEXT\b/i, 'text'],
+];
+
+interface PaletteRoleMatch {
+  role: PaletteRole;
+  confidence: ConfidenceLevel;
+}
+
+function roleForLabel(label: string): PaletteRoleMatch {
+  for (const [re, role] of STRONG_PALETTE_LABEL_KEYWORDS) {
+    if (re.test(label)) return { role, confidence: 'high' };
   }
-  return 'accent';
+  for (const [re, role] of QUALIFIER_PALETTE_LABEL_KEYWORDS) {
+    if (re.test(label)) return { role, confidence: 'medium' };
+  }
+  for (const [re, role] of WEAK_PALETTE_LABEL_KEYWORDS) {
+    if (re.test(label)) return { role, confidence: 'high' };
+  }
+  return { role: 'accent', confidence: 'low' };
 }
 
 // High-confidence path: parse a "## COLOR PALETTE" (or "## COLORS") section
@@ -151,13 +242,13 @@ export function extractStructuredPalette(body: string): DesignIndexPaletteEntry[
     for (const segment of line.replace(/^-\s*/, '').split(/[;.]\s+|;\s*/)) {
       const labelled = segment.match(/^\s*([^:`]+):\s*(.*)$/);
       if (!labelled) continue;
-      const role = roleForLabel((labelled[1] ?? '').trim());
+      const { role, confidence } = roleForLabel((labelled[1] ?? '').trim());
       for (const hexMatch of (labelled[2] ?? '').matchAll(/#[0-9A-Fa-f]{6}/g)) {
         const hex = hexMatch[0].toUpperCase();
         const key = `${hex}:${role}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        entries.push({ hex, role, provenance: segment.trim(), confidence: 'high' });
+        entries.push({ hex, role, provenance: segment.trim(), confidence });
       }
     }
   }
@@ -202,9 +293,49 @@ function roleForTypeLabel(label: string): TypographyRole | null {
   return null;
 }
 
+// The "- LABEL: <capture>" line shape captures everything up to the next
+// `(`/`,`/end of line after a role label, which is right for a real font
+// name ("PLUS JAKARTA SANS (700/800)" -> "PLUS JAKARTA SANS") but also
+// matches the typesetting-prose lines that follow the same "LABEL: value,
+// value, value." shape a font-pairing line uses -- "BODY: 18PX, SAGE-GREY,
+// RELAXED LEADING." captures "18PX"; "DISPLAY HEADLINES: WEIGHT 400
+// (NORMAL), ..." captures "WEIGHT 400". Neither is a font family. Reject
+// anything that reads as a CSS size, a font-weight instruction, or a bare
+// casing/weight descriptor rather than accept any alphanumeric text as a
+// name -- R1's own rule is that a low-confidence field is marked, never
+// silently guessed at high confidence.
+const CSS_SIZE_RE = /\d\s*(PX|EM|REM|PT|VW|VH|%)\b/i;
+const PURE_NUMBER_RE = /^-?\d+(\.\d+)?$/;
+const WEIGHT_PREFIX_RE = /^WEIGHT\b/i;
+// Words that describe size, weight, or casing rather than naming a family.
+// A capture that is ENTIRELY made of these words (e.g. "SMALL", "WEIGHT
+// 300", "UPPERCASE") is prose, not a name -- but a real family that happens
+// to contain one of them as part of its actual name ("Inter Tight") is not
+// rejected, because at least one word in the phrase isn't in this set.
+const NON_FAMILY_WORDS = new Set([
+  'WEIGHT', 'UPPERCASE', 'LOWERCASE', 'CAPS', 'SMALL', 'MEDIUM',
+  'LARGE', 'BOLD', 'LIGHT', 'REGULAR', 'NORMAL', 'TIGHT', 'WIDE', 'RELAXED',
+  'LOOSE', 'THIN', 'BLACK', 'SEMIBOLD', 'ITALIC', 'DESKTOP', 'MOBILE',
+]);
+
+export function looksLikeFontFamily(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (CSS_SIZE_RE.test(trimmed)) return false;
+  if (PURE_NUMBER_RE.test(trimmed)) return false;
+  if (WEIGHT_PREFIX_RE.test(trimmed)) return false;
+  const words = trimmed.split(/\s+/);
+  if (words.every((w) => NON_FAMILY_WORDS.has(w.toUpperCase()))) return false;
+  return true;
+}
+
 // High-confidence path: parse a "## TYPOGRAPHY" section for
 // `- LABEL: **FONT NAME** ...` lines (design-templates/almond-hours-h65/
-// SKILL.md's "## TYPOGRAPHY" section is the model).
+// SKILL.md's "## TYPOGRAPHY" section is the model). A line whose captured
+// value fails looksLikeFontFamily is skipped rather than accepted -- a later
+// line for the same role can still fill it in, and if none ever does,
+// buildTypography's cdn_fonts fallback (low confidence) applies instead of a
+// fabricated high-confidence family.
 export function extractStructuredTypography(
   body: string,
 ): Partial<Record<TypographyRole, DesignIndexTypographyRoleValue>> {
@@ -221,7 +352,7 @@ export function extractStructuredTypography(
     const role = roleForTypeLabel((m[1] ?? '').trim());
     if (!role || result[role]) continue; // first match per role wins
     const family = (m[2] ?? '').trim();
-    if (!family) continue;
+    if (!family || !looksLikeFontFamily(family)) continue;
     result[role] = { family, confidence: 'high' };
   }
   return result;
@@ -290,6 +421,59 @@ export function estimateDensity(body: string): DensityLevel {
 }
 
 // ---------------------------------------------------------------------------
+// Layout / typesetting extraction (F001 R1 Addendum A.3, scored by R5)
+// ---------------------------------------------------------------------------
+
+const MEASURE_RE = /max-width:\s*([\d.]+)\s*(ch|rem|px)\b/i;
+// Addendum A.3 states the poetry archetype's own measure target both ways --
+// "~62 characters (`max-width: 34rem`)" -- so 34rem == 62ch is a ratio taken
+// directly from the PRD, reused here to convert any OTHER template's
+// rem-expressed measure onto the same ch scale.
+const REM_TO_CH = 62 / 34;
+// Addendum A.3's own body size (19-21px) puts roughly 8px per character at
+// typical prose weights -- used only as a coarse px->ch approximation to
+// flag an unusually wide column, never to assert an exact character count.
+const PX_TO_CH_DIVISOR = 8;
+
+function measureToCh(value: number, unit: string): number | null {
+  if (!Number.isFinite(value)) return null;
+  const lower = unit.toLowerCase();
+  if (lower === 'ch') return value;
+  if (lower === 'rem') return value * REM_TO_CH;
+  return value / PX_TO_CH_DIVISOR;
+}
+
+const CENTER_RE = /text-align:\s*center\b|\bcentered\b|\bcenter-align/i;
+const JUSTIFY_RE = /text-align:\s*justify\b|\bjustified\b/i;
+const LEFT_RE = /text-align:\s*left\b|\bleft-align/i;
+const PRE_WRAP_RE = /white-space:\s*pre-wrap|\bpreserv\w*\s+line[- ]?breaks?\b/i;
+const HANGING_INDENT_RE = /hanging[- ]indent/i;
+
+export function extractLayout(body: string): DesignIndexLayout {
+  const measureMatch = body.match(MEASURE_RE);
+  const measureCh = measureMatch ? measureToCh(Number(measureMatch[1]), measureMatch[2] ?? 'ch') : null;
+
+  const hasCenter = CENTER_RE.test(body);
+  const hasJustify = JUSTIFY_RE.test(body);
+  const hasLeft = LEFT_RE.test(body);
+  const alignSignals = [hasCenter, hasJustify, hasLeft].filter(Boolean).length;
+  const textAlign: DesignIndexLayout['textAlign'] =
+    alignSignals === 0 ? null : alignSignals > 1 ? 'mixed' : hasCenter ? 'center' : hasJustify ? 'justify' : 'left';
+
+  const preservesLineBreaks = PRE_WRAP_RE.test(body) ? true : null;
+  const hangingIndent = HANGING_INDENT_RE.test(body) ? true : null;
+
+  // `measureCh`/`textAlign` come from a bare text scan that cannot tell a
+  // reading column's max-width/text-align from an unrelated element's, so
+  // they never raise confidence above 'low' on their own. `preservesLineBreaks`/
+  // `hangingIndent` use unambiguous typesetting terms -- when either is
+  // found, the row overall gets 'medium'.
+  const confidence: ConfidenceLevel = preservesLineBreaks || hangingIndent ? 'medium' : 'low';
+
+  return { measureCh, textAlign, preservesLineBreaks, hangingIndent, confidence };
+}
+
+// ---------------------------------------------------------------------------
 // Per-template build
 // ---------------------------------------------------------------------------
 
@@ -333,6 +517,7 @@ export function buildEntry(slug: string): DesignIndexEntry | null {
     mood: extractMoods(parsed?.description ?? '', parsed?.tags ?? [], skillText),
     density: estimateDensity(skillText),
     motion_level: estimateMotionLevel(skillText),
+    layout: extractLayout(skillText),
     preview: {
       path: hasExampleHtml ? `design-templates/${slug}/example.html` : null,
       hasExampleHtml,
