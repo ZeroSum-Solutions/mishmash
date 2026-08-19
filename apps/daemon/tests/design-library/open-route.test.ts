@@ -214,15 +214,35 @@ describe('design library open route (spawn mocked)', () => {
     expect(openerCallCount()).toBe(0);
   });
 
-  // Rendering runs the author's scripts, so the reference-only tier that
-  // covers third-party captures and site mirrors stays open-folder-only —
-  // a narrower gate than `start-project`'s referenceable set.
-  it('403s a human-local-only collection rather than executing a third-party capture', async () => {
+  // This tier USED to be refused here: rendering runs the author's scripts,
+  // and `human-local-only` covers third-party captures and site mirrors.
+  // Devin authorized that exposure on 2026-08-19 ("broaden to all catalog
+  // items"), so live rendering now spans every tier. The exposure is real and
+  // accepted — opening one runs whatever the captured site shipped, exactly
+  // as double-clicking the file in Finder does.
+  it('renders a human-local-only capture, which Devin authorized on 2026-08-19', async () => {
     const daemonUrl = await startWithFixture();
 
     const res = await livePreview(daemonUrl, '01 Kits/capture-kit');
+    expect(res.status).toBe(200);
+    expect(openerCallCount()).toBe(1);
+  });
+
+  // The load-bearing half of that decision. Rendering an item locally is
+  // reference viewing on this machine, which RIGHTS.md allows for
+  // `human-local-only`. COPYING one puts its bytes where they can be
+  // committed and shipped, which RIGHTS.md forbids. Before this change a
+  // single shared set governed both, so broadening rendering would silently
+  // have granted the copy right too. This pins them apart.
+  it('still refuses to copy that same human-local-only capture into a project', async () => {
+    const daemonUrl = await startWithFixture();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rel: '01 Kits/capture-kit', mode: 'copy' }),
+    });
     expect(res.status).toBe(403);
-    expect(openerCallCount()).toBe(0);
   });
 
   it('400s a path-traversal rel without spawning anything', async () => {

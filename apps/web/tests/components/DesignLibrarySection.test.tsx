@@ -517,14 +517,17 @@ describe('DesignLibrarySection', () => {
     const withoutEntry = screen.getByText('Fintune (iOS)').closest('article') as HTMLElement;
     expect(within(withoutEntry).queryByTestId('design-library-live-preview')).toBeNull();
 
-    // And a reference-only item is withheld even though it HAS an entry page:
-    // rendering runs the author's scripts, so the tier gate decides, not the
-    // mere presence of an HTML file.
+    // A human-local-only item WITH an entry page is now offered too. This was
+    // withheld until Devin broadened live rendering to every tier on
+    // 2026-08-19; rendering it runs the captured author's scripts, which is
+    // the exposure he accepted. Note what still decides: the entry page. The
+    // tier no longer withholds rendering, so the case above — no entry_html,
+    // no button — is the one carrying that half of the contract.
     const referenceOnly = screen
       .getByText('NeuForm Particle Field')
       .closest('article') as HTMLElement;
     expect(referenceOnly.getAttribute('data-allowed-use')).toBe('human-local-only');
-    expect(within(referenceOnly).queryByTestId('design-library-live-preview')).toBeNull();
+    expect(within(referenceOnly).queryByTestId('design-library-live-preview')).not.toBeNull();
   });
 
   it('surfaces the daemon reason when a live preview cannot be opened', async () => {
@@ -677,13 +680,17 @@ describe('DesignLibrarySection', () => {
     );
   });
 
-  it('omits Explore kit for a human-local-only item even with a matching category and entry_html', async () => {
+  // Was omitted until Devin broadened live rendering to every tier on
+  // 2026-08-19. Explore kit is the SANDBOXED surface — an opaque-origin
+  // iframe with no `allow-same-origin` — so it is the safer of the two
+  // rendering paths for a third-party capture.
+  it('offers Explore kit for a human-local-only item with a matching category and entry_html', async () => {
     render(<DesignLibrarySection active />);
     await screen.findByText('NeuForm Particle Field');
     fireEvent.click(screen.getByRole('button', { name: 'Preview NeuForm Particle Field' }));
     const dialog = await screen.findByRole('dialog', { name: 'NeuForm Particle Field' });
 
-    expect(within(dialog).queryByTestId('design-library-explore-kit')).toBeNull();
+    expect(within(dialog).queryByTestId('design-library-explore-kit')).not.toBeNull();
   });
 
   it('omits Explore kit for an otherwise-permitted item with no renderable entry', async () => {
@@ -942,6 +949,28 @@ describe('DesignLibrarySection', () => {
   });
 
   it('omits the cycle controls entirely when the item has only one example', async () => {
+    // Since live rendering broadened to every tier (2026-08-19), this
+    // human-local-only item has TWO examples in the base fixture — its thumb
+    // plus a live-preview frame — so it is no longer a one-example case.
+    // Drop its entry page here to keep testing the contract this test is
+    // about (one example ⇒ no cycle affordance) rather than silently
+    // retargeting the assertion at two examples.
+    fetchDesignLibraryCatalog.mockResolvedValue({
+      ok: true,
+      catalog: {
+        ...CATALOG,
+        groups: [
+          CATALOG.groups[0]!,
+          {
+            ...CATALOG.groups[1]!,
+            items: [
+              CATALOG.groups[1]!.items[0]!,
+              { ...CATALOG.groups[1]!.items[1]!, entry_html: null },
+            ],
+          },
+        ],
+      },
+    });
     render(<DesignLibrarySection active />);
     await screen.findByText('NeuForm Particle Field');
     fireEvent.click(screen.getByRole('button', { name: 'Preview NeuForm Particle Field' }));
