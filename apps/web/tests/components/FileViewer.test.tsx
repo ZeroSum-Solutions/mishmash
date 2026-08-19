@@ -1713,7 +1713,7 @@ describe('FileViewer SVG artifacts', () => {
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('renders sandbox-shim artifacts on the srcdoc transport without entering edit mode (#2791)', () => {
+  it('renders sandbox-shim artifacts on the srcdoc transport without entering edit mode (#2791)', async () => {
     const file = baseFile({
       name: 'search.html',
       path: 'search.html',
@@ -1738,11 +1738,22 @@ describe('FileViewer SVG artifacts', () => {
       />,
     );
 
-    const srcDocFrame = container.querySelector('iframe[data-od-render-mode="srcdoc"]') as HTMLIFrameElement | null;
-    expect(srcDocFrame?.getAttribute('data-od-active')).toBe('true');
-    expect(srcDocFrame?.srcdoc).toContain('data-od-id="results"');
-    expect(srcDocFrame?.srcdoc).not.toContain('data-od-lazy-srcdoc-transport');
-    expect(srcDocFrame?.srcdoc).toContain('data-od-sandbox-shim');
+    // The fixture's `<script src="app.js">` is a relative asset ref, so this
+    // preview is one the canvas now rewrites before it paints anything (F004):
+    // the frame mounts once, already inlined, instead of mounting raw and
+    // being rewritten a beat later. The assertions below are unchanged; only
+    // the wait for the frame to exist is new.
+    const srcDocFrame = await waitFor(() => {
+      const node = container.querySelector(
+        'iframe[data-od-render-mode="srcdoc"]',
+      ) as HTMLIFrameElement | null;
+      if (!node) throw new Error('srcdoc frame not mounted yet');
+      return node;
+    });
+    expect(srcDocFrame.getAttribute('data-od-active')).toBe('true');
+    expect(srcDocFrame.srcdoc).toContain('data-od-id="results"');
+    expect(srcDocFrame.srcdoc).not.toContain('data-od-lazy-srcdoc-transport');
+    expect(srcDocFrame.srcdoc).toContain('data-od-sandbox-shim');
   });
 
   it('keeps srcDoc HTML previews available with a compact Code action', async () => {
