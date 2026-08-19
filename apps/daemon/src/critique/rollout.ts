@@ -13,27 +13,30 @@
  *     supporting parsers (`parseRolloutPhase`, `parseEnvEnabled`).
  *     Full unit coverage of the priority matrix.
  *
- * Planned consumers (not yet wired; each lands in a focused
- * follow-up PR):
+ * Wired consumers:
  *
- *   - The orchestrator entry in `apps/daemon/src/server.ts`, before
- *     it spawns the critique CLI adapter for a generation. The
- *     current spawn gate still reads `critiqueCfg.enabled` directly;
- *     swapping that to `isCritiqueEnabled({...})` is the one-line
- *     change the wireup PR makes.
- *   - A future settings endpoint that echoes the resolved value to
- *     the Settings UI. The endpoint does not ship in Phase 15;
- *     `setCritiqueTheaterEnabled` on the web side is localStorage-
- *     only this phase, with daemon persistence deferred to the
- *     Settings UI PR.
- *   - The conformance harness, so a prerelease cycle can run against an
- *     adapter even when the human-facing flag is off.
+ *   - The orchestrator entry in `apps/daemon/src/server.ts` calls
+ *     `isCritiqueEnabled({...})` ahead of every candidate generation;
+ *     its result gates the panel-prompt threading and the
+ *     orchestrator spawn together.
+ *   - The M1 Settings toggle (`CritiqueTheaterSection`) persists the
+ *     per-project override through `setCritiqueTheaterEnabled` in
+ *     `apps/web/src/components/Theater/hooks/useCritiqueTheaterEnabled.ts`,
+ *     which round-trips `metadata.critiqueTheaterEnabled` through the
+ *     existing project PATCH. The daemon reads it back through
+ *     `narrowProjectCritiqueOverride`.
+ *   - `GET /api/projects/:projectId/critique/status` and `od critique
+ *     status` echo the resolved value, so an operator can ask what a
+ *     project would do without starting a generation.
+ *   - The conformance harness runs synthetic adapters independently of
+ *     this resolver, by design.
  *
- * Operators who want to enable the feature today should set
- * `OD_CRITIQUE_ENABLED=1` rather than relying on the client toggle,
- * because the spawn-time gate has not been re-pointed at this
- * resolver yet. The resolver itself is correct and ready; the wiring
- * change is the only blocker.
+ * Two ways to turn it on for local testing: per project, via the
+ * Settings toggle, which needs no restart because the override is read
+ * per request; or daemon-wide, with `OD_CRITIQUE_ENABLED=1` on the
+ * daemon's launch command. `parseEnvEnabled` is also read per request,
+ * but the rest of `CritiqueConfig` is cached at boot, so a changed
+ * `OD_CRITIQUE_MAX_ROUNDS` or timeout does need a restart.
  *
  * Resolution order (highest priority first):
  *

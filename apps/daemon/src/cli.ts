@@ -341,6 +341,15 @@ const FEEDBACK_STRING_FLAGS = new Set([
   'daemon-url', 'project', 'conversation', 'message', 'rating', 'reason', 'note', 'prompt-file',
 ]);
 const FEEDBACK_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'clear']);
+
+const CRITIQUE_STRING_FLAGS = new Set([
+  'daemon-url',
+  'project',
+  'window-days',
+  'shipped-threshold',
+  'clean-parse-threshold',
+]);
+const CRITIQUE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const MEMORY_STRING_FLAGS = new Set([
   'daemon-url', 'name', 'description', 'type', 'body', 'body-file',
   // `od memory profile set` reads structured fields verbatim and/or a prose
@@ -916,6 +925,7 @@ const SUBCOMMAND_MAP = {
   project: runProject,
   automation: runAutomation,
   automations: runAutomation,
+  critique: runCritique,
   feedback: runFeedback,
   memory: runMemory,
   run: runRun,
@@ -12402,6 +12412,88 @@ Output:
 
 Common options:
   --daemon-url <url>   MishMash daemon HTTP base.`);
+}
+
+function printCritiqueHelp() {
+  console.log(`Usage:
+  od critique status --project <id> [--json]        Resolved Critique Theater state for a project.
+  od critique conformance [--window-days <n>]
+      [--shipped-threshold <0-1>] [--clean-parse-threshold <0-1>] [--json]
+                                                    Rollout conformance window and its decision.
+
+Common options:
+  --daemon-url <url>   MishMash daemon HTTP base.`);
+}
+
+// Read-only mirror of the two critique status surfaces. Until these existed
+// the only way to learn whether Critique Theater would run was to start a
+// generation and read the daemon's stdout.
+async function runCritique(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    printCritiqueHelp();
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  const sub = args[0];
+  let flags;
+  try {
+    flags = parseFlags(args.slice(1), { string: CRITIQUE_STRING_FLAGS, boolean: CRITIQUE_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const base = await cliDaemonBaseUrl(flags);
+  const writeJson = (data) => process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
+
+  if (sub === 'status') {
+    if (!flags.project) {
+      console.error('Usage: od critique status --project <id> [--json]');
+      process.exit(2);
+    }
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/projects/${encodeURIComponent(flags.project)}/critique/status`);
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    console.log(`critique enabled: ${data.enabled}`);
+    console.log(`  phase:           ${data.resolution.phase}`);
+    console.log(`  skill policy:    ${data.resolution.skillPolicy ?? '(none)'}`);
+    console.log(`  project override:${data.resolution.projectOverride ?? '(none)'}`);
+    console.log(`  env override:    ${data.resolution.envOverride ?? '(none)'}`);
+    if (data.resolution.approximate) {
+      console.log('  note: resolved from the project\'s bound skill; a prompt that adds skills by @-mention can still change the outcome.');
+    }
+    return;
+  }
+
+  if (sub === 'conformance') {
+    const query = new URLSearchParams();
+    if (flags['window-days']) query.set('windowDays', flags['window-days']);
+    if (flags['shipped-threshold']) query.set('shippedThreshold', flags['shipped-threshold']);
+    if (flags['clean-parse-threshold']) query.set('cleanParseThreshold', flags['clean-parse-threshold']);
+    const suffix = query.toString();
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/critique/conformance${suffix ? `?${suffix}` : ''}`);
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    console.log(`decision: ${data.decision.kind}`);
+    console.log(`window:   ${data.window.days} day(s), ${data.window.history.length} row(s)`);
+    return;
+  }
+
+  console.error(`unknown subcommand: od critique ${sub}`);
+  printCritiqueHelp();
+  process.exit(2);
 }
 
 async function runAutomation(args) {

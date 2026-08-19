@@ -171,4 +171,29 @@ describe('RunRegistry', () => {
     expect(ids).not.toContain('crun_13');
     expect(ids).toContain('crun_14');
   });
+
+  // Capacity. Each in-flight run holds a panel subprocess and its transcript
+  // buffer; the registry knew how many were running but never refused another.
+  it('register refuses a handle once the registry is at capacity', () => {
+    const capped = createRunRegistry(2);
+    capped.register(makeHandle('crun_cap_1', 'p1'));
+    capped.register(makeHandle('crun_cap_2', 'p2'));
+    expect(() => capped.register(makeHandle('crun_cap_3', 'p3'))).toThrow(
+      /at capacity \(max=2, active=2\)/,
+    );
+  });
+
+  it('register succeeds again once unregister frees a slot', () => {
+    const capped = createRunRegistry(1);
+    capped.register(makeHandle('crun_cap_a', 'p1'));
+    expect(() => capped.register(makeHandle('crun_cap_b', 'p2'))).toThrow(/at capacity/);
+    capped.unregister('p1', 'crun_cap_a');
+    expect(() => capped.register(makeHandle('crun_cap_b', 'p2'))).not.toThrow();
+  });
+
+  it('is uncapped when no maximum is given, so existing callers are unchanged', () => {
+    const uncapped = createRunRegistry();
+    for (let i = 0; i < 50; i += 1) uncapped.register(makeHandle(`crun_uncapped_${i}`, `p${i}`));
+    expect(uncapped.list()).toHaveLength(50);
+  });
 });

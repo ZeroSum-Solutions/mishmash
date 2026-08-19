@@ -72,11 +72,19 @@ function compositeKey(projectId: string, runId: string): string {
  *
  * @see specs/current/critique-theater.md § interrupt endpoint (Task 6.1)
  */
-export function createRunRegistry(): RunRegistry {
+export function createRunRegistry(maxConcurrentRuns: number = Infinity): RunRegistry {
   const store = new Map<string, RunHandle>();
 
   return {
     register(handle: RunHandle): void {
+      // Backstop, not the primary gate: the spawn path checks capacity first
+      // and falls through to legacy generation, so reaching this throw means
+      // a caller registered without asking.
+      if (store.size >= maxConcurrentRuns) {
+        throw new Error(
+          `RunRegistry: at capacity (max=${maxConcurrentRuns}, active=${store.size}); cannot register (projectId="${handle.projectId}", runId="${handle.runId}")`,
+        );
+      }
       const key = compositeKey(handle.projectId, handle.runId);
       if (store.has(key)) {
         throw new Error(

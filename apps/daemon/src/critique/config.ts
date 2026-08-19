@@ -20,6 +20,10 @@ export function loadCritiqueConfigFromEnv(env: NodeJS.ProcessEnv = process.env):
   const totalTimeoutMs = parsePositiveInt('OD_CRITIQUE_TOTAL_TIMEOUT_MS', env['OD_CRITIQUE_TOTAL_TIMEOUT_MS'], defaults.totalTimeoutMs);
   const parserMaxBlockBytes = parsePositiveInt('OD_CRITIQUE_PARSER_MAX_BLOCK_BYTES', env['OD_CRITIQUE_PARSER_MAX_BLOCK_BYTES'], defaults.parserMaxBlockBytes);
   const fallbackPolicy = parseFallbackPolicy(env['OD_CRITIQUE_FALLBACK_POLICY'], defaults.fallbackPolicy);
+  // The contract has carried `maxConcurrentRuns` and named this env var since
+  // the config landed, but nothing ever read it, so the cap was whatever the
+  // default happened to be.
+  const maxConcurrentRuns = parsePositiveInt('OD_CRITIQUE_MAX_CONCURRENT_RUNS', env['OD_CRITIQUE_MAX_CONCURRENT_RUNS'], defaults.maxConcurrentRuns);
 
   // Cross-field validation: threshold cannot exceed scale.
   if (scoreThreshold > scoreScale + 1e-9) {
@@ -38,6 +42,7 @@ export function loadCritiqueConfigFromEnv(env: NodeJS.ProcessEnv = process.env):
     totalTimeoutMs,
     parserMaxBlockBytes,
     fallbackPolicy,
+    maxConcurrentRuns,
   };
 }
 

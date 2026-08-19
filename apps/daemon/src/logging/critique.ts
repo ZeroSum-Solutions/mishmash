@@ -15,6 +15,8 @@
  * swap can replace the implementation without touching the call sites.
  */
 
+import type { CritiqueConfig } from '@open-design/contracts/critique';
+
 export type CritiqueLogEvent =
   | {
       event: 'run_started';
@@ -22,6 +24,13 @@ export type CritiqueLogEvent =
       adapter: string;
       skill: string;
       protocolVersion: number;
+      /**
+       * The whole resolved config, not a threshold summary. A run that died
+       * on `parserMaxBlockBytes`, or that queued behind the concurrency cap,
+       * is only explainable from the log line if the log line carries the
+       * values it ran under.
+       */
+      config: CritiqueConfig;
     }
   | {
       event: 'round_closed';

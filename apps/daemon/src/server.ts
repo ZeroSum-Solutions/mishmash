@@ -364,6 +364,7 @@ import { reconcileStaleRuns } from './critique/persistence.js';
 import { runOrchestrator } from './critique/orchestrator.js';
 import { createRunRegistry } from './critique/run-registry.js';
 import { handleCritiqueInterrupt } from './critique/interrupt-handler.js';
+import { handleCritiqueStatus } from './critique/status-handler.js';
 import { handleCritiqueArtifact } from './critique/artifact-handler.js';
 import {
   isCritiqueEnabled,
@@ -1162,7 +1163,7 @@ const critiqueWarnedAdapters = new Set<string>();
 // In-process registry of in-flight critique runs so the interrupt endpoint
 // can cascade an AbortController to the matching orchestrator invocation.
 // Created once per process; not persisted across daemon restarts.
-const critiqueRunRegistry = createRunRegistry();
+const critiqueRunRegistry = createRunRegistry(critiqueCfg.maxConcurrentRuns);
 export const SSE_KEEPALIVE_INTERVAL_MS = 25_000;
 
 export function createAgentRuntimeEnv(
@@ -3214,9 +3215,11 @@ export async function startServer({
   const critiqueDeps = {
     handleCritiqueArtifact,
     handleCritiqueInterrupt,
+    handleCritiqueStatus,
     critiqueArtifactsRoot: CRITIQUE_ARTIFACTS_DIR,
     critiqueResponseCapBytes: critiqueCfg.parserMaxBlockBytes,
     critiqueRunRegistry,
+    critiqueSkillRoots: SKILL_ROOTS,
   };
 
   // External services
@@ -7612,11 +7615,20 @@ export async function startServer({
     // the model was never told to emit.
     if (critiqueShouldRun) {
       const adapterStreamFormat: string = def.streamFormat ?? 'plain';
+      // Concurrent critique runs each hold a panel subprocess and its
+      // transcript buffer, so past a point they starve the generations they
+      // are meant to improve. Over the cap, skip the orchestrator the same
+      // way a non-plain adapter does: the request still succeeds, through
+      // legacy generation.
+      const critiqueAtCapacity =
+        critiqueRunRegistry.list().length >= critiqueCfg.maxConcurrentRuns;
       if (adapterStreamFormat !== 'plain') {
         if (!critiqueWarnedAdapters.has(adapterStreamFormat)) {
           critiqueWarnedAdapters.add(adapterStreamFormat);
           console.warn(`[critique] adapter format=${adapterStreamFormat} is not plain-stream; skipping orchestrator and falling through to legacy generation`);
         }
+      } else if (critiqueAtCapacity) {
+        console.warn(`[critique] at capacity (max=${critiqueCfg.maxConcurrentRuns}); skipping orchestrator and falling through to legacy generation`);
       } else {
         const critiqueRunId = run.id;
         // Per-run artifact directory keeps concurrent or sequential runs in the

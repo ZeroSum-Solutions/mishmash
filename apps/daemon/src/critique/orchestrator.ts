@@ -292,6 +292,7 @@ export async function runOrchestrator(
             adapter,
             skill,
             protocolVersion: event.protocolVersion,
+            config: cfg,
           });
           critiqueProtocolVersion.set(
             { version: String(event.protocolVersion) },
