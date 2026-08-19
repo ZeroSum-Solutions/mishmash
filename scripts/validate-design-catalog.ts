@@ -20,12 +20,23 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CATEGORIES } from './design-taxonomy.ts';
+import {
+  CATEGORIES,
+  CONFIDENCE_LEVELS,
+  DENSITY_LEVELS,
+  MOODS,
+  MOTION_LEVELS,
+  PALETTE_ROLES,
+  TYPOGRAPHY_ROLES,
+} from './design-taxonomy.ts';
+import type { DesignIndex, DesignIndexEntry } from './build-design-index.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATES_DIR = path.join(ROOT, 'design-templates');
 const DEFAULT_LIBRARY_DIR = '/Users/zero-suminc./projects/mishmash-assets';
 const MIN_DESCRIPTION_LENGTH = 40;
+const DESIGN_INDEX_PATH = path.join(TEMPLATES_DIR, 'index.json');
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 // ---------------------------------------------------------------------------
 // Minimal frontmatter parsing
@@ -161,11 +172,44 @@ function extractNestedScalars(lines: string[], key: string): Record<string, stri
   return {};
 }
 
-type SkillFrontmatter = { description: string | undefined; category: string | undefined };
+export type SkillFrontmatter = {
+  description: string | undefined;
+  category: string | undefined;
+  name: string | undefined;
+  scenario: string | undefined;
+  tags: string[];
+};
 
-// Returns { description, category } for a SKILL.md file, or null if the file
-// has no `---` frontmatter block at all.
-function parseSkillFrontmatter(text: string): SkillFrontmatter | null {
+// Extracts a top-level (column-0) YAML block list (`key:\n  - "a"\n  - b`).
+// Only the plain block-sequence style used throughout design-templates/*/
+// SKILL.md frontmatter is supported (no flow-style `[a, b]`).
+function extractTopLevelList(lines: string[], key: string): string[] {
+  const re = new RegExp(`^${key}:\\s*$`);
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] ?? '';
+    if (/^\s/.test(line)) continue;
+    if (!re.test(line)) continue;
+    const items: string[] = [];
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const l = lines[j] ?? '';
+      if (l.trim() === '') continue;
+      const indent = (l.match(/^\s*/)?.[0] ?? '').length;
+      if (indent === 0) break;
+      const m = l.trim().match(/^-\s*(.*)$/);
+      if (!m) break;
+      items.push(unquote(m[1] ?? ''));
+    }
+    return items;
+  }
+  return [];
+}
+
+// Returns { description, category, name, scenario, tags } for a SKILL.md
+// file, or null if the file has no `---` frontmatter block at all. Exported
+// for scripts/build-design-index.ts (F001 R1), which needs `name`/`tags`/
+// `od.scenario` in addition to the `description`/`od.category` this
+// validator already used.
+export function parseSkillFrontmatter(text: string): SkillFrontmatter | null {
   const lines = text.split(/\r?\n/);
   if (lines[0] !== '---') return null;
   let end = -1;
@@ -178,8 +222,10 @@ function parseSkillFrontmatter(text: string): SkillFrontmatter | null {
   if (end === -1) return null;
   const yaml = lines.slice(1, end);
   const description = extractTopLevelScalar(yaml, 'description');
+  const name = extractTopLevelScalar(yaml, 'name');
+  const tags = extractTopLevelList(yaml, 'tags');
   const od = extractNestedScalars(yaml, 'od');
-  return { description, category: od.category };
+  return { description, category: od.category, name, scenario: od.scenario, tags };
 }
 
 // ---------------------------------------------------------------------------
@@ -188,7 +234,7 @@ function parseSkillFrontmatter(text: string): SkillFrontmatter | null {
 
 type Violation = { subject: string; detail: string };
 
-type Report = {
+export type Report = {
   'template-category-missing': Violation[];
   'template-category-invalid': Violation[];
   'template-description-missing': Violation[];
@@ -199,11 +245,19 @@ type Report = {
   'catalog-description-short': Violation[];
   'catalog-cover-missing': Violation[];
   'catalog-duplicate': Violation[];
+  'index-file-missing': Violation[];
+  'index-row-missing': Violation[];
+  'index-row-orphan': Violation[];
+  'index-mood-invalid': Violation[];
+  'index-palette-invalid': Violation[];
+  'index-typography-invalid': Violation[];
+  'index-scale-invalid': Violation[];
+  'index-source-stale': Violation[];
   'catalog-blocked-pending-license': Violation[];
 };
 
 // checkType -> array of { subject, detail }
-function newReport(): Report {
+export function newReport(): Report {
   return {
     'template-category-missing': [],
     'template-category-invalid': [],
@@ -215,6 +269,14 @@ function newReport(): Report {
     'catalog-description-short': [],
     'catalog-cover-missing': [],
     'catalog-duplicate': [],
+    'index-file-missing': [],
+    'index-row-missing': [],
+    'index-row-orphan': [],
+    'index-mood-invalid': [],
+    'index-palette-invalid': [],
+    'index-typography-invalid': [],
+    'index-scale-invalid': [],
+    'index-source-stale': [],
     'catalog-blocked-pending-license': [],
   };
 }
@@ -223,13 +285,15 @@ function relToRoot(p: string): string {
   return path.relative(ROOT, p);
 }
 
-function checkTemplates(report: Report): number {
+export function checkTemplates(report: Report): { count: number; slugs: Set<string> } {
   const entries = readdirSync(TEMPLATES_DIR, { withFileTypes: true }).filter((e) => e.isDirectory());
   let count = 0;
+  const slugs = new Set<string>();
   for (const entry of entries) {
     const skillPath = path.join(TEMPLATES_DIR, entry.name, 'SKILL.md');
     if (!existsSync(skillPath)) continue;
     count += 1;
+    slugs.add(entry.name);
     const text = readFileSync(skillPath, 'utf8');
     const parsed = parseSkillFrontmatter(text);
     const rel = relToRoot(skillPath);
@@ -252,7 +316,7 @@ function checkTemplates(report: Report): number {
       });
     }
   }
-  return count;
+  return { count, slugs };
 }
 
 // The catalog schema is external (mishmash-assets/catalog.json) and only
@@ -318,6 +382,176 @@ function fingerprint(item: CatalogItem): string | null {
   const { files, size, label, noSignal } = normalizeFingerprintFields(item);
   if (noSignal) return null;
   return createHash('sha256').update(JSON.stringify({ files, size, label })).digest('hex');
+}
+
+// ---------------------------------------------------------------------------
+// Design index checks (F001 R2)
+// ---------------------------------------------------------------------------
+
+function sha256Hex(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+// Recomputes the same source hash scripts/build-design-index.ts stamps onto
+// each row, from the template's CURRENT on-disk SKILL.md + template.json
+// bytes -- mirrors buildEntry()'s sourceHash there exactly. A row whose
+// stored sourceHash no longer matches this recomputation means the index
+// was not regenerated after its source template changed.
+function currentSourceHash(templateDir: string): string | null {
+  const skillPath = path.join(templateDir, 'SKILL.md');
+  if (!existsSync(skillPath)) return null;
+  const skillText = readFileSync(skillPath, 'utf8');
+  const templateJsonPath = path.join(templateDir, 'template.json');
+  const templateJsonText = existsSync(templateJsonPath) ? readFileSync(templateJsonPath, 'utf8') : '';
+  return sha256Hex(`${skillText}\u0000${templateJsonText}`);
+}
+
+/**
+ * `indexOverride` exists so every violation class can be pinned by a test.
+ * Reading the committed index and asserting it is clean proves nothing about
+ * the checks themselves — that assertion stays green against a no-op, because
+ * a fresh report is already empty. A synthetic index is the only way to show
+ * each rule fires.
+ */
+export function checkDesignIndex(
+  report: Report,
+  templateSlugs: Set<string>,
+  indexOverride?: DesignIndex,
+): void {
+  if (indexOverride !== undefined) {
+    checkDesignIndexRows(report, templateSlugs, indexOverride);
+    return;
+  }
+  if (!existsSync(DESIGN_INDEX_PATH)) {
+    report['index-file-missing'].push({
+      subject: relToRoot(DESIGN_INDEX_PATH),
+      detail: 'design-templates/index.json does not exist -- run scripts/build-design-index.ts',
+    });
+    return;
+  }
+
+  let index: DesignIndex;
+  try {
+    index = JSON.parse(readFileSync(DESIGN_INDEX_PATH, 'utf8')) as DesignIndex;
+  } catch (error) {
+    report['index-file-missing'].push({
+      subject: relToRoot(DESIGN_INDEX_PATH),
+      detail: `not valid JSON: ${String(error)}`,
+    });
+    return;
+  }
+
+  checkDesignIndexRows(report, templateSlugs, index);
+}
+
+function checkDesignIndexRows(
+  report: Report,
+  templateSlugs: Set<string>,
+  index: DesignIndex,
+): void {
+  const rows = Array.isArray(index.templates) ? index.templates : [];
+  const indexedSlugs = new Set(rows.map((row) => row.slug));
+
+  for (const slug of templateSlugs) {
+    if (!indexedSlugs.has(slug)) {
+      report['index-row-missing'].push({
+        subject: slug,
+        detail: 'has SKILL.md but no design-templates/index.json row',
+      });
+    }
+  }
+
+  for (const row of rows) {
+    const rel = `design-templates/index.json#${row.slug}`;
+
+    if (!templateSlugs.has(row.slug)) {
+      report['index-row-orphan'].push({
+        subject: row.slug,
+        detail: 'index row has no matching design-templates/<slug> directory',
+      });
+      continue; // no on-disk template left to hash-check below
+    }
+
+    for (const mood of row.mood ?? []) {
+      if (!MOODS.includes(mood)) {
+        report['index-mood-invalid'].push({ subject: rel, detail: `mood "${mood}" not in controlled vocabulary` });
+      }
+    }
+
+    for (const entry of row.palette ?? []) {
+      if (!HEX_RE.test(entry.hex)) {
+        report['index-palette-invalid'].push({
+          subject: rel,
+          detail: `palette hex "${entry.hex}" is not a valid 6-digit hex`,
+        });
+      }
+      if (!(PALETTE_ROLES as readonly string[]).includes(entry.role)) {
+        report['index-palette-invalid'].push({
+          subject: rel,
+          detail: `palette role "${entry.role}" not in controlled vocabulary`,
+        });
+      }
+      if (!(CONFIDENCE_LEVELS as readonly string[]).includes(entry.confidence)) {
+        report['index-palette-invalid'].push({
+          subject: rel,
+          detail: `palette confidence "${entry.confidence}" not high|medium|low`,
+        });
+      }
+    }
+
+    const typography = row.typography ?? ({} as DesignIndexEntry['typography']);
+    for (const role of TYPOGRAPHY_ROLES) {
+      const value = typography[role];
+      if (!value) {
+        if (role !== 'body_alt') {
+          report['index-typography-invalid'].push({ subject: rel, detail: `missing required typography role "${role}"` });
+        }
+        continue;
+      }
+      if (!(CONFIDENCE_LEVELS as readonly string[]).includes(value.confidence)) {
+        report['index-typography-invalid'].push({
+          subject: rel,
+          detail: `typography.${role}.confidence "${value.confidence}" not high|medium|low`,
+        });
+      }
+    }
+
+    if (!(DENSITY_LEVELS as readonly string[]).includes(row.density)) {
+      report['index-scale-invalid'].push({ subject: rel, detail: `density "${row.density}" not low|medium|high` });
+    }
+    if (!(MOTION_LEVELS as readonly string[]).includes(row.motion_level)) {
+      report['index-scale-invalid'].push({
+        subject: rel,
+        detail: `motion_level "${row.motion_level}" not low|medium|high`,
+      });
+    }
+
+    const recomputed = currentSourceHash(path.join(TEMPLATES_DIR, row.slug));
+    if (recomputed !== null && recomputed !== row.sourceHash) {
+      report['index-source-stale'].push({
+        subject: rel,
+        detail: 'stored sourceHash no longer matches SKILL.md/template.json on disk -- rerun scripts/build-design-index.ts',
+      });
+    }
+  }
+}
+
+// Guard-safe subset of the validator: template + design-index checks only.
+// Deliberately does NOT call loadCatalog/checkCatalog -- those need
+// DEFAULT_LIBRARY_DIR (`mishmash-assets`, a sibling repo checked out at a
+// hardcoded personal path, not a workspace-relative one), which is not
+// guaranteed to exist on every machine or in CI. Wiring the WHOLE validator
+// into `pnpm guard` would make the gate newly fail wherever that directory
+// is absent -- a portability regression F001 R2 does not ask for and this
+// plan does not introduce (see §A.3). `node scripts/validate-design-
+// catalog.ts` (no args) still runs the full check, catalog included, exactly
+// as it does today, unchanged by this plan.
+export async function checkDesignCatalogAndIndexGuard(): Promise<boolean> {
+  const report = newReport();
+  const { slugs: templateSlugs } = checkTemplates(report);
+  checkDesignIndex(report, templateSlugs);
+  const total = printReport(report, templateSlugs.size, 0);
+  return total === 0;
 }
 
 function checkCatalog(report: Report, libraryDir: string, items: CatalogItem[]): number {
@@ -410,6 +644,14 @@ const SECTION_TITLES: Record<keyof Report, string> = {
   'catalog-description-short': `Catalog — description under ${MIN_DESCRIPTION_LENGTH} chars`,
   'catalog-cover-missing': 'Catalog — cover (thumb) missing or file not found',
   'catalog-duplicate': 'Catalog — duplicate fingerprint (no duplicate_of)',
+  'index-file-missing': 'Design index — design-templates/index.json missing or invalid JSON',
+  'index-row-missing': 'Design index — template has no index row',
+  'index-row-orphan': 'Design index — row has no matching template directory',
+  'index-mood-invalid': 'Design index — mood not in controlled vocabulary',
+  'index-palette-invalid': 'Design index — invalid palette hex or role',
+  'index-typography-invalid': 'Design index — invalid or missing typography role',
+  'index-scale-invalid': 'Design index — density/motion_level not low|medium|high',
+  'index-source-stale': 'Design index — row stale relative to current SKILL.md/template.json',
   'catalog-blocked-pending-license': 'Catalog — items blocked-pending-license (zero-blockers policy)',
 };
 
@@ -524,9 +766,10 @@ function main(): void {
   }
 
   const report = newReport();
-  const templateCount = checkTemplates(report);
+  const { count: templateCount, slugs: templateSlugs } = checkTemplates(report);
   const catalogItems = loadCatalog(args.libraryDir);
   const catalogCount = checkCatalog(report, args.libraryDir, catalogItems);
+  checkDesignIndex(report, templateSlugs);
   const total = printReport(report, templateCount, catalogCount);
   process.exitCode = total === 0 ? 0 : 1;
 }
