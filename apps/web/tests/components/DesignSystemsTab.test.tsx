@@ -375,7 +375,7 @@ function surfaceSelect(): HTMLSelectElement {
 function surfacePillCount(label: string): string | null {
   for (const option of Array.from(surfaceSelect().options)) {
     const match = option.textContent?.match(/^(.*) \((\d+)\)$/);
-    if (match && match[1] === label) return match[2];
+    if (match && match[1] === label) return match[2] ?? null;
   }
   return null;
 }

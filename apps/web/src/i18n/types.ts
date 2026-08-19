@@ -765,6 +765,10 @@ export interface Dict {
   'settings.memoryStarterFeedbackDesc': string;
   'settings.memoryStarterFeedbackBody': string;
   'settings.memoryStarterProjectName': string;
+'settings.memoryTypeFilterLabel': string;
+'settings.memoryActiveFiltersAria': string;
+'settings.memoryClearFilters': string;
+'settings.memoryRemoveTypeFilterLabel': string;
   'settings.memoryStarterProjectDesc': string;
   'settings.memoryStarterProjectBody': string;
   'settings.memorySaveHint': string;
@@ -2444,6 +2448,9 @@ export interface Dict {
   'ds.tokens': string;
   'ds.specToggle': string;
   'ds.specLoading': string;
+  'ds.activeFiltersAria': string;
+  'ds.clearFilters': string;
+  'ds.removeSurfaceFilterLabel': string;
 
   // Avatar menu (project topbar)
   'avatar.title': string;
