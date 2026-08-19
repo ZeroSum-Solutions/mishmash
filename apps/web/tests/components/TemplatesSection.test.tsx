@@ -217,6 +217,34 @@ describe('TemplatesSection category sections', () => {
   });
 });
 
+// F007 R2: search is a facet like source/category — it must surface in the
+// active-filters summary, and "Clear filters" must reset it along with
+// everything else. Regression coverage for a bug where Clear filters reset
+// source+category but left `query` (and its chip) untouched.
+describe('TemplatesSection active filters', () => {
+  it('shows a chip for an active search query and clears it on "Clear filters"', () => {
+    const templates = [
+      skill({ id: 'landing-1', name: 'Landing One', category: 'landing-page' }),
+      skill({ id: 'deck-1', name: 'Deck One', category: 'deck' }),
+    ];
+    render(<TemplatesSection templates={templates} active onUseTemplate={vi.fn()} />);
+
+    const search = screen.getByTestId('templates-search') as HTMLInputElement;
+    fireEvent.change(search, { target: { value: 'deck' } });
+    expect(search.value).toBe('deck');
+
+    const summary = screen.getByRole('group', { name: 'Active filters' });
+    expect(within(summary).getByText('deck')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(search.value).toBe('');
+    // Every chip — including the search chip — is gone, so the summary
+    // itself renders nothing.
+    expect(screen.queryByRole('group', { name: 'Active filters' })).toBeNull();
+  });
+});
+
 // PRD C8 — the create-from-template action opens the shared GuidedCreateDialog
 // in front of the existing single-click create, instead of creating directly.
 describe('TemplatesSection guided create wiring', () => {

@@ -1081,6 +1081,8 @@ export interface Dict {
   'templates.sourceFilterLabel': string;
   'templates.activeFiltersAria': string;
   'templates.clearFilters': string;
+  'templates.clearSearch': string;
+  'templates.removeFilter': string;
   // Client message center
   'messageCenter.openAria': string;
   'messageCenter.unreadCount': string;

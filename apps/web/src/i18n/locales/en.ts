@@ -739,6 +739,8 @@ export const en: Dict = {
   'templates.sourceFilterLabel': 'Source',
   'templates.activeFiltersAria': 'Active filters',
   'templates.clearFilters': 'Clear filters',
+  'templates.clearSearch': 'Clear search',
+  'templates.removeFilter': 'Remove filter: {label}',
   'messageCenter.openAria': 'Open message center',
   'messageCenter.unreadCount': '{count} unread',
   'messageCenter.title': 'Message center',

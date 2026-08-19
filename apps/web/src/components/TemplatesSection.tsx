@@ -19,7 +19,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { GuidedCreateBrief, SkillSummary } from '@open-design/contracts';
-import { FilterActiveSummary, FilterSelect } from '@open-design/components';
+import { FilterActiveSummary, FilterSearchInput, FilterSelect } from '@open-design/components';
 import { Icon } from './Icon';
 import { MediaFallback } from './MediaFallback';
 import { GuidedCreateDialog } from './GuidedCreateDialog';
@@ -488,16 +488,15 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
       </header>
 
       <div className="templates-view__controls">
-        <label className="templates-view__search">
-          <Icon name="search" size={15} />
-          <input
-            type="search"
-            value={query}
-            placeholder={t('templates.search')}
-            onChange={(e) => setQuery(e.target.value)}
-            data-testid="templates-search"
-          />
-        </label>
+        <FilterSearchInput
+          label={t('templates.search')}
+          value={query}
+          onChange={setQuery}
+          placeholder={t('templates.search')}
+          clearLabel={t('templates.clearSearch')}
+          className="templates-view__search-field"
+          testId="templates-search"
+        />
         <div className="templates-view__filters">
           <FilterSelect
             label={t('templates.sourceFilterLabel')}
@@ -533,16 +532,30 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
         ariaLabel={t('templates.activeFiltersAria')}
         clearAllLabel={t('templates.clearFilters')}
         onClearAll={() => {
+          setQuery('');
           setSourceFilter('all');
           setCategoryFilter('all');
         }}
         chips={[
+          ...(query.trim()
+            ? [
+                {
+                  id: 'search',
+                  label: query.trim(),
+                  removeLabel: t('templates.removeFilter', { label: query.trim() }),
+                  onRemove: () => setQuery(''),
+                },
+              ]
+            : []),
           ...(sourceFilter !== 'all'
             ? [
                 {
                   id: 'source',
                   label:
                     sourceFilter === 'user' ? t('templates.sourceUser') : t('templates.sourceBuiltIn'),
+                  removeLabel: t('templates.removeFilter', {
+                    label: sourceFilter === 'user' ? t('templates.sourceUser') : t('templates.sourceBuiltIn'),
+                  }),
                   onRemove: () => setSourceFilter('all'),
                 },
               ]
@@ -552,6 +565,7 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
                 {
                   id: 'category',
                   label: categoryLabel(activeCategoryFilter, t),
+                  removeLabel: t('templates.removeFilter', { label: categoryLabel(activeCategoryFilter, t) }),
                   onRemove: () => setCategoryFilter('all'),
                 },
               ]
