@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, Dispatch, SetStateAction } from 'react';
 import { Button, VisuallyHidden } from '@open-design/components';
-import type { AmrWalletSnapshot } from '@open-design/contracts';
+import type { AmrWalletSnapshot, RatchetDecisionDto } from '@open-design/contracts';
 import { validateBaseUrl } from '@open-design/contracts/api/connectionTest';
 import {
   agentIdToTracking,
@@ -181,8 +181,13 @@ import {
   type ByokDraftValidation,
 } from './byok/validation';
 import {
+  explainCritiqueStatusReason,
   setCritiqueTheaterEnabled,
+  summarizeConformanceHistory,
+  useCritiqueConformance,
+  useCritiqueStatus,
   useCritiqueTheaterEnabled,
+  type CritiqueStatusReason,
 } from './Theater';
 import {
   ACCENT_SWATCHES,
@@ -8412,13 +8417,92 @@ function AppearanceSection({
  * (`/`), the toggle is localStorage-only, and a contextual hint tells
  * the user that per-project persistence requires opening a project
  * first. That matches the actual scope of the wire-up.
+ *
+ * Below the checkbox, a "Resolved status" block calls
+ * `GET /api/projects/:id/critique/status` and shows the DAEMON's
+ * answer plus which factor decided it (skill policy, project
+ * override, env override, or the rollout phase default) — see
+ * `describeCritiqueStatusReason` / `explainCritiqueStatusReason`. The
+ * checkbox above only ever reflects the browser's own preference, so
+ * a required or opt-out skill policy can make the two disagree; that
+ * case gets its own visible warning rather than leaving the user to
+ * guess why an unchecked box still runs Design Jury. A "Fleet
+ * conformance" block below it mirrors `od critique conformance`.
  */
+type SettingsTranslate = (key: keyof Dict, vars?: Record<string, string | number>) => string;
+
+/**
+ * Renders WHY `CritiqueStatusResponse.enabled` came out the way it did,
+ * per the resolution order `explainCritiqueStatusReason` mirrors from
+ * `apps/daemon/src/critique/rollout.ts`. Kept separate from the
+ * checkbox's own copy so a user can see "the checkbox is off, but a
+ * required skill turns Design Jury on anyway" rather than just a bare
+ * boolean.
+ */
+function describeCritiqueStatusReason(t: SettingsTranslate, reason: CritiqueStatusReason): string {
+  switch (reason.kind) {
+    case 'skill-opt-out':
+      return t('critiqueTheater.settingsStatusReasonSkillOptOut');
+    case 'skill-required':
+      return t('critiqueTheater.settingsStatusReasonSkillRequired');
+    case 'project-override':
+      return t('critiqueTheater.settingsStatusReasonProjectOverride', {
+        value: reason.value
+          ? t('critiqueTheater.settingsStatusOn')
+          : t('critiqueTheater.settingsStatusOff'),
+      });
+    case 'env-override':
+      return t('critiqueTheater.settingsStatusReasonEnvOverride', {
+        value: reason.value
+          ? t('critiqueTheater.settingsStatusOn')
+          : t('critiqueTheater.settingsStatusOff'),
+      });
+    case 'phase-default':
+      return t('critiqueTheater.settingsStatusReasonPhase', { phase: reason.phase });
+  }
+}
+
+/** Same idea as `describeCritiqueStatusReason`, for the ratchet's hold/promote/demote decision. */
+function describeCritiqueConformanceDecision(
+  t: SettingsTranslate,
+  decision: RatchetDecisionDto,
+): string {
+  switch (decision.kind) {
+    case 'hold':
+      return t('critiqueTheater.settingsConformanceDecisionHold', {
+        phase: decision.current,
+        reason: decision.reason,
+      });
+    case 'promote':
+      return t('critiqueTheater.settingsConformanceDecisionPromote', {
+        from: decision.from,
+        to: decision.to,
+        days: decision.evidenceDays,
+      });
+    case 'demote':
+      return t('critiqueTheater.settingsConformanceDecisionDemote', {
+        from: decision.from,
+        to: decision.to,
+        reason: decision.reason,
+      });
+  }
+}
+
 function CritiqueTheaterSection() {
   const { t } = useI18n();
   const analytics = useAnalytics();
   const enabled = useCritiqueTheaterEnabled();
   const route = useRoute();
   const activeProjectId = route.kind === 'project' ? route.projectId : null;
+  const { status, loading: statusLoading, error: statusError } = useCritiqueStatus(activeProjectId);
+  const { conformance, loading: conformanceLoading, error: conformanceError } = useCritiqueConformance();
+  const conformanceSummary = conformance ? summarizeConformanceHistory(conformance.window.history) : null;
+  // The checkbox reflects the browser's stored preference; `status.enabled`
+  // is the daemon's resolved answer after skill/project/env/phase rules.
+  // The two can legitimately disagree (a required or opt-out skill policy
+  // always wins server-side) and a user staring at an unchecked box with
+  // no explanation is exactly the bug this surface exists to fix.
+  const disagreesWithCheckbox = status !== null && status.enabled !== enabled;
   return (
     <section className="settings-section">
       <div className="section-head">
@@ -8465,6 +8549,64 @@ function CritiqueTheaterSection() {
           </small>
         )}
       </label>
+      <div data-testid="critique-status-block">
+        <h4>{t('critiqueTheater.settingsStatusHeading')}</h4>
+        {activeProjectId === null ? (
+          <p className="hint">{t('critiqueTheater.settingsStatusNoProjectHint')}</p>
+        ) : statusLoading ? (
+          <p className="hint">{t('critiqueTheater.settingsStatusLoading')}</p>
+        ) : statusError ? (
+          <p className="hint" role="alert">
+            {t('critiqueTheater.settingsStatusError', { error: statusError.message })}
+          </p>
+        ) : status ? (
+          <>
+            <p className="hint">
+              {status.enabled
+                ? t('critiqueTheater.settingsStatusEnabledSummary')
+                : t('critiqueTheater.settingsStatusDisabledSummary')}
+            </p>
+            <small className="hint">
+              {describeCritiqueStatusReason(t, explainCritiqueStatusReason(status.resolution))}
+            </small>
+            {disagreesWithCheckbox ? (
+              <p className="hint" role="alert">
+                {t('critiqueTheater.settingsStatusDisagreeWarning')}
+              </p>
+            ) : null}
+            {status.resolution.approximate ? (
+              <small className="hint">{t('critiqueTheater.settingsStatusApproximateNote')}</small>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+      <div data-testid="critique-conformance-block">
+        <h4>{t('critiqueTheater.settingsConformanceHeading')}</h4>
+        {conformanceLoading ? (
+          <p className="hint">{t('critiqueTheater.settingsConformanceLoading')}</p>
+        ) : conformanceError ? (
+          <p className="hint" role="alert">
+            {t('critiqueTheater.settingsConformanceError', { error: conformanceError.message })}
+          </p>
+        ) : conformance ? (
+          <>
+            {conformanceSummary ? (
+              <p className="hint">
+                {t('critiqueTheater.settingsConformanceSummary', {
+                  days: conformance.window.days,
+                  shippedPct: conformanceSummary.shippedPct,
+                  cleanPct: conformanceSummary.cleanPct,
+                })}
+              </p>
+            ) : (
+              <p className="hint">{t('critiqueTheater.settingsConformanceEmpty')}</p>
+            )}
+            <small className="hint">
+              {describeCritiqueConformanceDecision(t, conformance.decision)}
+            </small>
+          </>
+        ) : null}
+      </div>
     </section>
   );
 }

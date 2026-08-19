@@ -20,6 +20,12 @@ export {
   useCritiqueTheaterEnabled,
   setCritiqueTheaterEnabled,
 } from './hooks/useCritiqueTheaterEnabled';
+export { useCritiqueStatus } from './hooks/useCritiqueStatus';
+export { useCritiqueConformance } from './hooks/useCritiqueConformance';
+export { explainCritiqueStatusReason } from './critique-status-reason';
+export type { CritiqueStatusReason } from './critique-status-reason';
+export { summarizeConformanceHistory } from './critique-conformance-summary';
+export type { CritiqueConformanceSummary } from './critique-conformance-summary';
 export type {
   CritiqueState,
   CritiqueAction,

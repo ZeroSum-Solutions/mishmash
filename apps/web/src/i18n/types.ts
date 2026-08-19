@@ -4299,6 +4299,29 @@ export interface Dict {
   'critiqueTheater.settingsEnabledDescription': string;
   'critiqueTheater.settingsEnabledProjectHint': string;
   'critiqueTheater.settingsEnabledNoProjectHint': string;
+  'critiqueTheater.settingsStatusHeading': string;
+  'critiqueTheater.settingsStatusLoading': string;
+  'critiqueTheater.settingsStatusError': string;
+  'critiqueTheater.settingsStatusNoProjectHint': string;
+  'critiqueTheater.settingsStatusEnabledSummary': string;
+  'critiqueTheater.settingsStatusDisabledSummary': string;
+  'critiqueTheater.settingsStatusApproximateNote': string;
+  'critiqueTheater.settingsStatusReasonSkillOptOut': string;
+  'critiqueTheater.settingsStatusReasonSkillRequired': string;
+  'critiqueTheater.settingsStatusReasonProjectOverride': string;
+  'critiqueTheater.settingsStatusReasonEnvOverride': string;
+  'critiqueTheater.settingsStatusReasonPhase': string;
+  'critiqueTheater.settingsStatusDisagreeWarning': string;
+  'critiqueTheater.settingsStatusOn': string;
+  'critiqueTheater.settingsStatusOff': string;
+  'critiqueTheater.settingsConformanceHeading': string;
+  'critiqueTheater.settingsConformanceLoading': string;
+  'critiqueTheater.settingsConformanceError': string;
+  'critiqueTheater.settingsConformanceEmpty': string;
+  'critiqueTheater.settingsConformanceSummary': string;
+  'critiqueTheater.settingsConformanceDecisionHold': string;
+  'critiqueTheater.settingsConformanceDecisionPromote': string;
+  'critiqueTheater.settingsConformanceDecisionDemote': string;
 
   // Diagnostics export
   'diagnostics.exportTitle': string;
