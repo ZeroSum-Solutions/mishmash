@@ -671,6 +671,7 @@ import { createAnomalySurface, registerAnomalyRoutes } from './routes/anomalies.
 import { createCompositionMetricsStore } from './composition-metrics-store.js';
 import { registerCompositionMetricsRoutes } from './routes/composition-metrics.js';
 import { buildCatalogueCandidates, registerCatalogueMatchRoutes } from './routes/catalogue-match.js';
+import { registerDesignAdvisorRoutes } from './routes/design-advisor.js';
 import { registerTelemetryRoutes } from './routes/telemetry.js';
 import {
   assembleExample,
@@ -2706,6 +2707,14 @@ export async function startServer({
   registerCatalogueMatchRoutes(app, {
     listAllSkillLikeEntries,
     designTemplateRoots: DESIGN_TEMPLATE_ROOTS,
+  });
+
+  // F001 R6 -- design advisor. designIndexPath always points at the
+  // built-in design-templates/ root's index.json (F001 R1's build
+  // artifact), not the user-installed root -- the index is only ever
+  // generated for the committed catalogue.
+  registerDesignAdvisorRoutes(app, {
+    designIndexPath: path.join(DESIGN_TEMPLATES_DIR, 'index.json'),
   });
 
   const telemetry = registerTelemetryRoutes(app, {
