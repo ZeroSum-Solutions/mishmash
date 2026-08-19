@@ -1078,6 +1078,9 @@ export interface Dict {
   'templates.category.inspiration': string;
   'templates.category.tool': string;
   'templates.category.uncategorized': string;
+  'templates.sourceFilterLabel': string;
+  'templates.activeFiltersAria': string;
+  'templates.clearFilters': string;
   // Client message center
   'messageCenter.openAria': string;
   'messageCenter.unreadCount': string;
