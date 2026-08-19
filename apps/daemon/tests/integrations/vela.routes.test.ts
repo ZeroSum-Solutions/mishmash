@@ -1565,11 +1565,15 @@ describe('the generic AMR proxy refuses the vendor message feed', () => {
         'api/v1/wallet/r%C3%A9sum%C3%A9',
         'api/v1/models/%E6%97%A5%E6%9C%AC',
         'api/v1/wallet/entry%00',
+        // An escaped literal percent in a resource id: decodes once to a bare
+        // `%`, which cannot decode again. Refusing that broke a real path.
+        'api/v1/wallet/100%25',
+        'api/v1/models/a%25b%25c',
       ]) {
         const response = await fetch(`${baseUrl}/api/integrations/vela/api-proxy/${path}`);
         expect(response.status, path).toBe(200);
       }
-      expect(requestSpy).toHaveBeenCalledTimes(3);
+      expect(requestSpy).toHaveBeenCalledTimes(5);
     } finally {
       requestSpy.mockRestore();
     }

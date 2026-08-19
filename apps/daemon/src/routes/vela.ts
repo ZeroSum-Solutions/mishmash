@@ -123,16 +123,13 @@ const AMR_PROXY_ALLOWED_PREFIX = '/api/v1/';
 // stacks do both — so `message%2Dcenter` and `Message-Center` would sail past
 // a raw compare and still resolve to the vendor's real endpoint.
 //
-// Parse once (which resolves the query, the fragment and any literal dot
-// segments), then decode as a plain string. Re-parsing between passes is what
-// an earlier draft did, and it never converged on a path holding a non-ASCII
-// character or a control byte: `URL` re-encodes those every pass and
-// `decodeURIComponent` undoes it, so every accented AMR path exhausted the
-// loop and was refused. Dot segments are resolved again afterwards because a
-// decode can reveal ones the first parse could not see (`..%2f`).
-//
-// Returns null when the suffix cannot be normalized; the caller refuses those
-// rather than forwarding something it cannot reason about.
+// Every decode stage is classified, not just the last one, because the two
+// failure modes pull in opposite directions. Refusing anything that will not
+// decode cleanly broke `%25` (an escaped literal percent), which decodes once
+// to a bare `%` and then legitimately cannot decode again — a real path on a
+// real resource id. Classifying only the fully decoded form would miss a
+// vendor endpoint that only appears at an intermediate stage. Looking at all
+// of them costs nothing and is wrong in neither direction.
 function removeDotSegments(pathname: string): string {
   const out: string[] = [];
   for (const segment of pathname.split('/')) {
@@ -146,32 +143,45 @@ function removeDotSegments(pathname: string): string {
   return out.join('/') || '/';
 }
 
-function normalizeAmrProxyPathname(suffix: string): string | null {
+function settlePathname(pathname: string): string {
+  // A decoded `?` or `#` is a delimiter to the upstream, so nothing after it
+  // is part of the path it routes on. A backslash is a separator to plenty of
+  // stacks.
+  const delimiter = pathname.search(/[?#]/);
+  const cut = delimiter === -1 ? pathname : pathname.slice(0, delimiter);
+  return removeDotSegments(cut.replace(/\\/g, '/'))
+    .replace(/\/{2,}/g, '/')
+    .toLowerCase();
+}
+
+/**
+ * Every form of the path an upstream might route on, most-encoded first.
+ * Returns null only when the suffix cannot be parsed at all, or when it is
+ * still decoding after the pass budget — a shape no real path has, and the one
+ * case where refusing is safer than guessing.
+ */
+function amrProxyPathStages(suffix: string): string[] | null {
   let pathname: string;
   try {
     pathname = new URL(suffix, 'http://amr-proxy.local').pathname;
   } catch {
     return null;
   }
-  for (let pass = 0; pass < 4 && pathname.includes('%'); pass += 1) {
+  const stages = [settlePathname(pathname)];
+  for (let pass = 0; pass < 4; pass += 1) {
+    if (!pathname.includes('%')) return stages;
     let decoded: string;
     try {
       decoded = decodeURIComponent(pathname);
     } catch {
-      return null;
+      // Nothing further to decode; what we have is what the upstream sees.
+      return stages;
     }
-    if (decoded === pathname) break;
+    if (decoded === pathname) return stages;
     pathname = decoded;
+    stages.push(settlePathname(pathname));
   }
-  // A decoded `?` or `#` is a delimiter to the upstream, so everything after
-  // it is not part of the path it routes on. Cutting here is what stops
-  // `message-center%23anything` from reading as a different endpoint.
-  const delimiter = pathname.search(/[?#]/);
-  if (delimiter !== -1) pathname = pathname.slice(0, delimiter);
-  // A backslash is a path separator to plenty of upstream stacks.
-  return removeDotSegments(pathname.replace(/\\/g, '/'))
-    .replace(/\/{2,}/g, '/')
-    .toLowerCase();
+  return pathname.includes('%') ? null : stages;
 }
 
 function isAmrProxyDeniedPath(pathname: string): boolean {
@@ -184,12 +194,12 @@ function proxyAmrApiRequest(req: Request, res: Response): void {
     res.status(404).json({ error: 'unknown_amr_api_proxy_path' });
     return;
   }
-  const normalized = normalizeAmrProxyPathname(suffix);
-  if (normalized === null || !normalized.startsWith(AMR_PROXY_ALLOWED_PREFIX)) {
+  const stages = amrProxyPathStages(suffix);
+  if (stages === null || !stages[stages.length - 1]!.startsWith(AMR_PROXY_ALLOWED_PREFIX)) {
     res.status(404).json({ error: 'unknown_amr_api_proxy_path' });
     return;
   }
-  if (isAmrProxyDeniedPath(normalized)) {
+  if (stages.some(isAmrProxyDeniedPath)) {
     res.status(404).json({ error: 'message_center_is_local' });
     return;
   }
