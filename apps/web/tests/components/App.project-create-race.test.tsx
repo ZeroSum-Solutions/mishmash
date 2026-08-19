@@ -500,6 +500,27 @@ describe('App project creation routing', () => {
     );
   });
 
+  it('bypasses the daemon cache for an explicit user agent refresh', async () => {
+    mockedListProjects.mockResolvedValue([]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(mockedFetchAgentsStream).toHaveBeenCalledTimes(1);
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Refresh agents' }));
+    await waitFor(() => {
+      expect(mockedFetchAgentsStream).toHaveBeenCalledTimes(2);
+    });
+
+    expect(mockedFetchAgentsStream.mock.calls[0]?.[0]).not.toMatchObject({
+      forceRefresh: true,
+    });
+    expect(mockedFetchAgentsStream.mock.calls[1]?.[0]).toMatchObject({
+      forceRefresh: true,
+    });
+  });
+
   it('ignores stale streamed writes from an older bootstrap after a newer rescan', async () => {
     const staleCodexAgent: AgentInfo = {
       id: 'codex',

@@ -1444,7 +1444,11 @@ function AppInner() {
   );
 
   const refreshAgents = useCallback(
-    async (options?: { throwOnError?: boolean; agentCliEnv?: AppConfig['agentCliEnv'] }) => {
+    async (options?: {
+      throwOnError?: boolean;
+      agentCliEnv?: AppConfig['agentCliEnv'];
+      forceRefresh?: boolean;
+    }) => {
       if (options && Object.prototype.hasOwnProperty.call(options, 'agentCliEnv')) {
         const nextConfig = clearStaleAmrModelChoiceOnProfileChange(config, {
           ...config,
@@ -1459,6 +1463,7 @@ function AppInner() {
       setAgentsLoading(true);
       try {
         const next = await fetchAgentsStream({
+          forceRefresh: options?.forceRefresh,
           onAgent: (agent) => {
             if (!isCurrentAgentStreamRequest(agentRequestId)) return;
             setAgents((current) =>
@@ -1484,6 +1489,14 @@ function AppInner() {
       }
     },
     [beginAgentStreamRequest, config, isCurrentAgentStreamRequest],
+  );
+
+  const refreshAgentsFresh = useCallback(
+    (options?: {
+      throwOnError?: boolean;
+      agentCliEnv?: AppConfig['agentCliEnv'];
+    }) => refreshAgents({ ...options, forceRefresh: true }),
+    [refreshAgents],
   );
 
   useEffect(() => {
@@ -1521,7 +1534,7 @@ function AppInner() {
         setConfig(next);
         amrModelsRef.current = null;
         restartAmrPolling();
-        void refreshAgents();
+        void refreshAgents({ forceRefresh: true });
       });
     };
     window.addEventListener(APP_CONFIG_CHANGED_EVENT, handleAppConfigChanged);
@@ -2532,7 +2545,7 @@ function AppInner() {
         onAgentChange={handleAgentChange}
         onAgentModelChange={handleAgentModelChange}
         onApiModelChange={handleApiModelChange}
-        onRefreshAgents={refreshAgents}
+        onRefreshAgents={refreshAgentsFresh}
         onThemeChange={handleThemeChange}
         onOpenSettings={openSettings}
         onOpenAmrSettings={openAmrSettings}
@@ -2584,7 +2597,7 @@ function AppInner() {
         onSilentUpdatePreferenceChange={handleSilentUpdatePreferenceChange}
         onSkillsRefresh={refreshSkills}
         onSkillsChanged={handleSkillsChanged}
-        onRefreshAgents={refreshAgents}
+        onRefreshAgents={refreshAgentsFresh}
         onThemeChange={handleThemeChange}
         skillsLoading={skillsLoading}
         designSystemsLoading={dsLoading}
@@ -2726,7 +2739,7 @@ function AppInner() {
             settingsDraftConfigRef.current = null;
             setSettingsHighlight(null);
           }}
-          onRefreshAgents={refreshAgents}
+          onRefreshAgents={refreshAgentsFresh}
           onAmrLoginStatusChange={handleAmrLoginStatusChange}
           daemonMediaProviders={daemonMediaProviders}
           daemonMediaProvidersFetchState={daemonMediaProvidersFetchState}
