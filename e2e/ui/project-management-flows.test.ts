@@ -2814,7 +2814,10 @@ test('[P2] change pet opens pet settings and updates the custom companion draft'
   const dialog = await openEntrySettingsDialog(page, /^Pets\b/);
   await expect(dialog.getByRole('heading', { level: 2, name: 'Pets' })).toBeVisible();
 
-  await dialog.getByRole('tab', { name: 'Custom' }).click();
+  // The Pets source picker migrated from a subtab-pill tablist to the shared
+  // FilterSelect primitive (F007), which renders a native select. Drive it by
+  // option value rather than the tab role it no longer has.
+  await dialog.getByTestId('pet-source-select').selectOption('custom');
   const customPanel = dialog.locator('.pet-custom');
   await expect(customPanel).toBeVisible();
 

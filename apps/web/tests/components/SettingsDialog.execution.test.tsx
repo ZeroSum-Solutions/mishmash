@@ -4661,7 +4661,10 @@ describe('SettingsDialog pets interactions', () => {
     });
     expect(screen.queryByText('Jade')).toBeNull();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Community' }));
+    // F007 migrated the Pets source picker from a subtab-pill tablist to the
+    // shared FilterSelect primitive (a native select), so drive it by option
+    // value instead of the tab role it no longer exposes.
+    fireEvent.change(screen.getByTestId('pet-source-select'), { target: { value: 'community' } });
     expect(screen.getByText('Recently hatched')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Download community pets' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
@@ -4675,7 +4678,7 @@ describe('SettingsDialog pets interactions', () => {
       { initialSection: 'pet' },
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Custom' }));
+    fireEvent.change(screen.getByTestId('pet-source-select'), { target: { value: 'custom' } });
 
     fireEvent.change(screen.getByDisplayValue('Buddy'), {
       target: { value: 'Scout' },
@@ -4768,7 +4771,7 @@ describe('SettingsDialog pets interactions', () => {
       { initialSection: 'pet' },
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Community' }));
+    fireEvent.change(screen.getByTestId('pet-source-select'), { target: { value: 'community' } });
     await waitFor(() => {
       expect(fetchCodexPetsMock).toHaveBeenCalledTimes(1);
     });
@@ -4798,7 +4801,7 @@ describe('SettingsDialog pets interactions', () => {
       { initialSection: 'pet' },
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Community' }));
+    fireEvent.change(screen.getByTestId('pet-source-select'), { target: { value: 'community' } });
     fireEvent.change(screen.getByLabelText('Pet concept (optional)'), {
       target: { value: 'a tiny pixel-art bee in a cozy sweater' },
     });
