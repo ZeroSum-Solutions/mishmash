@@ -38,6 +38,7 @@ export const uiP0Groups = {
       "ui/entry-chrome-flows.test.ts",
       "ui/entry-configuration-flows.test.ts",
       "ui/api-empty-response.test.ts",
+      "ui/message-center-no-upstream.test.ts",
     ],
   },
   "settings-onboarding": {
@@ -100,6 +101,7 @@ const uiP0CoverageFiles = [
   "ui/critical-smoke.test.ts",
   "ui/entry-chrome-flows.test.ts",
   "ui/entry-configuration-flows.test.ts",
+  "ui/message-center-no-upstream.test.ts",
   "ui/project-management-flows.test.ts",
   "ui/real-daemon-run.test.ts",
   "ui/settings-api-protocol.test.ts",

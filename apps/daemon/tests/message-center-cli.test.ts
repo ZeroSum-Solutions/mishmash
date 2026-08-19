@@ -5,7 +5,14 @@ import { dirname, resolve as pathResolve } from 'node:path';
 import { promisify } from 'node:util';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { startServer } from '../src/server.js';
+
 const execFileP = promisify(execFile);
+
+interface StartedDaemon {
+  url: string;
+  shutdown: () => Promise<void> | void;
+}
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DAEMON_ROOT = pathResolve(__dirname, '..');
 const REPO_ROOT = pathResolve(__dirname, '../../..');
@@ -98,6 +105,14 @@ async function runCli(args: string[]): Promise<{ stdout: string; stderr: string;
   }
 }
 
+// The stub server below accepts any responder a test hands it — useful for
+// proving the CLI builds the right request (query params, locale mapping,
+// output formatting), but it would stay green even if the real daemon route
+// still proxied to the vendor and returned arbitrary messages. The second
+// `describe` block drives the CLI against the actual registered
+// `/api/integrations/vela/message-center/*` handler (apps/daemon/src/routes/
+// vela.ts) and asserts the exact local-empty contract R1 promises, which the
+// stub cannot prove either way.
 describe('od message-center CLI', () => {
   let stub: StubServer;
 
@@ -244,5 +259,47 @@ describe('od message-center CLI', () => {
     expect(result.code).toBe(2);
     expect(stub.requests).toHaveLength(0);
     expect(result.stderr).toMatch(/Usage: od message-center read/);
+  });
+});
+
+describe('od message-center CLI against the registered local route', () => {
+  let daemon: StartedDaemon;
+
+  beforeAll(async () => {
+    daemon = (await startServer({ port: 0, returnServer: true })) as StartedDaemon;
+  });
+
+  afterAll(async () => {
+    await daemon.shutdown();
+  });
+
+  it('`message-center list --json` returns the exact empty page, not a stub-shaped stand-in', async () => {
+    const result = await runCli(['message-center', 'list', '--json', '--daemon-url', daemon.url]);
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ messages: [], nextCursor: null, unreadCount: 0 });
+  });
+
+  it('`message-center list` prints the empty-inbox line against the real route', async () => {
+    const result = await runCli(['message-center', 'list', '--daemon-url', daemon.url]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe('No message-center messages.\n');
+  });
+
+  it('`message-center read <id>` acknowledges locally without a vendor round trip', async () => {
+    const result = await runCli(['message-center', 'read', 'anything', '--daemon-url', daemon.url]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('Marked message as read\tanything');
+  });
+
+  it('`message-center read --json` returns the real route\'s exact ack, not an arbitrary echo', async () => {
+    const result = await runCli(['message-center', 'read', 'anything', '--json', '--daemon-url', daemon.url]);
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ ok: true });
+  });
+
+  it('`message-center read-all --json` returns the real route\'s exact ok response', async () => {
+    const result = await runCli(['message-center', 'read-all', '--json', '--daemon-url', daemon.url]);
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ ok: true });
   });
 });
