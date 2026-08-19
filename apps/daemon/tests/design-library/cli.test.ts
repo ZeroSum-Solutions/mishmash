@@ -104,6 +104,10 @@ describe('design-library CLI privacy', () => {
     expect(output.groups[0]?.items[0]).toMatchObject({
       id: 'cli-safe-item',
       allowed_use: 'licensed-source-review',
+      // F009: redistribute is computed server-side and reaches the CLI
+      // through the same GET /api/design-library/catalog contract as
+      // `catalog --json` above — 'no' because this item is not own-code.
+      redistribute: 'no',
     });
     expect(stdout).not.toContain('UI8-INVOICE-PRIVATE-MARKER');
     expect(stdout).not.toContain('private.example.invalid');

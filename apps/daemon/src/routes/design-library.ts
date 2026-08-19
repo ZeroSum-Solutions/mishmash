@@ -289,12 +289,23 @@ function detectItemGallery(root: string, item: Pick<DesignLibraryItem, 'id' | 't
   return gallery;
 }
 
+// Whether a human may commit a copy of this item's bytes into this
+// repository's own git-tracked tree — see DesignLibraryItem.redistribute in
+// @open-design/contracts. Pure function of `allowed_use`, not a new
+// authorization input: `own-code` is Devin's own output with no vendor
+// restriction, every other tier (including the still-`blocked-pending-
+// license` state) carries a vendor or unresolved rights constraint and must
+// never be committed here.
+function deriveRedistribute(allowedUse: DesignLibraryAllowedUse | undefined): 'yes' | 'no' {
+  return allowedUse === 'own-code' ? 'yes' : 'no';
+}
+
 /**
- * Returns the catalog with `entry_html` and `gallery` stamped on every item.
- * One bounded depth-2 scan per collection plus a handful of `existsSync`
- * probes; the whole library resolves in well under a second and the catalog
- * is fetched once per session, so this stays inline rather than growing a
- * cache that would need its own invalidation rules.
+ * Returns the catalog with `entry_html`, `gallery`, and `redistribute`
+ * stamped on every item. One bounded depth-2 scan per collection plus a
+ * handful of `existsSync` probes; the whole library resolves in well under a
+ * second and the catalog is fetched once per session, so this stays inline
+ * rather than growing a cache that would need its own invalidation rules.
  */
 async function withComputedCatalogFields(root: string, catalog: unknown): Promise<Record<string, unknown>> {
   const base = (catalog && typeof catalog === 'object' ? catalog : {}) as Record<string, unknown>;
@@ -306,6 +317,7 @@ async function withComputedCatalogFields(root: string, catalog: unknown): Promis
       ...item,
       entry_html: await detectItemEntryHtml(root, item?.rel),
       gallery: detectItemGallery(root, item),
+      redistribute: deriveRedistribute(item?.allowed_use),
     })));
     return { ...group, items };
   }));
