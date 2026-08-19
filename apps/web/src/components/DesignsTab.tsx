@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Dialog, DialogDescription, DialogFooter, DialogTitle } from "@open-design/components";
+import { Dialog, DialogDescription, DialogFooter, DialogTitle, FilterSelect } from "@open-design/components";
 import { projectKindFromMetadataToTracking } from "@open-design/contracts/analytics";
 import { useAnalytics } from "../analytics/provider";
 import {
@@ -536,40 +536,23 @@ export function DesignsTab({
 		>
 			<div className="tab-panel-toolbar designs-toolbar">
 				<div className="toolbar-left">
-					<div
-						className="subtab-pill"
-						role="group"
-						aria-label={t("designs.filterAria")}
-					>
-						<button
-							aria-pressed={sub === "recent"}
-							className={sub === "recent" ? "active" : ""}
-							onClick={() => {
-								trackProjectsListControlsClick(analytics.track, {
-									page_name: "projects",
-									area: "list_controls",
-									element: "recent",
-								});
-								setSub("recent");
-							}}
-						>
-							{t("designs.subRecent")}
-						</button>
-						<button
-							aria-pressed={sub === "yours"}
-							className={sub === "yours" ? "active" : ""}
-							onClick={() => {
-								trackProjectsListControlsClick(analytics.track, {
-									page_name: "projects",
-									area: "list_controls",
-									element: "your_designs",
-								});
-								setSub("yours");
-							}}
-						>
-							{t("designs.subYours")}
-						</button>
-					</div>
+					<FilterSelect
+						label={t("designs.filterAria")}
+						value={sub}
+						testId="designs-sub-select"
+						options={[
+							{ value: "recent", label: t("designs.subRecent") },
+							{ value: "yours", label: t("designs.subYours") },
+						]}
+						onChange={(value) => {
+							trackProjectsListControlsClick(analytics.track, {
+								page_name: "projects",
+								area: "list_controls",
+								element: value === "recent" ? "recent" : "your_designs",
+							});
+							setSub(value as SubTab);
+						}}
+					/>
 				</div>
 				<div className="toolbar-right">
 					{onNewProject && projects.length > 0 ? (
@@ -678,7 +661,7 @@ export function DesignsTab({
 						</button>
 					) : null}
 					<div
-						className="subtab-pill"
+						className="designs-view-toggle"
 						role="group"
 						aria-label={t("designs.viewToggleAria")}
 					>
