@@ -226,6 +226,37 @@ describe('FileViewer — asset inlining never paints the raw document first', ()
     expect(frameSrcDoc()).not.toContain('File A');
   });
 
+  it('drops the retained inline when an edit removes the last asset ref', async () => {
+    // The retention key is the file, not the content, so a source change that
+    // no longer needs rewriting has nothing coming to replace what is held.
+    // Without an explicit clear the previous document stays on screen for
+    // good — there is no later event that corrects it.
+    vi.stubGlobal('fetch', fetchReturning(rawHtml('With refs')));
+    const { rerender } = render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlFile()} />,
+    );
+
+    await waitFor(() => expect(inlineState.calls).toBe(1));
+    await settleNextInline({ html: inlinedHtml('With refs') });
+    await waitFor(() => expect(frameSrcDoc()).toContain('With refs'));
+
+    const noRefs = `<html><head></head><body><h1>No refs now</h1>${SECTIONS}</body></html>`;
+    vi.stubGlobal('fetch', fetchReturning(noRefs));
+    await act(async () => {
+      rerender(
+        <FileViewer
+          projectId="project-1"
+          projectKind="prototype"
+          file={{ ...htmlFile(), mtime: 1710009999 }}
+        />,
+      );
+    });
+
+    await waitFor(() => expect(frameSrcDoc()).toContain('No refs now'));
+    expect(frameSrcDoc()).not.toContain('With refs');
+    expect(frameSrcDoc()).not.toContain(INLINE_MARKER);
+  });
+
   it('does not paint a pre-reload rewrite while Manual Edit holds the source frozen', async () => {
     // A guard, not a repro — it passes on `main` too. Review raised the case:
     // Reload skips its own `setSource(null)` while Manual Edit holds a frozen
@@ -262,7 +293,10 @@ describe('FileViewer — asset inlining never paints the raw document first', ()
     await act(async () => {
       screen.getByTestId('manual-edit-mode-toggle').click();
     });
-    await waitFor(() => expect(frameSrcDoc()).not.toContain('Before reload'));
+    // Definite state, not a string comparison against a missing frame: the
+    // post-reload rewrite is still pending, so the gate is up and there is no
+    // frame at all. The stale document is therefore provably not on screen.
+    await waitFor(() => expect(previewFrame()).toBeNull());
 
     while (inlineState.pending.length > 0) {
       await settleNextInline({ html: inlinedHtml('After reload') });

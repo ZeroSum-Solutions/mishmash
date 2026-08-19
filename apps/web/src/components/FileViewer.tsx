@@ -7718,7 +7718,14 @@ function HtmlViewer({
     // they can be normalized; wait for it rather than inlining a half-fixed
     // document (the effect re-runs when the set lands).
     if (projectRootAssetRefs && projectFilePathSet === null) return;
-    if (!hasRelativeAssetRefs(source) && !projectRootAssetRefs) return;
+    if (!hasRelativeAssetRefs(source) && !projectRootAssetRefs) {
+      // Nothing to rewrite for THIS source, so nothing is coming to replace a
+      // retained value — and the key alone cannot tell them apart, since the
+      // file did not change. Without this clear, an edit that removes the last
+      // relative ref leaves the previous document on screen for good.
+      setInlinedSource(null);
+      return;
+    }
     let cancelled = false;
     const key = inlinedSourceKey;
     void inlineRelativeAssets(source, projectId, file.name, projectFilePathSet, {
