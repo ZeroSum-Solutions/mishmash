@@ -7,7 +7,7 @@ import {
   type CSSProperties,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { Button } from '@open-design/components';
+import { Button, FilterActiveSummary, FilterSelect } from '@open-design/components';
 import { Icon, type IconName } from './Icon';
 import { ConnectorLogo, useResolvedTheme } from './ConnectorLogo';
 import { useT } from '../i18n';
@@ -1615,7 +1615,7 @@ export function MemorySection({
                   <button
                     key={id}
                     type="button"
-                    className="filter-pill"
+                    className="memory-quick-pill"
                     onClick={() => openPreview(id)}
                     title={id}
                   >
@@ -1929,7 +1929,7 @@ export function MemorySection({
                     <button
                       key={starter.nameKey}
                       type="button"
-                      className="filter-pill"
+                      className="memory-quick-pill"
                       onClick={() =>
                         setEditing({
                           id: editing.id,
@@ -2374,31 +2374,46 @@ export function MemorySection({
 
           <div className="library-toolbar is-row">
             <div className="library-filters">
-              <button
-                type="button"
-                className={`filter-pill${filter === 'all' ? ' active' : ''}`}
-                onClick={() => setFilter('all')}
-              >
-                {t('settings.memoryAll')}
-                <span className="filter-pill-count">
-                  {entries.length + visibleExtractions.length}
-                </span>
-              </button>
-              {TYPES.map((type) => {
-                const count = entries.filter((e) => e.type === type).length;
-                if (count === 0 && filter !== type) return null;
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    className={`filter-pill${filter === type ? ' active' : ''}`}
-                    onClick={() => setFilter(type)}
-                  >
-                    {TYPE_LABEL[type]}
-                    <span className="filter-pill-count">{count}</span>
-                  </button>
-                );
-              })}
+              <FilterSelect
+                label={t('settings.memoryTypeFilterLabel')}
+                value={filter}
+                defaultValue="all"
+                testId="memory-type-filter"
+                // Hide a type with no entries in the current set, but always
+                // keep "all" and the currently active type — mirrors the
+                // prior pill row's hide-empty-but-keep-active behavior.
+                options={[
+                  { value: 'all', label: t('settings.memoryAll'), count: entries.length + visibleExtractions.length },
+                  ...TYPES.filter((type) => {
+                    const count = entries.filter((e) => e.type === type).length;
+                    return count > 0 || filter === type;
+                  }).map((type) => ({
+                    value: type,
+                    label: TYPE_LABEL[type],
+                    count: entries.filter((e) => e.type === type).length,
+                  })),
+                ]}
+                onChange={(value) => setFilter(value as 'all' | MemoryType)}
+              />
+              <FilterActiveSummary
+                ariaLabel={t('settings.memoryActiveFiltersAria')}
+                clearAllLabel={t('settings.memoryClearFilters')}
+                onClearAll={() => setFilter('all')}
+                chips={
+                  filter !== 'all'
+                    ? [
+                        {
+                          id: 'memory-type',
+                          label: TYPE_LABEL[filter],
+                          removeLabel: t('settings.memoryRemoveTypeFilterLabel', {
+                            label: TYPE_LABEL[filter],
+                          }),
+                          onRemove: () => setFilter('all'),
+                        },
+                      ]
+                    : []
+                }
+              />
             </div>
             <div className="memory-management-actions">
               {visibleExtractions.length > 0 ? (
@@ -2570,7 +2585,7 @@ export function MemorySection({
               <details className="library-group memory-advanced-card">
                 <summary className="memory-details-summary">
                   <span className="memory-details-title">Memory tree</span>
-                  <span className="filter-pill-count">{memoryTree.length}</span>
+                  <span className="memory-count-badge">{memoryTree.length}</span>
                 </summary>
                 <p className="memory-advanced-hint">
                   Technical view of the same saved memories. Most users only

@@ -202,6 +202,36 @@
   gap: 4px;
 }
 
+/* Standalone pill-styled buttons that are NOT filter controls (an extraction's
+   written-memory-id shortcuts, the new-entry starter templates) — split out
+   from the shared `.filter-pill` class (styles/viewer/composio.css) so this
+   file's own tokens don't collide with the F007 filter-primitive migration. */
+.memory-quick-pill {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.memory-quick-pill:hover:not(:disabled) {
+  background: var(--bg-muted);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+/* Plain count badge (memory tree disclosure summary) — same numerals as the
+   pill count, without a pill to sit inside. */
+.memory-count-badge {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
 /* Memory section: pill that briefly confirms a manual save/create/delete.
    Pinned to the right edge of the section's flex column. */
 .memory-flash-pill {
