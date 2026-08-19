@@ -508,13 +508,6 @@
 }
 .routines-field textarea { resize: vertical; min-height: 80px; }
 
-.routines-field-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: 0.01em;
-}
-
 .routines-fieldrow { display: flex; gap: 12px; flex-wrap: wrap; }
 .routines-fieldrow > .routines-field { flex: 1 1 180px; min-width: 0; }
 .routines-fieldrow-2col > .routines-field { flex: 1 1 240px; }
@@ -527,8 +520,6 @@
   background: var(--bg-subtle);
   border-radius: var(--radius);
 }
-
-.routines-kind-pills { align-self: flex-start; }
 
 .routines-weekday-row {
   display: flex;
