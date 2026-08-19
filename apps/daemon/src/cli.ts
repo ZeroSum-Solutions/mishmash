@@ -10276,6 +10276,7 @@ async function runDesignLibraryShow(rawArgs) {
   console.log(`${item.label} (${item.rel})`);
   console.log(`Kind: ${item.kind} · ${item.files} files · ${item.size}`);
   console.log(`Allowed use: ${item.allowed_use}`);
+  if (item.redistribute) console.log(`Redistribute into this repo: ${item.redistribute}`);
   if (item.domains?.length) console.log(`Domains: ${item.domains.join(', ')}`);
   if (item.aspects?.length) console.log(`Aspects: ${item.aspects.join(', ')}`);
   if (item.stacks?.length) console.log(`Stack: ${item.stacks.join(', ')}`);

@@ -30,6 +30,19 @@ export interface DesignLibraryItem {
   category: string;
   domains: string[];
   allowed_use: DesignLibraryAllowedUse;
+  /**
+   * Whether a human may commit a copy of this item's bytes into this
+   * repository's own git-tracked tree. Derived, not authored: `'yes'` only
+   * for `own-code` (Devin's own output, no vendor restriction); `'no'` for
+   * every other tier, including `blocked-pending-license`. This is narrower
+   * than `allowed_use` — an item can be usable in-product (previewable,
+   * copyable into a *managed project*) while still `redistribute: 'no'`,
+   * because a managed project lives outside this repository's tracked tree.
+   * Computed by the daemon when it serves the catalog, same as `entry_html`
+   * and `gallery` above — absent only from hand-authored fixtures that
+   * predate this field.
+   */
+  redistribute?: 'yes' | 'no';
   /** Rel path of the collection this item duplicates, when known. */
   duplicate_of?: string;
   /**

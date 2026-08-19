@@ -253,6 +253,7 @@ export type Report = {
   'index-typography-invalid': Violation[];
   'index-scale-invalid': Violation[];
   'index-source-stale': Violation[];
+  'catalog-blocked-pending-license': Violation[];
 };
 
 // checkType -> array of { subject, detail }
@@ -276,6 +277,7 @@ export function newReport(): Report {
     'index-typography-invalid': [],
     'index-scale-invalid': [],
     'index-source-stale': [],
+    'catalog-blocked-pending-license': [],
   };
 }
 
@@ -588,6 +590,17 @@ function checkCatalog(report: Report, libraryDir: string, items: CatalogItem[]):
       }
     }
 
+    // Zero-blockers policy (F009): fail loudly on any item still resolving
+    // to blocked-pending-license instead of letting it sit unnoticed. This
+    // is an on-demand check, not a pnpm guard/CI gate — libraryDir defaults
+    // to a machine-local path that does not exist in CI (see DEFAULT_LIBRARY_DIR).
+    if (item.allowed_use === 'blocked-pending-license') {
+      report['catalog-blocked-pending-license'].push({
+        subject: id,
+        detail: typeof item.rel === 'string' ? item.rel : '(no rel)',
+      });
+    }
+
     const fp = fingerprint(item);
     if (fp === null) continue; // no metadata signal — excluded from duplicate detection
     const group = fingerprintGroups.get(fp);
@@ -639,6 +652,7 @@ const SECTION_TITLES: Record<keyof Report, string> = {
   'index-typography-invalid': 'Design index — invalid or missing typography role',
   'index-scale-invalid': 'Design index — density/motion_level not low|medium|high',
   'index-source-stale': 'Design index — row stale relative to current SKILL.md/template.json',
+  'catalog-blocked-pending-license': 'Catalog — items blocked-pending-license (zero-blockers policy)',
 };
 
 function printReport(report: Report, templateCount: number, catalogCount: number): number {

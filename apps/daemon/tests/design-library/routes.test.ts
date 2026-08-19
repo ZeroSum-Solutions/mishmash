@@ -378,6 +378,53 @@ describe('design library routes', () => {
       // Curated per-item descriptions authored in the external catalog must
       // reach consumers (web cards, preview dialog, `od design-library show`).
       description: 'Synthetic style blurb. Best for passthrough tests.',
+      // F009: redistribute is a computed field, derived from allowed_use —
+      // 'no' for every tier except own-code, since a human-local-only item
+      // carries a vendor/unresolved rights constraint that must never be
+      // committed into this repository's own tracked tree.
+      redistribute: 'no',
+    });
+  });
+
+  it('computes redistribute="yes" only for own-code items', async () => {
+    fixtureDir = mkdtempSync(path.join(tmpdir(), 'od-design-library-test-'));
+    writeFileSync(
+      path.join(fixtureDir, 'catalog.json'),
+      JSON.stringify({
+        library: 'Synthetic Test Library',
+        rights_ledger: 'synthetic-ledger-fixture',
+        note: 'redistribute derivation fixture',
+        total_collections: 1,
+        groups: [{
+          title: 'Synthetic Group',
+          folder: '00 Synthetic',
+          blurb: 'A synthetic group for tests.',
+          items: [{
+            id: 'own-code-item',
+            label: 'Own Code Item',
+            rel: '00 Synthetic/own-code-item',
+            thumb: null,
+            kind: 'Synthetic kind',
+            files: 1,
+            size: '1 KB',
+            category: '00 Synthetic',
+            domains: ['test-domain'],
+            allowed_use: 'own-code',
+          }],
+        }],
+      }, null, 2),
+      'utf8',
+    );
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/catalog`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { groups: { items: Record<string, unknown>[] }[] };
+    expect(body.groups[0]?.items[0]).toMatchObject({
+      id: 'own-code-item',
+      allowed_use: 'own-code',
+      redistribute: 'yes',
     });
   });
 

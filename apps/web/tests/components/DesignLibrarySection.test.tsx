@@ -59,6 +59,7 @@ const CATALOG: DesignLibraryCatalog = {
           category: 'ui-kit',
           domains: ['ui-kit', 'dashboard'],
           allowed_use: 'licensed-source-review',
+          redistribute: 'no',
           entry_html: 'index.html',
           description: 'Dark glassmorphic analytics dashboard. Best for SaaS admin panels.',
         },
@@ -275,6 +276,10 @@ describe('DesignLibrarySection', () => {
     // The same actions the card offers stay reachable from the dialog.
     expect(within(dialog).getByRole('button', { name: /open file/i })).toBeTruthy();
     expect(within(dialog).getByText('Start project')).toBeTruthy();
+    // F009: the computed `redistribute` field surfaces as its own badge,
+    // distinct from the allowed_use badge — this item is licensed-source-
+    // review, so it must never be committed into this repo's own tree.
+    expect(within(dialog).getByText('Not for repo')).toBeTruthy();
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Neon Dashboard Kit' })).toBeNull());

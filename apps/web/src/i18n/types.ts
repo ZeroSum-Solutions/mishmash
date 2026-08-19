@@ -4504,6 +4504,10 @@ export interface Dict {
   'designLibrary.allowedUse.licensedSourceReview': string;
   'designLibrary.allowedUse.humanLocalOnly': string;
   'designLibrary.allowedUse.blockedPendingLicense': string;
+  'designLibrary.redistribute.yesLabel': string;
+  'designLibrary.redistribute.noLabel': string;
+  'designLibrary.redistribute.yesTooltip': string;
+  'designLibrary.redistribute.noTooltip': string;
   // Kit starter (Stream A) — "Use as template" card action, shown only for
   // the two copyable allowed_use tiers (own-code, licensed-source-review).
   'designLibrary.useAsTemplate': string;
