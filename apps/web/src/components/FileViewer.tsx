@@ -6301,7 +6301,13 @@ function HtmlViewer({
   const [routingSource, setRoutingSource] = useState<string | null>(liveHtml ?? null);
   const [serverPoweredPreviewRequired, setServerPoweredPreviewRequired] = useState(false);
   const [previewAssetWarning, setPreviewAssetWarning] = useState<PreviewAssetWarning | null>(null);
-  const [inlinedSource, setInlinedSource] = useState<string | null>(null);
+  // Keyed so a retained inline survives a re-render of the SAME file but is
+  // never read under a different one. Clearing it unconditionally on every
+  // effect run is what made the canvas paint the raw document first and the
+  // inlined one a beat later.
+  const [inlinedSource, setInlinedSource] = useState<{ key: string; value: string } | null>(
+    null,
+  );
   const [zoom, setZoom] = useState(100);
   const [zoomMode, setZoomMode] = useState<'auto' | 'manual'>('auto');
   const fileViewportKey = previewViewportStateKey(projectId, file);
@@ -7282,7 +7288,14 @@ function HtmlViewer({
     if (!effectiveDeck || source == null) return source;
     return normalizeDeckVisualSource(removeSpeakerNotesFromHtml(source));
   }, [effectiveDeck, source]);
-  const livePreviewSource = inlinedSource ?? deckVisualSource;
+  const inlinedSourceKey = `${projectId}:${file.name}`;
+  const inlinedSourceForKey =
+    inlinedSource && inlinedSource.key === inlinedSourceKey ? inlinedSource.value : null;
+  // `source === null` means the preview was deliberately cleared (Reload,
+  // issue #4650). A retained inline must never resurrect that content, so it
+  // is only read while there is a live source to inline.
+  const livePreviewSource =
+    source !== null ? (inlinedSourceForKey ?? deckVisualSource) : deckVisualSource;
   // Annotation modes that should hold the preview still while open. Manual
   // Edit is handled by its own freeze just below; these are the non-edit
   // passes (Mark/Draw, Comment, Inspect) that also must not be yanked out
@@ -7672,8 +7685,19 @@ function HtmlViewer({
     usePoweredPreview,
   ]);
 
+  // Mirrors the inline effect's own guard order: true exactly when a preview
+  // is going to be rewritten, so the loading gate can wait for the rewrite
+  // instead of painting the raw document first.
+  const previewNeedsAssetInlining = useMemo(
+    () =>
+      !useUrlLoadPreview &&
+      !effectiveDeck &&
+      source != null &&
+      (projectRootAssetRefs || hasRelativeAssetRefs(source)),
+    [useUrlLoadPreview, effectiveDeck, source, projectRootAssetRefs],
+  );
+
   useEffect(() => {
-    setInlinedSource(null);
     if (useUrlLoadPreview) return;
     if (!source || effectiveDeck) return;
     // Root-relative project asset refs need the confirmed file list before
@@ -7682,12 +7706,21 @@ function HtmlViewer({
     if (projectRootAssetRefs && projectFilePathSet === null) return;
     if (!hasRelativeAssetRefs(source) && !projectRootAssetRefs) return;
     let cancelled = false;
+    const key = inlinedSourceKey;
     void inlineRelativeAssets(source, projectId, file.name, projectFilePathSet, {
       fetch: globalThis.fetch.bind(globalThis),
       rawUrl: projectRawUrl,
-    }).then((next) => {
-      if (!cancelled) setInlinedSource(next);
-    });
+    })
+      .then((next) => {
+        if (!cancelled) setInlinedSource({ key, value: next });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        // Fall back to the raw document rather than holding the loading gate
+        // open forever: unstyled but visible beats a frame that never resolves.
+        console.error('[FileViewer] inlineRelativeAssets failed, showing raw source:', err);
+        setInlinedSource({ key, value: source });
+      });
     return () => {
       cancelled = true;
     };
@@ -7700,6 +7733,7 @@ function HtmlViewer({
     useUrlLoadPreview,
     projectRootAssetRefs,
     projectFilePathSet,
+    inlinedSourceKey,
   ]);
 
   const srcDoc = useMemo(
@@ -9009,7 +9043,6 @@ function HtmlViewer({
       };
       setSource(result.source);
       sourceRef.current = result.source;
-      setInlinedSource(null);
       if (patch.kind !== 'set-style') {
         setManualEditFrozenSource(result.source);
       }
@@ -9074,7 +9107,6 @@ function HtmlViewer({
     if (persisted == null || persisted === expectedSource) return true;
     setSource(persisted);
     sourceRef.current = persisted;
-    setInlinedSource(null);
     setManualEditHistory([]);
     setManualEditUndone([]);
     manualEditPendingStyleRef.current = null;
@@ -9105,7 +9137,6 @@ function HtmlViewer({
       }
       setSource(latest.beforeSource);
       sourceRef.current = latest.beforeSource;
-      setInlinedSource(null);
       setManualEditFrozenSource(latest.beforeSource);
       setManualEditHistory(rest);
       setManualEditUndone((current) => [latest, ...current]);
@@ -9139,7 +9170,6 @@ function HtmlViewer({
       }
       setSource(latest.afterSource);
       sourceRef.current = latest.afterSource;
-      setInlinedSource(null);
       setManualEditFrozenSource(latest.afterSource);
       setManualEditUndone(rest);
       setManualEditHistory((current) => [latest, ...current]);
@@ -9268,7 +9298,6 @@ function HtmlViewer({
       if (!saved) throw new Error('speaker_notes_save_failed');
       setSource(nextSource);
       sourceRef.current = nextSource;
-      setInlinedSource(null);
       setSpeakerNotesStatus('saved');
       await onFileSaved?.();
       fireSpeakerNotesSaveResult(editSurface, 'success', hasContent);
@@ -10165,6 +10194,9 @@ function HtmlViewer({
     fireArtifactToolbarClick('reload');
     capturePreviewScrollPosition();
     imageExportSnapshotDataUrlRef.current = null;
+    // The one clear that stays: Reload nulls `source` rather than replacing
+    // it, so there is no new content for a retained inline to be stale
+    // against. The other six sites set new content in the same tick.
     setInlinedSource(null);
     setReloadKey((key) => key + 1);
     if (!useUrlLoadPreview) {
@@ -10221,7 +10253,6 @@ function HtmlViewer({
   async function handleVersionRestored(content: string) {
     setSource(content);
     sourceRef.current = content;
-    setInlinedSource(null);
     setReloadKey((key) => key + 1);
     await onFileSaved?.();
     setVersionRestoredToast({
@@ -11508,7 +11539,9 @@ function HtmlViewer({
     if (state === 'failed') return t('fileViewer.deployLinkFailed');
     return t('fileViewer.deployLinkPreparingLabel');
   };
-  const initialPreviewLoading = source === null && !sourceEverLoadedRef.current;
+  const initialPreviewLoading =
+    (source === null && !sourceEverLoadedRef.current) ||
+    (previewNeedsAssetInlining && inlinedSourceForKey === null);
   const sourceModeLoading = mode === 'source' && source === null;
   const boardAvailable = mode === 'preview' && source !== null;
   const showPreviewToolbarControls = mode === 'preview';
