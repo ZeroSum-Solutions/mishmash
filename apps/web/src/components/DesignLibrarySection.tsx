@@ -981,6 +981,23 @@ function DesignLibraryDetailDialog({
             >
               {allowedUseLabel(item.allowed_use)}
             </span>
+            {item.redistribute ? (
+              <span
+                className={`${styles.badge} ${styles.previewBadge}`}
+                data-redistribute={item.redistribute}
+                title={t(
+                  item.redistribute === 'yes'
+                    ? 'designLibrary.redistribute.yesTooltip'
+                    : 'designLibrary.redistribute.noTooltip',
+                )}
+              >
+                {t(
+                  item.redistribute === 'yes'
+                    ? 'designLibrary.redistribute.yesLabel'
+                    : 'designLibrary.redistribute.noLabel',
+                )}
+              </span>
+            ) : null}
           </div>
         </div>
         <p className={styles.detail}>
