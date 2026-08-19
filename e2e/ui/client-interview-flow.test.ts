@@ -35,7 +35,7 @@ const QUICK_TIER_ANSWERS = [
   'Call for an estimate', // primaryCta
 ];
 
-test('[P2] client discovery interview runs the quick tier end-to-end and starts a project with zero re-typing', async ({ page }) => {
+test('[P0] client discovery interview runs the quick tier end-to-end and starts a project with zero re-typing', async ({ page }) => {
   await gotoInterview(page);
 
   await expect(page.getByTestId('interview-tier-quick')).toBeVisible();
@@ -61,7 +61,7 @@ test('[P2] client discovery interview runs the quick tier end-to-end and starts 
   await expect(page.getByTestId('chat-composer')).toBeVisible({ timeout: T.long });
 });
 
-test('[P2] pushes back on a vague REQUIRED answer without leaving the interview', async ({ page }) => {
+test('[P0] pushes back on a vague REQUIRED answer without leaving the interview', async ({ page }) => {
   await gotoInterview(page);
   await page.getByTestId('interview-tier-quick').click();
   await expect(page.getByTestId('interview-turn')).toBeVisible();
