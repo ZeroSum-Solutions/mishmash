@@ -80,6 +80,14 @@ export interface ArchetypeDisqualifier {
 export interface Archetype {
   id: string;
   name: string;
+  /**
+   * Keyword/phrase list an incoming brief is matched against (F001 R4),
+   * mirroring `CatalogueMatchCandidate.triggers`
+   * (packages/contracts/src/api/catalogue-match.ts) so brief-extraction can
+   * reuse `matchCatalogue`'s proven tokenize/trigger-overlap scoring instead
+   * of a second implementation -- see design/brief-extraction.ts.
+   */
+  triggers: string[];
   directions: ArchetypeDirection[];
   /** Union of every direction's `sections`, deduplicated -- F001 R7b: "the section axis comes from the archetype's required-section list (R3)." Computed, not hand-authored -- see POETRY_ARCHETYPE's construction below. */
   requiredSections: string[];
@@ -163,6 +171,16 @@ const POETRY_DIRECTIONS: ArchetypeDirection[] = [
 export const POETRY_ARCHETYPE: Archetype = {
   id: 'poetry',
   name: 'Poetry',
+  // R4's own P0 accuracy bar: the literal demo query ("...best templates to
+  // use for a small business poetry website...") plus at least 2
+  // paraphrases must resolve to this archetype. Every entry here names the
+  // archetype's own subject matter directly -- no keyword borrowed from
+  // another domain.
+  triggers: [
+    'poetry', 'poem', 'poems', 'poet', 'poets', 'literary journal',
+    'literary', 'literature', 'verse', 'verses', 'stanza', 'stanzas',
+    'chapbook', 'reading series', 'small press',
+  ],
   directions: POETRY_DIRECTIONS,
   requiredSections: Array.from(new Set(POETRY_DIRECTIONS.flatMap((direction) => direction.sections))),
   typography: [
