@@ -47,6 +47,90 @@ test("a template missing from the index is reported, not passed over", () => {
   assert.equal(report["index-row-missing"][0]?.subject, "f001-template-that-does-not-exist");
 });
 
+// A synthetic index, so each rule is shown to fire. Asserting the committed
+// index is clean cannot do that: a fresh report is already empty, so that
+// assertion stays green even if every check below were deleted.
+function syntheticIndex(row: Record<string, unknown>) {
+  return {
+    generatedAt: "1970-01-01T00:00:00.000Z",
+    templates: [
+      {
+        slug: "f001-synthetic",
+        name: "Synthetic",
+        family: "synthetic",
+        category: "landing-page",
+        scenario: null,
+        tags: [],
+        mood: [],
+        density: "low",
+        motion_level: "low",
+        palette: [],
+        typography: {},
+        preview: null,
+        sourceHash: "0".repeat(64),
+        ...row,
+      },
+    ],
+  } as never;
+}
+
+const SYNTHETIC_SLUGS = new Set(["f001-synthetic"]);
+
+test("an out-of-vocabulary mood is reported", () => {
+  const report = newReport();
+  checkDesignIndex(report, SYNTHETIC_SLUGS, syntheticIndex({ mood: ["neon"] }));
+  assert.equal(report["index-mood-invalid"].length, 1);
+});
+
+test("a malformed hex, an unknown role and a bad confidence are each reported", () => {
+  const report = newReport();
+  checkDesignIndex(
+    report,
+    SYNTHETIC_SLUGS,
+    syntheticIndex({
+      palette: [{ hex: "not-a-hex", role: "sparkle", provenance: "p", confidence: "certain" }],
+    }),
+  );
+  assert.equal(report["index-palette-invalid"].length, 3);
+});
+
+test("an out-of-scale density or motion level is reported", () => {
+  const report = newReport();
+  checkDesignIndex(report, SYNTHETIC_SLUGS, syntheticIndex({ density: "sideways" }));
+  assert.equal(report["index-scale-invalid"].length, 1);
+  const motion = newReport();
+  checkDesignIndex(motion, SYNTHETIC_SLUGS, syntheticIndex({ motion_level: "turbo" }));
+  assert.equal(motion["index-scale-invalid"].length, 1);
+});
+
+test("a malformed typography entry is reported", () => {
+  const report = newReport();
+  checkDesignIndex(
+    report,
+    SYNTHETIC_SLUGS,
+    syntheticIndex({ typography: { body: { family: "X", confidence: "bogus" } } }),
+  );
+  assert.ok(report["index-typography-invalid"].length > 0);
+});
+
+test("a row with no corresponding template is reported as an orphan", () => {
+  const report = newReport();
+  checkDesignIndex(report, new Set(), syntheticIndex({}));
+  assert.equal(report["index-row-orphan"].length, 1);
+});
+
+test("a row whose source hash has drifted is reported as stale", () => {
+  const report = newReport();
+  const { slugs } = checkTemplates(newReport());
+  const realSlug = [...slugs][0]!;
+  checkDesignIndex(
+    report,
+    new Set([realSlug]),
+    syntheticIndex({ slug: realSlug, sourceHash: "f".repeat(64) }),
+  );
+  assert.equal(report["index-source-stale"].length, 1, "a drifted hash must be caught");
+});
+
 test("the report carries a slot for every design-index violation class", () => {
   const report = newReport();
   for (const key of [

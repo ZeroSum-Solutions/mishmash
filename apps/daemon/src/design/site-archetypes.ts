@@ -181,6 +181,13 @@ export const POETRY_ARCHETYPE: Archetype = {
     preserveLineBreaks: true,
     hangingIndentOnWrap: true,
   },
+  // DERIVED, not sourced. Addendum A.3 specifies this archetype's palettes,
+  // typography and typesetting literally, but names no motion ceiling. 'medium'
+  // is a judgement call from the directions' own character ("hushed",
+  // "letterpress", "quiet"), and so is the `motion-above-ceiling` disqualifier
+  // built on it below. Both are the kind of thing an owner may want to set
+  // rather than inherit -- they are marked here so nobody reads them as
+  // sourced content.
   motionCeiling: 'medium',
   disqualifiers: [
     {
@@ -194,6 +201,7 @@ export const POETRY_ARCHETYPE: Archetype = {
         'Centers a whole poem or other long text block -- poem alignment must be left, never centered or justified.',
     },
     {
+      // Derived along with motionCeiling above -- see that comment.
       id: 'motion-above-ceiling',
       description:
         "design-templates/index.json motion_level exceeds this archetype's motionCeiling (medium) -- undermines the hushed, literary character poetry needs.",

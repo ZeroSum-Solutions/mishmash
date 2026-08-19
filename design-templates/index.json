@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-19T15:17:19.976Z",
+  "generatedAt": "2026-08-19T16:10:13.673Z",
   "templates": [
     {
       "slug": "aegis-console-h39",
@@ -16,13 +16,13 @@
         {
           "hex": "#FF8C42",
           "role": "muted",
-          "provenance": "- SECONDARY WARM ACCENT (USE RARELY, FOR ONE ALERT STATE): `#FF8C42`.",
+          "provenance": "SECONDARY WARM ACCENT (USE RARELY, FOR ONE ALERT STATE): `#FF8C42`.",
           "confidence": "high"
         },
         {
           "hex": "#22C55E",
           "role": "accent",
-          "provenance": "- LIVE/STATUS GREEN: `#22C55E` FOR \"ONLINE\" PULSE DOTS.",
+          "provenance": "LIVE/STATUS GREEN: `#22C55E` FOR \"ONLINE\" PULSE DOTS.",
           "confidence": "high"
         }
       ],
@@ -191,49 +191,73 @@
         {
           "hex": "#1B1B1B",
           "role": "text",
-          "provenance": "- INK / BRAND PRIMARY: `#1B1B1B` (NEAR-BLACK, USED FOR TYPE, BUTTONS, BORDERS)",
+          "provenance": "INK / BRAND PRIMARY: `#1B1B1B` (NEAR-BLACK, USED FOR TYPE, BUTTONS, BORDERS)",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "background",
-          "provenance": "- PAPER / BACKGROUND: `#FFFFFF`",
+          "provenance": "PAPER / BACKGROUND: `#FFFFFF`",
           "confidence": "high"
         },
         {
           "hex": "#FFFBF0",
           "role": "muted",
-          "provenance": "- CREAM / BRAND SECONDARY: `#FFFBF0` (WARM BUTTER TINT FOR ALTERNATING SECTIONS)",
+          "provenance": "CREAM / BRAND SECONDARY: `#FFFBF0` (WARM BUTTER TINT FOR ALTERNATING SECTIONS)",
           "confidence": "high"
         },
         {
           "hex": "#F9F9F7",
           "role": "accent",
-          "provenance": "- SURFACE: `#F9F9F7` (SOFT NEUTRAL CARD FILL)",
+          "provenance": "SURFACE: `#F9F9F7` (SOFT NEUTRAL CARD FILL)",
           "confidence": "high"
         },
         {
           "hex": "#F0ECE6",
           "role": "accent",
-          "provenance": "- ACCENT LIGHT: `#F0ECE6` (WARM ALMOND PANEL FILL)",
+          "provenance": "ACCENT LIGHT: `#F0ECE6` (WARM ALMOND PANEL FILL)",
           "confidence": "high"
         },
         {
           "hex": "#666666",
-          "role": "text",
-          "provenance": "- TEXT SECONDARY: `#666666`",
+          "role": "muted",
+          "provenance": "TEXT SECONDARY: `#666666`",
           "confidence": "high"
         },
         {
           "hex": "#1E1E1E",
           "role": "rule",
-          "provenance": "- HAIRLINE BORDER: `#1E1E1E` AT LOW EMPHASIS / `RGBA(27,27,27,0.1)`",
+          "provenance": "HAIRLINE BORDER: `#1E1E1E` AT LOW EMPHASIS / `RGBA(27,27,27,0.1)`",
           "confidence": "high"
         },
         {
           "hex": "#1B1B1B",
           "role": "accent",
-          "provenance": "- INTERACTIVE REVEAL PALETTE (CYCLES ON HOVER): `#1B1B1B`, `#E87C3E`, `#2D4356`, `#8B4513`, `#4A6741`",
+          "provenance": "INTERACTIVE REVEAL PALETTE (CYCLES ON HOVER): `#1B1B1B`, `#E87C3E`, `#2D4356`, `#8B4513`, `#4A6741`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#E87C3E",
+          "role": "accent",
+          "provenance": "INTERACTIVE REVEAL PALETTE (CYCLES ON HOVER): `#1B1B1B`, `#E87C3E`, `#2D4356`, `#8B4513`, `#4A6741`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#2D4356",
+          "role": "accent",
+          "provenance": "INTERACTIVE REVEAL PALETTE (CYCLES ON HOVER): `#1B1B1B`, `#E87C3E`, `#2D4356`, `#8B4513`, `#4A6741`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#8B4513",
+          "role": "accent",
+          "provenance": "INTERACTIVE REVEAL PALETTE (CYCLES ON HOVER): `#1B1B1B`, `#E87C3E`, `#2D4356`, `#8B4513`, `#4A6741`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#4A6741",
+          "role": "accent",
+          "provenance": "INTERACTIVE REVEAL PALETTE (CYCLES ON HOVER): `#1B1B1B`, `#E87C3E`, `#2D4356`, `#8B4513`, `#4A6741`",
           "confidence": "high"
         }
       ],
@@ -280,13 +304,13 @@
         {
           "hex": "#FE5733",
           "role": "accent",
-          "provenance": "- ACCENT (EMBER ORANGE): `#FE5733`, USED SPARINGLY FOR OVERLINES, THE",
+          "provenance": "ACCENT (EMBER ORANGE): `#FE5733`, USED SPARINGLY FOR OVERLINES, THE",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- SURFACE (CARD WHITE): `#FFFFFF` FOR THE OCCASIONAL SOLID PANEL.",
+          "provenance": "SURFACE (CARD WHITE): `#FFFFFF` FOR THE OCCASIONAL SOLID PANEL.",
           "confidence": "high"
         }
       ],
@@ -332,37 +356,37 @@
         {
           "hex": "#F6F0E9",
           "role": "background",
-          "provenance": "- CREAM PAPER (PAGE BG): `#F6F0E9`",
+          "provenance": "CREAM PAPER (PAGE BG): `#F6F0E9`",
           "confidence": "high"
         },
         {
           "hex": "#2B180A",
           "role": "text",
-          "provenance": "- ROASTED BROWN (PRIMARY TEXT / DARK SECTIONS): `#2B180A`",
+          "provenance": "ROASTED BROWN (PRIMARY TEXT / DARK SECTIONS): `#2B180A`",
           "confidence": "high"
         },
         {
           "hex": "#DAB697",
           "role": "muted",
-          "provenance": "- MUTED AMBER / GOLD (ACCENT): `#DAB697`",
+          "provenance": "MUTED AMBER / GOLD (ACCENT): `#DAB697`",
           "confidence": "high"
         },
         {
           "hex": "#94877C",
-          "role": "text",
-          "provenance": "- WARM TAUPE (SECONDARY/MUTED TEXT): `#94877C`",
+          "role": "muted",
+          "provenance": "WARM TAUPE (SECONDARY/MUTED TEXT): `#94877C`",
           "confidence": "high"
         },
         {
           "hex": "#EFE7DD",
           "role": "accent",
-          "provenance": "- WARM BUTTON FILL: `#EFE7DD`",
+          "provenance": "WARM BUTTON FILL: `#EFE7DD`",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- PURE WHITE (CARD SURFACES INSIDE CREAM): `#FFFFFF`",
+          "provenance": "PURE WHITE (CARD SURFACES INSIDE CREAM): `#FFFFFF`",
           "confidence": "high"
         }
       ],
@@ -408,37 +432,37 @@
         {
           "hex": "#D97706",
           "role": "accent",
-          "provenance": "- AMBER PRIMARY: `#D97706` (HEADINGS, ACCENTS, BUTTONS, CURSOR).",
+          "provenance": "AMBER PRIMARY: `#D97706` (HEADINGS, ACCENTS, BUTTONS, CURSOR).",
           "confidence": "high"
         },
         {
           "hex": "#FEF3C7",
           "role": "accent",
-          "provenance": "- BUTTER CREAM: `#FEF3C7` (TINTED PANELS, PILLS, HERO CENTER COLUMN).",
+          "provenance": "BUTTER CREAM: `#FEF3C7` (TINTED PANELS, PILLS, HERO CENTER COLUMN).",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "background",
-          "provenance": "- WARM WHITE BACKGROUND: `#FFFFFF`.",
+          "provenance": "WARM WHITE BACKGROUND: `#FFFFFF`.",
           "confidence": "high"
         },
         {
           "hex": "#1F2937",
           "role": "text",
-          "provenance": "- INK PRIMARY TEXT: `#1F2937`.",
+          "provenance": "INK PRIMARY TEXT: `#1F2937`.",
           "confidence": "high"
         },
         {
           "hex": "#4B5563",
-          "role": "text",
-          "provenance": "- MUTED SECONDARY TEXT: `#4B5563`.",
+          "role": "muted",
+          "provenance": "MUTED SECONDARY TEXT: `#4B5563`.",
           "confidence": "high"
         },
         {
           "hex": "#141415",
           "role": "accent",
-          "provenance": "- NEAR-BLACK FOR DEEP CONTRAST WHERE NEEDED: `#141415`.",
+          "provenance": "NEAR-BLACK FOR DEEP CONTRAST WHERE NEEDED: `#141415`.",
           "confidence": "high"
         }
       ],
@@ -716,13 +740,43 @@
         {
           "hex": "#050505",
           "role": "background",
-          "provenance": "- BACKGROUND BASE: `#050505` (NEAR-BLACK), SECONDARY PANELS `#080808` / `#0A0A0A`, CARD SURFACE `#111111`.",
+          "provenance": "BACKGROUND BASE: `#050505` (NEAR-BLACK), SECONDARY PANELS `#080808` / `#0A0A0A`, CARD SURFACE `#111111`.",
+          "confidence": "high"
+        },
+        {
+          "hex": "#080808",
+          "role": "background",
+          "provenance": "BACKGROUND BASE: `#050505` (NEAR-BLACK), SECONDARY PANELS `#080808` / `#0A0A0A`, CARD SURFACE `#111111`.",
+          "confidence": "high"
+        },
+        {
+          "hex": "#0A0A0A",
+          "role": "background",
+          "provenance": "BACKGROUND BASE: `#050505` (NEAR-BLACK), SECONDARY PANELS `#080808` / `#0A0A0A`, CARD SURFACE `#111111`.",
+          "confidence": "high"
+        },
+        {
+          "hex": "#111111",
+          "role": "background",
+          "provenance": "BACKGROUND BASE: `#050505` (NEAR-BLACK), SECONDARY PANELS `#080808` / `#0A0A0A`, CARD SURFACE `#111111`.",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "text",
-          "provenance": "- TEXT PRIMARY: `#FFFFFF`; TEXT SECONDARY: `#9CA3AF` (GRAY-400); TEXT MUTED: `#6B7280`.",
+          "provenance": "TEXT PRIMARY: `#FFFFFF`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#9CA3AF",
+          "role": "muted",
+          "provenance": "TEXT SECONDARY: `#9CA3AF` (GRAY-400)",
+          "confidence": "high"
+        },
+        {
+          "hex": "#6B7280",
+          "role": "muted",
+          "provenance": "TEXT MUTED: `#6B7280`.",
           "confidence": "high"
         }
       ],
@@ -1445,37 +1499,37 @@
         {
           "hex": "#111114",
           "role": "text",
-          "provenance": "- INK / PRIMARY TEXT & DARK PANELS: `#111114`",
+          "provenance": "INK / PRIMARY TEXT & DARK PANELS: `#111114`",
           "confidence": "high"
         },
         {
           "hex": "#F3F1EA",
           "role": "background",
-          "provenance": "- IVORY / PAGE BACKGROUND: `#F3F1EA`",
+          "provenance": "IVORY / PAGE BACKGROUND: `#F3F1EA`",
           "confidence": "high"
         },
         {
           "hex": "#FBFAF6",
           "role": "background",
-          "provenance": "- PAPER / SURFACE CARDS: `#FBFAF6`",
+          "provenance": "PAPER / SURFACE CARDS: `#FBFAF6`",
           "confidence": "high"
         },
         {
           "hex": "#1F44FF",
           "role": "accent",
-          "provenance": "- COBALT ACCENT: `#1F44FF`",
+          "provenance": "COBALT ACCENT: `#1F44FF`",
           "confidence": "high"
         },
         {
           "hex": "#6B6A66",
-          "role": "text",
-          "provenance": "- MUTED TEXT: `#6B6A66`",
+          "role": "muted",
+          "provenance": "MUTED TEXT: `#6B6A66`",
           "confidence": "high"
         },
         {
           "hex": "#A9A7A0",
-          "role": "text",
-          "provenance": "- FAINT TEXT / HAIRLINES ON LIGHT: `#A9A7A0`",
+          "role": "rule",
+          "provenance": "FAINT TEXT / HAIRLINES ON LIGHT: `#A9A7A0`",
           "confidence": "high"
         }
       ],
@@ -1522,49 +1576,49 @@
         {
           "hex": "#0E1726",
           "role": "accent",
-          "provenance": "- BRAND PRIMARY (DEEP NAVY): `#0E1726`",
+          "provenance": "BRAND PRIMARY (DEEP NAVY): `#0E1726`",
           "confidence": "high"
         },
         {
           "hex": "#16223A",
           "role": "muted",
-          "provenance": "- BRAND SECONDARY (SLATE PANEL): `#16223A`",
+          "provenance": "BRAND SECONDARY (SLATE PANEL): `#16223A`",
           "confidence": "high"
         },
         {
           "hex": "#2F6BFF",
           "role": "accent",
-          "provenance": "- BRAND ACCENT (ELECTRIC COBALT): `#2F6BFF`",
+          "provenance": "BRAND ACCENT (ELECTRIC COBALT): `#2F6BFF`",
           "confidence": "high"
         },
         {
           "hex": "#1E4FD8",
           "role": "accent",
-          "provenance": "- ACCENT DEEP (HOVER COBALT): `#1E4FD8`",
+          "provenance": "ACCENT DEEP (HOVER COBALT): `#1E4FD8`",
           "confidence": "high"
         },
         {
           "hex": "#F7F8FB",
           "role": "background",
-          "provenance": "- NEUTRAL BACKGROUND (NEAR-WHITE PAPER): `#F7F8FB`",
+          "provenance": "NEUTRAL BACKGROUND (NEAR-WHITE PAPER): `#F7F8FB`",
           "confidence": "high"
         },
         {
           "hex": "#EEF1F6",
           "role": "accent",
-          "provenance": "- NEUTRAL SURFACE (OFF-WHITE CARD): `#EEF1F6`",
+          "provenance": "NEUTRAL SURFACE (OFF-WHITE CARD): `#EEF1F6`",
           "confidence": "high"
         },
         {
           "hex": "#F5F7FB",
           "role": "text",
-          "provenance": "- TEXT PRIMARY (ON DARK, NEAR-WHITE): `#F5F7FB`",
+          "provenance": "TEXT PRIMARY (ON DARK, NEAR-WHITE): `#F5F7FB`",
           "confidence": "high"
         },
         {
           "hex": "#64748B",
-          "role": "text",
-          "provenance": "- TEXT SECONDARY (MUTED SLATE): `#64748B`",
+          "role": "muted",
+          "provenance": "TEXT SECONDARY (MUTED SLATE): `#64748B`",
           "confidence": "high"
         }
       ],
@@ -1772,37 +1826,37 @@
         {
           "hex": "#EEE9E3",
           "role": "background",
-          "provenance": "- BACKGROUND BEIGE: `#EEE9E3` (PRIMARY PAPER CANVAS)",
+          "provenance": "BACKGROUND BEIGE: `#EEE9E3` (PRIMARY PAPER CANVAS)",
           "confidence": "high"
         },
         {
           "hex": "#F43C00",
           "role": "accent",
-          "provenance": "- BRAND ORANGE: `#F43C00` (ACCENT — DOTS, LINKS, HEADLINE PUNCTUATION, FOOTER BLOCK)",
+          "provenance": "BRAND ORANGE: `#F43C00` (ACCENT — DOTS, LINKS, HEADLINE PUNCTUATION, FOOTER BLOCK)",
           "confidence": "high"
         },
         {
           "hex": "#000000",
           "role": "text",
-          "provenance": "- INK BLACK: `#000000` (PRIMARY TEXT, DARK BLOCKS)",
+          "provenance": "INK BLACK: `#000000` (PRIMARY TEXT, DARK BLOCKS)",
           "confidence": "high"
         },
         {
           "hex": "#141414",
           "role": "accent",
-          "provenance": "- CARD DARK: `#141414` (CARDS ON DARK BLOCKS)",
+          "provenance": "CARD DARK: `#141414` (CARDS ON DARK BLOCKS)",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "text",
-          "provenance": "- TEXT LIGHT: `#FFFFFF`",
+          "provenance": "TEXT LIGHT: `#FFFFFF`",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- WHITE BLOCK: `#FFFFFF`",
+          "provenance": "WHITE BLOCK: `#FFFFFF`",
           "confidence": "high"
         }
       ],
@@ -2090,43 +2144,43 @@
         {
           "hex": "#000000",
           "role": "background",
-          "provenance": "- BACKGROUND (PAGE): `#000000` PURE BLACK.",
+          "provenance": "BACKGROUND (PAGE): `#000000` PURE BLACK.",
           "confidence": "high"
         },
         {
           "hex": "#161A18",
           "role": "accent",
-          "provenance": "- SURFACE: `#161A18` (WARM CHARCOAL-OLIVE).",
+          "provenance": "SURFACE: `#161A18` (WARM CHARCOAL-OLIVE).",
           "confidence": "high"
         },
         {
           "hex": "#0E100F",
           "role": "accent",
-          "provenance": "- SURFACE-DARK: `#0E100F` (DEEPER PANEL).",
+          "provenance": "SURFACE-DARK: `#0E100F` (DEEPER PANEL).",
           "confidence": "high"
         },
         {
           "hex": "#2F3126",
           "role": "rule",
-          "provenance": "- BORDER: `#2F3126` (DESATURATED OLIVE HAIRLINE).",
+          "provenance": "BORDER: `#2F3126` (DESATURATED OLIVE HAIRLINE).",
           "confidence": "high"
         },
         {
           "hex": "#F3FFC9",
           "role": "text",
-          "provenance": "- BRAND PRIMARY / TEXT-PRIMARY: `#F3FFC9` (PALE PHOSPHOR CITRON).",
+          "provenance": "BRAND PRIMARY / TEXT-PRIMARY: `#F3FFC9` (PALE PHOSPHOR CITRON).",
           "confidence": "high"
         },
         {
           "hex": "#A9AD9B",
-          "role": "text",
-          "provenance": "- TEXT-SECONDARY / SAGE: `#A9AD9B` (MUTED SAGE-GREY — BODY COPY).",
+          "role": "muted",
+          "provenance": "TEXT-SECONDARY / SAGE: `#A9AD9B` (MUTED SAGE-GREY — BODY COPY).",
           "confidence": "high"
         },
         {
           "hex": "#000000",
           "role": "text",
-          "provenance": "- TEXT-INVERSE: `#000000` (FOR USE ON CITRON BUTTONS).",
+          "provenance": "TEXT-INVERSE: `#000000` (FOR USE ON CITRON BUTTONS).",
           "confidence": "high"
         }
       ],
@@ -2171,13 +2225,13 @@
         {
           "hex": "#7E3F26",
           "role": "accent",
-          "provenance": "- DEEP CLAY (HOVER / PRESSED): `#7E3F26`",
+          "provenance": "DEEP CLAY (HOVER / PRESSED): `#7E3F26`",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "background",
-          "provenance": "- PURE WHITE BACKGROUND: `#FFFFFF`",
+          "provenance": "PURE WHITE BACKGROUND: `#FFFFFF`",
           "confidence": "high"
         }
       ],
@@ -3500,49 +3554,49 @@
         {
           "hex": "#FDFCFB",
           "role": "accent",
-          "provenance": "- PAGE BASE / \"BRAND DARK\" (ACTUALLY A WARM OFF-WHITE): `#FDFCFB`",
+          "provenance": "PAGE BASE / \"BRAND DARK\" (ACTUALLY A WARM OFF-WHITE): `#FDFCFB`",
           "confidence": "high"
         },
         {
           "hex": "#E6D5D1",
           "role": "accent",
-          "provenance": "- DUSTY ROSE BLOCK: `#E6D5D1`",
+          "provenance": "DUSTY ROSE BLOCK: `#E6D5D1`",
           "confidence": "high"
         },
         {
           "hex": "#F2EEE3",
           "role": "accent",
-          "provenance": "- BONE CREAM BLOCK: `#F2EEE3`",
+          "provenance": "BONE CREAM BLOCK: `#F2EEE3`",
           "confidence": "high"
         },
         {
           "hex": "#E7E1EC",
           "role": "accent",
-          "provenance": "- MAUVE / LILAC-GREY BLOCK: `#E7E1EC`",
+          "provenance": "MAUVE / LILAC-GREY BLOCK: `#E7E1EC`",
           "confidence": "high"
         },
         {
           "hex": "#4B594D",
           "role": "text",
-          "provenance": "- DEEP PINE GREEN (STRUCTURAL INK, CTA FILLS, DARK SECTIONS): `#4B594D`",
+          "provenance": "DEEP PINE GREEN (STRUCTURAL INK, CTA FILLS, DARK SECTIONS): `#4B594D`",
           "confidence": "high"
         },
         {
           "hex": "#3D3D3D",
           "role": "text",
-          "provenance": "- TEXT INK: `#3D3D3D`",
+          "provenance": "TEXT INK: `#3D3D3D`",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "text",
-          "provenance": "- TEXT ON DARK: `#FFFFFF`",
+          "provenance": "TEXT ON DARK: `#FFFFFF`",
           "confidence": "high"
         },
         {
           "hex": "#C5A059",
           "role": "accent",
-          "provenance": "- ANTIQUE GOLD ACCENT (USED SPARINGLY): `#C5A059`",
+          "provenance": "ANTIQUE GOLD ACCENT (USED SPARINGLY): `#C5A059`",
           "confidence": "high"
         }
       ],
@@ -3950,31 +4004,49 @@
         {
           "hex": "#FAFAF8",
           "role": "background",
-          "provenance": "- PAPER BACKGROUND: `#FAFAF8` (WARM STONE-50), SECONDARY PANELS `#F5F4F1`.",
+          "provenance": "PAPER BACKGROUND: `#FAFAF8` (WARM STONE-50), SECONDARY PANELS `#F5F4F1`.",
+          "confidence": "high"
+        },
+        {
+          "hex": "#F5F4F1",
+          "role": "background",
+          "provenance": "PAPER BACKGROUND: `#FAFAF8` (WARM STONE-50), SECONDARY PANELS `#F5F4F1`.",
           "confidence": "high"
         },
         {
           "hex": "#1C1917",
           "role": "text",
-          "provenance": "- INK / NEAR-BLACK: `#1C1917` (STONE-900) FOR TEXT AND DARK PANELS.",
+          "provenance": "INK / NEAR-BLACK: `#1C1917` (STONE-900) FOR TEXT AND DARK PANELS.",
           "confidence": "high"
         },
         {
           "hex": "#78716C",
-          "role": "text",
-          "provenance": "- MUTED INK: `#78716C` (STONE-500) FOR SUBHEADS AND BODY.",
+          "role": "muted",
+          "provenance": "MUTED INK: `#78716C` (STONE-500) FOR SUBHEADS AND BODY.",
           "confidence": "high"
         },
         {
           "hex": "#E7E5E4",
           "role": "rule",
-          "provenance": "- HAIRLINE BORDERS: `#E7E5E4` (STONE-200).",
+          "provenance": "HAIRLINE BORDERS: `#E7E5E4` (STONE-200).",
           "confidence": "high"
         },
         {
           "hex": "#EA580C",
           "role": "accent",
-          "provenance": "- EMBER ACCENT (PRIMARY): `#EA580C` (ORANGE-600), HOVER `#C2410C`, SOFT WASH `#FFEDD5`.",
+          "provenance": "EMBER ACCENT (PRIMARY): `#EA580C` (ORANGE-600), HOVER `#C2410C`, SOFT WASH `#FFEDD5`.",
+          "confidence": "high"
+        },
+        {
+          "hex": "#C2410C",
+          "role": "accent",
+          "provenance": "EMBER ACCENT (PRIMARY): `#EA580C` (ORANGE-600), HOVER `#C2410C`, SOFT WASH `#FFEDD5`.",
+          "confidence": "high"
+        },
+        {
+          "hex": "#FFEDD5",
+          "role": "accent",
+          "provenance": "EMBER ACCENT (PRIMARY): `#EA580C` (ORANGE-600), HOVER `#C2410C`, SOFT WASH `#FFEDD5`.",
           "confidence": "high"
         }
       ],
@@ -4683,55 +4755,67 @@
         {
           "hex": "#7EEA57",
           "role": "accent",
-          "provenance": "- BRAND ACCENT (LIME): `#7EEA57` — THE BRIGHT BIO-GREEN; USED FOR CTA BUTTONS,",
+          "provenance": "BRAND ACCENT (LIME): `#7EEA57` — THE BRIGHT BIO-GREEN",
           "confidence": "high"
         },
         {
           "hex": "#5FCB3C",
           "role": "accent",
-          "provenance": "- ACCENT DEEP (FOR HOVER / DEPTH): `#5FCB3C`.",
+          "provenance": "ACCENT DEEP (FOR HOVER / DEPTH): `#5FCB3C`.",
           "confidence": "high"
         },
         {
           "hex": "#212121",
           "role": "accent",
-          "provenance": "- BRAND DARK (CHARCOAL): `#212121` — NIGHT-HIGHWAY PANELS, FOOTER, DARK SECTIONS.",
+          "provenance": "BRAND DARK (CHARCOAL): `#212121` — NIGHT-HIGHWAY PANELS, FOOTER, DARK SECTIONS.",
           "confidence": "high"
         },
         {
           "hex": "#F2F2F2",
           "role": "background",
-          "provenance": "- NEUTRAL BACKGROUND (PAPER GRAY): `#F2F2F2` — MAIN PAGE CANVAS.",
+          "provenance": "NEUTRAL BACKGROUND (PAPER GRAY): `#F2F2F2` — MAIN PAGE CANVAS.",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- NEUTRAL SURFACE (WHITE): `#FFFFFF` — CARDS, HEADER PILL, FLOATING CARD.",
+          "provenance": "NEUTRAL SURFACE (WHITE): `#FFFFFF` — CARDS, HEADER PILL, FLOATING CARD.",
           "confidence": "high"
         },
         {
           "hex": "#F5F5F5",
           "role": "accent",
-          "provenance": "- NEUTRAL SURFACE ALT: `#F5F5F5` — ROUNDED-TOP SECTION BANDS.",
+          "provenance": "NEUTRAL SURFACE ALT: `#F5F5F5` — ROUNDED-TOP SECTION BANDS.",
           "confidence": "high"
         },
         {
           "hex": "#D3D3D3",
           "role": "rule",
-          "provenance": "- NEUTRAL BORDER: `#D3D3D3` — HAIRLINE + DASHED DIVIDERS.",
+          "provenance": "NEUTRAL BORDER: `#D3D3D3` — HAIRLINE + DASHED DIVIDERS.",
           "confidence": "high"
         },
         {
           "hex": "#212121",
           "role": "text",
-          "provenance": "- TEXT PRIMARY: `#212121`. TEXT SECONDARY: `#636363`. TEXT TERTIARY: `#7B7B7B`.",
+          "provenance": "TEXT PRIMARY: `#212121`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#636363",
+          "role": "muted",
+          "provenance": "TEXT SECONDARY: `#636363`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#7B7B7B",
+          "role": "muted",
+          "provenance": "TEXT TERTIARY: `#7B7B7B`.",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "text",
-          "provenance": "- TEXT ON DARK: `#FFFFFF`. TEXT ON PRIMARY (ON LIME): `#212121`.",
+          "provenance": "TEXT ON DARK: `#FFFFFF`",
           "confidence": "high"
         }
       ],
@@ -5084,43 +5168,37 @@
         {
           "hex": "#B7C99B",
           "role": "accent",
-          "provenance": "- MATCHA PRIMARY ACCENT: `#B7C99B` (MATCHA LATTE GREEN).",
+          "provenance": "MATCHA PRIMARY ACCENT: `#B7C99B` (MATCHA LATTE GREEN).",
           "confidence": "high"
         },
         {
           "hex": "#0F172A",
           "role": "text",
-          "provenance": "- INK / TEXT PRIMARY: `#0F172A` (SLATE-900).",
+          "provenance": "INK / TEXT PRIMARY: `#0F172A` (SLATE-900).",
           "confidence": "high"
         },
         {
           "hex": "#475569",
-          "role": "text",
-          "provenance": "- TEXT SECONDARY: `#475569` (SLATE-600).",
+          "role": "muted",
+          "provenance": "TEXT SECONDARY: `#475569` (SLATE-600).",
           "confidence": "high"
         },
         {
           "hex": "#E2E8F0",
           "role": "rule",
-          "provenance": "- HAIRLINE / BORDER: `#E2E8F0` (SLATE-200).",
+          "provenance": "HAIRLINE / BORDER: `#E2E8F0` (SLATE-200).",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "background",
-          "provenance": "- BACKGROUND PRIMARY: `#FFFFFF`.",
+          "provenance": "BACKGROUND PRIMARY: `#FFFFFF`.",
           "confidence": "high"
         },
         {
           "hex": "#F8FAFC",
-          "role": "background",
-          "provenance": "- SURFACE / MUTED BACKGROUND: `#F8FAFC` (SLATE-50).",
-          "confidence": "high"
-        },
-        {
-          "hex": "#0F172A",
-          "role": "text",
-          "provenance": "- ON-ACCENT TEXT: `#0F172A` (DARK INK ON GREEN).",
+          "role": "muted",
+          "provenance": "SURFACE / MUTED BACKGROUND: `#F8FAFC` (SLATE-50).",
           "confidence": "high"
         }
       ],
@@ -5232,31 +5310,49 @@
         {
           "hex": "#F2F2F2",
           "role": "background",
-          "provenance": "- PAPER / BACKGROUND: `#F2F2F2` (PRIMARY), SURFACES `#F4F4F5`, CARD WASH `rgba(249, 247, 243, 0.5)`, OCCASIONAL PURE-WHITE PANELS `#FFFFFF`.",
+          "provenance": "PAPER / BACKGROUND: `#F2F2F2` (PRIMARY), SURFACES `#F4F4F5`, CARD WASH `rgba(249, 247, 243, 0.5)`, OCCASIONAL PURE-WHITE PANELS `#FFFFFF`.",
+          "confidence": "high"
+        },
+        {
+          "hex": "#F4F4F5",
+          "role": "background",
+          "provenance": "PAPER / BACKGROUND: `#F2F2F2` (PRIMARY), SURFACES `#F4F4F5`, CARD WASH `rgba(249, 247, 243, 0.5)`, OCCASIONAL PURE-WHITE PANELS `#FFFFFF`.",
+          "confidence": "high"
+        },
+        {
+          "hex": "#FFFFFF",
+          "role": "background",
+          "provenance": "PAPER / BACKGROUND: `#F2F2F2` (PRIMARY), SURFACES `#F4F4F5`, CARD WASH `rgba(249, 247, 243, 0.5)`, OCCASIONAL PURE-WHITE PANELS `#FFFFFF`.",
           "confidence": "high"
         },
         {
           "hex": "#E5E5E5",
           "role": "accent",
-          "provenance": "- GRID LINES / NEUTRAL PRIMARY: `#E5E5E5`.",
+          "provenance": "GRID LINES / NEUTRAL PRIMARY: `#E5E5E5`.",
           "confidence": "high"
         },
         {
           "hex": "#107A4D",
           "role": "accent",
-          "provenance": "- BRAND ACCENT (STRUCTURAL GREEN): `#107A4D` — USED FOR ACCENT TYPE, BADGES, THE HIGHLIGHTED PRICING TIER, CODE TEXT, AND THE GREEN OFFSET SHADOW.",
+          "provenance": "BRAND ACCENT (STRUCTURAL GREEN): `#107A4D` — USED FOR ACCENT TYPE, BADGES, THE HIGHLIGHTED PRICING TIER, CODE TEXT, AND THE GREEN OFFSET SHADOW.",
           "confidence": "high"
         },
         {
           "hex": "#1A1A1A",
           "role": "text",
-          "provenance": "- INK / TEXT PRIMARY: `#1A1A1A`. TEXT SECONDARY: `#4A4A4A`.",
+          "provenance": "INK / TEXT PRIMARY: `#1A1A1A`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#4A4A4A",
+          "role": "muted",
+          "provenance": "TEXT SECONDARY: `#4A4A4A`.",
           "confidence": "high"
         },
         {
           "hex": "#FFF9EB",
           "role": "accent",
-          "provenance": "- POSTCARD CREAM (FOR THE ENVELOPE REVEAL): `#FFF9EB`.",
+          "provenance": "POSTCARD CREAM (FOR THE ENVELOPE REVEAL): `#FFF9EB`.",
           "confidence": "high"
         }
       ],
@@ -5368,49 +5464,49 @@
         {
           "hex": "#234D2E",
           "role": "accent",
-          "provenance": "- FOREST GREEN PRIMARY: `#234D2E` (DARK PANELS, HEADINGS ON LIGHT, PRIMARY BUTTONS, BORDERS).",
+          "provenance": "FOREST GREEN PRIMARY: `#234D2E` (DARK PANELS, HEADINGS ON LIGHT, PRIMARY BUTTONS, BORDERS).",
           "confidence": "high"
         },
         {
           "hex": "#5C8A3A",
           "role": "accent",
-          "provenance": "- MOSS / LEAF ACCENT: `#5C8A3A` (SECONDARY GREEN, ICON ACCENTS, ACTIVE STATES).",
+          "provenance": "MOSS / LEAF ACCENT: `#5C8A3A` (SECONDARY GREEN, ICON ACCENTS, ACTIVE STATES).",
           "confidence": "high"
         },
         {
           "hex": "#F4EEDD",
           "role": "background",
-          "provenance": "- WARM CREAM PAPER BACKGROUND: `#F4EEDD` (PAGE BACKGROUND).",
+          "provenance": "WARM CREAM PAPER BACKGROUND: `#F4EEDD` (PAGE BACKGROUND).",
           "confidence": "high"
         },
         {
           "hex": "#E7DCC2",
           "role": "accent",
-          "provenance": "- KRAFT TAN PANEL TINT: `#E7DCC2` (TINTED PANELS, PILLS, ALTERNATE SECTIONS).",
+          "provenance": "KRAFT TAN PANEL TINT: `#E7DCC2` (TINTED PANELS, PILLS, ALTERNATE SECTIONS).",
           "confidence": "high"
         },
         {
           "hex": "#C7622D",
           "role": "accent",
-          "provenance": "- BURNT-ORANGE / TERRACOTTA POP: `#C7622D` (PRICES, KEY HIGHLIGHTS, TICKER, ONE-OF-A-KIND ACCENTS).",
+          "provenance": "BURNT-ORANGE / TERRACOTTA POP: `#C7622D` (PRICES, KEY HIGHLIGHTS, TICKER, ONE-OF-A-KIND ACCENTS).",
           "confidence": "high"
         },
         {
           "hex": "#2A2620",
           "role": "text",
-          "provenance": "- INK PRIMARY TEXT: `#2A2620` (NEAR-BLACK WARM BROWN).",
+          "provenance": "INK PRIMARY TEXT: `#2A2620` (NEAR-BLACK WARM BROWN).",
           "confidence": "high"
         },
         {
           "hex": "#6B6253",
-          "role": "text",
-          "provenance": "- MUTED SECONDARY TEXT: `#6B6253`.",
+          "role": "muted",
+          "provenance": "MUTED SECONDARY TEXT: `#6B6253`.",
           "confidence": "high"
         },
         {
           "hex": "#FBF8F0",
           "role": "accent",
-          "provenance": "- OFF-WHITE CARD FILL: `#FBF8F0`.",
+          "provenance": "OFF-WHITE CARD FILL: `#FBF8F0`.",
           "confidence": "high"
         }
       ],
@@ -5696,37 +5792,37 @@
         {
           "hex": "#C95100",
           "role": "accent",
-          "provenance": "- BURNT TERRACOTTA PRIMARY: `#C95100`",
+          "provenance": "BURNT TERRACOTTA PRIMARY: `#C95100`",
           "confidence": "high"
         },
         {
           "hex": "#260A00",
           "role": "text",
-          "provenance": "- DEEP COCOA INK (TEXT / DARK SECTIONS): `#260A00`",
+          "provenance": "DEEP COCOA INK (TEXT / DARK SECTIONS): `#260A00`",
           "confidence": "high"
         },
         {
           "hex": "#F4F1EB",
           "role": "background",
-          "provenance": "- OAT-CREAM BACKGROUND: `#F4F1EB`",
+          "provenance": "OAT-CREAM BACKGROUND: `#F4F1EB`",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- PURE SURFACE WHITE: `#FFFFFF`",
+          "provenance": "PURE SURFACE WHITE: `#FFFFFF`",
           "confidence": "high"
         },
         {
           "hex": "#807768",
-          "role": "text",
-          "provenance": "- MUTED CLAY TEXT (SECONDARY): `#807768`",
+          "role": "muted",
+          "provenance": "MUTED CLAY TEXT (SECONDARY): `#807768`",
           "confidence": "high"
         },
         {
           "hex": "#6E7A5E",
           "role": "accent",
-          "provenance": "- WARM SAGE SUPPORTING ACCENT (SPARINGLY, FOR STAT DOTS): `#6E7A5E`",
+          "provenance": "WARM SAGE SUPPORTING ACCENT (SPARINGLY, FOR STAT DOTS): `#6E7A5E`",
           "confidence": "high"
         }
       ],
@@ -5772,49 +5868,49 @@
         {
           "hex": "#F2F1EE",
           "role": "background",
-          "provenance": "- BACKGROUND / PAPER: `#F2F1EE` (WARM GREY PAPER)",
+          "provenance": "BACKGROUND / PAPER: `#F2F1EE` (WARM GREY PAPER)",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- SURFACE / CARDS: `#FFFFFF` (PURE WHITE)",
+          "provenance": "SURFACE / CARDS: `#FFFFFF` (PURE WHITE)",
           "confidence": "high"
         },
         {
           "hex": "#FAFAF8",
           "role": "muted",
-          "provenance": "- SECONDARY SURFACE (BANDS): `#FAFAF8` (NEAR-WHITE BONE)",
+          "provenance": "SECONDARY SURFACE (BANDS): `#FAFAF8` (NEAR-WHITE BONE)",
           "confidence": "high"
         },
         {
           "hex": "#1B1A17",
           "role": "text",
-          "provenance": "- INK / PRIMARY TEXT: `#1B1A17` (NEAR-BLACK, WARM)",
+          "provenance": "INK / PRIMARY TEXT: `#1B1A17` (NEAR-BLACK, WARM)",
           "confidence": "high"
         },
         {
           "hex": "#75726B",
-          "role": "text",
-          "provenance": "- MUTED TEXT: `#75726B` (WARM TAUPE)",
+          "role": "muted",
+          "provenance": "MUTED TEXT: `#75726B` (WARM TAUPE)",
           "confidence": "high"
         },
         {
           "hex": "#E4E2DD",
           "role": "rule",
-          "provenance": "- HAIRLINE BORDER: `#E4E2DD`",
+          "provenance": "HAIRLINE BORDER: `#E4E2DD`",
           "confidence": "high"
         },
         {
           "hex": "#E8590C",
           "role": "accent",
-          "provenance": "- BRAND ACCENT (MARMALADE): `#E8590C`",
+          "provenance": "BRAND ACCENT (MARMALADE): `#E8590C`",
           "confidence": "high"
         },
         {
           "hex": "#C2410C",
           "role": "accent",
-          "provenance": "- ACCENT HOVER / DEEP: `#C2410C`",
+          "provenance": "ACCENT HOVER / DEEP: `#C2410C`",
           "confidence": "high"
         }
       ],
@@ -8337,61 +8433,67 @@
         {
           "hex": "#FDFCF8",
           "role": "background",
-          "provenance": "- WARM PAPER BACKGROUND: `#FDFCF8` (PRIMARY CANVAS, WARM OFF-WHITE)",
+          "provenance": "WARM PAPER BACKGROUND: `#FDFCF8` (PRIMARY CANVAS, WARM OFF-WHITE)",
           "confidence": "high"
         },
         {
           "hex": "#F2EFE9",
           "role": "accent",
-          "provenance": "- STONE SURFACE: `#F2EFE9` (CARDS / ALTERNATE SECTIONS)",
+          "provenance": "STONE SURFACE: `#F2EFE9` (CARDS / ALTERNATE SECTIONS)",
           "confidence": "high"
         },
         {
           "hex": "#E7E5E4",
           "role": "rule",
-          "provenance": "- HAIRLINE BORDER: `#E7E5E4`",
+          "provenance": "HAIRLINE BORDER: `#E7E5E4`",
           "confidence": "high"
         },
         {
           "hex": "#1C1917",
           "role": "text",
-          "provenance": "- INK / TEXT PRIMARY: `#1C1917`",
+          "provenance": "INK / TEXT PRIMARY: `#1C1917`",
           "confidence": "high"
         },
         {
           "hex": "#57534E",
-          "role": "text",
-          "provenance": "- TEXT SECONDARY: `#57534E`",
+          "role": "muted",
+          "provenance": "TEXT SECONDARY: `#57534E`",
           "confidence": "high"
         },
         {
           "hex": "#DC2626",
           "role": "accent",
-          "provenance": "- VERMILLION PRIMARY (THE ONE ACCENT): `#DC2626`",
+          "provenance": "VERMILLION PRIMARY (THE ONE ACCENT): `#DC2626`",
           "confidence": "high"
         },
         {
           "hex": "#991B1B",
           "role": "accent",
-          "provenance": "- VERMILLION DEEP (HOVER / DARKER): `#991B1B`",
+          "provenance": "VERMILLION DEEP (HOVER / DARKER): `#991B1B`",
           "confidence": "high"
         },
         {
           "hex": "#FBBF24",
           "role": "muted",
-          "provenance": "- GOLD SPARK (RARE SECONDARY ACCENT, FOR STARS / BADGES): `#FBBF24`",
+          "provenance": "GOLD SPARK (RARE SECONDARY ACCENT, FOR STARS / BADGES): `#FBBF24`",
           "confidence": "high"
         },
         {
           "hex": "#1A1715",
           "role": "text",
-          "provenance": "- INK DARK PANEL: `#1A1715` / `#0F0E0D` (FOR THE DARK GALLERY STRIP)",
+          "provenance": "INK DARK PANEL: `#1A1715` / `#0F0E0D` (FOR THE DARK GALLERY STRIP)",
+          "confidence": "high"
+        },
+        {
+          "hex": "#0F0E0D",
+          "role": "text",
+          "provenance": "INK DARK PANEL: `#1A1715` / `#0F0E0D` (FOR THE DARK GALLERY STRIP)",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "text",
-          "provenance": "- TEXT ON ACCENT: `#FFFFFF`",
+          "provenance": "TEXT ON ACCENT: `#FFFFFF`",
           "confidence": "high"
         }
       ],
@@ -8891,61 +8993,61 @@
         {
           "hex": "#C8553D",
           "role": "accent",
-          "provenance": "- TERRACOTTA / RUST (PRIMARY): `#C8553D`",
+          "provenance": "TERRACOTTA / RUST (PRIMARY): `#C8553D`",
           "confidence": "high"
         },
         {
           "hex": "#F2D06B",
           "role": "muted",
-          "provenance": "- MUSTARD GOLD (SECONDARY): `#F2D06B`",
+          "provenance": "MUSTARD GOLD (SECONDARY): `#F2D06B`",
           "confidence": "high"
         },
         {
           "hex": "#A8D0C8",
           "role": "muted",
-          "provenance": "- MUTED TEAL (ACCENT): `#A8D0C8`",
+          "provenance": "MUTED TEAL (ACCENT): `#A8D0C8`",
           "confidence": "high"
         },
         {
           "hex": "#2A6F66",
           "role": "accent",
-          "provenance": "- DEEP TEAL (ACCENT DARK): `#2A6F66`",
+          "provenance": "DEEP TEAL (ACCENT DARK): `#2A6F66`",
           "confidence": "high"
         },
         {
           "hex": "#FDF8E8",
           "role": "background",
-          "provenance": "- CREAM (PAGE BACKGROUND): `#FDF8E8`",
+          "provenance": "CREAM (PAGE BACKGROUND): `#FDF8E8`",
           "confidence": "high"
         },
         {
           "hex": "#F9F1DC",
           "role": "accent",
-          "provenance": "- BEIGE CARD SURFACE: `#F9F1DC`",
+          "provenance": "BEIGE CARD SURFACE: `#F9F1DC`",
           "confidence": "high"
         },
         {
           "hex": "#FDFDF7",
           "role": "accent",
-          "provenance": "- NEAR-WHITE SURFACE: `#FDFDF7`",
+          "provenance": "NEAR-WHITE SURFACE: `#FDFDF7`",
           "confidence": "high"
         },
         {
           "hex": "#222222",
           "role": "text",
-          "provenance": "- INK TEXT (PRIMARY): `#222222`",
+          "provenance": "INK TEXT (PRIMARY): `#222222`",
           "confidence": "high"
         },
         {
           "hex": "#666666",
-          "role": "text",
-          "provenance": "- MUTED TEXT (SECONDARY): `#666666`",
+          "role": "muted",
+          "provenance": "MUTED TEXT (SECONDARY): `#666666`",
           "confidence": "high"
         },
         {
           "hex": "#4A3B32",
           "role": "accent",
-          "provenance": "- DARK COCOA (FOOTER): `#4A3B32`",
+          "provenance": "DARK COCOA (FOOTER): `#4A3B32`",
           "confidence": "high"
         }
       ],
@@ -8990,61 +9092,79 @@
         {
           "hex": "#F7F2E7",
           "role": "background",
-          "provenance": "- PAPER / BASE BACKGROUND: `#F7F2E7` (WARM CREAM) WITH A SUBTLE PAPER-GRAIN / DOTTED TEXTURE OVERLAY.",
+          "provenance": "PAPER / BASE BACKGROUND: `#F7F2E7` (WARM CREAM) WITH A SUBTLE PAPER-GRAIN / DOTTED TEXTURE OVERLAY.",
           "confidence": "high"
         },
         {
           "hex": "#1C1A17",
           "role": "text",
-          "provenance": "- INK / PRIMARY TEXT: `#1C1A17` (NEAR-BLACK WARM CHARCOAL).",
+          "provenance": "INK / PRIMARY TEXT: `#1C1A17` (NEAR-BLACK WARM CHARCOAL).",
           "confidence": "high"
         },
         {
           "hex": "#6B6357",
-          "role": "text",
-          "provenance": "- SECONDARY TEXT: `#6B6357` (MUTED TAUPE).",
+          "role": "muted",
+          "provenance": "SECONDARY TEXT: `#6B6357` (MUTED TAUPE).",
           "confidence": "high"
         },
         {
           "hex": "#3B2F63",
           "role": "accent",
-          "provenance": "- PRIMARY BRAND — DEEP INDIGO: `#3B2F63` (USED FOR PRIMARY BUTTONS, LOGO MARK, HEADINGS ACCENT).",
+          "provenance": "PRIMARY BRAND — DEEP INDIGO: `#3B2F63` (USED FOR PRIMARY BUTTONS, LOGO MARK, HEADINGS ACCENT).",
           "confidence": "high"
         },
         {
           "hex": "#E8A22B",
           "role": "accent",
-          "provenance": "- ACCENT — AMBER / GAMBOGE: `#E8A22B` (HIGHLIGHTS, GLOWS, ICON FILLS).",
+          "provenance": "ACCENT — AMBER / GAMBOGE: `#E8A22B` (HIGHLIGHTS, GLOWS, ICON FILLS).",
           "confidence": "high"
         },
         {
           "hex": "#7FA77C",
           "role": "accent",
-          "provenance": "- ACCENT — SAGE GREEN: `#7FA77C` AND ITS TINT `#DDE8D4` (MARQUEE BAR, CARD FILLS).",
+          "provenance": "ACCENT — SAGE GREEN: `#7FA77C` AND ITS TINT `#DDE8D4` (MARQUEE BAR, CARD FILLS).",
+          "confidence": "high"
+        },
+        {
+          "hex": "#DDE8D4",
+          "role": "accent",
+          "provenance": "ACCENT — SAGE GREEN: `#7FA77C` AND ITS TINT `#DDE8D4` (MARQUEE BAR, CARD FILLS).",
           "confidence": "high"
         },
         {
           "hex": "#C9673E",
           "role": "accent",
-          "provenance": "- ACCENT — TERRACOTTA / CLAY: `#C9673E` (TERTIARY HIGHLIGHTS, ROTATING WORD).",
+          "provenance": "ACCENT — TERRACOTTA / CLAY: `#C9673E` (TERTIARY HIGHLIGHTS, ROTATING WORD).",
           "confidence": "high"
         },
         {
           "hex": "#E7E0F4",
           "role": "accent",
-          "provenance": "- SOFT LAVENDER TINT: `#E7E0F4` (CARD FILL VARIANT).",
+          "provenance": "SOFT LAVENDER TINT: `#E7E0F4` (CARD FILL VARIANT).",
           "confidence": "high"
         },
         {
           "hex": "#FAE9C8",
           "role": "accent",
-          "provenance": "- AMBER LIGHT TINT: `#FAE9C8`, INDIGO TINT: `#E3DEF0`.",
+          "provenance": "AMBER LIGHT TINT: `#FAE9C8`, INDIGO TINT: `#E3DEF0`.",
+          "confidence": "high"
+        },
+        {
+          "hex": "#E3DEF0",
+          "role": "accent",
+          "provenance": "AMBER LIGHT TINT: `#FAE9C8`, INDIGO TINT: `#E3DEF0`.",
           "confidence": "high"
         },
         {
           "hex": "#FFFDF8",
           "role": "accent",
-          "provenance": "- CARD SURFACE: `#FFFDF8` (WARM OFF-WHITE), BORDERS `#EAE2D2`.",
+          "provenance": "CARD SURFACE: `#FFFDF8` (WARM OFF-WHITE), BORDERS `#EAE2D2`.",
+          "confidence": "high"
+        },
+        {
+          "hex": "#EAE2D2",
+          "role": "accent",
+          "provenance": "CARD SURFACE: `#FFFDF8` (WARM OFF-WHITE), BORDERS `#EAE2D2`.",
           "confidence": "high"
         }
       ],
@@ -11382,31 +11502,31 @@
         {
           "hex": "#28392C",
           "role": "muted",
-          "provenance": "- MID FOREST (SECONDARY PANELS, FOOTER): `#28392C`",
+          "provenance": "MID FOREST (SECONDARY PANELS, FOOTER): `#28392C`",
           "confidence": "high"
         },
         {
           "hex": "#8B8A7E",
-          "role": "text",
-          "provenance": "- TEXT MUTED: `#8B8A7E`",
+          "role": "muted",
+          "provenance": "TEXT MUTED: `#8B8A7E`",
           "confidence": "high"
         },
         {
           "hex": "#C6F03B",
           "role": "accent",
-          "provenance": "- ACCENT / LIVING CHARTREUSE (BUTTONS, DOTS, HIGHLIGHTS): `#C6F03B`",
+          "provenance": "ACCENT / LIVING CHARTREUSE (BUTTONS, DOTS, HIGHLIGHTS): `#C6F03B`",
           "confidence": "high"
         },
         {
           "hex": "#B0DB1F",
           "role": "accent",
-          "provenance": "- ACCENT DEEP (HOVER): `#B0DB1F`",
+          "provenance": "ACCENT DEEP (HOVER): `#B0DB1F`",
           "confidence": "high"
         },
         {
           "hex": "#F2EFE2",
           "role": "text",
-          "provenance": "- LIGHT TEXT ON DARK: `#F2EFE2`",
+          "provenance": "LIGHT TEXT ON DARK: `#F2EFE2`",
           "confidence": "high"
         }
       ],
@@ -11452,61 +11572,103 @@
         {
           "hex": "#FFFFFF",
           "role": "background",
-          "provenance": "- BACKGROUND BASE WHITE: `#FFFFFF`",
+          "provenance": "BACKGROUND BASE WHITE: `#FFFFFF`",
           "confidence": "high"
         },
         {
           "hex": "#FFFBF3",
           "role": "background",
-          "provenance": "- WARM PAPER TINT (HERO BOTTOM FADE): `#FFFBF3` BLENDING INTO `#FCEFEF`",
+          "provenance": "WARM PAPER TINT (HERO BOTTOM FADE): `#FFFBF3` BLENDING INTO `#FCEFEF`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#FCEFEF",
+          "role": "background",
+          "provenance": "WARM PAPER TINT (HERO BOTTOM FADE): `#FFFBF3` BLENDING INTO `#FCEFEF`",
           "confidence": "high"
         },
         {
           "hex": "#FBFAF9",
           "role": "accent",
-          "provenance": "- SURFACE (ALTERNATING SECTIONS): `#FBFAF9`",
+          "provenance": "SURFACE (ALTERNATING SECTIONS): `#FBFAF9`",
           "confidence": "high"
         },
         {
           "hex": "#92A0E1",
           "role": "text",
-          "provenance": "- BRAND PRIMARY (PERIWINKLE): `#92A0E1`",
+          "provenance": "BRAND PRIMARY (PERIWINKLE): `#92A0E1`",
           "confidence": "high"
         },
         {
           "hex": "#C2A0E1",
           "role": "muted",
-          "provenance": "- BRAND SECONDARY (LAVENDER): `#C2A0E1`",
+          "provenance": "BRAND SECONDARY (LAVENDER): `#C2A0E1`",
           "confidence": "high"
         },
         {
           "hex": "#C2A0E1",
           "role": "accent",
-          "provenance": "- AURORA GRADIENT STOPS: `#C2A0E1`, `#92A0E1`, `#A8B5F0`, `#D4C5F0`",
+          "provenance": "AURORA GRADIENT STOPS: `#C2A0E1`, `#92A0E1`, `#A8B5F0`, `#D4C5F0`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#92A0E1",
+          "role": "accent",
+          "provenance": "AURORA GRADIENT STOPS: `#C2A0E1`, `#92A0E1`, `#A8B5F0`, `#D4C5F0`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#A8B5F0",
+          "role": "accent",
+          "provenance": "AURORA GRADIENT STOPS: `#C2A0E1`, `#92A0E1`, `#A8B5F0`, `#D4C5F0`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#D4C5F0",
+          "role": "accent",
+          "provenance": "AURORA GRADIENT STOPS: `#C2A0E1`, `#92A0E1`, `#A8B5F0`, `#D4C5F0`",
           "confidence": "high"
         },
         {
           "hex": "#111111",
           "role": "text",
-          "provenance": "- INK / NEAR-BLACK FOR DARK SECTION + PRIMARY TEXT: `#111111` / TRUE BLACK `#000000`",
+          "provenance": "INK / NEAR-BLACK FOR DARK SECTION + PRIMARY TEXT: `#111111` / TRUE BLACK `#000000`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#000000",
+          "role": "text",
+          "provenance": "INK / NEAR-BLACK FOR DARK SECTION + PRIMARY TEXT: `#111111` / TRUE BLACK `#000000`",
           "confidence": "high"
         },
         {
           "hex": "#525252",
           "role": "text",
-          "provenance": "- BODY TEXT: `#525252`; MUTED TEXT: `#4F5465`",
+          "provenance": "BODY TEXT: `#525252`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#4F5465",
+          "role": "muted",
+          "provenance": "MUTED TEXT: `#4F5465`",
           "confidence": "high"
         },
         {
           "hex": "#EBEBEB",
           "role": "rule",
-          "provenance": "- HAIRLINE BORDER LIGHT: `#EBEBEB`; BORDER DARK: `#454545`",
+          "provenance": "HAIRLINE BORDER LIGHT: `#EBEBEB`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#454545",
+          "role": "rule",
+          "provenance": "BORDER DARK: `#454545`",
           "confidence": "high"
         },
         {
           "hex": "#4ADE80",
           "role": "accent",
-          "provenance": "- SUCCESS GREEN ACCENT (DASHBOARD MOCK): `#4ADE80`",
+          "provenance": "SUCCESS GREEN ACCENT (DASHBOARD MOCK): `#4ADE80`",
           "confidence": "high"
         }
       ],
@@ -11551,73 +11713,73 @@
         {
           "hex": "#070515",
           "role": "background",
-          "provenance": "- BRAND DARK (HERO + FOOTER BACKGROUND): `#070515`",
+          "provenance": "BRAND DARK (HERO + FOOTER BACKGROUND): `#070515`",
           "confidence": "high"
         },
         {
           "hex": "#C6FF7C",
           "role": "accent",
-          "provenance": "- BRAND LIME (PRIMARY ACCENT / CTA): `#C6FF7C`",
+          "provenance": "BRAND LIME (PRIMARY ACCENT / CTA): `#C6FF7C`",
           "confidence": "high"
         },
         {
           "hex": "#FF5F2E",
           "role": "accent",
-          "provenance": "- BRAND ORANGE (EYEBROWS / HOVER HIGHLIGHT): `#FF5F2E`",
+          "provenance": "BRAND ORANGE (EYEBROWS / HOVER HIGHLIGHT): `#FF5F2E`",
           "confidence": "high"
         },
         {
           "hex": "#B4DBFF",
           "role": "accent",
-          "provenance": "- BRAND BLUE (PASTEL PANEL / HEADLINE WORD): `#B4DBFF`",
+          "provenance": "BRAND BLUE (PASTEL PANEL / HEADLINE WORD): `#B4DBFF`",
           "confidence": "high"
         },
         {
           "hex": "#FDF070",
           "role": "accent",
-          "provenance": "- BRAND YELLOW (PASTEL PANEL / HEADLINE WORD): `#FDF070`",
+          "provenance": "BRAND YELLOW (PASTEL PANEL / HEADLINE WORD): `#FDF070`",
           "confidence": "high"
         },
         {
           "hex": "#F6C2F4",
           "role": "text",
-          "provenance": "- BRAND PINK (PASTEL PANEL): `#F6C2F4`",
+          "provenance": "BRAND PINK (PASTEL PANEL): `#F6C2F4`",
           "confidence": "high"
         },
         {
           "hex": "#C7CAFF",
           "role": "accent",
-          "provenance": "- BRAND PURPLE (PASTEL PANEL): `#C7CAFF`",
+          "provenance": "BRAND PURPLE (PASTEL PANEL): `#C7CAFF`",
           "confidence": "high"
         },
         {
           "hex": "#FDFAE7",
           "role": "accent",
-          "provenance": "- CARD CREAM (PASTEL PANEL): `#FDFAE7`",
+          "provenance": "CARD CREAM (PASTEL PANEL): `#FDFAE7`",
           "confidence": "high"
         },
         {
           "hex": "#F8F8F8",
           "role": "background",
-          "provenance": "- OFFWHITE SECTION BG: `#F8F8F8`",
+          "provenance": "OFFWHITE SECTION BG: `#F8F8F8`",
           "confidence": "high"
         },
         {
           "hex": "#070515",
           "role": "text",
-          "provenance": "- TEXT MAIN (NEAR-BLACK INK): `#070515`",
+          "provenance": "TEXT MAIN (NEAR-BLACK INK): `#070515`",
           "confidence": "high"
         },
         {
           "hex": "#6D6C6C",
-          "role": "text",
-          "provenance": "- TEXT MUTED: `#6D6C6C`",
+          "role": "muted",
+          "provenance": "TEXT MUTED: `#6D6C6C`",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- WHITE: `#FFFFFF`",
+          "provenance": "WHITE: `#FFFFFF`",
           "confidence": "high"
         }
       ],
@@ -12191,49 +12353,43 @@
         {
           "hex": "#FBF9EF",
           "role": "background",
-          "provenance": "- PAPER BACKGROUND (PRIMARY CANVAS): `#FBF9EF`",
+          "provenance": "PAPER BACKGROUND (PRIMARY CANVAS): `#FBF9EF`",
           "confidence": "high"
         },
         {
           "hex": "#EEECE3",
           "role": "muted",
-          "provenance": "- SURFACE (MUTED PANEL FILL): `#EEECE3`",
+          "provenance": "SURFACE (MUTED PANEL FILL): `#EEECE3`",
           "confidence": "high"
         },
         {
           "hex": "#171412",
           "role": "text",
-          "provenance": "- INK / DARK (PRIMARY TEXT + DARK PANELS): `#171412`",
+          "provenance": "INK / DARK (PRIMARY TEXT + DARK PANELS): `#171412`",
           "confidence": "high"
         },
         {
           "hex": "#5BFB7A",
           "role": "accent",
-          "provenance": "- ELECTRIC GREEN ACCENT (PRIMARY SIGNAL COLOR): `#5BFB7A`",
+          "provenance": "ELECTRIC GREEN ACCENT (PRIMARY SIGNAL COLOR): `#5BFB7A`",
           "confidence": "high"
         },
         {
           "hex": "#3255FF",
-          "role": "text",
-          "provenance": "- COBALT BLUE (SECONDARY ACCENT, HOVER FILLS, LINKS): `#3255FF`",
-          "confidence": "high"
-        },
-        {
-          "hex": "#171412",
-          "role": "text",
-          "provenance": "- PRIMARY TEXT: `#171412`",
+          "role": "muted",
+          "provenance": "COBALT BLUE (SECONDARY ACCENT, HOVER FILLS, LINKS): `#3255FF`",
           "confidence": "high"
         },
         {
           "hex": "#4F4F4F",
-          "role": "text",
-          "provenance": "- SECONDARY TEXT: `#4F4F4F`",
+          "role": "muted",
+          "provenance": "SECONDARY TEXT: `#4F4F4F`",
           "confidence": "high"
         },
         {
           "hex": "#FBF9EF",
           "role": "text",
-          "provenance": "- LIGHT TEXT (ON DARK PANELS): `#FBF9EF`",
+          "provenance": "LIGHT TEXT (ON DARK PANELS): `#FBF9EF`",
           "confidence": "high"
         }
       ],
@@ -12649,19 +12805,19 @@
         {
           "hex": "#F2F0EB",
           "role": "background",
-          "provenance": "- PAPER / BACKGROUND: `#F2F0EB` (WARM OFF-WHITE BONE)",
+          "provenance": "PAPER / BACKGROUND: `#F2F0EB` (WARM OFF-WHITE BONE)",
           "confidence": "high"
         },
         {
           "hex": "#0D0D0D",
           "role": "text",
-          "provenance": "- INK / FOREGROUND: `#0D0D0D` (NEAR-BLACK)",
+          "provenance": "INK / FOREGROUND: `#0D0D0D` (NEAR-BLACK)",
           "confidence": "high"
         },
         {
           "hex": "#FF3B2F",
           "role": "accent",
-          "provenance": "- ONE SINGLE ACCENT, USED SPARINGLY: `#FF3B2F` (SIGNAL RED) — ONLY ON THE",
+          "provenance": "ONE SINGLE ACCENT, USED SPARINGLY: `#FF3B2F` (SIGNAL RED) — ONLY ON THE",
           "confidence": "high"
         }
       ],
@@ -13542,19 +13698,19 @@
         {
           "hex": "#050505",
           "role": "background",
-          "provenance": "- BACKGROUND VOID: `#050505` (TRUE NEAR-BLACK).",
+          "provenance": "BACKGROUND VOID: `#050505` (TRUE NEAR-BLACK).",
           "confidence": "high"
         },
         {
           "hex": "#F4F2EE",
           "role": "text",
-          "provenance": "- TEXT PRIMARY: `#F4F2EE` (WARM OFF-WHITE).",
+          "provenance": "TEXT PRIMARY: `#F4F2EE` (WARM OFF-WHITE).",
           "confidence": "high"
         },
         {
           "hex": "#C7A06A",
           "role": "accent",
-          "provenance": "- BRASS ACCENT: `#C7A06A` (USED ONLY FOR ONE LINE, INDEX NUMERALS, AND THE HOVER FILL).",
+          "provenance": "BRASS ACCENT: `#C7A06A` (USED ONLY FOR ONE LINE, INDEX NUMERALS, AND THE HOVER FILL).",
           "confidence": "high"
         }
       ],
@@ -13600,37 +13756,37 @@
         {
           "hex": "#F4F1EA",
           "role": "background",
-          "provenance": "- PAPER / CANVAS BACKGROUND: `#F4F1EA` (WARM BONE).",
+          "provenance": "PAPER / CANVAS BACKGROUND: `#F4F1EA` (WARM BONE).",
           "confidence": "high"
         },
         {
           "hex": "#EDE8DD",
           "role": "background",
-          "provenance": "- ALTERNATE PANEL BACKGROUND: `#EDE8DD` (SLIGHTLY DEEPER PAPER).",
+          "provenance": "ALTERNATE PANEL BACKGROUND: `#EDE8DD` (SLIGHTLY DEEPER PAPER).",
           "confidence": "high"
         },
         {
           "hex": "#1A1714",
           "role": "text",
-          "provenance": "- INK / PRIMARY TEXT: `#1A1714` (NEAR-BLACK ESPRESSO).",
+          "provenance": "INK / PRIMARY TEXT: `#1A1714` (NEAR-BLACK ESPRESSO).",
           "confidence": "high"
         },
         {
           "hex": "#1A1714",
           "role": "background",
-          "provenance": "- INVERTED PANEL BACKGROUND: `#1A1714` WITH `#F4F1EA` TEXT.",
+          "provenance": "INVERTED PANEL BACKGROUND: `#1A1714` WITH `#F4F1EA` TEXT.",
           "confidence": "high"
         },
         {
           "hex": "#B25A1E",
           "role": "accent",
-          "provenance": "- OCHRE ACCENT: `#B25A1E` (BURNT OCHRE) — USED FOR THE BRAND DOT, RULES,",
+          "provenance": "OCHRE ACCENT: `#B25A1E` (BURNT OCHRE) — USED FOR THE BRAND DOT, RULES,",
           "confidence": "high"
         },
         {
           "hex": "#E9CFA8",
           "role": "accent",
-          "provenance": "- OCHRE TINT: `#E9CFA8` (SAND) FOR SOFT CARD BACKGROUNDS AND BORDERS.",
+          "provenance": "OCHRE TINT: `#E9CFA8` (SAND) FOR SOFT CARD BACKGROUNDS AND BORDERS.",
           "confidence": "high"
         }
       ],
@@ -14187,61 +14343,79 @@
         {
           "hex": "#F4F5F7",
           "role": "background",
-          "provenance": "- CANVAS / NEUTRAL BACKGROUND: `#F4F5F7` (COOL OFF-WHITE).",
+          "provenance": "CANVAS / NEUTRAL BACKGROUND: `#F4F5F7` (COOL OFF-WHITE).",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- SURFACE WHITE: `#FFFFFF`.",
+          "provenance": "SURFACE WHITE: `#FFFFFF`.",
           "confidence": "high"
         },
         {
           "hex": "#0B0D12",
           "role": "text",
-          "provenance": "- INK / TEXT PRIMARY: `#0B0D12` (NEAR-BLACK, SLIGHT BLUE).",
+          "provenance": "INK / TEXT PRIMARY: `#0B0D12` (NEAR-BLACK, SLIGHT BLUE).",
           "confidence": "high"
         },
         {
           "hex": "#5B6270",
-          "role": "text",
-          "provenance": "- TEXT MUTED: `#5B6270`.",
+          "role": "muted",
+          "provenance": "TEXT MUTED: `#5B6270`.",
           "confidence": "high"
         },
         {
           "hex": "#E2E5EA",
           "role": "rule",
-          "provenance": "- HAIRLINE BORDER: `#E2E5EA`.",
+          "provenance": "HAIRLINE BORDER: `#E2E5EA`.",
           "confidence": "high"
         },
         {
           "hex": "#4F46E5",
           "role": "accent",
-          "provenance": "- CHARGE A — ELECTRIC INDIGO: `#4F46E5` (PRIMARY ACCENT, GRADIENT TO `#3730A3`).",
+          "provenance": "CHARGE A — ELECTRIC INDIGO: `#4F46E5` (PRIMARY ACCENT, GRADIENT TO `#3730A3`).",
+          "confidence": "high"
+        },
+        {
+          "hex": "#3730A3",
+          "role": "accent",
+          "provenance": "CHARGE A — ELECTRIC INDIGO: `#4F46E5` (PRIMARY ACCENT, GRADIENT TO `#3730A3`).",
           "confidence": "high"
         },
         {
           "hex": "#EC4899",
           "role": "accent",
-          "provenance": "- CHARGE B — HOT MAGENTA: `#EC4899` (SECONDARY ACCENT, GRADIENT TO `#DB2777`).",
+          "provenance": "CHARGE B — HOT MAGENTA: `#EC4899` (SECONDARY ACCENT, GRADIENT TO `#DB2777`).",
+          "confidence": "high"
+        },
+        {
+          "hex": "#DB2777",
+          "role": "accent",
+          "provenance": "CHARGE B — HOT MAGENTA: `#EC4899` (SECONDARY ACCENT, GRADIENT TO `#DB2777`).",
           "confidence": "high"
         },
         {
           "hex": "#10B981",
           "role": "accent",
-          "provenance": "- SUPPORTING SIGNAL GREEN (LIVE/ACTIVE): `#10B981`.",
+          "provenance": "SUPPORTING SIGNAL GREEN (LIVE/ACTIVE): `#10B981`.",
           "confidence": "high"
         },
         {
           "hex": "#F59E0B",
           "role": "accent",
-          "provenance": "- SUPPORTING AMBER (WARMING/PAUSED): `#F59E0B`.",
+          "provenance": "SUPPORTING AMBER (WARMING/PAUSED): `#F59E0B`.",
           "confidence": "high"
         },
         {
           "hex": "#0E1014",
           "role": "text",
-          "provenance": "- INK PANEL (DARK NODE CARDS): `#0E1014` WITH `#1B1F27` HAIRLINES AND INDIGO/MAGENTA/GREEN MONO TEXT.",
+          "provenance": "INK PANEL (DARK NODE CARDS): `#0E1014` WITH `#1B1F27` HAIRLINES AND INDIGO/MAGENTA/GREEN MONO TEXT.",
+          "confidence": "high"
+        },
+        {
+          "hex": "#1B1F27",
+          "role": "text",
+          "provenance": "INK PANEL (DARK NODE CARDS): `#0E1014` WITH `#1B1F27` HAIRLINES AND INDIGO/MAGENTA/GREEN MONO TEXT.",
           "confidence": "high"
         }
       ],
@@ -15004,49 +15178,49 @@
         {
           "hex": "#F2F2F0",
           "role": "background",
-          "provenance": "- NEUTRAL BACKGROUND (PAGE CANVAS): `#F2F2F0`",
+          "provenance": "NEUTRAL BACKGROUND (PAGE CANVAS): `#F2F2F0`",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- SURFACE / CARD WHITE: `#FFFFFF`",
+          "provenance": "SURFACE / CARD WHITE: `#FFFFFF`",
           "confidence": "high"
         },
         {
           "hex": "#0A0A0A",
           "role": "text",
-          "provenance": "- INK / BRAND PRIMARY (TEXT + BLACK CARDS): `#0A0A0A`",
+          "provenance": "INK / BRAND PRIMARY (TEXT + BLACK CARDS): `#0A0A0A`",
           "confidence": "high"
         },
         {
           "hex": "#4B5563",
-          "role": "text",
-          "provenance": "- TEXT SECONDARY: `#4B5563`",
+          "role": "muted",
+          "provenance": "TEXT SECONDARY: `#4B5563`",
           "confidence": "high"
         },
         {
           "hex": "#9CA3AF",
-          "role": "text",
-          "provenance": "- TEXT MUTED: `#9CA3AF`",
+          "role": "muted",
+          "provenance": "TEXT MUTED: `#9CA3AF`",
           "confidence": "high"
         },
         {
           "hex": "#00C65E",
           "role": "accent",
-          "provenance": "- RISO GREEN: `#00C65E`",
+          "provenance": "RISO GREEN: `#00C65E`",
           "confidence": "high"
         },
         {
           "hex": "#5C5FEF",
           "role": "accent",
-          "provenance": "- RISO PURPLE / INDIGO: `#5C5FEF`",
+          "provenance": "RISO PURPLE / INDIGO: `#5C5FEF`",
           "confidence": "high"
         },
         {
           "hex": "#FF5C00",
           "role": "accent",
-          "provenance": "- RISO ORANGE (PRIMARY ACCENT): `#FF5C00`",
+          "provenance": "RISO ORANGE (PRIMARY ACCENT): `#FF5C00`",
           "confidence": "high"
         }
       ],
@@ -15789,31 +15963,31 @@
         {
           "hex": "#16191A",
           "role": "text",
-          "provenance": "- INK (PRIMARY TEXT / DARK PANELS): `#16191A` (NEAR-BLACK CHARCOAL).",
+          "provenance": "INK (PRIMARY TEXT / DARK PANELS): `#16191A` (NEAR-BLACK CHARCOAL).",
           "confidence": "high"
         },
         {
           "hex": "#F4F1EA",
           "role": "background",
-          "provenance": "- PAPER (PAGE GROUND): `#F4F1EA` (WARM OFF-WHITE LINEN).",
+          "provenance": "PAPER (PAGE GROUND): `#F4F1EA` (WARM OFF-WHITE LINEN).",
           "confidence": "high"
         },
         {
           "hex": "#FBF9F3",
           "role": "background",
-          "provenance": "- PAPER-LIGHT (CARDS / INSET PANELS): `#FBF9F3`.",
+          "provenance": "PAPER-LIGHT (CARDS / INSET PANELS): `#FBF9F3`.",
           "confidence": "high"
         },
         {
           "hex": "#B4522E",
           "role": "accent",
-          "provenance": "- ACCENT — \"OXIDE\" (A SINGLE SPARING WARM RUST/TERRACOTTA): `#B4522E`, USED ONLY FOR THE STATUS DOT, SECTION INDEX NUMERALS, ACTIVE STATES, AND ONE WORD OF EMPHASIS — NEVER FOR LARGE FILLS.",
+          "provenance": "ACCENT — \"OXIDE\" (A SINGLE SPARING WARM RUST/TERRACOTTA): `#B4522E`, USED ONLY FOR THE STATUS DOT, SECTION INDEX NUMERALS, ACTIVE STATES, AND ONE WORD OF EMPHASIS — NEVER FOR LARGE FILLS.",
           "confidence": "high"
         },
         {
           "hex": "#F4F1EA",
           "role": "text",
-          "provenance": "- ON-INK CREAM (TEXT ON DARK PANELS): `#F4F1EA`.",
+          "provenance": "ON-INK CREAM (TEXT ON DARK PANELS): `#F4F1EA`.",
           "confidence": "high"
         }
       ],
@@ -15859,37 +16033,37 @@
         {
           "hex": "#FDFCFB",
           "role": "background",
-          "provenance": "- PAGE BACKGROUND / \"OFF-WHITE PAPER\": `#FDFCFB`",
+          "provenance": "PAGE BACKGROUND / \"OFF-WHITE PAPER\": `#FDFCFB`",
           "confidence": "high"
         },
         {
           "hex": "#E6D5D1",
           "role": "accent",
-          "provenance": "- DUSTY ROSE PANEL: `#E6D5D1`",
+          "provenance": "DUSTY ROSE PANEL: `#E6D5D1`",
           "confidence": "high"
         },
         {
           "hex": "#F2EEE3",
           "role": "accent",
-          "provenance": "- WARM CREAM PANEL: `#F2EEE3`",
+          "provenance": "WARM CREAM PANEL: `#F2EEE3`",
           "confidence": "high"
         },
         {
           "hex": "#E7E1EC",
           "role": "text",
-          "provenance": "- COOL LILAC-PINK PANEL: `#E7E1EC`",
+          "provenance": "COOL LILAC-PINK PANEL: `#E7E1EC`",
           "confidence": "high"
         },
         {
           "hex": "#4B594D",
           "role": "accent",
-          "provenance": "- DEEP PINE GREEN (THE GROUNDING ACCENT — CTAS, ICONS, KEY LABELS): `#4B594D`",
+          "provenance": "DEEP PINE GREEN (THE GROUNDING ACCENT — CTAS, ICONS, KEY LABELS): `#4B594D`",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "text",
-          "provenance": "- LIGHT TEXT (ON GREEN PANELS): `#FFFFFF`",
+          "provenance": "LIGHT TEXT (ON GREEN PANELS): `#FFFFFF`",
           "confidence": "high"
         }
       ],
@@ -15984,43 +16158,43 @@
         {
           "hex": "#211E1B",
           "role": "text",
-          "provenance": "- INK / CHARCOAL: `#211E1B` (PRIMARY TEXT, BORDERS, SHADOWS, DARK PANELS).",
+          "provenance": "INK / CHARCOAL: `#211E1B` (PRIMARY TEXT, BORDERS, SHADOWS, DARK PANELS).",
           "confidence": "high"
         },
         {
           "hex": "#F6F1E7",
           "role": "background",
-          "provenance": "- PAPER / BACKGROUND: `#F6F1E7` (WARM OFF-WHITE PAGE BACKGROUND).",
+          "provenance": "PAPER / BACKGROUND: `#F6F1E7` (WARM OFF-WHITE PAGE BACKGROUND).",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- SURFACE WHITE: `#FFFFFF` (CARD FILL).",
+          "provenance": "SURFACE WHITE: `#FFFFFF` (CARD FILL).",
           "confidence": "high"
         },
         {
           "hex": "#15B5A6",
           "role": "accent",
-          "provenance": "- TEAL ACCENT: `#15B5A6` (PRIMARY POP — PRICES, HIGHLIGHTS, ACTIVE CARD).",
+          "provenance": "TEAL ACCENT: `#15B5A6` (PRIMARY POP — PRICES, HIGHLIGHTS, ACTIVE CARD).",
           "confidence": "high"
         },
         {
           "hex": "#FF6B5E",
           "role": "accent",
-          "provenance": "- CORAL ACCENT: `#FF6B5E` (SECONDARY POP — BADGES, ACCENTS, HOVER STATES).",
+          "provenance": "CORAL ACCENT: `#FF6B5E` (SECONDARY POP — BADGES, ACCENTS, HOVER STATES).",
           "confidence": "high"
         },
         {
           "hex": "#F2B705",
           "role": "accent",
-          "provenance": "- MUSTARD ACCENT: `#F2B705` (TERTIARY POP — STARS, DETAILS, STAT TILES).",
+          "provenance": "MUSTARD ACCENT: `#F2B705` (TERTIARY POP — STARS, DETAILS, STAT TILES).",
           "confidence": "high"
         },
         {
           "hex": "#6F6A60",
-          "role": "text",
-          "provenance": "- SECONDARY TEXT: `#6F6A60` (MUTED COPY ON PAPER).",
+          "role": "muted",
+          "provenance": "SECONDARY TEXT: `#6F6A60` (MUTED COPY ON PAPER).",
           "confidence": "high"
         }
       ],
@@ -16170,43 +16344,43 @@
         {
           "hex": "#F2EEE3",
           "role": "accent",
-          "provenance": "- CREAM / OAT PANEL: `#F2EEE3`",
+          "provenance": "CREAM / OAT PANEL: `#F2EEE3`",
           "confidence": "high"
         },
         {
           "hex": "#E6D5D1",
           "role": "accent",
-          "provenance": "- DUSTY ROSE / CLAY PANEL: `#E6D5D1`",
+          "provenance": "DUSTY ROSE / CLAY PANEL: `#E6D5D1`",
           "confidence": "high"
         },
         {
           "hex": "#E7E1EC",
           "role": "accent",
-          "provenance": "- LILAC MIST PANEL: `#E7E1EC`",
+          "provenance": "LILAC MIST PANEL: `#E7E1EC`",
           "confidence": "high"
         },
         {
           "hex": "#4B594D",
           "role": "text",
-          "provenance": "- SAGE / FOREST ACCENT (BUTTONS, INK): `#4B594D`",
+          "provenance": "SAGE / FOREST ACCENT (BUTTONS, INK): `#4B594D`",
           "confidence": "high"
         },
         {
           "hex": "#3C4A3E",
           "role": "accent",
-          "provenance": "- DEEPER MOSS HOVER: `#3C4A3E`",
+          "provenance": "DEEPER MOSS HOVER: `#3C4A3E`",
           "confidence": "high"
         },
         {
           "hex": "#3D3D3D",
           "role": "text",
-          "provenance": "- PRIMARY INK / TEXT: `#3D3D3D`",
+          "provenance": "PRIMARY INK / TEXT: `#3D3D3D`",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "text",
-          "provenance": "- LIGHT TEXT (ON SAGE): `#FFFFFF`",
+          "provenance": "LIGHT TEXT (ON SAGE): `#FFFFFF`",
           "confidence": "high"
         }
       ],
@@ -17134,31 +17308,31 @@
         {
           "hex": "#16324F",
           "role": "text",
-          "provenance": "- DEEP NAVY INK (PRIMARY TEXT / DARK SECTIONS): `#16324F`",
+          "provenance": "DEEP NAVY INK (PRIMARY TEXT / DARK SECTIONS): `#16324F`",
           "confidence": "high"
         },
         {
           "hex": "#9DD3D4",
           "role": "accent",
-          "provenance": "- SOFT SKY / SEAFOAM ACCENT: `#9DD3D4`",
+          "provenance": "SOFT SKY / SEAFOAM ACCENT: `#9DD3D4`",
           "confidence": "high"
         },
         {
           "hex": "#F6F5F0",
           "role": "background",
-          "provenance": "- SALT CREAM (PAGE BACKGROUND): `#F6F5F0`",
+          "provenance": "SALT CREAM (PAGE BACKGROUND): `#F6F5F0`",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- PURE WHITE (CARDS): `#FFFFFF`",
+          "provenance": "PURE WHITE (CARDS): `#FFFFFF`",
           "confidence": "high"
         },
         {
           "hex": "#4A7A93",
-          "role": "text",
-          "provenance": "- MUTED STEEL BLUE (SECONDARY TEXT): `#4A7A93`",
+          "role": "muted",
+          "provenance": "MUTED STEEL BLUE (SECONDARY TEXT): `#4A7A93`",
           "confidence": "high"
         }
       ],
@@ -17847,31 +18021,31 @@
         {
           "hex": "#0C0B08",
           "role": "text",
-          "provenance": "- INK / CHARCOAL: `#0C0B08` (PRIMARY TEXT, BORDERS, DARK PANELS).",
+          "provenance": "INK / CHARCOAL: `#0C0B08` (PRIMARY TEXT, BORDERS, DARK PANELS).",
           "confidence": "high"
         },
         {
           "hex": "#F4F1EA",
           "role": "background",
-          "provenance": "- PAPER / BACKGROUND: `#F4F1EA` (WARM OFF-WHITE PAGE BACKGROUND).",
+          "provenance": "PAPER / BACKGROUND: `#F4F1EA` (WARM OFF-WHITE PAGE BACKGROUND).",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- SURFACE WHITE: `#FFFFFF` (FLOATING QUOTE CARD).",
+          "provenance": "SURFACE WHITE: `#FFFFFF` (FLOATING QUOTE CARD).",
           "confidence": "high"
         },
         {
           "hex": "#C5A059",
           "role": "accent",
-          "provenance": "- GOLD ACCENT: `#C5A059` (SCRIPT EYEBROWS, HOVERS, KEY PRICES, DECORATIVE TYPE).",
+          "provenance": "GOLD ACCENT: `#C5A059` (SCRIPT EYEBROWS, HOVERS, KEY PRICES, DECORATIVE TYPE).",
           "confidence": "high"
         },
         {
           "hex": "#2E2E2E",
           "role": "rule",
-          "provenance": "- HAIRLINE ON DARK: `#2E2E2E` (DIVIDERS INSIDE DARK PANELS).",
+          "provenance": "HAIRLINE ON DARK: `#2E2E2E` (DIVIDERS INSIDE DARK PANELS).",
           "confidence": "high"
         }
       ],
@@ -18033,43 +18207,49 @@
         {
           "hex": "#4A141A",
           "role": "accent",
-          "provenance": "- BRAND DEEP (DARKER MAROON FOR HOVER/SHADOW): `#4A141A`",
+          "provenance": "BRAND DEEP (DARKER MAROON FOR HOVER/SHADOW): `#4A141A`",
           "confidence": "high"
         },
         {
           "hex": "#0B0A0A",
           "role": "text",
-          "provenance": "- BRAND INK (NEAR-BLACK TEXT): `#0B0A0A` / `#050505`",
+          "provenance": "BRAND INK (NEAR-BLACK TEXT): `#0B0A0A` / `#050505`",
+          "confidence": "high"
+        },
+        {
+          "hex": "#050505",
+          "role": "text",
+          "provenance": "BRAND INK (NEAR-BLACK TEXT): `#0B0A0A` / `#050505`",
           "confidence": "high"
         },
         {
           "hex": "#4A4A4A",
-          "role": "text",
-          "provenance": "- TEXT SECONDARY (MUTED): `#4A4A4A`",
+          "role": "muted",
+          "provenance": "TEXT SECONDARY (MUTED): `#4A4A4A`",
           "confidence": "high"
         },
         {
           "hex": "#FBF9F6",
           "role": "background",
-          "provenance": "- PAPER BACKGROUND (WARM WHITE): `#FBF9F6`",
+          "provenance": "PAPER BACKGROUND (WARM WHITE): `#FBF9F6`",
           "confidence": "high"
         },
         {
           "hex": "#F4F1EC",
           "role": "accent",
-          "provenance": "- SURFACE (OFF-WHITE CARD): `#F4F1EC`",
+          "provenance": "SURFACE (OFF-WHITE CARD): `#F4F1EC`",
           "confidence": "high"
         },
         {
           "hex": "#C8A24B",
           "role": "rule",
-          "provenance": "- ACCENT GOLD (SPARINGLY, FOR STARS/DOTS/RULES): `#C8A24B`",
+          "provenance": "ACCENT GOLD (SPARINGLY, FOR STARS/DOTS/RULES): `#C8A24B`",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- WHITE: `#FFFFFF`",
+          "provenance": "WHITE: `#FFFFFF`",
           "confidence": "high"
         }
       ],
@@ -18116,13 +18296,13 @@
         {
           "hex": "#163C38",
           "role": "accent",
-          "provenance": "- BRAND GREEN DARKER ACCENT: `#163C38` FOR SUBTLE INNER GRADIENT DEPTH.",
+          "provenance": "BRAND GREEN DARKER ACCENT: `#163C38` FOR SUBTLE INNER GRADIENT DEPTH.",
           "confidence": "high"
         },
         {
           "hex": "#F6F4EF",
-          "role": "background",
-          "provenance": "- WARM PAPER TINT FOR SECONDARY SECTIONS: `#F6F4EF`.",
+          "role": "muted",
+          "provenance": "WARM PAPER TINT FOR SECONDARY SECTIONS: `#F6F4EF`.",
           "confidence": "high"
         }
       ],
@@ -18168,25 +18348,49 @@
         {
           "hex": "#16302B",
           "role": "background",
-          "provenance": "- FOREST DARK (PRIMARY BACKGROUND): `#16302B` (WITH A DEEPER `#0F211D` AND `#1C3B36` FOR LAYERING).",
+          "provenance": "FOREST DARK (PRIMARY BACKGROUND): `#16302B` (WITH A DEEPER `#0F211D` AND `#1C3B36` FOR LAYERING).",
+          "confidence": "high"
+        },
+        {
+          "hex": "#0F211D",
+          "role": "background",
+          "provenance": "FOREST DARK (PRIMARY BACKGROUND): `#16302B` (WITH A DEEPER `#0F211D` AND `#1C3B36` FOR LAYERING).",
+          "confidence": "high"
+        },
+        {
+          "hex": "#1C3B36",
+          "role": "background",
+          "provenance": "FOREST DARK (PRIMARY BACKGROUND): `#16302B` (WITH A DEEPER `#0F211D` AND `#1C3B36` FOR LAYERING).",
           "confidence": "high"
         },
         {
           "hex": "#FCF6E8",
           "role": "text",
-          "provenance": "- PARCHMENT CREAM (LIGHT SECTIONS / PRIMARY TEXT ON DARK): `#FCF6E8`.",
+          "provenance": "PARCHMENT CREAM (LIGHT SECTIONS / PRIMARY TEXT ON DARK): `#FCF6E8`.",
           "confidence": "high"
         },
         {
           "hex": "#E8B53A",
           "role": "accent",
-          "provenance": "- MUSEUM GOLD (PRIMARY ACCENT): `#E8B53A` / SOFTER `#EEC643`.",
+          "provenance": "MUSEUM GOLD (PRIMARY ACCENT): `#E8B53A` / SOFTER `#EEC643`.",
+          "confidence": "high"
+        },
+        {
+          "hex": "#EEC643",
+          "role": "accent",
+          "provenance": "MUSEUM GOLD (PRIMARY ACCENT): `#E8B53A` / SOFTER `#EEC643`.",
           "confidence": "high"
         },
         {
           "hex": "#E2552B",
           "role": "muted",
-          "provenance": "- DEEP ORANGE (SECONDARY ACCENT / CTA): `#E2552B` / HOVER `#C8431D`.",
+          "provenance": "DEEP ORANGE (SECONDARY ACCENT / CTA): `#E2552B` / HOVER `#C8431D`.",
+          "confidence": "high"
+        },
+        {
+          "hex": "#C8431D",
+          "role": "muted",
+          "provenance": "DEEP ORANGE (SECONDARY ACCENT / CTA): `#E2552B` / HOVER `#C8431D`.",
           "confidence": "high"
         }
       ],
@@ -18231,8 +18435,8 @@
       "palette": [
         {
           "hex": "#9AA197",
-          "role": "text",
-          "provenance": "- TERTIARY / MUTED TEXT: `#9AA197`",
+          "role": "muted",
+          "provenance": "TERTIARY / MUTED TEXT: `#9AA197`",
           "confidence": "high"
         }
       ],
@@ -18278,43 +18482,43 @@
         {
           "hex": "#004953",
           "role": "accent",
-          "provenance": "- BRAND PRIMARY / MIDNIGHT GREEN: `#004953`",
+          "provenance": "BRAND PRIMARY / MIDNIGHT GREEN: `#004953`",
           "confidence": "high"
         },
         {
           "hex": "#F9F7F2",
           "role": "background",
-          "provenance": "- PAPER BEIGE (BACKGROUND): `#F9F7F2`",
+          "provenance": "PAPER BEIGE (BACKGROUND): `#F9F7F2`",
           "confidence": "high"
         },
         {
           "hex": "#F2EFE8",
           "role": "accent",
-          "provenance": "- WARMER BEIGE PANEL (ALT SECTION): `#F2EFE8`",
+          "provenance": "WARMER BEIGE PANEL (ALT SECTION): `#F2EFE8`",
           "confidence": "high"
         },
         {
           "hex": "#3E2723",
           "role": "text",
-          "provenance": "- TEXT PRIMARY (HEADINGS, COCOA): `#3E2723`",
+          "provenance": "TEXT PRIMARY (HEADINGS, COCOA): `#3E2723`",
           "confidence": "high"
         },
         {
           "hex": "#5D4037",
-          "role": "text",
-          "provenance": "- TEXT SECONDARY (BODY, LIGHTER BROWN): `#5D4037`",
+          "role": "muted",
+          "provenance": "TEXT SECONDARY (BODY, LIGHTER BROWN): `#5D4037`",
           "confidence": "high"
         },
         {
           "hex": "#F9F7F2",
           "role": "text",
-          "provenance": "- TEXT ON DARK (BEIGE ON GREEN/BROWN): `#F9F7F2`",
+          "provenance": "TEXT ON DARK (BEIGE ON GREEN/BROWN): `#F9F7F2`",
           "confidence": "high"
         },
         {
           "hex": "#3E2723",
           "role": "accent",
-          "provenance": "- FOOTER GROUND (DEEP COCOA): `#3E2723`",
+          "provenance": "FOOTER GROUND (DEEP COCOA): `#3E2723`",
           "confidence": "high"
         }
       ],
@@ -18407,37 +18611,31 @@
         {
           "hex": "#070E01",
           "role": "text",
-          "provenance": "- BRAND PRIMARY / INK: `#070E01` (NEAR-BLACK PINE)",
+          "provenance": "BRAND PRIMARY / INK: `#070E01` (NEAR-BLACK PINE)",
           "confidence": "high"
         },
         {
           "hex": "#ECF3E5",
           "role": "background",
-          "provenance": "- NEUTRAL BACKGROUND (FENNEL PASTEL): `#ECF3E5`",
+          "provenance": "NEUTRAL BACKGROUND (FENNEL PASTEL): `#ECF3E5`",
           "confidence": "high"
         },
         {
           "hex": "#A5FFA9",
           "role": "accent",
-          "provenance": "- BRAND ACCENT (LUMINOUS MINT): `#A5FFA9`",
+          "provenance": "BRAND ACCENT (LUMINOUS MINT): `#A5FFA9`",
           "confidence": "high"
         },
         {
           "hex": "#4A4A4A",
-          "role": "text",
-          "provenance": "- TEXT SECONDARY: `#4A4A4A`",
-          "confidence": "high"
-        },
-        {
-          "hex": "#ECF3E5",
-          "role": "background",
-          "provenance": "- TEXT ON PRIMARY (PAPER ON INK PANELS): `#ECF3E5`",
+          "role": "muted",
+          "provenance": "TEXT SECONDARY: `#4A4A4A`",
           "confidence": "high"
         },
         {
           "hex": "#070E01",
           "role": "rule",
-          "provenance": "- HAIRLINE RULES: `#070E01` AT 10% OPACITY",
+          "provenance": "HAIRLINE RULES: `#070E01` AT 10% OPACITY",
           "confidence": "high"
         }
       ],
@@ -18724,7 +18922,7 @@
         {
           "hex": "#FFFFFF",
           "role": "accent",
-          "provenance": "- WHITE CARDS: `#FFFFFF`",
+          "provenance": "WHITE CARDS: `#FFFFFF`",
           "confidence": "high"
         }
       ],
@@ -18770,31 +18968,31 @@
         {
           "hex": "#0F0F0F",
           "role": "background",
-          "provenance": "- BACKGROUND: `#0F0F0F`",
+          "provenance": "BACKGROUND: `#0F0F0F`",
           "confidence": "high"
         },
         {
           "hex": "#FFFFFF",
           "role": "text",
-          "provenance": "- TEXT: `#FFFFFF`",
+          "provenance": "TEXT: `#FFFFFF`",
           "confidence": "high"
         },
         {
           "hex": "#1D1D1D",
           "role": "text",
-          "provenance": "- TEXT-DARK (ON YELLOW/WHITE BUTTONS): `#1D1D1D`",
+          "provenance": "TEXT-DARK (ON YELLOW/WHITE BUTTONS): `#1D1D1D`",
           "confidence": "high"
         },
         {
           "hex": "#FAE100",
           "role": "accent",
-          "provenance": "- PRIMARY (ELECTRIC YELLOW): `#FAE100`",
+          "provenance": "PRIMARY (ELECTRIC YELLOW): `#FAE100`",
           "confidence": "high"
         },
         {
           "hex": "#834900",
           "role": "accent",
-          "provenance": "- PRIMARY-DARK: `#834900`",
+          "provenance": "PRIMARY-DARK: `#834900`",
           "confidence": "high"
         }
       ],
@@ -18876,7 +19074,7 @@
         {
           "hex": "#0A0A0F",
           "role": "accent",
-          "provenance": "- DEEP SPACE BLACK: `#0a0a0f` (HOVER OVERLAYS, STARFIELD BACKDROP)",
+          "provenance": "DEEP SPACE BLACK: `#0a0a0f` (HOVER OVERLAYS, STARFIELD BACKDROP)",
           "confidence": "high"
         }
       ],

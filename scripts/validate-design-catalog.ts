@@ -404,7 +404,22 @@ function currentSourceHash(templateDir: string): string | null {
   return sha256Hex(`${skillText}\u0000${templateJsonText}`);
 }
 
-export function checkDesignIndex(report: Report, templateSlugs: Set<string>): void {
+/**
+ * `indexOverride` exists so every violation class can be pinned by a test.
+ * Reading the committed index and asserting it is clean proves nothing about
+ * the checks themselves — that assertion stays green against a no-op, because
+ * a fresh report is already empty. A synthetic index is the only way to show
+ * each rule fires.
+ */
+export function checkDesignIndex(
+  report: Report,
+  templateSlugs: Set<string>,
+  indexOverride?: DesignIndex,
+): void {
+  if (indexOverride !== undefined) {
+    checkDesignIndexRows(report, templateSlugs, indexOverride);
+    return;
+  }
   if (!existsSync(DESIGN_INDEX_PATH)) {
     report['index-file-missing'].push({
       subject: relToRoot(DESIGN_INDEX_PATH),
@@ -424,6 +439,14 @@ export function checkDesignIndex(report: Report, templateSlugs: Set<string>): vo
     return;
   }
 
+  checkDesignIndexRows(report, templateSlugs, index);
+}
+
+function checkDesignIndexRows(
+  report: Report,
+  templateSlugs: Set<string>,
+  index: DesignIndex,
+): void {
   const rows = Array.isArray(index.templates) ? index.templates : [];
   const indexedSlugs = new Set(rows.map((row) => row.slug));
 

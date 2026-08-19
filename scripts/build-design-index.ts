@@ -107,11 +107,16 @@ const HEX_RE = /#[0-9A-Fa-f]{6}\b/g;
 // style used by the better-documented templates (see
 // design-templates/almond-hours-h65/SKILL.md, "## COLOR PALETTE (EXACT)").
 // First keyword match wins; unmatched labels fall back to 'accent'.
+// Order matters and the qualifier wins. A label reading
+// "TEXT-SECONDARY / SAGE (MUTED SAGE-GREY -- BODY COPY)" says muted, and
+// matching TEXT first labelled 31 of the catalogue's high-confidence entries
+// as the primary text colour -- a confident wrong answer, which is worse than
+// an unmarked guess.
 const PALETTE_LABEL_KEYWORDS: [RegExp, PaletteRole][] = [
+  [/MUTED|SECONDARY|SUBTLE|TERTIARY|DIM\b/i, 'muted'],
+  [/BORDER|HAIRLINE|RULE|DIVIDER/i, 'rule'],
   [/PAPER|BACKGROUND|\bBG\b/i, 'background'],
   [/INK|TEXT\b/i, 'text'],
-  [/MUTED|SECONDARY|SUBTLE/i, 'muted'],
-  [/BORDER|HAIRLINE|RULE|DIVIDER/i, 'rule'],
   [/ACCENT|CTA|HIGHLIGHT|BRAND/i, 'accent'],
 ];
 
@@ -133,12 +138,28 @@ export function extractStructuredPalette(body: string): DesignIndexPaletteEntry[
   const section = nextHeading === -1 ? rest : rest.slice(0, nextHeading);
 
   const entries: DesignIndexPaletteEntry[] = [];
+  const seen = new Set<string>();
   for (const line of section.split(/\r?\n/)) {
-    const m = line.match(/^-\s*([^:`]+):\s*`?(#[0-9A-Fa-f]{6})/);
-    if (!m) continue;
-    const label = (m[1] ?? '').trim();
-    const hex = (m[2] ?? '').toUpperCase();
-    entries.push({ hex, role: roleForLabel(label), provenance: line.trim(), confidence: 'high' });
+    if (!/^-\s*[^:`]+:\s*`?#[0-9A-Fa-f]{6}/.test(line)) continue;
+    // A palette line is not one label and one hex. Real ones carry several
+    // labelled colours ("TEXT PRIMARY: #a; TEXT SECONDARY: #b") and several
+    // hexes under one label (a cycling accent set). Splitting on the
+    // separators first keeps each hex with the label that actually describes
+    // it: taking the line's first label for everything called every secondary
+    // and muted grey the primary text colour, and taking only the first hex
+    // dropped 59 lines' worth of accents on the floor.
+    for (const segment of line.replace(/^-\s*/, '').split(/[;.]\s+|;\s*/)) {
+      const labelled = segment.match(/^\s*([^:`]+):\s*(.*)$/);
+      if (!labelled) continue;
+      const role = roleForLabel((labelled[1] ?? '').trim());
+      for (const hexMatch of (labelled[2] ?? '').matchAll(/#[0-9A-Fa-f]{6}/g)) {
+        const hex = hexMatch[0].toUpperCase();
+        const key = `${hex}:${role}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        entries.push({ hex, role, provenance: segment.trim(), confidence: 'high' });
+      }
+    }
   }
   return entries.length > 0 ? entries : null;
 }
