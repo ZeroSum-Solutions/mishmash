@@ -12,11 +12,12 @@
 // from encoding a house aesthetic.
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@open-design/components';
-import type { TypefaceSummary } from '@open-design/contracts';
-import { fetchTypefaces, installTypefaceIntoProject } from '../providers/typefaces';
+import type { TypefaceDetail, TypefaceFace, TypefaceSummary } from '@open-design/contracts';
+import { fetchTypeface, fetchTypefaces, installTypefaceIntoProject, typefaceFaceUrl } from '../providers/typefaces';
 import { listProjects } from '../state/projects';
 import type { Project } from '../types';
 import { useT } from '../i18n';
+import { useInView } from './plugins-home/useInView';
 import styles from './TypefacesSection.module.css';
 
 type InstallState =
@@ -35,6 +36,168 @@ function classificationLine(t: TypefaceSummary): string {
   return styleWord;
 }
 
+// ---- Specimen rendering (F008 R1-R8) ---------------------------------------
+//
+// See plan F008.md section B.4 for the full design rationale (alias-based
+// load tracking, why R2's full-coverage promise stays with the unmodified
+// install flow, why the grid specimen unmounts while a row is expanded).
+const VARIABLE_WEIGHT_RE = /^\d{1,4}\s+\d{1,4}$/;
+const SPECIMEN_ALIAS_PREFIX = 'od-specimen-';
+
+type FaceLoadStatus = 'idle' | 'loading' | 'loaded' | 'unavailable';
+
+function isLatinFace(face: TypefaceFace): boolean {
+  return (face.unicodeRange ?? '').trim().toUpperCase().startsWith('U+0000-00FF');
+}
+
+/**
+ * Among same-weight/style candidates, the Latin-covering subset (present for
+ * most families) or -- for an unbounded family like InterVariable/
+ * InterDisplay, which ship one file per weight with no unicode-range at all
+ * -- the one face that carries no unicodeRange. Never `faces[0]`: raw array
+ * order is not script-aware (F008 audit correction).
+ */
+function pickSpecimenFace(candidates: TypefaceFace[]): TypefaceFace | undefined {
+  return candidates.find(isLatinFace) ?? candidates.find((f) => !f.unicodeRange);
+}
+
+function facesForWeight(faces: TypefaceFace[], weight: string): TypefaceFace[] {
+  const isVariable = VARIABLE_WEIGHT_RE.test(weight);
+  return faces.filter(
+    (f) => f.style === 'normal' && (isVariable ? VARIABLE_WEIGHT_RE.test(f.weight.trim()) : f.weight.trim() === weight),
+  );
+}
+
+function specimenAlias(typefaceId: string, weight: string): string {
+  return `${SPECIMEN_ALIAS_PREFIX}${typefaceId}-${weight.replace(/\s+/g, '_')}`;
+}
+
+/**
+ * Loads exactly one @font-face for one (family, weight) pair under a unique
+ * alias and reports whether it actually decoded. `active` gates the
+ * fetch/registration behind viewport visibility (grid) or the row's expanded
+ * state (detail). `face`/`faceUrl` must be memoized by the caller against
+ * stable inputs so this effect does not refire on every render (R7: at most
+ * one face request per activation).
+ */
+function useFaceLoad(
+  alias: string,
+  face: TypefaceFace | undefined,
+  faceUrl: string | undefined,
+  weight: string,
+  active: boolean,
+): FaceLoadStatus {
+  const [status, setStatus] = useState<FaceLoadStatus>('idle');
+
+  useEffect(() => {
+    if (!active || !face || !faceUrl) return;
+    if (typeof FontFace === 'undefined' || typeof document === 'undefined' || !document.fonts) {
+      setStatus('unavailable');
+      return;
+    }
+    let cancelled = false;
+    setStatus('loading');
+    const fontFace = new FontFace(alias, `url("${faceUrl}") format("woff2")`, {
+      weight,
+      style: 'normal',
+      display: 'swap',
+    });
+    document.fonts.add(fontFace);
+    fontFace
+      .load()
+      .then(() => {
+        if (!cancelled) setStatus('loaded');
+      })
+      .catch(() => {
+        if (!cancelled) setStatus('unavailable');
+        document.fonts.delete(fontFace);
+      });
+    return () => {
+      cancelled = true;
+      document.fonts.delete(fontFace);
+    };
+  }, [active, face, faceUrl, alias, weight]);
+
+  return status;
+}
+
+/**
+ * One weight's specimen line: the shared comparison phrase, rendered in that
+ * weight's own face, or an explicit unavailable marker (R6/R9) — never
+ * unstyled text pretending to be styled, and never a face that silently fell
+ * back to a same-named system font.
+ */
+function WeightSpecimen({
+  typefaceId,
+  weight,
+  faces,
+  phrase,
+  active,
+  variant,
+}: {
+  typefaceId: string;
+  weight: string;
+  faces: TypefaceFace[];
+  phrase: string;
+  active: boolean;
+  variant: 'grid' | 'detail';
+}) {
+  const t = useT();
+  const face = useMemo(() => pickSpecimenFace(facesForWeight(faces, weight)), [faces, weight]);
+  const faceUrl = useMemo(() => (face ? typefaceFaceUrl(typefaceId, face.file) : undefined), [face, typefaceId]);
+  const alias = useMemo(() => specimenAlias(typefaceId, weight), [typefaceId, weight]);
+  const status = useFaceLoad(alias, face, faceUrl, weight, active);
+  const label = VARIABLE_WEIGHT_RE.test(weight) ? `variable ${weight.replace(/\s+/g, '–')}` : weight;
+  const testIdBase = `typeface-specimen-${typefaceId}-${weight.replace(/\s+/g, '_')}`;
+
+  // `face` is undefined for two different reasons that must not be
+  // conflated: (1) the parent hasn't fetched this family's detail yet
+  // (`faces` is still `[]`, and `active` is false until it has) -- nothing
+  // has failed, so there is nothing to report; and (2) the detail is loaded
+  // and genuinely carries no matching face for this weight, which is a real
+  // R6 "unavailable" case. Rendering the unavailable marker for case (1)
+  // would itself be the lie R6 warns against -- claiming a load failed
+  // before any load was ever attempted.
+  if (!active) {
+    return null;
+  }
+
+  if (!face || status === 'unavailable') {
+    return (
+      <p className={styles.specimenUnavailable} data-testid={`${testIdBase}-unavailable`} role="status">
+        <span className={styles.specimenWeightLabel}>{label}</span> {t('typefaces.specimenUnavailable')}
+      </p>
+    );
+  }
+
+  return (
+    <p
+      className={variant === 'grid' ? styles.specimenLine : styles.specimenDetailLine}
+      aria-busy={status === 'loading'}
+      data-testid={testIdBase}
+      style={status === 'loaded' ? { fontFamily: `'${alias}'` } : undefined}
+    >
+      <span className={styles.specimenWeightLabel}>{label}</span> {status === 'loaded' ? phrase : ''}
+    </p>
+  );
+}
+
+function defaultWeight(classification: TypefaceSummary['classification']): string | undefined {
+  if (classification.weights.length > 0) return String(classification.weights[0]);
+  if (classification.variableWeightRange) {
+    return `${classification.variableWeightRange[0]} ${classification.variableWeightRange[1]}`;
+  }
+  return undefined;
+}
+
+function allWeights(classification: TypefaceSummary['classification']): string[] {
+  if (classification.weights.length > 0) return classification.weights.map(String);
+  if (classification.variableWeightRange) {
+    return [`${classification.variableWeightRange[0]} ${classification.variableWeightRange[1]}`];
+  }
+  return [];
+}
+
 function TypefaceRow({
   typeface,
   projects,
@@ -42,9 +205,27 @@ function TypefaceRow({
   typeface: TypefaceSummary;
   projects: Project[];
 }) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const [projectId, setProjectId] = useState<string>(projects[0]?.id ?? '');
   const [install, setInstall] = useState<InstallState>({ status: 'idle' });
+  const { ref: specimenRef, inView } = useInView<HTMLDivElement>({ rootMargin: '240px' });
+  const [detail, setDetail] = useState<TypefaceDetail | null>(null);
+
+  useEffect(() => {
+    if (!inView || detail) return;
+    let cancelled = false;
+    fetchTypeface(typeface.id).then((result) => {
+      if (!cancelled && result) setDetail(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [inView, detail, typeface.id]);
+
+  const phrase = t('typefaces.specimenPhrase');
+  const gridWeight = defaultWeight(typeface.classification);
+  const detailWeights = useMemo(() => allWeights(typeface.classification), [typeface.classification]);
 
   const onInstall = async () => {
     if (!projectId) return;
@@ -58,7 +239,19 @@ function TypefaceRow({
   };
 
   return (
-    <li className={styles.row}>
+    <li className={styles.row} data-testid={`typeface-row-${typeface.id}`}>
+      <div ref={specimenRef} className={styles.specimen}>
+        {gridWeight && !expanded ? (
+          <WeightSpecimen
+            typefaceId={typeface.id}
+            weight={gridWeight}
+            faces={detail?.faces ?? []}
+            phrase={phrase}
+            active={inView && detail != null}
+            variant="grid"
+          />
+        ) : null}
+      </div>
       <button
         type="button"
         className={styles.rowHeader}
@@ -75,6 +268,21 @@ function TypefaceRow({
       </button>
       <div className={`${styles.body} ${expanded ? styles.bodyOpen : ''}`}>
         <div className={styles.bodyInner}>
+          {expanded && detail ? (
+            <div className={styles.specimenDetail}>
+              {detailWeights.map((weight) => (
+                <WeightSpecimen
+                  key={weight}
+                  typefaceId={typeface.id}
+                  weight={weight}
+                  faces={detail.faces}
+                  phrase={phrase}
+                  active
+                  variant="detail"
+                />
+              ))}
+            </div>
+          ) : null}
           <p className={styles.faceCount}>{typeface.faceCount} installable @font-face rule{typeface.faceCount === 1 ? '' : 's'}.</p>
           {projects.length === 0 ? (
             <p className={styles.hint}>Open or create a project first to install this typeface into it.</p>

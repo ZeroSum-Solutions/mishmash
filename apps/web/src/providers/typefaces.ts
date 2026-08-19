@@ -63,3 +63,8 @@ export async function installTypefaceIntoProject(
     return { ok: false, message: err instanceof Error ? err.message : String(err) };
   }
 }
+
+/** Stable, cache-friendly URL for one indexed face's raw woff2 bytes (R1/R8). Mirrors projectRawUrl's per-segment-encoding convention (apps/web/src/providers/registry.ts:2220-2227). */
+export function typefaceFaceUrl(id: string, file: string): string {
+  return `/api/typefaces/${encodeURIComponent(id)}/faces/${encodeURIComponent(file)}`;
+}
