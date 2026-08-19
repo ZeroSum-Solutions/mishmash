@@ -22,7 +22,11 @@ export const uiP0Groups = {
   },
   "workspace-restoration": {
     grep: String.raw`\[P0\]`,
-    files: ["ui/app-restoration.test.ts", "ui/critical-smoke.test.ts"],
+    files: [
+      "ui/app-restoration.test.ts",
+      "ui/client-interview-flow.test.ts",
+      "ui/critical-smoke.test.ts",
+    ],
   },
   // Split out of the former single `entry-settings` group (2026-08-04). That
   // group was the CI critical path at ~11.8m of test payload while every other
@@ -101,6 +105,7 @@ const uiP0CoverageFiles = [
   "ui/app-restoration.test.ts",
   "ui/app.test.ts",
   "ui/canvas-preview-inline-flicker.test.ts",
+  "ui/client-interview-flow.test.ts",
   "ui/critical-smoke.test.ts",
   "ui/entry-chrome-flows.test.ts",
   "ui/entry-configuration-flows.test.ts",

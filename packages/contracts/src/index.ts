@@ -37,6 +37,8 @@ export * from './api/media.js';
 export * from './api/mcp.js';
 export * from './api/memory.js';
 export * from './api/orbit.js';
+export * from './api/client-brief.js';
+export * from './api/interviews.js';
 export * from './api/plugin-candidates.js';
 export * from './api/previews.js';
 export * from './api/project-reference.js';

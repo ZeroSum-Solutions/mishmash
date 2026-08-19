@@ -389,6 +389,18 @@ const SHARE_STRING_FLAGS = new Set([
 const SHARE_BOOLEAN_FLAGS = new Set([
   'help', 'h', 'json',
 ]);
+// Declared here (not near `runInterview` further down) for the same reason
+// as SHARE_STRING_FLAGS above: the top-of-file SUBCOMMAND_MAP dispatch runs
+// during module evaluation, so a `const` referenced from a handler must be
+// initialized before that dispatch line, regardless of where the handler
+// function itself is defined (function declarations are fully hoisted;
+// `const` bindings are not).
+const INTERVIEW_STRING_FLAGS = new Set([
+  'daemon-url', 'archetype', 'prompt', 'prompt-file',
+]);
+const INTERVIEW_BOOLEAN_FLAGS = new Set([
+  'help', 'h', 'json',
+]);
 // Defined near the top because `runFigma` is reachable through the
 // top-of-file SUBCOMMAND_MAP dispatch during module evaluation; a `const`
 // further down would still be in TDZ when the handler reads it.
@@ -936,6 +948,7 @@ const SUBCOMMAND_MAP = {
   ui: runUi,
   marketplace: runMarketplace,
   share: runShare,
+  interview: runInterview,
   brand: runBrand,
   brands: runBrand,
   project: runProject,
@@ -1349,6 +1362,10 @@ function printRootHelp() {
   od share <open-design|url> [options]
       Build localized social-share targets for the MishMash repo or a
       deployed project URL. Use --json for scripted integrations.
+
+  od interview run <quick|standard|full> --prompt-file <path|-> [--json]
+      Run the F002 client discovery interview end-to-end and print the
+      resulting structured brief mapped onto GuidedCreateBrief.
 
   od ui <list|show|respond|revoke|prefill> [args]
       Read and answer GenUI surfaces (form / choice / confirmation / oauth-prompt) headlessly.
@@ -6370,6 +6387,147 @@ async function runShare(args) {
   for (const target of data.platforms ?? []) {
     console.log(`${target.platform}\t${target.shareUrl ?? target.entryUrl ?? '-'}`);
   }
+}
+
+function printInterviewUsage() {
+  console.log(`Usage:
+  od interview run <quick|standard|full> --prompt-file <path|-> [--archetype <id>] [--json]
+
+Runs the F002 client discovery interview end-to-end against the daemon's
+/api/interviews endpoints, in turns of one or two questions each — the same
+engine the web chat-pane surface drives. The CLI is the embeddability
+contract for external agents that don't render the web UI (AGENTS.md
+"Capability exposure"), so it runs non-interactively: --prompt-file (or
+--prompt) supplies every answer up front as a single JSON object keyed by
+question id, e.g. {"hqLocation": "Tampa, FL", "phone": "(813) 555-0100"}.
+Use "-" to read the JSON from stdin. Unanswered questions are left blank
+(recorded as skipped, same as a client leaving them blank in the UI); a
+REQUIRED question answered too vaguely (see PRD R2's executable definition)
+gets pushed back once and the run stops with an error, since a static
+answer file cannot supply a better answer on retry.
+
+  --archetype   Question-set vocabulary. Defaults to (and today, only
+                supports) local-trade.
+  --json        Print the final { session, clientBrief, guidedBrief } as
+                JSON instead of a human-readable summary.
+
+Example:
+  od interview run quick --prompt-file answers.json --json
+`);
+}
+
+async function runInterview(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    printInterviewUsage();
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  const sub = args[0];
+  if (sub !== 'run') {
+    console.error(`unknown subcommand: od interview ${sub}`);
+    printInterviewUsage();
+    process.exit(2);
+  }
+  const rest = args.slice(1);
+  let flags;
+  try {
+    flags = parseFlags(rest, { string: INTERVIEW_STRING_FLAGS, boolean: INTERVIEW_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const tier = positionalArgs(rest, INTERVIEW_STRING_FLAGS)[0];
+  if (!tier) {
+    console.error('Usage: od interview run <quick|standard|full> --prompt-file <path|-> [--json]');
+    process.exit(2);
+  }
+
+  let rawAnswers;
+  try {
+    rawAnswers = await readPromptFromFlags(flags);
+  } catch (err) {
+    console.error(`failed to read --prompt-file: ${err.message}`);
+    process.exit(2);
+  }
+  if (!rawAnswers) {
+    console.error('od interview run requires --prompt \'<json>\' or --prompt-file <path|-> with a JSON object of {questionId: answer}');
+    process.exit(2);
+  }
+  let answers;
+  try {
+    answers = JSON.parse(rawAnswers);
+  } catch (err) {
+    console.error(`--prompt-file must contain a JSON object: ${err.message}`);
+    process.exit(2);
+  }
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+    console.error('--prompt-file must contain a JSON object of {questionId: answer}');
+    process.exit(2);
+  }
+
+  const base = await cliDaemonBaseUrl(flags);
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/interviews`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tier, ...(flags.archetype ? { archetype: flags.archetype } : {}) }),
+    });
+  } catch (err) {
+    surfaceFetchError(err, base);
+    process.exit(3);
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  let state = await resp.json();
+
+  let guard = 0;
+  while (state.turn && guard < 200) {
+    guard += 1;
+    const turnAnswers = {};
+    for (const question of state.turn.questions) {
+      if (Object.prototype.hasOwnProperty.call(answers, question.id)) {
+        turnAnswers[question.id] = String(answers[question.id]);
+      }
+    }
+    let turnResp;
+    try {
+      turnResp = await fetch(`${base}/api/interviews/${state.session.id}/turns`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ answers: turnAnswers }),
+      });
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!turnResp.ok) return structuredHttpFailure(turnResp);
+    state = await turnResp.json();
+    if (state.pushBack) {
+      // A static --prompt-file cannot supply a better answer on retry, so
+      // resubmitting would loop forever on the same rejected step. Stop and
+      // tell the caller which field needs a real answer.
+      console.error(`Interview stalled on a REQUIRED field: ${state.pushBack.message} (field: ${state.pushBack.fieldId})`);
+      process.exit(1);
+    }
+  }
+
+  if (!state.result) {
+    console.error('interview did not reach a terminal state — check --prompt-file covers every question, or raise the turn guard.');
+    process.exit(1);
+  }
+
+  if (flags.json) {
+    process.stdout.write(JSON.stringify({ session: state.session, ...state.result }, null, 2) + '\n');
+    return;
+  }
+  console.log(`Interview ${state.session.id} finished: ${state.session.status}`);
+  if (state.result.clientBrief.openItems.length > 0) {
+    console.log('Open items:');
+    for (const item of state.result.clientBrief.openItems) {
+      console.log(`  - ${item.label} (${item.reason})`);
+    }
+  }
+  console.log('Mapped project brief:');
+  console.log(JSON.stringify(state.result.guidedBrief, null, 2));
 }
 
 function printFigmaUsage() {

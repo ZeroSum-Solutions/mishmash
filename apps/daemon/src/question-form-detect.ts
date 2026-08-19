@@ -14,9 +14,17 @@
 export const QUESTION_FORM_OPEN_RE = /<(question-form|ask-question)\b[^>]*>/i;
 
 // True when `body` is a renderable question-form body: JSON (optionally fenced)
-// parsing to an object with a non-empty `questions` array. This is the minimal
-// contract `tryParseForm` enforces in the web parser; a body that fails it is
-// kept as raw prose by the UI (no form card renders).
+// parsing to an object with a non-empty `questions` array, OR a bare top-level
+// JSON array of questions. This mirrors the web parser's `parseForm`
+// (apps/web/src/artifacts/question-form.ts), which already accepts both
+// shapes — proven by its own regression test ("parses the
+// deliveryFormat/container array payload", apps/web/tests/artifacts/
+// question-form.test.ts:222). Before this fix the daemon accepted only the
+// object shape, so a renderable array-payload form was misclassified here
+// (e.g. by the missing-artifacts guard and awaiting-input status) while the
+// web UI rendered it fine — the drift this module's own header comment
+// flagged. A body that fails either shape is kept as raw prose by the UI (no
+// form card renders).
 export function questionFormBodyIsRenderable(body: string): boolean {
   const trimmed = typeof body === 'string' ? body.trim() : '';
   if (!trimmed) return false;
@@ -31,7 +39,7 @@ export function questionFormBodyIsRenderable(body: string): boolean {
     return false;
   }
   if (!data || typeof data !== 'object') return false;
-  const questions = (data as { questions?: unknown }).questions;
+  const questions = Array.isArray(data) ? data : (data as { questions?: unknown }).questions;
   return Array.isArray(questions) && questions.some((q) => q && typeof q === 'object');
 }
 

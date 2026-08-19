@@ -23,6 +23,7 @@ import { DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID } from '@open-design/contracts';
 import { EntryView } from './components/EntryView';
 import type { IntegrationTab } from './components/IntegrationsView';
 import { MarketplaceView } from './components/MarketplaceView';
+import { InterviewView } from './components/interview/InterviewView';
 import { PluginDetailView } from './components/PluginDetailView';
 import type { CreateInput, ImportClaudeDesignOutcome } from './components/NewProjectPanel';
 import { MemoryToast } from './components/MemoryToast';
@@ -2472,6 +2473,20 @@ function AppInner() {
     appMain = <MarketplaceView />;
   } else if (route.kind === 'marketplace-detail') {
     appMain = <PluginDetailView pluginId={route.pluginId} />;
+  } else if (route.kind === 'interview' || route.kind === 'interview-session') {
+    // F002 — client discovery interview. Standalone like marketplace above:
+    // not scoped to any one project, so it renders outside the
+    // EntryView/ProjectView split. `interview-session` deep-links resume: the
+    // in-memory session store (apps/daemon/src/interview/engine.ts) survives
+    // for the life of the daemon process, so GET /api/interviews/:id can
+    // reconstruct the current turn or terminal result — not durable across a
+    // daemon restart (P1's persistence decision), but real within one.
+    appMain = (
+      <InterviewView
+        key={route.kind === 'interview-session' ? route.sessionId : 'new'}
+        resumeSessionId={route.kind === 'interview-session' ? route.sessionId : undefined}
+      />
+    );
   } else if (route.kind === 'design-system-create') {
     appMain = (
       <DesignSystemCreationFlow
