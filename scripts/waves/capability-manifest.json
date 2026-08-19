@@ -314,6 +314,31 @@
     ]
   },
   {
+    "capability": "interview",
+    "uiEntryPoint": "Client discovery interview view (/interview)",
+    "cliArgs": [
+      "interview",
+      "run",
+      "quick",
+      "--prompt-file",
+      "-",
+      "--json"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/interviews",
+    "outputSchema": "{ session: InterviewSessionSummary, turn: { message, questions } }",
+    "parityApplicable": true,
+    "reason": "F002 (client discovery interview). `od interview run` and the web surface both drive the same multi-turn session (POST /api/interviews to start, then repeated POST /api/interviews/:id/turns) rather than a single request/response, so a byte-equality diff of one representative POST's response is a partial parity check, not a full one -- the CLI's own subprocess test (apps/daemon/tests/interview-cli-subprocess.test.ts) and the route test (apps/daemon/tests/interview-routes.test.ts) both exercise the full turn loop through the SAME /api/interviews* endpoints already, which is where the real dual-track coverage lives.",
+    "knownNamespaceRoutes": [
+      "GET /api/interviews/:param",
+      "POST /api/interviews",
+      "POST /api/interviews/:param/turns"
+    ],
+    "probeBody": {
+      "tier": "quick"
+    }
+  },
+  {
     "capability": "share",
     "uiEntryPoint": "Home / project share menu",
     "cliArgs": [
