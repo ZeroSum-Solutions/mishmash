@@ -7,7 +7,7 @@ import {
   mapClientBriefToGuidedBrief,
   questionsForTier,
 } from '../src/api/interviews';
-import { REQUIRED_CLIENT_BRIEF_FIELDS } from '../src/api/client-brief';
+import { ClientBriefSchema, REQUIRED_CLIENT_BRIEF_FIELDS } from '../src/api/client-brief';
 
 const COMPLETE_REQUIRED_ANSWERS = {
   hqLocation: 'Tampa, FL',
@@ -78,6 +78,32 @@ describe('buildInterviewSteps — one-or-two-questions-per-turn ("the most impor
     const steps = buildInterviewSteps('quick', 'local-trade');
     const flattened = steps.flatMap((s) => s.questions.map((q) => q.id));
     expect(flattened).toEqual(questions.map((q) => q.id));
+  });
+});
+
+describe('buildClientBrief output passes RUNTIME schema validation (success criterion 3)', () => {
+  it('a complete brief validates against ClientBriefSchema, not just TypeScript compilation', () => {
+    const brief = buildClientBrief('full', 'local-trade', {
+      ...COMPLETE_REQUIRED_ANSWERS,
+      businessDescription: 'We fix what other guys break.',
+      services: 'Structured cabling, fiber splicing',
+    });
+    const parsed = ClientBriefSchema.safeParse(brief);
+    expect(parsed.success, parsed.success ? '' : JSON.stringify((parsed as any).error?.issues)).toBe(true);
+  });
+
+  it('a needs-info brief (skipped/vague/unknown fields, openItems populated) also validates', () => {
+    const brief = buildClientBrief('quick', 'local-trade', {
+      hqLocation: 'Tampa, FL',
+      serviceArea: 'Tampa, Clearwater',
+      certifications: "I don't know",
+      phone: 'my main line',
+      // email omitted entirely — exercises the "skipped" openItems path too.
+    });
+    expect(brief.status).toBe('needs-info');
+    expect(brief.openItems.length).toBeGreaterThan(0);
+    const parsed = ClientBriefSchema.safeParse(brief);
+    expect(parsed.success, parsed.success ? '' : JSON.stringify((parsed as any).error?.issues)).toBe(true);
   });
 });
 

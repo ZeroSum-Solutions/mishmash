@@ -1,5 +1,6 @@
 import type http from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ClientBriefSchema } from '@open-design/contracts';
 
 import { startServer } from '../src/server.js';
 
@@ -209,6 +210,10 @@ describe('interview routes', () => {
     expect(lastResult.guidedBrief).toBeTruthy();
     // full tier answers every question, so every mapped source field is present.
     expect(typeof lastResult.guidedBrief.product).toBe('string');
+    // Success criterion 3: the ACTUAL over-the-wire clientBrief passes runtime
+    // schema validation, not just TypeScript compilation.
+    const parsed = ClientBriefSchema.safeParse(lastResult.clientBrief);
+    expect(parsed.success, parsed.success ? '' : JSON.stringify((parsed as any).error?.issues)).toBe(true);
   });
 
   it('runs the standard tier end-to-end to a "complete" brief (success criterion 1: every tier, not just full/quick)', async () => {
