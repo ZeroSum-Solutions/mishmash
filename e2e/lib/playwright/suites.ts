@@ -38,6 +38,7 @@ export const uiP0Groups = {
       "ui/entry-chrome-flows.test.ts",
       "ui/entry-configuration-flows.test.ts",
       "ui/api-empty-response.test.ts",
+      "ui/typeface-specimens.test.ts",
     ],
   },
   "settings-onboarding": {
@@ -107,6 +108,7 @@ const uiP0CoverageFiles = [
   "ui/settings-connectors-auth-recovery.test.ts",
   "ui/settings-local-cli-codex-fallback.test.ts",
   "ui/template-entry-file-shim.test.ts",
+  "ui/typeface-specimens.test.ts",
   "ui/workspace-keyboard-flows.test.ts",
 ] as const;
 

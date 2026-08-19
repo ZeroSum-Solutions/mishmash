@@ -150,6 +150,18 @@ function WeightSpecimen({
   const label = VARIABLE_WEIGHT_RE.test(weight) ? `variable ${weight.replace(/\s+/g, '–')}` : weight;
   const testIdBase = `typeface-specimen-${typefaceId}-${weight.replace(/\s+/g, '_')}`;
 
+  // `face` is undefined for two different reasons that must not be
+  // conflated: (1) the parent hasn't fetched this family's detail yet
+  // (`faces` is still `[]`, and `active` is false until it has) -- nothing
+  // has failed, so there is nothing to report; and (2) the detail is loaded
+  // and genuinely carries no matching face for this weight, which is a real
+  // R6 "unavailable" case. Rendering the unavailable marker for case (1)
+  // would itself be the lie R6 warns against -- claiming a load failed
+  // before any load was ever attempted.
+  if (!active) {
+    return null;
+  }
+
   if (!face || status === 'unavailable') {
     return (
       <p className={styles.specimenUnavailable} data-testid={`${testIdBase}-unavailable`} role="status">
