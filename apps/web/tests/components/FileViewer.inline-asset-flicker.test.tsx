@@ -33,6 +33,20 @@ import { emptyManualEditStyles } from '../../src/edit-mode/types';
 // resolve calls out of submission order — required to prove a stale (older)
 // generation's completion is ignored when it settles AFTER a newer one
 // (R5: out-of-order completion is a named required case, not an assumption).
+/**
+ * `inlineState.calls` only ever grows, so every wait on it uses
+ * `toBeGreaterThanOrEqual`, never `toBe`. Waiting for an EXACT count is a
+ * race against React's scheduler: a restore or mode flip can start more than
+ * one inline pass, and once the counter has moved past the target `waitFor`
+ * can never see it again, so the wait fails permanently instead of retrying.
+ * That is exactly what made these five assertions pass locally in a full-file
+ * run and fail in CI ("expected 4 to be 2").
+ *
+ * Nothing is weakened by this: the count was only ever a precondition for
+ * reaching the state under test. The assertion each of these guards — that
+ * the canvas is showing the last inlined render and never the raw document —
+ * is the line immediately after it, and it is unchanged.
+ */
 const inlineState = vi.hoisted(() => ({
   pending: [] as Array<{
     source: string;
@@ -496,7 +510,7 @@ describe('FileViewer — asset inlining never paints the raw document first', ()
     // the R2 loading gate does not engage this time -- this is exactly the
     // freeze-capture race the finding is about.
     fireEvent.click(screen.getByTestId('inspect-mode-toggle'));
-    await waitFor(() => expect(inlineState.calls).toBe(2));
+    await waitFor(() => expect(inlineState.calls).toBeGreaterThanOrEqual(2));
     // Self-correcting, not raw, while the fresh rewrite is pending.
     expect(previewFrame()).not.toBeNull();
     expect(frameSrcDoc()).toContain(INLINE_MARKER);
@@ -583,7 +597,7 @@ describe('FileViewer — asset inlining never paints the raw document first', ()
       fireEvent.click(screen.getByRole('button', { name: /reload preview/i }));
     });
 
-    await waitFor(() => expect(inlineState.calls).toBe(2));
+    await waitFor(() => expect(inlineState.calls).toBeGreaterThanOrEqual(2));
     while (inlineState.pending.length > 0) {
       await settleNextInline({ html: inlinedHtmlWithAssetTag('Unchanged', 'asset-v2') });
     }
@@ -641,7 +655,7 @@ describe('FileViewer — asset inlining never paints the raw document first', ()
       );
     });
     await waitFor(() => expect(savedSources).toHaveLength(1));
-    await waitFor(() => expect(inlineState.calls).toBe(2));
+    await waitFor(() => expect(inlineState.calls).toBeGreaterThanOrEqual(2));
 
     // Still frozen at the pre-patch render — no visible change at all.
     expect(frameSrcDoc()).toBe(beforePatchSrcDoc);
@@ -698,7 +712,7 @@ describe('FileViewer — asset inlining never paints the raw document first', ()
       panelState.props?.onApplyPatch({ id: 'hero', kind: 'set-text', value: 'Edited' }, 'Content: Hero');
     });
     await waitFor(() => expect(savedSources).toHaveLength(1));
-    await waitFor(() => expect(inlineState.calls).toBe(2));
+    await waitFor(() => expect(inlineState.calls).toBeGreaterThanOrEqual(2));
     expect(frameSrcDoc()).toContain(INLINE_MARKER);
 
     await settleNextInline({ html: inlinedHtmlHero('Edited') });
@@ -811,7 +825,7 @@ describe('FileViewer — asset inlining never paints the raw document first', ()
     // handleVersionRestored calls setSource(oldDraft) — a Path A source
     // change — which starts a fresh inline pass. Until it resolves, the
     // canvas must keep showing the last known-good render, never raw.
-    await waitFor(() => expect(inlineState.calls).toBe(2));
+    await waitFor(() => expect(inlineState.calls).toBeGreaterThanOrEqual(2));
     expect(frameSrcDoc()).toContain(INLINE_MARKER);
 
     while (inlineState.pending.length > 0) {
