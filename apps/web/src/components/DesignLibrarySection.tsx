@@ -34,6 +34,7 @@ import { Icon } from './Icon';
 import { MediaFallback } from './MediaFallback';
 import { DesignLibraryPromotionPanel } from './DesignLibraryPromotionPanel';
 import { GuidedCreateDialog } from './GuidedCreateDialog';
+import { useInView } from './plugins-home/useInView';
 import { useT } from '../i18n';
 import styles from './DesignLibrarySection.module.css';
 
@@ -651,6 +652,10 @@ function DesignLibraryCard({
   const [guidedOpen, setGuidedOpen] = useState(false);
   const [selectedAspects, setSelectedAspects] = useState<string[]>([]);
   const [hoverPanelOpen, setHoverPanelOpen] = useState(false);
+  const { ref: thumbRef, inView: thumbInView } = useInView<HTMLDivElement>({
+    once: true,
+    rootMargin: '100px',
+  });
   const hoverPanelId = `design-library-hover-panel-${item.id}`;
   const tooltip = t(ALLOWED_USE_TOOLTIP_KEY[item.allowed_use]);
   const templateStart = useStartFromDesignLibrary(
@@ -675,16 +680,18 @@ function DesignLibraryCard({
 
   return (
     <article className={styles.card} data-testid="design-library-card" data-allowed-use={item.allowed_use}>
-      <div className={styles.thumb} data-testid="design-library-cover">
+      <div ref={thumbRef} className={styles.thumb} data-testid="design-library-cover">
         {hasVisualPreview && item.thumb ? (
-          <img
-            className={`${styles.thumbImg}${thumbLoaded ? ` ${styles.thumbImgLoaded}` : ''}`}
-            src={designLibraryThumbUrl(item.thumb)}
-            alt={item.label}
-            loading="lazy"
-            onLoad={() => setThumbLoaded(true)}
-            onError={() => setThumbError(true)}
-          />
+          thumbInView ? (
+            <img
+              className={`${styles.thumbImg}${thumbLoaded ? ` ${styles.thumbImgLoaded}` : ''}`}
+              src={designLibraryThumbUrl(item.thumb)}
+              alt={item.label}
+              loading="lazy"
+              onLoad={() => setThumbLoaded(true)}
+              onError={() => setThumbError(true)}
+            />
+          ) : null
         ) : (
           <div className={styles.thumbUnavailable} aria-hidden>
             <MediaFallback />
