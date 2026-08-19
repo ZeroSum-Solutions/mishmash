@@ -1519,17 +1519,13 @@ describe('the generic AMR proxy refuses the vendor message feed', () => {
         'api/v1/message-center/read-all',
         'api/v1/message-center',
         // The gate has to compare what the upstream will route on, not the
-        // bytes we were handed: URL.pathname neither percent-decodes nor
-        // case-folds, and the vendor's stack does both.
+        // bytes we were handed: URL.pathname does not percent-decode, so a
+        // percent-encoded literal character (here, a hyphen) needs the same
+        // treatment as an unencoded one.
         'api/v1/message%2Dcenter/messages',
-        'api/v1/Message-Center/messages',
-        'api/v1/MESSAGE-CENTER',
         'api/v1/message-center//messages',
         'api/v1/wallet/..%2fmessage-center/messages',
         'api/v1/message%252Dcenter/messages',
-        // A decoded `#` is a delimiter upstream, so this reads as the message
-        // centre once it lands there.
-        'api/v1/message-center%23anything',
         // Multi-layer encodings that resolve to a stray `%` alongside the
         // denied segment. These are denied on every version of the gate;
         // they are here because the class is what the tolerant decoder
@@ -1581,6 +1577,50 @@ describe('the generic AMR proxy refuses the vendor message feed', () => {
         expect(response.status, path).toBe(200);
       }
       expect(requestSpy).toHaveBeenCalledTimes(5);
+    } finally {
+      requestSpy.mockRestore();
+    }
+  });
+
+  it('still proxies a path a decoded delimiter or case-fold would have wrongly denied', async () => {
+    // Regression: an earlier gate decoded `%23` to `#` and cut the path
+    // there, as if the upstream saw a fragment delimiter. It never does —
+    // `#` only exists here because we decoded it, and the outbound target
+    // below keeps `%23` intact, so the real request lands on a resource
+    // named "message-center#anything", not on the message centre. The same
+    // gate also case-folded before comparing, which would deny any
+    // differently-cased path even though HTTP paths are case-sensitive by
+    // default and nothing here establishes the upstream folds case either.
+    const upstreamTargets: string[] = [];
+    const requestSpy = vi.spyOn(https, 'request').mockImplementation(((target, _o, callback) => {
+      upstreamTargets.push(target instanceof URL ? target.pathname : String(target));
+      const req = new PassThrough() as any;
+      req.on('finish', () => {
+        const upstreamRes = new PassThrough() as any;
+        upstreamRes.statusCode = 200;
+        upstreamRes.headers = { 'content-type': 'application/json' };
+        (callback as ((r: unknown) => void) | undefined)?.(upstreamRes);
+        upstreamRes.end('{"ok":true}');
+      });
+      req.setTimeout = () => req;
+      return req;
+    }) as typeof https.request);
+    seedLogin('local');
+    try {
+      for (const path of [
+        'api/v1/message-center%23anything',
+        'api/v1/Message-Center/messages',
+        'api/v1/MESSAGE-CENTER',
+      ]) {
+        const response = await fetch(`${baseUrl}/api/integrations/vela/api-proxy/${path}`);
+        expect(response.status, path).toBe(200);
+      }
+      expect(requestSpy).toHaveBeenCalledTimes(3);
+      expect(upstreamTargets).toEqual([
+        '/api/v1/message-center%23anything',
+        '/api/v1/Message-Center/messages',
+        '/api/v1/MESSAGE-CENTER',
+      ]);
     } finally {
       requestSpy.mockRestore();
     }

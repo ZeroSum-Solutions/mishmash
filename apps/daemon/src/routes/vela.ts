@@ -119,9 +119,8 @@ const AMR_PROXY_DENIED_PREFIX = '/api/v1/message-center';
 const AMR_PROXY_ALLOWED_PREFIX = '/api/v1/';
 
 // Compare what the *upstream* will route on, not the bytes we were handed.
-// `URL.pathname` neither percent-decodes nor case-folds, and mainstream HTTP
-// stacks do both — so `message%2Dcenter` and `Message-Center` would sail past
-// a raw compare and still resolve to the vendor's real endpoint.
+// `URL.pathname` does not percent-decode, so `message%2Dcenter` would sail
+// past a raw compare and still resolve to the vendor's real endpoint.
 //
 // Every decode stage is classified, not just the last one, because the two
 // failure modes pull in opposite directions. Refusing anything that will not
@@ -144,14 +143,25 @@ function removeDotSegments(pathname: string): string {
 }
 
 function settlePathname(pathname: string): string {
-  // A decoded `?` or `#` is a delimiter to the upstream, so nothing after it
-  // is part of the path it routes on. A backslash is a separator to plenty of
-  // stacks.
-  const delimiter = pathname.search(/[?#]/);
-  const cut = delimiter === -1 ? pathname : pathname.slice(0, delimiter);
-  return removeDotSegments(cut.replace(/\\/g, '/'))
-    .replace(/\/{2,}/g, '/')
-    .toLowerCase();
+  // Dot-segments resolve the same way client- and server-side (RFC 3986),
+  // and a backslash is a path separator to plenty of HTTP stacks — both are
+  // safe to normalize before comparing.
+  //
+  // Deliberately NOT done here: cutting the pathname at a `?`/`#`, and
+  // case-folding it. A `?`/`#` that shows up only because WE percent-decoded
+  // a triplet is not a real delimiter — `URL` already split the raw request
+  // into path/query/fragment before any of this runs, so a literal delimiter
+  // can never survive into `pathname` in the first place, and percent-
+  // encoding a reserved character is precisely what keeps it from acting as
+  // one. Treating a decoded `#` as a cut point 404s a request whose actual
+  // outbound target (`new URL(suffix, AMR_API_UPSTREAM_ORIGIN)` below) keeps
+  // the `%23` intact — `/api/v1/message-center%23anything` proxies to that
+  // literal path, not to `/api/v1/message-center`. Case-folding has the same
+  // problem in the other direction: nothing here establishes the upstream
+  // router is case-insensitive, and HTTP paths are case-sensitive by
+  // default, so folding would deny a differently-cased path that is a
+  // distinct, legitimate endpoint upstream.
+  return removeDotSegments(pathname.replace(/\\/g, '/')).replace(/\/{2,}/g, '/');
 }
 
 const PERCENT_RUN_RE = /(?:%[0-9a-fA-F]{2})+/g;
