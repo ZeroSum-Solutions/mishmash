@@ -15,6 +15,7 @@ import { checkComponentsManifestExtraction } from "./check-components-manifest-e
 import { checkPluginPreviewManifest } from "./check-plugin-preview-manifest.ts";
 import { checkBrandSurfaces } from "./check-brand-surfaces.ts";
 import { checkForkRepoLinks } from "./check-fork-repo-links.ts";
+import { checkDesignCatalogAndIndexGuard } from "./validate-design-catalog.ts";
 import { checkCanvasCoverage } from "./canvas-coverage-report.ts";
 import { checkDaemonFilesystemWrites } from "./check-daemon-filesystem-writes.ts";
 import { validatePlaywrightSuiteTopology } from "../e2e/lib/playwright/suites.ts";
@@ -1986,6 +1987,7 @@ const checks: GuardCheck[] = [
   { name: "design system A2 defaults parity", run: checkDesignSystemA2DefaultsParity },
   { name: "design system flag parity", run: checkDesignSystemFlagParity },
   { name: "design system component manifest extraction", run: checkComponentsManifestExtraction },
+  { name: "design catalog index", run: checkDesignCatalogAndIndexGuard },
   { name: "capability manifest parity", run: checkCapabilityManifestParity },
   { name: "daemon filesystem writes", run: checkDaemonFilesystemWrites },
   { name: "brand surfaces", run: checkBrandSurfaces },

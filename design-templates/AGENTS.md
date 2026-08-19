@@ -84,3 +84,14 @@ ship a tiny local runtime with the same minimum behavior.
   `scrollIntoView()` because it can move the parent page instead of the deck.
 - **Fallbacks:** no-script and print output should still expose every slide.
   Hide non-active slides only after the runtime has booted.
+
+## Structured design index (index.json)
+
+`index.json` at the root of this directory is a **committed, generated artifact** — not
+hand-edited. It carries one row per template (palette, typography, mood, density,
+motion_level, a preview pointer, and a source-hash), built by
+`node scripts/build-design-index.ts` and gated for drift by
+`scripts/validate-design-catalog.ts`'s `checkDesignIndex`, wired into `pnpm guard`.
+Regenerate it after touching any template's `SKILL.md` or `template.json`, or `pnpm
+guard` will fail with an `index-source-stale` violation naming the drifted row.
+
