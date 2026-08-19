@@ -99,3 +99,40 @@ export const LEGACY_CATEGORY_MAP: Record<string, string> = {
   consulting: 'deck',
   'b2b-sales': 'deck',
 };
+
+// ---------------------------------------------------------------------------
+// F001 design index vocabularies (design-templates/index.json)
+// ---------------------------------------------------------------------------
+
+// Controlled mood vocabulary for the structured design index
+// (scripts/build-design-index.ts, R1). Seeded 2026-08-18 from the exact
+// examples named in F001 R1's requirement text -- deliberately not expanded
+// beyond them here; growing this list is a design-judgment call for a human,
+// the same as adding a new archetype (see
+// apps/daemon/src/design/site-archetypes.ts). scripts/validate-design-
+// catalog.ts rejects any index row whose mood[] entries are not a subset of
+// this list.
+export const MOODS: string[] = ['editorial', 'warm', 'clinical', 'brutalist', 'playful'];
+
+// Fixed palette-role vocabulary (F001 Addendum A.2). Every palette entry in
+// design-templates/index.json carries one of these roles -- there is no
+// separate provisional list to reconcile.
+export const PALETTE_ROLES = ['background', 'text', 'muted', 'rule', 'accent'] as const;
+export type PaletteRole = (typeof PALETTE_ROLES)[number];
+
+// Fixed typography-role vocabulary (F001 Addendum A.2). 'body_alt' is
+// optional per template; 'body', 'headings', and 'ui' are always present,
+// possibly with confidence: 'low' and family: null when unresolved.
+export const TYPOGRAPHY_ROLES = ['body', 'body_alt', 'headings', 'ui'] as const;
+export type TypographyRole = (typeof TYPOGRAPHY_ROLES)[number];
+
+// Three-point scales for design-templates/index.json (F001 R1).
+export const DENSITY_LEVELS = ['low', 'medium', 'high'] as const;
+export type DensityLevel = (typeof DENSITY_LEVELS)[number];
+export const MOTION_LEVELS = ['low', 'medium', 'high'] as const;
+export type MotionLevel = (typeof MOTION_LEVELS)[number];
+
+// Extraction-confidence vocabulary (F001 R1): "a low-confidence field is
+// marked, never silently guessed or hidden."
+export const CONFIDENCE_LEVELS = ['high', 'medium', 'low'] as const;
+export type ConfidenceLevel = (typeof CONFIDENCE_LEVELS)[number];
