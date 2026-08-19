@@ -137,8 +137,8 @@ function renderExamples(onUsePrompt = vi.fn()) {
   return { onUsePrompt };
 }
 
-function filterRow(name: string) {
-  return screen.getByRole('tablist', { name });
+function filterSelect(name: string) {
+  return screen.getByRole('combobox', { name });
 }
 
 describe('ExamplesTab', () => {
@@ -202,20 +202,20 @@ describe('ExamplesTab', () => {
     expect(screen.getByText('No examples match these filters.')).toBeTruthy();
   });
 
-  it('narrows by surface, type, and scenario filter pills', () => {
+  it('narrows by surface, type, and scenario filters', () => {
     renderExamples();
 
-    fireEvent.click(within(filterRow('Surface')).getByRole('tab', { name: /Image1/ }));
+    fireEvent.change(filterSelect('Surface'), { target: { value: 'image' } });
     expect(screen.getByTestId('example-card-hero-image')).toBeTruthy();
     expect(screen.queryByTestId('example-card-live-dashboard')).toBeNull();
 
-    fireEvent.click(within(filterRow('Surface')).getByRole('tab', { name: /All7/ }));
-    fireEvent.click(within(filterRow('Type')).getByRole('tab', { name: /Prototypes · Mobile1/ }));
+    fireEvent.change(filterSelect('Surface'), { target: { value: 'all' } });
+    fireEvent.change(filterSelect('Type'), { target: { value: 'prototype-mobile' } });
     expect(screen.getByTestId('example-card-mobile-checkout')).toBeTruthy();
     expect(screen.queryByTestId('example-card-live-dashboard')).toBeNull();
 
-    fireEvent.click(within(filterRow('Type')).getByRole('tab', { name: /All7/ }));
-    fireEvent.click(within(filterRow('Scenario')).getByRole('button', { name: /Marketing3/ }));
+    fireEvent.change(filterSelect('Type'), { target: { value: 'all' } });
+    fireEvent.change(filterSelect('Scenario'), { target: { value: 'marketing' } });
     expect(screen.getByTestId('example-card-editorial-landing')).toBeTruthy();
     expect(screen.getByTestId('example-card-brand-deck')).toBeTruthy();
     expect(screen.getByTestId('example-card-launch-video')).toBeTruthy();
@@ -225,7 +225,7 @@ describe('ExamplesTab', () => {
   it('filters Docs & templates examples and uses the selected template prompt', () => {
     const { onUsePrompt } = renderExamples();
 
-    fireEvent.click(within(filterRow('Type')).getByRole('tab', { name: /Docs & templates1/ }));
+    fireEvent.change(filterSelect('Type'), { target: { value: 'document' } });
 
     expect(screen.getByTestId('example-card-brief-template')).toBeTruthy();
     expect(screen.getByText('Template')).toBeTruthy();

@@ -71,10 +71,10 @@ describe('RoutinesSection', () => {
     fireEvent.change(screen.getByLabelText('Prompt'), {
       target: { value: 'Summarize GitHub and design activity.' },
     });
-    fireEvent.click(screen.getByRole('tab', { name: 'Weekly' }));
+    fireEvent.change(screen.getByLabelText('Schedule'), { target: { value: 'weekly' } });
     fireEvent.click(screen.getByRole('button', { name: 'Wed' }));
     fireEvent.click(screen.getAllByRole('radio')[1]!);
-    fireEvent.change(screen.getAllByRole('combobox')[1]!, {
+    fireEvent.change(screen.getAllByRole('combobox')[2]!, {
       target: { value: 'proj-1' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));

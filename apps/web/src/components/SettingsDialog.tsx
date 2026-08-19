@@ -7569,7 +7569,7 @@ function MediaProvidersSection({
             <span className="memory-details-title">
               {t('tasks.comingSoon')}
             </span>
-            <span className="filter-pill-count">
+            <span className="media-provider-coming-soon-count">
               {comingSoonProviders.length}
             </span>
           </summary>

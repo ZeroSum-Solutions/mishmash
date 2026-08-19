@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
+import { FilterSelect } from '@open-design/components';
 import { useAnalytics } from '../../analytics/provider';
 import { trackSettingsPetsClick } from '../../analytics/events';
 import { useT } from '../../i18n';
@@ -568,60 +569,25 @@ export function PetSettings({ cfg, setCfg }: Props) {
 
       <div className="pet-tabs">
         <div className="pet-tabs-top-row">
-          <div
-            className="subtab-pill"
-            role="tablist"
-            aria-label={t('pet.tabsAria')}
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'builtIn'}
-              className={activeTab === 'builtIn' ? 'active' : ''}
-              onClick={() => {
-                trackSettingsPetsClick(analytics.track, {
-                  page_name: 'settings',
-                  area: 'pets',
-                  element: 'built_in',
-                });
-                setActiveTab('builtIn');
-              }}
-            >
-              {t('pet.tabBuiltIn')}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'custom'}
-              className={activeTab === 'custom' ? 'active' : ''}
-              onClick={() => {
-                trackSettingsPetsClick(analytics.track, {
-                  page_name: 'settings',
-                  area: 'pets',
-                  element: 'custom',
-                });
-                setActiveTab('custom');
-              }}
-            >
-              {t('pet.tabCustom')}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'community'}
-              className={activeTab === 'community' ? 'active' : ''}
-              onClick={() => {
-                trackSettingsPetsClick(analytics.track, {
-                  page_name: 'settings',
-                  area: 'pets',
-                  element: 'community',
-                });
-                setActiveTab('community');
-              }}
-            >
-              {t('pet.tabCommunity')}
-            </button>
-          </div>
+          <FilterSelect
+            label={t('pet.tabsAria')}
+            value={activeTab}
+            testId="pet-source-select"
+            options={[
+              { value: 'builtIn', label: t('pet.tabBuiltIn') },
+              { value: 'custom', label: t('pet.tabCustom') },
+              { value: 'community', label: t('pet.tabCommunity') },
+            ]}
+            onChange={(value) => {
+              const tab = value as PetSourceTab;
+              trackSettingsPetsClick(analytics.track, {
+                page_name: 'settings',
+                area: 'pets',
+                element: tab === 'builtIn' ? 'built_in' : tab,
+              });
+              setActiveTab(tab);
+            }}
+          />
           <div className="pet-wake-controls">
             <button
               type="button"

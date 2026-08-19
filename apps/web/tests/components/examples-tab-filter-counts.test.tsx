@@ -44,6 +44,14 @@ function renderExamples(skills: SkillSummary[]) {
   render(<ExamplesTab skills={skills} onUsePrompt={() => {}} />);
 }
 
+// Reads the visible option labels of a FilterSelect. Options render as
+// `Label (N)` when the option carries a count.
+function optionLabels(select: HTMLElement): string[] {
+  return within(select)
+    .getAllByRole('option')
+    .map((option) => (option.textContent ?? '').trim());
+}
+
 describe('ExamplesTab filter counts', () => {
   beforeEach(() => {
     mockedFetch.mockResolvedValue({ html: '<main>preview</main>' });
@@ -62,20 +70,23 @@ describe('ExamplesTab filter counts', () => {
       skill({ id: 'product-mobile', name: 'Product mobile', platform: 'mobile', scenario: 'product' }),
     ]);
 
-    const scenarioFilters = screen.getByRole('tablist', { name: 'Scenario' });
-    expect(within(scenarioFilters).getByRole('button', { name: /^All\s*4$/ })).toBeTruthy();
+    // F007 migrated these filters from pill tablists to the shared FilterSelect
+    // primitive, which renders a native select whose options read "Label (N)".
+    // The count semantics under test are unchanged; only the control differs.
+    const scenarioFilters = screen.getByRole('combobox', { name: 'Scenario' });
+    expect(optionLabels(scenarioFilters)).toContain('All (4)');
 
-    const typeFilters = screen.getByRole('tablist', { name: 'Type' });
-    fireEvent.click(within(typeFilters).getByRole('tab', { name: /^Prototypes · Desktop\s*2$/ }));
+    const typeFilters = screen.getByRole('combobox', { name: 'Type' });
+    fireEvent.change(typeFilters, { target: { value: 'prototype-desktop' } });
 
-    expect(within(scenarioFilters).getByRole('button', { name: /^All\s*2$/ })).toBeTruthy();
-    expect(within(scenarioFilters).getByRole('button', { name: /^Engineering\s*1$/ })).toBeTruthy();
-    expect(within(scenarioFilters).getByRole('button', { name: /^Product\s*1$/ })).toBeTruthy();
+    expect(optionLabels(scenarioFilters)).toContain('All (2)');
+    expect(optionLabels(scenarioFilters)).toContain('Engineering (1)');
+    expect(optionLabels(scenarioFilters)).toContain('Product (1)');
 
-    fireEvent.click(within(scenarioFilters).getByRole('button', { name: /^Product\s*1$/ }));
+    fireEvent.change(scenarioFilters, { target: { value: 'product' } });
 
-    expect(within(scenarioFilters).getByRole('button', { name: /^All\s*2$/ })).toBeTruthy();
-    expect(within(scenarioFilters).getByRole('button', { name: /^Product\s*1$/ })).toBeTruthy();
+    expect(optionLabels(scenarioFilters)).toContain('All (2)');
+    expect(optionLabels(scenarioFilters)).toContain('Product (1)');
   });
 
   it('uses media tags for media examples so visible tags do not imply zero-count prototype types', () => {
@@ -91,12 +102,12 @@ describe('ExamplesTab filter counts', () => {
       }),
     ]);
 
-    const surfaceFilters = screen.getByRole('tablist', { name: 'Surface' });
-    fireEvent.click(within(surfaceFilters).getByRole('tab', { name: /^Image\s*1$/ }));
+    const surfaceFilters = screen.getByRole('combobox', { name: 'Surface' });
+    fireEvent.change(surfaceFilters, { target: { value: 'image' } });
 
-    const typeFilters = screen.getByRole('tablist', { name: 'Type' });
-    expect(within(typeFilters).getByRole('tab', { name: /^All\s*1$/ })).toBeTruthy();
-    expect(within(typeFilters).getByRole('tab', { name: /^Prototypes · Desktop\s*0$/ })).toBeTruthy();
+    const typeFilters = screen.getByRole('combobox', { name: 'Type' });
+    expect(optionLabels(typeFilters)).toContain('All (1)');
+    expect(optionLabels(typeFilters)).toContain('Prototypes · Desktop (0)');
     const imageCard = screen.getByTestId('example-card-image-example');
     expect(within(imageCard).getByText('Image')).toBeTruthy();
     expect(within(imageCard).queryByText('Desktop prototype')).toBeNull();

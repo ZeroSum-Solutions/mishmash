@@ -8,6 +8,7 @@ import type {
   RoutineSchedule,
   Weekday,
 } from '@open-design/contracts';
+import { FilterSelect } from '@open-design/components';
 
 import { Icon } from './Icon';
 import { navigate } from '../router';
@@ -287,21 +288,16 @@ function ScheduleEditor({
 }) {
   return (
     <div className="routines-schedule-editor">
-      <div className="routines-field-label">{t('routines.fieldSchedule')}</div>
-      <div className="subtab-pill routines-kind-pills" role="tablist">
-        {SCHEDULE_KINDS.map((kind) => (
-          <button
-            type="button"
-            key={kind}
-            role="tab"
-            aria-selected={form.kind === kind}
-            className={form.kind === kind ? 'active' : ''}
-            onClick={() => setForm({ ...form, kind })}
-          >
-            {t(`routines.kind.${kind}`)}
-          </button>
-        ))}
-      </div>
+      <FilterSelect
+        label={t('routines.fieldSchedule')}
+        value={form.kind}
+        testId="routines-kind-select"
+        options={SCHEDULE_KINDS.map((kind) => ({
+          value: kind,
+          label: t(`routines.kind.${kind}`),
+        }))}
+        onChange={(value) => setForm({ ...form, kind: value as ScheduleKind })}
+      />
 
       {form.kind === 'hourly' ? (
         <div className="routines-fieldrow">

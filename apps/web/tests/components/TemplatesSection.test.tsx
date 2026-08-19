@@ -184,7 +184,9 @@ describe('TemplatesSection category sections', () => {
     expect(within(webAppSection).getAllByTestId('templates-card')).toHaveLength(1);
   });
 
-  it('filters to one category when its chip is clicked', () => {
+  it('filters to one category when it is chosen', () => {
+    // The category facet is a labelled select rather than a row of chips
+    // (F007 R1): same behaviour, one control, and it no longer overflows.
     const templates = [
       skill({ id: 'landing-1', name: 'Landing One', category: 'landing-page' }),
       skill({ id: 'deck-1', name: 'Deck One', category: 'deck' }),
@@ -193,27 +195,53 @@ describe('TemplatesSection category sections', () => {
 
     expect(sectionCategories()).toEqual(['landing-page', 'deck']);
 
-    const deckChip = screen
-      .getAllByTestId('templates-category-chip')
-      .find((el) => el.getAttribute('data-category') === 'deck')!;
-    fireEvent.click(deckChip);
+    const categorySelect = screen.getByTestId('templates-category-select') as HTMLSelectElement;
+    fireEvent.change(categorySelect, { target: { value: 'deck' } });
 
     expect(sectionCategories()).toEqual(['deck']);
-    expect(deckChip.getAttribute('data-active')).toBe('true');
+    expect(categorySelect.value).toBe('deck');
     expect(screen.getByTestId('templates-card').getAttribute('data-template-id')).toBe('deck-1');
   });
 
-  it('renders no section and no chip for a category with zero templates', () => {
+  it('offers no option for a category with zero templates', () => {
     const templates = [skill({ id: 'landing-1', name: 'Landing One', category: 'landing-page' })];
     render(<TemplatesSection templates={templates} active onUseTemplate={vi.fn()} />);
 
     expect(sectionCategories()).toEqual(['landing-page']);
-    const chipCategories = screen
-      .getAllByTestId('templates-category-chip')
-      .map((el) => el.getAttribute('data-category'));
-    // Only "all" and the one populated category get a chip — every other
+    const options = Array.from(
+      (screen.getByTestId('templates-category-select') as HTMLSelectElement).options,
+    ).map((option) => option.value);
+    // Only "all" and the one populated category are offered — every other
     // taxonomy category (dashboard, web-app, deck, tool, ...) is absent.
-    expect(chipCategories).toEqual(['all', 'landing-page']);
+    expect(options).toEqual(['all', 'landing-page']);
+  });
+});
+
+// F007 R2: search is a facet like source/category — it must surface in the
+// active-filters summary, and "Clear filters" must reset it along with
+// everything else. Regression coverage for a bug where Clear filters reset
+// source+category but left `query` (and its chip) untouched.
+describe('TemplatesSection active filters', () => {
+  it('shows a chip for an active search query and clears it on "Clear filters"', () => {
+    const templates = [
+      skill({ id: 'landing-1', name: 'Landing One', category: 'landing-page' }),
+      skill({ id: 'deck-1', name: 'Deck One', category: 'deck' }),
+    ];
+    render(<TemplatesSection templates={templates} active onUseTemplate={vi.fn()} />);
+
+    const search = screen.getByTestId('templates-search') as HTMLInputElement;
+    fireEvent.change(search, { target: { value: 'deck' } });
+    expect(search.value).toBe('deck');
+
+    const summary = screen.getByRole('group', { name: 'Active filters' });
+    expect(within(summary).getByText('deck')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(search.value).toBe('');
+    // Every chip — including the search chip — is gone, so the summary
+    // itself renders nothing.
+    expect(screen.queryByRole('group', { name: 'Active filters' })).toBeNull();
   });
 });
 

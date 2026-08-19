@@ -459,7 +459,9 @@ describe('DesignsTab select mode', () => {
 
     expect(screen.getByText('54m ago')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Your designs' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter projects' }), {
+      target: { value: 'yours' },
+    });
 
     expect(screen.getByText('54m ago')).toBeTruthy();
     expect(screen.queryByText('1h ago')).toBeNull();

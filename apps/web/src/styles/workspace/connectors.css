@@ -646,6 +646,40 @@
 .tab-panel-toolbar.designs-toolbar {
   background: transparent;
 }
+/* Grid/board view toggle — mirrors `.subtab-pill` (drawer.css) so it keeps
+   the same segmented-control look now that the Recent/Yours filter next to
+   it has moved onto FilterSelect. Kept as its own class (rather than
+   reusing `.subtab-pill`) because it isn't a filter, and the shared
+   `.subtab-pill` class still backs the pet-tabs / connector pickers. */
+.designs-view-toggle {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  gap: 4px;
+}
+.designs-view-toggle button {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  color: var(--text-muted);
+}
+.designs-view-toggle button:hover:not(.active) {
+  background: var(--bg-muted);
+  border-color: transparent;
+  color: var(--text);
+}
+.designs-view-toggle button.active {
+  background: var(--bg-panel);
+  color: var(--text);
+  box-shadow: var(--shadow-xs);
+}
 .tab-panel-toolbar .toolbar-search .toolbar-search-clear {
   position: absolute;
   right: 6px;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, VisuallyHidden } from '@open-design/components';
+import { Button, FilterActiveSummary, FilterSelect, VisuallyHidden } from '@open-design/components';
 import { useAnalytics } from '../analytics/provider';
 import {
   trackDesignSystemsTemplateCardClick,
@@ -636,36 +636,57 @@ export function DesignSystemsTab({
 
         {showPresetFilters ? (
           <div className={styles.presetFilters}>
-            <div className={styles.surfaceRow} role="tablist" aria-label={t('ds.surfaceLabel')}>
-              {/* Hide chips with no items in the active style/search filter, but
-                  always keep "all" and the currently selected surface — otherwise a
-                  transient search could remove the active chip and leave the list
-                  filtered with no chip showing aria-selected. */}
-              {SURFACE_PILLS.filter(
+            <FilterSelect
+              label={t('ds.surfaceLabel')}
+              value={surfaceFilter}
+              defaultValue="all"
+              testId="design-systems-surface-select"
+              // Hide options with no items in the active style/search filter, but
+              // always keep "all" and the currently selected surface — otherwise a
+              // transient search could remove the active option and leave the
+              // trigger pointing at an option no longer in the list.
+              options={SURFACE_PILLS.filter(
                 (p) => p.value === surfaceFilter || p.value === 'all' || surfaceCounts[p.value] > 0,
-              ).map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  role="tab"
-                  aria-selected={surfaceFilter === p.value}
-                  data-testid={`design-systems-surface-${p.value}`}
-                  className={`${styles.surfacePill} ${surfaceFilter === p.value ? styles.surfacePillActive : ''}`}
-                  onClick={() => {
-                    trackDesignSystemsTopClick(analytics.track, {
-                      page_name: 'design_systems',
-                      area: 'design_systems',
-                      element: 'filter_chip',
-                      filter_name: p.value,
-                    });
-                    setSurfaceFilter(p.value);
-                  }}
-                >
-                  {t(p.labelKey)}
-                  <span className={`filter-pill-count ${styles.surfaceCount}`}>{surfaceCounts[p.value]}</span>
-                </button>
-              ))}
-            </div>
+              ).map((p) => ({
+                value: p.value,
+                label: t(p.labelKey),
+                count: surfaceCounts[p.value],
+              }))}
+              onChange={(value) => {
+                trackDesignSystemsTopClick(analytics.track, {
+                  page_name: 'design_systems',
+                  area: 'design_systems',
+                  element: 'filter_chip',
+                  filter_name: value,
+                });
+                setSurfaceFilter(value as SurfaceFilter);
+              }}
+            />
+            <FilterActiveSummary
+              ariaLabel={t('ds.activeFiltersAria')}
+              clearAllLabel={t('ds.clearFilters')}
+              onClearAll={() => setSurfaceFilter('all')}
+              chips={
+                surfaceFilter !== 'all'
+                  ? [
+                      {
+                        id: 'surface',
+                        label: t(
+                          SURFACE_PILLS.find((p) => p.value === surfaceFilter)?.labelKey
+                            ?? 'examples.modeAll',
+                        ),
+                        removeLabel: t('ds.removeSurfaceFilterLabel', {
+                          label: t(
+                            SURFACE_PILLS.find((p) => p.value === surfaceFilter)?.labelKey
+                              ?? 'examples.modeAll',
+                          ),
+                        }),
+                        onRemove: () => setSurfaceFilter('all'),
+                      },
+                    ]
+                  : []
+              }
+            />
             <select
               data-testid="design-systems-category-select"
               className={styles.categorySelect}

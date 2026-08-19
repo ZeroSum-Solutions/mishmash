@@ -9,6 +9,16 @@ export {
   DialogTitle,
 } from './dialog';
 export type { DialogProps } from './dialog';
+export { FilterActiveSummary } from './filter-active-summary';
+export type { FilterActiveChip, FilterActiveSummaryProps } from './filter-active-summary';
+export { FilterMultiSelect, FilterSelect } from './filter-select';
+export type {
+  FilterMultiSelectProps,
+  FilterSelectOption,
+  FilterSelectProps,
+} from './filter-select';
+export { FilterSearchInput } from './filter-search-input';
+export type { FilterSearchInputProps } from './filter-search-input';
 export { Input, Select, Textarea } from './form-controls';
 export type { InputProps, SelectProps, TextareaProps } from './form-controls';
 export { VisuallyHidden } from './visually-hidden';

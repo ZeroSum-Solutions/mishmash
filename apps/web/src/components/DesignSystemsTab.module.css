@@ -141,63 +141,11 @@
   letter-spacing: 0.02em;
 }
 
-/* Official-presets filters — surface pills + category select */
+/* Official-presets filters — surface FilterSelect + category select */
 .presetFilters {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.surfaceRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.surfacePill {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--bg-panel);
-  color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 550;
-  font-family: inherit;
-  cursor: pointer;
-  transition: border-color var(--dur-quick) var(--ease-out),
-    background-color var(--dur-quick) var(--ease-out),
-    color var(--dur-quick) var(--ease-out);
-}
-
-.surfacePill:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.surfacePillActive,
-.surfacePillActive:hover {
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  background: var(--accent-tint);
-  color: var(--accent);
-}
-
-.surfacePill:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.surfaceCount {
-  font-variant-numeric: tabular-nums;
-  font-size: 10.5px;
-  color: var(--text-faint);
-}
-
-.surfacePillActive .surfaceCount {
-  color: var(--accent);
 }
 
 .categorySelect {

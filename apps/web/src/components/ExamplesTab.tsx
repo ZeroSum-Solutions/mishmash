@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FilterSelect } from '@open-design/components';
 import { useI18n } from '../i18n';
 import {
   localizeSkillDescription,
@@ -366,83 +367,56 @@ export function ExamplesTab({ skills: rawSkills, onUsePrompt }: Props) {
             aria-label={t('examples.searchAria')}
           />
         </div>
-        <div
-          className="examples-filter-row"
-          role="tablist"
-          aria-label={t('examples.surfaceLabel')}
-        >
-          <span className="examples-filter-label">{t('examples.surfaceLabel')}</span>
-          {SURFACE_PILLS.map((p) => (
-            <button
-              key={p.value}
-              type="button"
-              role="tab"
-              aria-selected={surfaceFilter === p.value}
-              className={`filter-pill ${surfaceFilter === p.value ? 'active' : ''}`}
-              onClick={() => {
-                setSurfaceFilter(p.value);
-                setModeFilter('all');
-                setScenarioFilter('all');
-              }}
-            >
-              {t(p.labelKey)}
-              <span className="filter-pill-count">{surfaceCounts[p.value]}</span>
-            </button>
-          ))}
+        <div className="examples-filter-row">
+          <FilterSelect
+            label={t('examples.surfaceLabel')}
+            value={surfaceFilter}
+            defaultValue="all"
+            testId="examples-surface-select"
+            options={SURFACE_PILLS.map((p) => ({
+              value: p.value,
+              label: t(p.labelKey),
+              count: surfaceCounts[p.value],
+            }))}
+            onChange={(value) => {
+              setSurfaceFilter(value as SurfaceFilter);
+              setModeFilter('all');
+              setScenarioFilter('all');
+            }}
+          />
+          <FilterSelect
+            label={t('examples.typeLabel')}
+            value={modeFilter}
+            defaultValue="all"
+            testId="examples-mode-select"
+            options={MODE_PILLS.map((p) => ({
+              value: p.value,
+              label: t(p.labelKey),
+              count: modeCounts[p.value],
+            }))}
+            onChange={(value) => {
+              setModeFilter(value as ModeFilter);
+              setScenarioFilter('all');
+            }}
+          />
+          {scenarioOptions.length > 1 ? (
+            <FilterSelect
+              label={t('examples.scenarioLabel')}
+              value={scenarioFilter}
+              defaultValue="all"
+              testId="examples-scenario-select"
+              options={[
+                { value: 'all', label: t('examples.modeAll'), count: scenarioAllCount },
+                ...scenarioOptions.map((tag) => ({
+                  value: tag,
+                  label: scenarioLabel(t, tag),
+                  count: scenarioCounts.get(tag) ?? 0,
+                })),
+              ]}
+              onChange={(value) => setScenarioFilter(value)}
+            />
+          ) : null}
         </div>
-        <div
-          className="examples-filter-row"
-          role="tablist"
-          aria-label={t('examples.typeLabel')}
-        >
-          <span className="examples-filter-label">{t('examples.typeLabel')}</span>
-          {MODE_PILLS.map((p) => (
-            <button
-              key={p.value}
-              type="button"
-              role="tab"
-              aria-selected={modeFilter === p.value}
-              className={`filter-pill ${modeFilter === p.value ? 'active' : ''}`}
-              onClick={() => {
-                setModeFilter(p.value);
-                setScenarioFilter('all');
-              }}
-            >
-              {t(p.labelKey)}
-              <span className="filter-pill-count">{modeCounts[p.value]}</span>
-            </button>
-          ))}
-        </div>
-        {scenarioOptions.length > 1 ? (
-          <div
-            className="examples-filter-row"
-            role="tablist"
-            aria-label={t('examples.scenarioLabel')}
-          >
-            <span className="examples-filter-label">
-              {t('examples.scenarioLabel')}
-            </span>
-            <button
-              type="button"
-              className={`filter-pill ${scenarioFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setScenarioFilter('all')}
-            >
-              {t('examples.modeAll')}
-              <span className="filter-pill-count">{scenarioAllCount}</span>
-            </button>
-            {scenarioOptions.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                className={`filter-pill ${scenarioFilter === tag ? 'active' : ''}`}
-                onClick={() => setScenarioFilter(tag)}
-              >
-                {scenarioLabel(t, tag)}
-                <span className="filter-pill-count">{scenarioCounts.get(tag) ?? 0}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
       </div>
 
       {filtered.length === 0 ? (

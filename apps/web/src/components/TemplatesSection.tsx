@@ -19,6 +19,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { GuidedCreateBrief, SkillSummary } from '@open-design/contracts';
+import { FilterActiveSummary, FilterSearchInput, FilterSelect } from '@open-design/components';
 import { Icon } from './Icon';
 import { MediaFallback } from './MediaFallback';
 import { GuidedCreateDialog } from './GuidedCreateDialog';
@@ -487,63 +488,90 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
       </header>
 
       <div className="templates-view__controls">
-        <label className="templates-view__search">
-          <Icon name="search" size={15} />
-          <input
-            type="search"
-            value={query}
-            placeholder={t('templates.search')}
-            onChange={(e) => setQuery(e.target.value)}
-            data-testid="templates-search"
+        <FilterSearchInput
+          label={t('templates.search')}
+          value={query}
+          onChange={setQuery}
+          placeholder={t('templates.search')}
+          clearLabel={t('templates.clearSearch')}
+          className="templates-view__search-field"
+          testId="templates-search"
+        />
+        <div className="templates-view__filters">
+          <FilterSelect
+            label={t('templates.sourceFilterLabel')}
+            value={sourceFilter}
+            defaultValue="all"
+            testId="templates-source-select"
+            options={[
+              { value: 'all', label: t('templates.sourceAll') },
+              { value: 'user', label: t('templates.sourceUser') },
+              { value: 'built-in', label: t('templates.sourceBuiltIn') },
+            ]}
+            onChange={(value) => setSourceFilter(value as SourceFilter)}
           />
-        </label>
-        <div className="templates-view__filters" role="group">
-          {(['all', 'user', 'built-in'] as const).map((id) => (
-            <button
-              key={id}
-              type="button"
-              data-active={sourceFilter === id ? 'true' : 'false'}
-              onClick={() => setSourceFilter(id)}
-            >
-              {id === 'all'
-                ? t('templates.sourceAll')
-                : id === 'user'
-                  ? t('templates.sourceUser')
-                  : t('templates.sourceBuiltIn')}
-            </button>
-          ))}
+          <FilterSelect
+            label={t('templates.categoryFilterLabel')}
+            value={activeCategoryFilter}
+            defaultValue="all"
+            testId="templates-category-select"
+            options={[
+              { value: 'all', label: t('templates.categoryAll'), count: searched.length },
+              ...categoryChips.map((category) => ({
+                value: category,
+                label: categoryLabel(category, t),
+                count: categoryCounts.get(category),
+              })),
+            ]}
+            onChange={(value) => setCategoryFilter(value)}
+          />
         </div>
       </div>
 
-      <div
-        className="templates-view__category-filters"
-        role="group"
-        aria-label={t('templates.categoryFilterLabel')}
-      >
-        <button
-          type="button"
-          data-testid="templates-category-chip"
-          data-category="all"
-          data-active={activeCategoryFilter === 'all' ? 'true' : 'false'}
-          aria-pressed={activeCategoryFilter === 'all'}
-          onClick={() => setCategoryFilter('all')}
-        >
-          {t('templates.categoryAll')} ({searched.length})
-        </button>
-        {categoryChips.map((category) => (
-          <button
-            key={category}
-            type="button"
-            data-testid="templates-category-chip"
-            data-category={category}
-            data-active={activeCategoryFilter === category ? 'true' : 'false'}
-            aria-pressed={activeCategoryFilter === category}
-            onClick={() => setCategoryFilter(category)}
-          >
-            {categoryLabel(category, t)} ({categoryCounts.get(category)})
-          </button>
-        ))}
-      </div>
+      <FilterActiveSummary
+        ariaLabel={t('templates.activeFiltersAria')}
+        clearAllLabel={t('templates.clearFilters')}
+        onClearAll={() => {
+          setQuery('');
+          setSourceFilter('all');
+          setCategoryFilter('all');
+        }}
+        chips={[
+          ...(query.trim()
+            ? [
+                {
+                  id: 'search',
+                  label: query.trim(),
+                  removeLabel: t('templates.removeFilter', { label: query.trim() }),
+                  onRemove: () => setQuery(''),
+                },
+              ]
+            : []),
+          ...(sourceFilter !== 'all'
+            ? [
+                {
+                  id: 'source',
+                  label:
+                    sourceFilter === 'user' ? t('templates.sourceUser') : t('templates.sourceBuiltIn'),
+                  removeLabel: t('templates.removeFilter', {
+                    label: sourceFilter === 'user' ? t('templates.sourceUser') : t('templates.sourceBuiltIn'),
+                  }),
+                  onRemove: () => setSourceFilter('all'),
+                },
+              ]
+            : []),
+          ...(activeCategoryFilter !== 'all'
+            ? [
+                {
+                  id: 'category',
+                  label: categoryLabel(activeCategoryFilter, t),
+                  removeLabel: t('templates.removeFilter', { label: categoryLabel(activeCategoryFilter, t) }),
+                  onRemove: () => setCategoryFilter('all'),
+                },
+              ]
+            : []),
+        ]}
+      />
 
       {shown.length === 0 ? (
         <p className="templates-view__empty" role="status">

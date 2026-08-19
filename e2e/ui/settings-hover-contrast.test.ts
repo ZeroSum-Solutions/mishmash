@@ -153,9 +153,12 @@ test.describe('Settings hover contrast (regression guard for #1795)', () => {
       await petsNav.click();
       // Pet tabs render once the section is mounted; no daemon round-trip is
       // required for the tab pills themselves.
-      await page.waitForSelector('.pet-tabs .subtab-pill button');
+      // F007 migrated this picker from a subtab-pill tablist to the shared
+      // FilterSelect primitive, which renders a native select. `.subtab-pill`
+      // no longer appears in any TSX, so measure the control that replaced it.
+      await page.waitForSelector('[data-testid="pet-source-select"]');
 
-      const inactive = '.pet-tabs .subtab-pill button:not(.active)';
+      const inactive = '[data-testid="pet-source-select"]';
       const measurement = await hoverAndMeasure(page, inactive);
       expect(
         measurement.ratio,

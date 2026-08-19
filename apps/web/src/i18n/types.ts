@@ -765,6 +765,10 @@ export interface Dict {
   'settings.memoryStarterFeedbackDesc': string;
   'settings.memoryStarterFeedbackBody': string;
   'settings.memoryStarterProjectName': string;
+'settings.memoryTypeFilterLabel': string;
+'settings.memoryActiveFiltersAria': string;
+'settings.memoryClearFilters': string;
+'settings.memoryRemoveTypeFilterLabel': string;
   'settings.memoryStarterProjectDesc': string;
   'settings.memoryStarterProjectBody': string;
   'settings.memorySaveHint': string;
@@ -1078,6 +1082,11 @@ export interface Dict {
   'templates.category.inspiration': string;
   'templates.category.tool': string;
   'templates.category.uncategorized': string;
+  'templates.sourceFilterLabel': string;
+  'templates.activeFiltersAria': string;
+  'templates.clearFilters': string;
+  'templates.clearSearch': string;
+  'templates.removeFilter': string;
   // Client message center
   'messageCenter.openAria': string;
   'messageCenter.unreadCount': string;
@@ -2439,6 +2448,9 @@ export interface Dict {
   'ds.tokens': string;
   'ds.specToggle': string;
   'ds.specLoading': string;
+  'ds.activeFiltersAria': string;
+  'ds.clearFilters': string;
+  'ds.removeSurfaceFilterLabel': string;
 
   // Avatar menu (project topbar)
   'avatar.title': string;
