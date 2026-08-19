@@ -14,6 +14,29 @@ function makeHandle(runId: string, projectId = 'p1'): RunHandle {
   };
 }
 
+/**
+ * `register()` stores `{ ...handle, reserved: false }` — a COPY — because it
+ * has to clear the reservation flag that `reserve()` sets, and mutating a
+ * caller's object in place would break this repo's immutability rule. So the
+ * stored handle is never identity-equal to the one passed in, and `toBe(h)`
+ * asserts an implementation detail rather than a contract.
+ *
+ * What actually has to hold is stronger than shape equality: the stored
+ * handle must carry the SAME AbortController instance, because `interrupt()`
+ * aborts the stored copy and the spawn path awaits the caller's signal. If a
+ * future change deep-copied the handle, every assertion below would still
+ * pass on shape while cancellation silently stopped working — so identity is
+ * asserted precisely where it is load-bearing, and value everywhere else.
+ */
+function expectStoredHandle(actual: RunHandle | null, expected: RunHandle): void {
+  expect(actual).not.toBeNull();
+  expect(actual!.runId).toBe(expected.runId);
+  expect(actual!.projectId).toBe(expected.projectId);
+  expect(actual!.startedAt).toBe(expected.startedAt);
+  expect(actual!.abort).toBe(expected.abort);
+  expect(actual!.reserved).toBe(false);
+}
+
 describe('RunRegistry', () => {
   let registry: RunRegistry;
 
@@ -32,7 +55,7 @@ describe('RunRegistry', () => {
   it('register + get round-trips the handle', () => {
     const h = makeHandle('crun_01');
     registry.register(h);
-    expect(registry.get('p1', 'crun_01')).toBe(h);
+    expectStoredHandle(registry.get('p1', 'crun_01'), h);
   });
 
   it('register throws on duplicate (projectId, runId)', () => {
@@ -52,8 +75,8 @@ describe('RunRegistry', () => {
       registry.register(a);
       registry.register(b);
     }).not.toThrow();
-    expect(registry.get('p1', 'crun_shared')).toBe(a);
-    expect(registry.get('p2', 'crun_shared')).toBe(b);
+    expectStoredHandle(registry.get('p1', 'crun_shared'), a);
+    expectStoredHandle(registry.get('p2', 'crun_shared'), b);
   });
 
   it('get does not return a handle from a different project even when the runId matches', () => {
@@ -62,7 +85,7 @@ describe('RunRegistry', () => {
     const inP2 = makeHandle('crun_only_in_p2', 'p2');
     registry.register(inP2);
     expect(registry.get('p1', 'crun_only_in_p2')).toBeNull();
-    expect(registry.get('p2', 'crun_only_in_p2')).toBe(inP2);
+    expectStoredHandle(registry.get('p2', 'crun_only_in_p2'), inP2);
   });
 
   // ---------------------------------------------------------------------------
@@ -134,7 +157,7 @@ describe('RunRegistry', () => {
 
     registry.unregister('p1', sharedRunId);
     expect(registry.get('p1', sharedRunId)).toBeNull();
-    expect(registry.get('p2', sharedRunId)).toBe(inP2);
+    expectStoredHandle(registry.get('p2', sharedRunId), inP2);
   });
 
   // ---------------------------------------------------------------------------
@@ -152,8 +175,8 @@ describe('RunRegistry', () => {
     registry.register(h2);
     const snap = registry.list();
     expect(snap).toHaveLength(2);
-    expect(snap).toContain(h1);
-    expect(snap).toContain(h2);
+    expectStoredHandle(snap.find((x) => x.runId === h1.runId) ?? null, h1);
+    expectStoredHandle(snap.find((x) => x.runId === h2.runId) ?? null, h2);
   });
 
   it('list returns a defensive copy (mutations do not affect registry)', () => {
