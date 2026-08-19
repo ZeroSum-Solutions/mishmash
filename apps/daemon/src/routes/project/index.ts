@@ -2683,7 +2683,21 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         );
       }
       dbDeleteProject(db, req.params.id);
-      await removeProjectDir(PROJECTS_DIR, req.params.id).catch(() => {});
+      // The row (and its six ON DELETE CASCADE children) is already gone by the
+      // time this runs, so a directory-removal failure cannot be reported as a
+      // failed delete — the delete DID happen. It must not vanish either: an
+      // empty `.catch(() => {})` left orphaned project bytes on disk with no row
+      // pointing at them, invisible to every UI surface and unreclaimable
+      // without manual filesystem work. Log it in the same shape as the MM-021
+      // fallback above so the orphan is diagnosable, and still answer ok.
+      await removeProjectDir(PROJECTS_DIR, req.params.id).catch((err: unknown) => {
+        console.warn(
+          `[project-delete] directory removal failed for project ${req.params.id}; ` +
+          `the database row is already deleted, so its files are now orphaned at ` +
+          `${PROJECTS_DIR} and must be reclaimed manually`,
+          err,
+        );
+      });
       /** @type {import('@open-design/contracts').OkResponse} */
       const body = { ok: true };
       res.json(body);
