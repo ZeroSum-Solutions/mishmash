@@ -3955,6 +3955,11 @@ export async function startServer({
     // composeSystemPrompt() call in this function. Optional: callers that
     // never pass it simply get no shortlist, same as an empty match.
     briefText,
+    // The chat run's id, threaded in so critique eligibility can claim a
+    // concurrency slot at the moment the panel addendum is decided. Callers
+    // that omit it (non-chat composers) simply never claim a slot and never
+    // get the addendum.
+    critiqueRunId,
   }) => {
     const project =
       typeof projectId === 'string' && projectId
@@ -4439,11 +4444,33 @@ export async function startServer({
     // now (see the craft-floor block above), before craft resolution
     // needed the same signal.
     const isPlainAdapter = (streamFormat ?? 'plain') === 'plain';
-    const critiqueShouldRun = critiqueEnabledForRun
+    // Concurrent critique runs each hold a panel subprocess and its transcript
+    // buffer, so past a point they starve the generations they are meant to
+    // improve. The cap is enforced HERE, as the last eligibility condition,
+    // rather than at spawn: a run denied a slot must never receive the panel
+    // addendum, because nothing downstream would consume the <CRITIQUE_RUN>
+    // tags it was told to emit and the raw protocol would stream back to the
+    // user as assistant text. Claiming the slot as part of the same decision
+    // that writes the addendum is what keeps prompt and orchestrator in
+    // lockstep — see the run-registry `reserve()` docblock.
+    //
+    // The key must match the one the spawn path registers under, or the
+    // reservation is never upgraded and the slot leaks.
+    const critiqueEligibleBeforeCapacity = critiqueEnabledForRun
       && critiqueBrand !== undefined
       && critiqueSkill !== undefined
       && !isMediaSurface
-      && isPlainAdapter;
+      && isPlainAdapter
+      && typeof critiqueRunId === 'string'
+      && critiqueRunId.length > 0;
+    const critiqueCapacityKey = typeof projectId === 'string' && projectId
+      ? projectId
+      : critiqueRunId;
+    const critiqueShouldRun = critiqueEligibleBeforeCapacity
+      && critiqueRunRegistry.reserve(critiqueCapacityKey, critiqueRunId);
+    if (critiqueEligibleBeforeCapacity && !critiqueShouldRun) {
+      console.warn(`[critique] at capacity (max=${critiqueCfg.maxConcurrentRuns}); composing without the panel addendum and falling through to legacy generation`);
+    }
     // Only thread the critique fields when the run is actually eligible;
     // otherwise the composer's own internal eligibility check (cfg.enabled
     // && brand && skill && !isMediaSurface) might still fire on
@@ -5151,6 +5178,10 @@ export async function startServer({
       isWebCloneRun,
     } =
       await composeDaemonSystemPrompt({
+        // Critique capacity is claimed inside the composer, keyed on this id
+        // and released by the spawn path's finally (or the child-close
+        // handler if the run never reaches the orchestrator).
+        critiqueRunId: run.id,
         agentId,
         projectId,
         skillId,
@@ -7602,6 +7633,65 @@ export async function startServer({
         .catch((err) => console.warn('[memory-llm] background failed', err));
     });
 
+    // Delivering the composed prompt over stdin has to be callable from TWO
+    // exits: the legacy streaming path far below, and the Critique Theater
+    // branch just after this, which `return`s before ever reaching it.
+    //
+    // That mattered the moment critique started routing real adapters:
+    // antigravity, qwen and deepseek are all `promptViaStdin: true` AND
+    // `streamFormat: 'plain'`, and plain-stream is exactly what routes a run
+    // into runOrchestrator. On the critique path those three would otherwise
+    // sit waiting for a prompt that never arrives while the orchestrator
+    // waits for stdout, deadlocked until the total timeout fires.
+    //
+    // Idempotent by design: whichever exit reaches it first delivers the
+    // prompt, the other no-ops, so the legacy path is unchanged.
+    let promptDeliveredViaChildStdin = false;
+    const deliverPromptViaChildStdin = (): void => {
+      if (promptDeliveredViaChildStdin) return;
+      if (!writePromptToChildStdin || !child.stdin) return;
+      promptDeliveredViaChildStdin = true;
+      const promptInputFormat = def.promptInputFormat ?? 'text';
+      lifecycle.mark('model_call_start');
+      lifecycle.mark('stdin_write_start');
+      const markStdinWriteEnd = (err?: Error | null) => {
+        if (err) return;
+        lifecycle.mark('stdin_write_end');
+      };
+      if (promptInputFormat === 'stream-json') {
+        // Wrap the prompt as an Anthropic user message and write it as one
+        // JSONL line. Do NOT close stdin: claude-code keeps reading further
+        // messages until EOF, which is what lets the daemon stream more user
+        // messages into the same turn. The stdin is closed on a clean terminal
+        // turn (see applyClaudeStreamJsonRunBookkeeping) or when the child
+        // exits (run terminates, user cancels).
+        const userMessage = JSON.stringify({
+          type: 'user',
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: composed }],
+          },
+        });
+        try {
+          // E-lite: `write` returns false when the chunk was buffered because the
+          // OS pipe is full (the child isn't draining stdin) — the corroborating
+          // signal for a `stdin_write`-phase inactivity stall.
+          const accepted = child.stdin.write(`${userMessage}\n`, 'utf8', markStdinWriteEnd);
+          run.stdinBackpressure = accepted === false;
+        } catch (err) {
+          // Swallow EPIPE here for the same reason as the listener above —
+          // a fast-exiting child has already routed its failure through
+          // stderr / exit handlers.
+          if (err && err.code !== 'EPIPE') throw err;
+        }
+        run.stdinOpen = true;
+      } else {
+        // Split write + close so the boolean backpressure signal survives —
+        // see writePromptAndEndStdin for why `end(chunk)` cannot report it.
+        run.stdinBackpressure = writePromptAndEndStdin(child.stdin, composed, markStdinWriteEnd);
+      }
+    };
+
     // Critique Theater branch (M0 dark launch, default disabled).
     // Only plain-stream adapters are routed through runOrchestrator in v1.
     // Adapters that emit structured wrappers (claude-stream-json,
@@ -7620,20 +7710,19 @@ export async function startServer({
     // the model was never told to emit.
     if (critiqueShouldRun) {
       const adapterStreamFormat: string = def.streamFormat ?? 'plain';
-      // Concurrent critique runs each hold a panel subprocess and its
-      // transcript buffer, so past a point they starve the generations they
-      // are meant to improve. Over the cap, skip the orchestrator the same
-      // way a non-plain adapter does: the request still succeeds, through
-      // legacy generation.
-      const critiqueAtCapacity =
-        critiqueRunRegistry.list().length >= critiqueCfg.maxConcurrentRuns;
+      // No capacity check here on purpose. Checking at spawn — after the
+      // panel addendum is already in the prompt and the child is already
+      // running — is what broke prompt/orchestrator lockstep: an over-cap run
+      // fell through to legacy streaming and leaked raw <CRITIQUE_RUN>
+      // protocol into the assistant's visible output. The slot is claimed
+      // with the same decision that writes the addendum (see the
+      // `critiqueShouldRun` block in the composer), so reaching this point
+      // means a slot is already held and only needs upgrading.
       if (adapterStreamFormat !== 'plain') {
         if (!critiqueWarnedAdapters.has(adapterStreamFormat)) {
           critiqueWarnedAdapters.add(adapterStreamFormat);
           console.warn(`[critique] adapter format=${adapterStreamFormat} is not plain-stream; skipping orchestrator and falling through to legacy generation`);
         }
-      } else if (critiqueAtCapacity) {
-        console.warn(`[critique] at capacity (max=${critiqueCfg.maxConcurrentRuns}); skipping orchestrator and falling through to legacy generation`);
       } else {
         const critiqueRunId = run.id;
         // Per-run artifact directory keeps concurrent or sequential runs in the
@@ -7725,6 +7814,13 @@ export async function startServer({
             resolve({ code, signal });
           });
         });
+        // Stdin-based adapters (antigravity, qwen, deepseek) get their prompt
+        // here, not from the legacy write far below — this branch returns
+        // before reaching it. Must come after the stderr/error wiring above
+        // and before the orchestrator starts awaiting stdout: the child does
+        // not emit its first byte until stdin closes, so delivering any later
+        // deadlocks the run.
+        deliverPromptViaChildStdin();
         try {
           const orchestratorResult = await runOrchestrator({
             runId: critiqueRunId,
@@ -9211,49 +9307,19 @@ export async function startServer({
           fs.promises.unlink(agentLogFilePath).catch(() => {});
         }
         cleanupPromptFile();
+        // Backstop against a leaked critique slot. The orchestrator branch
+        // releases its own in a finally; this covers a run that claimed one
+        // at compose time and then never reached that branch (non-plain
+        // adapter, or a throw in between). unregister() is idempotent, so
+        // double-releasing a settled run is a no-op — but never releasing
+        // one costs a slot for the lifetime of the daemon.
+        critiqueRunRegistry.unregister(
+          typeof projectId === 'string' && projectId ? projectId : run.id,
+          run.id,
+        );
       }
     });
-    if (writePromptToChildStdin && child.stdin) {
-      const promptInputFormat = def.promptInputFormat ?? 'text';
-      lifecycle.mark('model_call_start');
-      lifecycle.mark('stdin_write_start');
-      const markStdinWriteEnd = (err?: Error | null) => {
-        if (err) return;
-        lifecycle.mark('stdin_write_end');
-      };
-      if (promptInputFormat === 'stream-json') {
-        // Wrap the prompt as an Anthropic user message and write it as one
-        // JSONL line. Do NOT close stdin: claude-code keeps reading further
-        // messages until EOF, which is what lets the daemon stream more user
-        // messages into the same turn. The stdin is closed on a clean terminal
-        // turn (see applyClaudeStreamJsonRunBookkeeping) or when the child
-        // exits (run terminates, user cancels).
-        const userMessage = JSON.stringify({
-          type: 'user',
-          message: {
-            role: 'user',
-            content: [{ type: 'text', text: composed }],
-          },
-        });
-        try {
-          // E-lite: `write` returns false when the chunk was buffered because the
-          // OS pipe is full (the child isn't draining stdin) — the corroborating
-          // signal for a `stdin_write`-phase inactivity stall.
-          const accepted = child.stdin.write(`${userMessage}\n`, 'utf8', markStdinWriteEnd);
-          run.stdinBackpressure = accepted === false;
-        } catch (err) {
-          // Swallow EPIPE here for the same reason as the listener above —
-          // a fast-exiting child has already routed its failure through
-          // stderr / exit handlers.
-          if (err && err.code !== 'EPIPE') throw err;
-        }
-        run.stdinOpen = true;
-      } else {
-        // Split write + close so the boolean backpressure signal survives —
-        // see writePromptAndEndStdin for why `end(chunk)` cannot report it.
-        run.stdinBackpressure = writePromptAndEndStdin(child.stdin, composed, markStdinWriteEnd);
-      }
-    }
+    deliverPromptViaChildStdin();
   };
 
   orbitService.setRunHandler(async ({

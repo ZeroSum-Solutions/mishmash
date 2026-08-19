@@ -845,3 +845,105 @@ describe('runOrchestrator - fallback on timeout/abort (Defect 7)', () => {
     expect(shipEvents).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Resolved-config logging (R4)
+// ---------------------------------------------------------------------------
+
+/**
+ * These go through runOrchestrator on purpose.
+ *
+ * `tests/logging/critique.test.ts` calls `logCritique` directly with a
+ * hand-built event object. Because `logCritique` serializes whatever it is
+ * handed (`{ ...e }`), that test stays green even if the orchestrator stops
+ * supplying `config` entirely — it proves the logger forwards its input, not
+ * that any config is ever recorded for a real run. The tests below fail if the
+ * orchestrator stops emitting the config, and fail if it goes back to emitting
+ * it only once the model has produced a frame.
+ */
+describe('runOrchestrator - resolved config logging', () => {
+  function captureCritiqueLines(): { lines: Record<string, unknown>[]; restore: () => void } {
+    const lines: Record<string, unknown>[] = [];
+    const original = process.stdout.write.bind(process.stdout);
+    const spy = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation(((chunk: unknown, ...rest: unknown[]) => {
+        const text = typeof chunk === 'string' ? chunk : String(chunk);
+        for (const line of text.split('\n')) {
+          if (!line.startsWith('{')) continue;
+          try {
+            const parsed = JSON.parse(line) as Record<string, unknown>;
+            if (parsed['namespace'] === 'critique') lines.push(parsed);
+          } catch { /* not a critique log line */ }
+        }
+        return (original as (...a: unknown[]) => boolean)(chunk, ...rest);
+      }) as typeof process.stdout.write);
+    return { lines, restore: () => { spy.mockRestore(); } };
+  }
+
+  it('records the resolved config for a run that dies before the model emits a frame', async () => {
+    const { bus } = makeBus();
+    const cfg: CritiqueConfig = { ...defaultCritiqueConfig(), maxRounds: 2, parserMaxBlockBytes: 4096 };
+    // A child that exits on launch (bad auth, missing model) produces exactly
+    // this: the stream errors before a single <CRITIQUE_RUN> frame arrives.
+    // eslint-disable-next-line require-yield
+    async function* diesBeforeAnyFrame(): AsyncIterable<string> {
+      throw new Error('child exited before writing any output');
+    }
+
+    const { lines, restore } = captureCritiqueLines();
+    try {
+      await runOrchestrator({
+        runId: 'r-cfg-1',
+        projectId: 'p1',
+        conversationId: 'c1',
+        artifactId: 'a1',
+        artifactDir: join(tmpDir, 'cfg1'),
+        adapter: 'qwen',
+        skill: 'unit-test',
+        cfg,
+        db,
+        bus,
+        stdout: diesBeforeAnyFrame(),
+      });
+    } finally {
+      restore();
+    }
+
+    // The run must have failed — otherwise this is not the scenario claimed.
+    expect(getCritiqueRun(db, 'r-cfg-1')?.status).not.toBe('shipped');
+
+    const started = lines.filter((l) => l['event'] === 'run_started');
+    expect(started, 'no run_started record for a run that never produced a frame').toHaveLength(1);
+    expect(started[0]!['config']).toEqual(cfg);
+    expect(started[0]!['adapter']).toBe('qwen');
+    expect(started[0]!['skill']).toBe('unit-test');
+  });
+
+  it('records the resolved config exactly once on a run that ships', async () => {
+    const { bus } = makeBus();
+    const cfg = defaultCritiqueConfig();
+    const { lines, restore } = captureCritiqueLines();
+    try {
+      await runOrchestrator({
+        runId: 'r-cfg-2',
+        projectId: 'p1',
+        conversationId: 'c1',
+        artifactId: 'a1',
+        artifactDir: join(tmpDir, 'cfg2'),
+        adapter: 'qwen',
+        skill: 'unit-test',
+        cfg,
+        db,
+        bus,
+        stdout: streamOf(happyStream3Rounds()),
+      });
+    } finally {
+      restore();
+    }
+
+    const started = lines.filter((l) => l['event'] === 'run_started');
+    expect(started, 'run_started must be logged once per run, not once per frame').toHaveLength(1);
+    expect(started[0]!['config']).toEqual(cfg);
+  });
+});

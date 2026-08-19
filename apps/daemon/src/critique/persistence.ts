@@ -44,9 +44,32 @@ export interface CritiqueRunRow {
   rounds: CritiqueRoundSummary[];
   transcriptPath: string | null;
   protocolVersion: number;
-  /** Null until an adapter reports usage. Wall-clock from createdAt/updatedAt
-   *  cannot answer "what did this run cost" — a panel that thought hard for
-   *  four rounds and one that stalled on IO look identical. */
+  /**
+   * Wall-clock from createdAt/updatedAt cannot answer "what did this run
+   * cost" — a panel that thought hard for four rounds and one that stalled on
+   * IO look identical. These columns exist to carry that answer.
+   *
+   * KNOWN GAP — both are NULL for every production run today, and no
+   * daemon-side wiring can change that on its own. The orchestrator only ever
+   * receives `stdout: AsyncIterable<string>` (raw text, see
+   * `server.ts` -> `runOrchestrator({ stdout })`), and it is reachable only
+   * for `streamFormat: 'plain'` adapters. Usage extraction in this daemon
+   * lives entirely in the STRUCTURED stream decoders — `claude-stream.ts`
+   * (`total_cost_usd`), `qoder-stream.ts`, the json-event-stream decoders, the
+   * ACP and pi-rpc event readers — which feed `usage-tracking.ts`. Those are
+   * exactly the formats the critique gate excludes. The plain adapters that DO
+   * run the panel (antigravity, qwen, deepseek) emit no usage on stdout at
+   * all; where a plain CLI reports tokens it does so on stderr, which the
+   * orchestrator never parses, and the <CRITIQUE_RUN> wire protocol itself has
+   * no usage element.
+   *
+   * So this is a missing data SOURCE, not missing wiring: populating these
+   * honestly requires a plain-stream usage channel that does not exist yet.
+   * Do not fill them with an estimate derived from transcript bytes — the one
+   * question they exist to answer is a cost decision, and a guess labelled
+   * `total_tokens` would corrupt it. Left NULL and documented until that
+   * channel is built.
+   */
   totalTokens: number | null;
   costUsd: number | null;
   createdAt: number;
