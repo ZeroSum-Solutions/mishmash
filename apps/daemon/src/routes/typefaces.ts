@@ -4,6 +4,8 @@
 // apps/daemon/src/typefaces/catalogue.ts for the index/install logic and
 // apps/daemon/src/typefaces/allowlist.ts for the licence gate.
 import type { Express } from 'express';
+import { promises as fsp } from 'node:fs';
+import path from 'node:path';
 import type {
   GetTypefaceResponse,
   InstallTypefaceRequest,
@@ -13,12 +15,14 @@ import type {
 
 import {
   describeExcludedTypeface,
+  findIndexedTypefaceFace,
   getTypeface,
   installTypeface,
   listTypefaces,
   TypefaceInstallPathError,
   TypefaceNotFoundError,
 } from '../typefaces/catalogue.js';
+import { mimeFor } from '../projects.js';
 import type { RouteDeps } from '../server-context.js';
 
 export interface RegisterTypefaceRoutesDeps
@@ -113,6 +117,41 @@ export function registerTypefaceRoutes(app: Express, ctx: RegisterTypefaceRoutes
       if (err instanceof TypefaceInstallPathError) {
         return sendApiError(res, 400, 'BAD_REQUEST', errorMessage(err));
       }
+      sendApiError(res, 500, 'INTERNAL_ERROR', errorMessage(err));
+    }
+  });
+
+  // R1 (F008): serve one indexed face's raw bytes. The :file match is
+  // against IndexedTypeface.faces -- never a filesystem path derived from
+  // request input -- so an unknown/cross-family/traversal-shaped filename
+  // simply fails the lookup (404), with no path-join step to defend at all.
+  // sendFile still follows symlinks, so the resolved byte path is
+  // realpath-checked against its own template's fonts/ directory before
+  // being served -- mirrors static-resource.ts's sendSkillSubresource
+  // containment check (audit correction: the index's own build-time check,
+  // catalogue.ts:147, is lexical only and does not defend against this).
+  app.get('/api/typefaces/:id/faces/:file', async (req, res) => {
+    try {
+      const face = await findIndexedTypefaceFace(DESIGN_TEMPLATES_DIR, req.params.id, req.params.file);
+      if (!face || face.format !== 'woff2') {
+        return sendApiError(res, 404, 'NOT_FOUND', `typeface face not found: ${req.params.id}/${req.params.file}`);
+      }
+      const fontsDir = path.dirname(face.sourcePath);
+      let fontsDirReal: string;
+      let sourcePathReal: string;
+      try {
+        fontsDirReal = await fsp.realpath(fontsDir);
+        sourcePathReal = await fsp.realpath(face.sourcePath);
+      } catch {
+        return sendApiError(res, 404, 'NOT_FOUND', `typeface face not found: ${req.params.id}/${req.params.file}`);
+      }
+      if (sourcePathReal !== fontsDirReal && !sourcePathReal.startsWith(fontsDirReal + path.sep)) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'invalid face path');
+      }
+      // Content-hashed filenames (R8): safe to cache forever.
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+      await res.type(mimeFor(sourcePathReal)).sendFile(path.basename(sourcePathReal), { root: fontsDirReal });
+    } catch (err) {
       sendApiError(res, 500, 'INTERNAL_ERROR', errorMessage(err));
     }
   });

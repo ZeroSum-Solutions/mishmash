@@ -253,6 +253,27 @@ export async function getTypeface(designTemplatesDir: string, id: string): Promi
 }
 
 /**
+ * Internal-only: looks up one indexed face by family id + exact filename, for
+ * the face-serving route (routes/typefaces.ts). The match is against the
+ * pre-built index's own `face.file` values -- never a filesystem path built
+ * from request input -- so there is no traversal surface: a value that does
+ * not exactly equal an indexed filename simply misses. Unlike `getTypeface`,
+ * this returns the internal `IndexedTypefaceFace` (with `sourcePath`), since
+ * `getTypeface` -> `toDetail()` strips `sourcePath` before its DTO reaches
+ * callers outside this module (F008 audit correction: `getTypeface()` cannot
+ * be reused for this).
+ */
+export async function findIndexedTypefaceFace(
+  designTemplatesDir: string,
+  id: string,
+  file: string,
+): Promise<IndexedTypefaceFace | undefined> {
+  const index = await getTypefaceIndex(designTemplatesDir);
+  const entry = index.families.get(id.trim().toLowerCase());
+  return entry?.faces.find((face) => face.file === file);
+}
+
+/**
  * True when `id` names a family visible somewhere in the raw catalogue scan
  * but excluded by the licence gate — lets the HTTP layer return a specific
  * "excluded, here's why" 404 instead of a bare "not found" for names the

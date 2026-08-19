@@ -1034,6 +1034,8 @@ export interface Dict {
   'typefaces.search': string;
   'typefaces.loading': string;
   'typefaces.empty': string;
+  'typefaces.specimenPhrase': string;
+  'typefaces.specimenUnavailable': string;
   // Templates gallery
   'templates.title': string;
   'templates.subtitle': string;

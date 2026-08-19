@@ -696,6 +696,8 @@ export const en: Dict = {
   'typefaces.search': 'Search typefaces',
   'typefaces.loading': 'Loading typeface catalogue…',
   'typefaces.empty': 'No typefaces match your search.',
+  'typefaces.specimenPhrase': 'The quick brown fox jumps over the lazy dog.',
+  'typefaces.specimenUnavailable': 'Specimen unavailable — this font failed to load.',
   'templates.title': 'Templates',
   'templates.subtitle':
     'Every renderable design template in the catalogue. Open one to inspect it, or start a project from it.',
