@@ -72,6 +72,16 @@ interface Props {
 // Only these allowed_use tiers may be copied into a new project — mirrors
 // COPYABLE_ALLOWED_USE in apps/daemon/src/routes/design-library.ts.
 const COPYABLE_ALLOWED_USE = new Set<DesignLibraryAllowedUse>(['own-code', 'licensed-source-review']);
+// Rendering is authorized on a wider set than copying. Copying puts an item's
+// bytes where they can be committed and shipped, which RIGHTS.md forbids for
+// `human-local-only`; rendering one is reference viewing on this machine,
+// which it allows. Devin broadened live rendering to every tier on
+// 2026-08-19. Mirrors LIVE_PREVIEWABLE_ALLOWED_USE in
+// apps/daemon/src/routes/design-library.ts, which re-authorizes independently.
+const LIVE_PREVIEWABLE_ALLOWED_USE = new Set<DesignLibraryAllowedUse>([
+  ...COPYABLE_ALLOWED_USE,
+  'human-local-only',
+]);
 const REFERENCEABLE_ALLOWED_USE = new Set<DesignLibraryAllowedUse>([
   'own-code',
   'licensed-source-review',
@@ -108,7 +118,7 @@ function categoryLabel(category: string): string {
 // the preview-asset route re-authorizes independently, same as live-preview.
 const EXPLORABLE_CATEGORIES = new Set(['ui-kit', 'design-system']);
 function canExploreKit(item: DesignLibraryItem): boolean {
-  return Boolean(item.entry_html) && EXPLORABLE_CATEGORIES.has(item.category) && COPYABLE_ALLOWED_USE.has(item.allowed_use);
+  return Boolean(item.entry_html) && EXPLORABLE_CATEGORIES.has(item.category) && LIVE_PREVIEWABLE_ALLOWED_USE.has(item.allowed_use);
 }
 
 // Shared with `useLivePreview` below and the MM-012#1 detail-dialog preview
@@ -117,7 +127,7 @@ function canExploreKit(item: DesignLibraryItem): boolean {
 // rendering runs the author's scripts, so third-party captures stay
 // open-file-only. The preview-asset route re-authorizes independently.
 function canLivePreviewItem(item: DesignLibraryItem): boolean {
-  return Boolean(item.entry_html) && COPYABLE_ALLOWED_USE.has(item.allowed_use);
+  return Boolean(item.entry_html) && LIVE_PREVIEWABLE_ALLOWED_USE.has(item.allowed_use);
 }
 
 // Real strip images only — falls back to the primary thumb alone when the

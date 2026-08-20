@@ -79,11 +79,26 @@ const REFERENCEABLE_ALLOWED_USE = new Set<DesignLibraryAllowedUse>([
 // Live preview EXECUTES the collection's HTML in a real browser tab, which is
 // a materially larger exposure than "Open folder" — a folder view is passive,
 // a rendered page runs the author's scripts and fetches whatever they embed.
-// So this deliberately uses the narrow copyable set rather than the permissive
-// referenceable one: `human-local-only` covers third-party captures and site
-// mirrors whose scripts and trackers should not be run just to look at them,
-// and those items keep "Open folder" exactly as before.
-const LIVE_PREVIEWABLE_ALLOWED_USE = COPYABLE_ALLOWED_USE;
+// `human-local-only` covers third-party captures and site mirrors, so that
+// exposure is real: opening one runs whatever the captured site shipped.
+//
+// Devin authorized that exposure on 2026-08-19 ("broaden to all catalog
+// items"), so live rendering now spans every tier. Measured scope of that
+// decision: 6 items, all under `04 Design Inspiration` — web-captures,
+// ios-goat, ios-superpower, prototypes-designbybrandin, web-plane and
+// web-sana-ai. Every other catalog item was already renderable or has no
+// detectable entry HTML at all.
+//
+// This is deliberately its own set rather than the previous
+// `= COPYABLE_ALLOWED_USE` alias. Copying an item into a project puts its
+// bytes somewhere they can be committed and shipped, which RIGHTS.md forbids
+// for `human-local-only`; rendering one locally is reference viewing on this
+// machine, which RIGHTS.md allows. Widening the shared alias would have
+// silently granted the copy right too — keep the two apart.
+const LIVE_PREVIEWABLE_ALLOWED_USE = new Set<DesignLibraryAllowedUse>([
+  ...COPYABLE_ALLOWED_USE,
+  'human-local-only',
+]);
 
 const PROMOTION_GROUPS = new Set<string>(DESIGN_LIBRARY_PROMOTION_GROUPS);
 const PROMOTION_LIST_STATUSES = new Set<DesignLibraryPromotionListStatus>([

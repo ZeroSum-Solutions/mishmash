@@ -173,11 +173,15 @@ describe('design library preview-asset route', () => {
     expect(await res.text()).toBe('body { color: red; }');
   });
 
-  it('403s a human-local-only item even though the catalog lists it', async () => {
+  // Was a 403 until Devin broadened live rendering to every tier on
+  // 2026-08-19. This is the SANDBOXED surface — an opaque-origin iframe with
+  // no `allow-same-origin` — so it is the safer of the two rendering paths,
+  // and it still re-authorizes independently of the catalog.
+  it('serves a human-local-only item, which Devin authorized on 2026-08-19', async () => {
     const daemonUrl = await startWithFixture();
 
     const res = await fetch(previewAssetUrl(daemonUrl, '01 Kits/capture-kit', 'index.html'));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
   it('403s an item with no rights record', async () => {
