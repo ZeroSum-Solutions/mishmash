@@ -86,7 +86,7 @@ void main() {
   vec2 starCell = floor(gl_FragCoord.xy / 28.0);
   vec2 starLocal = fract(gl_FragCoord.xy / 28.0);
   vec2 starPos = vec2(hash(starCell), hash(starCell + 11.0)) * 0.8 + 0.1;
-  float star = smoothstep(0.09, 0.0, length(starLocal - starPos)) * step(0.93, hash(starCell + 5.0));
+  float star = (1.0 - smoothstep(0.0, 0.09, length(starLocal - starPos))) * step(0.93, hash(starCell + 5.0));
   float twinkle = 0.5 + 0.5 * sin(uTime * (0.9 + hash(starCell + 7.0) * 2.2) + hash(starCell + 3.0) * 6.28);
   float starMask = smoothstep(-0.15, 0.85, point.y);
   color += vec3(0.75, 0.85, 1.0) * star * twinkle * 0.3 * starMask;
@@ -152,7 +152,14 @@ export function HomeAmbientBackdrop() {
 
     const resize = () => {
       const bounds = canvas.getBoundingClientRect();
-      const ratio = Math.min(window.devicePixelRatio || 1, 1.25);
+      let ratio = Math.min(window.devicePixelRatio || 1, 1.25);
+      // Full-bleed on a 4K/ultrawide display multiplies fragment count just
+      // as the warped shader multiplied per-fragment cost; cap the drawing
+      // buffer near the old 1440x920 stage's area and let CSS upscale the
+      // soft-focus aurora, which survives it invisibly.
+      const maxBufferArea = 2_200_000;
+      const area = bounds.width * bounds.height * ratio * ratio;
+      if (area > maxBufferArea) ratio *= Math.sqrt(maxBufferArea / area);
       const width = Math.max(1, Math.floor(bounds.width * ratio));
       const height = Math.max(1, Math.floor(bounds.height * ratio));
       if (canvas.width === width && canvas.height === height) return;
