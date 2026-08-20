@@ -5,9 +5,10 @@ Follow the root `AGENTS.md` and `tools/AGENTS.md` first. This tool owns the repo
 ## Dormant in this fork
 
 **No `pnpm tools-pack …` command works here.** `tools/pack` packages the Electron
-desktop shell, and this fork removed `apps/desktop` and `apps/packaged` — the root
-`AGENTS.md` says not to recreate or reference them. So the "Owns" list below
-describes the tool's design, not a capability this repository currently has:
+desktop shell, and this fork removed `apps/desktop` and `apps/packaged`. Restoring
+them is permitted — the root `AGENTS.md` lifted that prohibition — but until someone
+does, the "Owns" list below describes the tool's design, not a capability this
+repository currently has:
 
 - `src/config.ts` resolves Electron through `apps/desktop/package.json`, so
   `resolveToolPackConfig()` throws for *every* platform.

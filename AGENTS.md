@@ -30,7 +30,8 @@ This file is the single source of truth for agents entering this repository. Rea
 ## Inactive or placeholder directories
 
 - `apps/nextjs` and `packages/shared` have been removed; do not recreate or reference them.
-- `apps/desktop` (Electron shell), `apps/packaged` (packaged Electron runtime entry), and `apps/landing-page` (standalone Astro marketing site) have been removed from this fork; the team uses the web Studio only. Do not recreate or reference them.
+- `apps/landing-page` (standalone Astro marketing site) has been removed from this fork; it was upstream's site, not ours. Do not recreate or reference it.
+- `apps/desktop` (Electron shell) and `apps/packaged` (packaged Electron runtime entry) are absent but **no longer prohibited**. The team ran on the web Studio alone; a downloadable desktop build is now open work. Restoring them is a revert of `53d224849`, not a rewrite — `tools/pack` retained its packaging source for exactly this. Restore both together or not at all, and read `tools/pack/AGENTS.md`, "Dormant in this fork", first: a partial restore turns guarded tests red rather than leaving them quietly off. The packaging target itself is undecided — a revert returns the Electron shell `tools/pack` already builds, while any other shape needs `tools/pack` reworked rather than re-armed. Do not settle that choice inside an unrelated PR.
 - Local runtime data, `.tmp/`, Playwright reports, and agent scratch directories must stay out of git. For daemon-managed data paths, read and follow **Daemon data directory contract** below; do not restate or improvise path conventions elsewhere.
 
 # Development workflow
