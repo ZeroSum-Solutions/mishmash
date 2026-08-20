@@ -3,16 +3,29 @@
   z-index: -1;
   top: -28px;
   left: 50%;
-  width: min(1440px, calc(100vw - 32px));
-  height: clamp(680px, 78dvh, 920px);
+  /* Full-bleed: the aurora tracks the viewport on any window size instead of
+     stopping at the old 1440x920 stage card, which left dark bands on wide
+     or tall browsers. The edge vignette below replaces the border-radius.
+     The 32px slack absorbs classic (non-overlay) scrollbars: .entry-main--scroll
+     is overflow-y:auto, so its overflow-x computes to auto and any right-edge
+     overhang would surface as a horizontal scrollbar. */
+  width: calc(100vw - 32px);
+  height: max(680px, 94dvh);
   overflow: hidden;
   pointer-events: none;
   transform: translateX(-50%);
-  border-radius: 48px;
   background:
     radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 38%),
     radial-gradient(circle at 78% 22%, color-mix(in srgb, #35d6d0 9%, transparent), transparent 38%);
   mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.9) 68%, transparent 100%);
+}
+
+/* The icon rail is a real grid column (0 collapsed, 56px open). Open, the
+   whole pane - and .home-view's center - shifts right by the rail width, so
+   a viewport-sized backdrop would overhang the pane's right edge. Subtract
+   the rail; the backdrop then spans the visible pane exactly. */
+:global(.entry--rail-open) .root {
+  width: calc(100vw - var(--entry-rail-width, 56px) - 32px);
 }
 
 .root::after {
@@ -39,8 +52,7 @@
   .root {
     top: -18px;
     width: calc(100vw - 16px);
-    height: clamp(660px, 90dvh, 760px);
-    border-radius: 28px;
+    height: max(660px, 92dvh);
   }
 
   .canvas {
