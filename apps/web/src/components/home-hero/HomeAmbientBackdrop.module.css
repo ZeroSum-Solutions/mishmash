@@ -3,12 +3,14 @@
   z-index: -1;
   top: -28px;
   left: 50%;
-  width: min(1440px, calc(100vw - 32px));
-  height: clamp(680px, 78dvh, 920px);
+  /* Full-bleed: the aurora tracks the viewport on any window size instead of
+     stopping at the old 1440x920 stage card, which left dark bands on wide
+     or tall browsers. The edge vignette below replaces the border-radius. */
+  width: 100vw;
+  height: max(680px, 94dvh);
   overflow: hidden;
   pointer-events: none;
   transform: translateX(-50%);
-  border-radius: 48px;
   background:
     radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 38%),
     radial-gradient(circle at 78% 22%, color-mix(in srgb, #35d6d0 9%, transparent), transparent 38%);
@@ -38,9 +40,7 @@
 @media (max-width: 700px) {
   .root {
     top: -18px;
-    width: calc(100vw - 16px);
-    height: clamp(660px, 90dvh, 760px);
-    border-radius: 28px;
+    height: max(660px, 92dvh);
   }
 
   .canvas {

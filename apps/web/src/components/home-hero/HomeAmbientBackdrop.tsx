@@ -45,30 +45,59 @@ float fbm(vec2 point) {
 }
 
 void main() {
-  vec2 uv = gl_FragCoord.xy / uResolution;
   vec2 point = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
   // Keep the aurora expansive on wide home stages. Without this correction,
   // the field retains a roughly fixed pixel width while the canvas grows.
   float wideScale = max(1.0, (uResolution.x / uResolution.y) / 1.65);
   point.x /= wideScale;
   float time = uTime * 0.08;
-  float pointerPull = (uPointer.x - 0.5) * 0.34;
-  float field = fbm(vec2(point.y * 1.45 - time, point.x * 0.7 + time));
+  float pointerPull = (uPointer.x - 0.5) * 0.42;
 
-  float leftCenter = -0.42 + sin(point.y * 1.7 + time) * 0.17 + (field - 0.5) * 0.52 + pointerPull;
-  float rightCenter = 0.38 + cos(point.y * 1.3 - time * 0.8) * 0.2 - (field - 0.5) * 0.38 + pointerPull * 0.5;
-  float leftRibbon = exp(-pow((point.x - leftCenter) / 0.24, 2.0));
-  float rightRibbon = exp(-pow((point.x - rightCenter) / 0.3, 2.0));
+  // Domain warp: one fbm pass displaces the coordinates a second pass samples,
+  // which folds the ribbons into aurora curtains instead of straight bands.
+  vec2 warp = vec2(
+    fbm(point * 1.3 + vec2(0.0, -time * 1.2)),
+    fbm(point * 1.3 + vec2(5.2, 1.3) + vec2(time * 0.7, 0.0))
+  );
+  float field = fbm(vec2(point.y * 1.45 - time, point.x * 0.7 + time) + (warp - 0.5) * 1.9);
+
+  float leftCenter = -0.42 + sin(point.y * 1.7 + time) * 0.17 + (field - 0.5) * 0.62 + pointerPull;
+  float rightCenter = 0.38 + cos(point.y * 1.3 - time * 0.8) * 0.2 - (field - 0.5) * 0.48 + pointerPull * 0.5;
+  float midCenter = (warp.x - 0.5) * 0.9 + sin(time * 0.6) * 0.12 + pointerPull * 0.75;
+  float leftRibbon = exp(-pow((point.x - leftCenter) / (0.24 + warp.y * 0.1), 2.0));
+  float rightRibbon = exp(-pow((point.x - rightCenter) / (0.3 + warp.x * 0.08), 2.0));
+  float midRibbon = exp(-pow((point.x - midCenter) / 0.5, 2.0)) * 0.55;
   float centerGlow = exp(-dot(point * vec2(0.72, 1.18), point * vec2(0.72, 1.18)) * 1.35);
 
-  vec3 violet = vec3(0.48, 0.17, 0.98);
+  // Slow palette breathing keeps any single frame on-brand while a live
+  // minute never repeats exactly.
+  float breathe = 0.5 + 0.5 * sin(uTime * 0.05);
+  vec3 violet = mix(vec3(0.48, 0.17, 0.98), vec3(0.70, 0.20, 0.88), breathe);
   vec3 blue = vec3(0.15, 0.38, 0.96);
-  vec3 cyan = vec3(0.08, 0.72, 0.76);
-  vec3 color = violet * leftRibbon * 0.72 + cyan * rightRibbon * 0.48 + blue * centerGlow * 0.26;
+  vec3 cyan = mix(vec3(0.08, 0.72, 0.76), vec3(0.10, 0.56, 0.94), breathe);
+  vec3 color = violet * leftRibbon * 0.72
+    + cyan * rightRibbon * 0.5
+    + mix(blue, violet, warp.y) * midRibbon * 0.34
+    + blue * centerGlow * 0.26;
   color *= 0.48 + 0.52 * smoothstep(-0.7, 0.8, point.y);
+
+  // Star dust: at most one ~2px point per 28px cell, each twinkling out of
+  // phase, masked toward the top so it reads as texture rather than confetti.
+  vec2 starCell = floor(gl_FragCoord.xy / 28.0);
+  vec2 starLocal = fract(gl_FragCoord.xy / 28.0);
+  vec2 starPos = vec2(hash(starCell), hash(starCell + 11.0)) * 0.8 + 0.1;
+  float star = smoothstep(0.09, 0.0, length(starLocal - starPos)) * step(0.93, hash(starCell + 5.0));
+  float twinkle = 0.5 + 0.5 * sin(uTime * (0.9 + hash(starCell + 7.0) * 2.2) + hash(starCell + 3.0) * 6.28);
+  float starMask = smoothstep(-0.15, 0.85, point.y);
+  color += vec3(0.75, 0.85, 1.0) * star * twinkle * 0.3 * starMask;
+
   color += (hash(gl_FragCoord.xy + uTime) - 0.5) * 0.015;
 
-  float alpha = clamp((leftRibbon + rightRibbon) * 0.34 + centerGlow * 0.18, 0.0, 0.62);
+  float alpha = clamp(
+    (leftRibbon + rightRibbon) * 0.34 + midRibbon * 0.2 + centerGlow * 0.18 + star * twinkle * starMask * 0.25,
+    0.0,
+    0.66
+  );
   outColor = vec4(max(color, 0.0), alpha);
 }`;
 
@@ -130,6 +159,9 @@ export function HomeAmbientBackdrop() {
       canvas.width = width;
       canvas.height = height;
       gl.viewport(0, 0, width, height);
+      // Resizing the drawing buffer clears it; when the frame loop is not
+      // running (reduced motion, hidden tab) repaint the single frame.
+      if (reducedMotion.matches || document.hidden) draw(performance.now());
     };
     const draw = (now: number) => {
       resize();
