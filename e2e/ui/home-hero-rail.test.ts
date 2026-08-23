@@ -473,16 +473,23 @@ test('[P1] home left rail expands and collapses from the shell controls', async 
   const shell = page.locator('.entry');
   const rail = page.locator('.entry-nav-rail');
   const expand = page.getByTestId('entry-rail-toggle');
+  const backdrop = page.getByTestId('home-ambient-backdrop');
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('home rail test requires a fixed viewport');
 
   await expect(shell).not.toHaveClass(/entry--rail-open/);
   await expect(rail).toHaveAttribute('aria-hidden', 'true');
   await expect(expand).toHaveAttribute('aria-expanded', 'false');
+  await expect.poll(async () => Math.round((await backdrop.boundingBox())?.width ?? 0))
+    .toBe(viewport.width - 32);
 
   await expand.click();
   await expect(shell).toHaveClass(/entry--rail-open/);
   await expect(rail).not.toHaveAttribute('aria-hidden', 'true');
   await expect(page.getByTestId('entry-nav-home')).toBeVisible();
   await expect(page.getByTestId('entry-nav-projects')).toBeVisible();
+  await expect.poll(async () => Math.round((await backdrop.boundingBox())?.width ?? 0))
+    .toBe(viewport.width - 56 - 32);
 
   const collapse = page.getByTestId('entry-nav-collapse');
   await expect(collapse).toBeVisible();

@@ -224,7 +224,12 @@ export function HomeAmbientBackdrop() {
   }, []);
 
   return (
-    <div className={styles.root} aria-hidden="true" data-source="webgl-aurora-veil">
+    <div
+      className={styles.root}
+      aria-hidden="true"
+      data-source="webgl-aurora-veil"
+      data-testid="home-ambient-backdrop"
+    >
       <canvas ref={canvasRef} className={styles.canvas} data-testid="home-ambient-canvas" />
     </div>
   );
