@@ -44,8 +44,9 @@ function safeAcademyPath(value: unknown): string | null {
 
 export function AcademySection({ title, loadingLabel, unavailableLabel }: Props) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
-  const [filePath, setFilePath] = useState(ACADEMY_ENTRY_FILE);
+  const [navigation, setNavigation] = useState({ filePath: ACADEMY_ENTRY_FILE, requestId: 0 });
   const [documentState, setDocumentState] = useState<AcademyDocumentState>({ kind: 'loading' });
+  const { filePath } = navigation;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -88,14 +89,19 @@ export function AcademySection({ title, loadingLabel, unavailableLabel }: Props)
     };
     void load();
     return () => controller.abort();
-  }, [filePath]);
+  }, [filePath, navigation.requestId]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (event.source !== frameRef.current?.contentWindow) return;
       if (!event.data || event.data.type !== PREVIEW_NAVIGATE_MESSAGE) return;
       const nextPath = safeAcademyPath(event.data.path);
-      if (nextPath) setFilePath(nextPath);
+      if (nextPath) {
+        setNavigation((current) => ({
+          filePath: nextPath,
+          requestId: current.requestId + 1,
+        }));
+      }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);

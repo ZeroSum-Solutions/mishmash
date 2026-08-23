@@ -544,6 +544,10 @@ test('[P1] Academy renders project HTML through the sandboxed preview path', asy
 
   await frame.contentFrame().getByRole('link', { name: 'Missing lesson' }).click();
   await expect(frame.contentFrame().getByRole('heading', { name: 'Nested Lesson' })).toBeVisible();
+  const missingPath = '/api/projects/mishmash-academy/raw/pages/missing.html';
+  await expect.poll(() => requestedPaths.filter((path) => path === missingPath).length).toBe(1);
+  await frame.contentFrame().getByRole('link', { name: 'Missing lesson' }).click();
+  await expect.poll(() => requestedPaths.filter((path) => path === missingPath).length).toBe(2);
 
   await frame.contentFrame().getByRole('link', { name: 'Academy home' }).click();
   await expect(frame.contentFrame().getByRole('heading', { name: 'Team Academy' })).toBeVisible();
