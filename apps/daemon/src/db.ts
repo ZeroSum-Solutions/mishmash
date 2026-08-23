@@ -1075,6 +1075,24 @@ export function listConversations(db: SqliteDb, projectId: string) {
     .all(projectId)).map(normalizeConversation);
 }
 
+/**
+ * Return the conversation seeded first for a project. Millisecond timestamps
+ * can tie when a second conversation is created immediately after the project,
+ * so rowid is the deterministic insertion-order tiebreaker.
+ */
+export function firstConversationIdForProject(db: SqliteDb, projectId: string): string | null {
+  const row = db
+    .prepare(
+      `SELECT id
+         FROM conversations
+        WHERE project_id = ?
+        ORDER BY created_at ASC, rowid ASC
+        LIMIT 1`,
+    )
+    .get(projectId) as DbRow | undefined;
+  return typeof row?.id === 'string' && row.id.length > 0 ? row.id : null;
+}
+
 export function getConversation(db: SqliteDb, id: string) {
   const r = db
     .prepare(

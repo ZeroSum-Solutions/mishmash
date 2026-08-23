@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   closeDatabase,
   conversationTurnIndexForRun,
+  firstConversationIdForProject,
   insertConversation,
   insertProject,
   openDatabase,
@@ -90,5 +91,27 @@ describe('conversationTurnIndexForRun', () => {
     addRun(db, 'conv-1', 'assistant-1', 'run-1');
 
     expect(conversationTurnIndexForRun(db, 'conv-1', 'missing-run')).toBeNull();
+  });
+
+  it('keeps the seeded conversation first when creation timestamps tie', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    const now = Date.now();
+    insertProject(db, { id: 'proj-tie', name: 'P', createdAt: now, updatedAt: now });
+    insertConversation(db, {
+      id: 'z-seeded',
+      projectId: 'proj-tie',
+      title: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    insertConversation(db, {
+      id: 'a-recent',
+      projectId: 'proj-tie',
+      title: 'Recently active',
+      createdAt: now,
+      updatedAt: now + 60_000,
+    });
+
+    expect(firstConversationIdForProject(db, 'proj-tie')).toBe('z-seeded');
   });
 });
