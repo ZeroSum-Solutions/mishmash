@@ -500,11 +500,30 @@ test('[P1] home left rail expands and collapses from the shell controls', async 
 });
 
 test('[P1] Academy renders project HTML through the sandboxed preview path', async ({ page }) => {
-  await page.route('**/api/projects/mishmash-academy/raw/index.html', async (route) => {
+  const requestedPaths: string[] = [];
+  await page.route('**/api/projects/mishmash-academy/raw/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    requestedPaths.push(pathname);
+    if (pathname.endsWith('/raw/index.html')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><html><head></head><body><h1>Team Academy</h1><a href="pages/lesson%202.html">Nested lesson</a></body></html>',
+      });
+      return;
+    }
+    if (pathname.endsWith('/raw/pages/lesson%202.html')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><html><head></head><body><h1>Nested Lesson</h1><a href="../index.html">Academy home</a><a href="missing.html">Missing lesson</a></body></html>',
+      });
+      return;
+    }
     await route.fulfill({
-      status: 200,
-      contentType: 'text/html',
-      body: '<!doctype html><html><head></head><body><h1>Team Academy</h1></body></html>',
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'not found' }),
     });
   });
   await gotoEntryHome(page);
@@ -516,6 +535,17 @@ test('[P1] Academy renders project HTML through the sandboxed preview path', asy
   await expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
   await expect(frame).not.toHaveAttribute('src');
   await expect(frame).toHaveAttribute('srcdoc', /data-od-sandbox-shim/);
+  await expect(frame.contentFrame().getByRole('heading', { name: 'Team Academy' })).toBeVisible();
+
+  await frame.contentFrame().getByRole('link', { name: 'Nested lesson' }).click();
+  await expect(frame.contentFrame().getByRole('heading', { name: 'Nested Lesson' })).toBeVisible();
+  expect(requestedPaths).toContain('/api/projects/mishmash-academy/raw/pages/lesson%202.html');
+  expect(requestedPaths).not.toContain('/api/projects/mishmash-academy/raw/pages/lesson%25202.html');
+
+  await frame.contentFrame().getByRole('link', { name: 'Missing lesson' }).click();
+  await expect(frame.contentFrame().getByRole('heading', { name: 'Nested Lesson' })).toBeVisible();
+
+  await frame.contentFrame().getByRole('link', { name: 'Academy home' }).click();
   await expect(frame.contentFrame().getByRole('heading', { name: 'Team Academy' })).toBeVisible();
 });
 

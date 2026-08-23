@@ -22,9 +22,24 @@ function safeAcademyPath(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const path = value.split(/[?#]/u, 1)[0]?.trim() ?? '';
   if (!path || path.startsWith('/') || !path.toLowerCase().endsWith('.html')) return null;
-  const segments = path.split('/');
-  if (segments.some((segment) => !segment || segment === '.' || segment === '..')) return null;
-  return path;
+  try {
+    const segments = path.split('/').map((segment) => decodeURIComponent(segment));
+    if (
+      segments.some(
+        (segment) =>
+          !segment
+          || segment === '.'
+          || segment === '..'
+          || segment.includes('/')
+          || segment.includes('\\'),
+      )
+    ) {
+      return null;
+    }
+    return segments.join('/');
+  } catch {
+    return null;
+  }
 }
 
 export function AcademySection({ title, loadingLabel, unavailableLabel }: Props) {
@@ -34,7 +49,7 @@ export function AcademySection({ title, loadingLabel, unavailableLabel }: Props)
 
   useEffect(() => {
     const controller = new AbortController();
-    setDocumentState({ kind: 'loading' });
+    setDocumentState((current) => current.kind === 'ready' ? current : { kind: 'loading' });
     const load = async () => {
       try {
         const response = await fetch(projectRawUrl(ACADEMY_PROJECT_ID, filePath), {
@@ -42,7 +57,7 @@ export function AcademySection({ title, loadingLabel, unavailableLabel }: Props)
           signal: controller.signal,
         });
         if (!response.ok) {
-          setDocumentState({ kind: 'unavailable' });
+          setDocumentState((current) => current.kind === 'ready' ? current : { kind: 'unavailable' });
           return;
         }
         const source = await response.text();
@@ -61,11 +76,14 @@ export function AcademySection({ title, loadingLabel, unavailableLabel }: Props)
           kind: 'ready',
           srcDoc: buildSrcdoc(inlined, {
             baseHref: projectRawUrl(ACADEMY_PROJECT_ID, assetBaseDirFor(filePath)),
+            previewNavigationRootHref: projectRawUrl(ACADEMY_PROJECT_ID, ''),
             previewFocusGuard: true,
           }),
         });
       } catch {
-        if (!controller.signal.aborted) setDocumentState({ kind: 'unavailable' });
+        if (!controller.signal.aborted) {
+          setDocumentState((current) => current.kind === 'ready' ? current : { kind: 'unavailable' });
+        }
       }
     };
     void load();
