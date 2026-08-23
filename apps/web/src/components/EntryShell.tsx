@@ -100,6 +100,7 @@ import { LibrarySection } from './LibrarySection';
 import { StoryboardSection } from './storyboard/StoryboardSection';
 import { TemplatesSection } from './TemplatesSection';
 import { TypefacesSection } from './TypefacesSection';
+import { AcademySection } from './AcademySection';
 import { metadataForSkill } from './skill-project-metadata';
 import { UpdaterPopup } from './UpdaterPopup';
 import { WhatsNewPopup } from './WhatsNewPopup';
@@ -1419,10 +1420,10 @@ export function EntryShell({
             </div>
             <div data-testid="entry-view-academy" data-active={view === 'academy' ? 'true' : 'false'} {...inactiveViewProps(view === 'academy')}>
               {academyVisited ? (
-                <iframe
+                <AcademySection
                   title={t('entry.navAcademy')}
-                  src="/api/projects/mishmash-academy/raw/index.html"
-                  style={{ width: '100%', height: 'calc(100vh - 96px)', border: 0, display: 'block' }}
+                  loadingLabel={t('entry.academyLoading')}
+                  unavailableLabel={t('entry.academyUnavailable')}
                 />
               ) : null}
             </div>

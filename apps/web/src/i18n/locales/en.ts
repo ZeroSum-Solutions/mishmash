@@ -688,6 +688,8 @@ export const en: Dict = {
   'entry.navDesignLibrary': 'Design Library',
   'entry.navStoryboard': 'Storyboard',
   'entry.navAcademy': 'Academy',
+  'entry.academyLoading': 'Loading Academy…',
+  'entry.academyUnavailable': 'Academy is not available in this workspace yet.',
   'entry.navTemplates': 'Templates',
   'entry.navTypefaces': 'Typefaces',
   'entry.navIntegrations': 'Integrations',

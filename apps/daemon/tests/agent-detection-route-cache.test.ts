@@ -26,6 +26,13 @@ const detectedAgent = {
   models: [{ id: 'default', label: 'Default' }],
 };
 
+const refreshedAgent = {
+  ...detectedAgent,
+  id: 'claude',
+  name: 'Claude Code',
+  bin: 'claude',
+};
+
 describe('GET /api/agents detection cache', () => {
   let server: http.Server | null = null;
   let tempRoot = '';
@@ -162,5 +169,45 @@ describe('GET /api/agents detection cache', () => {
     await refreshed.text();
 
     expect(detectAgentsStreamMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let an explicit refresh join an older in-flight batch detection', async () => {
+    let releaseFirst!: () => void;
+    let releaseRefresh!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const refreshGate = new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    detectAgentsMock
+      .mockImplementationOnce(async () => {
+        await firstGate;
+        return [detectedAgent];
+      })
+      .mockImplementationOnce(async () => {
+        await refreshGate;
+        return [refreshedAgent];
+      });
+    const baseUrl = await startServer();
+
+    const firstRequest = fetch(`${baseUrl}/api/agents`);
+    await vi.waitFor(() => expect(detectAgentsMock).toHaveBeenCalledTimes(1));
+    const refreshRequest = fetch(`${baseUrl}/api/agents?refresh=1`);
+
+    try {
+      await vi.waitFor(() => expect(detectAgentsMock).toHaveBeenCalledTimes(2));
+    } finally {
+      releaseRefresh();
+      releaseFirst();
+    }
+
+    const [firstResponse, refreshResponse] = await Promise.all([firstRequest, refreshRequest]);
+    await expect(firstResponse.json()).resolves.toEqual({ agents: [detectedAgent] });
+    await expect(refreshResponse.json()).resolves.toEqual({ agents: [refreshedAgent] });
+
+    const cachedResponse = await fetch(`${baseUrl}/api/agents`);
+    await expect(cachedResponse.json()).resolves.toEqual({ agents: [refreshedAgent] });
+    expect(detectAgentsMock).toHaveBeenCalledTimes(2);
   });
 });

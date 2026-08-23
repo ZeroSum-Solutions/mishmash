@@ -499,6 +499,43 @@ test('[P1] home left rail expands and collapses from the shell controls', async 
   await expect(expand).toHaveAttribute('aria-expanded', 'false');
 });
 
+test('[P1] Academy renders project HTML through the sandboxed preview path', async ({ page }) => {
+  await page.route('**/api/projects/mishmash-academy/raw/index.html', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: '<!doctype html><html><head></head><body><h1>Team Academy</h1></body></html>',
+    });
+  });
+  await gotoEntryHome(page);
+
+  await page.getByTestId('entry-rail-toggle').click();
+  await page.getByTestId('entry-nav-academy').click();
+
+  const frame = page.getByTestId('academy-frame');
+  await expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
+  await expect(frame).not.toHaveAttribute('src');
+  await expect(frame).toHaveAttribute('srcdoc', /data-od-sandbox-shim/);
+  await expect(frame.contentFrame().getByRole('heading', { name: 'Team Academy' })).toBeVisible();
+});
+
+test('[P1] Academy explains when the team training project is unavailable', async ({ page }) => {
+  await page.route('**/api/projects/mishmash-academy/raw/index.html', async (route) => {
+    await route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'not found' }),
+    });
+  });
+  await gotoEntryHome(page);
+
+  await page.getByTestId('entry-rail-toggle').click();
+  await page.getByTestId('entry-nav-academy').click();
+
+  await expect(page.getByText('Academy is not available in this workspace yet.')).toBeVisible();
+  await expect(page.getByTestId('academy-frame')).toHaveCount(0);
+});
+
 test('[P1] home composer plus menu exposes attachment, connector, plugin, and MCP entries', async ({ page }) => {
   await gotoEntryHome(page);
 

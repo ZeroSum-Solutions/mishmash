@@ -203,6 +203,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       .digest('hex');
 
     if (!wantsStream) {
+      let ownedAgentDetection: typeof inFlightAgentDetection = null;
       try {
         if (
           !forceRefresh
@@ -214,7 +215,8 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
           return;
         }
         if (
-          inFlightAgentDetection
+          !forceRefresh
+          && inFlightAgentDetection
           && inFlightAgentDetection.cacheKey === agentDetectionCacheKey
         ) {
           const list = await inFlightAgentDetection.promise;
@@ -222,24 +224,27 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
           return;
         }
         const detectionPromise = detectAgents(agentCliEnv).then((agents) => {
-          cachedAgentDetection = {
-            cacheKey: agentDetectionCacheKey,
-            agents,
-            expiresAt: Date.now() + agentDetectionCacheTtlMs,
-          };
+          if (inFlightAgentDetection === ownedAgentDetection) {
+            cachedAgentDetection = {
+              cacheKey: agentDetectionCacheKey,
+              agents,
+              expiresAt: Date.now() + agentDetectionCacheTtlMs,
+            };
+          }
           return agents;
         });
         void detectionPromise.catch(() => undefined);
-        inFlightAgentDetection = {
+        ownedAgentDetection = {
           cacheKey: agentDetectionCacheKey,
           promise: detectionPromise,
         };
+        inFlightAgentDetection = ownedAgentDetection;
         const list = await detectionPromise;
         res.json({ agents: list });
       } catch (err: any) {
         res.status(500).json({ error: String(err) });
       } finally {
-        if (inFlightAgentDetection?.cacheKey === agentDetectionCacheKey) {
+        if (inFlightAgentDetection === ownedAgentDetection) {
           inFlightAgentDetection = null;
         }
       }
@@ -261,6 +266,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       aborted = true;
     });
     let rejectDetection: (error: unknown) => void = () => undefined;
+    let ownedAgentDetection: typeof inFlightAgentDetection = null;
     try {
       if (
         !forceRefresh
@@ -279,7 +285,8 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       }
 
       if (
-        inFlightAgentDetection
+        !forceRefresh
+        && inFlightAgentDetection
         && inFlightAgentDetection.cacheKey === agentDetectionCacheKey
       ) {
         const agents = await inFlightAgentDetection.promise;
@@ -300,21 +307,24 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
         rejectDetection = reject;
       });
       void detectionPromise.catch(() => undefined);
-      inFlightAgentDetection = {
+      ownedAgentDetection = {
         cacheKey: agentDetectionCacheKey,
         promise: detectionPromise,
       };
+      inFlightAgentDetection = ownedAgentDetection;
       for await (const agent of detectAgentsStream(agentCliEnv)) {
         detectedAgents.push(agent);
         if (!aborted) {
           res.write(`event: agent\ndata: ${JSON.stringify(agent)}\n\n`);
         }
       }
-      cachedAgentDetection = {
-        cacheKey: agentDetectionCacheKey,
-        agents: detectedAgents,
-        expiresAt: Date.now() + agentDetectionCacheTtlMs,
-      };
+      if (inFlightAgentDetection === ownedAgentDetection) {
+        cachedAgentDetection = {
+          cacheKey: agentDetectionCacheKey,
+          agents: detectedAgents,
+          expiresAt: Date.now() + agentDetectionCacheTtlMs,
+        };
+      }
       resolveDetection(detectedAgents);
       if (!aborted) {
         res.write('event: done\ndata: {}\n\n');
@@ -325,7 +335,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
         res.write(`event: error\ndata: ${JSON.stringify({ error: String(err) })}\n\n`);
       }
     } finally {
-      if (inFlightAgentDetection?.cacheKey === agentDetectionCacheKey) {
+      if (inFlightAgentDetection === ownedAgentDetection) {
         inFlightAgentDetection = null;
       }
       res.end();
