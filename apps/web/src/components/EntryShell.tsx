@@ -636,6 +636,13 @@ export function EntryShell({
   useEffect(() => {
     if (view === 'design-library') setDesignLibraryVisited(true);
   }, [view]);
+  // Academy pane: mount the training-site iframe on first visit and keep it
+  // mounted afterwards (matching the stay-mounted tab convention above) so
+  // switching tabs does not reload the iframe and lose the reader's place.
+  const [academyVisited, setAcademyVisited] = useState(false);
+  useEffect(() => {
+    if (view === 'academy') setAcademyVisited(true);
+  }, [view]);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   // Hard block from the pre-run balance gate on a home submit (empty wallet
   // or signed out); non-null renders the AmrBalanceDialog on the home page —
@@ -1409,6 +1416,15 @@ export function EntryShell({
             </div>
             <div data-testid="entry-view-typefaces" data-active={view === 'typefaces' ? 'true' : 'false'} {...inactiveViewProps(view === 'typefaces')}>
               <TypefacesSection />
+            </div>
+            <div data-testid="entry-view-academy" data-active={view === 'academy' ? 'true' : 'false'} {...inactiveViewProps(view === 'academy')}>
+              {academyVisited ? (
+                <iframe
+                  title={t('entry.navAcademy')}
+                  src="/api/projects/mishmash-academy/raw/index.html"
+                  style={{ width: '100%', height: 'calc(100vh - 96px)', border: 0, display: 'block' }}
+                />
+              ) : null}
             </div>
             {view === 'integrations' ? (
               <IntegrationsView

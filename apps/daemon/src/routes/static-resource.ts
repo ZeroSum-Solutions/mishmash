@@ -1,10 +1,12 @@
 import type { Express, Request, Response } from 'express';
 import type Database from 'better-sqlite3';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import type { DesignSystemTokenContractRebuildJobResponse } from '@open-design/contracts';
 import { detectAgents, detectAgentsStream } from '../agents.js';
+import type { DetectedAgent } from '../runtimes/types.js';
 import {
   SkillImportError,
   deleteUserSkill,
@@ -70,6 +72,16 @@ export function registerAtomRoutes(app: Express, ctx: RegisterAtomRoutesDeps) {
 }
 
 export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticResourceRoutesDeps) {
+  const agentDetectionCacheTtlMs = 60_000;
+  let cachedAgentDetection: {
+    cacheKey: string;
+    agents: DetectedAgent[];
+    expiresAt: number;
+  } | null = null;
+  let inFlightAgentDetection: {
+    cacheKey: string;
+    promise: Promise<DetectedAgent[]>;
+  } | null = null;
   const {
     RUNTIME_DATA_DIR,
     RUNTIME_DATA_DIR_CANONICAL,
@@ -176,6 +188,8 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   app.get('/api/agents', async (req, res) => {
     const wantsStream =
       req.query.stream === '1' || req.query.stream === 'true';
+    const forceRefresh =
+      req.query.refresh === '1' || req.query.refresh === 'true';
     let config;
     try {
       config = await readAppConfig(RUNTIME_DATA_DIR);
@@ -184,13 +198,50 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       return;
     }
     const agentCliEnv = config.agentCliEnv ?? {};
+    const agentDetectionCacheKey = createHash('sha256')
+      .update(JSON.stringify(agentCliEnv))
+      .digest('hex');
 
     if (!wantsStream) {
       try {
-        const list = await detectAgents(agentCliEnv);
+        if (
+          !forceRefresh
+          && cachedAgentDetection
+          && cachedAgentDetection.cacheKey === agentDetectionCacheKey
+          && cachedAgentDetection.expiresAt > Date.now()
+        ) {
+          res.json({ agents: cachedAgentDetection.agents });
+          return;
+        }
+        if (
+          inFlightAgentDetection
+          && inFlightAgentDetection.cacheKey === agentDetectionCacheKey
+        ) {
+          const list = await inFlightAgentDetection.promise;
+          res.json({ agents: list });
+          return;
+        }
+        const detectionPromise = detectAgents(agentCliEnv).then((agents) => {
+          cachedAgentDetection = {
+            cacheKey: agentDetectionCacheKey,
+            agents,
+            expiresAt: Date.now() + agentDetectionCacheTtlMs,
+          };
+          return agents;
+        });
+        void detectionPromise.catch(() => undefined);
+        inFlightAgentDetection = {
+          cacheKey: agentDetectionCacheKey,
+          promise: detectionPromise,
+        };
+        const list = await detectionPromise;
         res.json({ agents: list });
       } catch (err: any) {
         res.status(500).json({ error: String(err) });
+      } finally {
+        if (inFlightAgentDetection?.cacheKey === agentDetectionCacheKey) {
+          inFlightAgentDetection = null;
+        }
       }
       return;
     }
@@ -209,19 +260,74 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
     req.on('close', () => {
       aborted = true;
     });
+    let rejectDetection: (error: unknown) => void = () => undefined;
     try {
-      for await (const agent of detectAgentsStream(agentCliEnv)) {
-        if (aborted) break;
-        res.write(`event: agent\ndata: ${JSON.stringify(agent)}\n\n`);
+      if (
+        !forceRefresh
+        && cachedAgentDetection
+        && cachedAgentDetection.cacheKey === agentDetectionCacheKey
+        && cachedAgentDetection.expiresAt > Date.now()
+      ) {
+        for (const agent of cachedAgentDetection.agents) {
+          if (aborted) break;
+          res.write(`event: agent\ndata: ${JSON.stringify(agent)}\n\n`);
+        }
+        if (!aborted) {
+          res.write('event: done\ndata: {}\n\n');
+        }
+        return;
       }
+
+      if (
+        inFlightAgentDetection
+        && inFlightAgentDetection.cacheKey === agentDetectionCacheKey
+      ) {
+        const agents = await inFlightAgentDetection.promise;
+        for (const agent of agents) {
+          if (aborted) break;
+          res.write(`event: agent\ndata: ${JSON.stringify(agent)}\n\n`);
+        }
+        if (!aborted) {
+          res.write('event: done\ndata: {}\n\n');
+        }
+        return;
+      }
+
+      const detectedAgents: DetectedAgent[] = [];
+      let resolveDetection!: (agents: DetectedAgent[]) => void;
+      const detectionPromise = new Promise<DetectedAgent[]>((resolve, reject) => {
+        resolveDetection = resolve;
+        rejectDetection = reject;
+      });
+      void detectionPromise.catch(() => undefined);
+      inFlightAgentDetection = {
+        cacheKey: agentDetectionCacheKey,
+        promise: detectionPromise,
+      };
+      for await (const agent of detectAgentsStream(agentCliEnv)) {
+        detectedAgents.push(agent);
+        if (!aborted) {
+          res.write(`event: agent\ndata: ${JSON.stringify(agent)}\n\n`);
+        }
+      }
+      cachedAgentDetection = {
+        cacheKey: agentDetectionCacheKey,
+        agents: detectedAgents,
+        expiresAt: Date.now() + agentDetectionCacheTtlMs,
+      };
+      resolveDetection(detectedAgents);
       if (!aborted) {
         res.write('event: done\ndata: {}\n\n');
       }
     } catch (err: any) {
+      rejectDetection(err);
       if (!aborted) {
         res.write(`event: error\ndata: ${JSON.stringify({ error: String(err) })}\n\n`);
       }
     } finally {
+      if (inFlightAgentDetection?.cacheKey === agentDetectionCacheKey) {
+        inFlightAgentDetection = null;
+      }
       res.end();
     }
   });

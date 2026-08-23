@@ -128,9 +128,11 @@ export async function fetchAgents(options?: { throwOnError?: boolean }): Promise
 export async function fetchAgentsStream(args: {
   onAgent: (agent: AgentInfo) => void;
   signal?: AbortSignal;
+  forceRefresh?: boolean;
 }): Promise<AgentInfo[]> {
-  const { onAgent, signal } = args;
-  const resp = await fetch('/api/agents?stream=1', {
+  const { onAgent, signal, forceRefresh = false } = args;
+  const query = forceRefresh ? '?stream=1&refresh=1' : '?stream=1';
+  const resp = await fetch(`/api/agents${query}`, {
     cache: 'no-store',
     headers: { Accept: 'text/event-stream' },
     ...(signal ? { signal } : {}),

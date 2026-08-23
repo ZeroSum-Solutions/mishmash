@@ -100,6 +100,20 @@ describe('fetchAgentsStream', () => {
     await expect(fetchAgentsStream({ onAgent: vi.fn() }))
       .rejects.toThrow('agents stream ended before done');
   });
+
+  it('requests a daemon refresh when the caller explicitly bypasses the cache', async () => {
+    const fetchMock = vi.fn(async () => agentStreamResponse(
+      'event: done\ndata: {}\n\n',
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchAgentsStream({ onAgent: vi.fn(), forceRefresh: true });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/agents?stream=1&refresh=1',
+      expect.objectContaining({ cache: 'no-store' }),
+    );
+  });
 });
 
 describe('fetchAppVersionInfo', () => {
