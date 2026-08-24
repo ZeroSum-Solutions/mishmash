@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { assetBaseDirFor, inlineRelativeAssets } from './file-viewer-preview-assets';
-import { projectRawUrl } from '../providers/registry';
+import { fetchProjectFiles, projectRawUrl } from '../providers/registry';
 import { buildSrcdoc, PREVIEW_NAVIGATE_MESSAGE } from '../runtime/srcdoc';
 import styles from './AcademySection.module.css';
 
@@ -44,6 +44,7 @@ function safeAcademyPath(value: unknown): string | null {
 
 export function AcademySection({ title, loadingLabel, unavailableLabel }: Props) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const projectFilePathsRef = useRef<ReadonlySet<string> | null>(null);
   const [navigation, setNavigation] = useState({ filePath: ACADEMY_ENTRY_FILE, requestId: 0 });
   const [documentState, setDocumentState] = useState<AcademyDocumentState>({ kind: 'loading' });
   const { filePath } = navigation;
@@ -53,10 +54,18 @@ export function AcademySection({ title, loadingLabel, unavailableLabel }: Props)
     setDocumentState((current) => current.kind === 'ready' ? current : { kind: 'loading' });
     const load = async () => {
       try {
-        const response = await fetch(projectRawUrl(ACADEMY_PROJECT_ID, filePath), {
-          cache: 'no-store',
-          signal: controller.signal,
-        });
+        const [response, projectFilePaths] = await Promise.all([
+          fetch(projectRawUrl(ACADEMY_PROJECT_ID, filePath), {
+            cache: 'no-store',
+            signal: controller.signal,
+          }),
+          projectFilePathsRef.current
+            ? Promise.resolve(projectFilePathsRef.current)
+            : fetchProjectFiles(ACADEMY_PROJECT_ID).then((files) =>
+                new Set(files.map((entry) => entry.name)),
+              ),
+        ]);
+        if (projectFilePaths.size > 0) projectFilePathsRef.current = projectFilePaths;
         if (!response.ok) {
           setDocumentState((current) => current.kind === 'ready' ? current : { kind: 'unavailable' });
           return;
@@ -66,7 +75,7 @@ export function AcademySection({ title, loadingLabel, unavailableLabel }: Props)
           source,
           ACADEMY_PROJECT_ID,
           filePath,
-          null,
+          projectFilePaths,
           {
             fetch: globalThis.fetch.bind(globalThis),
             rawUrl: projectRawUrl,
