@@ -12,7 +12,8 @@
 // that count positive once the panel is opened, so it would prove nothing
 // about the three syncs that matter most (the ones a user never asked for).
 // This checkpoints the request count separately after each trigger — mount,
-// the interval (driven with a fake clock rather than a real 60-second wait),
+// the interval (invoked through a captured callback rather than a real
+// 60-second wait),
 // a visibility change, and the panel actually being opened — so every trigger
 // has to prove it fired. It also runs across both a fresh profile and one
 // with the vendor feed already cached, and both signed-in and signed-out
@@ -88,6 +89,38 @@ async function seedVendorCache(page: Page) {
   );
 }
 
+async function captureMinuteIntervals(page: Page) {
+  await page.addInitScript(() => {
+    const callbacks: Array<() => void> = [];
+    const nativeSetInterval = window.setInterval.bind(window);
+
+    window.setInterval = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+      if (timeout !== 60_000 || typeof handler !== 'function') {
+        return nativeSetInterval(handler, timeout, ...args);
+      }
+
+      callbacks.push(() => handler(...args));
+      // The app only needs an opaque interval id so it can clear the callback
+      // on unmount. Keep captured ids outside the range browsers normally use.
+      return 2_000_000_000 + callbacks.length;
+    }) as typeof window.setInterval;
+
+    Object.defineProperty(window, '__odRunMinuteIntervals', {
+      configurable: true,
+      value: () => callbacks.forEach((callback) => callback()),
+    });
+  });
+}
+
+async function runMinuteIntervals(page: Page) {
+  await page.evaluate(() => {
+    const run = (window as Window & { __odRunMinuteIntervals?: () => void })
+      .__odRunMinuteIntervals;
+    if (!run) throw new Error('minute interval capture was not installed');
+    run();
+  });
+}
+
 interface LifecycleResult {
   messageCenterRequests: string[];
   dialog: Locator;
@@ -101,6 +134,7 @@ async function runLifecycle(
   await applyStandardMocks(page);
   await mockVelaStatus(page, options.loggedIn);
   if (options.seeded) await seedVendorCache(page);
+  await captureMinuteIntervals(page);
 
   const messageCenterRequests: string[] = [];
   page.on('request', (request: Request) => {
@@ -108,7 +142,6 @@ async function runLifecycle(
     if (/message-center/i.test(url)) messageCenterRequests.push(url);
   });
 
-  await page.clock.install();
   await page.goto('/', { waitUntil: 'domcontentloaded' });
 
   // 0. Mount. Without this checkpoint proving the sync ran at all, every
@@ -122,7 +155,7 @@ async function runLifecycle(
   const afterMount = messageCenterRequests.length;
 
   // 1. The 60-second interval, independent of the panel ever being opened.
-  await page.clock.runFor(65_000);
+  await runMinuteIntervals(page);
   await expect
     .poll(() => messageCenterRequests.length, {
       message: 'the request count did not increase after the interval tick — the interval sync never fired',
