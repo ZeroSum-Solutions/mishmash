@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
 import { cleanup, render } from '@testing-library/react';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HomeAmbientBackdrop } from '../../src/components/home-hero/HomeAmbientBackdrop';
@@ -20,17 +18,6 @@ describe('HomeAmbientBackdrop', () => {
     expect(markup).toContain('data-testid="home-ambient-canvas"');
     expect(markup).toContain('data-source="webgl-aurora-veil"');
     expect(markup).toContain('aria-hidden="true"');
-  });
-
-  it('fills the responsive home stage instead of stopping at the old fixed desktop size', () => {
-    const css = readFileSync(
-      resolve(process.cwd(), 'src/components/home-hero/HomeAmbientBackdrop.module.css'),
-      'utf8',
-    );
-
-    expect(css).not.toMatch(/width:\s*min\(1180px/);
-    expect(css).toMatch(/width:\s*min\(1440px,\s*calc\(100vw - 32px\)\)/);
-    expect(css).toMatch(/height:\s*clamp\(680px,\s*78dvh,\s*920px\)/);
   });
 
   it('resizes the WebGL drawing buffer when its rendered backdrop changes size', () => {

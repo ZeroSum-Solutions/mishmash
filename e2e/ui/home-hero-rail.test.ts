@@ -473,16 +473,23 @@ test('[P1] home left rail expands and collapses from the shell controls', async 
   const shell = page.locator('.entry');
   const rail = page.locator('.entry-nav-rail');
   const expand = page.getByTestId('entry-rail-toggle');
+  const backdrop = page.getByTestId('home-ambient-backdrop');
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('home rail test requires a fixed viewport');
 
   await expect(shell).not.toHaveClass(/entry--rail-open/);
   await expect(rail).toHaveAttribute('aria-hidden', 'true');
   await expect(expand).toHaveAttribute('aria-expanded', 'false');
+  await expect.poll(async () => Math.round((await backdrop.boundingBox())?.width ?? 0))
+    .toBe(viewport.width - 32);
 
   await expand.click();
   await expect(shell).toHaveClass(/entry--rail-open/);
   await expect(rail).not.toHaveAttribute('aria-hidden', 'true');
   await expect(page.getByTestId('entry-nav-home')).toBeVisible();
   await expect(page.getByTestId('entry-nav-projects')).toBeVisible();
+  await expect.poll(async () => Math.round((await backdrop.boundingBox())?.width ?? 0))
+    .toBe(viewport.width - 56 - 32);
 
   const collapse = page.getByTestId('entry-nav-collapse');
   await expect(collapse).toBeVisible();
@@ -490,6 +497,77 @@ test('[P1] home left rail expands and collapses from the shell controls', async 
   await expect(shell).not.toHaveClass(/entry--rail-open/);
   await expect(rail).toHaveAttribute('aria-hidden', 'true');
   await expect(expand).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('[P1] Academy renders project HTML through the sandboxed preview path', async ({ page }) => {
+  const requestedPaths: string[] = [];
+  await page.route('**/api/projects/mishmash-academy/raw/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    requestedPaths.push(pathname);
+    if (pathname.endsWith('/raw/index.html')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><html><head></head><body><h1>Team Academy</h1><a href="pages/lesson%202.html">Nested lesson</a></body></html>',
+      });
+      return;
+    }
+    if (pathname.endsWith('/raw/pages/lesson%202.html')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><html><head></head><body><h1>Nested Lesson</h1><a href="../index.html">Academy home</a><a href="missing.html">Missing lesson</a></body></html>',
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'not found' }),
+    });
+  });
+  await gotoEntryHome(page);
+
+  await page.getByTestId('entry-rail-toggle').click();
+  await page.getByTestId('entry-nav-academy').click();
+
+  const frame = page.getByTestId('academy-frame');
+  await expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
+  await expect(frame).not.toHaveAttribute('src');
+  await expect(frame).toHaveAttribute('srcdoc', /data-od-sandbox-shim/);
+  await expect(frame.contentFrame().getByRole('heading', { name: 'Team Academy' })).toBeVisible();
+
+  await frame.contentFrame().getByRole('link', { name: 'Nested lesson' }).click();
+  await expect(frame.contentFrame().getByRole('heading', { name: 'Nested Lesson' })).toBeVisible();
+  expect(requestedPaths).toContain('/api/projects/mishmash-academy/raw/pages/lesson%202.html');
+  expect(requestedPaths).not.toContain('/api/projects/mishmash-academy/raw/pages/lesson%25202.html');
+
+  await frame.contentFrame().getByRole('link', { name: 'Missing lesson' }).click();
+  await expect(frame.contentFrame().getByRole('heading', { name: 'Nested Lesson' })).toBeVisible();
+  const missingPath = '/api/projects/mishmash-academy/raw/pages/missing.html';
+  await expect.poll(() => requestedPaths.filter((path) => path === missingPath).length).toBe(1);
+  await frame.contentFrame().getByRole('link', { name: 'Missing lesson' }).click();
+  await expect.poll(() => requestedPaths.filter((path) => path === missingPath).length).toBe(2);
+
+  await frame.contentFrame().getByRole('link', { name: 'Academy home' }).click();
+  await expect(frame.contentFrame().getByRole('heading', { name: 'Team Academy' })).toBeVisible();
+});
+
+test('[P1] Academy explains when the team training project is unavailable', async ({ page }) => {
+  await page.route('**/api/projects/mishmash-academy/raw/index.html', async (route) => {
+    await route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'not found' }),
+    });
+  });
+  await gotoEntryHome(page);
+
+  await page.getByTestId('entry-rail-toggle').click();
+  await page.getByTestId('entry-nav-academy').click();
+
+  await expect(page.getByText('Academy is not available in this workspace yet.')).toBeVisible();
+  await expect(page.getByTestId('academy-frame')).toHaveCount(0);
 });
 
 test('[P1] home composer plus menu exposes attachment, connector, plugin, and MCP entries', async ({ page }) => {

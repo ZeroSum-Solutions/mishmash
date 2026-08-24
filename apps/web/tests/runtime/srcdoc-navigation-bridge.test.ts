@@ -154,6 +154,48 @@ describe('injected navigation bridge routes in-project nav clicks to the host', 
     expect(h.posted).toEqual([{ type: PREVIEW_NAVIGATE_MESSAGE, path: 'join.html' }]);
   });
 
+  it('can emit project-root-relative encoded paths for a nested preview', () => {
+    const rootedBridge = extractBridgeBody(
+      buildSrcdoc('<a href="lesson%202.html">Lesson</a>', {
+        baseHref: '/api/projects/p1/raw/pages/',
+        previewNavigationRootHref: '/api/projects/p1/raw/',
+      }),
+    );
+    const h = createBridgeHarness('https://preview.local/api/projects/p1/raw/pages/');
+    h.install(rootedBridge);
+    const prevented = h.click({ anchor: makeAnchor({ href: 'lesson%202.html' }) });
+    expect(prevented).toBe(true);
+    expect(h.posted).toEqual([{ type: PREVIEW_NAVIGATE_MESSAGE, path: 'pages/lesson%202.html' }]);
+  });
+
+  it('allows a rooted nested preview to navigate back to the project entry page', () => {
+    const rootedBridge = extractBridgeBody(
+      buildSrcdoc('<a href="../index.html">Home</a>', {
+        baseHref: '/api/projects/p1/raw/pages/',
+        previewNavigationRootHref: '/api/projects/p1/raw/',
+      }),
+    );
+    const h = createBridgeHarness('https://preview.local/api/projects/p1/raw/pages/');
+    h.install(rootedBridge);
+    const prevented = h.click({ anchor: makeAnchor({ href: '../index.html' }) });
+    expect(prevented).toBe(true);
+    expect(h.posted).toEqual([{ type: PREVIEW_NAVIGATE_MESSAGE, path: 'index.html' }]);
+  });
+
+  it('leaves a link that escapes the configured project root alone', () => {
+    const rootedBridge = extractBridgeBody(
+      buildSrcdoc('<a href="../../../outside.html">Outside</a>', {
+        baseHref: '/api/projects/p1/raw/pages/',
+        previewNavigationRootHref: '/api/projects/p1/raw/',
+      }),
+    );
+    const h = createBridgeHarness('https://preview.local/api/projects/p1/raw/pages/');
+    h.install(rootedBridge);
+    const prevented = h.click({ anchor: makeAnchor({ href: '../../../outside.html' }) });
+    expect(prevented).toBe(false);
+    expect(h.posted).toEqual([]);
+  });
+
   it('leaves an external link alone', () => {
     const h = createBridgeHarness('https://preview.local/api/projects/p1/raw/');
     h.install(bridgeBody);

@@ -1029,6 +1029,9 @@ export interface Dict {
   'entry.navLibrary': string;
   'entry.navDesignLibrary': string;
   'entry.navStoryboard': string;
+  'entry.navAcademy': string;
+  'entry.academyLoading': string;
+  'entry.academyUnavailable': string;
   'entry.navTemplates': string;
   'entry.navTypefaces': string;
   'entry.navIntegrations': string;

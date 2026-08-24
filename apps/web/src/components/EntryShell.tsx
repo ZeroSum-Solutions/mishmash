@@ -100,6 +100,7 @@ import { LibrarySection } from './LibrarySection';
 import { StoryboardSection } from './storyboard/StoryboardSection';
 import { TemplatesSection } from './TemplatesSection';
 import { TypefacesSection } from './TypefacesSection';
+import { AcademySection } from './AcademySection';
 import { metadataForSkill } from './skill-project-metadata';
 import { UpdaterPopup } from './UpdaterPopup';
 import { WhatsNewPopup } from './WhatsNewPopup';
@@ -635,6 +636,13 @@ export function EntryShell({
   const [designLibraryVisited, setDesignLibraryVisited] = useState(view === 'design-library');
   useEffect(() => {
     if (view === 'design-library') setDesignLibraryVisited(true);
+  }, [view]);
+  // Academy pane: mount the training-site iframe on first visit and keep it
+  // mounted afterwards (matching the stay-mounted tab convention above) so
+  // switching tabs does not reload the iframe and lose the reader's place.
+  const [academyVisited, setAcademyVisited] = useState(false);
+  useEffect(() => {
+    if (view === 'academy') setAcademyVisited(true);
   }, [view]);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   // Hard block from the pre-run balance gate on a home submit (empty wallet
@@ -1409,6 +1417,15 @@ export function EntryShell({
             </div>
             <div data-testid="entry-view-typefaces" data-active={view === 'typefaces' ? 'true' : 'false'} {...inactiveViewProps(view === 'typefaces')}>
               <TypefacesSection />
+            </div>
+            <div data-testid="entry-view-academy" data-active={view === 'academy' ? 'true' : 'false'} {...inactiveViewProps(view === 'academy')}>
+              {academyVisited ? (
+                <AcademySection
+                  title={t('entry.navAcademy')}
+                  loadingLabel={t('entry.academyLoading')}
+                  unavailableLabel={t('entry.academyUnavailable')}
+                />
+              ) : null}
             </div>
             {view === 'integrations' ? (
               <IntegrationsView

@@ -30,6 +30,12 @@ import {
 export type SrcdocOptions = {
   deck?: boolean;
   baseHref?: string;
+  /**
+   * Optional project-root URL used when the host needs navigation messages to
+   * stay root-relative across nested HTML files. Defaults to `baseHref`, which
+   * preserves the existing file-directory-relative behavior.
+   */
+  previewNavigationRootHref?: string;
   initialSlideIndex?: number;
   hideDeckChrome?: boolean;
   deckClickNavigation?: boolean;
@@ -430,7 +436,7 @@ export function buildSrcdoc(
   // standalone HTML/multi-page preview is the case that needs its in-page
   // links routed back through the host instead of navigating the iframe.
   const withNavigationBridge = options.baseHref && !options.deck
-    ? injectPreviewNavigationBridge(withBase)
+    ? injectPreviewNavigationBridge(withBase, options.previewNavigationRootHref)
     : withBase;
   const withShim = injectSandboxShim(withNavigationBridge);
   const blockLoadTimeScriptRedirect = htmlHasLoadTimeLocationNavigation(withBase);
@@ -1460,9 +1466,10 @@ function injectBaseHref(doc: string, baseHref: string): string {
  * since the click handler trusts `document.baseURI` to name the project's
  * raw-file directory.
  */
-function injectPreviewNavigationBridge(doc: string): string {
+function injectPreviewNavigationBridge(doc: string, navigationRootHref?: string): string {
   const script = `<script data-od-preview-navigation-bridge>(function(){
   var MESSAGE_TYPE = ${JSON.stringify(PREVIEW_NAVIGATE_MESSAGE)};
+  var CONFIGURED_ROOT = ${JSON.stringify(navigationRootHref ?? null)};
   document.addEventListener('click', function(ev){
     if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
     var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
@@ -1474,10 +1481,14 @@ function injectPreviewNavigationBridge(doc: string): string {
     var base;
     try { base = document.baseURI; } catch (_) { return; }
     if (!base) return;
+    var root = base;
+    if (CONFIGURED_ROOT) {
+      try { root = new URL(CONFIGURED_ROOT, base).href; } catch (_) { return; }
+    }
     var resolved;
     try { resolved = new URL(href, base).href; } catch (_) { return; }
-    if (resolved.indexOf(base) !== 0) return;
-    var rel = resolved.slice(base.length).split(/[?#]/)[0];
+    if (resolved.indexOf(root) !== 0) return;
+    var rel = resolved.slice(root.length).split(/[?#]/)[0];
     if (!rel) return;
     try {
       if (!window.parent || window.parent === window) return;
