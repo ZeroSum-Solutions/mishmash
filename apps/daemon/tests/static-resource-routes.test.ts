@@ -67,7 +67,10 @@ describe('static resource mutation routes', () => {
               catalogReadCount += 1;
               return [];
             },
-            listAllDesignTemplates: async () => [],
+            listAllDesignTemplates: async () => {
+              catalogReadCount += 1;
+              return [];
+            },
             listAllSkillLikeEntries: async () => [],
             mimeFor: () => 'application/octet-stream',
           },
@@ -161,6 +164,17 @@ describe('static resource mutation routes', () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ code: 'BAD_REQUEST' });
     expect(catalogReadCount).toBe(0);
+  });
+
+  it('reuses one design-template catalogue scan across repeated list requests', async () => {
+    catalogReadCount = 0;
+
+    const first = await fetch(`${baseUrl}/api/design-templates`);
+    const second = await fetch(`${baseUrl}/api/design-templates`);
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(catalogReadCount).toBe(1);
   });
 });
 
