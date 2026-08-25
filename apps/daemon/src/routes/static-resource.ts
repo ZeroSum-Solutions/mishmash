@@ -102,6 +102,14 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
     listAllDesignSystems,
     mimeFor,
   } = ctx.resources;
+  let designTemplatesPromise: ReturnType<typeof listAllDesignTemplates> | null = null;
+  const loadDesignTemplates = () => {
+    designTemplatesPromise ??= listAllDesignTemplates().catch((error) => {
+      designTemplatesPromise = null;
+      throw error;
+    });
+    return designTemplatesPromise;
+  };
   const { isLocalSameOrigin, resolvedPortRef, sendApiError } = ctx.http;
   const requireLocalOrigin = (req: any, res: any) => {
     if (isLocalSameOrigin(req, resolvedPortRef.current)) return true;
@@ -376,7 +384,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   // entries without bleeding functional skills into the EntryView gallery.
   app.get('/api/design-templates', async (_req, res) => {
     try {
-      const templates = await listAllDesignTemplates();
+      const templates = await loadDesignTemplates();
       res.json({
         designTemplates: templates.map(({ body, dir: _dir, ...rest }) => ({
           ...rest,
@@ -390,7 +398,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
 
   app.get('/api/design-templates/:id', async (req, res) => {
     try {
-      const templates = await listAllDesignTemplates();
+      const templates = await loadDesignTemplates();
       const template = findSkillById(templates, req.params.id);
       if (!template) return res.status(404).json({ error: 'design template not found' });
       const { dir: _dir, ...serializable } = template;
