@@ -10,6 +10,7 @@
 
 import {
   lazy,
+  memo,
   Suspense,
   useCallback,
   useEffect,
@@ -97,6 +98,7 @@ import { DesignsTab } from './DesignsTab';
 import { DesignSystemsTab } from './DesignSystemsTab';
 import { EntryNavRail, type EntryView as EntryViewKind } from './EntryNavRail';
 import { LibrarySection } from './LibrarySection';
+import type { DesignLibraryOpenProjectHandler } from './DesignLibrarySection';
 import { StoryboardSection } from './storyboard/StoryboardSection';
 import { TemplatesSection } from './TemplatesSection';
 import { TypefacesSection } from './TypefacesSection';
@@ -184,9 +186,9 @@ import {
 } from './providerModelsCache';
 import { resolveByokModelPreference } from './byok/validation';
 
-const DesignLibrarySection = lazy(() =>
+const DesignLibrarySection = memo(lazy(() =>
   import('./DesignLibrarySection').then(({ DesignLibrarySection }) => ({ default: DesignLibrarySection })),
-);
+));
 
 // Persist the entry nav-rail open/collapsed state so it survives both a
 // home -> project -> home navigation (EntryShell unmounts on the project
@@ -637,6 +639,24 @@ export function EntryShell({
   useEffect(() => {
     if (view === 'design-library') setDesignLibraryVisited(true);
   }, [view]);
+  const handleDesignLibraryOpenProject = useCallback<DesignLibraryOpenProjectHandler>(
+    (projectId, conversationId, entryFile, project) => {
+      // MM-008: startDesignLibraryProject already built the full project
+      // daemon-side. Register that record in the client cache before routing;
+      // otherwise the canvas briefly opens a placeholder project.
+      if (project && onOpenProjectFromDesignLibrary) {
+        onOpenProjectFromDesignLibrary(project, conversationId, entryFile);
+        return;
+      }
+      navigate({
+        kind: 'project',
+        projectId,
+        conversationId: conversationId ?? null,
+        fileName: entryFile ?? null,
+      });
+    },
+    [onOpenProjectFromDesignLibrary],
+  );
   // Academy pane: mount the training-site iframe on first visit and keep it
   // mounted afterwards (matching the stay-mounted tab convention above) so
   // switching tabs does not reload the iframe and lose the reader's place.
@@ -1377,30 +1397,8 @@ export function EntryShell({
               {view === 'design-library' || designLibraryVisited ? (
                 <Suspense fallback={<CenteredLoader label={t('common.loading')} />}>
                   <DesignLibrarySection
-                    active={view === 'design-library'}
-                    onOpenProject={(projectId, conversationId, entryFile, project) => {
-                      // MM-008: startDesignLibraryProject already built the full
-                      // project daemon-side, so route it through the same
-                      // client-cache-insert + auto-send bookkeeping
-                      // handleCreateProject uses (App.tsx's
-                      // onOpenProjectFromDesignLibrary) instead of navigating
-                      // straight to a project the client cache has never seen —
-                      // that used to land on a placeholder "Untitled" project
-                      // (dead canvas) until an async re-fetch caught up.
-                      if (project && onOpenProjectFromDesignLibrary) {
-                        onOpenProjectFromDesignLibrary(project, conversationId, entryFile);
-                        return;
-                      }
-                      navigate({
-                        kind: 'project',
-                        projectId,
-                        conversationId: conversationId ?? null,
-                        // Land on the kit's own entry HTML, so the project opens on
-                        // the page "Open live preview" just showed rather than
-                        // whatever the generic primary-file heuristic ranks first.
-                        fileName: entryFile ?? null,
-                      });
-                    }}
+                    active
+                    onOpenProject={handleDesignLibraryOpenProject}
                   />
                 </Suspense>
               ) : null}

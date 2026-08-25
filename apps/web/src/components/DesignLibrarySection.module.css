@@ -173,6 +173,13 @@
   border-radius: 12px;
   overflow: hidden;
   background: var(--bg-panel);
+  /* The catalog stays mounted after its first visit so filters and scroll
+     position survive route switches. Skip off-screen card layout and paint
+     when that retained catalog is revealed again; the intrinsic block size
+     preserves grid geometry until a card enters the viewport. */
+  content-visibility: auto;
+  contain: layout paint style;
+  contain-intrinsic-size: auto 364px;
   transition: box-shadow 200ms var(--ease-out);
 }
 .card:hover {

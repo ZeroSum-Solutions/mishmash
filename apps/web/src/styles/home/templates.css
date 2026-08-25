@@ -112,6 +112,13 @@
   background: var(--bg-panel);
   color: inherit;
   cursor: pointer;
+  /* The catalog can contain hundreds of cards. Keep every template in the
+     DOM for search, keyboard navigation, and section counts, but let the
+     browser skip style/layout/paint for cards outside the scrollport. This
+     mirrors the established large-gallery contract in LibraryCard. */
+  content-visibility: auto;
+  contain: layout paint style;
+  contain-intrinsic-size: auto 258px;
   transition: border-color var(--dur-quick) var(--ease-out),
     transform var(--dur-quick) var(--ease-out);
 }
