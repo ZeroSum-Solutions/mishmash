@@ -15,4 +15,10 @@ describe('EntryShell Design Library cold-load boundary', () => {
     expect(entryShellSource).toContain("import('./DesignLibrarySection')");
     expect(entryShellSource).toContain('designLibraryVisited');
   });
+
+  it('keeps the visited catalog render stable while switching entry routes', () => {
+    expect(entryShellSource).toContain('memo(lazy(() =>');
+    expect(entryShellSource).toContain('handleDesignLibraryOpenProject');
+    expect(entryShellSource).toMatch(/<DesignLibrarySection\s+active\s+onOpenProject=\{handleDesignLibraryOpenProject\}/);
+  });
 });
