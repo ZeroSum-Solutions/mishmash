@@ -644,6 +644,7 @@ import { sweepOrphanedRenderProcesses } from './covers/render-pid-registry.js';
 import { registerVelaRoutes } from './routes/vela.js';
 import { velaWalletSnapshotReader } from './integrations/vela-wallet.js';
 import { registerFinalizeRoutes, registerImportRoutes, registerProjectExportRoutes } from './import-export-routes.js';
+import { isImageScreenshotExportAvailable } from './screenshot-export-availability.js';
 import { registerHandoffRoutes } from './routes/handoff.js';
 import { EmptyTranscriptError, synthesizeHandoffPrompt } from './design/index.js';
 import { TranscriptExportLockedError } from './transcript-export.js';
@@ -4658,6 +4659,12 @@ export async function startServer({
       // restores the classic stack. main keeps classic as the default —
       // do NOT carry this flip into a PR against main.
       promptCoreVariant: process.env.OD_PROMPT_CORE === 'classic' ? undefined : 'slim',
+      // The charter may name the image-export preview only when THIS daemon
+      // can serve it; without a desktop renderer the route answers 501.
+      screenshotExportAvailable: isImageScreenshotExportAvailable({
+        desktopSlideRenderer,
+        desktopArtifactExporter,
+      }),
     });
     // The chat handler also needs to know where the active skill lives
     // on disk so it can stage a per-project copy of its side files

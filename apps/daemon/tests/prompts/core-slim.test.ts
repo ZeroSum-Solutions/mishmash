@@ -96,6 +96,10 @@ describe('renderSlimCoreCharter — byte budget', () => {
 
 describe('renderSlimCoreCharter — frozen protocol markers', () => {
   const charter = renderSlimCoreCharter('filesystem');
+  // W2.6 / T-10: the optional render preview is named only when the daemon
+  // proved it can serve the export (`screenshotExportAvailable`); the default
+  // charter is fail-closed. Preview-budget assertions read this form.
+  const previewCharter = renderSlimCoreCharter('filesystem', { screenshotExportAvailable: true });
 
   it('keeps the question-form protocol intact', () => {
     expect(charter).toContain('<question-form id="discovery" title="Quick brief — 30 seconds">');
@@ -168,7 +172,8 @@ describe('renderSlimCoreCharter — frozen protocol markers', () => {
   });
 
   it('states the verification budget once and without a re-score loop', () => {
-    expect(charter.match(/One render is the whole budget/g)).toHaveLength(1);
+    expect(previewCharter.match(/One render is the whole budget/g)).toHaveLength(1);
+    expect(previewCharter).not.toContain('Two passes is normal');
     expect(charter).not.toContain('Two passes is normal');
   });
 
@@ -208,13 +213,24 @@ describe('renderSlimCoreCharter — frozen protocol markers', () => {
   });
 
   it('separates the optional preview budget from final delivery exports', () => {
-    expect(charter).toContain('ONE optional preview directly');
-    expect(charter).toContain('`"$OD_NODE_BIN" "$OD_BIN" export <file>');
-    expect(charter).toContain('never your own browser (no Playwright/headless), even after a failure');
-    expect(charter).toContain('No help/env/path probes first');
-    expect(charter).toContain('after failure, run at most one diagnostic');
-    expect(charter).toContain('retry only after fixing the cause');
-    expect(charter).toContain('A user-requested final export is delivery, outside this preview budget');
+    expect(previewCharter).toContain('ONE optional preview directly');
+    expect(previewCharter).toContain('`"$OD_NODE_BIN" "$OD_BIN" export <file>');
+    expect(previewCharter).toContain(
+      'never your own browser (no Playwright/headless), even after a failure',
+    );
+    expect(previewCharter).toContain('No help/env/path probes first');
+    expect(previewCharter).toContain('after failure, run at most one diagnostic');
+    expect(previewCharter).toContain('retry only after fixing the cause');
+    expect(previewCharter).toContain(
+      'A user-requested final export is delivery, outside this preview budget',
+    );
+  });
+
+  it('says there is no preview, and still forbids a browser, when the export is unavailable', () => {
+    expect(charter).not.toContain('`"$OD_NODE_BIN" "$OD_BIN" export <file>');
+    expect(charter).toContain('This runtime has no render preview');
+    expect(charter).toContain('never your own browser (no Playwright/headless)');
+    expect(charter).toContain('A user-requested final export is delivery');
   });
 
   it('switches the handoff rule by execution profile', () => {

@@ -48,7 +48,7 @@ function htmlProject(overrides: Partial<Project> = {}): Project {
     createdAt: 1,
     updatedAt: 2,
     status: { value: 'not_started' },
-    metadata: { entryFile: 'index.html' },
+    metadata: { kind: 'other', entryFile: 'index.html' },
     ...overrides,
   };
 }
