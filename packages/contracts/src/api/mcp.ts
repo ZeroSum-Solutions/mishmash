@@ -192,6 +192,46 @@ export type McpServerHealthState =
   /** Configured but switched off, so it was never contacted. */
   | 'disabled';
 
+/** The only failure signature MishMash can repair itself today: an npx cache
+ *  entry that was left half-written, which is why issue #157's `mermaid`
+ *  server never starts. */
+export type McpRepairKind = 'npx-cache';
+
+/**
+ * A repair MishMash can perform for a failure signature it recognizes.
+ *
+ * `target` is a path the DAEMON derived from the failing server's own stderr,
+ * never one a caller supplied. It travels on the health record so the UI and
+ * the CLI can show the user exactly what a repair would remove before they
+ * confirm it; `POST /api/mcp/repair` re-derives it and ignores whatever the
+ * request body claims.
+ */
+export interface McpServerRepair {
+  kind: McpRepairKind;
+  /** Absolute path the repair removes. */
+  target: string;
+}
+
+/**
+ * Body for `POST /api/mcp/repair`.
+ *
+ * `confirm` is part of the mechanism, not a UI courtesy: the endpoint refuses
+ * the request without it, so nothing in this flow ever deletes on its own.
+ */
+export interface RepairMcpServerRequest {
+  serverId: string;
+  confirm: boolean;
+}
+
+/** Response from `POST /api/mcp/repair`. */
+export interface RepairMcpServerResponse {
+  serverId: string;
+  /** The repair the daemon derived and performed. */
+  repair: McpServerRepair;
+  /** Whether the target was removed. */
+  removed: boolean;
+}
+
 export interface McpServerHealth {
   id: string;
   label?: string;
@@ -215,6 +255,10 @@ export interface McpServerHealth {
   /** Concrete repair for a failure signature MishMash recognizes (a corrupt
    * npx cache entry, an incompatible Python `mcp` SDK). Absent otherwise. */
   remedy?: string;
+  /** The repair MishMash can perform for this server, when its failure has one
+   * MishMash knows how to fix. Absent for a healthy server and for a failure
+   * whose fix belongs to the user (a Python environment, a missing key). */
+  repair?: McpServerRepair;
   /** ISO timestamp of this server's probe. */
   checkedAt: string;
 }
