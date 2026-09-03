@@ -19,6 +19,7 @@ import {
   type WorkspaceContextItem,
 } from '@open-design/contracts';
 import { readMeta as readBrandMeta } from '../../brands/store.js';
+import { hasCoverImage } from '../../covers/store.js';
 import { createProjectArtifactFile } from '../../artifacts/create.js';
 import { ArtifactPublicationBlockedError } from '../../artifacts/publication-guard.js';
 import { ArtifactRegressionError } from '../../artifacts/stub-guard.js';
@@ -1638,22 +1639,30 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           }
         }
       }
+      const visible = listProjects(db).filter((project: any) =>
+        projectVisibleForLocations(project, locations),
+      );
+      // `hasCover` is what stops a client probing the frozen cover route for
+      // a cover that has never been rendered (a guaranteed 404). See
+      // hasCoverImage's docblock.
+      const covers = await Promise.all(
+        visible.map((project: any) => hasCoverImage(ctx.paths.RUNTIME_DATA_DIR, project.id)),
+      );
       /** @type {import('@open-design/contracts').ProjectsResponse} */
       const body = {
-        projects: listProjects(db)
-          .filter((project: any) => projectVisibleForLocations(project, locations))
-          .map((project: any) => ({
-            ...project,
-            status: brandAwareProjectStatus(
-              project,
-              composeProjectDisplayStatus(
-                activeRunStatuses.get(project.id) ??
-                  latestRunStatuses.get(project.id) ?? { value: 'not_started' },
-                awaitingInputProjects,
-                project.id,
-              ),
+        projects: visible.map((project: any, index: number) => ({
+          ...project,
+          hasCover: covers[index] === true,
+          status: brandAwareProjectStatus(
+            project,
+            composeProjectDisplayStatus(
+              activeRunStatuses.get(project.id) ??
+                latestRunStatuses.get(project.id) ?? { value: 'not_started' },
+              awaitingInputProjects,
+              project.id,
             ),
-          })),
+          ),
+        })),
       };
       res.json(body);
     } catch (err: any) {
@@ -2340,8 +2349,9 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     }
     const resolvedDir = projectDetailResolvedDir(PROJECTS_DIR, project, resolveProjectDir);
     const resolvedCanvasFile = await resolveCanvasFile(PROJECTS_DIR, project);
+    const hasCover = await hasCoverImage(ctx.paths.RUNTIME_DATA_DIR, project.id);
     /** @type {import('@open-design/contracts').ProjectDetailResponse} */
-    const body = { project, resolvedDir, resolvedCanvasFile };
+    const body = { project: { ...project, hasCover }, resolvedDir, resolvedCanvasFile };
     res.json(body);
   });
 

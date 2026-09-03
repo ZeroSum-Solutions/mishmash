@@ -1,15 +1,31 @@
 import { useEffect, useState } from 'react';
 import { projectFileUrl } from '../providers/registry';
-import type { ProjectFile } from '../types';
+import type { Project, ProjectFile } from '../types';
 
 /**
  * W4 — the daemon's rendered, persisted cover image (GET
  * /api/projects/:id/cover). Raw image bytes when a cover has been
- * generated, 404 before the first render — HtmlProjectCoverFrame's
- * onError fallback handles the not-yet-rendered case as a static glyph.
+ * generated, 404 before the first render. Call `renderedCoverSrc` rather
+ * than this: it is what decides whether the request happens at all.
  */
 export function renderedCoverUrl(projectId: string): string {
   return `/api/projects/${encodeURIComponent(projectId)}/cover`;
+}
+
+/**
+ * INVARIANT: the web requests a project's rendered cover only when the daemon
+ * has told it one exists (`Project.hasCover`). That route is frozen as "raw
+ * image bytes 200, or 404", so requesting it before the first render is a
+ * guaranteed 404 — and `observability/request-health.ts` files every one as a
+ * `resource-failed` anomaly, which fills the log with one row per project
+ * card during entirely ordinary use.
+ *
+ * `undefined` here is the not-yet-rendered state: `HtmlProjectCoverFrame`
+ * renders its static glyph for it without touching the network, the same
+ * thing the `onError` fallback used to produce after the failed request.
+ */
+export function renderedCoverSrc(project: Pick<Project, 'id' | 'hasCover'>): string | undefined {
+  return project.hasCover === true ? renderedCoverUrl(project.id) : undefined;
 }
 
 export type ProjectCoverKind = 'html' | 'image' | 'video' | 'logo';
@@ -70,10 +86,11 @@ export function projectCoverUrl(projectId: string, name: string, version?: numbe
  * Fixed: an `<img>` pointed at the SAME `src` the caller already passes.
  * Browsers never parse HTML bytes as an image, so no script or
  * network-capable frame is ever created regardless of what `src` resolves
- * to -- the not-yet-rendered state falls straight through `onError` into
- * the static glyph. Once a real cover exists (call sites pass
- * `renderedCoverUrl(projectId)`, see above), `src` serves real image
- * bytes and the same `<img>` renders it.
+ * to -- a src that fails falls straight through `onError` into the static
+ * glyph. Call sites pass `renderedCoverSrc(project)` (see above), so an
+ * absent `src` means the daemon reports no cover and the glyph renders with
+ * no request; a present one serves real image bytes, and `onError` still
+ * covers a reported cover whose bytes fail to load.
  */
 export function HtmlProjectCoverFrame({
   src: coverSrc,

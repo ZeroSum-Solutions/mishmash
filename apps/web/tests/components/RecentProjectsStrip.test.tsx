@@ -201,6 +201,7 @@ describe('RecentProjectsStrip', () => {
             id: 'project-html',
             name: 'Web Prototype',
             updatedAt: 3,
+            hasCover: true,
           }),
         ]}
         onOpen={() => {}}
@@ -267,11 +268,13 @@ describe('RecentProjectsStrip', () => {
             name: 'Simple Deck',
             updatedAt: 4,
             metadata: { kind: 'deck' },
+            hasCover: true,
           }),
           project({
             id: 'project-html',
             name: 'Web Prototype',
             updatedAt: 3,
+            hasCover: true,
           }),
         ]}
         onOpen={() => {}}
@@ -295,7 +298,10 @@ describe('RecentProjectsStrip', () => {
     });
   });
 
-  it('falls back to the glyph and logs when the rendered cover image fails to load (not yet generated, S4-5)', async () => {
+  // W2.6: a project with no cover no longer reaches the endpoint at all (see
+  // project-cover-pre-render-request.test.tsx). The onError path still has to
+  // work for a cover the daemon reported whose bytes then fail to load.
+  it('falls back to the glyph and logs when a reported cover image fails to load (S4-5)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const { container } = render(
@@ -305,6 +311,7 @@ describe('RecentProjectsStrip', () => {
             id: 'project-html',
             name: 'Web Prototype',
             updatedAt: 3,
+            hasCover: true,
           }),
         ]}
         onOpen={() => {}}
