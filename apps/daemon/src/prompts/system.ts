@@ -833,6 +833,12 @@ export interface ComposeInput {
   // active-DS direction, mid-conversation clarifying questions) are then
   // skipped. Daemon callers select it via OD_PROMPT_CORE=slim.
   promptCoreVariant?: 'classic' | 'slim' | undefined;
+  // Whether the running daemon can rasterize an image export, per
+  // `isImageScreenshotExportAvailable`. The slim charter names the
+  // `od export ... --format image` preview only when this is true; absent
+  // means the route would answer 501, so the charter omits the command
+  // rather than sending the agent at a guaranteed failure (W2.6 / T-10).
+  screenshotExportAvailable?: boolean | undefined;
   // Whether the visible conversation mentions generating media (see
   // `detectMediaIntentSignal`). Only consulted for non-media projects:
   // `false` skips the MEDIA_DISPATCH_HINT, `true`/`undefined` keep it.
@@ -883,6 +889,7 @@ export function composeSystemPrompt({
   executionProfile,
   freeformDeckSignal,
   promptCoreVariant,
+  screenshotExportAvailable,
   mediaHintSignal,
   platformHintSignal,
 }: ComposeInput): string {
@@ -930,7 +937,10 @@ export function composeSystemPrompt({
           // Template-derived runs get the same copyright-guardrail exemption
           // as the classic head — see TEMPLATE_COPYRIGHT_GUARDRAIL_CLAUSE
           // (MM-004-A).
-          { templateSourceExemption: metadata?.kind === 'template' },
+          {
+            templateSourceExemption: metadata?.kind === 'template',
+            screenshotExportAvailable: screenshotExportAvailable === true,
+          },
         ),
         '\n\n---\n\n',
       ]

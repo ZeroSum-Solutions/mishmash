@@ -3457,6 +3457,11 @@ export interface Dict {
 
   'designFiles.previewOpen': string;
   'designFiles.previewClose': string;
+  'designFiles.previewServer.title': string;
+  'designFiles.previewServer.openInChrome': string;
+  'designFiles.previewServer.openFailed': string;
+  'designFiles.previewServer.rootAbsolute': string;
+  'designFiles.previewServer.none': string;
   'designFiles.modified': string;
   'designFiles.weeksAgo': string;
   'designFiles.groupBy': string;
@@ -3753,6 +3758,8 @@ export interface Dict {
   'fileViewer.speakerNotesPlaceholder': string;
   'fileViewer.previewAssetBlockedTitle': string;
   'fileViewer.previewAssetBlockedDetail': string;
+  'fileViewer.previewRuntimeScriptBlockedTitle': string;
+  'fileViewer.previewRuntimeScriptBlockedDetail': string;
   'fileViewer.presenterReset': string;
   'fileViewer.present': string;
   'fileViewer.presentInTab': string;

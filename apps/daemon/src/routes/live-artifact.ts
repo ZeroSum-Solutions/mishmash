@@ -1,4 +1,8 @@
 import type { Express } from 'express';
+import {
+  projectRawAssetBaseHref,
+  withProjectAssetBaseHref,
+} from '@open-design/contracts/runtime/project-asset-base';
 import type { RouteDeps } from '../server-context.js';
 
 export interface RegisterLiveArtifactRoutesDeps extends RouteDeps<'db' | 'http' | 'paths' | 'auth' | 'liveArtifacts' | 'projectStore'> {}
@@ -59,7 +63,11 @@ export function registerLiveArtifactRoutes(app: Express, ctx: RegisterLiveArtifa
         artifactId: req.params.artifactId,
       });
       setLiveArtifactPreviewHeaders(res);
-      res.status(200).send(record.html);
+      // This route's URL names no project file, so the preview document has to
+      // carry the resolution root itself -- see projectRawAssetBaseHref.
+      res.status(200).send(
+        withProjectAssetBaseHref(record.html, projectRawAssetBaseHref(projectId, '')),
+      );
     } catch (err: any) {
       sendLiveArtifactRouteError(res, err);
     }

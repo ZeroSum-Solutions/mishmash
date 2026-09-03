@@ -150,11 +150,13 @@ import {
   htmlNeedsFocusGuard,
   htmlNeedsPoweredPreview,
   htmlNeedsRedirectGuard,
+  htmlBuildsScriptAtRuntime,
   htmlNeedsSandboxShim,
   parseForceInline,
   shouldUrlLoadHtmlPreview,
   type UrlLoadDecision,
 } from './file-viewer-render-mode';
+import { PreviewRuntimeScriptNotice } from './PreviewRuntimeScriptNotice';
 import {
   assetBaseDirFor,
   collectPreviewAssetPaths,
@@ -165,6 +167,7 @@ import {
   PREVIEW_INLINE_TIMEOUT_MS,
   type PreviewAssetProgress,
 } from './file-viewer-preview-assets';
+import { projectRawAssetBaseHref } from '@open-design/contracts/runtime/project-asset-base';
 import { resolvePoweredPreviewUrl } from '../runtime/powered-preview';
 import { saveTemplate } from '../state/projects';
 import type {
@@ -2762,7 +2765,7 @@ export function fileVersionPreviewOptions(
 ) {
   return {
     deck: sourceLooksLikeDeckPreview(source),
-    baseHref: projectRawUrl(projectId, assetBaseDirFor(fileName)),
+    baseHref: projectRawAssetBaseHref(projectId, fileName),
   };
 }
 
@@ -7380,6 +7383,16 @@ function HtmlViewer({
     const s = routingHtmlSource;
     return s != null && htmlNeedsFocusGuard(s);
   }, [passiveLargeHtmlPreview, routingHtmlSource]);
+  // The artifact attaches its script at runtime, so neither the literal-tag
+  // scan nor the srcDoc asset inliner can see it and no preview mode can run
+  // it. Not a render-mode disqualifier (see htmlBuildsScriptAtRuntime) — it
+  // only decides whether the viewer explains the blank canvas the user may be
+  // looking at.
+  const buildsScriptAtRuntime = useMemo(() => {
+    if (passiveLargeHtmlPreview) return false;
+    const s = routingHtmlSource;
+    return s != null && htmlBuildsScriptAtRuntime(s);
+  }, [passiveLargeHtmlPreview, routingHtmlSource]);
   // A self-redirecting artifact must render through srcDoc so buildSrcdoc's
   // redirect-loop guard is present; on the raw URL-load path the iframe reloads
   // itself forever and freezes the workspace (nexu-io/open-design#710).
@@ -7857,7 +7870,7 @@ function HtmlViewer({
   const srcDoc = useMemo(
     () => (previewSource ? buildSrcdoc(previewSource, {
       deck: effectiveDeck,
-      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
+      baseHref: projectRawAssetBaseHref(projectId, file.name),
       initialSlideIndex: htmlPreviewSlideState.get(previewStateKey)?.active ?? 0,
       hideDeckChrome: effectiveDeck,
       selectionBridge: true,
@@ -7885,7 +7898,7 @@ function HtmlViewer({
   const presentationSrcDoc = useMemo(
     () => (deckVisualSource && inTabPresent ? buildSrcdoc(deckVisualSource, {
       deck: effectiveDeck,
-      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
+      baseHref: projectRawAssetBaseHref(projectId, file.name),
       initialSlideIndex: htmlPreviewSlideState.get(previewStateKey)?.active ?? 0,
       hideDeckChrome: effectiveDeck,
       deckClickNavigation: effectiveDeck,
@@ -7902,7 +7915,7 @@ function HtmlViewer({
   const buildDeckThumbnailSrcDoc = useCallback(
     (index: number) => buildSrcdoc(deckVisualSource ?? '', {
       deck: true,
-      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
+      baseHref: projectRawAssetBaseHref(projectId, file.name),
       initialSlideIndex: index,
       hideDeckChrome: true,
       previewFocusGuard: true,
@@ -7920,7 +7933,7 @@ function HtmlViewer({
     if (!effectiveDeck || !deckVisualSource) return null;
     const parsed = parseDeckThumbnails(
       deckVisualSource,
-      projectRawUrl(projectId, assetBaseDirFor(file.name)),
+      projectRawAssetBaseHref(projectId, file.name),
     );
     return parsed.renderable ? parsed : null;
   }, [effectiveDeck, deckVisualSource, projectId, file.name]);
@@ -9492,7 +9505,7 @@ function HtmlViewer({
     const count = Math.max(deckSlideCount, speakerNotes.length, 1);
     const presenterPreviewHtmlBySlide = Array.from({ length: count }, (_, index) => buildSrcdoc(deckVisualSource, {
       deck: true,
-      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
+      baseHref: projectRawAssetBaseHref(projectId, file.name),
       initialSlideIndex: index,
       hideDeckChrome: true,
       previewFocusGuard: true,
@@ -9953,7 +9966,7 @@ function HtmlViewer({
     if (!source) return;
     openSandboxedPreviewInNewTab(source, exportTitle, {
       deck: effectiveDeck,
-      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
+      baseHref: projectRawAssetBaseHref(projectId, file.name),
       initialSlideIndex: htmlPreviewSlideState.get(previewStateKey)?.active ?? 0,
       hideDeckChrome: effectiveDeck,
       deckClickNavigation: effectiveDeck,
@@ -13108,6 +13121,21 @@ function HtmlViewer({
                       <strong>{t('fileViewer.previewAssetsIncompleteTitle')}</strong>
                       <span>{t('fileViewer.previewAssetsIncompleteDetail')}</span>
                     </div>
+                  ) : null}
+                  {/*
+                    Three banners want the one absolute slot over the preview.
+                    The two `.preview-asset-warning` ones stack (see the
+                    adjacent-sibling rule in viewer/core.css), so a blocked
+                    asset and a pass that ran out of budget can both show. This
+                    notice has its own slot at the same offset and cannot
+                    stack, so it yields to either of them: both name something
+                    happening to THIS render — a file the daemon refused, or a
+                    pass that never settled — while this one explains a shape
+                    the artifact would have to change. Either is also the
+                    likelier cause of the blank canvas when both are true.
+                  */}
+                  {buildsScriptAtRuntime && !previewAssetWarning && !previewInlineStatus.timedOut ? (
+                    <PreviewRuntimeScriptNotice />
                   ) : null}
                 </div>
               </div>
