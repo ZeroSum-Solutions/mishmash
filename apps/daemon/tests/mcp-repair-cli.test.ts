@@ -257,3 +257,127 @@ describe('od mcp repair requires the confirmation flag before it removes anythin
     expect(result.code).toBe(2);
   }, 40_000);
 });
+
+// ── W1G.4: the --json contract holds on every path ───────────────────────
+//
+// Red spec for W1G.4, finding 1 (MEDIUM/LAW). `AGENTS.md` -> "Capability
+// exposure (UI/CLI dual-track)": the CLI form of a capability must support
+// `--json` for machine-readable output. A refusal is exactly the path a script
+// has to branch on, so prose there is the contract broken where it matters
+// most. Every refusal must carry the same `{ error: { code, message, data } }`
+// envelope the command's daemon failures already emit, on stderr, with the
+// exit code unchanged at 2 and nothing removed.
+//
+// Each case asserts the envelope's fields, not the whole stdout: a sibling
+// track that adds a line to this command must not silently change what these
+// assert.
+
+/** The last JSON line the CLI wrote to stderr, or null when it wrote prose. */
+function stderrEnvelope(stderr: string): any {
+  const line = stderr.trim().split('\n').filter(Boolean).pop() ?? '';
+  try {
+    return JSON.parse(line);
+  } catch {
+    return null;
+  }
+}
+
+describe('od mcp repair honours --json on every refusal', () => {
+  it('refuses without --yes as a JSON envelope, still removing nothing', async () => {
+    stub = await startStub();
+
+    const result = await runCli([
+      'mcp',
+      'repair',
+      'mermaid',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(2);
+    const envelope = stderrEnvelope(result.stderr);
+    expect(
+      envelope,
+      `expected a JSON envelope on stderr, got stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+    ).not.toBeNull();
+    expect(envelope.error.code).toBe('mcp-repair-not-confirmed');
+    expect(envelope.error.data.serverId).toBe('mermaid');
+    expect(envelope.error.data.target).toBe(CACHE_ENTRY);
+    expect(result.stdout.trim()).toBe('');
+    expect(stub.requests.some((request) => request.url === '/api/mcp/repair')).toBe(false);
+  }, 40_000);
+
+  it('reports an unknown server as a JSON envelope', async () => {
+    stub = await startStub();
+
+    const result = await runCli([
+      'mcp',
+      'repair',
+      'no-such-server',
+      '--yes',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(2);
+    const envelope = stderrEnvelope(result.stderr);
+    expect(
+      envelope,
+      `expected a JSON envelope on stderr, got stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+    ).not.toBeNull();
+    expect(envelope.error.code).toBe('mcp-server-not-found');
+    expect(envelope.error.data.serverId).toBe('no-such-server');
+    expect(result.stdout.trim()).toBe('');
+    expect(stub.requests.some((request) => request.url === '/api/mcp/repair')).toBe(false);
+  }, 40_000);
+
+  it('reports a server with no repair available as a JSON envelope', async () => {
+    stub = await startStub();
+
+    const result = await runCli([
+      'mcp',
+      'repair',
+      'antv-chart',
+      '--yes',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(2);
+    const envelope = stderrEnvelope(result.stderr);
+    expect(
+      envelope,
+      `expected a JSON envelope on stderr, got stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+    ).not.toBeNull();
+    expect(envelope.error.code).toBe('mcp-repair-unavailable');
+    expect(envelope.error.data.serverId).toBe('antv-chart');
+    expect(envelope.error.data.state).toBe('ok');
+    expect(result.stdout.trim()).toBe('');
+    expect(stub.requests.some((request) => request.url === '/api/mcp/repair')).toBe(false);
+  }, 40_000);
+
+  it('reports a missing server id as a JSON envelope', async () => {
+    stub = await startStub();
+
+    const result = await runCli([
+      'mcp',
+      'repair',
+      '--yes',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(2);
+    const envelope = stderrEnvelope(result.stderr);
+    expect(
+      envelope,
+      `expected a JSON envelope on stderr, got stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+    ).not.toBeNull();
+    expect(envelope.error.code).toBe('mcp-repair-server-id-required');
+    expect(result.stdout.trim()).toBe('');
+  }, 40_000);
+});
