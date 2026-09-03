@@ -157,3 +157,58 @@ describe('hasAdvertisedCover — whether a cover was ever rendered', () => {
     }
   });
 });
+
+/**
+ * The route gate must never be narrower than the advertisement. `hasCover` is
+ * published from `hasCoverImage`; if any on-disk state made `hasCoverImage`
+ * true while `hasAdvertisedCover` was false, the route would answer 404 for a
+ * cover the list is advertising at that same instant.
+ */
+describe('hasAdvertisedCover is never narrower than hasCoverImage', () => {
+  it('holds for every on-disk state a covers directory can be in', async () => {
+    const seed = {
+      'state-nothing': async () => {},
+      'state-empty-dir': async () => {
+        await fs.mkdir(path.join(coversRootDir(dataDir), 'state-empty-dir'), { recursive: true });
+      },
+      'state-image-only': async () => {
+        const dir = path.join(coversRootDir(dataDir), 'state-image-only');
+        await fs.mkdir(dir, { recursive: true });
+        await fs.writeFile(path.join(dir, 'cover.png'), Buffer.from('bytes'));
+      },
+      'state-record-only': async () => {
+        await writeCover(dataDir, 'state-record-only', {
+          imageBytes: Buffer.from('bytes'),
+          sourceHash: 'f'.repeat(16),
+          width: 1,
+          height: 1,
+          generatedAt: new Date(),
+        });
+        await fs.unlink(path.join(coversRootDir(dataDir), 'state-record-only', 'cover.png'));
+      },
+      'state-both': async () => {
+        await writeCover(dataDir, 'state-both', {
+          imageBytes: Buffer.from('bytes'),
+          sourceHash: '0'.repeat(16),
+          width: 1,
+          height: 1,
+          generatedAt: new Date(),
+        });
+      },
+      'state-empty-image': async () => {
+        const dir = path.join(coversRootDir(dataDir), 'state-empty-image');
+        await fs.mkdir(dir, { recursive: true });
+        await fs.writeFile(path.join(dir, 'cover.png'), Buffer.alloc(0));
+      },
+    };
+    for (const [id, make] of Object.entries(seed)) await make();
+
+    for (const id of [...Object.keys(seed), '..', '../..', 'a/b', '']) {
+      const advertised = await hasCoverImage(dataDir, id);
+      const served = await hasAdvertisedCover(dataDir, id);
+      expect(advertised && !served, `hasCoverImage true but hasAdvertisedCover false for ${JSON.stringify(id)}`).toBe(
+        false,
+      );
+    }
+  });
+});

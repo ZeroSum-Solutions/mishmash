@@ -113,7 +113,18 @@ export async function hasCoverImage(runtimeDataDir: string, projectId: string): 
  * cannot be read, and the orphan-bytes case where a record was never written.
  *
  * A project with neither has advertised nothing, and the route still answers
- * 404 for it.
+ * 404 for it. That is also the invariant's one honest limit: once BOTH files
+ * are gone the daemon holds no evidence a cover was ever rendered, so it
+ * cannot tell that state apart from a project that never had one, and a client
+ * still holding an older `hasCover: true` gets a 404. Nothing inside the
+ * daemon removes a project's cover — only an external write to the data root
+ * reaches that state — and closing it would take a cover token stored on the
+ * project row, which is a larger contract than this fix.
+ *
+ * What IS guaranteed at every instant, and pinned by a test in
+ * tests/covers/store.test.ts: `hasCoverImage` implies `hasAdvertisedCover`.
+ * The route can therefore never refuse a cover the list is advertising right
+ * now, whatever the on-disk state.
  */
 export async function hasAdvertisedCover(runtimeDataDir: string, projectId: string): Promise<boolean> {
   if (await hasCoverImage(runtimeDataDir, projectId)) return true;

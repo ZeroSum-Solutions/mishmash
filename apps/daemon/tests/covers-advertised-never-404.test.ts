@@ -21,7 +21,7 @@
 // a mocked oracle here would prove nothing about the on-disk race.
 
 import http from 'node:http';
-import { mkdtemp, rm, stat, truncate, unlink } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, truncate, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { register } from 'prom-client';
@@ -162,6 +162,37 @@ describe('W2G.6 — a cover the project advertises never answers 404', () => {
       const bytes = Buffer.from(await resp.arrayBuffer());
       expect(bytes.length).toBeGreaterThan(0);
       expect(bytes.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+      expect(resp.headers.get(PLACEHOLDER_HEADER)).toBe('1');
+    },
+    180_000,
+  );
+
+  // Round-1 audit hardening (GLM finding 2): "the read returned something" is
+  // the wrong line. A write cut short after the PNG header is non-empty, so it
+  // passed a length-only check and was served 200 image/png -- and an <img>
+  // cannot decode it, so it fires the same client_resource_error the 404
+  // fires. The bytes here keep a valid PNG signature and lose the IEND chunk.
+  it(
+    'answers a valid placeholder image when the advertised cover is cut short after its header',
+    async () => {
+      const id = `cover-cutshort-${Date.now()}`;
+      await createProject(id);
+      await uploadIndexHtml(id);
+      const imagePath = await generateCover(id);
+
+      expect(await listedHasCover(id)).toBe(true);
+
+      await truncate(imagePath, 64);
+      const damaged = await readFile(imagePath);
+      expect(damaged.length).toBe(64);
+      expect(damaged.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+
+      const resp = await fetch(`${baseUrl}/api/projects/${id}/cover`);
+      expect(resp.status).toBe(200);
+      const bytes = Buffer.from(await resp.arrayBuffer());
+      expect(bytes.length).not.toBe(64);
+      expect(bytes.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+      expect(bytes.subarray(bytes.length - 8, bytes.length - 4).toString('ascii')).toBe('IEND');
       expect(resp.headers.get(PLACEHOLDER_HEADER)).toBe('1');
     },
     180_000,
