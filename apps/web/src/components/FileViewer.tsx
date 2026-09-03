@@ -7805,6 +7805,15 @@ function HtmlViewer({
       setPreviewInlineStatus((prev) => ({ ...prev, timedOut: true }));
       setInlinedSource({ key, forSource: source, value: source });
     }, PREVIEW_INLINE_TIMEOUT_MS);
+    // Disarm both budgets the moment the pass settles. The effect does NOT
+    // re-run on its own resolution — `inlinedSource` is not one of its
+    // dependencies, by design — so a timer left armed here would fire over a
+    // finished preview and swap the inlined document back to the raw one
+    // fifteen seconds after it painted.
+    const disarmBudgets = (): void => {
+      clearTimeout(progressTimer);
+      clearTimeout(budgetTimer);
+    };
     void inlineRelativeAssets(source, projectId, file.name, projectFilePathSet, {
       fetch: globalThis.fetch.bind(globalThis),
       rawUrl: projectRawUrl,
@@ -7813,11 +7822,13 @@ function HtmlViewer({
       },
     })
       .then((next) => {
+        disarmBudgets();
         if (cancelled) return;
         setPreviewInlineStatus(IDLE_PREVIEW_INLINE_STATUS);
         setInlinedSource({ key, forSource: source, value: next });
       })
       .catch((err: unknown) => {
+        disarmBudgets();
         if (cancelled) return;
         // Fall back to the raw document rather than holding the loading gate
         // open forever: unstyled but visible beats a frame that never resolves.
@@ -7829,8 +7840,7 @@ function HtmlViewer({
       });
     return () => {
       cancelled = true;
-      clearTimeout(progressTimer);
-      clearTimeout(budgetTimer);
+      disarmBudgets();
     };
   }, [
     source,

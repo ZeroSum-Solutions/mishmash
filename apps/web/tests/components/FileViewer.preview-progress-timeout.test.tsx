@@ -252,6 +252,27 @@ describe('a slow preview says what it is doing instead of showing a blank gate',
     expect(warning).toHaveAttribute('role', 'alert');
     expect(warning.textContent?.length ?? 0).toBeGreaterThan(0);
   });
+
+  it('leaves a finished preview alone once its budgets have run out on the clock', async () => {
+    // The effect does not re-run on its own resolution, so a budget timer left
+    // armed after the pass settles would fire over a working preview: a false
+    // "assets did not finish" alert, and the inlined document swapped back to
+    // the raw one fifteen seconds after it painted.
+    stubFetch(rawHtml('Settled'));
+
+    render(<FileViewer projectId="project-1" projectKind="prototype" file={htmlFile()} />);
+
+    await waitFor(() => expect(inlineState.calls).toBe(1));
+    await settleNextInline(inlinedHtml('Settled'));
+    await waitFor(() => expect(frameSrcDoc()).toContain(INLINE_MARKER));
+
+    await advance(20_000);
+
+    expect(frameSrcDoc()).toContain(INLINE_MARKER);
+    expect(frameSrcDoc()).toContain('Settled');
+    expect(screen.queryByTestId('preview-inline-timeout-warning')).toBeNull();
+    expect(screen.queryByTestId('preview-inline-progress')).toBeNull();
+  });
 });
 
 describe('a preview that never paints becomes a preview-error record', () => {
