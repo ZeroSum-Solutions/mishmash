@@ -57,8 +57,9 @@ in its own words, which the failure alert shows verbatim under the named cause.
 The run-level classification only fires when the agent process itself is killed.
 
 A run that ends that way reports cause `signal_killed` and shows as **Stopped by
-your system**, with copy that names the exit code and points back here. It is
-not a MishMash bug report; it is a machine that ran out of headroom.
+your system**, with copy that names the exit code and the likely causes; this
+page documents the limits behind it. It is not a MishMash bug report; it is a
+machine that ran out of headroom.
 
 What to do about it:
 

@@ -321,9 +321,9 @@ const AGENT_AGNOSTIC_DETAIL_FAILURE_UI: Record<string, RunFailureUi> = {
   // The fix is updating MishMash to a build that bundles a compatible
   // (baseline) runtime, so show guidance copy without a dead Retry button.
   // The OS killed a step in the run (SIGKILL / exit 137) — the case behind the
-  // 77s ffmpeg encode that died with no message. Name it and point at the
-  // documented subprocess limits (docs/subprocess-limits.md) instead of
-  // leaving the user with a silent kill.
+  // 77s ffmpeg encode that died with no message. Name it and describe the
+  // likely causes (docs/subprocess-limits.md documents the full policy)
+  // instead of leaving the user with a silent kill.
   signal_killed: retryWithGuidance(
     'chat.runError.title.stoppedBySystem',
     'chat.runError.stoppedBySystemMessage',

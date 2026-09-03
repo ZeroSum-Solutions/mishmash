@@ -62,7 +62,7 @@ export const en: Dict = {
   'chat.runError.title.stoppedBySystem': 'Stopped by your system',
   'chat.runError.title.permissionBlocked': 'Blocked by a permission check',
   'chat.runError.title.stopped': 'Run stopped',
-  'chat.runError.stoppedBySystemMessage': 'Your operating system killed a step in this run (exit 137) — usually because it ran out of memory or a subprocess ran past its limit. Heavy steps such as video encodes and large downloads have documented limits; split the work into smaller steps and retry.',
+  'chat.runError.stoppedBySystemMessage': 'Your operating system killed a step in this run (exit 137 / SIGKILL) — usually because it ran out of memory or a subprocess ran past its limit. Heavy steps such as video encodes and large downloads have documented limits; split the work into smaller steps and retry.',
   'chat.runError.step.preflight': 'It failed before the agent started, during preflight checks.',
   'chat.runError.step.spawn': 'It failed while starting the agent.',
   'chat.runError.step.sessionInit': 'It failed while opening the agent session.',
