@@ -35,6 +35,7 @@ import {
   updateLiveArtifact,
 } from '../src/live-artifacts/store.js';
 import { isLocalSameOrigin } from '../src/origin-validation.js';
+import { resolveProjectFilePath } from '../src/projects.js';
 import { registerLiveArtifactRoutes } from '../src/routes/live-artifact.js';
 
 const PROJECT_ID = 'w24-relative-assets';
@@ -180,7 +181,16 @@ describe('relative asset resolution across the two page-creation paths', () => {
     expect(resolved.pathname).toBe(
       `/api/projects/${encodeURIComponent(PROJECT_ID)}/raw/${RELATIVE_REF}`,
     );
-    expect(fs.existsSync(path.join(projectsDir, PROJECT_ID, RELATIVE_REF))).toBe(true);
+
+    // Not just "a path that looks right": run the resolved URL's splat through
+    // resolveProjectFilePath, the same resolver the raw route uses
+    // (apps/daemon/src/routes/project/index.ts), so the assertion is about a
+    // file that route would actually serve.
+    const rawSplat = decodeURIComponent(resolved.pathname.split('/raw/')[1] ?? '');
+    const served = await resolveProjectFilePath(projectsDir, PROJECT_ID, rawSplat);
+    expect(served.name).toBe(RELATIVE_REF);
+    expect(served.mime).toBe('image/png');
+    expect(served.size).toBeGreaterThan(0);
   });
 
   it('resolves that ref to the same URL as the identical page written to disk', async () => {
@@ -188,7 +198,12 @@ describe('relative asset resolution across the two page-creation paths', () => {
     const previewHtml = await (await fetch(previewUrl)).text();
 
     // The disk-written page is served by the raw-file route, so its own
-    // document URL is what its relative refs resolve against.
+    // document URL is what its relative refs resolve against. That URL shape is
+    // the route's own: app.get(/^\/api\/projects\/([^/]+)\/raw\/(.+)$/u) in
+    // apps/daemon/src/routes/project/index.ts, built web-side by projectRawUrl
+    // (apps/web/src/providers/registry.ts). Registering that route here would
+    // pull in the whole project-file dependency set; the first test already
+    // proves the resolved path is one the route's resolver serves.
     const diskPageUrl = `${baseUrl}/api/projects/${encodeURIComponent(PROJECT_ID)}/raw/${DISK_PAGE}`;
     const diskPageHtml = fs.readFileSync(path.join(projectsDir, PROJECT_ID, DISK_PAGE), 'utf8');
 

@@ -41,20 +41,40 @@ export function projectRawAssetBaseHref(projectId: string, ownerFilePath: string
 }
 
 /**
+ * Blank out comment spans so a `<head>` written inside one is not mistaken for
+ * the document's real head. Same length as the input, so an index found in the
+ * masked copy addresses the identical position in the original.
+ */
+function maskComments(html: string): string {
+  return html.replace(/<!--[\s\S]*?(?:-->|$)/g, (comment) => ' '.repeat(comment.length));
+}
+
+/**
  * State the base inside the document, for a preview whose serving URL cannot.
  *
- * The tag goes first in `<head>`, so it is the document's effective base even
- * when the page carries one of its own: only the first `<base href>` in a
- * document takes effect. Overriding is the intended behaviour here — a page
- * served off its project's raw route cannot know a base that resolves to
- * project files, so its own would name nothing either.
+ * The tag goes first in the real `<head>`, so it is the document's effective
+ * base even when the page carries one of its own: only the first `<base href>`
+ * in a document takes effect. Overriding is the intended behaviour here — a
+ * page served off its project's raw route cannot know a base that resolves to
+ * project files, so its own would name nothing either. The insertion point is
+ * found on a comment-masked copy so a commented-out `<head>` cannot capture the
+ * tag and leave the page's own base in charge.
  *
- * The response carrying this document must allow the base under its
- * `base-uri` directive, or the browser drops the tag and the refs stay broken.
+ * The response carrying this document must allow the base under its `base-uri`
+ * directive, or the browser drops the tag and the refs stay broken.
  */
 export function withProjectAssetBaseHref(html: string, baseHref: string): string {
   const tag = `<base href="${baseHref.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">`;
-  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (open) => `${open}${tag}`);
-  if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (open) => `${open}<head>${tag}</head>`);
+  const searchable = maskComments(html);
+  const head = /<head[^>]*>/i.exec(searchable);
+  if (head) {
+    const at = head.index + head[0].length;
+    return `${html.slice(0, at)}${tag}${html.slice(at)}`;
+  }
+  const root = /<html[^>]*>/i.exec(searchable);
+  if (root) {
+    const at = root.index + root[0].length;
+    return `${html.slice(0, at)}<head>${tag}</head>${html.slice(at)}`;
+  }
   return `${tag}${html}`;
 }

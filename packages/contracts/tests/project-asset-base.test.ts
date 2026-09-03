@@ -54,6 +54,15 @@ describe('withProjectAssetBaseHref', () => {
     );
   });
 
+  it('skips a head written inside a comment', () => {
+    const out = withProjectAssetBaseHref(
+      '<html><!-- <head><base href="/decoy/"></head> --><head><title>t</title></head></html>',
+      '/api/projects/p1/raw/',
+    );
+    expect(out).toContain('<head><base href="/api/projects/p1/raw/"><title>t</title></head>');
+    expect(out).toContain('<!-- <head><base href="/decoy/"></head> -->');
+  });
+
   it('escapes the href so it cannot break out of the attribute', () => {
     expect(withProjectAssetBaseHref('<html><head></head></html>', '/raw/"><script>x</script>')).toContain(
       '<base href="/raw/&quot;><script>x</script>">',
