@@ -98,6 +98,52 @@ async function postRepair(baseUrl: string): Promise<{ status: number; json: any 
   }
 }
 
+/**
+ * Mount the MCP routes on a bare express app with the given `filesystem` dep,
+ * the same shape `server.ts` passes. `undefined` is the misregistration case.
+ */
+async function mountRoutes(
+  filesystem: { create: typeof createFilesystemWriteGateway } | undefined,
+): Promise<string> {
+  const app = express();
+  app.use(express.json());
+  const resolvedPortRef = { current: 0 };
+  registerMcpRoutes(app, {
+    http: {
+      createSseResponse: () => undefined,
+      isLocalSameOrigin,
+      requireLocalDaemonRequest: () => true,
+      resolvedPortRef,
+      sendApiError: (res: any, status: number, code: string, message: string) =>
+        res.status(status).json({ error: { code, message } }),
+      sendLiveArtifactRouteError: () => undefined,
+      sendMulterError: () => undefined,
+    } as any,
+    paths: {
+      OD_BIN: join(dataDir, 'cli.js'),
+      RUNTIME_DATA_DIR: dataDir,
+      PROJECTS_DIR: join(dataDir, 'projects'),
+    } as any,
+    mcp: {
+      pendingAuth: new Map(),
+      daemonUrlRef: { current: 'http://127.0.0.1:0' },
+    } as any,
+    ...(filesystem ? { filesystem } : {}),
+  });
+  return new Promise<string>((resolve, reject) => {
+    routeServer = app.listen(0, '127.0.0.1', () => {
+      const addr = routeServer?.address();
+      if (!addr || typeof addr !== 'object') {
+        reject(new Error('could not bind'));
+        return;
+      }
+      resolvedPortRef.current = addr.port;
+      resolve(`http://127.0.0.1:${addr.port}`);
+    });
+    routeServer?.on('error', reject);
+  });
+}
+
 /** The audited removal of the cache entry, or undefined when none was recorded. */
 function auditedRemoval(): FilesystemWriteAuditEntry | undefined {
   return audit.find(
@@ -126,48 +172,12 @@ afterEach(async () => {
 
 describe('the MCP cache repair is recorded on the daemon audited write gateway', () => {
   it('records the removal on the gateway factory the route was given', async () => {
-    const app = express();
-    app.use(express.json());
-    const resolvedPortRef = { current: 0 };
-    registerMcpRoutes(app, {
-      http: {
-        createSseResponse: () => undefined,
-        isLocalSameOrigin,
-        requireLocalDaemonRequest: () => true,
-        resolvedPortRef,
-        sendApiError: (res: any, status: number, code: string, message: string) =>
-          res.status(status).json({ error: { code, message } }),
-        sendLiveArtifactRouteError: () => undefined,
-        sendMulterError: () => undefined,
-      } as any,
-      paths: {
-        OD_BIN: join(dataDir, 'cli.js'),
-        RUNTIME_DATA_DIR: dataDir,
-        PROJECTS_DIR: join(dataDir, 'projects'),
-      } as any,
-      mcp: {
-        pendingAuth: new Map(),
-        daemonUrlRef: { current: 'http://127.0.0.1:0' },
-      } as any,
-      filesystem: {
-        create: (options) =>
-          createFilesystemWriteGateway({
-            ...options,
-            auditSink: (entry) => audit.push(entry),
-          }),
-      },
-    });
-    const baseUrl = await new Promise<string>((resolve, reject) => {
-      routeServer = app.listen(0, '127.0.0.1', () => {
-        const addr = routeServer?.address();
-        if (!addr || typeof addr !== 'object') {
-          reject(new Error('could not bind'));
-          return;
-        }
-        resolvedPortRef.current = addr.port;
-        resolve(`http://127.0.0.1:${addr.port}`);
-      });
-      routeServer?.on('error', reject);
+    const baseUrl = await mountRoutes({
+      create: (options) =>
+        createFilesystemWriteGateway({
+          ...options,
+          auditSink: (entry) => audit.push(entry),
+        }),
     });
 
     const res = await postRepair(baseUrl);
@@ -179,6 +189,16 @@ describe('the MCP cache repair is recorded on the daemon audited write gateway',
       auditedRemoval(),
       `the removal left no audit record; entries seen: ${JSON.stringify(audit)}`,
     ).toBeDefined();
+  }, 60_000);
+
+  it('refuses rather than removing when no gateway factory was supplied', async () => {
+    const baseUrl = await mountRoutes(undefined);
+
+    const res = await postRepair(baseUrl);
+
+    expect(res.status).toBe(500);
+    expect(res.json?.error?.code).toBe('MCP_REPAIR_FAILED');
+    expect(await exists(cacheEntry)).toBe(true);
   }, 60_000);
 
   it('records the removal through the real daemon audit sink', async () => {

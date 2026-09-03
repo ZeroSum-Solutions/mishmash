@@ -13,11 +13,17 @@ import type { RouteDeps } from './server-context.js';
 
 export interface RegisterMcpRoutesDeps extends RouteDeps<'http' | 'paths' | 'mcp'> {
   // Declared here rather than on `ServerContext`, which carries no `filesystem`
-  // key: the other route modules that write (`design-library`, `library`,
-  // `storyboard`) each declare it the same way, and the daemon passes its
-  // audited factory in. `POST /api/mcp/repair` removes a directory outside the
-  // daemon's data, so it is one of those writers.
-  filesystem: { create: typeof createFilesystemWriteGateway };
+  // key: every route module that writes (`design-library`, `library`,
+  // `storyboard`, `project`) declares it the same way, and the daemon passes
+  // its audited factory in. `POST /api/mcp/repair` removes a directory outside
+  // the daemon's data, so it is one of those writers.
+  //
+  // Optional for the same reason as `RegisterProjectRoutesDeps`'s: this Deps
+  // type is in `route-context-contract.ts`'s union, which asserts
+  // `ServerContext` satisfies every member of it. Absence is not a fallback --
+  // `requireWriteGatewayFactory` below refuses the repair rather than
+  // performing an unaudited one.
+  filesystem?: { create: typeof createFilesystemWriteGateway };
 }
 
 export function registerMcpRoutes(app: Express, ctx: RegisterMcpRoutesDeps) {
@@ -26,6 +32,20 @@ export function registerMcpRoutes(app: Express, ctx: RegisterMcpRoutesDeps) {
   const { pendingAuth, daemonUrlRef } = ctx.mcp;
   const getResolvedPort = () => resolvedPortRef.current;
   const getDaemonUrl = () => daemonUrlRef.current;
+  /**
+   * INVARIANT: the cache repair removes a directory only through the write
+   * gateway factory the daemon configured, so the removal reaches the daemon's
+   * audit sink. A registration that omits the dep gets an error, never a
+   * gateway of this module's own making: an unrecorded destructive write to
+   * another tool's state is the failure this exists to prevent.
+   */
+  function requireWriteGatewayFactory(): typeof createFilesystemWriteGateway {
+    const create = ctx.filesystem?.create;
+    if (!create) {
+      throw new Error('MCP routes were registered without a filesystem write gateway factory');
+    }
+    return create;
+  }
   // Surfaces the absolute paths to the daemon's Node-compatible runtime and
   // CLI entry so the Settings → MCP server panel can render snippets that work
   // even when `od` isn't on the user's PATH (the common case for source clones
@@ -284,7 +304,7 @@ export function registerMcpRoutes(app: Express, ctx: RegisterMcpRoutesDeps) {
       }
       const removed = await applyMcpServerRepair(repair, {
         runtimeDataRoot:    RUNTIME_DATA_DIR,
-        createWriteGateway: ctx.filesystem.create,
+        createWriteGateway: requireWriteGatewayFactory(),
       });
       res.json({ serverId, repair, removed });
     } catch (err: any) {
