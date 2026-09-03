@@ -107,6 +107,25 @@ export function htmlHasRootRelativeProjectAssetRefs(
 }
 
 /**
+ * True when a document cannot render whole inside a plain srcdoc preview
+ * that only injects a `<base href>` — the Design Files panel's render.
+ *
+ * A `<base>` rebases relative refs only; by spec it cannot rebase a
+ * ROOT-ABSOLUTE one. A mirrored site asks for `/_nuxt/entry.js`,
+ * `/textures/manifest.json`, `/_payload.json`, and those resolve against the
+ * app origin, 404, and leave the site's own loader spinning with nothing on
+ * screen to explain it (issue #158). The project's own preview server is the
+ * surface that serves a site from its root, so the panel must say so instead
+ * of rendering a black frame.
+ *
+ * Deliberately shape-only: the panel has no root-absolute rewrite pipeline,
+ * so membership in the project file list would not change the outcome.
+ */
+export function htmlNeedsPreviewServerForRootAbsoluteAssets(html: string): boolean {
+  return htmlHasRootRelativeProjectAssetRefs(html, null);
+}
+
+/**
  * Collect project asset paths referenced by an HTML preview. Used by
  * FileViewer's host-side preflight so raw-route security failures do not stay
  * hidden as broken images inside a sandboxed iframe.

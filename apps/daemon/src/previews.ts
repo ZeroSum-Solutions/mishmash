@@ -6,6 +6,8 @@ import path from 'node:path';
 
 import type { PreviewInfo } from '@open-design/contracts';
 
+import { loopbackPreviewUrl } from './preview-origin.js';
+
 /**
  * Daemon-owned preview server lifecycle (issue #38).
  *
@@ -181,7 +183,9 @@ export function createPreviewService() {
     const pid = child.pid ?? 0;
     if (pid) opts.onSpawn?.(pid);
 
-    const url = `http://127.0.0.1:${port}/`;
+    // The stored URL is the daemon machine's own address; the HTTP surface
+    // re-announces it on the host each request arrived on.
+    const url = loopbackPreviewUrl(port);
     const deadline = Date.now() + readyTimeoutMs;
     while (Date.now() < deadline) {
       if (childState.exited) {
