@@ -229,3 +229,56 @@ describe('withProjectAssetBaseHref reads a script to the end the parser gives it
     );
   });
 });
+
+// Round-4 track audit (proof/w2fix/2G.4-glm-r4.json), finding 3. A comment does
+// not only close on `-->`: the tokenizer's comment-end-bang state closes it on
+// `--!>` too. Reading only `-->` runs the comment on past a `<base>` the parser
+// treats as a real element, so the tag stays and outranks the injected one --
+// the re-rooting this module exists to close.
+describe('withProjectAssetBaseHref closes a comment where the parser closes it', () => {
+  const BASE = '/api/projects/p1/raw/';
+
+  it('drops a base the document writes after a --!> comment close', () => {
+    expect(
+      withProjectAssetBaseHref(
+        '<!-- --!><base href="/evil/"> --><html><head><title>t</title></head></html>',
+        BASE,
+      ),
+    ).toBe('<!-- --!> --><html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>');
+  });
+
+  it('finds the head after a --!> comment close', () => {
+    expect(
+      withProjectAssetBaseHref(
+        '<!-- a --!><base href="/evil/"><html><head><title>t</title></head></html>',
+        BASE,
+      ),
+    ).toBe('<!-- a --!><html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>');
+  });
+});
+
+// Round-4 track audit findings 1 and 2, both refuted against jsdom (see
+// proof/w2fix/2G.4-glm-r4-response.md) and kept as cases so the two properties
+// stay pinned: `-->` ends a script's double-escaped region the way it ends its
+// escaped one, and a second `=` before a quoted value is read as the start of an
+// unquoted value, so the tag really does end at the quoted `>`.
+describe('withProjectAssetBaseHref agrees with the tokenizer on two shapes the audit queried', () => {
+  const BASE = '/api/projects/p1/raw/';
+
+  it('ends a script at the first </script> after a --> leaves its double-escaped region', () => {
+    expect(
+      withProjectAssetBaseHref(
+        '<script><!--<script>-->y</script><head></head>--></script><html><head><title>t</title></head>',
+        BASE,
+      ),
+    ).toBe(
+      '<script><!--<script>-->y</script><head><base href="/api/projects/p1/raw/"></head>--></script><html><head><title>t</title></head>',
+    );
+  });
+
+  it('drops the base tag a doubled = ends at the quoted >', () => {
+    expect(
+      withProjectAssetBaseHref('<base href=="a>b"><html><head><title>t</title></head></html>', BASE),
+    ).toBe('b"><html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>');
+  });
+});

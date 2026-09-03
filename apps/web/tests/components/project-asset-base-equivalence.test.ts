@@ -153,3 +153,29 @@ describe('withProjectAssetBaseHref does not edit script text past a nested </scr
     expect(after.baseURI).toBe(`http://d${BASE}`);
   });
 });
+
+// Round-4 track audit (proof/w2fix/2G.4-glm-r4.json), finding 3, in parsed
+// terms: a `<base>` written after a `--!>` comment close is a real element the
+// parser hoists into the head, so the document resolves against it unless the
+// transform drops it.
+describe('withProjectAssetBaseHref stays first in tree order past a --!> comment close', () => {
+  const BASE = '/api/projects/p1/raw/';
+  const PREVIEW_URL = 'http://d/preview';
+
+  function parse(html: string) {
+    const { document } = new JSDOM(html, { url: PREVIEW_URL }).window;
+    return {
+      bases: Array.from(document.querySelectorAll('base'), (base) => base.getAttribute('href')),
+      baseURI: document.baseURI,
+    };
+  }
+
+  it('resolves against the injected base, not one written after a --!> close', () => {
+    const input = '<!-- --!><base href="/evil/"> --><html><head><title>t</title></head></html>';
+    expect(parse(input).baseURI).toBe('http://d/evil/');
+
+    const parsed = parse(withProjectAssetBaseHref(input, BASE));
+    expect(parsed.bases).toEqual([BASE]);
+    expect(parsed.baseURI).toBe(`http://d${BASE}`);
+  });
+});
