@@ -414,6 +414,8 @@ import { reportRunCompletedFromDaemon } from './langfuse-bridge.js';
 import { followRunTerminalOnMessage, reconcileDurableRunTerminals } from './runtimes/run-terminal-reconciliation.js';
 import {
   classifyUnattendedRunDelivery,
+  replayUnattendedDeliveryClassifications,
+  type UnattendedDeliveryDeps,
   type UnattendedDeliveryRun,
 } from './runtimes/run-delivery-classification.js';
 import { buildPromptStackTelemetry } from './prompt-telemetry.js';
@@ -2886,7 +2888,7 @@ export async function startServer({
   // fresh daemon boot, repair stale message rows and replay any PostHog or
   // Langfuse terminal work whose checkpoint was not committed. Network work
   // stays off the startup critical path.
-  void reconcileDurableRunTerminals({
+  const durableRunTerminalsReconciled = reconcileDurableRunTerminals({
     analytics: analyticsService,
     appVersion: telemetry.getCachedAppVersion()?.version ?? '0.0.0',
     appVersionInfo: telemetry.getCachedAppVersion(),
@@ -2915,12 +2917,32 @@ export async function startServer({
   const previewService = createPreviewService();
 
   /**
+   * What the delivery classification reads the world through, shared by the
+   * settle-window timer below and the startup replay that covers the turns the
+   * timer never got to fire for. One object so the two paths cannot drift into
+   * judging the same turn against different project state.
+   */
+  const unattendedDeliveryDeps: UnattendedDeliveryDeps = {
+    listProjectFiles: async (projectId: string) => {
+      const project = getProject(db, projectId);
+      return await listFiles(PROJECTS_DIR, projectId, { metadata: project?.metadata });
+    },
+    previewStartedDuringRun: (projectId: string, startedAt: number) =>
+      previewService.list(projectId).some((session) => session.startedAt >= startedAt),
+    runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),
+  };
+
+  /**
    * Record the daemon's own delivery verdict for a run whose turn no web client
    * finalized. Fires one settle window after the run's terminal event so an
    * attached client -- which knows the pre-turn file names and the outcome of
    * its own artifact save -- always writes first and wins;
    * `classifyUnattendedRunDelivery` then finds the row already claimed and does
    * nothing. Unref'd so a pending timer never holds the daemon open.
+   *
+   * The window and the unref together mean this verdict is in memory only until
+   * it fires. A daemon exit inside the window is covered by the startup replay
+   * wired below, not by holding the process open.
    */
   const scheduleUnattendedDeliveryClassification = (
     run: Partial<UnattendedDeliveryRun> & { createdAt?: unknown },
@@ -2940,15 +2962,7 @@ export async function startServer({
       void classifyUnattendedRunDelivery(
         db,
         classified,
-        {
-          listProjectFiles: async (projectId: string) => {
-            const project = getProject(db, projectId);
-            return await listFiles(PROJECTS_DIR, projectId, { metadata: project?.metadata });
-          },
-          previewStartedDuringRun: (projectId: string, startedAt: number) =>
-            previewService.list(projectId).some((session) => session.startedAt >= startedAt),
-          runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),
-        },
+        unattendedDeliveryDeps,
         isRunTouchedProjectFile,
       ).catch((error) => {
         console.warn('[runs] unattended delivery classification failed', error);
@@ -2956,6 +2970,25 @@ export async function startServer({
     }, CLIENT_FINALIZE_SETTLE_MS);
     timer.unref?.();
   };
+
+  // The daemon's second durable startup obligation, kept separate from the
+  // first: a succeeded design turn whose verdict was still sitting in the
+  // settle-window timer when the daemon exited is decided now, from the run's
+  // own durable record. Ordered after the reconciliation above because that
+  // pass repairs the assistant row's run status from the durable run state,
+  // and this pass reads that status to find the succeeded turns.
+  void durableRunTerminalsReconciled.then(async () => {
+    const replayed = await replayUnattendedDeliveryClassifications(
+      db,
+      unattendedDeliveryDeps,
+      isRunTouchedProjectFile,
+    );
+    if (replayed.classified > 0) {
+      console.warn('[runs] replayed unattended delivery classifications', replayed);
+    }
+  }).catch((error) => {
+    console.warn('[runs] unattended delivery classification replay failed', error);
+  });
 
   // Tracks runs whose finalized assistant message has already been forwarded
   // to Langfuse so repeated message updates only emit one final trace per run.
