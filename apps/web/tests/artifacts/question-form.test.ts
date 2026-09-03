@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  formAnswersByAssistantMessageId,
+  formAnswersFormId,
   formatFormAnswers,
   splitOnQuestionForms,
   parsePartialQuestionForm,
+  submittedAnswerContentForForm,
 } from '../../src/artifacts/question-form';
 
 const VALID_BODY = `{
@@ -516,5 +519,73 @@ describe('parsePartialQuestionForm (true token-by-token streaming)', () => {
       '<question-form id="discovery">{"questions":[{"label":"First","type":"text"},{"id":"b"';
     expect(parsePartialQuestionForm(noId)?.questions.map((q) => q.id)).toEqual(['q1']);
     expect(finalIds('<question-form id="discovery">{"questions":[{"label":"First","type":"text"}]}</question-form>')).toEqual(['q1']);
+  });
+});
+
+describe('form answer identity', () => {
+  const answer = (id: string) => `[form answers — ${id}]\n- Who is this for?: Product evaluators`;
+
+  it('reads the form id out of the header formatFormAnswers writes', () => {
+    const form = { id: 'brief', title: 'Quick brief', questions: [] };
+    expect(formAnswersFormId(formatFormAnswers(form, {}))).toBe('brief');
+  });
+
+  it('tolerates an en dash or hyphen separator in a paraphrased header', () => {
+    expect(formAnswersFormId('[form answers – brief]\n- A: b')).toBe('brief');
+    expect(formAnswersFormId('[form answers - brief]\n- A: b')).toBe('brief');
+  });
+
+  it('reads no id from a message that is not a form answer', () => {
+    expect(formAnswersFormId('Actually, make the hero taller.')).toBeNull();
+    expect(formAnswersFormId('[form answers]\n- A: b')).toBeNull();
+  });
+
+  it('gives every assistant message before the answer that answer for its form id', () => {
+    const byAssistantId = formAnswersByAssistantMessageId([
+      { id: 'a-1', role: 'assistant', content: 'form' },
+      { id: 'u-2', role: 'user', content: 'Actually, make the hero taller.' },
+      { id: 'a-2', role: 'assistant', content: 'form again' },
+      { id: 'u-3', role: 'user', content: answer('brief') },
+      { id: 'a-3', role: 'assistant', content: 'Got it.' },
+    ]);
+    expect(byAssistantId.get('a-1')?.get('brief')).toBe(answer('brief'));
+    expect(byAssistantId.get('a-2')?.get('brief')).toBe(answer('brief'));
+    // Nothing follows a-3, so it holds no answer.
+    expect(byAssistantId.get('a-3')).toBeUndefined();
+  });
+
+  it('keeps the nearest following answer when one form id is answered twice', () => {
+    const byAssistantId = formAnswersByAssistantMessageId([
+      { id: 'a-1', role: 'assistant', content: 'form' },
+      { id: 'u-1', role: 'user', content: `${answer('brief')} first` },
+      { id: 'a-2', role: 'assistant', content: 'form again' },
+      { id: 'u-2', role: 'user', content: `${answer('brief')} second` },
+    ]);
+    expect(byAssistantId.get('a-1')?.get('brief')).toBe(`${answer('brief')} first`);
+    expect(byAssistantId.get('a-2')?.get('brief')).toBe(`${answer('brief')} second`);
+  });
+
+  it('resolves a form to the answer carrying its own id, not the next user message', () => {
+    const form = { id: 'brief' };
+    const answers = new Map([['brief', answer('brief')]]);
+    expect(submittedAnswerContentForForm(form, answers, 'Actually, make the hero taller.')).toBe(
+      answer('brief'),
+    );
+  });
+
+  it('falls back to the next user message when no answer carries the form id', () => {
+    const form = { id: 'brief' };
+    expect(submittedAnswerContentForForm(form, new Map(), '[form answers]\n- A: b')).toBe(
+      '[form answers]\n- A: b',
+    );
+    expect(submittedAnswerContentForForm(form, undefined, undefined)).toBeUndefined();
+  });
+
+  it('never falls back to a message that names a different form', () => {
+    // Position must not override identity: an answer stamped for `tone` is not
+    // this form's answer, however adjacent it is.
+    expect(
+      submittedAnswerContentForForm({ id: 'brief' }, new Map(), answer('tone')),
+    ).toBeUndefined();
   });
 });
