@@ -39,12 +39,18 @@ const RELATIVE_PAGE =
 
 type PreviewRow = { id: string; url: string; port: number };
 
-function stubDaemon(options: { html: string; previews?: PreviewRow[] }) {
+function stubDaemon(options: { html: string; previews?: PreviewRow[]; openFails?: boolean }) {
   const opened: string[] = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.endsWith('/open')) {
       opened.push(url);
+      if (options.openFails) {
+        return new Response(
+          JSON.stringify({ error: 'PREVIEW_OPEN_FAILED', url: 'http://127.0.0.1:8125/' }),
+          { status: 502, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
       return new Response(
         JSON.stringify({ opened: true, url: 'http://127.0.0.1:8125/', browser: 'chrome' }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -155,6 +161,27 @@ describe('Design Files panel preview server offer', () => {
     fireEvent.click(container.querySelector('.df-preview-server-chrome')!);
     await waitFor(() => {
       expect(opened).toEqual(['/api/projects/test-project/previews/pv1/open']);
+    });
+  });
+
+  it('says so when the daemon could not start Chrome, instead of doing nothing', async () => {
+    stubDaemon({
+      html: ROOT_ABSOLUTE_PAGE,
+      previews: [{ id: 'pv1', url: 'http://127.0.0.1:8125/', port: 8125 }],
+      openFails: true,
+    });
+    const { container } = renderPanel([htmlFile()]);
+    openPreviewOf(container);
+
+    await waitFor(() => {
+      expect(container.querySelector('.df-preview-server-chrome')).toBeTruthy();
+    });
+    expect(container.querySelector('.df-preview-server-failed')).toBeNull();
+
+    fireEvent.click(container.querySelector('.df-preview-server-chrome')!);
+    await waitFor(() => {
+      expect(container.querySelector('.df-preview-server-failed')?.textContent)
+        .toBe(en['designFiles.previewServer.openFailed']);
     });
   });
 

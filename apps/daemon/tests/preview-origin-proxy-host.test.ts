@@ -36,6 +36,17 @@ describe('preview URL for the request host', () => {
     )).toBe('http://devins-macbook-pro.tail908c18.ts.net:8125/');
   });
 
+  it('uses Referer on a same-origin GET, where a browser sends no Origin', () => {
+    // The panel's own read of /api/projects/:id/previews is exactly this shape.
+    expect(previewUrlForRequestHost(
+      {
+        referer: 'https://devins-macbook-pro.tail908c18.ts.net:7443/projects/p1',
+        host: '127.0.0.1:7456',
+      },
+      8125,
+    )).toBe('http://devins-macbook-pro.tail908c18.ts.net:8125/');
+  });
+
   it('ignores an opaque or non-http origin and falls through to the host', () => {
     expect(previewUrlForRequestHost({ origin: 'null', host: 'client.example:443' }, 8125))
       .toBe('http://client.example:8125/');

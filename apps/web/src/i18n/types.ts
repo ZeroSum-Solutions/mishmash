@@ -3459,6 +3459,7 @@ export interface Dict {
   'designFiles.previewClose': string;
   'designFiles.previewServer.title': string;
   'designFiles.previewServer.openInChrome': string;
+  'designFiles.previewServer.openFailed': string;
   'designFiles.previewServer.rootAbsolute': string;
   'designFiles.previewServer.none': string;
   'designFiles.modified': string;

@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 
-import { createChromeOpenInvocation } from '../src/browser/browser-open.js';
+import { createChromeOpenInvocation, openInChrome } from '../src/browser/browser-open.js';
 import { createPreviewService } from '../src/previews.js';
 import { registerPreviewRoutes } from '../src/routes/preview.js';
 
@@ -131,6 +131,31 @@ describe('opening a preview in Chrome', () => {
       url: `http://127.0.0.1:${port}/`,
     });
   }, 30_000);
+});
+
+describe('Chrome launcher observability', () => {
+  it('reports a launcher that produced no process, before its async error event', () => {
+    const warnings: string[] = [];
+    // Node's shape for a missing binary: a ChildProcess with no pid whose
+    // 'error' event only fires on a later tick. The route has to answer now.
+    const pidless = { pid: undefined, on: () => {}, unref: () => {} };
+    const result = openInChrome('http://127.0.0.1:8125/', {
+      platform: 'linux',
+      spawn: () => pidless as never,
+      warn: (message) => warnings.push(message),
+    });
+    expect(result).toBeNull();
+    expect(warnings.join(' ')).toContain('did not start');
+  });
+
+  it('returns the child when the launcher started', () => {
+    const started = { pid: 4321, on: () => {}, unref: () => {} };
+    expect(openInChrome('http://127.0.0.1:8125/', {
+      platform: 'linux',
+      spawn: () => started as never,
+      warn: () => {},
+    })).toBe(started);
+  });
 });
 
 describe('Chrome open invocation', () => {

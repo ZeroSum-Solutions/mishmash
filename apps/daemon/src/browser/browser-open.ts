@@ -61,8 +61,13 @@ export function createBrowserOpenInvocation(
  * preview server that is answering perfectly well — so "open in Chrome" has
  * to name the browser instead of asking the OS for whichever it prefers.
  *
- * Best-effort like `openBrowser`: a machine without Chrome fails the spawn
- * and the caller sees the warning, never a crash.
+ * Best-effort like `openBrowser`, and only as observant as the platform's
+ * launcher allows: on Linux the command IS the browser, so a machine without
+ * Chrome produces no process and the caller learns that immediately. On
+ * macOS and Windows the command is `/usr/bin/open` / `cmd.exe`, which exist
+ * whether or not Chrome does — there the launch starts and a missing Chrome
+ * surfaces only in the launcher's own exit status, which a detached
+ * `stdio: 'ignore'` child does not report back.
  */
 export function createChromeOpenInvocation(
   platform: SupportedPlatform,
@@ -122,6 +127,13 @@ function spawnOpener(
       const detail = error instanceof Error ? error.message : String(error);
       warn(`[od] failed to open browser: ${detail}`);
     });
+    // Node reports a missing binary as an ASYNCHRONOUS 'error' event, but it
+    // leaves `pid` undefined the moment the spawn fails, so a caller that has
+    // to answer now can still tell "no process was created" from "launched".
+    if (child.pid === undefined) {
+      warn(`[od] failed to open browser: ${invocation.command} did not start`);
+      return null;
+    }
     child.unref();
     return child;
   } catch (error) {

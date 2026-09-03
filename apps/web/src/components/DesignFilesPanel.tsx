@@ -1561,6 +1561,10 @@ function DfPreviewServerOffer({
   needsServerRoot: boolean;
 }) {
   const t = useT();
+  // A hand-off the daemon could not start must not look like a click that did
+  // nothing: `openPreviewInChrome` resolves null on a 502 or a transport
+  // failure, and the reader still has the link right next to the button.
+  const [failedFor, setFailedFor] = useState<string | null>(null);
   if (previews.length === 0) {
     if (!needsServerRoot) return null;
     return (
@@ -1592,11 +1596,19 @@ function DfPreviewServerOffer({
               type="button"
               className="df-preview-server-chrome"
               onClick={() => {
-                void openPreviewInChrome(projectId, preview.id);
+                setFailedFor(null);
+                void openPreviewInChrome(projectId, preview.id).then((opened) => {
+                  if (!opened) setFailedFor(preview.id);
+                });
               }}
             >
               {t('designFiles.previewServer.openInChrome')}
             </button>
+          ) : null}
+          {failedFor === preview.id ? (
+            <span className="df-preview-server-failed" role="status">
+              {t('designFiles.previewServer.openFailed')}
+            </span>
           ) : null}
         </div>
       ))}

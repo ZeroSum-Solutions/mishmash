@@ -96,11 +96,13 @@ export function registerPreviewRoutes(app: Express, deps: PreviewRoutesDeps): vo
   // arbitrary address, and it is always the loopback one because Chrome runs
   // on the daemon's machine.
   //
-  // `opened: true` means the launcher was started, which is as much as a
-  // detached opener can be asked. A machine with no Chrome fails the spawn
-  // outright and gets 502 instead of a success that opened nothing; a
-  // launcher that dies AFTER spawning is logged by `openInChrome`, not
-  // reported here.
+  // `opened: true` means the launcher process started — no more than that.
+  // A launcher that never started at all answers 502; that is the whole of
+  // what a detached opener can observe, and it is not the same as "Chrome
+  // opened". On Linux the launcher IS the browser, so a missing Chrome does
+  // reach the caller as 502; on macOS and Windows the launcher is
+  // `/usr/bin/open` / `cmd.exe`, which start whether or not Chrome is
+  // installed, so a missing Chrome there is invisible to this route.
   app.post('/api/projects/:id/previews/:previewId/open', (req, res) => {
     if (!assertProject(req, res)) return;
     const session = previews.get(String(req.params.previewId));

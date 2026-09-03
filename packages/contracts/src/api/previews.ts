@@ -42,8 +42,11 @@ export type PreviewListResponse = {
  * comment: EGO Lite task spaces do). The URL is the loopback one, since that
  * is the address the daemon's machine reaches the preview on.
  *
- * `opened` reports that the launcher was started. A machine with no Chrome
- * fails the spawn and answers 502 `PREVIEW_OPEN_FAILED` instead.
+ * `opened` reports that the launcher process started, not that Chrome came
+ * up: a detached opener cannot see further. A launcher that never started
+ * answers 502 `PREVIEW_OPEN_FAILED` instead — which on Linux does mean no
+ * Chrome, while on macOS and Windows the launcher (`open`, `cmd.exe`) starts
+ * whether Chrome is installed or not.
  */
 export type PreviewOpenResponse = {
   opened: true;

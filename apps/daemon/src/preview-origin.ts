@@ -18,6 +18,7 @@ const LOOPBACK_HOST = '127.0.0.1';
 /** The subset of request headers that can name the caller's own front. */
 export type PreviewRequestHeaders = {
   origin?: unknown;
+  referer?: unknown;
   host?: unknown;
   'x-forwarded-host'?: unknown;
 };
@@ -31,14 +32,14 @@ export function loopbackPreviewUrl(port: number): string {
  * The host the caller reached Open Design on, in the order the signals can be
  * trusted to survive a front.
  *
- * `Origin` first, because a browser sets it from the page's own address and
- * no proxy rewrites it. Measured, not assumed: the Next dev server's
- * `/api/*` rewrite hands the daemon its own upstream `Host` and no
- * `X-Forwarded-Host`, so a browser on `localhost` would otherwise be told
- * `127.0.0.1` — the loopback answer this track exists to stop giving. It is
- * also the safest of the three: `origin-validation.ts` has already rejected
- * any request whose `Origin` is neither same-origin nor in
- * `OD_ALLOWED_ORIGINS`, so an arbitrary host cannot be smuggled in here.
+ * The browsing page's own address first — `Origin`, then `Referer` — because
+ * a browser writes both from the page it is on and a proxy rewrites neither.
+ * Measured, not assumed: the Next dev server's `/api/*` rewrite hands the
+ * daemon its own upstream `Host` and no `X-Forwarded-Host`, so a browser on
+ * `localhost` would otherwise be told `127.0.0.1`, the loopback answer this
+ * track exists to stop giving. Both are needed: a browser omits `Origin` on
+ * a same-origin GET, which is exactly the shape of the panel's own read, and
+ * sends `Referer` there instead.
  *
  * `X-Forwarded-Host` next, the header a proxy that rewrites `Host` is
  * required to set, for a non-browser caller behind such a front. It may
@@ -48,15 +49,15 @@ export function loopbackPreviewUrl(port: number): string {
  * machine) and for a front that forwards it unchanged.
  */
 function requestHostname(headers: PreviewRequestHeaders): string | null {
-  const fromOrigin = originHostname(headers.origin);
-  if (fromOrigin) return fromOrigin;
+  const fromPage = urlHostname(headers.origin) ?? urlHostname(headers.referer);
+  if (fromPage) return fromPage;
   const forwarded = headerText(headers['x-forwarded-host']).split(',')[0] ?? '';
   const parsed = parseHostHeader(forwarded.trim()) ?? parseHostHeader(headers.host);
   return parsed ? parsed.hostname : null;
 }
 
-/** Hostname of an http(s) `Origin`; null for `null`, opaque, or malformed. */
-function originHostname(value: unknown): string | null {
+/** Hostname of an http(s) absolute URL; null for `null`, opaque, or malformed. */
+function urlHostname(value: unknown): string | null {
   const raw = headerText(value).trim();
   if (!raw || raw === 'null') return null;
   try {
