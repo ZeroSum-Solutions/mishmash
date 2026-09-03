@@ -49,8 +49,8 @@ const PAGE_HTML = `<!doctype html><html><body><img src="${RELATIVE_REF}" alt="sh
  * relative `<img src>` reaches the project file it names.
  */
 function assetBaseUrl(documentUrl: string, html: string): string {
-  const match = /<base\b[^>]*\bhref\s*=\s*["']([^"']*)["']/i.exec(html);
-  return match ? new URL(match[1], documentUrl).href : documentUrl;
+  const declaredBase = /<base\b[^>]*\bhref\s*=\s*["']([^"']*)["']/i.exec(html)?.[1];
+  return declaredBase === undefined ? documentUrl : new URL(declaredBase, documentUrl).href;
 }
 
 describe('relative asset resolution across the two page-creation paths', () => {

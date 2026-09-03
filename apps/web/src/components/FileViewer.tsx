@@ -162,6 +162,7 @@ import {
   htmlHasRootRelativeProjectAssetRefs,
   inlineRelativeAssets,
 } from './file-viewer-preview-assets';
+import { projectRawAssetBaseHref } from '@open-design/contracts/runtime/project-asset-base';
 import { resolvePoweredPreviewUrl } from '../runtime/powered-preview';
 import { saveTemplate } from '../state/projects';
 import type {
@@ -2741,7 +2742,7 @@ export function fileVersionPreviewOptions(
 ) {
   return {
     deck: sourceLooksLikeDeckPreview(source),
-    baseHref: projectRawUrl(projectId, assetBaseDirFor(fileName)),
+    baseHref: projectRawAssetBaseHref(projectId, fileName),
   };
 }
 
@@ -7799,7 +7800,7 @@ function HtmlViewer({
   const srcDoc = useMemo(
     () => (previewSource ? buildSrcdoc(previewSource, {
       deck: effectiveDeck,
-      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
+      baseHref: projectRawAssetBaseHref(projectId, file.name),
       initialSlideIndex: htmlPreviewSlideState.get(previewStateKey)?.active ?? 0,
       hideDeckChrome: effectiveDeck,
       selectionBridge: true,
@@ -7827,7 +7828,7 @@ function HtmlViewer({
   const presentationSrcDoc = useMemo(
     () => (deckVisualSource && inTabPresent ? buildSrcdoc(deckVisualSource, {
       deck: effectiveDeck,
-      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
+      baseHref: projectRawAssetBaseHref(projectId, file.name),
       initialSlideIndex: htmlPreviewSlideState.get(previewStateKey)?.active ?? 0,
       hideDeckChrome: effectiveDeck,
       deckClickNavigation: effectiveDeck,
@@ -7844,7 +7845,7 @@ function HtmlViewer({
   const buildDeckThumbnailSrcDoc = useCallback(
     (index: number) => buildSrcdoc(deckVisualSource ?? '', {
       deck: true,
-      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
+      baseHref: projectRawAssetBaseHref(projectId, file.name),
       initialSlideIndex: index,
       hideDeckChrome: true,
       previewFocusGuard: true,
@@ -7862,7 +7863,7 @@ function HtmlViewer({
     if (!effectiveDeck || !deckVisualSource) return null;
     const parsed = parseDeckThumbnails(
       deckVisualSource,
-      projectRawUrl(projectId, assetBaseDirFor(file.name)),
+      projectRawAssetBaseHref(projectId, file.name),
     );
     return parsed.renderable ? parsed : null;
   }, [effectiveDeck, deckVisualSource, projectId, file.name]);
@@ -9415,7 +9416,7 @@ function HtmlViewer({
     const count = Math.max(deckSlideCount, speakerNotes.length, 1);
     const presenterPreviewHtmlBySlide = Array.from({ length: count }, (_, index) => buildSrcdoc(deckVisualSource, {
       deck: true,
-      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
+      baseHref: projectRawAssetBaseHref(projectId, file.name),
       initialSlideIndex: index,
       hideDeckChrome: true,
       previewFocusGuard: true,
@@ -9876,7 +9877,7 @@ function HtmlViewer({
     if (!source) return;
     openSandboxedPreviewInNewTab(source, exportTitle, {
       deck: effectiveDeck,
-      baseHref: projectRawUrl(projectId, assetBaseDirFor(file.name)),
+      baseHref: projectRawAssetBaseHref(projectId, file.name),
       initialSlideIndex: htmlPreviewSlideState.get(previewStateKey)?.active ?? 0,
       hideDeckChrome: effectiveDeck,
       deckClickNavigation: effectiveDeck,
