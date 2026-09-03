@@ -169,10 +169,11 @@ export function followRunTerminalOnMessage(
  * the stored values and every other field passes through untouched, so a late
  * write still delivers the content, events and produced files it carries.
  *
- * The row's `ended_at` is held on the same terms as its status: a stale copy
- * that agrees the turn succeeded but carries the timestamp its own writer
- * stamped would drag the row off the run's terminal clock, which is the same
- * drift one step down.
+ * The row's `ended_at` is held on the same terms as its status, in the one
+ * direction that is drift: a stale copy that agrees the turn succeeded but
+ * carries an EARLIER timestamp its own writer stamped would drag the row back
+ * off the run's terminal clock. A write that agrees and moves the clock
+ * FORWARDS is not that copy — see `heldTerminalEndedAt` below.
  *
  * Two writes are deliberately let through. A write that already agrees on both
  * status and timestamp has nothing to correct. And a write naming a DIFFERENT
@@ -223,13 +224,47 @@ export function holdTerminalRunStatusOnMessageWrite(
       && typeof stored?.runId === 'string'
       && message.runId !== stored.runId
     ) return message;
-    const endedAt = stored?.endedAt ?? message.endedAt ?? null;
+    const endedAt = heldTerminalEndedAt(stored, message, held);
     if (message.runStatus === held && message.endedAt === endedAt) return message;
     return { ...message, ...heldTerminalBody(stored, message), runStatus: held, endedAt };
   } catch (err) {
     console.warn('[runs] terminal run status hold failed', err);
     return message;
   }
+}
+
+/**
+ * The `ended_at` a held write leaves on the row.
+ *
+ * A write that agrees with the row's terminal status AND carries a later
+ * timestamp is the live client's own final save for that same terminal, not a
+ * stale copy of the turn: it saw the end the daemon saw. The daemon stamps the
+ * row the moment the run ends (`reconcileAssistantMessageOnRunEnd` in
+ * `plugins/share-helpers.ts`), and the client's onDone save lands a few hundred
+ * milliseconds later with the completion time it rendered, so pinning the
+ * stored stamp back would overwrite the client's `endedAt` on every turn that
+ * finishes normally — which `e2e/tests/dialog/retry-after-stop.test.ts` asserts
+ * must not happen for a retried turn.
+ *
+ * Every other write keeps the stored timestamp. A write that disagrees on the
+ * status is a stale copy whose clock is not evidence of anything, and a write
+ * that agrees but carries an EARLIER timestamp is the backwards drift this hold
+ * exists to stop. A write carrying no timestamp of its own takes the row's, as
+ * before.
+ */
+function heldTerminalEndedAt(
+  stored: { endedAt: number | null } | undefined,
+  message: Record<string, unknown>,
+  held: string,
+): unknown {
+  const storedEndedAt = stored?.endedAt ?? null;
+  const incoming = message.endedAt;
+  if (
+    message.runStatus === held
+    && typeof incoming === 'number'
+    && (storedEndedAt === null || incoming > storedEndedAt)
+  ) return incoming;
+  return storedEndedAt ?? incoming ?? null;
 }
 
 function isBlankText(value: unknown): boolean {

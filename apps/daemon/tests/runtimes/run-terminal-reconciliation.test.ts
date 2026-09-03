@@ -784,6 +784,26 @@ describe('durable run terminal reconciliation', () => {
         }
       });
 
+      // Not every write that disagrees on the timestamp is a stale copy. The
+      // daemon stamps the row the moment the run ends
+      // (`reconcileAssistantMessageOnRunEnd`, `plugins/share-helpers.ts`), and
+      // the client's own onDone save lands a few hundred milliseconds later
+      // carrying the completion time it rendered. That save agrees with the
+      // row's terminal and moves the clock FORWARDS, so it is the live turn's
+      // final write and owns its own `endedAt` — the retried turn in
+      // `e2e/tests/dialog/retry-after-stop.test.ts` asserts exactly that.
+      it('lets a retried turn\'s final save keep its own later terminal timestamp', () => {
+        insertRow('m-retried-final', 'succeeded', 9_000);
+
+        const write = {
+          content: 'the answer',
+          endedAt: 9_196,
+          id: 'm-retried-final',
+          runStatus: 'succeeded',
+        };
+        expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
+      });
+
       it('never touches a write that already agrees on status and timestamp', () => {
         insertRow('m-agrees-fully', 'succeeded', 9_000);
 
