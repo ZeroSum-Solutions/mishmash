@@ -150,7 +150,7 @@ describe('design delivery — ghost banner for a turn that delivered work', () =
       resolveDesignDeliveryOutcome(
         deliveryInput({
           content: 'Run the preview yourself when you are ready.',
-          events: okBash('bash-prose', 'echo "next step: preview start, then open the URL"'),
+          events: okBash('bash-prose', 'echo "next step: preview start then open the URL"'),
         }),
       ),
     ).toBe('report_only');
