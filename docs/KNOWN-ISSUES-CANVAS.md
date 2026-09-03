@@ -76,27 +76,32 @@ an annotated element: the InspectPanel renders (`FileViewer.tsx:13208`).
 
 ---
 
-## CANVAS-3 — `paletteActive` and `tweaksBridge` never reach the render-mode decision
+## CANVAS-3 — `paletteActive` and `tweaksBridge` never reach the render-mode decision — RESOLVED
 
-**Severity:** medium · **Area:** runtime-wiring · **Status:** `tweaksBridge` resolved;
-`paletteActive` still has no producer, and cannot get one until CANVAS-1 is decided
+**Severity:** medium · **Area:** runtime-wiring · **Status:** fixed; `tweaksBridge` wired,
+the palette half descoped by Devin on 2026-09-03
 
-**`tweaksBridge` — resolved.** `FileViewer.tsx:7373` computes `tweaksTemplateBridge` from
-`hasTweaksTemplate(routingHtmlSource)` and passes it into `urlLoadDecision` at `:7486`, so an
-artifact shipping the class-based tweaks template now takes the srcDoc path where its bridge
-can inject. The precision cost of that heuristic is tracked separately as CANVAS-12.
+**`tweaksBridge` — wired.** `FileViewer.tsx` computes `tweaksTemplateBridge` from
+`hasTweaksTemplate(routingHtmlSource)` and passes it into `urlLoadDecision`, so an artifact
+shipping the class-based tweaks template now takes the srcDoc path where its bridge can
+inject. The precision cost of that heuristic is tracked separately as CANVAS-12.
 
-**`paletteActive` — still open, and not a wiring gap.** There is nothing to wire it to. The
-palette bridge is never injected (`FileViewer.tsx:7816` passes `paletteBridge: false` to
-`buildSrcdoc`), nothing in `apps/web/src` posts the `od:palette` message the bridge listens
-for (`runtime/srcdoc.ts:1309`), and no host palette state exists. `paletteActive`
-(`file-viewer-render-mode.ts:41`) and its disqualifier (`:137`) are therefore a hook for a
-surface that was never built.
+**The palette half — descoped, and the hooks removed.** There was never anything to wire it
+to: the palette bridge was never injected (`FileViewer.tsx` passed `paletteBridge: false` to
+`buildSrcdoc`), nothing in `apps/web/src` posted the `od:palette` message the bridge listened
+for, and no host palette state existed. `paletteActive`, the `paletteBridge` / `initialPalette`
+options, `injectPaletteBridge` and its `od:palette` listener were a hook for a surface that
+was never built.
 
-**Why it is not fixed here.** Giving `paletteActive` a producer means building the palette
-surface — feature work, not wiring — and deleting it means retiring `injectPaletteBridge`
-too. Both directions are the same product decision CANVAS-1 is waiting on; settle them
-together.
+**The decision.** Building the producer means designing a palette surface — feature work, not
+wiring, and the same toolbar CANVAS-1 is waiting on. Devin chose removal on 2026-09-03: the
+hooks are deleted, so the render-mode decision and `buildSrcdoc` no longer offer a capability
+the product does not have. `apps/web/tests/runtime/srcdoc-palette-hooks-removed.test.ts` holds
+that line. A future palette starts from an agreed surface and a bridge written for it, not
+from this one.
+
+**Not affected.** The always-on tweaks bridge stays; CANVAS-1 is untouched and still needs its
+own product decision.
 
 ---
 

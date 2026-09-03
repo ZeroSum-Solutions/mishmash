@@ -7501,8 +7501,8 @@ function HtmlViewer({
   // work around the opaque origin (localStorage SecurityError, focus theft),
   // and powered mode fixes the root cause with a REAL same-origin document, so
   // routing such an artifact to srcDoc would strip exactly the capabilities it
-  // needs. The interactive-bridge srcDoc modes (deck/inspect/edit/palette/
-  // tweaks/comment) still win — they require host-injected bridges powered mode
+  // needs. The interactive-bridge srcDoc modes (deck/inspect/edit/tweaks/
+  // comment) still win — they require host-injected bridges powered mode
   // can't carry.
   const needsPowered = useMemo(() => {
     if (serverPoweredPreviewRequired) return true;
@@ -7892,7 +7892,6 @@ function HtmlViewer({
       // re-parses the whole document — the "reload from scratch on switch" the
       // user hit. Mirrors the always-on tweaks bridge rationale above.
       editBridge: true,
-      paletteBridge: false,
       previewFocusGuard: true,
       // Embed the reload counter so the srcdoc string differs across reloads
       // even when the fetched HTML bytes are identical (issue #4650).
@@ -8062,8 +8061,8 @@ function HtmlViewer({
   // instead of parking it at about:blank. Draw is a quick "mark → screenshot →
   // close" round-trip; parking forces a full artifact re-fetch the moment the
   // overlay closes, which users see as a jarring black → loading → reload right
-  // after every screenshot. Sticky srcDoc modes (inspect / edit / palette /
-  // tweaks / comment / deck / focus-guard / sandbox-shim) keep parking, so two
+  // after every screenshot. Sticky srcDoc modes (inspect / edit / tweaks /
+  // comment / deck / focus-guard / sandbox-shim) keep parking, so two
   // live copies never linger beyond the brief annotation pass.
   const srcDocForcedOnlyByDraw =
     drawOverlayOpen &&
