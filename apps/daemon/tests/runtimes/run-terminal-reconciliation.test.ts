@@ -25,6 +25,7 @@ describe('durable run terminal reconciliation', () => {
         content TEXT,
         run_id TEXT,
         run_status TEXT,
+        started_at INTEGER,
         ended_at INTEGER,
         events_json TEXT
       )
@@ -823,6 +824,100 @@ describe('durable run terminal reconciliation', () => {
           expect.anything(),
         );
         noRole.close();
+      });
+
+      // The daemon stamps the row from its own `Date.now()` the moment the run
+      // ends (`reconcileAssistantMessageOnRunEnd`, `plugins/share-helpers.ts`);
+      // the client stamps its final save from the browser clock it rendered the
+      // completion with. The two clocks are independent, so "earlier than the
+      // stored stamp" cannot tell the run's own final save from an older run's
+      // stale copy. CI caught the collision twice — PR 163 run 33722201971 and
+      // PR 167 run 33749220713, both in
+      // `e2e/tests/dialog/retry-after-stop.test.ts`:
+      //
+      //   AssertionError: expected 1788434807160 to be 1788434807159
+      //     expect(assistant2!.endedAt).toBe(finishedAt);
+      //
+      // The client's save was one millisecond behind the daemon's, so a hold
+      // that reads backwards movement as staleness threw the live turn's own
+      // timestamp away. What separates the two writes is identity, not order:
+      // the final save names the run the row is terminal for.
+      describe('the row\'s own run owns its terminal timestamp', () => {
+        // The two stamps from PR 167 run 33749220713, kept literal so the
+        // spec fails on the same numbers CI reported.
+        const DAEMON_STAMP = 1_788_434_807_160;
+        const RUN_STARTED_AT = 1_788_434_800_000;
+
+        function insertTerminalRow(messageId: string, runId: string, startedAt: number): void {
+          db.prepare(
+            `INSERT INTO messages (id, role, content, run_id, run_status, started_at, ended_at, events_json)
+             VALUES (?, 'assistant', 'the answer', ?, 'succeeded', ?, ?, NULL)`,
+          ).run(messageId, runId, startedAt, DAEMON_STAMP);
+        }
+
+        it('keeps the run\'s own final save endedAt when it is one millisecond behind the daemon stamp', () => {
+          insertTerminalRow('m-own-run-1ms', 'run-live', RUN_STARTED_AT);
+
+          const write = {
+            content: 'the answer',
+            endedAt: DAEMON_STAMP - 1,
+            id: 'm-own-run-1ms',
+            role: 'assistant',
+            runId: 'run-live',
+            runStatus: 'succeeded',
+            startedAt: RUN_STARTED_AT,
+          };
+          expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
+        });
+
+        it('keeps it three milliseconds behind the daemon stamp too', () => {
+          insertTerminalRow('m-own-run-3ms', 'run-live', RUN_STARTED_AT);
+
+          const write = {
+            content: 'the answer',
+            endedAt: DAEMON_STAMP - 3,
+            id: 'm-own-run-3ms',
+            role: 'assistant',
+            runId: 'run-live',
+            runStatus: 'succeeded',
+            startedAt: RUN_STARTED_AT,
+          };
+          expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
+        });
+
+        // The save the retry-after-stop spec makes, and the one the chat makes
+        // for a turn whose runId never reached the row: no runId of its own,
+        // but the run's `startedAt`, which `pinAssistantMessageOnRunCreate`
+        // (`runtimes/chat-run-messages.ts`) stamps onto the row per run.
+        it('identifies the run by startedAt when the final save carries no runId', () => {
+          insertTerminalRow('m-own-run-started-at', 'run-live', RUN_STARTED_AT);
+
+          const write = {
+            content: 'the answer',
+            endedAt: DAEMON_STAMP - 1,
+            id: 'm-own-run-started-at',
+            role: 'assistant',
+            runStatus: 'succeeded',
+            startedAt: RUN_STARTED_AT,
+          };
+          expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
+        });
+
+        // The other half of the same rule: a copy of an EARLIER run on this row
+        // agrees the turn succeeded but is not the run the row is terminal for,
+        // so it still cannot drag the stamp back.
+        it('still holds a stale copy of an older run that agrees on the terminal status', () => {
+          insertTerminalRow('m-older-run', 'run-live', RUN_STARTED_AT);
+
+          expect(holdTerminalRunStatusOnMessageWrite(db, {
+            content: '',
+            endedAt: DAEMON_STAMP - 1,
+            id: 'm-older-run',
+            role: 'assistant',
+            runStatus: 'succeeded',
+            startedAt: RUN_STARTED_AT - 5_000,
+          })).toMatchObject({ content: 'the answer', endedAt: DAEMON_STAMP, runStatus: 'succeeded' });
+        });
       });
     });
 
