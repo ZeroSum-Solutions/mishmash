@@ -60,9 +60,14 @@ function isAsciiAlpha(char: string): boolean {
  * Elements whose content the tokenizer reads as text rather than as markup, so
  * a `<base>` written inside one is a string and never becomes an element.
  *
- * `noscript` is deliberately absent: its content is text only when scripting is
- * enabled, and the preview this module serves runs in a frame that executes no
- * script, so a parser reads what it holds as markup.
+ * `noscript` is deliberately absent, and the choice is not free: its content is
+ * text when scripting is enabled and markup when it is not, and this module
+ * cannot know which its caller will get. Reading it as markup means a `<base>`
+ * inside it is dropped — right for a preview frame that executes no script,
+ * and, where scripting is on, it deletes a few bytes from content the browser
+ * does not render. Reading it as text would mean leaving a real hoisted base in
+ * place and letting the page rebase itself, which is the defect this module
+ * exists to close. The harmless failure is the one taken.
  */
 const RAW_TEXT_ELEMENTS = new Set([
   'iframe',
@@ -78,7 +83,11 @@ const RAW_TEXT_ELEMENTS = new Set([
 
 /**
  * Where the start tag whose name ends at `from` ends: the offset just past its
- * `>`, or the length of `html` for a tag the document never closes.
+ * `>`, or `-1` for a tag the document never closes.
+ *
+ * `-1` is not an error. A tag still open when the input runs out is a tag the
+ * parser never emits — it reaches end-of-file inside the tag and drops the
+ * token — so a caller must treat `<html><head` as holding no head element.
  *
  * A `>` inside a quoted attribute value belongs to the value, so `<base
  * href="a>b">` is one tag and not a tag plus the stray text `b">`. Only the
@@ -125,7 +134,7 @@ function endOfTag(html: string, from: number): number {
     else if (char === '=' && state === 'name') state = 'before-value';
     else state = 'name';
   }
-  return html.length;
+  return -1;
 }
 
 /**
@@ -146,6 +155,13 @@ function endOfRawText(html: string, name: string, from: number): number {
 interface TagSpan {
   readonly start: number;
   readonly end: number;
+  /**
+   * Whether the byte just before `start` is a `<` the parser reads as text.
+   * Removing this tag would push that `<` against whatever follows the tag, and
+   * a `<` in front of a letter opens one — so the byte has to be spelled out as
+   * `&lt;` when the tag goes.
+   */
+  readonly afterTextLessThan: boolean;
 }
 
 interface BasePlacement {
@@ -174,16 +190,37 @@ interface BasePlacement {
  * A `<base>` inside a `<template>` is skipped for the same reason a commented
  * one is: template content parses into its own fragment, so it is not in the
  * document's tree order and cannot outrank the injected tag.
+ *
+ * A tag the input never closes ends the scan and is reported by neither field:
+ * the parser reaches end-of-file inside it and emits no token for it, so
+ * `<html><head` holds no head element and nothing follows it to find.
+ *
+ * Two corners are read conservatively rather than exactly, and both fail
+ * towards placing the injected tag earlier, which keeps it first in tree order:
+ * a `<!` construct is read to its first `>`, which under-skips a CDATA section
+ * in foreign content, and an unterminated comment is read to the end of the
+ * input. `noscript` is the one deliberate divergence and is argued at
+ * `RAW_TEXT_ELEMENTS`.
  */
 function scanForBasePlacement(html: string): BasePlacement {
   const hoistedBases: TagSpan[] = [];
   let htmlEnd: number | null = null;
   let templateDepth = 0;
+  let textLessThanAt = -1;
   let at = 0;
   while (at < html.length) {
     const start = html.indexOf('<', at);
     if (start < 0) break;
     if (html.startsWith('<!--', start)) {
+      // `<!-->` and `<!--->` close the comment where they stand.
+      if (html.startsWith('<!-->', start)) {
+        at = start + 5;
+        continue;
+      }
+      if (html.startsWith('<!--->', start)) {
+        at = start + 6;
+        continue;
+      }
       const close = html.indexOf('-->', start + 4);
       at = close < 0 ? html.length : close + 3;
       continue;
@@ -202,6 +239,7 @@ function scanForBasePlacement(html: string): BasePlacement {
       // `</` that names nothing is a bogus comment, read to the next `>`; a
       // lone `<` opens no tag at all and is ordinary text.
       if (!closing) {
+        textLessThanAt = start;
         at = start + 1;
         continue;
       }
@@ -219,7 +257,10 @@ function scanForBasePlacement(html: string): BasePlacement {
       nameEnd += 1;
     }
     const name = html.slice(nameStart, nameEnd).toLowerCase();
-    at = endOfTag(html, nameEnd);
+    const tagEnd = endOfTag(html, nameEnd);
+    // A tag the input never closes is never emitted, and nothing follows it.
+    if (tagEnd < 0) break;
+    at = tagEnd;
     if (closing) {
       if (name === 'template' && templateDepth > 0) templateDepth -= 1;
       continue;
@@ -233,7 +274,9 @@ function scanForBasePlacement(html: string): BasePlacement {
       continue;
     }
     if (templateDepth > 0) continue;
-    if (name === 'base') hoistedBases.push({ start, end: at });
+    if (name === 'base') {
+      hoistedBases.push({ start, end: at, afterTextLessThan: start > 0 && textLessThanAt === start - 1 });
+    }
     else if (name === 'head') return { headEnd: at, htmlEnd, hoistedBases };
     else if (name === 'html' && htmlEnd === null) htmlEnd = at;
   }
@@ -252,15 +295,20 @@ function scanForBasePlacement(html: string): BasePlacement {
  *
  * The spans come from `scanForBasePlacement`, so each one is a whole `<base>`
  * start tag and nothing else. The result is therefore the input with those tags
- * cut out and `tag` inserted: no other byte moves, and the bytes on either side
- * of a cut cannot join into markup the input did not contain.
+ * cut out and `tag` inserted, and the bytes a cut brings together cannot open a
+ * tag: the only byte that could is a `<` the parser already reads as text
+ * sitting right in front of the removed tag, and that one is written out as
+ * `&lt;` — the same character, spelled so a letter behind it cannot turn it
+ * into a tag opener. Every other byte is carried through untouched.
  */
 function insertBaseTag(html: string, hoistedBases: readonly TagSpan[], at: number, tag: string): string {
   let kept = '';
   let cursor = 0;
   for (const base of hoistedBases) {
     if (base.end > at) break;
-    kept += html.slice(cursor, base.start);
+    kept += base.afterTextLessThan
+      ? `${html.slice(cursor, base.start - 1)}&lt;`
+      : html.slice(cursor, base.start);
     cursor = base.end;
   }
   return `${kept}${html.slice(cursor, at)}${tag}${html.slice(at)}`;
@@ -284,9 +332,11 @@ function insertBaseTag(html: string, hoistedBases: readonly TagSpan[], at: numbe
  *
  * The document is read with an HTML start-tag scan rather than matched with a
  * regex over source text, so what comes back is the input with whole `<base>`
- * elements removed and one tag inserted. No byte outside a `<base>` start tag
- * changes, and no removal can splice its neighbours into markup that was never
- * written (see `scanForBasePlacement`).
+ * elements removed and one tag inserted. No removal forges an element the input
+ * did not contain or loses one it did, and the only byte outside a `<base>`
+ * start tag that can change is a `<` the parser reads as text immediately in
+ * front of a removed tag, rewritten as `&lt;` so the gap cannot open a tag (see
+ * `insertBaseTag` and `scanForBasePlacement`).
  *
  * The response carrying this document must allow the base under its `base-uri`
  * directive, or the browser drops the tag and the refs stay broken.
