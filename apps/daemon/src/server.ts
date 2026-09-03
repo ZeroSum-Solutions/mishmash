@@ -2767,6 +2767,7 @@ export async function startServer({
         if (status === 'canceled' && !run.failureCategory && !run.failureDetail) {
           const canceled = classifyRunFailure({
             result: 'cancelled',
+            ...(run.cancelOrigin ? { cancelOrigin: run.cancelOrigin } : {}),
             status: {
               status,
               error: run.error,

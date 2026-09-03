@@ -14,8 +14,15 @@ export interface RunEventForFailureClassification {
   data: unknown;
 }
 
+/** Why a run was cancelled. `user` is someone pressing Stop; `shutdown` is the
+ *  daemon ending an in-flight turn as it shuts down. They look identical on the
+ *  run object — both set `cancelRequested` — so the origin has to be carried
+ *  explicitly, or a shutdown would tell the user they cancelled their own turn. */
+export type RunCancelOrigin = 'user' | 'shutdown';
+
 export interface RunFailureClassificationInput {
   result: RunResult;
+  cancelOrigin?: RunCancelOrigin;
   status: RunStatusForAnalytics & {
     error?: string | null;
   };
@@ -631,13 +638,12 @@ export function classifyRunFailure(
 ): RunFailureClassification | undefined {
   if (input.result === 'success') return undefined;
   if (input.result === 'cancelled') {
-    return classification(
-      'user_cancel',
-      'user_cancelled',
-      inferFailureStageFromEvents(input.events, 'first_token_wait'),
-      false,
-      'none',
-    );
+    const stage = inferFailureStageFromEvents(input.events, 'first_token_wait');
+    // A shutdown is not the user's doing, so it must not be reported as one.
+    if (input.cancelOrigin === 'shutdown') {
+      return classification('process_exit', 'interrupted', stage, true, 'retry');
+    }
+    return classification('user_cancel', 'user_cancelled', stage, false, 'none');
   }
 
   const errorCode = normalizeCode(input.errorCode ?? input.status.errorCode);

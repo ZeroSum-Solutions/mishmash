@@ -155,6 +155,33 @@ describe('classifyRunFailure', () => {
     });
   });
 
+  // W1.4: a daemon shutdown ends in-flight turns through the same
+  // `cancelRequested` path as a user pressing Stop, so without the origin the
+  // run record would tell the user they cancelled a turn the daemon killed.
+  it('does not report a daemon-shutdown cancellation as the user cancelling', () => {
+    expect(
+      classifyRunFailure({
+        result: 'cancelled',
+        cancelOrigin: 'shutdown',
+        status: { status: 'canceled', signal: 'SIGTERM' },
+      }),
+    ).toEqual({
+      failure_category: 'process_exit',
+      failure_detail: 'interrupted',
+      failure_stage: 'first_token_wait',
+      retryable: true,
+      user_action: 'retry',
+    });
+    // An explicit user origin, and an absent one, both stay the user's cancel.
+    expect(
+      classifyRunFailure({
+        result: 'cancelled',
+        cancelOrigin: 'user',
+        status: { status: 'canceled' },
+      }),
+    ).toMatchObject({ failure_detail: 'user_cancelled' });
+  });
+
   it('uses phase evidence for cancelled runs with tool activity', () => {
     expect(
       classifyRunFailure({

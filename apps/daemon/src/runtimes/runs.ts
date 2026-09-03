@@ -636,6 +636,10 @@ export function createChatRunService({
   const cancel = async (run) => {
     if (TERMINAL_RUN_STATUSES.has(run.status)) return statusBody(run);
     run.cancelRequested = true;
+    // Someone pressed Stop. `shutdownActive` records a different origin below;
+    // both set `cancelRequested`, so this field is the only thing that can tell
+    // a deliberate Stop apart from the daemon ending the turn.
+    run.cancelOrigin = 'user';
     run.updatedAt = Date.now();
     clearPendingRetryRestart(run);
     closeRunStdin(run);
@@ -679,6 +683,7 @@ export function createChatRunService({
     const activeRuns = Array.from(runs.values()).filter((run) => !TERMINAL_RUN_STATUSES.has(run.status));
     await Promise.all(activeRuns.map(async (run) => {
       run.cancelRequested = true;
+      run.cancelOrigin = 'shutdown';
       run.updatedAt = Date.now();
       clearPendingRetryRestart(run);
       closeRunStdin(run);
