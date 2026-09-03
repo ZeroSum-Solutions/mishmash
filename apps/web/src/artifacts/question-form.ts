@@ -803,6 +803,84 @@ export function formatFormAnswers(
   return lines.join('\n');
 }
 
+/**
+ * The identity line `formatFormAnswers` writes: `[form answers — <form id>]`.
+ * The separator is tolerated as an em dash, en dash, or hyphen so a
+ * hand-typed or re-serialised answer still carries its form identity.
+ */
+const FORM_ANSWERS_HEADER = /^\[form answers\s*[\u2014\u2013-]\s*([^\]]+)\]$/i;
+
+/**
+ * The form id a user message answers, or `null` when the message is not a
+ * form-answer payload or its header carries no id.
+ */
+export function formAnswersFormId(userMessageContent: string): string | null {
+  const header = userMessageContent.split('\n', 1)[0]?.trim() ?? '';
+  const match = FORM_ANSWERS_HEADER.exec(header);
+  const id = match?.[1]?.trim();
+  return id && id.length > 0 ? id : null;
+}
+
+/** The minimum a conversation message must expose to resolve form answers. */
+export interface FormAnswerConversationMessage {
+  id: string;
+  role: string;
+  content: string;
+}
+
+/**
+ * Collects, for every assistant message, the form answers that arrive AFTER
+ * it, keyed by the form id each one answers and holding the nearest following
+ * answer for that id. This is the lookup `submittedAnswerContentForForm`
+ * consumes; see the invariant documented there.
+ */
+export function formAnswersByAssistantMessageId(
+  messages: ReadonlyArray<FormAnswerConversationMessage>,
+): Map<string, ReadonlyMap<string, string>> {
+  const byAssistantMessageId = new Map<string, ReadonlyMap<string, string>>();
+  const nearestFollowingAnswerByFormId = new Map<string, string>();
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i]!;
+    if (message.role === 'user') {
+      const formId = formAnswersFormId(message.content);
+      if (formId) nearestFollowingAnswerByFormId.set(formId, message.content);
+      continue;
+    }
+    if (message.role !== 'assistant') continue;
+    if (nearestFollowingAnswerByFormId.size === 0) continue;
+    byAssistantMessageId.set(message.id, new Map(nearestFollowingAnswerByFormId));
+  }
+  return byAssistantMessageId;
+}
+
+/**
+ * INVARIANT: a question form is answered when an answer for THAT form id
+ * exists anywhere later in the conversation.
+ *
+ * The system prompt tells the model to re-emit a still-pending form verbatim,
+ * so one form id can sit in several assistant messages at once, and the user
+ * may answer it long after newer turns have arrived. Resolving the answer by
+ * form id — not by "the user message immediately after this assistant
+ * message" — is what makes every copy of the id collapse to the answered
+ * summary together, so no copy is left submittable a second time.
+ *
+ * `nextUserContent` stays the fallback for an answer whose header carries no
+ * id (a paraphrased or hand-written reply): that message can only be read as
+ * an answer to the form it directly follows. A message that names a DIFFERENT
+ * form is not that form's answer, so position never overrides identity.
+ */
+export function submittedAnswerContentForForm(
+  form: Pick<QuestionForm, 'id'>,
+  answersByFormId: ReadonlyMap<string, string> | undefined,
+  nextUserContent: string | undefined,
+): string | undefined {
+  const answerForThisForm = answersByFormId?.get(form.id);
+  if (answerForThisForm) return answerForThisForm;
+  if (nextUserContent === undefined) return undefined;
+  const nextFormId = formAnswersFormId(nextUserContent);
+  return nextFormId === null || nextFormId === form.id ? nextUserContent : undefined;
+}
+
 function formOptionDisplayForValue(
   question: Pick<FormQuestion, 'options'>,
   value: string,
