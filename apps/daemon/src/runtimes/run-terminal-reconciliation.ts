@@ -169,12 +169,17 @@ export function followRunTerminalOnMessage(
  * the stored values and every other field passes through untouched, so a late
  * write still delivers the content, events and produced files it carries.
  *
- * Two writes are deliberately let through. A write that agrees with the stored
- * status has nothing to correct. And a write naming a DIFFERENT run is a new
- * turn on that row, not a stale copy of the finished one, so it owns the row;
- * only a write for the same run, or one that names no run at all, is held.
- * It never invents a status either — a row with no non-failed terminal status
- * stored is written exactly as sent.
+ * The row's `ended_at` is held on the same terms as its status: a stale copy
+ * that agrees the turn succeeded but carries the timestamp its own writer
+ * stamped would drag the row off the run's terminal clock, which is the same
+ * drift one step down.
+ *
+ * Two writes are deliberately let through. A write that already agrees on both
+ * status and timestamp has nothing to correct. And a write naming a DIFFERENT
+ * run is a new turn on that row, not a stale copy of the finished one, so it
+ * owns the row; only a write for the same run, or one that names no run at
+ * all, is held. It never invents a status either — a row with no non-failed
+ * terminal status stored is written exactly as sent.
  *
  * Failing open is deliberate: a read error here must not reject the user's
  * message write, so it warns and returns the write unchanged, which is exactly
@@ -194,17 +199,14 @@ export function holdTerminalRunStatusOnMessageWrite(
     ).get(id) as { runStatus: string | null; endedAt: number | null; runId: string | null } | undefined;
     const held = stored?.runStatus;
     if (!held || held === 'failed' || !TERMINAL_STATUSES.has(held)) return message;
-    if (message.runStatus === held) return message;
     if (
       typeof message.runId === 'string'
       && typeof stored?.runId === 'string'
       && message.runId !== stored.runId
     ) return message;
-    return {
-      ...message,
-      runStatus: held,
-      endedAt: stored?.endedAt ?? message.endedAt ?? null,
-    };
+    const endedAt = stored?.endedAt ?? message.endedAt ?? null;
+    if (message.runStatus === held && message.endedAt === endedAt) return message;
+    return { ...message, runStatus: held, endedAt };
   } catch (err) {
     console.warn('[runs] terminal run status hold failed', err);
     return message;

@@ -646,15 +646,29 @@ describe('durable run terminal reconciliation', () => {
         }
       });
 
-      it('never touches a write that already agrees with the row', () => {
+      // Agreeing on the status is not enough. A stale copy that carries the
+      // `endedAt` its own writer stamped would drag the row's timestamp back
+      // off the run's terminal clock, which is the same class of drift one
+      // step down.
+      it('pins the terminal timestamp even when the delayed write agrees on status', () => {
         insertRow('m-agrees', 'succeeded', 9_000);
         insertRow('m-agrees-canceled', 'canceled', 9_000);
 
         for (const id of ['m-agrees', 'm-agrees-canceled']) {
           const held = id === 'm-agrees' ? 'succeeded' : 'canceled';
-          const write = { endedAt: 1_000, id, runStatus: held };
-          expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
+          expect(holdTerminalRunStatusOnMessageWrite(db, {
+            endedAt: 1_000,
+            id,
+            runStatus: held,
+          })).toMatchObject({ endedAt: 9_000, runStatus: held });
         }
+      });
+
+      it('never touches a write that already agrees on status and timestamp', () => {
+        insertRow('m-agrees-fully', 'succeeded', 9_000);
+
+        const write = { content: 'the answer', endedAt: 9_000, id: 'm-agrees-fully', runStatus: 'succeeded' };
+        expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
       });
 
       it('fails open with a warning rather than rejecting the write', () => {
