@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   coversRootDir,
+  hasAdvertisedCover,
   hasCoverImage,
   readCoverImageBytes,
   readCoverRecord,
@@ -104,10 +105,10 @@ describe('hasCoverImage — the condition GET /api/projects/:id/cover answers on
   });
 
   /**
-   * The route reads ONLY the image bytes (routes/covers.ts: `readCoverImageBytes`
-   * then 404 when it finds nothing) — `readCoverRecord` takes no part in that
-   * decision. So bytes present with no record must still report true, or
-   * `hasCover` would under-report a cover the route serves.
+   * The route serves the image bytes when it can read them (routes/covers.ts:
+   * `servedCoverImage`), and only falls back to the record to decide whether a
+   * cover was ever advertised. So bytes present with no record must still
+   * report true, or `hasCover` would under-report a cover the route serves.
    */
   it('agrees with readCoverImageBytes when the record is missing', async () => {
     const dir = path.join(coversRootDir(dataDir), 'proj-orphan-bytes');
@@ -117,5 +118,42 @@ describe('hasCoverImage — the condition GET /api/projects/:id/cover answers on
     expect(await readCoverRecord(dataDir, 'proj-orphan-bytes')).toBeNull();
     expect(await readCoverImageBytes(dataDir, 'proj-orphan-bytes')).not.toBeNull();
     expect(await hasCoverImage(dataDir, 'proj-orphan-bytes')).toBe(true);
+  });
+});
+
+/**
+ * The condition GET /api/projects/:id/cover uses to decide 200-with-a-
+ * placeholder vs 404 -- see routes/covers.ts's `servedCoverImage`.
+ */
+describe('hasAdvertisedCover — whether a cover was ever rendered', () => {
+  it('stays true after the image bytes are deleted, because the record outlives them', async () => {
+    await writeCover(dataDir, 'proj-advertised', {
+      imageBytes: Buffer.from('fake-png-bytes'),
+      sourceHash: 'e'.repeat(16),
+      width: 1280,
+      height: 800,
+      generatedAt: new Date(),
+    });
+    await fs.unlink(path.join(coversRootDir(dataDir), 'proj-advertised', 'cover.png'));
+
+    expect(await hasCoverImage(dataDir, 'proj-advertised')).toBe(false);
+    expect(await readCoverImageBytes(dataDir, 'proj-advertised')).toBeNull();
+    expect(await hasAdvertisedCover(dataDir, 'proj-advertised')).toBe(true);
+  });
+
+  it('is true for orphan bytes with no record', async () => {
+    const dir = path.join(coversRootDir(dataDir), 'proj-advertised-orphan');
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, 'cover.png'), Buffer.from('bytes-without-record'));
+
+    expect(await readCoverRecord(dataDir, 'proj-advertised-orphan')).toBeNull();
+    expect(await hasAdvertisedCover(dataDir, 'proj-advertised-orphan')).toBe(true);
+  });
+
+  it('is false for a project that never rendered one, and for an unsafe id', async () => {
+    expect(await hasAdvertisedCover(dataDir, 'never-generated')).toBe(false);
+    for (const id of ['..', '../..', 'a/b', '']) {
+      expect(await hasAdvertisedCover(dataDir, id)).toBe(false);
+    }
   });
 });

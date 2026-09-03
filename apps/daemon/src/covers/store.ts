@@ -79,12 +79,15 @@ export async function readCoverRecord(
 
 /**
  * Whether rendered cover image bytes exist for `projectId` right now — the
- * same bytes `GET /api/projects/:id/cover` serves, and therefore the exact
- * condition that decides whether that frozen route answers 200 or 404.
+ * same bytes `GET /api/projects/:id/cover` serves.
  *
  * The projects list and detail responses publish this as `Project.hasCover`
  * so a client never has to discover the answer by taking a 404. An unsafe id
  * has no cover directory it is allowed to address, so it has no cover.
+ *
+ * This is an existence check at one instant, so it cannot be the whole answer
+ * for the route, which reads the bytes in a later request — see
+ * `hasAdvertisedCover` below.
  */
 export async function hasCoverImage(runtimeDataDir: string, projectId: string): Promise<boolean> {
   try {
@@ -93,6 +96,28 @@ export async function hasCoverImage(runtimeDataDir: string, projectId: string): 
   } catch {
     return false;
   }
+}
+
+/**
+ * Whether a cover has ever been rendered for `projectId` — the condition under
+ * which the daemon has published `Project.hasCover: true` and a client may
+ * already be rendering the cover URL in an `<img>`.
+ *
+ * INVARIANT: this must stay TRUE across every way the stored bytes can stop
+ * being readable, because it is what stops `GET /api/projects/:id/cover`
+ * answering 404 for a cover the daemon advertised. It is therefore
+ * deliberately wider than `hasCoverImage`: `writeCover` persists `record.json`
+ * alongside `cover.png`, and that record outlives the image bytes when they
+ * are deleted from another tab, truncated mid-replace, or made unreadable.
+ * The image half of the check covers the reverse window — bytes on disk that
+ * cannot be read, and the orphan-bytes case where a record was never written.
+ *
+ * A project with neither has advertised nothing, and the route still answers
+ * 404 for it.
+ */
+export async function hasAdvertisedCover(runtimeDataDir: string, projectId: string): Promise<boolean> {
+  if (await hasCoverImage(runtimeDataDir, projectId)) return true;
+  return (await readCoverRecord(runtimeDataDir, projectId)) !== null;
 }
 
 export async function readCoverImageBytes(

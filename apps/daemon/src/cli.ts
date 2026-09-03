@@ -19,7 +19,12 @@ import { resolveDaemonUrl, DaemonUrlDiscoveryError } from './daemon-url.js';
 import { formatRunFailureSummary } from './run-failure-summary.js';
 import { requestJsonIpc } from '@open-design/sidecar';
 import { SIDECAR_ENV, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
-import { EXPORT_FORMATS, EXPORT_IMAGE_FORMATS, nativeSessionRecoveryNotice } from '@open-design/contracts';
+import {
+  EXPORT_FORMATS,
+  EXPORT_IMAGE_FORMATS,
+  PROJECT_COVER_PLACEHOLDER_HEADER,
+  nativeSessionRecoveryNotice,
+} from '@open-design/contracts';
 import { buildExportCliRequestBody, buildExportCliResultEnvelope, resolveExportCliDeckMode } from './export-cli-request.js';
 import { exportRoutePath } from './export-cli-routing.js';
 import {
@@ -496,7 +501,9 @@ Subcommands:
   generate   POST .../cover/generate -- synchronously (re)render the
              project's cover, reusing the stored one when its content
              hash is unchanged.
-  show       GET .../cover -- fetch the currently stored cover bytes.
+  show       GET .../cover -- fetch the currently stored cover bytes, or
+             the neutral placeholder (reported as placeholder=true) when
+             the daemon advertises a cover it cannot read right now.
 
 Options:
   --project <id>   Project id (required).
@@ -567,8 +574,18 @@ async function runCover(args) {
     if (!resp.ok) return structuredHttpFailure(resp);
     const buf = Buffer.from(await resp.arrayBuffer());
     const contentType = resp.headers.get('content-type') ?? 'application/octet-stream';
+    // The route serves a placeholder rather than a 404 for a cover the daemon
+    // advertised but cannot read right now (routes/covers.ts: servedCoverImage).
+    // Report that instead of presenting the placeholder as the stored cover.
+    const placeholder = resp.headers.get(PROJECT_COVER_PLACEHOLDER_HEADER) === '1';
     if (flags.out) writeFileSync(flags.out, buf);
-    if (flags.json) return writeJson({ ok: true, projectId, contentType, bytes: buf.length, savedTo: flags.out ?? null });
+    if (flags.json) return writeJson({ ok: true, projectId, contentType, bytes: buf.length, placeholder, savedTo: flags.out ?? null });
+    if (placeholder) {
+      console.log(
+        `Cover for ${projectId}: placeholder -- the stored cover bytes could not be read (${contentType}, ${buf.length} bytes)${flags.out ? ` (saved to ${flags.out})` : ''}`,
+      );
+      return;
+    }
     console.log(`Cover for ${projectId}: ${contentType}, ${buf.length} bytes${flags.out ? ` (saved to ${flags.out})` : ''}`);
     return;
   }
