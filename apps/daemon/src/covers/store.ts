@@ -77,6 +77,24 @@ export async function readCoverRecord(
   }
 }
 
+/**
+ * Whether rendered cover image bytes exist for `projectId` right now — the
+ * same bytes `GET /api/projects/:id/cover` serves, and therefore the exact
+ * condition that decides whether that frozen route answers 200 or 404.
+ *
+ * The projects list and detail responses publish this as `Project.hasCover`
+ * so a client never has to discover the answer by taking a 404. An unsafe id
+ * has no cover directory it is allowed to address, so it has no cover.
+ */
+export async function hasCoverImage(runtimeDataDir: string, projectId: string): Promise<boolean> {
+  try {
+    await fs.access(coverImagePath(runtimeDataDir, projectId));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function readCoverImageBytes(
   runtimeDataDir: string,
   projectId: string,

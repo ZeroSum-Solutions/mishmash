@@ -9,9 +9,11 @@ export type E2eChatMessage = {
   events?: unknown[];
   id: string;
   producedFiles?: unknown[];
+  resultDeliveryState?: 'delivered' | 'no_result' | 'delivery_failed';
   role: 'assistant' | 'user';
   runId?: string;
   runStatus?: 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';
+  sessionMode?: 'chat' | 'design' | 'plan';
   startedAt?: number;
   telemetryFinalized?: boolean;
 };
