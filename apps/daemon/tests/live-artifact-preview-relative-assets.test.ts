@@ -254,6 +254,13 @@ describe('relative asset resolution across the two page-creation paths', () => {
     const previewUrl = `${baseUrl}/api/live-artifacts/${encodeURIComponent(artifactId)}/preview?projectId=${encodeURIComponent(PROJECT_ID)}`;
     const response = await fetch(previewUrl);
     expect(response.status).toBe(200);
+
+    // The injected base only takes effect if this response's CSP admits it.
+    // Under `base-uri 'none'` the browser drops the tag and the ref stays
+    // broken, so the directive is half the fix and is pinned here rather than
+    // left to a manual probe.
+    expect(response.headers.get('content-security-policy')).toContain("base-uri 'self'");
+
     const previewHtml = await response.text();
     expect(previewHtml).toContain(`src="${RELATIVE_REF}"`);
 
