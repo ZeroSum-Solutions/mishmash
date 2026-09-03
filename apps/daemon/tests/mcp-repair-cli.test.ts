@@ -284,9 +284,10 @@ describe('od mcp repair requires the confirmation flag before it removes anythin
  */
 function stderrEnvelope(stderr: string): any {
   const lines = stderr.trim().split('\n').filter(Boolean);
-  if (lines.length !== 1) return null;
+  const only = lines.length === 1 ? lines[0] : undefined;
+  if (only === undefined) return null;
   try {
-    return JSON.parse(lines[0]);
+    return JSON.parse(only);
   } catch {
     return null;
   }
