@@ -280,34 +280,90 @@ async function connectStdio(
   return outcome;
 }
 
+type ConclusiveReply = { ok: true } | { ok: false; reason: string };
+
 /**
- * Read a JSON-RPC `initialize` reply out of an HTTP response body.
+ * Look for a conclusive `initialize` outcome in the bytes that have arrived so
+ * far, or `null` when nothing conclusive is there yet.
  *
- * Streamable-HTTP servers may answer as plain JSON or as one SSE `data:`
- * frame, so both shapes are accepted. A 2xx alone is not an answer: a server
- * can return 200 with a JSON-RPC error, or with nothing at all, and reporting
- * that as `ok` would put the same unearned confidence on this surface that
- * #157 put on the run indicator.
+ * `null` is the load-bearing case. A streamable-HTTP server may answer
+ * `initialize` and then hold its SSE stream open, so waiting for the body to
+ * complete before deciding would report a server that answered in 200 ms as a
+ * 15-second timeout -- the exact shape of #157, rebuilt on the surface meant
+ * to correct it. The caller reads incrementally and stops at the first frame
+ * that settles the question.
+ *
+ * Only complete lines are parsed until the stream ends, because a half-arrived
+ * frame is not a frame. Both wire shapes are accepted: plain JSON, and one SSE
+ * `data:` frame.
  */
-function readInitializeReply(
-  body: string,
-): { ok: true } | { ok: false; reason: string } {
-  const candidates = body.includes('data:')
-    ? body.split('\n').filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim())
-    : [body.trim()];
-  for (const candidate of candidates) {
-    if (!candidate) continue;
+function scanInitializeReply(buffered: string, atEnd: boolean): ConclusiveReply | null {
+  const lines = buffered.split('\n');
+  const complete = atEnd ? lines : lines.slice(0, -1);
+  for (const raw of complete) {
+    const line = raw.trim();
+    if (!line) continue;
+    const payload = line.startsWith('data:') ? line.slice(5).trim() : line;
+    if (!payload) continue;
     try {
-      const message = JSON.parse(candidate) as { result?: unknown; error?: { message?: string } };
+      const message = JSON.parse(payload) as { result?: unknown; error?: { message?: string } };
       if (message.error) {
         return { ok: false, reason: message.error.message ?? 'server rejected initialize' };
       }
       if (message.result) return { ok: true };
     } catch {
-      // Not a JSON-RPC frame. Keep looking.
+      // Not a JSON-RPC frame (a comment, a keep-alive, a banner). Keep reading.
     }
   }
-  return { ok: false, reason: 'server answered without a JSON-RPC initialize result' };
+  return null;
+}
+
+/**
+ * Read an HTTP response until it settles the `initialize` question, then stop.
+ *
+ * Stopping early is the point: this returns as soon as a frame answers, and
+ * cancels the rest of the body rather than waiting for a stream the server may
+ * never close.
+ */
+async function readInitializeFromStream(
+  res: Response,
+): Promise<{ reply: ConclusiveReply; body: string }> {
+  const stream = res.body;
+  if (!stream) {
+    const body = await res.text();
+    return {
+      reply: scanInitializeReply(body, true)
+        ?? { ok: false, reason: 'server answered without a JSON-RPC initialize result' },
+      body,
+    };
+  }
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffered = '';
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (value) buffered += decoder.decode(value, { stream: true });
+      const reply = scanInitializeReply(buffered, done);
+      if (reply) return { reply, body: buffered };
+      if (done) break;
+      if (buffered.length > STDOUT_BUFFER_LIMIT) {
+        return {
+          reply: {
+            ok: false,
+            reason: `server sent ${STDOUT_BUFFER_LIMIT} bytes without a JSON-RPC initialize result`,
+          },
+          body: buffered,
+        };
+      }
+    }
+  } finally {
+    void reader.cancel().catch(() => {});
+  }
+  return {
+    reply: { ok: false, reason: 'server answered without a JSON-RPC initialize result' },
+    body: buffered,
+  };
 }
 
 /**
@@ -317,8 +373,11 @@ function readInitializeReply(
  * streamable HTTP takes a POSTed `initialize` and answers it, while the older
  * SSE transport answers a GET by opening an event stream and only then accepts
  * posts on a session endpoint it names. For `sse` the probe therefore measures
- * what it can honestly measure -- that the stream opens -- rather than POSTing
- * at a URL that shape does not serve and reporting the 405 as a dead server.
+ * what it can honestly measure -- that an event stream opens -- rather than
+ * POSTing at a URL that shape does not serve and reporting the 405 as a dead
+ * server. The `sse` meaning of `ok` and `connectMs` is narrower than the http
+ * one, and `packages/contracts/src/api/mcp.ts` says so where a reader of the
+ * DTO will see it.
  */
 async function connectRemote(
   server: McpServerConfig,
@@ -344,24 +403,34 @@ async function connectRemote(
       ...(isSse ? {} : { body: JSON.stringify(INITIALIZE_REQUEST) }),
       signal: controller.signal,
     });
-    const connectMs = Date.now() - startedAt;
     if (!res.ok) {
       return {
         state: 'failed',
-        connectMs,
+        connectMs: Date.now() - startedAt,
         stderr: excerpt(await res.text().catch(() => '')),
         reason: `HTTP ${res.status}`,
       };
     }
     if (isSse) {
-      // The stream opening IS the SSE handshake's first step; anything past it
-      // needs the session endpoint the stream itself names, which is more than
-      // a health probe should hold open.
-      void res.body?.cancel();
-      return { state: 'ok', connectMs, stderr: '' };
+      // An event stream opening IS the SSE handshake's first step; anything
+      // past it needs the session endpoint the stream itself names, which is
+      // more than a health probe should hold open. A 200 that is not an event
+      // stream is not that handshake, though -- a stray web page at the
+      // configured URL must not read as a working server.
+      const contentType = res.headers.get('content-type') ?? '';
+      void res.body?.cancel().catch(() => {});
+      if (!contentType.toLowerCase().includes('text/event-stream')) {
+        return {
+          state: 'failed',
+          connectMs: Date.now() - startedAt,
+          stderr: '',
+          reason: `expected an event stream, got content-type "${contentType || 'none'}"`,
+        };
+      }
+      return { state: 'ok', connectMs: Date.now() - startedAt, stderr: '' };
     }
-    const body = await res.text();
-    const reply = readInitializeReply(body);
+    const { reply, body } = await readInitializeFromStream(res);
+    const connectMs = Date.now() - startedAt;
     if (!reply.ok) {
       return { state: 'failed', connectMs, stderr: excerpt(body), reason: reply.reason };
     }

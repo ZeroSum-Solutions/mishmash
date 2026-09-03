@@ -288,12 +288,15 @@ describe('MCP health is its own surface with per-server state (#157)', () => {
     // F-09: the stderr excerpt is what makes the failure diagnosable.
     expect(broken.stderrExcerpt).toContain('npm error ENOENT');
 
-    // A server that connects and then says nothing is `timeout`, not `failed`,
-    // and its connectMs is the budget it actually consumed.
+    // A server that connects and then says nothing is `timeout`, not `failed`.
+    // connectMs is clamped to the budget by `timedOutConnectMs`, so the check
+    // below is about the clamp holding, not about the clock; the reason line
+    // has to quote the same budget the record reports, which is what would
+    // fail if the two ever drifted apart.
     const silent = byId.get('silent-probe');
     expect(silent.state).toBe('timeout');
     expect(silent.connectMs).toBeGreaterThanOrEqual(silent.budgetMs);
-    expect(silent.reason).toContain('no reply within');
+    expect(silent.reason).toContain(`no reply within ${silent.budgetMs}ms`);
 
     // A switched-off server is reported without being spawned.
     const off = byId.get('off-probe');
