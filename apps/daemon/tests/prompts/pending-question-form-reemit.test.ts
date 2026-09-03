@@ -21,6 +21,9 @@ import { composeSystemPrompt } from '../../src/prompts/system.js';
 
 const RE_EMIT_RULE = /re-emit (?:that|the) pending .*form/i;
 
+/** Heading of the slim core charter, as `system-prompt-matrix.test.ts` detects it. */
+const SLIM_CHARTER_MARKER = '# MishMash charter';
+
 /** The mid-conversation clarification section, as composed into a prompt. */
 function clarifyingQuestionsSection(prompt: string): string {
   const heading = '## Clarifying questions mid-conversation';
@@ -50,6 +53,21 @@ describe('pending question-form re-emission (#155)', () => {
 
   it('is instructed by the contracts API/BYOK composer', () => {
     expect(instructsReEmission(composeContractsSystemPrompt({}))).toBe(true);
+  });
+
+  /**
+   * The daemon's slim charter carries its own copy of the rule because the
+   * clarification section is gated off for the slim charter head
+   * (`apps/daemon/src/prompts/system.ts`). There is nothing to mirror it
+   * against today: the contracts composer has no slim-core variant. This
+   * case is the drift alarm — if contracts ever grows one, it fails and the
+   * author has to decide where the rule belongs.
+   */
+  it('has no contracts slim charter to mirror the slim-core rule against', () => {
+    expect(composeContractsSystemPrompt({}).includes(SLIM_CHARTER_MARKER)).toBe(false);
+    expect(composeSystemPrompt({ promptCoreVariant: 'slim' }).includes(SLIM_CHARTER_MARKER)).toBe(
+      true,
+    );
   });
 
   it('keeps the daemon and contracts clarification sections identical', () => {

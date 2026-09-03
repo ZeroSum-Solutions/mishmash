@@ -68,7 +68,10 @@ function formMessage(): ChatMessage {
  * message — but it was never submitted, so `nextUserContent` carries no
  * `[form answers — …]` block.
  */
-function renderOvertakenForm(onSubmitQuestionForm = vi.fn()) {
+function renderOvertakenForm(
+  onSubmitQuestionForm = vi.fn(),
+  { questionFormSubmitDisabled = false } = {},
+) {
   const view = render(
     <AssistantMessage
       message={formMessage()}
@@ -78,6 +81,7 @@ function renderOvertakenForm(onSubmitQuestionForm = vi.fn()) {
       isLast={false}
       nextUserContent="Actually, one more thought about the footer."
       onSubmitQuestionForm={onSubmitQuestionForm}
+      questionFormSubmitDisabled={questionFormSubmitDisabled}
     />,
   );
   return { ...view, onSubmitQuestionForm };
@@ -137,6 +141,22 @@ describe('AssistantMessage — a never-submitted question form (#155)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  /**
+   * Unlocking an overtaken form must not let it race an in-flight turn. The
+   * host's busy gate is `questionFormSubmitDisabled`
+   * (ProjectView.tsx: `currentConversationActionDisabled` = loading ||
+   * streaming || an active run || send-disabled), which reaches the form as
+   * `submitDisabled` and is the only thing that should hold a submission back.
+   */
+  it('cannot be submitted while the conversation is busy', () => {
+    const { container } = renderOvertakenForm(vi.fn(), { questionFormSubmitDisabled: true });
+    fireEvent.change(audienceInput(container), { target: { value: 'Product evaluators' } });
+    const submit = screen.queryByRole('button', { name: 'Send answers' });
+    expect(submit).not.toBeNull();
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    expect(audienceInput(container).disabled).toBe(false);
   });
 
   it('still collapses to the answered summary once its answers come back', () => {

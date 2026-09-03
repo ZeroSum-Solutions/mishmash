@@ -28,6 +28,12 @@
  *   `tests/prompts/core-slim.test.ts`. If your addition doesn't fit,
  *   something else must leave — or it belongs in a skill, a conditional
  *   block, or the host, not here.
+ * - This charter is daemon-only: `packages/contracts` has no slim-core
+ *   variant, so a rule stated here has no mirror to keep in sync. A rule
+ *   that BOTH cores need must also go in the mirrored pair
+ *   (`apps/daemon/src/prompts/system.ts` + `packages/contracts/src/prompts/
+ *   system.ts`), which `tests/prompts/pending-question-form-reemit.test.ts`
+ *   pins byte-identical.
  */
 import type { ExecutionProfile } from '@open-design/contracts';
 
