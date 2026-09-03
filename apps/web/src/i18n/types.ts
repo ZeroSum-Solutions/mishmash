@@ -2758,6 +2758,8 @@ export interface Dict {
   'chat.mode.design.cost': string;
   'chat.mode.design.costNote': string;
   'chat.routingIntent.debugSummary': string;
+  'chat.sessionRecovery.resumed': string;
+  'chat.sessionRecovery.reseeded': string;
   'chat.composerHint': string;
   'chat.cliSettingsTitle': string;
   'chat.cliSettingsAria': string;

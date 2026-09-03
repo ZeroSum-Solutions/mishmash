@@ -18,7 +18,7 @@ import { splitResearchSubcommand } from './research/cli-args.js';
 import { resolveDaemonUrl } from './daemon-url.js';
 import { requestJsonIpc } from '@open-design/sidecar';
 import { SIDECAR_ENV, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
-import { EXPORT_FORMATS, EXPORT_IMAGE_FORMATS } from '@open-design/contracts';
+import { EXPORT_FORMATS, EXPORT_IMAGE_FORMATS, nativeSessionRecoveryNotice } from '@open-design/contracts';
 import { buildExportCliRequestBody, buildExportCliResultEnvelope, resolveExportCliDeckMode } from './export-cli-request.js';
 import { exportRoutePath } from './export-cli-routing.js';
 import {
@@ -7619,7 +7619,8 @@ async function runRun(args) {
   od run cancel <runId>                     Request cancellation.
   od run continue <runId> [--follow]        Continue a resumable failed run.
   od run list   [--project <id>]            List recent runs.
-  od run info   <runId>                     One run's status.
+  od run info   <runId> [--json]            One run's status, including what
+                                            happened to the agent session.
   od run result-package <runId> [--json]    Inspect run outputs and workspace
                                             provenance without applying them.
 
@@ -7650,13 +7651,26 @@ Common options:
     case 'info': {
       const id = rest.find((a) => !a.startsWith('-'));
       if (!id) {
-        console.error('Usage: od run info <runId>');
+        console.error('Usage: od run info <runId> [--json]');
         process.exit(2);
       }
       const resp = await fetch(`${base}/api/runs/${encodeURIComponent(id)}`);
       if (!resp.ok) return structuredHttpFailure(resp, 'run-not-found');
       const data = await resp.json();
-      process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      // T-05: the native-session resume path is hot, so one run's status has to
+      // say what happened to the agent's SESSION, not only how the run ended.
+      // `recovered` is the shared reading from packages/contracts, so the CLI
+      // and the chat agree on which states are worth reporting.
+      const recovery = data?.nativeSessionRecovery ?? null;
+      console.log(`run\t${data?.id ?? id}\t${data?.status ?? '-'}`);
+      console.log(`project\t${data?.projectId ?? '-'}\tconversation=${data?.conversationId ?? '-'}`);
+      console.log(`agent\t${data?.agentId ?? '-'}\tresumable=${data?.resumable === true}`);
+      console.log(
+        `session-recovery\t${recovery?.state ?? '-'}`
+        + `\trecovered=${nativeSessionRecoveryNotice(recovery) ? 'yes' : 'no'}`
+        + `\tcontinuation=${recovery?.continuation ?? '-'}`,
+      );
       return;
     }
     case 'result-package': {

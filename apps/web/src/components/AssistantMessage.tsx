@@ -58,6 +58,11 @@ import {
 // overlap with W1 never has to touch a pre-existing import line -- see
 // docs/plans/waves/WR-routing.md's "Lease" section entry for this file.
 import { isRoutingTelemetryListResponse } from "@open-design/contracts";
+import {
+  nativeSessionRecoveryNotice,
+  type NativeSessionRecoveryMetadata,
+  type NativeSessionRecoveryNotice,
+} from "@open-design/contracts";
 import { OdCardView, type BrandBrowserAssistConfirm } from "./OdCard";
 import {
   normalizeVisualStyleQuestionValue,
@@ -731,6 +736,8 @@ function AssistantMessageImpl({
   // model" -- see useRoutingIntentForRun's own doc comment below.
   const routingIntent = useRoutingIntentForRun(message.runId, !streaming);
   const runUsageStatus = useRunUsageForRun(message.runId, !streaming);
+  // T-05: whether this turn continued the agent's existing session.
+  const sessionRecovery = useNativeSessionRecoveryForRun(message.runId, !streaming);
   const roleIconId = agentIconId(message.agentId, message.agentName);
   const hasEmptyResponse = events.some(
     (e) => e.kind === "status" && e.label === "empty_response"
@@ -888,6 +895,7 @@ function AssistantMessageImpl({
         </div>
       ) : null}
       {modelRouting ? <ModelRoutingStatus routing={modelRouting} /> : null}
+      {sessionRecovery ? <SessionRecoveryStatus notice={sessionRecovery} /> : null}
       {runUsageStatus ? <RunPricingStatus usage={runUsageStatus} /> : null}
       {routingIntent ? <RoutingIntentStatus intent={routingIntent} /> : null}
       <div className="assistant-flow">
@@ -1599,6 +1607,63 @@ function ModelRoutingStatus({ routing }: { routing: RunModelRouting }) {
     );
   }
   return null;
+}
+
+// T-05: what happened to the agent's SESSION for this turn. Fetched from the
+// run's own status record (GET /api/runs/:id) for the same reason as
+// useModelRoutingForRun above -- the recovery state settles once, and every
+// AssistantMessage already carries the run id. Returns only the reading worth
+// showing (see nativeSessionRecoveryNotice in packages/contracts), so an
+// ordinary run leaves this null and renders nothing.
+function useNativeSessionRecoveryForRun(
+  runId: string | null | undefined,
+  enabled: boolean,
+): NativeSessionRecoveryNotice | null {
+  const [notice, setNotice] = useState<NativeSessionRecoveryNotice | null>(null);
+  useEffect(() => {
+    setNotice(null);
+    if (!enabled || !runId) return;
+    const controller = new AbortController();
+    fetch(`/api/runs/${encodeURIComponent(runId)}`, { signal: controller.signal })
+      .then((resp) => (resp.ok ? resp.json() : null))
+      .then((data: unknown) => {
+        const candidate = (data as { nativeSessionRecovery?: unknown } | null)?.nativeSessionRecovery;
+        if (!candidate || typeof candidate !== "object") return;
+        setNotice(nativeSessionRecoveryNotice(candidate as NativeSessionRecoveryMetadata));
+      })
+      .catch(() => {
+        // Best-effort, same as the routing status hook above: a fetch failure
+        // means no line renders, never a broken message.
+      });
+    return () => controller.abort();
+  }, [runId, enabled]);
+  return notice;
+}
+
+// A recovered session changed what the agent could remember, so it says so in
+// plain words rather than a badge or a colour. `role="status"` with the same
+// text as the accessible name keeps it readable by both eyes and screen
+// readers, matching ModelRoutingStatus above.
+function SessionRecoveryStatus({ notice }: { notice: NativeSessionRecoveryNotice }) {
+  const t = useT();
+  const label = notice === "resumed"
+    ? t("chat.sessionRecovery.resumed")
+    : t("chat.sessionRecovery.reseeded");
+  return (
+    <span
+      className="assistant-model-routing assistant-session-recovery"
+      role="status"
+      aria-label={label}
+      style={{
+        ...MODEL_ROUTING_STATUS_BASE_STYLE,
+        color: "#4a4a4a",
+        background: "#eef0f2",
+        border: "1px solid #d7dbe0",
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 // Run-scoped cost/pricing status (NM-20, C1-9). Fetched independently from
