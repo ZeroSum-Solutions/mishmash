@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { startServer } from '../src/server.js';
+import { SHUTDOWN_INTERRUPTED_MESSAGE } from '../src/runtimes/runs.js';
 
 // W1F.4 red spec — the producer half.
 //
@@ -80,12 +81,12 @@ const FAILURE_STAGES = [
   'finalize',
 ];
 
-/**
- * The daemon's own sentence for a turn its shutdown ended. Mirrored by the
- * consumer spec's SHUTDOWN_CANCEL_RUN fixture.
- */
-const SHUTDOWN_INTERRUPTED_MESSAGE =
-  'MishMash shut down while this turn was running, so the turn was interrupted.';
+// `SHUTDOWN_INTERRUPTED_MESSAGE` is imported from the daemon rather than
+// restated here, so this spec cannot agree with a copy of the sentence that
+// production no longer sends. The consumer spec's SHUTDOWN_CANCEL_RUN fixture
+// mirrors it by hand — `apps/web` may not import daemon source (AGENTS.md,
+// Boundary constraints) — which is why this spec pins every field of the
+// persisted event, including the sentence.
 
 /** Verbatim agent output from the reported runs. See the file header. */
 const AGENT_OUTPUT = {
