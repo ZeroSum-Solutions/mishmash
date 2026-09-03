@@ -146,20 +146,50 @@ export function followRunTerminalOnMessage(
 }
 
 /**
+ * The status the run's own durable terminal record carries: the last `end`
+ * event in its `events.jsonl`.
+ *
+ * `emit()` (`runtimes/runs.ts`) persists `state.json` BEFORE it appends the
+ * record to the event log, so a terminal `state.json` can exist with no `end`
+ * line behind it — the process died between the two writes, the stream never
+ * flushed, or the run directory was restored without its log. Reading history,
+ * `state.json` alone is therefore not proof the run reached that terminal.
+ * Returns null when the log carries no `end` record at all.
+ */
+function durableTerminalStatus(runsLogDir: string, runId: string): string | null {
+  let status: string | null = null;
+  for (const record of readEvents(runsLogDir, runId)) {
+    if (record.event !== 'end') continue;
+    const candidate = isObject(record.data) ? record.data.status : null;
+    if (typeof candidate === 'string') status = candidate;
+  }
+  return status;
+}
+
+/**
  * Backfill for rows stranded before the terminal hook above existed: assistant
- * rows still `failed` with EMPTY content whose run's durable state carries a
- * non-failed terminal status. Idempotent, so it can run on every daemon boot.
+ * rows still `failed` with EMPTY content whose run reached a non-failed
+ * terminal. Idempotent, so it can run on every daemon boot.
  *
  * The empty-content narrowing is what separates this pass from the live hook.
  * At terminal time the hook knows the row's `failed` predates the run's
  * terminal event, so the row is provably stale whatever it holds. Reading
  * history, that ordering is unrecoverable — so this pass only touches rows
  * that carry no answer body at all, and never rewrites a stored error the user
- * may still be reading. Returns how many rows it repaired.
+ * may still be reading.
+ *
+ * It also requires the run's terminal to be durably RECORDED, not merely
+ * declared: `state.json` and the log's last `end` event must agree. A
+ * `state.json` written without the matching `end` line (see
+ * `durableTerminalStatus` above) says only that the daemon intended a
+ * terminal, and this pass rewrites a row the user reads — a repair is worth
+ * making only against the same evidence the symptom was measured against.
+ * Returns how many rows it repaired.
  */
 function followRunTerminalOnStuckMessages(
   db: Database.Database,
   statesByRunId: Map<string, DurableRunState>,
+  runsLogDir: string,
 ): number {
   let rows: Array<{ id: string; runId: string }> = [];
   try {
@@ -179,6 +209,7 @@ function followRunTerminalOnStuckMessages(
   for (const row of rows) {
     const state = statesByRunId.get(row.runId);
     if (!state) continue;
+    if (durableTerminalStatus(runsLogDir, row.runId) !== state.status) continue;
     if (followRunTerminalOnMessage(db, {
       assistantMessageId: row.id,
       endedAt: state.updatedAt,
@@ -345,7 +376,11 @@ export async function reconcileDurableRunTerminals(
 
   const statesByRunId = new Map(states.map((entry) => [entry.state.id, entry.state]));
   result.messagesReconciled = reconcileMessages(options.db, statesByRunId, now);
-  result.messagesFollowedTerminal = followRunTerminalOnStuckMessages(options.db, statesByRunId);
+  result.messagesFollowedTerminal = followRunTerminalOnStuckMessages(
+    options.db,
+    statesByRunId,
+    options.runsLogDir,
+  );
 
   for (const entry of states) {
     const { state } = entry;
