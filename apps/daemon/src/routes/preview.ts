@@ -16,10 +16,11 @@ export type PreviewRoutesDeps = {
    */
   resolvePreviewCwd: (projectId: string, requestedCwd?: string) => string | null;
   /**
-   * Launch a URL in Google Chrome on the daemon's own machine. Injectable so
-   * tests can assert the hand-off without opening a real browser.
+   * Launch a URL in Google Chrome on the daemon's own machine. Returns false
+   * when the launch could not even be started (no Chrome on this machine).
+   * Injectable so tests can assert the hand-off without opening a browser.
    */
-  openPreviewInChrome?: (url: string) => void;
+  openPreviewInChrome?: (url: string) => boolean;
 };
 
 /**
@@ -30,9 +31,7 @@ export type PreviewRoutesDeps = {
  */
 export function registerPreviewRoutes(app: Express, deps: PreviewRoutesDeps): void {
   const { previews, projectStore, resolvePreviewCwd } = deps;
-  const openPreviewInChrome = deps.openPreviewInChrome ?? ((url: string) => {
-    openInChrome(url);
-  });
+  const openPreviewInChrome = deps.openPreviewInChrome ?? ((url: string) => openInChrome(url) !== null);
 
   const assertProject = (req: Request, res: Response): boolean => {
     if (projectStore.getProject(String(req.params.id))) return true;
@@ -70,7 +69,7 @@ export function registerPreviewRoutes(app: Express, deps: PreviewRoutesDeps): vo
         command,
         port,
       });
-      res.json(announcePreviewOnRequestHost(session, req.headers.host));
+      res.json(announcePreviewOnRequestHost(session, req.headers));
     } catch (error) {
       if (error instanceof PreviewLifecycleError) {
         const status = error.code === 'PREVIEW_PORT_IN_USE' ? 409 : 502;
@@ -86,7 +85,7 @@ export function registerPreviewRoutes(app: Express, deps: PreviewRoutesDeps): vo
     res.json({
       previews: previews
         .list(String(req.params.id))
-        .map((session) => announcePreviewOnRequestHost(session, req.headers.host)),
+        .map((session) => announcePreviewOnRequestHost(session, req.headers)),
     });
   });
 
@@ -96,6 +95,12 @@ export function registerPreviewRoutes(app: Express, deps: PreviewRoutesDeps): vo
   // taken from the request, so this route cannot be talked into launching an
   // arbitrary address, and it is always the loopback one because Chrome runs
   // on the daemon's machine.
+  //
+  // `opened: true` means the launcher was started, which is as much as a
+  // detached opener can be asked. A machine with no Chrome fails the spawn
+  // outright and gets 502 instead of a success that opened nothing; a
+  // launcher that dies AFTER spawning is logged by `openInChrome`, not
+  // reported here.
   app.post('/api/projects/:id/previews/:previewId/open', (req, res) => {
     if (!assertProject(req, res)) return;
     const session = previews.get(String(req.params.previewId));
@@ -104,7 +109,10 @@ export function registerPreviewRoutes(app: Express, deps: PreviewRoutesDeps): vo
       return;
     }
     const url = loopbackPreviewUrl(session.port);
-    openPreviewInChrome(url);
+    if (!openPreviewInChrome(url)) {
+      res.status(502).json({ error: 'PREVIEW_OPEN_FAILED', url });
+      return;
+    }
     const body: PreviewOpenResponse = { opened: true, url, browser: 'chrome' };
     res.json(body);
   });

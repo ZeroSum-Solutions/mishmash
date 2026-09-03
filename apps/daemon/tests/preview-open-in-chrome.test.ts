@@ -51,7 +51,7 @@ describe('opening a preview in Chrome', () => {
     tempDirs.length = 0;
   });
 
-  async function boot(openPreviewInChrome: (url: string) => void): Promise<{ base: string }> {
+  async function boot(openPreviewInChrome: (url: string) => boolean): Promise<{ base: string }> {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), 'od-preview-chrome-'));
     tempDirs.push(tempDir);
     writeFileSync(path.join(tempDir, 'server.js'), SERVER_FIXTURE);
@@ -75,7 +75,10 @@ describe('opening a preview in Chrome', () => {
 
   it('opens the daemon-machine loopback URL of a registered session', async () => {
     const opened: string[] = [];
-    const { base } = await boot((url) => opened.push(url));
+    const { base } = await boot((url) => {
+      opened.push(url);
+      return true;
+    });
     const port = await freePort();
 
     const created = await fetch(`${base}/api/projects/p1/previews`, {
@@ -99,13 +102,35 @@ describe('opening a preview in Chrome', () => {
   }, 30_000);
 
   it('refuses an unknown session instead of opening anything', async () => {
-    const openPreviewInChrome = vi.fn();
+    const openPreviewInChrome = vi.fn(() => true);
     const { base } = await boot(openPreviewInChrome);
 
     const res = await fetch(`${base}/api/projects/p1/previews/nope/open`, { method: 'POST' });
     expect(res.status).toBe(404);
     expect(openPreviewInChrome).not.toHaveBeenCalled();
   });
+
+  it('reports a launcher that could not start instead of a false success', async () => {
+    const { base } = await boot(() => false);
+    const port = await freePort();
+
+    const created = await fetch(`${base}/api/projects/p1/previews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: [process.execPath, 'server.js'], port }),
+    });
+    expect(created.status).toBe(200);
+    const session = (await created.json()) as { id: string };
+
+    const res = await fetch(`${base}/api/projects/p1/previews/${session.id}/open`, {
+      method: 'POST',
+    });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({
+      error: 'PREVIEW_OPEN_FAILED',
+      url: `http://127.0.0.1:${port}/`,
+    });
+  }, 30_000);
 });
 
 describe('Chrome open invocation', () => {

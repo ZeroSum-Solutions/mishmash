@@ -1517,8 +1517,9 @@ function DfPreview({
 /**
  * The project's daemon-managed preview servers (`od preview start`), listed
  * only while an HTML file is previewed — the one case where a server root
- * changes what the user can see. Empty on any failure: the offer is extra
- * help, never a reason for the panel to report an error.
+ * changes what the user can see. `listProjectPreviews` answers [] on any
+ * transport failure rather than rejecting, so the offer stays extra help and
+ * never becomes a reason for the panel to report an error.
  */
 function usePreviewServers(projectId: string, enabled: boolean): PreviewInfo[] {
   const [previews, setPreviews] = useState<PreviewInfo[]>([]);
