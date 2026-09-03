@@ -18,13 +18,16 @@
 // new place.
 
 import { spawn } from 'node:child_process';
+import path from 'node:path';
 
 import type {
   McpHealthResponse,
   McpServerHealth,
   McpServerHealthState,
+  McpServerRepair,
 } from '@open-design/contracts';
 
+import { createFilesystemWriteGateway } from './filesystem/write-gateway.js';
 import type { McpServerConfig } from './mcp-config.js';
 import { redactSecrets } from './redact.js';
 
@@ -120,20 +123,93 @@ export function withoutMcpServerHealthNoise(text: string): string {
 }
 
 /**
+ * The npm cache entry an `ENOENT` line names, when it names one.
+ *
+ * `npx` stages each package it runs into `<npm cache>/_npx/<hash>/`. An
+ * interrupted stage leaves `node_modules/` behind without `package.json`, and
+ * every later run of that server dies on `ENOENT ... _npx/<hash>/package.json`
+ * -- issue #157's `mermaid` server. The entry is a cache, so removing it is
+ * the whole fix: npx re-downloads on the next run.
+ *
+ * The path is taken from the FULL absolute path npm printed, not rebuilt from
+ * a guessed cache root, so a machine whose npm cache is not `~/.npm` repairs
+ * correctly too.
+ */
+const NPX_CACHE_ENTRY_RE = /([^\s'"]*[\\/]_npx[\\/][0-9a-f]{8,})[\\/]package\.json/i;
+
+/**
+ * INVARIANT: the only path this module will ever remove is an `_npx/<hash>`
+ * cache entry named by an absolute path.
+ *
+ * A repair deletes a directory, so what makes it safe is not who asked for it
+ * but what it is allowed to point at. Both the derivation below and the
+ * removal check against this, which is why a caller cannot reach the removal
+ * with a path of its own choosing.
+ */
+function isNpxCacheEntryPath(target: string): boolean {
+  if (!target || !path.isAbsolute(target)) return false;
+  if (path.basename(path.dirname(target)) !== '_npx') return false;
+  return /^[0-9a-f]{8,}$/i.test(path.basename(target));
+}
+
+/**
+ * The repair for a half-written npx cache entry, derived from a server's own
+ * stderr, or undefined when that stderr describes something else.
+ *
+ * `ENOENT` is required as well as the path shape: the same path appears in
+ * ordinary npm chatter, and only a missing file makes the entry broken.
+ */
+export function mcpNpxCacheRepair(stderr: string): McpServerRepair | undefined {
+  if (!stderr || !/ENOENT/i.test(stderr)) return undefined;
+  const match = NPX_CACHE_ENTRY_RE.exec(stderr);
+  const target = match?.[1];
+  if (!target || !isNpxCacheEntryPath(target)) return undefined;
+  return { kind: 'npx-cache', target };
+}
+
+/**
+ * Perform a repair the daemon derived. Returns whether the target was removed.
+ *
+ * The target is re-checked against `isNpxCacheEntryPath` here rather than
+ * trusted from the record: this function is the one that deletes, so it owns
+ * the rule about what may be deleted. Confirmation is the caller's gate
+ * (`POST /api/mcp/repair`, `od mcp repair --yes`); nothing in this module ever
+ * repairs on its own.
+ *
+ * The removal goes through the filesystem write gateway with an `externalTool`
+ * capability scoped to the `_npx` directory itself -- an npx cache is another
+ * tool's own state, not daemon data. That scoping is what keeps a symlinked or
+ * relocated entry from letting the removal reach anything but the one
+ * directory this repair named.
+ */
+export async function applyMcpServerRepair(
+  repair: McpServerRepair,
+  options: { runtimeDataRoot: string },
+): Promise<boolean> {
+  if (repair.kind !== 'npx-cache') return false;
+  if (!isNpxCacheEntryPath(repair.target)) return false;
+  const gateway = createFilesystemWriteGateway({ runtimeDataRoot: options.runtimeDataRoot });
+  const capability = await gateway.externalTool(path.dirname(repair.target));
+  await gateway.rm(capability, repair.target, { recursive: true, force: true });
+  return true;
+}
+
+/**
  * A concrete repair for a failure signature MishMash recognizes, or
- * undefined. Both entries come from the servers measured in issue #157;
- * neither is applied automatically, because both mutate state the daemon
- * does not own (an npm cache, a Python environment resolution).
+ * undefined. Both entries come from the servers measured in issue #157. The
+ * npx-cache entry is one MishMash can perform (see `mcpNpxCacheRepair`); the
+ * uvx entry stays advice, because its fix is a change to the server's own
+ * configured arguments and only the user can make it.
  */
 export function mcpFailureRemedy(
   server: Pick<McpServerConfig, 'command' | 'args'>,
   stderr: string,
 ): string | undefined {
-  const npxCache = /_npx\/([0-9a-f]+)\/package\.json/.exec(stderr);
-  if (npxCache && /ENOENT/i.test(stderr)) {
+  const npxCache = mcpNpxCacheRepair(stderr);
+  if (npxCache) {
     return (
-      `The npx cache entry for this server is incomplete. Remove ` +
-      `~/.npm/_npx/${npxCache[1]} and it will be re-downloaded on the next run.`
+      `The npx cache entry for this server is incomplete. Repairing it removes ` +
+      `${npxCache.target}; npx re-downloads the server on the next run.`
     );
   }
   if (
@@ -493,7 +569,9 @@ export async function probeMcpServerHealth(
       ? await connectStdio(server, budgetMs)
       : await connectRemote(server, budgetMs, options.headersByServerId?.[server.id] ?? {});
   const stderrExcerpt = excerpt(outcome.stderr);
-  const remedy = outcome.state === 'ok' ? undefined : mcpFailureRemedy(server, outcome.stderr);
+  const failed = outcome.state !== 'ok';
+  const remedy = failed ? mcpFailureRemedy(server, outcome.stderr) : undefined;
+  const repair = failed ? mcpNpxCacheRepair(outcome.stderr) : undefined;
   return {
     ...base,
     state: outcome.state,
@@ -501,6 +579,7 @@ export async function probeMcpServerHealth(
     stderrExcerpt,
     ...(outcome.reason ? { reason: outcome.reason } : {}),
     ...(remedy ? { remedy } : {}),
+    ...(repair ? { repair } : {}),
     checkedAt: new Date().toISOString(),
   };
 }

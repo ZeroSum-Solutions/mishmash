@@ -10,8 +10,10 @@ import type {
   McpOAuthStatusResponse,
   McpServerConfig,
   McpServerHealth,
+  McpServerRepair,
   McpServersResponse,
   McpTemplate,
+  RepairMcpServerResponse,
   StartMcpOAuthResponse,
 } from '@open-design/contracts';
 
@@ -20,7 +22,9 @@ export type {
   McpOAuthStatusResponse,
   McpServerConfig,
   McpServerHealth,
+  McpServerRepair,
   McpTemplate,
+  RepairMcpServerResponse,
   StartMcpOAuthResponse,
 };
 
@@ -200,6 +204,29 @@ export async function fetchMcpHealth(): Promise<McpHealthResponse | null> {
       servers: Array.isArray(data?.servers) ? data.servers : [],
       checkedAt: typeof data?.checkedAt === 'string' ? data.checkedAt : '',
     };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Perform the repair the health record offered for one server.
+ *
+ * `confirm` is sent because the endpoint refuses the request without it; the
+ * caller is expected to have asked the user first. The daemon re-derives the
+ * path it removes from a fresh probe, so this body never carries one.
+ */
+export async function repairMcpServer(
+  serverId: string,
+): Promise<RepairMcpServerResponse | null> {
+  try {
+    const res = await fetch('/api/mcp/repair', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ serverId, confirm: true }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as RepairMcpServerResponse;
   } catch {
     return null;
   }

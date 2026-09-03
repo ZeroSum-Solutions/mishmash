@@ -6,10 +6,15 @@
 // that state belongs. The daemon measures it first-hand
 // (`GET /api/mcp/health`), so what shows here is what MishMash observed —
 // not what the agent CLI claimed, which is the thing that was wrong.
+//
+// One failure MishMash can fix rather than only describe: a half-written npx
+// cache entry. That repair is offered here as an action, and the confirmation
+// step below is the user's half of the gate the endpoint enforces — nothing is
+// removed until they name it.
 
 import { useCallback, useState } from 'react';
 import { Button } from '@open-design/components';
-import { fetchMcpHealth } from '../state/mcp';
+import { fetchMcpHealth, repairMcpServer } from '../state/mcp';
 import type { McpServerHealth } from '../state/mcp';
 import { useT } from '../i18n';
 import { Icon } from './Icon';
@@ -37,18 +42,43 @@ export function McpHealthPanel() {
   const [servers, setServers] = useState<McpServerHealth[] | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Which server the user is being asked to confirm a removal for, which one
+  // is being removed, and what has already been removed. Keyed by server id so
+  // one row's answer never speaks for another's.
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [repairing, setRepairing] = useState<string | null>(null);
+  const [repaired, setRepaired] = useState<Record<string, string>>({});
 
   const check = useCallback(async () => {
     setChecking(true);
     setError(null);
+    setConfirming(null);
     const data = await fetchMcpHealth();
     setChecking(false);
     if (!data) {
       setError(t('mcpClient.health.failed'));
       return;
     }
+    setRepaired({});
     setServers(data.servers);
   }, [t]);
+
+  const repair = useCallback(
+    async (server: McpServerHealth) => {
+      if (!server.repair) return;
+      setRepairing(server.id);
+      setError(null);
+      const result = await repairMcpServer(server.id);
+      setRepairing(null);
+      setConfirming(null);
+      if (!result?.removed) {
+        setError(t('mcpClient.health.repairFailed'));
+        return;
+      }
+      setRepaired((previous) => ({ ...previous, [server.id]: result.repair.target }));
+    },
+    [t],
+  );
 
   return (
     <div className={styles.panel}>
@@ -89,6 +119,41 @@ export function McpHealthPanel() {
                   <strong>{t('mcpClient.health.remedyLabel')}: </strong>
                   {server.remedy}
                 </p>
+              ) : null}
+              {repaired[server.id] ? (
+                <p className={styles.repair}>
+                  {t('mcpClient.health.repairDone', { path: repaired[server.id]! })}
+                </p>
+              ) : server.repair ? (
+                confirming === server.id ? (
+                  <div className={styles.repair}>
+                    <p className={styles.repairPrompt} data-mcp-repair-prompt={server.repair.target}>
+                      {t('mcpClient.health.repairPrompt', { path: server.repair.target })}
+                    </p>
+                    <div className={styles.repairActions}>
+                      <Button
+                        onClick={() => void repair(server)}
+                        disabled={repairing === server.id}
+                      >
+                        {repairing === server.id
+                          ? t('mcpClient.health.repairing')
+                          : t('mcpClient.health.repairConfirm')}
+                      </Button>
+                      <Button
+                        onClick={() => setConfirming(null)}
+                        disabled={repairing === server.id}
+                      >
+                        {t('mcpClient.health.repairCancel')}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={styles.repair}>
+                    <Button onClick={() => setConfirming(server.id)}>
+                      {t('mcpClient.health.repair')}
+                    </Button>
+                  </div>
+                )
               ) : null}
               {server.stderrExcerpt ? (
                 <details className={styles.stderr}>

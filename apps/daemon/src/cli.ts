@@ -94,6 +94,12 @@ const MCP_BOOLEAN_FLAGS = new Set([
   'h',
   'json',
 ]);
+// `od mcp repair` adds the confirmation flag. It is declared beside the other
+// MCP flag sets for the same TDZ reason described below.
+const MCP_REPAIR_BOOLEAN_FLAGS = new Set([
+  ...MCP_BOOLEAN_FLAGS,
+  'yes',
+]);
 
 // Hoisted next to MCP_*_FLAGS for the same TDZ reason as the MEDIA flags
 // above: `od mcp install <agent>` dispatches through SUBCOMMAND_MAP during
@@ -2512,6 +2518,9 @@ async function runMcp(args) {
   if (args[0] === 'health') {
     return runMcpHealth(args.slice(1));
   }
+  if (args[0] === 'repair') {
+    return runMcpRepair(args.slice(1));
+  }
   let flags;
   try {
     flags = parseFlags(args, {
@@ -2580,7 +2589,11 @@ To register this server into a coding agent's own config automatically:
   Agents: ${AGENT_SLUGS.join(' ')}
 
 To check the external MCP servers MishMash connects agents to:
-  od mcp health [--json] [--daemon-url <url>]`);
+  od mcp health [--json] [--daemon-url <url>]
+
+To repair a server whose failure MishMash recognizes (removes nothing
+without --yes):
+  od mcp repair <server-id> [--yes] [--json] [--daemon-url <url>]`);
 }
 
 // ---------------------------------------------------------------------------
@@ -2642,6 +2655,9 @@ server reported here as failed does not mean a run failed.
     console.log(`${server.state.toUpperCase().padEnd(8)} ${name}${timing}`);
     if (server.reason) console.log(`         ${server.reason}`);
     if (server.remedy) console.log(`         fix: ${server.remedy}`);
+    if (server.repair) {
+      console.log(`         run: od mcp repair ${server.id} --yes`);
+    }
     // Only for a server that is not ok: a healthy npx server routinely writes
     // warnings, and echoing those would bury the one line that matters. The
     // full excerpt is always in --json and in the Settings panel.
@@ -2651,6 +2667,104 @@ server reported here as failed does not mean a run failed.
       }
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: od mcp repair <server-id>
+//
+// The CLI half of the MCP cache repair (issue #157). The confirmation gate is
+// part of the mechanism, not a UI detail: without `--yes` this prints what a
+// repair would remove and stops, and it never reaches the repair endpoint at
+// all. `--yes` is the caller saying the word the endpoint requires.
+// ---------------------------------------------------------------------------
+
+async function runMcpRepair(args) {
+  if (args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    console.log(`Usage: od mcp repair <server-id> [--yes] [--json] [--daemon-url <url>]
+
+Repairs an external MCP server whose failure MishMash recognizes. Today that
+is one signature: an npx cache entry left half-written, which stops the server
+from ever starting. The repair removes that cache entry; npx re-downloads the
+server on the next run.
+
+Without --yes this prints the directory a repair would remove and exits 2
+without touching anything.
+
+  --yes                Confirm the removal. Required; nothing is removed without it.
+  --json               Print the raw result for piping into jq.
+  --daemon-url <url>   Override the daemon HTTP base URL.`);
+    process.exit(0);
+  }
+  let flags;
+  try {
+    flags = parseFlags(args, {
+      string: MCP_STRING_FLAGS,
+      boolean: MCP_REPAIR_BOOLEAN_FLAGS,
+    });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const serverId = positionalArgs(args, MCP_STRING_FLAGS)[0];
+  if (!serverId) {
+    console.error('Usage: od mcp repair <server-id> [--yes] [--json] [--daemon-url <url>]');
+    process.exit(2);
+  }
+  const base = await cliDaemonBaseUrl(flags);
+
+  // Read the plan from the same health surface the panel reads, so the user is
+  // shown the exact path before being asked to confirm it.
+  let healthResp;
+  try {
+    healthResp = await fetch(`${base}/api/mcp/health`);
+  } catch (err) {
+    return exitWithStructuredError({
+      code:    'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+    });
+  }
+  if (!healthResp.ok) return structuredHttpFailure(healthResp);
+  const health = await healthResp.json();
+  const servers = Array.isArray(health?.servers) ? health.servers : [];
+  const server = servers.find((entry) => entry?.id === serverId);
+  if (!server) {
+    console.error(`No MCP server configured with id ${serverId}.`);
+    process.exit(2);
+  }
+  if (!server.repair) {
+    console.error(
+      `${serverId} is ${server.state}; MishMash has no repair for that state.` +
+      (server.remedy ? `\n${server.remedy}` : ''),
+    );
+    process.exit(2);
+  }
+  if (!flags.yes) {
+    console.log(`Repairing ${serverId} removes ${server.repair.target}`);
+    console.log('Nothing has been removed. Re-run with --yes to confirm.');
+    process.exit(2);
+  }
+
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/mcp/repair`, {
+      method:  'POST',
+      headers: { 'content-type': 'application/json' },
+      body:    JSON.stringify({ serverId, confirm: true }),
+    });
+  } catch (err) {
+    return exitWithStructuredError({
+      code:    'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+    });
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const result = await resp.json();
+  if (flags.json) return process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+  console.log(
+    result?.removed
+      ? `Removed ${result?.repair?.target}. ${serverId} will be re-downloaded on the next run.`
+      : `Nothing was removed for ${serverId}.`,
+  );
 }
 
 // ---------------------------------------------------------------------------
