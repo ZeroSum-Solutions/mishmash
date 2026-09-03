@@ -37,7 +37,16 @@ const STDERR_EXCERPT_LIMIT = 2_000;
 /** A well-formed `initialize` reply is far smaller than this. */
 const STDOUT_BUFFER_LIMIT = 256_000;
 
-/** How long a probed server gets to honour SIGTERM before SIGKILL. */
+/**
+ * How long a probed server gets to honour SIGTERM before SIGKILL.
+ *
+ * Both signals reach the direct child only. A server launched through an
+ * `npx` or `uvx` wrapper runs as that wrapper's own child, and a wrapper that
+ * does not forward the signal can leave the real server behind. Killing the
+ * process group instead is the fix, and it is a follow-up rather than a line
+ * here: it needs `detached` spawning and platform-specific handling, which is
+ * more than this probe should grow inside a bug fix.
+ */
 const KILL_GRACE_MS = 2_000;
 
 /**
@@ -70,11 +79,17 @@ function timedOutConnectMs(elapsedMs: number, budgetMs: number): number {
 /**
  * Text describing an external MCP server's connection state.
  *
- * A line qualifies only when it pairs an MCP subject -- the words "MCP
- * server(s)", or "deferred tools" (the agent CLI's name for MCP-provided
- * tools) -- with a connection-state word, or when it carries one of the agent
- * CLI's MCP status codes. Both halves are required so an ordinary agent
- * failure that merely mentions a tool is left alone.
+ * A line qualifies when it pairs an MCP subject -- the words "MCP server(s)",
+ * or "deferred tools" (the agent CLI's name for MCP-provided tools) -- with a
+ * connection-state word. Requiring both halves is what leaves an ordinary
+ * agent failure that merely mentions a tool alone.
+ *
+ * The parenthesized status codes are the one alternative that does not require
+ * a subject, because it does not need one: `(CONNECT_TIMEOUT)` and
+ * `(CONNECTION_CLOSED)` are the agent CLI's MCP status vocabulary and appear
+ * nowhere else in its output. That makes the alternative broader than the
+ * subject-plus-state rule above, so it is written out rather than left for a
+ * reader to notice.
  */
 const MCP_SERVER_HEALTH_LINE_RE =
   /\b(?:MCP servers?|deferred tools?)\b[^\n]*\b(?:failed to connect|connection timed out|connection closed|no longer available|available again|disconnected|reconnected|unavailable)\b|\bMCP server (?:disconnected|reconnected)\b|\((?:CONNECT_TIMEOUT|CONNECTION_CLOSED)\)/i;
