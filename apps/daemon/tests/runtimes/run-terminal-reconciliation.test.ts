@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   followRunTerminalOnMessage,
+  holdTerminalRunStatusOnMessageWrite,
   reconcileDurableRunTerminals,
 } from '../../src/runtimes/run-terminal-reconciliation.js';
 
@@ -549,6 +550,93 @@ describe('durable run terminal reconciliation', () => {
         expect.anything(),
       );
       noEvents.close();
+    });
+
+    describe('a delayed message write cannot leave the run terminal event', () => {
+      function insertRow(messageId: string, runStatus: string, endedAt: number, role = 'assistant'): void {
+        db.prepare(
+          `INSERT INTO messages (id, role, content, run_id, run_status, ended_at, events_json)
+           VALUES (?, ?, '', 'run-hold', ?, ?, NULL)`,
+        ).run(messageId, role, runStatus, endedAt);
+      }
+
+      it('pins a failed write back to the terminal status the row already follows', () => {
+        insertRow('m-held', 'succeeded', 9_000);
+
+        expect(holdTerminalRunStatusOnMessageWrite(db, {
+          content: '',
+          endedAt: 2_000,
+          id: 'm-held',
+          role: 'assistant',
+          runStatus: 'failed',
+        })).toEqual({
+          content: '',
+          endedAt: 9_000,
+          id: 'm-held',
+          role: 'assistant',
+          runStatus: 'succeeded',
+        });
+      });
+
+      it('pins a failed write back to a canceled terminal too', () => {
+        insertRow('m-held-canceled', 'canceled', 9_000);
+
+        expect(holdTerminalRunStatusOnMessageWrite(db, {
+          id: 'm-held-canceled',
+          runStatus: 'failed',
+        })).toMatchObject({ runStatus: 'canceled' });
+      });
+
+      it('passes every other field of the delayed write through untouched', () => {
+        insertRow('m-held-fields', 'succeeded', 9_000);
+
+        expect(holdTerminalRunStatusOnMessageWrite(db, {
+          content: 'The answer the client finally flushed.',
+          events: [{ kind: 'text', text: 'hi' }],
+          id: 'm-held-fields',
+          producedFiles: ['index.html'],
+          runStatus: 'failed',
+        })).toMatchObject({
+          content: 'The answer the client finally flushed.',
+          events: [{ kind: 'text', text: 'hi' }],
+          producedFiles: ['index.html'],
+          runStatus: 'succeeded',
+        });
+      });
+
+      it('leaves a write alone when the row is not already on a non-failed terminal', () => {
+        insertRow('m-running', 'running', 2_000);
+        insertRow('m-already-failed', 'failed', 2_000);
+        insertRow('m-user', 'succeeded', 9_000, 'user');
+
+        for (const id of ['m-running', 'm-already-failed', 'm-user', 'm-absent']) {
+          const write = { id, runStatus: 'failed' };
+          expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
+        }
+      });
+
+      it('never touches a write that is not claiming failure', () => {
+        insertRow('m-not-failed', 'succeeded', 9_000);
+
+        for (const runStatus of ['succeeded', 'canceled', 'running', 'queued', undefined]) {
+          const write = { id: 'm-not-failed', runStatus };
+          expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
+        }
+      });
+
+      it('fails open with a warning rather than rejecting the write', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const noRole = new Database(':memory:');
+        noRole.exec(`CREATE TABLE messages (id TEXT PRIMARY KEY, run_status TEXT)`);
+
+        const write = { id: 'm-broken', runStatus: 'failed' };
+        expect(holdTerminalRunStatusOnMessageWrite(noRole, write)).toEqual(write);
+        expect(warn).toHaveBeenCalledWith(
+          '[runs] terminal run status hold failed',
+          expect.anything(),
+        );
+        noRole.close();
+      });
     });
 
     it('never rewrites a row for a non-terminal or failed run status', () => {

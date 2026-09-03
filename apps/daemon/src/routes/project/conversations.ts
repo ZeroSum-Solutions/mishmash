@@ -5,6 +5,7 @@ import { backfillBrandExtractionTranscriptForProject } from '../../brands/index.
 import type { RouteDeps } from '../../server-context.js';
 import { registerProjectCommentRoutes } from './comments.js';
 import { cancelRunsOwnedBy } from './cancel-owned-runs.js';
+import { holdTerminalRunStatusOnMessageWrite } from '../../runtimes/run-terminal-reconciliation.js';
 
 export interface RegisterProjectConversationRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'conversations' | 'ids' | 'telemetry' | 'appConfig' | 'agents'> {}
 
@@ -201,10 +202,10 @@ export function registerProjectConversationRoutes(app: Express, ctx: RegisterPro
     if (m.id && m.id !== req.params.mid) {
       return res.status(400).json({ error: 'id mismatch' });
     }
-    const saved = upsertMessage(db, req.params.cid, {
+    const saved = upsertMessage(db, req.params.cid, holdTerminalRunStatusOnMessageWrite(db, {
       ...m,
       id: req.params.mid,
-    });
+    }));
     // Bump the parent project's updatedAt so the project list re-orders.
     updateProject(db, req.params.id, {});
     ctx.telemetry?.reportFinalizedMessage(saved, m, {

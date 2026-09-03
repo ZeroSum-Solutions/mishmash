@@ -146,6 +146,59 @@ export function followRunTerminalOnMessage(
 }
 
 /**
+ * A message write may move an assistant row's run status TOWARDS its run's
+ * terminal event, never away from it.
+ *
+ * `followRunTerminalOnMessage` above repairs the row from inside the run's
+ * terminal hook, which fires while `finish()` is still running (`runtimes/
+ * runs.ts`). A chat client that already gave up on the turn holds its own copy
+ * of the row and can flush it afterwards — a retried PUT, a queued offline
+ * write, a second tab — and the message route upserts whatever it is handed
+ * (`routes/project/conversations.ts` -> `upsertMessage` in `db.ts`). Nothing
+ * revisits the row after that: the startup pass below only selects
+ * `queued`/`running` rows, and so does the post-end reconciler in
+ * `plugins/share-helpers.ts`. A write that lands one second late would make
+ * "Task failed" permanent again for a turn that succeeded (issue #159 A).
+ *
+ * So the invariant this holds is the write-side half of the same rule: once a
+ * row follows a non-failed terminal run status, only that status can be
+ * written onto it. `run_status` and `ended_at` are pinned back to the stored
+ * values and every other field passes through untouched, so a late write still
+ * delivers the content, events and produced files it carries. It never invents
+ * a status — a row with no non-failed terminal status stored is written
+ * exactly as sent.
+ *
+ * Failing open is deliberate: a read error here must not reject the user's
+ * message write, so it warns and returns the write unchanged, which is exactly
+ * the behaviour that preceded this guard.
+ */
+export function holdTerminalRunStatusOnMessageWrite(
+  db: Database.Database,
+  message: Record<string, unknown>,
+): Record<string, unknown> {
+  if (message.runStatus !== 'failed') return message;
+  const id = message.id;
+  if (typeof id !== 'string' || !id) return message;
+  try {
+    const stored = db.prepare(
+      `SELECT run_status AS runStatus, ended_at AS endedAt
+         FROM messages
+        WHERE id = ? AND role = 'assistant'`,
+    ).get(id) as { runStatus: string | null; endedAt: number | null } | undefined;
+    const held = stored?.runStatus;
+    if (!held || held === 'failed' || !TERMINAL_STATUSES.has(held)) return message;
+    return {
+      ...message,
+      runStatus: held,
+      endedAt: stored?.endedAt ?? message.endedAt ?? null,
+    };
+  } catch (err) {
+    console.warn('[runs] terminal run status hold failed', err);
+    return message;
+  }
+}
+
+/**
  * The status the run's own durable terminal record carries: the last `end`
  * event in its `events.jsonl`.
  *
