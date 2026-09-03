@@ -201,6 +201,10 @@ describe('the MCP cache repair is recorded on the daemon audited write gateway',
     expect(await exists(cacheEntry)).toBe(true);
   }, 60_000);
 
+  // Seeds an MCP config into the daemon data root the test setup resolved, which
+  // is process-wide. Safe because `vitest.config.ts` sets `fileParallelism: false`
+  // for exactly this class of suite, and `afterEach` removes the file again, so no
+  // other suite ever observes it.
   it('records the removal through the real daemon audit sink', async () => {
     daemonConfigPath = join(process.env.OD_DATA_DIR!, 'mcp-config.json');
     await writeBrokenServerFixture(dataDir, process.env.OD_DATA_DIR!);
