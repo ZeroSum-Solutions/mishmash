@@ -18,13 +18,17 @@
 // new place.
 
 import { spawn } from 'node:child_process';
+import { stat } from 'node:fs/promises';
+import path from 'node:path';
 
 import type {
   McpHealthResponse,
   McpServerHealth,
   McpServerHealthState,
+  McpServerRepair,
 } from '@open-design/contracts';
 
+import { createFilesystemWriteGateway } from './filesystem/write-gateway.js';
 import type { McpServerConfig } from './mcp-config.js';
 import { redactSecrets } from './redact.js';
 
@@ -120,20 +124,142 @@ export function withoutMcpServerHealthNoise(text: string): string {
 }
 
 /**
+ * The npm cache entry an `ENOENT` line names, when it names one.
+ *
+ * `npx` stages each package it runs into `<npm cache>/_npx/<hash>/`. An
+ * interrupted stage leaves `node_modules/` behind without `package.json`, and
+ * every later run of that server dies on `ENOENT ... _npx/<hash>/package.json`
+ * -- issue #157's `mermaid` server. The entry is a cache, so removing it is
+ * the whole fix: npx re-downloads on the next run.
+ *
+ * The path is taken from the FULL absolute path npm printed, not rebuilt from
+ * a guessed cache root, so a machine whose npm cache is not `~/.npm` repairs
+ * correctly too.
+ */
+const NPX_CACHE_ENTRY_RE = /([^\s'"]*[\\/]_npx[\\/][0-9a-f]{8,})[\\/]package\.json/i;
+
+/**
+ * INVARIANT: the only path this module will ever remove is an `_npx/<hash>`
+ * cache entry named by an absolute path.
+ *
+ * A repair deletes a directory, so what makes it safe is not who asked for it
+ * but what it is allowed to point at. Both the derivation below and the
+ * removal check against this, which is why a caller cannot reach the removal
+ * with a path of its own choosing.
+ */
+function isNpxCacheEntryPath(target: string): boolean {
+  if (!target || !path.isAbsolute(target)) return false;
+  if (path.basename(path.dirname(target)) !== '_npx') return false;
+  return /^[0-9a-f]{8,}$/i.test(path.basename(target));
+}
+
+/**
+ * The repair for a half-written npx cache entry, derived from a server's own
+ * stderr, or undefined when that stderr describes something else.
+ *
+ * `ENOENT` is required as well as the path shape: the same path appears in
+ * ordinary npm chatter, and only a missing file makes the entry broken.
+ */
+export function mcpNpxCacheRepair(stderr: string): McpServerRepair | undefined {
+  if (!stderr || !/ENOENT/i.test(stderr)) return undefined;
+  const match = NPX_CACHE_ENTRY_RE.exec(stderr);
+  const target = match?.[1];
+  if (!target || !isNpxCacheEntryPath(target)) return undefined;
+  return { kind: 'npx-cache', target };
+}
+
+async function exists(target: string): Promise<boolean> {
+  return stat(target).then(() => true, () => false);
+}
+
+/**
+ * INVARIANT: a repair is offered only for a directory that IS the half-written
+ * npx cache entry issue #157 describes -- the tree staged, `package.json` never
+ * written.
+ *
+ * The path this repair carries is read out of a server's own stderr, and a
+ * server is third-party code that can print whatever it likes. The path rule
+ * above narrows that text to `<...>/_npx/<hex>`, which is not on its own a
+ * statement about the machine: any directory anywhere could be named that way.
+ * This is the half that looks at the disk, so a crafted line naming a
+ * plausible-looking path finds nothing to offer unless the directory really has
+ * the shape npm leaves behind when a stage is interrupted.
+ *
+ * Matching the shape rather than a cache root is deliberate. npm's cache
+ * location is configurable, and asking npm for it means shelling out to a tool
+ * that may not be installed; the broken-entry shape is both stronger evidence
+ * and answerable from the filesystem alone.
+ */
+async function isHalfWrittenNpxCacheEntry(target: string): Promise<boolean> {
+  if (!isNpxCacheEntryPath(target)) return false;
+  if (!(await exists(target))) return false;
+  if (!(await exists(path.join(target, 'node_modules')))) return false;
+  return !(await exists(path.join(target, 'package.json')));
+}
+
+/**
+ * The repair to offer for a candidate derived from text, or undefined when the
+ * directory it names is not the broken entry the text claims.
+ *
+ * Derivation and verification are separate because they answer different
+ * questions: `mcpNpxCacheRepair` asks what the stderr says, this asks whether
+ * the disk agrees.
+ */
+export async function verifyNpxCacheRepair(
+  candidate: McpServerRepair,
+): Promise<McpServerRepair | undefined> {
+  if (candidate.kind !== 'npx-cache') return undefined;
+  return (await isHalfWrittenNpxCacheEntry(candidate.target)) ? candidate : undefined;
+}
+
+/**
+ * Perform a repair the daemon derived. Returns whether the target went away.
+ *
+ * The target is verified here rather than trusted from the record: this
+ * function is the one that deletes, so it owns the rule about what may be
+ * deleted, and it applies both halves of that rule -- the path shape and the
+ * half-written-entry shape on disk. A caller that skips the probe therefore
+ * gains nothing. Confirmation is the caller's gate (`POST /api/mcp/repair`,
+ * `od mcp repair --yes`); nothing in this module ever repairs on its own.
+ *
+ * The removal goes through the filesystem write gateway with an `externalTool`
+ * capability scoped to the `_npx` directory itself -- an npx cache is another
+ * tool's own state, not daemon data. That scoping is what keeps a symlinked or
+ * relocated entry from letting the removal reach anything but the one
+ * directory this repair named.
+ *
+ * The return value is a fact, not the absence of an exception. `rm` runs with
+ * `force` so a target that vanished between the probe and this call does not
+ * throw, which means the call alone cannot say whether anything went. Present
+ * before and absent after is the exact claim `removed` makes.
+ */
+export async function applyMcpServerRepair(
+  repair: McpServerRepair,
+  options: { runtimeDataRoot: string },
+): Promise<boolean> {
+  if (!(await verifyNpxCacheRepair(repair))) return false;
+  const gateway = createFilesystemWriteGateway({ runtimeDataRoot: options.runtimeDataRoot });
+  const capability = await gateway.externalTool(path.dirname(repair.target));
+  await gateway.rm(capability, repair.target, { recursive: true, force: true });
+  return !(await exists(repair.target));
+}
+
+/**
  * A concrete repair for a failure signature MishMash recognizes, or
- * undefined. Both entries come from the servers measured in issue #157;
- * neither is applied automatically, because both mutate state the daemon
- * does not own (an npm cache, a Python environment resolution).
+ * undefined. Both entries come from the servers measured in issue #157. The
+ * npx-cache entry is one MishMash can perform (see `mcpNpxCacheRepair`); the
+ * uvx entry stays advice, because its fix is a change to the server's own
+ * configured arguments and only the user can make it.
  */
 export function mcpFailureRemedy(
   server: Pick<McpServerConfig, 'command' | 'args'>,
   stderr: string,
 ): string | undefined {
-  const npxCache = /_npx\/([0-9a-f]+)\/package\.json/.exec(stderr);
-  if (npxCache && /ENOENT/i.test(stderr)) {
+  const npxCache = mcpNpxCacheRepair(stderr);
+  if (npxCache) {
     return (
-      `The npx cache entry for this server is incomplete. Remove ` +
-      `~/.npm/_npx/${npxCache[1]} and it will be re-downloaded on the next run.`
+      `The npx cache entry for this server is incomplete. Removing ` +
+      `${npxCache.target} lets npx re-download the server on the next run.`
     );
   }
   if (
@@ -493,7 +619,10 @@ export async function probeMcpServerHealth(
       ? await connectStdio(server, budgetMs)
       : await connectRemote(server, budgetMs, options.headersByServerId?.[server.id] ?? {});
   const stderrExcerpt = excerpt(outcome.stderr);
-  const remedy = outcome.state === 'ok' ? undefined : mcpFailureRemedy(server, outcome.stderr);
+  const failed = outcome.state !== 'ok';
+  const remedy = failed ? mcpFailureRemedy(server, outcome.stderr) : undefined;
+  const candidate = failed ? mcpNpxCacheRepair(outcome.stderr) : undefined;
+  const repair = candidate ? await verifyNpxCacheRepair(candidate) : undefined;
   return {
     ...base,
     state: outcome.state,
@@ -501,6 +630,7 @@ export async function probeMcpServerHealth(
     stderrExcerpt,
     ...(outcome.reason ? { reason: outcome.reason } : {}),
     ...(remedy ? { remedy } : {}),
+    ...(repair ? { repair } : {}),
     checkedAt: new Date().toISOString(),
   };
 }
