@@ -320,8 +320,10 @@ describe('agent file writes and the user viewport (B-09)', () => {
     const onProjectEvent = latestProjectEventHandler();
     const refreshesBefore = mockedFetchProjectFiles.mock.calls.length;
 
-    // A large agent rewrite: chokidar reports unlink + add and then a run of
-    // `change` events for as long as the write takes.
+    // A turn that rewrites several files. The daemon's watcher de-bounces per
+    // file (`awaitWriteFinish`), so each settled write arrives as its own
+    // unlink + add (+ change) burst, and a turn's bursts overlap into one run
+    // of events.
     const burst: ProjectEvent[] = [
       { type: 'file-changed', path: 'brand-spec.md', kind: 'unlink' },
       { type: 'file-changed', path: 'brand-spec.md', kind: 'add' },

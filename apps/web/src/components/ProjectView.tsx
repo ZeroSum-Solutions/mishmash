@@ -2622,6 +2622,7 @@ export function ProjectView({
   // mount we also do an initial pull so attachments staged before the
   // agent has written anything still see the user's pasted images.
   useEffect(() => {
+    const answeredSeq = settledFileChangeSeqRef.current;
     void refreshWorkspaceItems()
       .catch(() => {
         // The daemon probe can briefly lag behind a just-started local
@@ -2630,10 +2631,11 @@ export function ProjectView({
       })
       .finally(() => {
         // The refreshed list is in hand, so the preview now has the new
-        // mtimes. Clear the progress hint — unless another write landed
-        // while this fetch was in flight, in which case the burst that
-        // started it is not the current one and the hint must stay up.
-        if (fileChangeSeqRef.current !== settledFileChangeSeqRef.current) return;
+        // mtimes. Clear the progress hint — unless the burst has moved on.
+        // `answeredSeq` is captured per fetch rather than read from the ref,
+        // so a fetch that a later dispatch has already overtaken cannot clear
+        // a hint that the newer fetch is still working on.
+        if (fileChangeSeqRef.current !== answeredSeq) return;
         setPreviewUpdating(false);
       });
   }, [daemonLive, refreshWorkspaceItems, filesRefresh]);
