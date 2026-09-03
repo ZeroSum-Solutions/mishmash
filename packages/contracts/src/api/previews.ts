@@ -10,12 +10,18 @@ export type PreviewInfo = {
   pid: number;
   port: number;
   /**
-   * The preview's address on the host the request arrived on, with the
-   * preview's own port (issue #158). A caller on the daemon's machine gets
-   * `http://127.0.0.1:<port>/`; a collaborator reaching the daemon over a
-   * tailnet gets that tailnet host, because the loopback address would
-   * resolve to their own machine. Always plain `http:` — the preview process
-   * speaks HTTP on its port whatever scheme fronted the daemon.
+   * Where to fetch the preview: its path on the Open Design front the request
+   * arrived on, which the daemon serves by proxying to the loopback child
+   * (issue #158, decision D-14). It is reachable wherever the daemon is,
+   * under the same scheme and the same authentication, so a collaborator gets
+   * a working link and `port` below stays a detail of the daemon's own
+   * machine. A request no header can place is answered with the path alone,
+   * to be resolved against the origin the caller used.
+   *
+   * Two shapes a proxied preview cannot serve, both inherent to hosting a dev
+   * server under a path: a root-absolute request whose initiator sends no
+   * `Referer` (a `no-referrer` policy, a WebSocket handshake), and a request
+   * body over the daemon's 4mb API limit.
    */
   url: string;
   command: string[];

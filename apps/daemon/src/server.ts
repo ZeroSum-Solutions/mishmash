@@ -669,6 +669,11 @@ import { registerTerminalRoutes } from './routes/terminal.js';
 import { createTerminalService } from './terminals.js';
 import { confinePreviewCwd, createPreviewService } from './previews.js';
 import { registerPreviewRoutes } from './routes/preview.js';
+import {
+  PREVIEW_PROXY_MOUNT,
+  createPreviewProxyUpgradeHandler,
+  createPreviewRootAssetFallback,
+} from './preview-proxy.js';
 import { registerSocialShareRoutes } from './routes/social-share.js';
 import { registerInterviewRoutes } from './routes/interviews.js';
 import { registerOpenDesignPublicMetadataRoutes } from './routes/open-design-public-metadata.js';
@@ -2206,6 +2211,13 @@ export async function startServer({
   // registered before the global parser so it claims the body first (same
   // pattern as the routes above).
   app.use('/api/routing/decision/preview', express.json({ limit: '256kb' }));
+  // The preview proxy forwards a request body to the project's dev server
+  // verbatim, and a body the JSON parser has already consumed cannot be
+  // re-streamed. Capture it as bytes first (registered before the global
+  // parser, same pattern as the dedicated limits above); body-parser marks the
+  // request read, so the parser below leaves it alone. The API's own 4mb limit
+  // applies, which bounds what a preview can be POSTed through the daemon.
+  app.use(PREVIEW_PROXY_MOUNT, express.raw({ type: () => true, limit: '4mb' }));
   app.use(express.json({ limit: '4mb' }));
   const projectPreviewScopes = createProjectPreviewScopeRegistry();
 
@@ -10097,6 +10109,10 @@ export async function startServer({
     telemetry: { reportFinalizedMessage, reportFeedback },
   });
 
+  // Root-absolute preview assets (`/_next/static/...`), attributed to the
+  // preview page that asked for them. Registered here so it can only claim
+  // paths no daemon route owns.
+  app.use(createPreviewRootAssetFallback({ getPreview: (id) => previewService.get(id) }));
   registerStaticSpaFallback(app, STATIC_DIR);
 
   // Wait for `listen` to bind so callers always see the resolved URL —
@@ -10126,6 +10142,13 @@ export async function startServer({
     let server;
     try {
       server = app.listen(port, host);
+      // A WebSocket upgrade never enters the Express router, so the preview
+      // proxy's HMR channel is wired to the listener itself. Every other
+      // upgrade closes the socket, which is what Node already does when no
+      // handler is registered.
+      server.on('upgrade', createPreviewProxyUpgradeHandler({
+        getPreview: (id) => previewService.get(id),
+      }));
       server.once('listening', () => {
         // Widen the between-request idle window so kept-alive sockets
         // belonging to chat/SSE clients survive the gaps between bursts.

@@ -2698,6 +2698,7 @@ export const en: Dict = {
   'designFiles.previewClose': 'Close preview',
   'designFiles.previewServer.title': 'Preview server',
   'designFiles.previewServer.openInChrome': 'Open in Chrome',
+  'designFiles.previewServer.sharedLink': 'Open Design serves this preview itself, so the link works for anyone who can open this workspace.',
   'designFiles.previewServer.openFailed': 'Chrome did not open. Use the link instead.',
   'designFiles.previewServer.rootAbsolute': 'This page asks for files by site root path, like /_nuxt/entry.js. The panel preview serves files next to the file itself, so those requests fail and the page stays on its own loader.',
   'designFiles.previewServer.none': 'No preview server is running for this project. Start one with `od preview start` to see the page the way the site serves it.',

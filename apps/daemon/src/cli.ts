@@ -1764,11 +1764,11 @@ port verifiably answers HTTP — never report a preview URL as live any other
 way. \`stop\` succeeds only when the whole process group is confirmed gone.
 Output is JSON on stdout.
 
-\`start\` and \`list\` announce each preview on the host this command reached
-the daemon on, so a URL taken over a tailnet names the tailnet host instead of
-a loopback address the caller cannot reach (issue #158). \`open\` launches the
-preview in Google Chrome on the DAEMON's machine, for a default browser that
-refuses loopback.
+\`start\` and \`list\` announce each preview as a path on the Open Design front
+this command reached the daemon on. The daemon serves the preview itself, so
+that URL works for anyone who can reach Open Design rather than only on the
+daemon's own machine (issue #158). \`open\` launches the preview in Google
+Chrome on the DAEMON's machine, for a default browser that refuses loopback.
 
 Flags:
   --project     Required project id.
