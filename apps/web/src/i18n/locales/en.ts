@@ -2817,6 +2817,11 @@ export const en: Dict = {
   'sketch.tooltipClean': 'Saved',
   'fileViewer.empty': 'Select a file to view.',
   'fileViewer.loading': 'Loading…',
+  'fileViewer.preparingPreviewAssets': 'Preparing preview: inlining assets…',
+  'fileViewer.preparingPreviewAssetsProgress': 'Preparing preview: inlining {done} / {total} assets',
+  'fileViewer.previewAssetsIncompleteTitle': 'Preview assets did not finish',
+  'fileViewer.previewAssetsIncompleteDetail':
+    'Showing the raw document. Images, stylesheets, and scripts stored in this project may be missing.',
   'fileViewer.exportPptx': 'Export as PPTX',
   'fileViewer.openInNewTab': 'Open in new tab',
   'fileViewer.copyPath': 'Copy path',
