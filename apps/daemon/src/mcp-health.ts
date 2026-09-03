@@ -34,16 +34,36 @@ export const MCP_CONNECT_BUDGET_MS = 15_000;
 /** Longest stderr excerpt kept per server. Enough for a stack tail. */
 const STDERR_EXCERPT_LIMIT = 2_000;
 
+/** A well-formed `initialize` reply is far smaller than this. */
+const STDOUT_BUFFER_LIMIT = 256_000;
+
+/** How long a probed server gets to honour SIGTERM before SIGKILL. */
+const KILL_GRACE_MS = 2_000;
+
+/**
+ * Why a server is reported `timeout`.
+ *
+ * The cold-start clause is not padding: a server launched through `npx -y` or
+ * `uvx` downloads its package on first use, which can outlast the budget on a
+ * cold cache. Saying so is the difference between this surface and the report
+ * that made #157 -- a budget that expired is a fact about the probe, not a
+ * verdict on the server.
+ */
+function timeoutReason(budgetMs: number): string {
+  return `no reply within ${budgetMs}ms (a first run may still be downloading the server)`;
+}
+
 /**
  * Text describing an external MCP server's connection state.
  *
- * A line qualifies only when it names MCP *and* a connection-state word, or
- * carries one of the agent CLI's MCP status codes. Both halves are required
- * so that an ordinary agent failure that merely mentions a tool is left
- * alone.
+ * A line qualifies only when it pairs an MCP subject -- the words "MCP
+ * server(s)", or "deferred tools" (the agent CLI's name for MCP-provided
+ * tools) -- with a connection-state word, or when it carries one of the agent
+ * CLI's MCP status codes. Both halves are required so an ordinary agent
+ * failure that merely mentions a tool is left alone.
  */
 const MCP_SERVER_HEALTH_LINE_RE =
-  /\bMCP servers?\b[^\n]*\b(?:failed to connect|connection timed out|connection closed|disconnected|reconnected|unavailable)\b|\bMCP server (?:disconnected|reconnected)\b|\((?:CONNECT_TIMEOUT|CONNECTION_CLOSED)\)/i;
+  /\b(?:MCP servers?|deferred tools?)\b[^\n]*\b(?:failed to connect|connection timed out|connection closed|no longer available|available again|disconnected|reconnected|unavailable)\b|\bMCP server (?:disconnected|reconnected)\b|\((?:CONNECT_TIMEOUT|CONNECTION_CLOSED)\)/i;
 
 /**
  * INVARIANT: a run's failure indicator derives from the run's own outcome.
@@ -53,9 +73,13 @@ const MCP_SERVER_HEALTH_LINE_RE =
  * every classifier input through this helper and the two stay separate by
  * construction rather than by each classifier remembering to be careful.
  *
- * Filtering is line-scoped: agent output is line-delimited transport, so a
- * frame about MCP servers and a frame about the model provider never share
- * a line, and dropping the former cannot hide the latter.
+ * Filtering is line-scoped, which is what makes it safe rather than complete:
+ * agent output is line-delimited transport, so a frame about MCP servers and a
+ * frame about the model provider never share a line, and dropping the former
+ * cannot hide the latter. It recognizes the vocabulary the agent CLI actually
+ * uses; a future CLI could word a disconnect notice this never sees, which
+ * would leave that line in the classifier's input exactly as before this
+ * helper existed -- never worse.
  */
 export function withoutMcpServerHealthNoise(text: string): string {
   if (!text) return text;
@@ -64,11 +88,6 @@ export function withoutMcpServerHealthNoise(text: string): string {
     .split('\n')
     .filter((line) => !MCP_SERVER_HEALTH_LINE_RE.test(line))
     .join('\n');
-}
-
-/** True when `text` is entirely MCP server connection state. */
-export function isMcpServerHealthNoise(text: string): boolean {
-  return Boolean(text.trim()) && !withoutMcpServerHealthNoise(text).trim();
 }
 
 /**
@@ -151,6 +170,8 @@ async function connectStdio(
   });
 
   let stderr = '';
+  // Bounded: a server that streams without ever completing a JSON-RPC line
+  // would otherwise grow this buffer for the whole budget.
   let stdout = '';
   child.stderr?.setEncoding('utf8');
   child.stdout?.setEncoding('utf8');
@@ -168,12 +189,20 @@ async function connectStdio(
       resolve({ ...result, stderr });
     };
     const timer = setTimeout(
-      () => settle({ state: 'timeout', connectMs: elapsed(), reason: `no reply within ${budgetMs}ms` }),
+      () => settle({ state: 'timeout', connectMs: elapsed(), reason: timeoutReason(budgetMs) }),
       budgetMs,
     );
 
     child.stdout?.on('data', (chunk: string) => {
       stdout += chunk;
+      if (stdout.length > STDOUT_BUFFER_LIMIT && !stdout.includes('\n')) {
+        settle({
+          state: 'failed',
+          connectMs: elapsed(),
+          reason: `server sent ${STDOUT_BUFFER_LIMIT} bytes without a complete JSON-RPC frame`,
+        });
+        return;
+      }
       // The reply is one JSON-RPC frame per line; the first complete line
       // that parses as a response settles the probe.
       let index = stdout.indexOf('\n');
@@ -220,11 +249,58 @@ async function connectStdio(
     }
   });
 
+  // SIGTERM first, then SIGKILL after a grace period: a server that ignores
+  // SIGTERM must not outlive the probe that spawned it. `unref` keeps the
+  // grace timer from holding the event loop open.
   child.kill();
+  if (child.exitCode === null && child.signalCode === null) {
+    setTimeout(() => {
+      if (!child.killed || child.exitCode === null) child.kill('SIGKILL');
+    }, KILL_GRACE_MS).unref();
+  }
   return outcome;
 }
 
-/** POST one `initialize` at an http/sse server and time the reply. */
+/**
+ * Read a JSON-RPC `initialize` reply out of an HTTP response body.
+ *
+ * Streamable-HTTP servers may answer as plain JSON or as one SSE `data:`
+ * frame, so both shapes are accepted. A 2xx alone is not an answer: a server
+ * can return 200 with a JSON-RPC error, or with nothing at all, and reporting
+ * that as `ok` would put the same unearned confidence on this surface that
+ * #157 put on the run indicator.
+ */
+function readInitializeReply(
+  body: string,
+): { ok: true } | { ok: false; reason: string } {
+  const candidates = body.includes('data:')
+    ? body.split('\n').filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim())
+    : [body.trim()];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      const message = JSON.parse(candidate) as { result?: unknown; error?: { message?: string } };
+      if (message.error) {
+        return { ok: false, reason: message.error.message ?? 'server rejected initialize' };
+      }
+      if (message.result) return { ok: true };
+    } catch {
+      // Not a JSON-RPC frame. Keep looking.
+    }
+  }
+  return { ok: false, reason: 'server answered without a JSON-RPC initialize result' };
+}
+
+/**
+ * Connect to an http or sse server and time the reply.
+ *
+ * The two transports differ in their handshake and are probed differently:
+ * streamable HTTP takes a POSTed `initialize` and answers it, while the older
+ * SSE transport answers a GET by opening an event stream and only then accepts
+ * posts on a session endpoint it names. For `sse` the probe therefore measures
+ * what it can honestly measure -- that the stream opens -- rather than POSTing
+ * at a URL that shape does not serve and reporting the 405 as a dead server.
+ */
 async function connectRemote(
   server: McpServerConfig,
   budgetMs: number,
@@ -233,19 +309,20 @@ async function connectRemote(
   if (!server.url) {
     return { state: 'failed', connectMs: 0, stderr: '', reason: 'no url configured' };
   }
+  const isSse = server.transport === 'sse';
   const startedAt = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), budgetMs);
   try {
     const res = await fetch(server.url, {
-      method: 'POST',
+      method: isSse ? 'GET' : 'POST',
       headers: {
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream',
+        accept: isSse ? 'text/event-stream' : 'application/json, text/event-stream',
+        ...(isSse ? {} : { 'content-type': 'application/json' }),
         ...(server.headers ?? {}),
         ...extraHeaders,
       },
-      body: JSON.stringify(INITIALIZE_REQUEST),
+      ...(isSse ? {} : { body: JSON.stringify(INITIALIZE_REQUEST) }),
       signal: controller.signal,
     });
     const connectMs = Date.now() - startedAt;
@@ -257,6 +334,18 @@ async function connectRemote(
         reason: `HTTP ${res.status}`,
       };
     }
+    if (isSse) {
+      // The stream opening IS the SSE handshake's first step; anything past it
+      // needs the session endpoint the stream itself names, which is more than
+      // a health probe should hold open.
+      void res.body?.cancel();
+      return { state: 'ok', connectMs, stderr: '' };
+    }
+    const body = await res.text();
+    const reply = readInitializeReply(body);
+    if (!reply.ok) {
+      return { state: 'failed', connectMs, stderr: excerpt(body), reason: reply.reason };
+    }
     return { state: 'ok', connectMs, stderr: '' };
   } catch (err) {
     const connectMs = Date.now() - startedAt;
@@ -265,7 +354,7 @@ async function connectRemote(
       state: aborted ? 'timeout' : 'failed',
       connectMs,
       stderr: '',
-      reason: aborted ? `no reply within ${budgetMs}ms` : String((err as Error).message),
+      reason: aborted ? timeoutReason(budgetMs) : String((err as Error).message),
     };
   } finally {
     clearTimeout(timer);
@@ -284,10 +373,17 @@ export async function probeMcpServerHealth(
     transport: server.transport,
     enabled: server.enabled,
     budgetMs,
-    checkedAt: new Date().toISOString(),
   };
   if (!server.enabled) {
-    return { ...base, state: 'disabled', connectMs: 0, stderrExcerpt: '' };
+    // Reported, never spawned: a switched-off server is a fact about the
+    // config, and probing it would start a process the user opted out of.
+    return {
+      ...base,
+      state: 'disabled',
+      connectMs: 0,
+      stderrExcerpt: '',
+      checkedAt: new Date().toISOString(),
+    };
   }
   const outcome =
     server.transport === 'stdio'

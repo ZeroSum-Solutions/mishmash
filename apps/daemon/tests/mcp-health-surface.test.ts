@@ -73,6 +73,29 @@ describe('run failure indicator derives from run outcome only (#157)', () => {
     expect(diagnostic?.code).not.toBe('AGENT_CONNECTION_DROPPED');
   });
 
+  it('keeps MCP server state out of the diagnostic a real failure carries', () => {
+    // A genuine agent failure, with MCP server chatter beside it in the same
+    // tails. The diagnostic must describe the failure and quote only the
+    // failure: an error card that repeats "MCP server ... connection timed
+    // out" is how a user ends up chasing the wrong thing. Both halves of the
+    // flap have to go, not just the line that says "MCP server".
+    const diagnostic = diagnoseClaudeCliFailure({
+      agentId: 'claude',
+      exitCode: 1,
+      stderrTail: 'API Error: The socket connection was closed unexpectedly.',
+      // Last in the joined body, so this text is what the diagnostic's
+      // trailing quote would carry if the filter let it through.
+      stdoutTail: `${MCP_CONNECT_NOISE}\n${MCP_FLAP_NOISE}`,
+      env: {},
+    });
+
+    expect(diagnostic?.code).toBe('AGENT_CONNECTION_DROPPED');
+    expect(diagnostic?.detail).not.toContain('MCP server');
+    expect(diagnostic?.detail).not.toContain('CONNECTION_CLOSED');
+    expect(diagnostic?.detail).not.toContain('deferred tools');
+    expect(diagnostic?.detail).not.toContain('reconnected');
+  });
+
   it('still reports a genuine agent connection drop', () => {
     const diagnostic = diagnoseClaudeCliFailure({
       agentId: 'claude',
@@ -118,6 +141,13 @@ process.stdin.on('data', (chunk) => {
     }
   }
 });
+`;
+
+// Connects, then never answers: the shape of the #157 symptom, and the one
+// state whose number the product previously got wrong.
+const SILENT_SERVER_SRC = `
+process.stdin.resume();
+setTimeout(() => {}, 60_000);
 `;
 
 const BROKEN_SERVER_SRC = `
@@ -189,6 +219,22 @@ beforeEach(async () => {
           command: process.execPath,
           args: ['-e', BROKEN_SERVER_SRC],
         },
+        {
+          id: 'silent-probe',
+          label: 'Silent probe',
+          transport: 'stdio',
+          enabled: true,
+          command: process.execPath,
+          args: ['-e', SILENT_SERVER_SRC],
+        },
+        {
+          id: 'off-probe',
+          label: 'Switched-off probe',
+          transport: 'stdio',
+          enabled: false,
+          command: process.execPath,
+          args: ['-e', 'process.exit(0)'],
+        },
       ],
     }),
     'utf8',
@@ -215,14 +261,19 @@ async function getJson(path: string): Promise<{ status: number; json: any }> {
 }
 
 describe('MCP health is its own surface with per-server state (#157)', () => {
-  it('reports per-server state, connect time from spawn, and stderr', async () => {
+  it('reports every configured server, connect time from spawn, and stderr', async () => {
     const res = await getJson('/api/mcp/health');
     expect(res.status).toBe(200);
 
     const byId = new Map<string, any>(
       (res.json?.servers ?? []).map((entry: any) => [entry.id, entry]),
     );
-    expect([...byId.keys()].sort()).toEqual(['broken-probe', 'healthy-probe']);
+    expect([...byId.keys()].sort()).toEqual([
+      'broken-probe',
+      'healthy-probe',
+      'off-probe',
+      'silent-probe',
+    ]);
 
     const healthy = byId.get('healthy-probe');
     expect(healthy.state).toBe('ok');
@@ -236,5 +287,18 @@ describe('MCP health is its own surface with per-server state (#157)', () => {
     expect(broken.state).toBe('failed');
     // F-09: the stderr excerpt is what makes the failure diagnosable.
     expect(broken.stderrExcerpt).toContain('npm error ENOENT');
-  }, 30_000);
+
+    // A server that connects and then says nothing is `timeout`, not `failed`,
+    // and its connectMs is the budget it actually consumed.
+    const silent = byId.get('silent-probe');
+    expect(silent.state).toBe('timeout');
+    expect(silent.connectMs).toBeGreaterThanOrEqual(silent.budgetMs);
+    expect(silent.reason).toContain('no reply within');
+
+    // A switched-off server is reported without being spawned.
+    const off = byId.get('off-probe');
+    expect(off.state).toBe('disabled');
+    expect(off.connectMs).toBe(0);
+    expect(off.stderrExcerpt).toBe('');
+  }, 60_000);
 });

@@ -22,6 +22,16 @@ const STATE_LABEL_KEY = {
   disabled: 'mcpClient.health.stateDisabled',
 } as const;
 
+/**
+ * The state union is closed in contracts, but this value arrives over HTTP —
+ * an older or newer daemon can send one this build has no label for. Show the
+ * raw value rather than an empty chip.
+ */
+function stateLabel(state: McpServerHealth['state'], t: ReturnType<typeof useT>): string {
+  const key = STATE_LABEL_KEY[state];
+  return key ? t(key) : state;
+}
+
 export function McpHealthPanel() {
   const t = useT();
   const [servers, setServers] = useState<McpServerHealth[] | null>(null);
@@ -61,7 +71,7 @@ export function McpHealthPanel() {
                   size={13}
                 />
                 <span className={styles.name}>{server.label || server.id}</span>
-                <span className={styles.state}>{t(STATE_LABEL_KEY[server.state])}</span>
+                <span className={styles.state}>{stateLabel(server.state, t)}</span>
                 {server.state === 'ok' ? (
                   <span className="hint">
                     {t('mcpClient.health.connectMs', { ms: String(server.connectMs) })}
