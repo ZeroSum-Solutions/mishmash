@@ -580,4 +580,12 @@ describe('form answer identity', () => {
     );
     expect(submittedAnswerContentForForm(form, undefined, undefined)).toBeUndefined();
   });
+
+  it('never falls back to a message that names a different form', () => {
+    // Position must not override identity: an answer stamped for `tone` is not
+    // this form's answer, however adjacent it is.
+    expect(
+      submittedAnswerContentForForm({ id: 'brief' }, new Map(), answer('tone')),
+    ).toBeUndefined();
+  });
 });

@@ -866,14 +866,19 @@ export function formAnswersByAssistantMessageId(
  *
  * `nextUserContent` stays the fallback for an answer whose header carries no
  * id (a paraphrased or hand-written reply): that message can only be read as
- * an answer to the form it directly follows.
+ * an answer to the form it directly follows. A message that names a DIFFERENT
+ * form is not that form's answer, so position never overrides identity.
  */
 export function submittedAnswerContentForForm(
   form: Pick<QuestionForm, 'id'>,
   answersByFormId: ReadonlyMap<string, string> | undefined,
   nextUserContent: string | undefined,
 ): string | undefined {
-  return answersByFormId?.get(form.id) ?? nextUserContent;
+  const answerForThisForm = answersByFormId?.get(form.id);
+  if (answerForThisForm) return answerForThisForm;
+  if (nextUserContent === undefined) return undefined;
+  const nextFormId = formAnswersFormId(nextUserContent);
+  return nextFormId === null || nextFormId === form.id ? nextUserContent : undefined;
 }
 
 function formOptionDisplayForValue(
