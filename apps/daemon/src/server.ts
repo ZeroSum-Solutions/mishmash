@@ -6368,6 +6368,11 @@ export async function startServer({
       });
       const failure = classifyRunFailure({
         result,
+        // A cancellation reaching this handler must carry its origin too, or a
+        // shutdown that the child-close path finishes would be classified as
+        // the user cancelling — the same wrong statement `onRunFinished` guards
+        // against on the run service's own path.
+        ...(run.cancelOrigin ? { cancelOrigin: run.cancelOrigin } : {}),
         status: {
           status,
           error: run.error,

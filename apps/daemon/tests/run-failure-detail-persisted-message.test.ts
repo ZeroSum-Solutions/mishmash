@@ -168,6 +168,42 @@ describe('run failure classification persisted to assistant message', () => {
     );
     expect(errorEvent).toBeUndefined();
   });
+
+  // W1.4 round 3: the taxonomy decision is pinned by a unit test, but the
+  // plumbing that makes it true in production — shutdownActive stamping the
+  // origin, and onRunFinished passing it into the classifier — needs a real
+  // daemon to exercise. Without this, dropping either would leave every test
+  // green while a shutdown-killed turn again told the user they cancelled it.
+  it('reports a shutdown-killed turn as interrupted, not as the user cancelling', async () => {
+    binDir = await mkdtemp(path.join(os.tmpdir(), 'od-failure-detail-msg-bin-'));
+    const fakeClaude = await writeHangingClaude(binDir, 'claude-hangs-shutdown');
+
+    delete process.env.POSTHOG_KEY;
+    delete process.env.POSTHOG_HOST;
+
+    started = (await startServer({ port: 0, returnServer: true })) as StartedServer;
+    await putConfig(started.url, {
+      agentId: 'claude',
+      agentCliEnv: { claude: { CLAUDE_BIN: fakeClaude } },
+      telemetry: { metrics: true, content: false, artifactManifest: false },
+      privacyDecisionAt: Date.now(),
+    });
+
+    const { projectId, conversationId } = await createConversation(started.url);
+    const run = await startRun(started.url, projectId, conversationId);
+    await waitForRunning(started.url, run.runId);
+
+    // Shut the daemon down under the in-flight turn — the shutdownActive path,
+    // not POST /cancel.
+    const url = started.url;
+    await Promise.resolve(started.shutdown?.());
+
+    const status = await fetchRunStatus(url, run.runId);
+    expect(status?.status).toBe('canceled');
+    expect(status?.failureDetail).toBe('interrupted');
+    expect(status?.failureCategory).toBe('process_exit');
+    expect(status?.failureDetail).not.toBe('user_cancelled');
+  });
 });
 
 // The closed failure-stage union from packages/contracts, spelled out so a
@@ -326,6 +362,22 @@ async function startRun(
   expect(runResponse.status).toBe(202);
   const body = (await runResponse.json()) as { runId: string };
   return { runId: body.runId, assistantMessageId };
+}
+
+async function waitForRunning(url: string, runId: string): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 10_000) {
+    const run = await fetchRunStatus(url, runId);
+    if (run && run.status !== 'queued') return;
+    await delay(50);
+  }
+  throw new Error(`run ${runId} never started`);
+}
+
+async function fetchRunStatus(url: string, runId: string): Promise<RunStatus | null> {
+  const response = await fetch(`${url}/api/runs/${encodeURIComponent(runId)}`).catch(() => null);
+  if (!response || !response.ok) return null;
+  return (await response.json()) as RunStatus;
 }
 
 async function waitForRun(url: string, runId: string): Promise<RunStatus> {
