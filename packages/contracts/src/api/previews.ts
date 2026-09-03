@@ -9,6 +9,14 @@ export type PreviewInfo = {
   projectId: string;
   pid: number;
   port: number;
+  /**
+   * The preview's address on the host the request arrived on, with the
+   * preview's own port (issue #158). A caller on the daemon's machine gets
+   * `http://127.0.0.1:<port>/`; a collaborator reaching the daemon over a
+   * tailnet gets that tailnet host, because the loopback address would
+   * resolve to their own machine. Always plain `http:` — the preview process
+   * speaks HTTP on its port whatever scheme fronted the daemon.
+   */
   url: string;
   command: string[];
   cwd: string;
@@ -25,4 +33,23 @@ export type PreviewStartRequest = {
 
 export type PreviewListResponse = {
   previews: PreviewInfo[];
+};
+
+/**
+ * Result of `POST /api/projects/:id/previews/:previewId/open` — the daemon
+ * launched the preview in Google Chrome on ITS OWN machine, because the
+ * host's default browser may refuse loopback connections (issue #158
+ * comment: EGO Lite task spaces do). The URL is the loopback one, since that
+ * is the address the daemon's machine reaches the preview on.
+ *
+ * `opened` reports that the launcher process started, not that Chrome came
+ * up: a detached opener cannot see further. A launcher that never started
+ * answers 502 `PREVIEW_OPEN_FAILED` instead — which on Linux does mean no
+ * Chrome, while on macOS and Windows the launcher (`open`, `cmd.exe`) starts
+ * whether Chrome is installed or not.
+ */
+export type PreviewOpenResponse = {
+  opened: true;
+  url: string;
+  browser: 'chrome';
 };

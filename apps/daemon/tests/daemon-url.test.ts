@@ -83,12 +83,12 @@ describe("resolveDaemonUrl", () => {
     }
 
     // This case asserts that discovery *works*, not that it is fast. The budget
-    // has to cover a real process spawn, and `resolveDaemonUrl` swallows a
-    // timeout by returning DEFAULT_DAEMON_URL - so a budget too tight for a
-    // loaded machine surfaces as an assertion failure against the default port
-    // rather than as a visible timeout. At 1000ms this file passed alone and
-    // failed inside the full 619-file suite for exactly that reason. Kept well
-    // under the 20s per-test ceiling in vitest.config.ts.
+    // has to cover a real process spawn; a budget too tight for a loaded
+    // machine now surfaces as a DaemonUrlDiscoveryError (see
+    // daemon-url-fail-closed.test.ts) rather than as a silent default port. At
+    // 1000ms this file passed alone and failed inside the full 619-file suite
+    // for exactly that reason. Kept well under the 20s per-test ceiling in
+    // vitest.config.ts.
     const url = await resolveDaemonUrl({
       env: {
         PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH ?? ""}`,
