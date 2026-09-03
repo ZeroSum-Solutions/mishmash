@@ -1,16 +1,11 @@
-import type { ChatSessionMode } from '@open-design/contracts';
+import type { ChatSessionMode, DesignDeliveryOutcome } from '@open-design/contracts';
+import { resolveDesignDeliveryOutcomeFromEvidence, turnAsksForUserInput } from '@open-design/contracts';
 import { isImplicitProducedFileCandidate } from '../produced-files';
 import type { AgentEvent, ChatMessage, ProjectFile } from '../types';
 import { hasFileWriteToolUse } from './file-ops';
 import { unfinishedTodosFromEvents } from './todos';
 
-export type DesignDeliveryOutcome =
-  | 'not_required'
-  | 'awaiting_input'
-  | 'delivered'
-  | 'report_only'
-  | 'no_result'
-  | 'delivery_failed';
+export type { DesignDeliveryOutcome };
 
 export interface DesignDeliveryInput {
   sessionMode: ChatSessionMode | null | undefined;
@@ -117,15 +112,11 @@ export function isRetryableAssistantTerminalFailure(
   );
 }
 
-function asksForUserInput(content: string): boolean {
-  return /<(?:question-form|ask-question)\b/i.test(content);
-}
-
 function isIntermediateDesignTurn(
   content: string,
   events: AgentEvent[] | undefined,
 ): boolean {
-  return asksForUserInput(content) || unfinishedTodosFromEvents(events).length > 0;
+  return turnAsksForUserInput(content) || unfinishedTodosFromEvents(events).length > 0;
 }
 
 /**
@@ -172,48 +163,28 @@ function hasLiveArtifactDelivery(events: AgentEvent[] | undefined): boolean {
 }
 
 /**
- * A successful agent process is not necessarily a delivered design.
- *
- * Design mode is artifact-first, but clarification and explicitly unfinished
- * turns are valid intermediate outcomes. Chat and Plan remain text-first and
- * must never be failed merely because they did not write a project file.
- *
- * A zero-file success is only a missing deliverable when the turn attempted
- * to write project files (or an artifact save failed). A turn that never
- * tried to write and answered with substantive text is a report-only result —
- * image analysis, report-only audits, and shell cleanups end exactly this way —
- * and must not be downgraded to ARTIFACT_NOT_FOUND. The known cost: an agent
- * that merely claims completion without ever calling a write tool now passes as
- * text; the text itself makes that visible to the user.
- *
- * Delivery evidence is every way a turn can hand the user something: a file
- * that appeared, a file that was rewritten in place, a saved artifact, a live
- * artifact, or a preview server that is answering HTTP.
+ * The web half of the shared delivery decision: reduce this turn's streamed
+ * events to the evidence `resolveDesignDeliveryOutcomeFromEvidence`
+ * (`packages/contracts/src/api/delivery.ts`) reads, then let that one decision
+ * answer. The daemon reduces its own run-log shape to the same evidence, so an
+ * attended turn and an unattended one cannot be classified differently.
  */
 export function resolveDesignDeliveryOutcome(
   input: DesignDeliveryInput,
 ): DesignDeliveryOutcome {
-  if (input.sessionMode !== 'design' || input.runStatus !== 'succeeded') {
-    return 'not_required';
-  }
-  if (isIntermediateDesignTurn(input.content, input.events)) {
-    return 'awaiting_input';
-  }
-  if (
-    input.producedFileCount > 0 ||
-    input.traceObjectFileCount > 0 ||
-    (input.modifiedFileCount ?? 0) > 0 ||
-    input.persistenceSucceeded ||
-    hasLiveArtifactDelivery(input.events) ||
-    hasPreviewServerStart(input.events)
-  ) {
-    return 'delivered';
-  }
-  if (input.persistenceFailed) return 'delivery_failed';
-  if (!hasFileWriteToolUse(input.events) && input.content.trim().length > 0) {
-    return 'report_only';
-  }
-  return 'no_result';
+  return resolveDesignDeliveryOutcomeFromEvidence({
+    sessionMode: input.sessionMode,
+    runStatus: input.runStatus,
+    content: input.content,
+    hasUnfinishedTodos: unfinishedTodosFromEvents(input.events).length > 0,
+    deliveredFileCount:
+      input.producedFileCount + input.traceObjectFileCount + (input.modifiedFileCount ?? 0),
+    hasLiveArtifactDelivery: hasLiveArtifactDelivery(input.events),
+    hasPreviewServerStart: hasPreviewServerStart(input.events),
+    persistenceSucceeded: input.persistenceSucceeded === true,
+    persistenceFailed: input.persistenceFailed === true,
+    attemptedFileWrite: hasFileWriteToolUse(input.events),
+  });
 }
 
 /**
