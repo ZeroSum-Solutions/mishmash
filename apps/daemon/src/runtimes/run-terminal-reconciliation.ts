@@ -169,11 +169,12 @@ export function followRunTerminalOnMessage(
  * the stored values and every other field passes through untouched, so a late
  * write still delivers the content, events and produced files it carries.
  *
- * The row's `ended_at` is held on the same terms as its status, in the one
- * direction that is drift: a stale copy that agrees the turn succeeded but
- * carries an EARLIER timestamp its own writer stamped would drag the row back
- * off the run's terminal clock. A write that agrees and moves the clock
- * FORWARDS is not that copy — see `heldTerminalEndedAt` below.
+ * The row's `ended_at` is held on the same terms as its status, against the
+ * writes that are not the row's own run speaking: a stale copy that agrees the
+ * turn succeeded but carries the timestamp its own writer stamped would drag
+ * the row off the run's terminal clock. What separates that copy from the live
+ * client's final save is which run each one names, not which clock reads later
+ * — see `heldTerminalEndedAt` and `writeNamesRowRun` below.
  *
  * Two writes are deliberately let through. A write that already agrees on both
  * status and timestamp has nothing to correct. And a write naming a DIFFERENT
@@ -207,13 +208,14 @@ export function holdTerminalRunStatusOnMessageWrite(
   try {
     const stored = db.prepare(
       `SELECT run_status AS runStatus, ended_at AS endedAt, run_id AS runId,
-              content AS content, events_json AS eventsJson
+              started_at AS startedAt, content AS content, events_json AS eventsJson
          FROM messages
         WHERE id = ? AND role = 'assistant'`,
     ).get(id) as {
       runStatus: string | null;
       endedAt: number | null;
       runId: string | null;
+      startedAt: number | null;
       content: string | null;
       eventsJson: string | null;
     } | undefined;
@@ -234,37 +236,64 @@ export function holdTerminalRunStatusOnMessageWrite(
 }
 
 /**
+ * Whether a write is the row's OWN run speaking — the live client's final save
+ * for the terminal the row already follows — rather than a copy of the turn
+ * some earlier writer is flushing late.
+ *
+ * A write names the row's run when it carries the row's `run_id`, or, for a
+ * save that carries no run id, the row's `started_at`. Both are stamped onto
+ * the row per run by `pinAssistantMessageOnRunCreate` (`runtimes/
+ * chat-run-messages.ts`), so a copy made under an earlier run of the same row
+ * carries neither and cannot claim to be this run's writer.
+ */
+function writeNamesRowRun(
+  stored: { runId: string | null; startedAt: number | null } | undefined,
+  message: Record<string, unknown>,
+): boolean {
+  if (!stored) return false;
+  if (typeof message.runId === 'string' && message.runId) return message.runId === stored.runId;
+  return typeof message.startedAt === 'number' && message.startedAt === stored.startedAt;
+}
+
+/**
  * The `ended_at` a held write leaves on the row.
  *
- * A write that agrees with the row's terminal status AND carries a later
- * timestamp is the live client's own final save for that same terminal, not a
- * stale copy of the turn: it saw the end the daemon saw. The daemon stamps the
- * row the moment the run ends (`reconcileAssistantMessageOnRunEnd` in
- * `plugins/share-helpers.ts`), and the client's onDone save lands a few hundred
- * milliseconds later with the completion time it rendered, so pinning the
- * stored stamp back would overwrite the client's `endedAt` on every turn that
- * finishes normally — which `e2e/tests/dialog/retry-after-stop.test.ts` asserts
- * must not happen for a retried turn.
+ * A write that agrees with the row's terminal status and NAMES the row's run is
+ * that run's own final save, not a stale copy of the turn: it saw the end the
+ * daemon saw, so it keeps the timestamp it carries. Which way that timestamp
+ * falls against the stored one decides nothing, because the two stamps come
+ * from independent clocks — the daemon stamps the row from its own `Date.now()`
+ * the moment the run ends (`reconcileAssistantMessageOnRunEnd` in
+ * `plugins/share-helpers.ts`), and the client's onDone save carries the
+ * completion time it rendered. Ordering them made the live save lose its own
+ * `endedAt` by one millisecond in CI, which
+ * `e2e/tests/dialog/retry-after-stop.test.ts` asserts must not happen for a
+ * retried turn.
+ *
+ * A write that agrees on the status but names no run at all is the one case
+ * identity cannot settle. It keeps the narrower allowance this hold shipped
+ * with: it may move the terminal clock FORWARDS, never back.
  *
  * Every other write keeps the stored timestamp. A write that disagrees on the
- * status is a stale copy whose clock is not evidence of anything, and a write
- * that agrees but carries an EARLIER timestamp is the backwards drift this hold
- * exists to stop. A write carrying no timestamp of its own takes the row's, as
+ * status is a stale copy whose clock is not evidence of anything, a write that
+ * names an earlier run of the row is the backwards drift this hold exists to
+ * stop, and a write carrying no timestamp of its own takes the row's, as
  * before.
  */
 function heldTerminalEndedAt(
-  stored: { endedAt: number | null } | undefined,
+  stored: { endedAt: number | null; runId: string | null; startedAt: number | null } | undefined,
   message: Record<string, unknown>,
   held: string,
 ): unknown {
   const storedEndedAt = stored?.endedAt ?? null;
   const incoming = message.endedAt;
-  if (
-    message.runStatus === held
-    && typeof incoming === 'number'
-    && (storedEndedAt === null || incoming > storedEndedAt)
-  ) return incoming;
-  return storedEndedAt ?? incoming ?? null;
+  if (message.runStatus !== held || typeof incoming !== 'number') {
+    return storedEndedAt ?? incoming ?? null;
+  }
+  if (writeNamesRowRun(stored, message)) return incoming;
+  const namesNoRun = typeof message.runId !== 'string' && typeof message.startedAt !== 'number';
+  if (namesNoRun && (storedEndedAt === null || incoming > storedEndedAt)) return incoming;
+  return storedEndedAt ?? incoming;
 }
 
 function isBlankText(value: unknown): boolean {
