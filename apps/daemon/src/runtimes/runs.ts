@@ -342,6 +342,7 @@ export function createChatRunService({
     errorCode: run.errorCode ?? null,
     failureCategory: run.failureCategory ?? null,
     failureDetail: run.failureDetail ?? null,
+    failureStage: run.failureStage ?? null,
     resumable: run.resumable ?? false,
     endedWithUnfinishedWork: !!run.endedWithUnfinishedWork,
     modelRouting: modelRoutingForRun(run),
@@ -410,6 +411,7 @@ export function createChatRunService({
       ...(Number.isFinite(run.artifactCount) ? { artifactCount: run.artifactCount } : {}),
       failureCategory: run.failureCategory ?? null,
       failureDetail: run.failureDetail ?? null,
+      failureStage: run.failureStage ?? null,
     });
     for (const sse of run.clients) sse.end();
     run.clients.clear();

@@ -5430,6 +5430,12 @@ export async function startServer({
             // Best-effort: marking must never break run finalization.
           }
         }
+        // Re-stamp the persisted failure classification now that the run's
+        // artifact diff is resolved. The child-close pass (below) knows the
+        // cause and the step but runs before `run.artifactCount` exists, so
+        // without this the reloaded alert could not state whether files
+        // changed. The write is idempotent and a no-op for an unclassified run.
+        persistRunFailureClassification(db, run);
       }
     };
     let codexGeneratedImagesDir = resolveCodexGeneratedImagesDir(
@@ -6514,9 +6520,11 @@ export async function startServer({
       // Surface the daemon's failure classification (already computed for
       // retry-policy + telemetry) on the run so statusBody / the SSE `end` frame
       // carry it to the chat, which maps failureDetail -> a specific named
-      // failure type + fix. Only meaningful on a failed result.
+      // failure type + fix and failureStage -> the step that stopped. Only
+      // meaningful on a failed result.
       run.failureCategory = result === 'failed' ? failure?.failure_category ?? null : null;
       run.failureDetail = result === 'failed' ? failure?.failure_detail ?? null : null;
+      run.failureStage = result === 'failed' ? failure?.failure_stage ?? null : null;
       // Stamp the classification onto the persisted assistant message too, so a
       // reload (or any daemon-side persistence without the live web error
       // handler) keeps the specific failure guidance instead of the coarse
