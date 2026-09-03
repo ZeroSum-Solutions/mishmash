@@ -78,6 +78,8 @@ interface TerminalRunFixture {
   resumable?: boolean;
   /** A user Stop stores no error event at all — see the daemon spec. */
   withoutErrorEvent?: boolean;
+  /** Events an earlier attempt left on the same assistant row. */
+  priorEvents?: unknown[];
 }
 
 function terminalMessage(fixture: TerminalRunFixture): ChatMessage {
@@ -91,8 +93,9 @@ function terminalMessage(fixture: TerminalRunFixture): ChatMessage {
     agentId: 'claude',
     ...(fixture.resumable ? { resumable: true } : {}),
     events: fixture.withoutErrorEvent
-      ? []
+      ? [...(fixture.priorEvents ?? [])]
       : [
+          ...(fixture.priorEvents ?? []),
           {
             kind: 'status',
             label: 'error',
@@ -279,6 +282,36 @@ describe('the failure alert names the exact cause, the step, and the file-change
 
     renderFailure(SLEEP_RUN);
     expect(screen.getByRole('button', { name: 'promptTemplates.retry' })).toBeTruthy();
+  });
+
+  it('stays silent about a Stop that follows an earlier failed attempt', () => {
+    // A client may reuse one assistant message id across attempts, so an older
+    // attempt's classified error can still be sitting on the row when the user
+    // stops the retry. The daemon enriches the last error event with
+    // `user_cancelled` for a Stop, so the alert must read that event and not
+    // the stale one underneath it.
+    const { container } = renderFailure({
+      id: 'stop-after-failed-attempt',
+      runStatus: 'canceled',
+      detail: '',
+      priorEvents: [
+        {
+          kind: 'status',
+          label: 'error',
+          detail: SLEEP_RUN.detail,
+          code: 'AGENT_EXECUTION_FAILED',
+          failureCategory: 'process_exit',
+          failureDetail: 'stream_error',
+          failureStage: 'child_close',
+          artifactCount: 0,
+        },
+      ],
+      failureCategory: 'user_cancel',
+      failureDetail: 'user_cancelled',
+      failureStage: 'first_token_wait',
+    });
+
+    expect(container.querySelector('[data-user-action-card="run-recovery"]')).toBeNull();
   });
 
   it('stays silent about a Stop the user pressed', () => {

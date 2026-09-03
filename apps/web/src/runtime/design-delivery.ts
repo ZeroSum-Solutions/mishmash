@@ -55,33 +55,47 @@ export function countFilesModifiedDuringTurn(
 }
 
 /**
+ * The cancellation detail the daemon writes when it, not the user, ended a turn.
+ *
+ * `classifyRunFailure` has exactly two answers for a cancelled run
+ * (`apps/daemon/src/run-failure-classification.ts`): `user_cancelled` when
+ * someone pressed Stop, and `interrupted` when the daemon's own shutdown took
+ * the turn. Naming the one value rather than excluding the other is what makes
+ * this immune to a stale event: a classified error left on the row by an
+ * EARLIER attempt says `stream_error`, `hard_quota`, or any other failure
+ * cause, and none of them is this.
+ */
+const DAEMON_INTERRUPTED_DETAIL = 'interrupted';
+
+/**
  * A cancellation nobody asked for.
  *
  * The daemon draws the line between the two cancellations for us, and it draws
  * it on the message rather than on the run status. A Stop the user pressed is
  * classified `user_cancel`, and `persistRunFailureClassification`
  * (`apps/daemon/src/runtimes/chat-run-messages.ts`) deliberately refuses to give
- * that message an error event it did not already have, because reporting the
- * user's own action back to them as a failure is the wrong answer. A turn the
- * daemon's own shutdown ended is classified `process_exit` / `interrupted` and
- * DOES carry that event.
+ * that message an error event it did not already have — and enriches one it
+ * does have with `user_cancelled`. A turn the daemon's own shutdown ended is
+ * classified `process_exit` / `interrupted` and does carry that event.
  *
- * So a classified error event on a canceled row means the turn was taken from
- * the user — and reading the event rather than the status is what keeps a
- * deliberate Stop silent.
+ * Only the LAST error event is read, and only that one value admits the row.
+ * The row is per assistant turn but a client may reuse an assistant message id
+ * across attempts, so an older attempt's error can still be sitting in
+ * `events`; reading the last event agrees with the alert itself (`ChatPane`
+ * builds its card from the same one), and requiring `interrupted` means even a
+ * stale last event cannot paint a failure over a Stop the user pressed.
  */
 function isUnrequestedCancellation(
   message: Pick<ChatMessage, 'runStatus' | 'events'>,
 ): boolean {
   if (message.runStatus !== 'canceled') return false;
-  return (message.events ?? []).some(
-    (event) =>
-      event.kind === 'status'
-      && event.label === 'error'
-      && typeof event.failureDetail === 'string'
-      && event.failureDetail.length > 0
-      && event.failureDetail !== 'user_cancelled',
-  );
+  const events = message.events ?? [];
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.kind !== 'status' || event.label !== 'error') continue;
+    return event.failureDetail === DAEMON_INTERRUPTED_DETAIL;
+  }
+  return false;
 }
 
 /**

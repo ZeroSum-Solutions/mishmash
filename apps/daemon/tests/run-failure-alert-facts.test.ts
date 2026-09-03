@@ -272,6 +272,12 @@ describe('a failed or cancelled run carries its cause, step and file-change stat
     expect(errorEvent?.failureCategory).toBe('process_exit');
     expect(errorEvent?.failureDetail).toBe('interrupted');
     expect(FAILURE_STAGES).toContain(errorEvent?.failureStage);
+    // Pinned, not merely a member of the union: the consumer spec's
+    // SHUTDOWN_CANCEL_RUN fixture claims to mirror this event exactly, and a
+    // field only asserted to be "some valid stage" would leave that claim
+    // unchecked for this one field.
+    expect(errorEvent?.failureStage).toBe('first_token_wait');
+    expect(status?.failureStage).toBe('first_token_wait');
     expect(errorEvent?.artifactCount).toBe(0);
     // The classification alone is not an explanation. Without a sentence on the
     // event the chat has nothing to render under the title and `od run info`
