@@ -133,3 +133,23 @@ describe('withProjectAssetBaseHref stays first in tree order for inputs the audi
     expect(parse(withProjectAssetBaseHref('<html><head', BASE)).baseURI).toBe(`http://d${BASE}`);
   });
 });
+
+// Round-3 track audit (proof/w2fix/2G.4-glm-r3.json): the same claim in parsed
+// terms -- the script element's text must survive the transform unchanged.
+describe('withProjectAssetBaseHref does not edit script text past a nested </script>', () => {
+  const BASE = '/api/projects/p1/raw/';
+
+  it('keeps the script body byte for byte and still bases the document', () => {
+    const input =
+      '<script><!--<script></script><base href="/evil/">--></script><head><title>t</title></head>';
+    const before = new JSDOM(input, { url: 'http://d/preview' }).window.document;
+    const after = new JSDOM(withProjectAssetBaseHref(input, BASE), { url: 'http://d/preview' })
+      .window.document;
+
+    expect(before.querySelectorAll('base')).toHaveLength(0);
+    expect(after.querySelector('script')?.textContent).toBe(
+      before.querySelector('script')?.textContent,
+    );
+    expect(after.baseURI).toBe(`http://d${BASE}`);
+  });
+});

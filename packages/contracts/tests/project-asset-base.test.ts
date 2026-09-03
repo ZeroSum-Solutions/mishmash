@@ -197,3 +197,35 @@ describe('withProjectAssetBaseHref keeps a removal from opening a tag', () => {
     ).toBe('<!--><html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>');
   });
 });
+
+// Round-3 track audit (proof/w2fix/2G.4-glm-r3.json). Script content is not
+// plain raw text: `<!--` opens an escaped region and a `<script` inside that
+// opens a double-escaped one, where a `</script>` closes only the nesting. Ending
+// the element at the first `</script>` reads the rest of the script body as
+// markup, which put a base written in script text back in reach of the drop --
+// the case pinned above, one nesting deeper.
+describe('withProjectAssetBaseHref reads a script to the end the parser gives it', () => {
+  const BASE = '/api/projects/p1/raw/';
+
+  it('leaves a base written after a nested </script> inside script text alone', () => {
+    expect(
+      withProjectAssetBaseHref(
+        '<script><!--<script></script><base href="/evil/">--></script><head><title>t</title></head>',
+        BASE,
+      ),
+    ).toBe(
+      '<script><!--<script></script><base href="/evil/">--></script><head><base href="/api/projects/p1/raw/"><title>t</title></head>',
+    );
+  });
+
+  it('finds the real head after a script whose text holds one', () => {
+    expect(
+      withProjectAssetBaseHref(
+        '<script><!--<script><head></script>--></script><head><title>t</title></head>',
+        BASE,
+      ),
+    ).toBe(
+      '<script><!--<script><head></script>--></script><head><base href="/api/projects/p1/raw/"><title>t</title></head>',
+    );
+  });
+});
