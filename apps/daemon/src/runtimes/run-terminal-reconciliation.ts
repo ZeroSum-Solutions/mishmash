@@ -181,6 +181,18 @@ export function followRunTerminalOnMessage(
  * all, is held. It never invents a status either — a row with no non-failed
  * terminal status stored is written exactly as sent.
  *
+ * The ANSWER is held on the same terms as the status. A write that had to be
+ * held is by definition a copy of the turn made before it finished, so the
+ * body it carries is whatever that writer had when it gave up — for the
+ * dropped chat client, the empty string and the stale "daemon restarted"
+ * status event. Pinning only the status left the user reading a succeeded turn
+ * with no answer in it and two contradictory status events under it: the
+ * symptom moved rather than closing. So when the row already stores an answer
+ * and the held write carries none, the stored body and the events that belong
+ * to it stay. This never blocks a real late delivery: a write carrying content
+ * keeps its own content, and stored events replace nothing when there are
+ * none.
+ *
  * Failing open is deliberate: a read error here must not reject the user's
  * message write, so it warns and returns the write unchanged, which is exactly
  * the behaviour that preceded this guard.
@@ -193,10 +205,17 @@ export function holdTerminalRunStatusOnMessageWrite(
   if (typeof id !== 'string' || !id) return message;
   try {
     const stored = db.prepare(
-      `SELECT run_status AS runStatus, ended_at AS endedAt, run_id AS runId
+      `SELECT run_status AS runStatus, ended_at AS endedAt, run_id AS runId,
+              content AS content, events_json AS eventsJson
          FROM messages
         WHERE id = ? AND role = 'assistant'`,
-    ).get(id) as { runStatus: string | null; endedAt: number | null; runId: string | null } | undefined;
+    ).get(id) as {
+      runStatus: string | null;
+      endedAt: number | null;
+      runId: string | null;
+      content: string | null;
+      eventsJson: string | null;
+    } | undefined;
     const held = stored?.runStatus;
     if (!held || held === 'failed' || !TERMINAL_STATUSES.has(held)) return message;
     if (
@@ -206,10 +225,41 @@ export function holdTerminalRunStatusOnMessageWrite(
     ) return message;
     const endedAt = stored?.endedAt ?? message.endedAt ?? null;
     if (message.runStatus === held && message.endedAt === endedAt) return message;
-    return { ...message, runStatus: held, endedAt };
+    return { ...message, ...heldTerminalBody(stored, message), runStatus: held, endedAt };
   } catch (err) {
     console.warn('[runs] terminal run status hold failed', err);
     return message;
+  }
+}
+
+function isBlankText(value: unknown): boolean {
+  return typeof value !== 'string' || value.trim() === '';
+}
+
+/**
+ * The stored answer of a row whose write is being held, when the held write
+ * would erase it: the body plus the events recorded beside it. Empty when the
+ * row has no answer to protect or the write brings one of its own.
+ */
+function heldTerminalBody(
+  stored: { content: string | null; eventsJson: string | null } | undefined,
+  message: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!stored || isBlankText(stored.content)) return {};
+  if (!isBlankText(message.content)) return {};
+  const held: Record<string, unknown> = { content: stored.content };
+  const events = storedEvents(stored.eventsJson);
+  if (events) held.events = events;
+  return held;
+}
+
+function storedEvents(eventsJson: string | null): unknown[] | null {
+  if (typeof eventsJson !== 'string' || !eventsJson) return null;
+  try {
+    const parsed = JSON.parse(eventsJson) as unknown;
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
   }
 }
 

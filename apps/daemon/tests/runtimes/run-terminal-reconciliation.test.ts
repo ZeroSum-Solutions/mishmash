@@ -604,6 +604,61 @@ describe('durable run terminal reconciliation', () => {
         });
       });
 
+      // Pinning the status alone moved the symptom rather than closing it: the
+      // held write is a copy of the turn made before it finished, so it still
+      // blanked the answer to '' and re-attached the stale "daemon restarted"
+      // event. The user then read a succeeded turn with no answer in it under
+      // two contradictory status events.
+      it('keeps the stored answer and its events when the held write carries none', () => {
+        db.prepare(
+          `INSERT INTO messages (id, role, content, run_id, run_status, ended_at, events_json)
+           VALUES ('m-held-body', 'assistant', ?, 'run-hold', 'succeeded', 9000, ?)`,
+        ).run(
+          'Here is the page you asked for.',
+          JSON.stringify([{ kind: 'status', label: 'succeeded', detail: 'Message reconciled to the run terminal event.' }]),
+        );
+
+        expect(holdTerminalRunStatusOnMessageWrite(db, {
+          content: '',
+          endedAt: 2_000,
+          events: [{ detail: 'Run interrupted because the daemon restarted.', kind: 'status', label: 'error' }],
+          id: 'm-held-body',
+          role: 'assistant',
+          runId: 'run-hold',
+          runStatus: 'failed',
+        })).toEqual({
+          content: 'Here is the page you asked for.',
+          endedAt: 9_000,
+          events: [{ detail: 'Message reconciled to the run terminal event.', kind: 'status', label: 'succeeded' }],
+          id: 'm-held-body',
+          role: 'assistant',
+          runId: 'run-hold',
+          runStatus: 'succeeded',
+        });
+      });
+
+      // Holding the body must not cost a real late delivery. The dropped
+      // client's OTHER flush — the one that finally carries the answer — still
+      // writes its own content and events onto the row.
+      it('lets a held write deliver a body the row does not have yet', () => {
+        db.prepare(
+          `INSERT INTO messages (id, role, content, run_id, run_status, ended_at, events_json)
+           VALUES ('m-held-late-body', 'assistant', '', 'run-hold', 'succeeded', 9000, ?)`,
+        ).run(JSON.stringify([{ kind: 'status', label: 'succeeded', detail: 'stored' }]));
+
+        expect(holdTerminalRunStatusOnMessageWrite(db, {
+          content: 'The answer the client finally flushed.',
+          events: [{ kind: 'text', text: 'hi' }],
+          id: 'm-held-late-body',
+          runId: 'run-hold',
+          runStatus: 'failed',
+        })).toMatchObject({
+          content: 'The answer the client finally flushed.',
+          events: [{ kind: 'text', text: 'hi' }],
+          runStatus: 'succeeded',
+        });
+      });
+
       // A stale copy of the turn does not have to claim `failed` to strand the
       // row. `upsertMessage` writes `run_status` unconditionally, so a delayed
       // write that still believes the turn is `running` — or one that carries no
