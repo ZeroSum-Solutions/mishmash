@@ -13,6 +13,10 @@ import { projectWorkspaceProvenance } from '../workspace-contract.js';
 
 export const TERMINAL_RUN_STATUSES = new Set(['succeeded', 'failed', 'canceled']);
 
+/** What a turn ended by `shutdownActive` tells the user. See its use below. */
+export const SHUTDOWN_INTERRUPTED_MESSAGE =
+  'MishMash shut down while this turn was running, so the turn was interrupted.';
+
 const RUN_STATE_SCHEMA_VERSION = 1;
 
 function atomicWriteJson(filePath, value) {
@@ -687,6 +691,13 @@ export function createChatRunService({
       run.cancelRequested = true;
       // First writer wins — see `cancel` above.
       run.cancelOrigin ??= 'shutdown';
+      // Nobody asked for this cancellation, so nothing else will ever say why
+      // the turn ended: a Stop carries its own explanation (the user pressed
+      // it), while a shutdown leaves the run with no error text at all, and
+      // both the chat alert and `od run info` render a cause only from text
+      // the run carries. `??=` so a run that was already failing for its own
+      // reason keeps that reason.
+      run.error ??= SHUTDOWN_INTERRUPTED_MESSAGE;
       run.updatedAt = Date.now();
       clearPendingRetryRestart(run);
       closeRunStdin(run);

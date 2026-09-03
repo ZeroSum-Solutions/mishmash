@@ -94,9 +94,36 @@ export async function createFakeAgentRuntimes(
   return runtimes;
 }
 
+/**
+ * The verbatim agent output behind the failures the team daemon actually
+ * recorded, keyed by the cause a user would name for it.
+ *
+ * Each string is copied from a real run's `state.json` `error` field in the
+ * team daemon's run log (the runs named in the comments), so a fixture cannot
+ * quietly drift into text the production classifier would never see. The
+ * fixture supplies ONLY this raw agent output: the failure category, detail,
+ * lifecycle stage and artifact count are all resolved by the real daemon.
+ */
+export const REPORTED_AGENT_FAILURE_OUTPUT = {
+  // run 7557ed43 — the machine slept mid-response.
+  sleep: 'API Error: Your computer went to sleep mid-response. The response above may be incomplete.',
+  // run 0291fa4d — ANTHROPIC_BASE_URL pointed at a relay that was not running.
+  // The CLI reports the refused socket; the daemon's claude diagnostic is what
+  // turns it into "could not reach the configured custom Anthropic endpoint".
+  endpoint_down: 'Error: connect ECONNREFUSED 127.0.0.1:1',
+  // The provider's quota refusal, in the wording Claude Code passes through.
+  quota: 'API Error: You have exceeded your current quota. Please upgrade your plan to continue.',
+  // run 578cbce8 — the user denied a write_file permission prompt.
+  denied_permission:
+    'Error: permission check failed for write_file "index.html": user denied permission for write_file(index.html)',
+} as const;
+
+export type ReportedAgentFailureKind = keyof typeof REPORTED_AGENT_FAILURE_OUTPUT;
+
 function renderFakeAgentScript(agentId: FakeAgentId): string {
   return `#!/usr/bin/env node
 const agentId = ${JSON.stringify(agentId)};
+const REPORTED_FAILURE_OUTPUT = ${JSON.stringify(REPORTED_AGENT_FAILURE_OUTPUT)};
 const args = process.argv.slice(2);
 const { mkdir, writeFile: writeFileFs } = require('node:fs/promises');
 const { join } = require('node:path');
@@ -158,6 +185,22 @@ async function emitRun(promptText) {
   }
   if (promptText.includes('Return a daemon socket-drop failure')) {
     emitSocketDropFailure();
+    return;
+  }
+  if (promptText.includes('Return the reported sleep-drop failure')) {
+    emitReportedFailure('sleep');
+    return;
+  }
+  if (promptText.includes('Return the reported endpoint-unreachable failure')) {
+    emitReportedFailure('endpoint_down');
+    return;
+  }
+  if (promptText.includes('Return the reported quota failure')) {
+    emitReportedFailure('quota');
+    return;
+  }
+  if (promptText.includes('Return the reported denied-permission failure')) {
+    emitReportedFailure('denied_permission');
     return;
   }
   if (promptText.includes('Return an empty daemon smoke response')) {
@@ -739,6 +782,49 @@ function emitSocketDropFailure() {
   // Other runtimes are not the subject of the claude connection diagnostic;
   // surface a generic non-zero exit carrying the same SDK error text.
   process.stderr.write(sdkError + '\\n');
+  process.exitCode = 1;
+  exitSoon(1);
+}
+
+// Replay one of the reported failures (REPORTED_AGENT_FAILURE_OUTPUT above) on
+// the channel the real CLI used for it. Provider-side API refusals (the sleep
+// drop, the quota refusal) reach the host on STDOUT as a synthetic assistant
+// text block plus an is_error result frame — the same shape emitSocketDropFailure
+// captured from the real Claude Code CLI. Local failures (a refused endpoint
+// socket, a denied permission prompt) reach it on STDERR with a non-zero exit.
+// Nothing here names a category, detail, stage or artifact count: classifying
+// this output is the daemon's job and is what the specs measure.
+function emitReportedFailure(kind) {
+  const message = REPORTED_FAILURE_OUTPUT[kind];
+  const onStdout = kind === 'sleep' || kind === 'quota';
+  if (onStdout && agentId === 'claude') {
+    writeJson({ type: 'system', subtype: 'init', model: 'fake-claude', session_id: 'fake-session' });
+    writeJson({
+      type: 'assistant',
+      message: {
+        id: 'msg-1',
+        model: '<synthetic>',
+        role: 'assistant',
+        stop_reason: 'stop_sequence',
+        content: [{ type: 'text', text: message }],
+      },
+      error: 'unknown',
+    });
+    writeJson({
+      type: 'result',
+      subtype: 'success',
+      is_error: true,
+      result: message,
+      stop_reason: 'stop_sequence',
+      duration_ms: 1,
+      total_cost_usd: 0,
+      usage: { input_tokens: 0, output_tokens: 0 },
+    });
+    process.exitCode = 1;
+    exitSoon(1);
+    return;
+  }
+  process.stderr.write(message + '\\n');
   process.exitCode = 1;
   exitSoon(1);
 }

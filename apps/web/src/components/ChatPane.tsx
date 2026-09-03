@@ -33,7 +33,10 @@ import type { Dict } from '../i18n/types';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
 import { projectRawUrl } from '../providers/registry';
 import { takeComposerSeedFor } from '../state/libraryHandoff';
-import { splitOnQuestionForms } from '../artifacts/question-form';
+import {
+  formAnswersByAssistantMessageId,
+  splitOnQuestionForms,
+} from '../artifacts/question-form';
 import { stripArtifact } from '../artifacts/strip';
 import type { TodoItem } from '../runtime/todos';
 import type {
@@ -1415,7 +1418,9 @@ export function ChatPane({
     displayMessages.length > 0;
   // Map each assistant message id to the user message that follows it (if any)
   // so structured form replies collapse into a readable summary on the
-  // assistant message that asked them.
+  // assistant message that asked them. This is only the fallback for an answer
+  // whose header carries no form id; `formAnswersByAssistantId` below is the
+  // identity-based rule.
   const nextUserContentByAssistantId = useMemo(() => {
     const map = new Map<string, string>();
     for (let i = 0; i < displayMessages.length - 1; i++) {
@@ -1427,6 +1432,14 @@ export function ChatPane({
     }
     return map;
   }, [displayMessages]);
+  // Answers that arrive after each assistant message, keyed by the form id
+  // they answer, so a late answer collapses every copy of that form id (the
+  // model re-emits a pending form verbatim). See
+  // `submittedAnswerContentForForm` for the invariant.
+  const formAnswersByAssistantId = useMemo(
+    () => formAnswersByAssistantMessageId(displayMessages),
+    [displayMessages],
+  );
 
   useEffect(() => {
     didInitialScrollRef.current = false;
@@ -2406,6 +2419,7 @@ export function ChatPane({
                 hasActiveDesignSystem={hasActiveDesignSystem}
                 errorCardOwnerId={errorCardOwnerId}
                 nextUserContentByAssistantId={nextUserContentByAssistantId}
+                formAnswersByAssistantId={formAnswersByAssistantId}
                 assistantCallbacksRef={assistantCallbacksRef}
                 onBrandBrowserAssistConfirm={onBrandBrowserAssistConfirm}
                 onArtifactShare={onArtifactShare}
@@ -2862,6 +2876,7 @@ function ChatRows({
   hasActiveDesignSystem,
   errorCardOwnerId,
   nextUserContentByAssistantId,
+  formAnswersByAssistantId,
   assistantCallbacksRef,
   onBrandBrowserAssistConfirm,
   onArtifactShare,
@@ -2918,6 +2933,7 @@ function ChatRows({
   hasActiveDesignSystem: boolean;
   errorCardOwnerId: string | null;
   nextUserContentByAssistantId: Map<string, string>;
+  formAnswersByAssistantId: Map<string, ReadonlyMap<string, string>>;
   assistantCallbacksRef: MutableRefObject<AssistantCallbacks>;
   onBrandBrowserAssistConfirm?: BrandBrowserAssistConfirm;
   onArtifactShare?: (fileName: string) => void;
@@ -3089,6 +3105,7 @@ function ChatRows({
         isLast={m.id === lastAssistantId}
         errorCardOwnerId={errorCardOwnerId}
         nextUserContent={nextUserContentByAssistantId.get(m.id)}
+        formAnswersByFormId={formAnswersByAssistantId.get(m.id)}
         suppressDirectionForms={hasActiveDesignSystem}
         hasDesignSystemContext={hasActiveDesignSystem || !!activeDesignSystem}
         onSubmitQuestionForm={
