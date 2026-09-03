@@ -40,6 +40,7 @@ import {
   hasUnterminatedQuestionForm,
   splitOnQuestionForms,
   stripTrailingOpenQuestionForm,
+  submittedAnswerContentForForm,
   type QuestionForm,
 } from "../artifacts/question-form";
 import {
@@ -399,6 +400,9 @@ interface Props {
   // The user message that immediately follows this assistant turn, if any.
   // Structured form replies are parsed back into the inline answered summary.
   nextUserContent?: string;
+  // Form answers that arrive anywhere after this assistant turn, keyed by the
+  // form id each one answers. See `submittedAnswerContentForForm`.
+  formAnswersByFormId?: ReadonlyMap<string, string>;
   onSubmitQuestionForm?: QuestionFormSubmitHandler;
   questionFormSubmitDisabled?: boolean;
   onContinueRemainingTasks?: (todos: TodoItem[]) => void;
@@ -464,6 +468,7 @@ const ASSISTANT_MESSAGE_COMPARED_PROPS: Array<keyof Props> = [
   'isLast',
   'errorCardOwnerId',
   'nextUserContent',
+  'formAnswersByFormId',
   'questionFormSubmitDisabled',
   'forking',
   'shareToOpenDesignBusy',
@@ -532,6 +537,7 @@ function AssistantMessageImpl({
   isLast,
   errorCardOwnerId = null,
   nextUserContent,
+  formAnswersByFormId,
   onSubmitQuestionForm,
   questionFormSubmitDisabled = false,
   onContinueRemainingTasks,
@@ -823,21 +829,34 @@ function AssistantMessageImpl({
             : !!onToolboxAction ||
               !!onNextStepCreateDesignSystem ||
               (!!nextStepArtifactName && (!!onArtifactShare || !!onArtifactDownload));
+  // Whether a form emitted by this turn already has its answers back. The
+  // answer is looked up by form id across the whole conversation, so a late
+  // answer settles this turn too; see `submittedAnswerContentForForm`.
+  const answeredFromConversation = useCallback(
+    (form: QuestionForm) => {
+      const answerContent = submittedAnswerContentForForm(
+        form,
+        formAnswersByFormId,
+        nextUserContent,
+      );
+      return !!answerContent && !!parseSubmittedAnswers(form, answerContent);
+    },
+    [formAnswersByFormId, nextUserContent],
+  );
   // A clarification turn terminates its run while the emitted <question-form>
-  // is still waiting for the user inline. Until the immediate
-  // user reply submits that form's answers (skip-all submits through the same
-  // path), the turn is mid-handshake, not settled. Suppressed direction forms
-  // render as a locked pill the user cannot answer, so they don't hold the
-  // card back.
+  // is still waiting for the user inline. Until that form's answers come back
+  // (skip-all submits through the same path), the turn is mid-handshake, not
+  // settled. Suppressed direction forms render as a locked pill the user
+  // cannot answer, so they don't hold the card back.
   const hasPendingQuestionForm = useMemo(() => {
     if (hasUnterminatedQuestionForm(message.content)) return true;
     return splitOnQuestionForms(message.content).some(
       (seg) =>
         seg.kind === "form" &&
         !(suppressDirectionForms && isDirectionForm(seg.form)) &&
-        (!nextUserContent || !parseSubmittedAnswers(seg.form, nextUserContent)),
+        !answeredFromConversation(seg.form),
     );
-  }, [message.content, nextUserContent, suppressDirectionForms]);
+  }, [answeredFromConversation, message.content, suppressDirectionForms]);
   // "Next step" is a delivery affordance, not a generic terminal-state card.
   // Keep it out of pure Q&A, failures/cancellations and incomplete Todo turns;
   // only a successful turn that actually produced something may surface it.
@@ -934,6 +953,7 @@ function AssistantMessageImpl({
                 streaming={streaming}
                 showStreamCursor={streaming && i === lastTextBlockIndex}
                 nextUserContent={nextUserContent}
+                formAnswersByFormId={formAnswersByFormId}
                 suppressDirectionForms={suppressDirectionForms}
                 onSubmitQuestionForm={onSubmitQuestionForm}
                 questionFormSubmitDisabled={questionFormSubmitDisabled}
@@ -2792,6 +2812,7 @@ function ProseBlock({
   streaming,
   showStreamCursor,
   nextUserContent,
+  formAnswersByFormId,
   suppressDirectionForms,
   onSubmitQuestionForm,
   questionFormSubmitDisabled,
@@ -2811,6 +2832,7 @@ function ProseBlock({
   streaming: boolean;
   showStreamCursor?: boolean;
   nextUserContent?: string;
+  formAnswersByFormId?: ReadonlyMap<string, string>;
   suppressDirectionForms: boolean;
   projectId?: string | null;
   conversationId?: string | null;
@@ -2935,6 +2957,7 @@ function ProseBlock({
             projectId={projectId}
             conversationId={conversationId}
             nextUserContent={nextUserContent}
+            formAnswersByFormId={formAnswersByFormId}
             isLatestAssistantMessage={isLastAssistant}
             onSubmit={onSubmitQuestionForm}
             submitDisabled={questionFormSubmitDisabled}
@@ -2967,6 +2990,7 @@ function FormBlock({
   projectId,
   conversationId,
   nextUserContent,
+  formAnswersByFormId,
   isLatestAssistantMessage,
   onSubmit,
   submitDisabled,
@@ -2977,6 +3001,7 @@ function FormBlock({
   projectId?: string | null;
   conversationId?: string | null;
   nextUserContent?: string;
+  formAnswersByFormId?: ReadonlyMap<string, string>;
   // Only drives the "Answer now" affordance. It must never lock the form:
   // an unanswered form stays answerable however many turns have passed.
   isLatestAssistantMessage: boolean;
@@ -2997,10 +3022,14 @@ function FormBlock({
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const pendingUploadCleanupRef = useRef<ChatAttachment[]>([]);
-  const submittedFromHistory = useMemo(
-    () => (nextUserContent ? parseSubmittedAnswers(form, nextUserContent) : null),
-    [form, nextUserContent],
-  );
+  const submittedFromHistory = useMemo(() => {
+    const answerContent = submittedAnswerContentForForm(
+      form,
+      formAnswersByFormId,
+      nextUserContent,
+    );
+    return answerContent ? parseSubmittedAnswers(form, answerContent) : null;
+  }, [form, formAnswersByFormId, nextUserContent]);
   const submittedSummary = useMemo(() => {
     const items: Array<{ label: string; value: string }> = [];
     const visualItems: Array<{
