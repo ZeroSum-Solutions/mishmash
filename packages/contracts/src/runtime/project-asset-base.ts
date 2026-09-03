@@ -47,37 +47,221 @@ export function projectRawAssetBaseHref(projectId: string, ownerFilePath: string
   return `/api/projects/${encodeURIComponent(projectId)}/raw/${encodedDir ? `${encodedDir}/` : ''}`;
 }
 
-/**
- * Blank out comment spans so a `<head>` written inside one is not mistaken for
- * the document's real head. Same length as the input, so an index found in the
- * masked copy addresses the identical position in the original.
- */
-function maskComments(html: string): string {
-  return html.replace(/<!--[\s\S]*?(?:-->|$)/g, (comment) => ' '.repeat(comment.length));
+/** The characters an HTML tokenizer treats as whitespace inside a tag. */
+function isTagWhitespace(char: string): boolean {
+  return char === '\t' || char === '\n' || char === '\f' || char === '\r' || char === ' ';
+}
+
+function isAsciiAlpha(char: string): boolean {
+  return (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z');
 }
 
 /**
- * Insert `tag` at `at`, dropping any `<base>` the document wrote ahead of it.
+ * Elements whose content the tokenizer reads as text rather than as markup, so
+ * a `<base>` written inside one is a string and never becomes an element.
+ *
+ * `noscript` is deliberately absent: its content is text only when scripting is
+ * enabled, and the preview this module serves runs in a frame that executes no
+ * script, so a parser reads what it holds as markup.
+ */
+const RAW_TEXT_ELEMENTS = new Set([
+  'iframe',
+  'noembed',
+  'noframes',
+  'plaintext',
+  'script',
+  'style',
+  'textarea',
+  'title',
+  'xmp',
+]);
+
+/**
+ * Where the start tag whose name ends at `from` ends: the offset just past its
+ * `>`, or the length of `html` for a tag the document never closes.
+ *
+ * A `>` inside a quoted attribute value belongs to the value, so `<base
+ * href="a>b">` is one tag and not a tag plus the stray text `b">`. Only the
+ * tokenizer states needed to find the closing `>` are modelled here; what an
+ * attribute is called and what it holds never matters to this module.
+ */
+function endOfTag(html: string, from: number): number {
+  type TagState =
+    | 'before-name'
+    | 'name'
+    | 'before-value'
+    | 'double-quoted'
+    | 'single-quoted'
+    | 'unquoted'
+    | 'after-value';
+  let state: TagState = 'before-name';
+  for (let at = from; at < html.length; at += 1) {
+    const char = html[at] as string;
+    if (state === 'double-quoted' || state === 'single-quoted') {
+      if (char === (state === 'double-quoted' ? '"' : "'")) state = 'after-value';
+      continue;
+    }
+    if (state === 'before-value') {
+      if (isTagWhitespace(char)) continue;
+      if (char === '"') state = 'double-quoted';
+      else if (char === "'") state = 'single-quoted';
+      else if (char === '>') return at + 1;
+      else state = 'unquoted';
+      continue;
+    }
+    if (char === '>') return at + 1;
+    if (state === 'unquoted') {
+      if (isTagWhitespace(char)) state = 'before-name';
+      continue;
+    }
+    if (isTagWhitespace(char)) {
+      // Whitespace after an attribute name keeps the `=` that may follow it
+      // reading as this attribute's value separator, so `foo = "a>b"` is one
+      // attribute and the quoted `>` still belongs to its value.
+      if (state !== 'name') state = 'before-name';
+      continue;
+    }
+    if (char === '/') state = 'before-name';
+    else if (char === '=' && state === 'name') state = 'before-value';
+    else state = 'name';
+  }
+  return html.length;
+}
+
+/**
+ * Where the raw-text content opened by `name` ends: the offset of the end tag
+ * that closes it, or the length of `html` when the document never writes one.
+ * `<plaintext>` has no end tag at all — every byte after it is text.
+ */
+function endOfRawText(html: string, name: string, from: number): number {
+  if (name === 'plaintext') return html.length;
+  // `name` comes from RAW_TEXT_ELEMENTS, so nothing user-supplied reaches this.
+  const endTag = new RegExp(`</${name}[\\t\\n\\f\\r />]`, 'gi');
+  endTag.lastIndex = from;
+  const found = endTag.exec(html);
+  return found ? found.index : html.length;
+}
+
+/** The source span of one start tag, as `[start, end)` offsets into the input. */
+interface TagSpan {
+  readonly start: number;
+  readonly end: number;
+}
+
+interface BasePlacement {
+  /** Just past the document's real `<head>` start tag, or `null` if it has none. */
+  readonly headEnd: number | null;
+  /** Just past the document's real `<html>` start tag, or `null` if it has none. */
+  readonly htmlEnd: number | null;
+  /** Every `<base>` start tag the parser would hoist, in source order. */
+  readonly hoistedBases: readonly TagSpan[];
+}
+
+/**
+ * Read `html` the way an HTML tokenizer does, far enough to place the base tag.
+ *
+ * What this holds: `headEnd` and `htmlEnd` sit just past a start tag a parser
+ * would emit for that element in the document itself — never one written inside
+ * a comment, inside raw-text content, inside an attribute value, or inside a
+ * `<template>` — and `hoistedBases` spans every `<base>` start tag the parser
+ * would lift into the head, in source order.
+ *
+ * Text that only looks like a tag stays out of both. `<ba<base href="x">` is a
+ * single start tag named `ba<base`, because `<` is an ordinary character in a
+ * tag name, and the scan reads it as one; a regex over source text sees a
+ * `<base>` there that no parser does.
+ *
+ * A `<base>` inside a `<template>` is skipped for the same reason a commented
+ * one is: template content parses into its own fragment, so it is not in the
+ * document's tree order and cannot outrank the injected tag.
+ */
+function scanForBasePlacement(html: string): BasePlacement {
+  const hoistedBases: TagSpan[] = [];
+  let htmlEnd: number | null = null;
+  let templateDepth = 0;
+  let at = 0;
+  while (at < html.length) {
+    const start = html.indexOf('<', at);
+    if (start < 0) break;
+    if (html.startsWith('<!--', start)) {
+      const close = html.indexOf('-->', start + 4);
+      at = close < 0 ? html.length : close + 3;
+      continue;
+    }
+    const marker = html[start + 1] ?? '';
+    if (marker === '!' || marker === '?') {
+      // A doctype, a markup declaration, or a processing instruction: the
+      // tokenizer reads all three to the next `>`.
+      const close = html.indexOf('>', start + 2);
+      at = close < 0 ? html.length : close + 1;
+      continue;
+    }
+    const closing = marker === '/';
+    const nameStart = start + (closing ? 2 : 1);
+    if (!isAsciiAlpha(html[nameStart] ?? '')) {
+      // `</` that names nothing is a bogus comment, read to the next `>`; a
+      // lone `<` opens no tag at all and is ordinary text.
+      if (!closing) {
+        at = start + 1;
+        continue;
+      }
+      const close = html.indexOf('>', nameStart);
+      at = close < 0 ? html.length : close + 1;
+      continue;
+    }
+    let nameEnd = nameStart;
+    while (
+      nameEnd < html.length &&
+      !isTagWhitespace(html[nameEnd] as string) &&
+      html[nameEnd] !== '/' &&
+      html[nameEnd] !== '>'
+    ) {
+      nameEnd += 1;
+    }
+    const name = html.slice(nameStart, nameEnd).toLowerCase();
+    at = endOfTag(html, nameEnd);
+    if (closing) {
+      if (name === 'template' && templateDepth > 0) templateDepth -= 1;
+      continue;
+    }
+    if (name === 'template') {
+      templateDepth += 1;
+      continue;
+    }
+    if (RAW_TEXT_ELEMENTS.has(name)) {
+      at = endOfRawText(html, name, at);
+      continue;
+    }
+    if (templateDepth > 0) continue;
+    if (name === 'base') hoistedBases.push({ start, end: at });
+    else if (name === 'head') return { headEnd: at, htmlEnd, hoistedBases };
+    else if (name === 'html' && htmlEnd === null) htmlEnd = at;
+  }
+  return { headEnd: null, htmlEnd, hoistedBases };
+}
+
+/**
+ * Insert `tag` at `at`, dropping every `<base>` the document wrote ahead of it.
  *
  * A base written before the insertion point does not stay where the author put
  * it: the parser hoists a `<base>` that precedes `<head>` — that precedes
  * `<html>`, even — into the head it creates, ahead of everything inside it.
  * Since the document resolves against the first base in TREE order, leaving
  * such a tag in place would hand the page back the rebasing this function
- * exists to take over. Dropping it is what makes the injected base decisive for
- * every document shape rather than only for a base written inside the head.
+ * exists to take over.
  *
- * Matching runs on the comment-masked copy, so a `<base>` inside a comment —
- * inert already — is left where the author wrote it.
+ * The spans come from `scanForBasePlacement`, so each one is a whole `<base>`
+ * start tag and nothing else. The result is therefore the input with those tags
+ * cut out and `tag` inserted: no other byte moves, and the bytes on either side
+ * of a cut cannot join into markup the input did not contain.
  */
-function insertBaseTag(html: string, searchable: string, at: number, tag: string): string {
-  const prefix = searchable.slice(0, at);
-  const hoistable = /<base\b[^>]*>/gi;
+function insertBaseTag(html: string, hoistedBases: readonly TagSpan[], at: number, tag: string): string {
   let kept = '';
   let cursor = 0;
-  for (let found = hoistable.exec(prefix); found !== null; found = hoistable.exec(prefix)) {
-    kept += html.slice(cursor, found.index);
-    cursor = found.index + found[0].length;
+  for (const base of hoistedBases) {
+    if (base.end > at) break;
+    kept += html.slice(cursor, base.start);
+    cursor = base.end;
   }
   return `${kept}${html.slice(cursor, at)}${tag}${html.slice(at)}`;
 }
@@ -85,32 +269,36 @@ function insertBaseTag(html: string, searchable: string, at: number, tag: string
 /**
  * State the base inside the document, for a preview whose serving URL cannot.
  *
- * The tag goes first in the real `<head>` and any base the page declared ahead
- * of that point is dropped, so the injected base is the one the document
- * resolves against whatever shape the page has (see `insertBaseTag`).
- * Overriding is the intended behaviour here — a page served off its project's
- * raw route cannot know a base that resolves to project files, so its own would
- * name nothing either. The insertion point is found on a comment-masked copy so
- * a commented-out `<head>` cannot capture the tag and leave the page's own base
- * in charge.
+ * The tag goes first in the document's real `<head>` — the one a parser would
+ * build the document around, not a `<head>` written inside a comment, inside
+ * script text, or inside a `<template>` — and every `<base>` the parser would
+ * hoist ahead of that point is dropped, so the injected tag is the first base
+ * in tree order and the one the document resolves against. Overriding is the
+ * intended behaviour here: a page served off its project's raw route cannot
+ * know a base that resolves to project files, so its own would name nothing
+ * either.
  *
- * A stray `<!--` inside script text can mask past the real head; insertion then
- * falls back to just after `<html>`, which is still ahead of every base the
- * page declares later and drops every one it declared earlier.
+ * A document with no head of its own gets one just after `<html>`; a fragment
+ * with neither gets the tag in front, where it already outranks every base the
+ * fragment declares.
+ *
+ * The document is read with an HTML start-tag scan rather than matched with a
+ * regex over source text, so what comes back is the input with whole `<base>`
+ * elements removed and one tag inserted. No byte outside a `<base>` start tag
+ * changes, and no removal can splice its neighbours into markup that was never
+ * written (see `scanForBasePlacement`).
  *
  * The response carrying this document must allow the base under its `base-uri`
  * directive, or the browser drops the tag and the refs stay broken.
  */
 export function withProjectAssetBaseHref(html: string, baseHref: string): string {
   const tag = `<base href="${baseHref.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">`;
-  const searchable = maskComments(html);
-  const head = /<head[^>]*>/i.exec(searchable);
-  if (head) {
-    return insertBaseTag(html, searchable, head.index + head[0].length, tag);
+  const { headEnd, htmlEnd, hoistedBases } = scanForBasePlacement(html);
+  if (headEnd !== null) {
+    return insertBaseTag(html, hoistedBases, headEnd, tag);
   }
-  const root = /<html[^>]*>/i.exec(searchable);
-  if (root) {
-    return insertBaseTag(html, searchable, root.index + root[0].length, `<head>${tag}</head>`);
+  if (htmlEnd !== null) {
+    return insertBaseTag(html, hoistedBases, htmlEnd, `<head>${tag}</head>`);
   }
   // Nothing precedes the tag here, so a base the fragment declares is already
   // behind it in tree order and inert.
