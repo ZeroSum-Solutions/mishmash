@@ -365,22 +365,49 @@ function writeState(filePath: string, state: DurableRunState): void {
   }
 }
 
+/**
+ * The run's event log, read as far as it is intact.
+ *
+ * A half-written LAST line is the ordinary shape of a log whose daemon was
+ * killed mid-append: every record before it is complete, and the run's `end`
+ * record is usually one of them. Discarding the whole file over that trailing
+ * fragment made `durableTerminalStatus` report no terminal, which left the
+ * stranded row unrepaired — the exact symptom the backfill exists to clear —
+ * with nothing to say why.
+ *
+ * A malformed line anywhere ELSE means damage this reader cannot reason about:
+ * records may be missing or interleaved, so the log is not evidence and the
+ * whole file is discarded exactly as before. Under-repairing is the safe
+ * direction; mis-repairing a row the user reads is not.
+ */
 function readEvents(runsLogDir: string, runId: string): Array<{
   id: number;
   event: string;
   data: unknown;
   timestamp?: number;
 }> {
+  let lines: string[];
   try {
-    return fs.readFileSync(path.join(runsLogDir, runId, 'events.jsonl'), 'utf8')
+    lines = fs.readFileSync(path.join(runsLogDir, runId, 'events.jsonl'), 'utf8')
       .split('\n')
-      .filter(Boolean)
-      .map((line) => JSON.parse(line) as unknown)
-      .filter((value): value is { id: number; event: string; data: unknown; timestamp?: number } =>
-        isObject(value) && typeof value.id === 'number' && typeof value.event === 'string');
+      .filter(Boolean);
   } catch {
     return [];
   }
+  const records: Array<{ id: number; event: string; data: unknown; timestamp?: number }> = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    let value: unknown;
+    try {
+      value = JSON.parse(lines[index] as string) as unknown;
+    } catch {
+      if (index === lines.length - 1) break;
+      return [];
+    }
+    if (isObject(value) && typeof value.id === 'number' && typeof value.event === 'string') {
+      records.push(value as { id: number; event: string; data: unknown; timestamp?: number });
+    }
+  }
+  return records;
 }
 
 function hydrateRun(state: DurableRunState, events: ReturnType<typeof readEvents>) {

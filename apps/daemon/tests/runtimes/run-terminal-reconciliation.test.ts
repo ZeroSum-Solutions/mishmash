@@ -456,13 +456,13 @@ describe('durable run terminal reconciliation', () => {
     });
 
     it('does not backfill a row whose event log carries no end record at all', async () => {
-      const runId = 'run-truncated-log';
+      const runId = 'run-no-end-record';
       writeTerminalState(runId, 'succeeded', 9_000);
       fs.writeFileSync(
         path.join(tmpDir, runId, 'events.jsonl'),
         `${JSON.stringify({ id: 1, event: 'start', data: {}, timestamp: 1_000 })}\n`,
       );
-      insertStuckRow('m-run-truncated-log', runId);
+      insertStuckRow('m-run-no-end-record', runId);
 
       const result = await reconcileDurableRunTerminals({
         analytics: { capture: vi.fn() },
@@ -473,7 +473,72 @@ describe('durable run terminal reconciliation', () => {
       });
 
       expect(result.messagesFollowedTerminal).toBe(0);
-      expect(readRow('m-run-truncated-log').status).toBe('failed');
+      expect(readRow('m-run-no-end-record').status).toBe('failed');
+    });
+
+    // A daemon SIGKILLed mid-append leaves a half-written LAST line behind an
+    // otherwise complete log. Reading the file as all-or-nothing threw the
+    // run's real `end` record away with that fragment, so the stranded row was
+    // left `failed` with empty content — the symptom the backfill exists to
+    // clear, silently un-repaired.
+    it('repairs a row whose event log ends in a half-written line after its end record', async () => {
+      const runId = 'run-truncated-tail';
+      writeTerminalState(runId, 'succeeded', 9_000);
+      fs.mkdirSync(path.join(tmpDir, runId), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, runId, 'events.jsonl'),
+        `${JSON.stringify({ id: 1, event: 'start', data: {}, timestamp: 1_000 })}\n`
+        + `${JSON.stringify({
+          id: 2,
+          event: 'end',
+          data: { status: 'succeeded', code: null, signal: null },
+          timestamp: 9_000,
+        })}\n`
+        + '{"id":3,"event":"usage","data":{"input',
+      );
+      insertStuckRow('m-run-truncated-tail', runId);
+
+      const result = await reconcileDurableRunTerminals({
+        analytics: { capture: vi.fn() },
+        appVersion: '0.15.1',
+        db,
+        reportLangfuse: vi.fn(async () => ({ langfuse_expected: false })),
+        runsLogDir: tmpDir,
+      });
+
+      expect(result.messagesFollowedTerminal).toBe(1);
+      expect(readRow('m-run-truncated-tail').status).toBe('succeeded');
+    });
+
+    // Damage anywhere but the last line is not a torn append: records may be
+    // missing or interleaved, so the log is not evidence of anything and the
+    // pass must still fail closed rather than repair a row on a guess.
+    it('still refuses a log whose malformed line is not the last one', async () => {
+      const runId = 'run-corrupt-middle';
+      writeTerminalState(runId, 'succeeded', 9_000);
+      fs.mkdirSync(path.join(tmpDir, runId), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, runId, 'events.jsonl'),
+        '{"id":1,"event":"start","data":{"partial\n'
+        + `${JSON.stringify({
+          id: 2,
+          event: 'end',
+          data: { status: 'succeeded', code: null, signal: null },
+          timestamp: 9_000,
+        })}\n`,
+      );
+      insertStuckRow('m-run-corrupt-middle', runId);
+
+      const result = await reconcileDurableRunTerminals({
+        analytics: { capture: vi.fn() },
+        appVersion: '0.15.1',
+        db,
+        reportLangfuse: vi.fn(async () => ({ langfuse_expected: false })),
+        runsLogDir: tmpDir,
+      });
+
+      expect(result.messagesFollowedTerminal).toBe(0);
+      expect(readRow('m-run-corrupt-middle').status).toBe('failed');
     });
 
     it('repairs the row from the run terminal hook without waiting for a restart', () => {
