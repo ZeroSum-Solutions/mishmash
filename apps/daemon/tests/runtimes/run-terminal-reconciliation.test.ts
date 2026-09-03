@@ -903,6 +903,32 @@ describe('durable run terminal reconciliation', () => {
           expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
         });
 
+        // Sharing no identity is not the same as disagreeing. A row stamped
+        // before `pinAssistantMessageOnRunCreate` put a run id and a start on
+        // it has nothing to check a write against, so the write is neither
+        // confirmed nor refuted and keeps the forwards-only allowance the hold
+        // shipped with, exactly as it did before identity was consulted.
+        it('keeps the forwards-only allowance when the row carries no identity to check', () => {
+          db.prepare(
+            `INSERT INTO messages (id, role, content, run_id, run_status, started_at, ended_at, events_json)
+             VALUES ('m-no-row-identity', 'assistant', 'the answer', NULL, 'succeeded', NULL, ?, NULL)`,
+          ).run(DAEMON_STAMP);
+
+          const later = {
+            content: 'the answer',
+            endedAt: DAEMON_STAMP + 196,
+            id: 'm-no-row-identity',
+            role: 'assistant',
+            runId: 'run-live',
+            runStatus: 'succeeded',
+            startedAt: RUN_STARTED_AT,
+          };
+          expect(holdTerminalRunStatusOnMessageWrite(db, later)).toEqual(later);
+
+          expect(holdTerminalRunStatusOnMessageWrite(db, { ...later, endedAt: DAEMON_STAMP - 1 }))
+            .toMatchObject({ endedAt: DAEMON_STAMP });
+        });
+
         // The other half of the same rule: a copy of an EARLIER run on this row
         // agrees the turn succeeded but is not the run the row is terminal for,
         // so it still cannot drag the stamp back.

@@ -236,23 +236,46 @@ export function holdTerminalRunStatusOnMessageWrite(
 }
 
 /**
+ * The two fields a message write can name its run with, paired with the row's
+ * own copy of each. `pinAssistantMessageOnRunCreate` (`runtimes/
+ * chat-run-messages.ts`) stamps both onto the row when a run takes it, and
+ * every writer of the message PUT sends both back in `ChatMessage`.
+ */
+function runIdentity(
+  stored: { runId: string | null; startedAt: number | null } | undefined,
+  message: Record<string, unknown>,
+): Array<{ written: unknown; row: unknown }> {
+  const pairs: Array<{ written: unknown; row: unknown }> = [];
+  if (typeof message.runId === 'string' && message.runId && typeof stored?.runId === 'string') {
+    pairs.push({ written: message.runId, row: stored.runId });
+  }
+  if (typeof message.startedAt === 'number' && typeof stored?.startedAt === 'number') {
+    pairs.push({ written: message.startedAt, row: stored.startedAt });
+  }
+  return pairs;
+}
+
+/**
  * Whether a write is the row's OWN run speaking — the live client's final save
  * for the terminal the row already follows — rather than a copy of the turn
  * some earlier writer is flushing late.
  *
- * A write names the row's run when it carries the row's `run_id`, or, for a
- * save that carries no run id, the row's `started_at`. Both are stamped onto
- * the row per run by `pinAssistantMessageOnRunCreate` (`runtimes/
- * chat-run-messages.ts`), so a copy made under an earlier run of the same row
+ * A write names the row's run when any identity the two of them share agrees:
+ * the row's `run_id`, or its `started_at` for a save that carries no run id.
+ * Both are stamped per run, so a copy made under an earlier run of the same row
  * carries neither and cannot claim to be this run's writer.
+ *
+ * Sharing no identity at all is not the same as disagreeing, and callers must
+ * keep the two apart: an old row that predates the per-run stamps has nothing
+ * to check a write against, so a write it cannot verify has not been refuted
+ * either.
  */
 function writeNamesRowRun(
   stored: { runId: string | null; startedAt: number | null } | undefined,
   message: Record<string, unknown>,
 ): boolean {
-  if (!stored) return false;
-  if (typeof message.runId === 'string' && message.runId) return message.runId === stored.runId;
-  return typeof message.startedAt === 'number' && message.startedAt === stored.startedAt;
+  const identity = runIdentity(stored, message);
+  return identity.length > 0 && identity.every((pair) => pair.written === pair.row);
 }
 
 /**
@@ -270,9 +293,10 @@ function writeNamesRowRun(
  * `e2e/tests/dialog/retry-after-stop.test.ts` asserts must not happen for a
  * retried turn.
  *
- * A write that agrees on the status but names no run at all is the one case
- * identity cannot settle. It keeps the narrower allowance this hold shipped
- * with: it may move the terminal clock FORWARDS, never back.
+ * A write that agrees on the status but shares no run identity with the row is
+ * the one case identity cannot settle — it has been neither confirmed nor
+ * refuted, so it keeps the narrower allowance this hold shipped with: it may
+ * move the terminal clock FORWARDS, never back.
  *
  * Every other write keeps the stored timestamp. A write that disagrees on the
  * status is a stale copy whose clock is not evidence of anything, a write that
@@ -291,8 +315,8 @@ function heldTerminalEndedAt(
     return storedEndedAt ?? incoming ?? null;
   }
   if (writeNamesRowRun(stored, message)) return incoming;
-  const namesNoRun = typeof message.runId !== 'string' && typeof message.startedAt !== 'number';
-  if (namesNoRun && (storedEndedAt === null || incoming > storedEndedAt)) return incoming;
+  const unverifiable = runIdentity(stored, message).length === 0;
+  if (unverifiable && (storedEndedAt === null || incoming > storedEndedAt)) return incoming;
   return storedEndedAt ?? incoming;
 }
 
