@@ -71,11 +71,26 @@ export function McpHealthPanel() {
       const result = await repairMcpServer(server.id);
       setRepairing(null);
       setConfirming(null);
-      if (!result?.removed) {
-        setError(t('mcpClient.health.repairFailed'));
+      if (!result.ok) {
+        // A server that started between the check and the confirmation is not
+        // a broken daemon, and must not be described as one.
+        setError(
+          t(
+            result.code === 'MCP_REPAIR_UNAVAILABLE'
+              ? 'mcpClient.health.repairUnavailable'
+              : 'mcpClient.health.repairFailed',
+          ),
+        );
         return;
       }
-      setRepaired((previous) => ({ ...previous, [server.id]: result.repair.target }));
+      if (!result.response.removed) {
+        setError(t('mcpClient.health.repairNothingRemoved'));
+        return;
+      }
+      setRepaired((previous) => ({
+        ...previous,
+        [server.id]: result.response.repair.target,
+      }));
     },
     [t],
   );

@@ -1191,6 +1191,8 @@ export const en: Dict = {
   'mcpClient.health.repairing': 'Removing…',
   'mcpClient.health.repairDone': 'Removed {path}',
   'mcpClient.health.repairFailed': 'Repair failed. Check that the daemon is running and try again.',
+  'mcpClient.health.repairUnavailable': 'This server started on its own, so there is nothing to repair. Check health again to see its current state.',
+  'mcpClient.health.repairNothingRemoved': 'The cache entry was already gone, so nothing was removed. Check health again to see the current state.',
   'useEverywhere.modalAria': 'Use MishMash everywhere',
   'useEverywhere.modalTitle': 'Use MishMash everywhere',
   'useEverywhere.modalSubtitle': 'Drop MishMash into any IDE, agent, or script — CLI, HTTP, MCP, and Skills. Use “Copy guide for an agent” and paste into Claude Code, Codex, Cursor, openclaw, or hermes to set up everything.',

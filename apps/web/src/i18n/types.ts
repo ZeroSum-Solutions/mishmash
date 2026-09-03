@@ -1517,6 +1517,8 @@ export interface Dict {
   'mcpClient.health.repairing': string;
   'mcpClient.health.repairDone': string;
   'mcpClient.health.repairFailed': string;
+  'mcpClient.health.repairUnavailable': string;
+  'mcpClient.health.repairNothingRemoved': string;
   'useEverywhere.modalAria': string;
   'useEverywhere.modalTitle': string;
   'useEverywhere.modalSubtitle': string;

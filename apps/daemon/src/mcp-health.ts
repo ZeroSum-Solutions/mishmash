@@ -18,6 +18,7 @@
 // new place.
 
 import { spawn } from 'node:child_process';
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import type {
@@ -181,6 +182,12 @@ export function mcpNpxCacheRepair(stderr: string): McpServerRepair | undefined {
  * tool's own state, not daemon data. That scoping is what keeps a symlinked or
  * relocated entry from letting the removal reach anything but the one
  * directory this repair named.
+ *
+ * The return value is a fact, not the absence of an exception. `rm` runs with
+ * `force` so a target that vanished between the probe and this call does not
+ * throw, which means the call alone cannot say whether anything went; the
+ * presence check before it is what makes "removed" true only when there was
+ * something to remove.
  */
 export async function applyMcpServerRepair(
   repair: McpServerRepair,
@@ -188,10 +195,11 @@ export async function applyMcpServerRepair(
 ): Promise<boolean> {
   if (repair.kind !== 'npx-cache') return false;
   if (!isNpxCacheEntryPath(repair.target)) return false;
+  const present = await stat(repair.target).then(() => true, () => false);
   const gateway = createFilesystemWriteGateway({ runtimeDataRoot: options.runtimeDataRoot });
   const capability = await gateway.externalTool(path.dirname(repair.target));
   await gateway.rm(capability, repair.target, { recursive: true, force: true });
-  return true;
+  return present;
 }
 
 /**

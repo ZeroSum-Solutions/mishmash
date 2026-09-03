@@ -171,6 +171,24 @@ describe('the panel offers the recognized repair as an action', () => {
     expect(screen.getAllByRole('button', { name: /^Repair$/i })).toHaveLength(1);
   });
 
+  it('does not blame the daemon when the server healed before the confirmation', async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.endsWith('/api/mcp/health')) return jsonResponse(HEALTH_RESPONSE);
+      return jsonResponse(
+        { error: { code: 'MCP_REPAIR_UNAVAILABLE', message: 'nothing to repair' } },
+        409,
+      );
+    });
+    await renderChecked();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Repair$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Remove/i }));
+
+    await screen.findByText(/started on its own/i);
+    expect(screen.queryByText(/daemon is running/i)).toBeNull();
+  });
+
   it('confirms explicitly on the wire and reports the removal', async () => {
     await renderChecked();
 

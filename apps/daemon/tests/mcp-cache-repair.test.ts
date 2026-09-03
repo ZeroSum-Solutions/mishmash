@@ -240,6 +240,25 @@ describe('a confirmed repair removes the cache entry MishMash derived itself', (
     expect(await exists(cacheEntry)).toBe(false);
   }, 40_000);
 
+  it('reports removed: false when the entry was already gone', async () => {
+    // The signature is still in the server's stderr, so a repair is still
+    // offered — but there is nothing left to remove. `rm` runs with `force`,
+    // so only a presence check can tell the difference.
+    await rm(cacheEntry, { recursive: true, force: true });
+
+    const res = await postJson('/api/mcp/repair', {
+      serverId: 'mermaid',
+      confirm: true,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({
+      serverId: 'mermaid',
+      removed: false,
+      repair: { kind: 'npx-cache', target: cacheEntry },
+    });
+  }, 40_000);
+
   it('ignores a caller-supplied target and uses the one it derived', async () => {
     const attacked = join(dataDir, 'npm-cache');
     const res = await postJson('/api/mcp/repair', {

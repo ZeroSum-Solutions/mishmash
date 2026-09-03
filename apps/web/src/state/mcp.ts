@@ -209,6 +209,14 @@ export async function fetchMcpHealth(): Promise<McpHealthResponse | null> {
   }
 }
 
+/** Either the repair the daemon performed, or the reason it did not. The
+ *  error code is carried through because "the server healed since you looked"
+ *  (`MCP_REPAIR_UNAVAILABLE`) and "the daemon is unreachable" need different
+ *  words in front of the user. */
+export type RepairMcpServerResult =
+  | { ok: true; response: RepairMcpServerResponse }
+  | { ok: false; code: string | null };
+
 /**
  * Perform the repair the health record offered for one server.
  *
@@ -218,16 +226,21 @@ export async function fetchMcpHealth(): Promise<McpHealthResponse | null> {
  */
 export async function repairMcpServer(
   serverId: string,
-): Promise<RepairMcpServerResponse | null> {
+): Promise<RepairMcpServerResult> {
   try {
     const res = await fetch('/api/mcp/repair', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ serverId, confirm: true }),
     });
-    if (!res.ok) return null;
-    return (await res.json()) as RepairMcpServerResponse;
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as
+        | { error?: { code?: string } }
+        | null;
+      return { ok: false, code: body?.error?.code ?? null };
+    }
+    return { ok: true, response: (await res.json()) as RepairMcpServerResponse };
   } catch {
-    return null;
+    return { ok: false, code: null };
   }
 }
