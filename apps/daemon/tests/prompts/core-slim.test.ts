@@ -228,9 +228,12 @@ describe('renderSlimCoreCharter — frozen protocol markers', () => {
 
   it('says there is no preview, and still forbids a browser, when the export is unavailable', () => {
     expect(charter).not.toContain('`"$OD_NODE_BIN" "$OD_BIN" export <file>');
-    expect(charter).toContain('This runtime has no render preview');
+    expect(charter).toContain('This runtime cannot render an image');
     expect(charter).toContain('never your own browser (no Playwright/headless)');
-    expect(charter).toContain('A user-requested final export is delivery');
+    // The 501 does not care who asked: a user-requested image export answers it
+    // too, so the unavailable form must not read as permission to run one.
+    expect(charter).toContain('An image export the USER asks for is unavailable here too');
+    expect(charter).not.toContain('A user-requested final export is delivery, outside this preview budget');
   });
 
   it('switches the handoff rule by execution profile', () => {

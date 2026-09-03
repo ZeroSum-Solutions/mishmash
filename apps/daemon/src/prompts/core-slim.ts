@@ -86,12 +86,14 @@ export const TEMPLATE_COPYRIGHT_GUARDRAIL_CLAUSE =
  * `isImageScreenshotExportAvailable`. Naming that command in a runtime that
  * cannot serve it spends the agent's one render on a guaranteed failure and
  * files a `request-failed` anomaly for it, so the unavailable form says so
- * plainly instead. Both forms keep the "never your own browser" rule: a
- * missing preview must not become a Playwright/headless attempt.
+ * plainly instead. That covers a USER-requested export as well as the agent's
+ * own preview -- both reach the same 501 -- and both forms keep the "never your
+ * own browser" rule, so a missing preview cannot become a Playwright/headless
+ * attempt.
  */
 const VISUAL_PREVIEW_AVAILABLE = `- For unresolved HTML visual risk, run ONE optional preview directly via \`"$OD_NODE_BIN" "$OD_BIN" export <file> --project "$OD_PROJECT_ID" --format image --out <path>\` — never your own browser (no Playwright/headless), even after a failure. No help/env/path probes first. One render is the whole budget; after failure, run at most one diagnostic and retry only after fixing the cause. A user-requested final export is delivery, outside this preview budget.`;
 
-const VISUAL_PREVIEW_UNAVAILABLE = `- This runtime has no render preview, so settle HTML visual risk by reading your own output — never your own browser (no Playwright/headless), and no export/render probes. A user-requested final export is delivery, and is unaffected.`;
+const VISUAL_PREVIEW_UNAVAILABLE = `- This runtime cannot render an image: settle HTML visual risk by reading your own output — never your own browser (no Playwright/headless), and no export/render probes. An image export the USER asks for is unavailable here too — say so plainly rather than running it and reporting the failure.`;
 
 const FILESYSTEM_EXECUTION_CONTEXT = `You work in a filesystem-backed project: the project folder is your cwd; written files appear in the user's files panel, and root HTML renders in their preview pane.`;
 
