@@ -4,7 +4,8 @@ import { SIDECAR_ENV } from '@open-design/sidecar-proto';
 import { buildMcpInstallPayload, type McpInstallPayload } from './mcp-install-info.js';
 import { installCodexMcp, probeCodexInstall, uninstallCodexMcp } from './codex-cli.js';
 import { MCP_TEMPLATES, buildAcpMcpServers, buildClaudeMcpJson, isManagedProjectCwd, readMcpConfig, writeMcpConfig } from './mcp-config.js';
-import { probeMcpServersHealth } from './mcp-health.js';
+import type { McpServerConfig } from './mcp-config.js';
+import { applyMcpServerRepair, probeMcpServerHealth, probeMcpServersHealth } from './mcp-health.js';
 import { beginAuth, exchangeCodeForToken, refreshAccessToken } from './mcp-oauth.js';
 import { clearToken, getToken, isTokenExpired, readAllTokens, setToken } from './mcp-tokens.js';
 import type { RouteDeps } from './server-context.js';
@@ -182,29 +183,108 @@ export function registerMcpRoutes(app: Express, ctx: RegisterMcpRoutesDeps) {
   // being smeared into whatever run happened to be open (#157). Deliberately
   // uncached: the user asks for this exactly when they want to know whether
   // the state changed since the last answer.
+  // Servers the daemon already holds an OAuth token for are probed with it, so
+  // an authenticated remote server is not reported as a 401.
+  async function probeHeadersFor(
+    servers: McpServerConfig[],
+  ): Promise<Record<string, Record<string, string>>> {
+    const headersByServerId: Record<string, Record<string, string>> = {};
+    for (const server of servers) {
+      if (server.transport === 'stdio') continue;
+      const token = await getToken(RUNTIME_DATA_DIR, server.id);
+      if (token?.accessToken && !isTokenExpired(token)) {
+        headersByServerId[server.id] = {
+          authorization: `Bearer ${token.accessToken}`,
+        };
+      }
+    }
+    return headersByServerId;
+  }
+
   app.get('/api/mcp/health', async (req, res) => {
     if (!isLocalSameOrigin(req, getResolvedPort())) {
       return res.status(403).json({ error: 'cross-origin request rejected' });
     }
     try {
       const cfg = await readMcpConfig(RUNTIME_DATA_DIR);
-      // Servers the daemon already holds an OAuth token for are probed with
-      // it, so an authenticated remote server is not reported as a 401.
-      const headersByServerId: Record<string, Record<string, string>> = {};
-      for (const server of cfg.servers) {
-        if (server.transport === 'stdio') continue;
-        const token = await getToken(RUNTIME_DATA_DIR, server.id);
-        if (token?.accessToken && !isTokenExpired(token)) {
-          headersByServerId[server.id] = {
-            authorization: `Bearer ${token.accessToken}`,
-          };
-        }
-      }
+      const headersByServerId = await probeHeadersFor(cfg.servers);
       res.json(await probeMcpServersHealth(cfg.servers, { headersByServerId }));
     } catch (err: any) {
       res
         .status(500)
         .json({ error: String(err && err.message ? err.message : err) });
+    }
+  });
+
+  // Repair a recognized MCP failure (issue #157's half-written npx cache
+  // entry). Two rules make this safe to expose, and both live here rather than
+  // in the surfaces that call it:
+  //
+  //   1. Nothing is removed without `confirm: true` in the request body. The
+  //      web action and `od mcp repair --yes` are two ways of supplying that
+  //      one confirmation, not two separate gates.
+  //   2. The path removed is derived by a probe this handler runs, from the
+  //      server's own stderr. The request body names a configured server and
+  //      nothing else; a caller cannot choose what gets deleted.
+  //
+  // Probing again rather than trusting a client-held health record is also
+  // what keeps the repair honest: a server that has since started reports no
+  // repair, and the request is refused.
+  app.post('/api/mcp/repair', async (req, res) => {
+    if (!isLocalSameOrigin(req, getResolvedPort())) {
+      return res.status(403).json({ error: 'cross-origin request rejected' });
+    }
+    const serverId =
+      typeof req.body?.serverId === 'string' ? req.body.serverId.trim() : '';
+    if (!serverId) {
+      return sendApiError(
+        res,
+        400,
+        'MCP_REPAIR_SERVER_REQUIRED',
+        'serverId is required',
+      );
+    }
+    if (req.body?.confirm !== true) {
+      return sendApiError(
+        res,
+        400,
+        'MCP_REPAIR_NOT_CONFIRMED',
+        'confirm must be true: MishMash never removes a cache entry without an explicit confirmation',
+      );
+    }
+    try {
+      const cfg = await readMcpConfig(RUNTIME_DATA_DIR);
+      const server = cfg.servers.find((entry) => entry.id === serverId);
+      if (!server) {
+        return sendApiError(
+          res,
+          404,
+          'MCP_SERVER_NOT_FOUND',
+          `unknown serverId ${serverId}`,
+        );
+      }
+      const headersByServerId = await probeHeadersFor([server]);
+      const health = await probeMcpServerHealth(server, { headersByServerId });
+      const repair = health.repair;
+      if (!repair) {
+        return sendApiError(
+          res,
+          409,
+          'MCP_REPAIR_UNAVAILABLE',
+          `no repair is available for ${serverId} in its current state (${health.state})`,
+        );
+      }
+      const removed = await applyMcpServerRepair(repair, {
+        runtimeDataRoot: RUNTIME_DATA_DIR,
+      });
+      res.json({ serverId, repair, removed });
+    } catch (err: any) {
+      sendApiError(
+        res,
+        500,
+        'MCP_REPAIR_FAILED',
+        String(err && err.message ? err.message : err),
+      );
     }
   });
 
