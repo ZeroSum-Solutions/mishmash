@@ -731,13 +731,15 @@ function AssistantMessageImpl({
     | Extract<AgentEvent, { kind: "usage" }>
     | undefined;
   const roleName = assistantRoleName(message, t);
-  const modelRouting = useModelRoutingForRun(message.runId, !streaming);
+  // One GET /api/runs/:id per message; both readings below come off it.
+  const runStatus = useRunStatusForRun(message.runId, !streaming);
+  const modelRouting = modelRoutingFromRunStatus(runStatus);
   // WR wave (t9, plan §3.1 dispatch-time routing integration): "why this
   // model" -- see useRoutingIntentForRun's own doc comment below.
   const routingIntent = useRoutingIntentForRun(message.runId, !streaming);
   const runUsageStatus = useRunUsageForRun(message.runId, !streaming);
   // T-05: whether this turn continued the agent's existing session.
-  const sessionRecovery = useNativeSessionRecoveryForRun(message.runId, !streaming);
+  const sessionRecovery = nativeSessionRecoveryFromRunStatus(runStatus);
   const roleIconId = agentIconId(message.agentId, message.agentName);
   const hasEmptyResponse = events.some(
     (e) => e.kind === "status" && e.label === "empty_response"
@@ -1508,44 +1510,62 @@ export function assistantRoleLabel(
   );
 }
 
-// Routing truth (NM-13a / C1-2 / C1-4 / C1-11). Fetches the run's own
-// requested/resolved/reported/displayState record directly from the daemon
-// (GET /api/runs/:id) rather than threading a new field through the SSE
-// event union -- this component only needs the FINAL record once the run
-// has a chance to settle, and every AssistantMessage already has the run id
-// on `message.runId`. Skips the fetch while streaming (nothing has settled
-// yet) and when there is no run id (e.g. a locally-synthesized message).
-function useModelRoutingForRun(
+// The run's own status record (GET /api/runs/:id), fetched ONCE per assistant
+// message. Several notices on this message read that one document -- routing
+// truth (NM-13a / C1-2 / C1-4 / C1-11) and native session recovery (T-05) --
+// and each of them only needs the FINAL record once the run has a chance to
+// settle, so the fetch belongs to the message, not to the notice. Reading it
+// per notice issued one identical request per reader: on a long conversation
+// that multiplies the daemon's request count and the anomaly log's slow/failed
+// entries by the number of readers, for one document that never differs
+// between them.
+//
+// Fetched directly rather than threaded through the SSE event union because
+// every AssistantMessage already has the run id on `message.runId`. Skips the
+// fetch while streaming (nothing has settled yet) and when there is no run id
+// (e.g. a locally-synthesized message).
+function useRunStatusForRun(
   runId: string | null | undefined,
   enabled: boolean,
-): RunModelRouting | null {
-  const [routing, setRouting] = useState<RunModelRouting | null>(null);
+): Record<string, unknown> | null {
+  const [status, setStatus] = useState<Record<string, unknown> | null>(null);
   useEffect(() => {
-    setRouting(null);
+    setStatus(null);
     if (!enabled || !runId) return;
     const controller = new AbortController();
     fetch(`/api/runs/${encodeURIComponent(runId)}`, { signal: controller.signal })
       .then((resp) => (resp.ok ? resp.json() : null))
       .then((data: unknown) => {
-        const candidate = (data as { modelRouting?: unknown } | null)?.modelRouting;
-        if (
-          candidate &&
-          typeof candidate === "object" &&
-          typeof (candidate as RunModelRouting).requested === "string" &&
-          typeof (candidate as RunModelRouting).resolved === "string" &&
-          typeof (candidate as RunModelRouting).displayState === "string"
-        ) {
-          setRouting(candidate as RunModelRouting);
+        if (data && typeof data === "object" && !Array.isArray(data)) {
+          setStatus(data as Record<string, unknown>);
         }
       })
       .catch(() => {
-        // Best-effort: the routing status is supplementary information: a
-        // fetch failure (offline, run already GC'd) just means no badge
-        // renders, never a broken message.
+        // Best-effort: every reading taken from this record is supplementary
+        // information: a fetch failure (offline, run already GC'd) just means
+        // no notice renders, never a broken message.
       });
     return () => controller.abort();
   }, [runId, enabled]);
-  return routing;
+  return status;
+}
+
+// The routing reading of that record. Pure, so it costs nothing to derive on
+// each render and cannot drift from the recovery reading below.
+function modelRoutingFromRunStatus(
+  status: Record<string, unknown> | null,
+): RunModelRouting | null {
+  const candidate = status?.modelRouting;
+  if (
+    candidate &&
+    typeof candidate === "object" &&
+    typeof (candidate as RunModelRouting).requested === "string" &&
+    typeof (candidate as RunModelRouting).resolved === "string" &&
+    typeof (candidate as RunModelRouting).displayState === "string"
+  ) {
+    return candidate as RunModelRouting;
+  }
+  return null;
 }
 
 const MODEL_ROUTING_STATUS_BASE_STYLE: Record<string, string> = {
@@ -1609,35 +1629,17 @@ function ModelRoutingStatus({ routing }: { routing: RunModelRouting }) {
   return null;
 }
 
-// T-05: what happened to the agent's SESSION for this turn. Fetched from the
-// run's own status record (GET /api/runs/:id) for the same reason as
-// useModelRoutingForRun above -- the recovery state settles once, and every
-// AssistantMessage already carries the run id. Returns only the reading worth
+// T-05: what happened to the agent's SESSION for this turn. Read from the same
+// run status record as the routing reading above -- the recovery state settles
+// once, and it arrives on the same document. Returns only the reading worth
 // showing (see nativeSessionRecoveryNotice in packages/contracts), so an
 // ordinary run leaves this null and renders nothing.
-function useNativeSessionRecoveryForRun(
-  runId: string | null | undefined,
-  enabled: boolean,
+function nativeSessionRecoveryFromRunStatus(
+  status: Record<string, unknown> | null,
 ): NativeSessionRecoveryNotice | null {
-  const [notice, setNotice] = useState<NativeSessionRecoveryNotice | null>(null);
-  useEffect(() => {
-    setNotice(null);
-    if (!enabled || !runId) return;
-    const controller = new AbortController();
-    fetch(`/api/runs/${encodeURIComponent(runId)}`, { signal: controller.signal })
-      .then((resp) => (resp.ok ? resp.json() : null))
-      .then((data: unknown) => {
-        const candidate = (data as { nativeSessionRecovery?: unknown } | null)?.nativeSessionRecovery;
-        if (!candidate || typeof candidate !== "object") return;
-        setNotice(nativeSessionRecoveryNotice(candidate as NativeSessionRecoveryMetadata));
-      })
-      .catch(() => {
-        // Best-effort, same as the routing status hook above: a fetch failure
-        // means no line renders, never a broken message.
-      });
-    return () => controller.abort();
-  }, [runId, enabled]);
-  return notice;
+  const candidate = status?.nativeSessionRecovery;
+  if (!candidate || typeof candidate !== "object") return null;
+  return nativeSessionRecoveryNotice(candidate as NativeSessionRecoveryMetadata);
 }
 
 // A recovered session changed what the agent could remember, so it says so in
@@ -1667,7 +1669,7 @@ function SessionRecoveryStatus({ notice }: { notice: NativeSessionRecoveryNotice
 }
 
 // Run-scoped cost/pricing status (NM-20, C1-9). Fetched independently from
-// GET /api/runs/:id/usage -- same rationale as useModelRoutingForRun above
+// GET /api/runs/:id/usage -- same rationale as useRunStatusForRun above
 // (no new SSE event kind, this only needs the FINAL record once the run has
 // settled). A run whose lane emits no usage signal at all (e.g.
 // antigravity's plain stream) must say so plainly -- never a confident
@@ -1719,7 +1721,7 @@ function useRunUsageForRun(
         }
       })
       .catch(() => {
-        // Best-effort, same as useModelRoutingForRun: no badge on failure.
+        // Best-effort, same as useRunStatusForRun: no badge on failure.
       });
     return () => controller.abort();
   }, [runId, enabled]);
@@ -1758,7 +1760,7 @@ function RunPricingStatus({ usage }: { usage: RunUsageStatus }) {
 // (GET /api/routing/telemetry, this wave's own leased endpoint) rather than
 // widening ChatRunStatusResponse (packages/contracts/src/api/chat.ts is
 // outside this wave's lease). Same "fetch once, best-effort, never break
-// the message" discipline as useModelRoutingForRun/useRunUsageForRun above:
+// the message" discipline as useRunStatusForRun/useRunUsageForRun above:
 // skips while streaming, silent on any fetch failure, renders nothing for a
 // run that never went through the routing dispatch hook (older runs, or a
 // hook that failed open per its own doc comment in server.ts).

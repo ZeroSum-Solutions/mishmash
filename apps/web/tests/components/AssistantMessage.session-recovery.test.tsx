@@ -143,4 +143,23 @@ describe('AssistantMessage native session recovery status', () => {
 
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  // The recovery line and the model-routing notice read the SAME document.
+  // Giving each its own fetch made every settled assistant message ask the
+  // daemon for that document twice — invisible on one message, one duplicate
+  // request per message on a long conversation, and one extra entry per
+  // message in the anomaly log whenever the daemon is slow (AGENTS.md ->
+  // "Anomaly log": a log that fills with healthy events cannot be skimmed).
+  it('asks the daemon for the run status document exactly once per message', async () => {
+    stubFetchWithRecoveryState('resumed');
+    renderMessage();
+
+    await waitFor(() => screen.getByRole('status', {
+      name: (name) => /session recovered/i.test(name),
+    }));
+    const runStatusCalls = vi.mocked(fetch).mock.calls
+      .map((call) => String(call[0]))
+      .filter((url) => url === RUN_STATUS_URL);
+    expect(runStatusCalls).toHaveLength(1);
+  });
 });
