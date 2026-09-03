@@ -32,7 +32,7 @@ import {
 	HtmlProjectCoverFrame,
 	coverFromProjectFile,
 	projectCoverUrl,
-	renderedCoverUrl,
+	renderedCoverSrc,
 	selectProjectFileCover,
 	type ProjectCoverOverride,
 } from "./project-cover";
@@ -968,7 +968,7 @@ export function DesignsTab({
 										<video className="thumb-media" src={cover.src} muted preload="metadata" playsInline />
 									) : cover.kind === "html" ? (
 										<HtmlProjectCoverFrame
-											src={renderedCoverUrl(p.id)}
+											src={renderedCoverSrc(p)}
 											initial={cover.initial}
 											iframeClassName="thumb-iframe"
 											glyphClassName="project-thumb-glyph"
