@@ -74,6 +74,7 @@ export const uiP0Groups = {
     files: [
       "ui/real-daemon-run.test.ts",
       "ui/amr-run-failure-recovery.test.ts",
+      "ui/run-failure-retraction.test.ts",
       "ui/amr-logout-requires-relogin.test.ts",
       "ui/settings-local-cli-codex-fallback.test.ts",
     ],
@@ -112,6 +113,7 @@ const uiP0CoverageFiles = [
   "ui/message-center-no-upstream.test.ts",
   "ui/project-management-flows.test.ts",
   "ui/real-daemon-run.test.ts",
+  "ui/run-failure-retraction.test.ts",
   "ui/settings-api-protocol.test.ts",
   "ui/settings-connectors-auth-happy-path.test.ts",
   "ui/settings-connectors-auth-recovery.test.ts",
