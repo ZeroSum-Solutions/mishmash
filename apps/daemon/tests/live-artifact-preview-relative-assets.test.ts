@@ -69,9 +69,17 @@ const ASSET_BYTES = 'fake-png-bytes';
 
 /**
  * The URL a relative ref in `html` resolves against: the document's own
- * `<base href>` when it has one, otherwise the document URL itself. This is
- * exactly what a browser does, and it is the only thing that decides whether a
- * relative `<img src>` reaches the project file it names.
+ * `<base href>` when it has one, otherwise the document URL itself. That is the
+ * only thing that decides whether a relative `<img src>` names the project file
+ * it means to.
+ *
+ * A deliberate approximation of the browser, not a copy of it: this takes the
+ * first `<base href>` in SOURCE order, while a browser resolves against the
+ * first one in TREE order, and the two differ for a `<base>` written before
+ * `<head>` — the parser hoists that one. The case below that carries such a base
+ * is the reason they agree here: `withProjectAssetBaseHref` drops a base ahead
+ * of its insertion point, so after the fix no shipped document can put the two
+ * orders out of step. A document shape that could would need a real parser here.
  */
 function assetBaseUrl(documentUrl: string, html: string): string {
   const declaredBase = /<base\b[^>]*\bhref\s*=\s*["']([^"']*)["']/i.exec(html)?.[1];
