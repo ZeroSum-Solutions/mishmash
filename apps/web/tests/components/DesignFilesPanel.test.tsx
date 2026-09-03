@@ -397,7 +397,10 @@ describe("DesignFilesPanel preview", () => {
 
     fireEvent.click(container.querySelector(".df-file-row .df-row-name-btn")!);
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    // The FILE is never read; the preview-server list the panel offers
+    // alongside an HTML preview is a different, cheap request.
+    const fetchedUrls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(fetchedUrls.some((url) => url.includes("large.html"))).toBe(false);
     expect(container.querySelector(".df-preview-thumb iframe")).toBeNull();
     expect(container.querySelector(".df-preview-placeholder")?.textContent).toContain("⟨⟩");
   });

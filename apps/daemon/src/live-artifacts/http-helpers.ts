@@ -51,7 +51,10 @@ export function setLiveArtifactPreviewHeaders(res: Response): void {
     'Content-Security-Policy',
     [
       "default-src 'none'",
-      "base-uri 'none'",
+      // The preview document declares its own asset-resolution root (see
+      // projectRawAssetBaseHref); 'self' admits that base and still refuses
+      // one that would send relative refs off this origin.
+      "base-uri 'self'",
       "script-src 'none'",
       "object-src 'none'",
       "connect-src 'none'",

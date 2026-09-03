@@ -24,6 +24,7 @@ import { resolveWrapperTargetFromFile } from './entry-file-wrapper.js';
 import { authorizeReasoningEgress, sendReasoningEgressDenial } from './reasoning-egress.js';
 import { sandboxImportedProjectRootUnavailableReason } from './sandbox-mode.js';
 import { parseOrchestratorWorkspace } from './workspace-contract.js';
+import { SCREENSHOT_EXPORT_UNAVAILABLE_MESSAGE } from './screenshot-export-availability.js';
 
 export interface RegisterImportRoutesDeps extends RouteDeps<'db' | 'http' | 'uploads' | 'node' | 'ids' | 'paths' | 'imports' | 'auth' | 'projectStore' | 'conversations' | 'projectFiles' | 'validation'> {}
 
@@ -620,12 +621,7 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
             await fs.promises.rm(result.path, { force: true }).catch(() => {});
           }
         }
-        return sendApiError(
-          res,
-          501,
-          'UPSTREAM_UNAVAILABLE',
-          'screenshot export is only available in the desktop runtime',
-        );
+        return sendApiError(res, 501, 'UPSTREAM_UNAVAILABLE', SCREENSHOT_EXPORT_UNAVAILABLE_MESSAGE);
       }
       // Scratch dir under the daemon data root: the desktop renderer writes the
       // rendered images here and returns their file paths, so large images never
