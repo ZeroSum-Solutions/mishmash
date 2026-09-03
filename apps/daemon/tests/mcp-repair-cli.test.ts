@@ -187,6 +187,11 @@ describe('od mcp repair requires the confirmation flag before it removes anythin
     expect(result.code).toBe(2);
     expect(`${result.stdout}${result.stderr}`).toContain(CACHE_ENTRY);
     expect(`${result.stdout}${result.stderr}`).toContain('--yes');
+    // Pins the prose itself, not just the two substrings above: the `--json`
+    // work in W1G.4 routes this path through a shared helper, and the plain
+    // form has to stay exactly what it was for anyone reading it.
+    expect(result.stdout).toContain(`Repairing mermaid removes ${CACHE_ENTRY}\n`);
+    expect(result.stdout).toContain('Nothing has been removed. Re-run with --yes to confirm.\n');
     expect(stub.requests.some((request) => request.url === '/api/mcp/repair')).toBe(false);
   }, 40_000);
 
@@ -272,11 +277,16 @@ describe('od mcp repair requires the confirmation flag before it removes anythin
 // track that adds a line to this command must not silently change what these
 // assert.
 
-/** The last JSON line the CLI wrote to stderr, or null when it wrote prose. */
+/**
+ * The single JSON envelope the CLI wrote to stderr, or null when it wrote
+ * anything else. Strict on purpose: under `--json` the envelope is the whole
+ * of stderr, so prose printed beside it is a failure, not a detail.
+ */
 function stderrEnvelope(stderr: string): any {
-  const line = stderr.trim().split('\n').filter(Boolean).pop() ?? '';
+  const lines = stderr.trim().split('\n').filter(Boolean);
+  if (lines.length !== 1) return null;
   try {
-    return JSON.parse(line);
+    return JSON.parse(lines[0]);
   } catch {
     return null;
   }
