@@ -1,6 +1,7 @@
 import type { ChatSessionMode } from '@open-design/contracts';
-import type { AgentEvent, ChatMessage } from '../types';
-import { hasFileMutationToolUse } from './file-ops';
+import { isImplicitProducedFileCandidate } from '../produced-files';
+import type { AgentEvent, ChatMessage, ProjectFile } from '../types';
+import { hasFileWriteToolUse } from './file-ops';
 import { unfinishedTodosFromEvents } from './todos';
 
 export type DesignDeliveryOutcome =
@@ -18,8 +19,39 @@ export interface DesignDeliveryInput {
   events: AgentEvent[] | undefined;
   producedFileCount: number;
   traceObjectFileCount: number;
+  /** Project files rewritten during the turn; see `countFilesModifiedDuringTurn`. */
+  modifiedFileCount?: number;
   persistenceSucceeded?: boolean;
   persistenceFailed?: boolean;
+}
+
+/**
+ * Counts the project files this turn wrote over.
+ *
+ * The pre-turn snapshot records file NAMES only, so a diff against it sees a
+ * file that appeared and nothing else. A turn that rewrote `assets/hero.jpg`
+ * through `cp`, `magick`, or `ffmpeg` changes no name and would otherwise read
+ * as an empty turn. The invariant that closes that gap: a project file whose
+ * mtime is at or after the moment the snapshot was taken was written during the
+ * turn. Without a snapshot timestamp there is no boundary to judge against, so
+ * the count is zero rather than a guess.
+ *
+ * Files that are excluded from implicit attribution stay excluded here, so this
+ * count agrees with `computeProducedFiles` and `computeTraceObjectFiles` about
+ * what may be attributed to a run.
+ */
+export function countFilesModifiedDuringTurn(
+  files: readonly ProjectFile[] | undefined,
+  turnStartedAt: number | null | undefined,
+): number {
+  if (!files || typeof turnStartedAt !== 'number' || !Number.isFinite(turnStartedAt)) return 0;
+  let count = 0;
+  for (const file of files) {
+    if (file.type === 'dir') continue;
+    if (!isImplicitProducedFileCandidate(file)) continue;
+    if (Number.isFinite(file.mtime) && file.mtime >= turnStartedAt) count += 1;
+  }
+  return count;
 }
 
 /**
@@ -48,6 +80,41 @@ function isIntermediateDesignTurn(
   return asksForUserInput(content) || unfinishedTodosFromEvents(events).length > 0;
 }
 
+/**
+ * `od preview start --project <id> …` — the only sanctioned way for an agent to
+ * start a dev server (`apps/daemon/src/prompts/system.ts`). The daemon prompt
+ * spells the invocation `"$OD_NODE_BIN" "$OD_BIN" preview start`, so the program
+ * name reaches the event log unexpanded and cannot be matched on; the required
+ * `--project` flag is what separates a real invocation from prose.
+ */
+const PREVIEW_START_COMMAND = /(?:^|[\s;&|"'`(])preview\s+start(?:$|[\s;&|"'`])/;
+
+function isPreviewStartCommand(input: unknown): boolean {
+  if (!input || typeof input !== 'object') return false;
+  const command = (input as { command?: unknown }).command;
+  if (typeof command !== 'string') return false;
+  return PREVIEW_START_COMMAND.test(command) && /(?:^|\s)--project(?:=|\s)/.test(command);
+}
+
+/**
+ * A daemon-managed preview server (issue #38) is a delivered result in its own
+ * right: the deliverable the user asked for is the live URL, not a file. The
+ * start command returns only after the port verifiably answers HTTP, so a
+ * non-error tool result is proof the server is up.
+ */
+function hasPreviewServerStart(events: AgentEvent[] | undefined): boolean {
+  const startToolUseIds = new Set<string>();
+  for (const event of events ?? []) {
+    if (event.kind !== 'tool_use' || event.name !== 'Bash') continue;
+    if (isPreviewStartCommand(event.input)) startToolUseIds.add(event.id);
+  }
+  if (startToolUseIds.size === 0) return false;
+  return (events ?? []).some(
+    (event) =>
+      event.kind === 'tool_result' && !event.isError && startToolUseIds.has(event.toolUseId),
+  );
+}
+
 function hasLiveArtifactDelivery(events: AgentEvent[] | undefined): boolean {
   return (events ?? []).some(
     (event) =>
@@ -64,12 +131,16 @@ function hasLiveArtifactDelivery(events: AgentEvent[] | undefined): boolean {
  * must never be failed merely because they did not write a project file.
  *
  * A zero-file success is only a missing deliverable when the turn attempted
- * to mutate project files (or an artifact save failed). A turn that never
+ * to write project files (or an artifact save failed). A turn that never
  * tried to write and answered with substantive text is a report-only result —
- * image analysis and report-only audits end exactly this way — and must not
- * be downgraded to ARTIFACT_NOT_FOUND. The known cost: an agent that merely
- * claims completion without ever calling a write tool now passes as text; the
- * text itself makes that visible to the user.
+ * image analysis, report-only audits, and shell cleanups end exactly this way —
+ * and must not be downgraded to ARTIFACT_NOT_FOUND. The known cost: an agent
+ * that merely claims completion without ever calling a write tool now passes as
+ * text; the text itself makes that visible to the user.
+ *
+ * Delivery evidence is every way a turn can hand the user something: a file
+ * that appeared, a file that was rewritten in place, a saved artifact, a live
+ * artifact, or a preview server that is answering HTTP.
  */
 export function resolveDesignDeliveryOutcome(
   input: DesignDeliveryInput,
@@ -83,13 +154,15 @@ export function resolveDesignDeliveryOutcome(
   if (
     input.producedFileCount > 0 ||
     input.traceObjectFileCount > 0 ||
+    (input.modifiedFileCount ?? 0) > 0 ||
     input.persistenceSucceeded ||
-    hasLiveArtifactDelivery(input.events)
+    hasLiveArtifactDelivery(input.events) ||
+    hasPreviewServerStart(input.events)
   ) {
     return 'delivered';
   }
   if (input.persistenceFailed) return 'delivery_failed';
-  if (!hasFileMutationToolUse(input.events) && input.content.trim().length > 0) {
+  if (!hasFileWriteToolUse(input.events) && input.content.trim().length > 0) {
     return 'report_only';
   }
   return 'no_result';

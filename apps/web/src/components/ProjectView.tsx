@@ -113,6 +113,7 @@ import type { RunFailureClassificationFields } from '../runtime/chat-events';
 import {
   designDeliveryVerificationPending,
   isRetryableAssistantTerminalFailure,
+  countFilesModifiedDuringTurn,
   resolveDesignDeliveryOutcome,
   type DesignDeliveryOutcome,
 } from '../runtime/design-delivery';
@@ -3812,6 +3813,10 @@ export function ProjectView({
               events: message.events,
               producedFileCount: produced.length,
               traceObjectFileCount: traceObjectFiles.length,
+              modifiedFileCount: countFilesModifiedDuringTurn(
+                nextFiles,
+                status.createdAt || message.startedAt || message.createdAt,
+              ),
               persistenceSucceeded: artifactPersistenceSucceeded,
               persistenceFailed: artifactPersistenceError !== undefined,
             });
@@ -4138,6 +4143,10 @@ export function ProjectView({
                   events: deliveryEvents,
                   producedFileCount: produced.length,
                   traceObjectFileCount: traceObjectFiles.length,
+                  modifiedFileCount: countFilesModifiedDuringTurn(
+                    nextFiles,
+                    status.createdAt || message.startedAt || message.createdAt,
+                  ),
                   persistenceSucceeded: artifactPersistenceSucceeded,
                   persistenceFailed: artifactPersistenceError !== undefined,
                 });
@@ -5597,6 +5606,7 @@ export function ProjectView({
                 events: deliveryCandidate.events,
                 producedFileCount: produced.length,
                 traceObjectFileCount: traceObjectFiles.length,
+                modifiedFileCount: countFilesModifiedDuringTurn(nextFiles, startedAt),
                 persistenceSucceeded: artifactPersistenceSucceeded,
                 persistenceFailed: artifactPersistenceError !== undefined,
               });
