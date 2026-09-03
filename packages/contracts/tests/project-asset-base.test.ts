@@ -94,3 +94,61 @@ describe('withProjectAssetBaseHref', () => {
     );
   });
 });
+
+// F13 in proof/w2/codex-wave-r1.json: the drop that keeps the injected base
+// first in tree order must remove only tags an HTML parser would read as
+// `<base>` elements, and must never join the bytes around a removal into markup
+// the input did not contain. Every input below is verbatim from the 2.4 fresh
+// review (proof/w2/2.4-review-r2.json), which produced the failing outputs
+// against the shipped build; the parsed-shape half of the same claim lives in
+// apps/web/tests/components/project-asset-base-equivalence.test.ts, where a DOM
+// is available.
+describe('withProjectAssetBaseHref edits only real base elements', () => {
+  const BASE = '/api/projects/p1/raw/';
+
+  it('leaves text that only looks like a base alone rather than forging one', () => {
+    // `<ba<base` is a single tag name to the tokenizer, so this document has no
+    // base element at all. Splicing one out of the middle of it would mint one.
+    expect(
+      withProjectAssetBaseHref('<ba<base href="x">se href="/evil/"><html><head><title>t</title></head></html>', BASE),
+    ).toBe(
+      '<ba<base href="x">se href="/evil/"><html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>',
+    );
+  });
+
+  it('forges no script element out of the bytes around a base-looking token', () => {
+    expect(
+      withProjectAssetBaseHref('<scr<base href="x">ipt>window.PWNED=1;</script><html><head></head></html>', BASE),
+    ).toBe(
+      '<scr<base href="x">ipt>window.PWNED=1;</script><html><head><base href="/api/projects/p1/raw/"></head></html>',
+    );
+  });
+
+  it('leaves a base written inside script text alone', () => {
+    // Raw-text content is not markup: this base is a JavaScript string, so the
+    // parser never hoists it and the transform must not touch the script body.
+    expect(
+      withProjectAssetBaseHref('<script>var s="<base href=\\"/evil/\\">";</script><html><head></head></html>', BASE),
+    ).toBe(
+      '<script>var s="<base href=\\"/evil/\\">";</script><html><head><base href="/api/projects/p1/raw/"></head></html>',
+    );
+  });
+
+  it('leaves a base inside a template alone', () => {
+    // Template content parses into a separate fragment, so this base is not in
+    // the document's tree order and cannot outrank the injected one.
+    expect(
+      withProjectAssetBaseHref('<template><base href="/evil/"></template><html><head></head></html>', BASE),
+    ).toBe(
+      '<template><base href="/evil/"></template><html><head><base href="/api/projects/p1/raw/"></head></html>',
+    );
+  });
+
+  it('drops the whole base tag when a quoted attribute value contains a >', () => {
+    // `a>b` is an attribute value, not the end of the tag, so removing up to the
+    // quoted `>` would leave `b">` behind as stray text.
+    expect(withProjectAssetBaseHref('<base href="a>b"><html><head><title>t</title></head></html>', BASE)).toBe(
+      '<html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>',
+    );
+  });
+});
