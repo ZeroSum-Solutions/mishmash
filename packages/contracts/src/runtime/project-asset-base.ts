@@ -138,17 +138,75 @@ function endOfTag(html: string, from: number): number {
 }
 
 /**
+ * Whether `html` writes the start or end tag named `name` at `at`.
+ *
+ * The name is matched case-insensitively and the byte after it must be one the
+ * tokenizer accepts as ending a tag name, so `</scriptx>` does not close a
+ * `<script>` and `</script` at the very end of the input closes nothing.
+ */
+function isTagAt(html: string, at: number, name: string, closing: boolean): boolean {
+  const opener = closing ? '</' : '<';
+  const head = `${opener}${name}`;
+  if (html.slice(at, at + head.length).toLowerCase() !== head) return false;
+  const after = html[at + head.length];
+  return after !== undefined && (isTagWhitespace(after) || after === '/' || after === '>');
+}
+
+/**
+ * Where a `<script>`'s content ends.
+ *
+ * Script content is not plain raw text. `<!--` inside it opens an escaped
+ * region, a `<script` start tag inside that region opens a double-escaped one,
+ * and inside THAT a `</script>` closes only the nesting rather than the element
+ * — so `<script><!--<script></script><base href="/evil/">--></script>` is one
+ * script whose text holds a base, not a script followed by a base element. `-->`
+ * leaves the escaped region again.
+ *
+ * Getting this wrong is not cosmetic: the first `</script>` looks like the end
+ * of the element, and everything the author wrote as script text after it would
+ * be read as markup — which is how a `<base>` inside a script body would end up
+ * cut out of it.
+ */
+function endOfScriptData(html: string, from: number): number {
+  let state: 'data' | 'escaped' | 'double' = 'data';
+  let at = from;
+  while (at < html.length) {
+    if (state !== 'data' && html.startsWith('-->', at)) {
+      state = 'data';
+      at += 3;
+      continue;
+    }
+    if (state === 'data' && html.startsWith('<!--', at)) {
+      state = 'escaped';
+      at += 4;
+      continue;
+    }
+    if (html[at] === '<') {
+      if (isTagAt(html, at, 'script', true)) {
+        if (state !== 'double') return at;
+        state = 'escaped';
+      } else if (state === 'escaped' && isTagAt(html, at, 'script', false)) {
+        state = 'double';
+      }
+    }
+    at += 1;
+  }
+  return html.length;
+}
+
+/**
  * Where the raw-text content opened by `name` ends: the offset of the end tag
  * that closes it, or the length of `html` when the document never writes one.
- * `<plaintext>` has no end tag at all — every byte after it is text.
+ * `<plaintext>` has no end tag at all — every byte after it is text — and
+ * `<script>` has escape states of its own, so it gets its own walk.
  */
 function endOfRawText(html: string, name: string, from: number): number {
   if (name === 'plaintext') return html.length;
-  // `name` comes from RAW_TEXT_ELEMENTS, so nothing user-supplied reaches this.
-  const endTag = new RegExp(`</${name}[\\t\\n\\f\\r />]`, 'gi');
-  endTag.lastIndex = from;
-  const found = endTag.exec(html);
-  return found ? found.index : html.length;
+  if (name === 'script') return endOfScriptData(html, from);
+  for (let at = html.indexOf('<', from); at >= 0; at = html.indexOf('<', at + 1)) {
+    if (isTagAt(html, at, name, true)) return at;
+  }
+  return html.length;
 }
 
 /** The source span of one start tag, as `[start, end)` offsets into the input. */
