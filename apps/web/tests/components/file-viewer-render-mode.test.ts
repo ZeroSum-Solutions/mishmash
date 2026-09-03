@@ -8,6 +8,7 @@ import {
   htmlNeedsFocusGuard,
   htmlNeedsPoweredPreview,
   htmlNeedsRedirectGuard,
+  htmlBuildsScriptAtRuntime,
   htmlNeedsSandboxShim,
   parseForceInline,
   shouldUrlLoadHtmlPreview,
@@ -324,6 +325,46 @@ describe('htmlNeedsSandboxShim', () => {
     expect(htmlNeedsSandboxShim('<link rel="stylesheet" href="styles.css">')).toBe(false);
     // Text content mentioning `script src=` (e.g. a docs page) must not trigger.
     expect(htmlNeedsSandboxShim('<p>Use <code>&lt;script src=&quot;app.js&quot;&gt;</code></p>')).toBe(false);
+  });
+});
+
+describe('htmlBuildsScriptAtRuntime (CANVAS-6)', () => {
+  it('returns false for null/empty source', () => {
+    expect(htmlBuildsScriptAtRuntime(null)).toBe(false);
+    expect(htmlBuildsScriptAtRuntime('')).toBe(false);
+  });
+
+  it('returns false for plain static HTML and for a literal <script src>', () => {
+    expect(htmlBuildsScriptAtRuntime('<!doctype html><h1>hello</h1>')).toBe(false);
+    // A literal tag is already routed to srcDoc by htmlNeedsSandboxShim, so it
+    // is not this detector's residue.
+    expect(htmlBuildsScriptAtRuntime('<script src="boot.js"></script>')).toBe(false);
+  });
+
+  it('detects a script element built at runtime and given a src', () => {
+    const html = [
+      "var s = document.createElement('script');",
+      "s.src = './boot.js';",
+      'document.head.appendChild(s);',
+    ].join('\n');
+    expect(htmlBuildsScriptAtRuntime(html)).toBe(true);
+    // Quoting and spacing variants agents actually emit.
+    expect(htmlBuildsScriptAtRuntime('const el = document.createElement("script"); el.src = url;')).toBe(true);
+    expect(htmlBuildsScriptAtRuntime('document.createElement( `script` )\nel . src = url;')).toBe(true);
+    expect(htmlBuildsScriptAtRuntime("document.createElement('SCRIPT'); s.src = 'x.js';")).toBe(true);
+  });
+
+  it('requires both halves — a built script that is never given a src loads nothing external', () => {
+    expect(htmlBuildsScriptAtRuntime("var s = document.createElement('script'); s.text = code;")).toBe(false);
+    expect(htmlBuildsScriptAtRuntime("var i = document.createElement('iframe'); i.src = url;")).toBe(false);
+  });
+
+  it('is not wired as a render-mode disqualifier — it only decides whether to explain a blank canvas', () => {
+    const base = { mode: 'preview' as const, isDeck: false, commentMode: false, forceInline: false };
+    // No `dynamicScript` field exists on UrlLoadDecision on purpose: forcing
+    // srcDoc on this source-text guess would make every false positive pay for
+    // a slower render.
+    expect(shouldUrlLoadHtmlPreview(base)).toBe(true);
   });
 });
 

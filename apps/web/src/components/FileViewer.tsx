@@ -150,11 +150,13 @@ import {
   htmlNeedsFocusGuard,
   htmlNeedsPoweredPreview,
   htmlNeedsRedirectGuard,
+  htmlBuildsScriptAtRuntime,
   htmlNeedsSandboxShim,
   parseForceInline,
   shouldUrlLoadHtmlPreview,
   type UrlLoadDecision,
 } from './file-viewer-render-mode';
+import { PreviewInlineFallbackNotice } from './PreviewInlineFallbackNotice';
 import {
   assetBaseDirFor,
   collectPreviewAssetPaths,
@@ -6717,6 +6719,10 @@ function HtmlViewer({
     () => (typeof window === 'undefined' ? false : parseForceInline(window.location.search)),
     [],
   );
+  // Same escape hatch, reachable without editing the URL: set when the user
+  // takes the action on PreviewInlineFallbackNotice. File-scoped, so a
+  // different artifact starts back on the URL-load default.
+  const [inlineRenderRequested, setInlineRenderRequested] = useState(false);
   const [activeCommentTarget, setActiveCommentTarget] = useState<PreviewCommentSnapshot | null>(null);
   const [hoveredCommentTarget, setHoveredCommentTarget] = useState<PreviewCommentSnapshot | null>(null);
   // True while the pointer is physically over the floating hover card. The card
@@ -7356,6 +7362,16 @@ function HtmlViewer({
     const s = routingHtmlSource;
     return s != null && htmlNeedsFocusGuard(s);
   }, [passiveLargeHtmlPreview, routingHtmlSource]);
+  // The artifact builds its boot script at runtime, so the literal-tag scan
+  // above cannot route it to srcDoc and its linked file will evaluate at the
+  // URL-load iframe's opaque origin. Not a render-mode disqualifier (see
+  // htmlBuildsScriptAtRuntime) — it only decides whether the viewer explains
+  // the blank canvas the user may be looking at.
+  const buildsScriptAtRuntime = useMemo(() => {
+    if (passiveLargeHtmlPreview) return false;
+    const s = routingHtmlSource;
+    return s != null && htmlBuildsScriptAtRuntime(s);
+  }, [passiveLargeHtmlPreview, routingHtmlSource]);
   // A self-redirecting artifact must render through srcDoc so buildSrcdoc's
   // redirect-loop guard is present; on the raw URL-load path the iframe reloads
   // itself forever and freezes the workspace (nexu-io/open-design#710).
@@ -7485,7 +7501,7 @@ function HtmlViewer({
     drawMode: drawOverlayOpen,
     tweaksBridge: tweaksTemplateBridge,
     compositionMetricsBridge: compositionMetricsBridgeNeeded,
-    forceInline: (forceInline || needsSandboxShim) && !needsPowered,
+    forceInline: (forceInline || inlineRenderRequested || needsSandboxShim) && !needsPowered,
     needsFocusGuard: needsFocusGuard && !needsPowered,
     needsRedirectGuard: needsRedirectGuard && !needsPowered,
     projectRootAssetRefs,
@@ -7524,6 +7540,7 @@ function HtmlViewer({
   useEffect(() => {
     frozenPreviewSrcUrlRef.current = null;
     setAnnotationFrozenSource(null);
+    setInlineRenderRequested(false);
     setDrawOverlayOpen(false);
     setBoardMode(false);
     setInspectMode(false);
@@ -13011,6 +13028,9 @@ function HtmlViewer({
                         {t('fileViewer.previewAssetBlockedDetail', { filePath: previewAssetWarning.filePath })}
                       </span>
                     </div>
+                  ) : null}
+                  {useUrlLoadPreview && buildsScriptAtRuntime && !previewAssetWarning ? (
+                    <PreviewInlineFallbackNotice onRenderInline={() => setInlineRenderRequested(true)} />
                   ) : null}
                 </div>
               </div>
