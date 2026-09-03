@@ -60,60 +60,43 @@ the above should correct that sentence to match whichever behaviour is chosen.
 
 ---
 
-## CANVAS-2 — The Inspect CSS panel is permanently unreachable
+## CANVAS-2 — The Inspect CSS panel is permanently unreachable — RESOLVED
 
-**Severity:** high · **Area:** editing · **Status:** open, needs the missing activator
+**Severity:** high · **Area:** editing · **Status:** fixed; the activator exists
 
-`InspectPanel` renders only when `inspectMode && activeInspectTarget`. `inspectMode` is
-initialised `false` and **every** setter sets it back to `false`:
+The missing activator landed in `1ad65485f`. `FileViewer.tsx` now ships an Inspect toolbar
+button (`:12162`, `data-testid="inspect-mode-toggle"`) whose handler `activateInspectTool`
+(`:10452`) sets `setInspectMode(true)` at `:10471`, and the panel's second condition is
+produced by the selection bridge's `setActiveInspectTarget` at `:9285`. The state declaration
+this entry cited as "every setter sets it back to `false`" is at `:6399`; the `false` setters
+are the ordinary tool-exclusivity resets every other `activate*Tool()` performs.
 
-```bash
-grep -n "setInspectMode(" apps/web/src/components/FileViewer.tsx
-# :7414, :10112, :10140, :10171, :10194  — all setInspectMode(false)
-# declaration at :6359 — useState(false).  No setInspectMode(true) exists anywhere.
-```
-
-The whole protocol behind it is consequently dead in production: `od:inspect-mode`,
-`od:inspect-set`, `od:inspect-reset`, `od:inspect-replay`, and the `od:comment-target`
-listener gated on `if (!inspectMode) return` (`FileViewer.tsx:8994-9034`).
-
-As with CANVAS-1, `'inspect'` is present in the artifact-toolbar analytics enum
-(`FileViewer.tsx:6170`), implying a button that was never built.
-
-**Repro.** There is no sequence of clicks that opens the Inspect panel.
-
-**Why it is not fixed here.** The fix is to add a missing activator — a toolbar control that
-calls `setInspectMode(true)` — which is feature restoration, outside a hardening run's scope.
-It is small and well-understood, and should be its own PR with its own UI review.
+**Repro.** Open an HTML artifact, click the Inspect button in the viewer toolbar, then click
+an annotated element: the InspectPanel renders (`FileViewer.tsx:13208`).
 
 ---
 
 ## CANVAS-3 — `paletteActive` and `tweaksBridge` never reach the render-mode decision
 
-**Severity:** medium · **Area:** runtime-wiring · **Status:** open, one-line fix but unsafe alone
+**Severity:** medium · **Area:** runtime-wiring · **Status:** `tweaksBridge` resolved;
+`paletteActive` still has no producer, and cannot get one until CANVAS-1 is decided
 
-`shouldUrlLoadHtmlPreview` disqualifies URL-loading when `paletteActive` or `tweaksBridge` is
-set (`file-viewer-render-mode.ts:104,113`), because those bridges can only inject through
-srcDoc. The caller never sets either field:
+**`tweaksBridge` — resolved.** `FileViewer.tsx:7373` computes `tweaksTemplateBridge` from
+`hasTweaksTemplate(routingHtmlSource)` and passes it into `urlLoadDecision` at `:7486`, so an
+artifact shipping the class-based tweaks template now takes the srcDoc path where its bridge
+can inject. The precision cost of that heuristic is tracked separately as CANVAS-12.
 
-```bash
-grep -rn "paletteActive\|tweaksBridge" apps/web/src
-# only file-viewer-render-mode.ts — the type declaration and the two checks. No producer.
-```
+**`paletteActive` — still open, and not a wiring gap.** There is nothing to wire it to. The
+palette bridge is never injected (`FileViewer.tsx:7816` passes `paletteBridge: false` to
+`buildSrcdoc`), nothing in `apps/web/src` posts the `od:palette` message the bridge listens
+for (`runtime/srcdoc.ts:1309`), and no host palette state exists. `paletteActive`
+(`file-viewer-render-mode.ts:41`) and its disqualifier (`:137`) are therefore a hook for a
+surface that was never built.
 
-`FileViewer.tsx` builds `urlLoadDecision` at `:7363-7377` with eleven fields and omits both.
-`hasTweaksTemplate(source)` *is* computed (`:308`) but feeds only
-`previewTextNeedsFullSourceForSafeInline`, an unrelated full-text heuristic — it never
-reaches the URL-vs-srcDoc decision.
-
-**Consequence.** An artifact shipping the class-based tweaks template URL-loads by default,
-which is precisely the path where its bridge cannot inject.
-
-**Why it is not fixed here.** Wiring `tweaksBridge: hasTweaksTemplate(source)` is a plausible
-one-line change, but it would force srcDoc rendering to feed a consumer that does not exist
-(CANVAS-1) — a real performance cost for no user-visible gain. Fix it together with CANVAS-1,
-in whichever direction that decision goes, or delete both flags if the bridges are being
-retired.
+**Why it is not fixed here.** Giving `paletteActive` a producer means building the palette
+surface — feature work, not wiring — and deleting it means retiring `injectPaletteBridge`
+too. Both directions are the same product decision CANVAS-1 is waiting on; settle them
+together.
 
 ---
 
@@ -157,21 +140,40 @@ honest fix — removing the option until it works — is a UX decision, not a ha
 
 ---
 
-## CANVAS-6 — Dynamically-injected preview scripts can blank the canvas with no recovery
+## CANVAS-6 — Dynamically-injected preview scripts can blank the canvas with no recovery — RESOLVED
 
-**Severity:** medium · **Area:** runtime-wiring · **Status:** open, documented limitation
+**Severity:** medium · **Area:** runtime-wiring · **Status:** fixed by surfacing the cause;
+this entry's stated workaround was wrong and is corrected below
 
-An artifact whose boot script is attached via `document.createElement('script')` rather than a
-literal `<script src>` tag is routed to URL-load. If that script reads `localStorage` or
-`sessionStorage` at module-eval time the iframe throws and the preview renders blank. Nothing
-surfaces the cause; the only recovery is knowing to append `?forceInline=1`.
+**The stated workaround does not work.** This entry claimed "the only recovery is knowing to
+append `?forceInline=1`". Driven for real against a tools-dev runtime, it does not recover the
+artifact. The srcDoc path rescues a linked file by *inlining* it, and the inliner reads the same
+literal `<script src>` tags `htmlNeedsSandboxShim` does — so a runtime-attached `src` stays
+external there too, and the srcDoc iframe's opaque origin cannot fetch it
+(`net::ERR_BLOCKED_BY_ORB`). Observed: with the shim confirmed working in that same frame
+(`localStorage.setItem` succeeds), the document still renders empty because `boot.js` never
+loads. A control artifact identical except for a literal `<script src="./boot.js">` renders
+correctly, and its script is visibly inlined into the srcDoc. No host-side render-mode toggle
+fixes this shape.
 
-**Evidence.** `apps/web/src/components/file-viewer-render-mode.ts:180-186` documents exactly
-this as a remaining known limitation.
+**What changed.** The disqualifier set is unchanged — the detection cost this entry described is
+real. `htmlBuildsScriptAtRuntime` (`apps/web/src/components/file-viewer-render-mode.ts`) names
+the residue `htmlNeedsSandboxShim` cannot see (`document.createElement('script')` plus a `src`
+assignment), and `FileViewer.tsx` renders `PreviewRuntimeScriptNotice` over the preview when it
+matches. The notice states the cause and the remedy that does work: reference the script with a
+`<script src="...">` tag so the preview can inline it. It carries no action button, because
+every host-side action available here would be a false promise.
 
-**Why it is not fixed here.** Detecting dynamically-constructed script tags reliably from
-source text is a heuristic change to the disqualifier set, with real false-positive cost
-(every false positive forces a slower srcDoc render). It deserves its own spec and benchmark.
+Because it drives copy rather than the render path, a false positive costs one line of text
+instead of a slower render for every artifact that merely mentions the pattern.
+
+**Repro.** Preview an HTML artifact whose only script tag attaches another script at runtime;
+the canvas is empty and the notice under it names why.
+
+**Still open, deliberately.** The powered preview (`htmlNeedsPoweredPreview`) gives an artifact
+a real same-origin document, where such a script would both load and read storage — so it is a
+real recovery. Offering it here would escalate an artifact's trust surface off a source-text
+heuristic, which is a product decision, not a hardening call. Left to the owner.
 
 ---
 
@@ -196,22 +198,25 @@ its own so any behavioural surprises it uncovers are attributable.
 
 ---
 
-## CANVAS-8 — `resolveDaemonUrl` silently falls back to a default port
+## CANVAS-8 — `resolveDaemonUrl` silently falls back to a default port — RESOLVED
 
-**Severity:** medium · **Area:** runtime-wiring · **Status:** open, correctness hazard
+**Severity:** medium · **Area:** runtime-wiring · **Status:** fixed; the fallback fails closed
 
-When discovery exceeds its budget, `resolveDaemonUrl` returns `http://127.0.0.1:7456` with no
-signal to the caller. On a loaded machine an `od` CLI client can therefore address a
-*different* daemon than the one the user is running, and then mutate project data through it.
+Each discovery probe in `apps/daemon/src/daemon-url.ts` now reports whether it reached a
+conclusion. `defaultDaemonUrlOrFailClosed` returns `DEFAULT_DAEMON_URL` only when every probe
+concluded that nothing is listening; a probe that ran out of budget or failed for a reason
+other than "not there" raises `DaemonUrlDiscoveryError` carrying the reasons. An `od` client
+can therefore no longer address a different daemon than the user's because discovery was slow.
 
-**Evidence.** `apps/daemon/src/daemon-url.ts:40-44` (fallback), `:60`, `:77` (both catch
-blocks discard the reason). Reproduced deliberately on this branch by forcing the budget to
-1ms — the caller cannot distinguish "no daemon found" from "discovery timed out".
+The `od` CLI turns that error into the repository's structured envelope — code
+`daemon-url-unresolved`, exit 76 — naming `--daemon-url` and `OD_DAEMON_URL` as the two ways
+out (`apps/daemon/src/cli.ts`, `cliDaemonUrl`).
 
-**Why it is not fixed here.** The spec-level flake this caused **was** fixed, but changing the
-product's fallback semantics (fail loudly? return a discriminated result?) is a behaviour
-change to a path every CLI invocation depends on, and belongs in its own PR with its own red
-spec.
+**Repro.** Put a `pnpm` on `PATH` that never answers, unset `OD_DAEMON_URL` and
+`OD_SIDECAR_IPC_PATH`, and run `od project list --json`: it exits 76 with the envelope
+instead of writing against port 7456. Covered by
+`apps/daemon/tests/daemon-url-fail-closed.test.ts` and
+`apps/daemon/tests/daemon-url-cli-fail-closed.test.ts`.
 
 ---
 

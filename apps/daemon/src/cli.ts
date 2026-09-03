@@ -15,7 +15,7 @@ import { BRAND_USAGE, isBrandHelpArg } from './cli-help/index.js';
 import { parseDesignSystemRenameArgs } from './design-systems/rename-args.js';
 import { runLiveArtifactsToolCli } from './tools-live-artifacts-cli.js';
 import { splitResearchSubcommand } from './research/cli-args.js';
-import { resolveDaemonUrl } from './daemon-url.js';
+import { resolveDaemonUrl, DaemonUrlDiscoveryError } from './daemon-url.js';
 import { formatRunFailureSummary } from './run-failure-summary.js';
 import { requestJsonIpc } from '@open-design/sidecar';
 import { SIDECAR_ENV, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
@@ -449,6 +449,7 @@ const RECOVERABLE_EXIT_CODES = {
   'genui-surface-awaiting':   73,
   'desktop-auth-pending':     74,
   'desktop-import-token-rejected': 75,
+  'daemon-url-unresolved':    76,
 };
 const PLUGIN_LIST_FILTER_FLAGS = new Set([
   ...PLUGIN_STRING_FLAGS,
@@ -2438,8 +2439,22 @@ function surfaceFetchError(err, daemonUrl) {
   }
 }
 
+// Discovery that could not finish is refused by resolveDaemonUrl rather than
+// collapsed onto the default port (see daemon-url.ts,
+// `defaultDaemonUrlOrFailClosed`). Surface that as the same structured
+// envelope every other recoverable CLI failure uses, so an embedding agent
+// reads a code instead of an unhandled rejection, and name the two ways out.
 async function cliDaemonUrl(flags) {
-  return resolveDaemonUrl({ flagUrl: flags?.['daemon-url'] });
+  try {
+    return await resolveDaemonUrl({ flagUrl: flags?.['daemon-url'] });
+  } catch (err) {
+    if (!(err instanceof DaemonUrlDiscoveryError)) throw err;
+    exitWithStructuredError({
+      code:    'daemon-url-unresolved',
+      message: err.message,
+      data:    { reasons: err.reasons },
+    });
+  }
 }
 
 async function cliDaemonBaseUrl(flags) {
