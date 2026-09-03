@@ -370,23 +370,121 @@ describe('QuestionFormView', () => {
     expect(select.value).toBe('__od-other__');
   });
 
-  it('combines checkbox presets with custom user entries', () => {
+  it('keeps a checkbox Other sentence with commas as one submitted answer', () => {
+    // Mutation caught: splitting custom checkbox text on commas recreates multiple
+    // answers and makes the custom sentence count against maxSelections.
     const onSubmit = vi.fn();
-    render(<QuestionFormView form={checkboxObjectForm} interactive onSubmit={onSubmit} />);
+    const cappedForm = {
+      ...checkboxObjectForm,
+      questions: [
+        {
+          ...checkboxObjectForm.questions[0]!,
+          defaultValue: ['editorial', 'soft-gradients'],
+          maxSelections: 2,
+        },
+      ],
+    } as QuestionForm;
+    render(<QuestionFormView form={cappedForm} interactive onSubmit={onSubmit} />);
 
-    fireEvent.click(screen.getByLabelText('Editorial / magazine'));
     fireEvent.click(screen.getByRole('button', { name: 'Other' }));
     fireEvent.change(screen.getByLabelText('Custom answer'), {
-      target: { value: 'Neo-museum, Field notebook' },
+      target: { value: 'Bold, warm, editorial' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Send answers' }));
+    const submit = screen.getByRole('button', { name: 'Send answers' }) as HTMLButtonElement;
 
-    expect(onSubmit.mock.calls[0]?.[0]).toContain('Editorial / magazine [value: editorial]');
-    expect(onSubmit.mock.calls[0]?.[0]).toContain('Neo-museum');
-    expect(onSubmit.mock.calls[0]?.[0]).toContain('Field notebook');
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+
+    expect(onSubmit.mock.calls[0]?.[0]).toContain('Bold, warm, editorial');
     expect(onSubmit.mock.calls[0]?.[1]).toEqual({
-      tone: ['editorial', 'Neo-museum', 'Field notebook'],
+      tone: ['editorial', 'soft-gradients', 'Bold, warm, editorial'],
     });
+  });
+
+  it('does not let custom checkbox text consume fixed-choice capacity', () => {
+    // Mutation caught: using the total answer-array length for chip caps disables
+    // the second predefined choice after one fixed choice plus Other text.
+    const onSubmit = vi.fn();
+    const cappedForm = {
+      ...checkboxObjectForm,
+      questions: [
+        {
+          ...checkboxObjectForm.questions[0]!,
+          defaultValue: ['editorial'],
+          maxSelections: 2,
+        },
+      ],
+    } as QuestionForm;
+    render(<QuestionFormView form={cappedForm} interactive onSubmit={onSubmit} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Other' }));
+    fireEvent.change(screen.getByLabelText('Custom answer'), {
+      target: { value: 'Warm, tactile' },
+    });
+
+    const gradients = screen.getByLabelText('Soft gradients') as HTMLInputElement;
+    expect(gradients.disabled).toBe(false);
+    fireEvent.click(gradients);
+    expect((screen.getByLabelText('Modern minimal') as HTMLInputElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send answers' }));
+    expect(onSubmit.mock.calls[0]?.[1]).toEqual({
+      tone: ['editorial', 'Warm, tactile', 'soft-gradients'],
+    });
+  });
+
+  it('marks and reports a predefined checkbox default above maxSelections', () => {
+    // Mutation caught: omitting the shared over-limit validation leaves Submit
+    // disabled without a field-level explanation of the cap and current count.
+    const onReadyChange = vi.fn();
+    const invalidForm = {
+      ...checkboxObjectForm,
+      questions: [
+        {
+          ...checkboxObjectForm.questions[0]!,
+          defaultValue: ['editorial', 'soft-gradients', 'modern-minimal'],
+          maxSelections: 2,
+        },
+      ],
+    } as QuestionForm;
+    const { container } = render(
+      <QuestionFormView
+        form={invalidForm}
+        interactive
+        onReadyChange={onReadyChange}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('alert').textContent).toBe('Pick up to 2, you have 3');
+    expect(container.querySelector('.qf-field')?.classList.contains('qf-field-invalid')).toBe(true);
+    expect((screen.getByRole('button', { name: 'Send answers' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(onReadyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('blocks stepped navigation for a predefined checkbox overage', () => {
+    // Mutation caught: validating only required-answer presence enables Next for
+    // an invalid restored/default checkbox selection above maxSelections.
+    const invalidSteppedForm = {
+      id: 'invalid-stepped-checkbox',
+      title: 'Confirm choices',
+      questions: [
+        {
+          ...checkboxObjectForm.questions[0]!,
+          defaultValue: ['editorial', 'soft-gradients', 'modern-minimal'],
+          maxSelections: 2,
+        },
+        { id: 'notes', label: 'Notes', type: 'text' },
+      ],
+    } as QuestionForm;
+    render(<QuestionFormView form={invalidSteppedForm} interactive onSubmit={vi.fn()} />);
+
+    expect(screen.getByRole('alert').textContent).toBe('Pick up to 2, you have 3');
+    expect((screen.getByRole('button', { name: 'Next step' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
   });
 
   it('can hide custom choice input for exact machine-id pickers', () => {
@@ -935,6 +1033,83 @@ describe('QuestionFormView', () => {
     });
     expect(onSubmit.mock.calls[0]?.[0]).toContain(
       'Editorial narrative [value: deck-editorial-narrative]',
+    );
+  });
+
+  it('counts catalog styles as fixed choices while leaving room for custom text', () => {
+    // Mutation caught: treating normalized catalog IDs as custom values either
+    // misses real fixed-choice overages or makes Other consume catalog capacity.
+    const visualForm = {
+      ...checkboxObjectForm,
+      questions: [
+        {
+          ...checkboxObjectForm.questions[0]!,
+          defaultValue: ['editorial'],
+          maxSelections: 2,
+        },
+      ],
+    } as QuestionForm;
+    const onSubmit = vi.fn();
+    render(
+      <QuestionFormView
+        form={visualForm}
+        interactive
+        visualStyleContext="deck"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'View all' }));
+    const dialog = screen.getByRole('dialog', { name: 'Visual tone' });
+    const customInput = screen.getByLabelText('Custom answer') as HTMLInputElement;
+    fireEvent.change(customInput, { target: { value: 'Warm, tactile editorial' } });
+
+    const productKeynote = dialog.querySelector(
+      'input[aria-label="Product keynote"]',
+    ) as HTMLInputElement;
+    expect(productKeynote.disabled).toBe(false);
+    fireEvent.click(productKeynote);
+    expect(customInput.value).toBe('Warm, tactile editorial');
+    expect(
+      (dialog.querySelector('input[aria-label="Bold storytelling"]') as HTMLInputElement).disabled,
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: /done/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send answers' }));
+    expect(onSubmit.mock.calls[0]?.[1]).toEqual({
+      tone: [
+        'deck-editorial-narrative',
+        'Warm, tactile editorial',
+        'deck-product-keynote',
+      ],
+    });
+  });
+
+  it('reports visual catalog defaults that genuinely exceed maxSelections', () => {
+    // Mutation caught: checking only the model-authored option list classifies
+    // canonical visual catalog IDs as custom and hides a real fixed overage.
+    const invalidVisualForm = {
+      ...checkboxObjectForm,
+      questions: [
+        {
+          ...checkboxObjectForm.questions[0]!,
+          defaultValue: ['editorial', 'luxury'],
+          maxSelections: 1,
+        },
+      ],
+    } as QuestionForm;
+    render(
+      <QuestionFormView
+        form={invalidVisualForm}
+        interactive
+        visualStyleContext="deck"
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('alert').textContent).toBe('Pick up to 1, you have 2');
+    expect((screen.getByRole('button', { name: 'Send answers' }) as HTMLButtonElement).disabled).toBe(
+      true,
     );
   });
 

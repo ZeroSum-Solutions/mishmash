@@ -4083,6 +4083,7 @@ export interface Dict {
   'qf.submitDefault': string;
   'qf.submitDisabledTitle': string;
   'qf.submitTitle': string;
+  'qf.selectionLimitError': string;
   'qf.cardSelected': string;
   'qf.cardRefs': string;
   'qf.cardSampleText': string;

@@ -162,6 +162,16 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
   const activeQuestion = form.questions[activeQuestionIndex];
   const isLastQuestion = activeQuestionIndex === form.questions.length - 1;
   const questionsToRender = stepped && activeQuestion ? [activeQuestion] : form.questions;
+  const selectionLimits = new Map(
+    form.questions.map((question) => [
+      question.id,
+      questionPredefinedSelectionLimit(
+        question,
+        currentAnswers[question.id],
+        visualStyleContext,
+      ),
+    ]),
+  );
 
   useEffect(() => {
     setActiveQuestionIndex(0);
@@ -301,30 +311,31 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
     onAnswerChange?.(id, value);
   }
 
-  function toggleCheckbox(id: string, option: string, maxSelections?: number) {
+  function toggleCheckbox(q: QuestionForm['questions'][number], option: string) {
     if (locked) return;
-    const current = Array.isArray(answers[id]) ? (answers[id] as string[]) : [];
+    const current = Array.isArray(answers[q.id]) ? (answers[q.id] as string[]) : [];
     const has = current.includes(option);
-    if (!has && maxSelections !== undefined && current.length >= maxSelections) return;
-    touched.add(id);
+    const selectionLimit = questionPredefinedSelectionLimit(q, current, visualStyleContext);
+    if (!has && selectionLimit.isAtLimit) return;
+    touched.add(q.id);
     const next = has ? current.filter((v) => v !== option) : [...current, option];
-    const nextAnswers = { ...answers, [id]: next };
+    const nextAnswers = { ...answers, [q.id]: next };
     setAnswers(nextAnswers);
     setSkippedQuestionIds((currentSkipped) => {
-      if (!currentSkipped.has(id)) return currentSkipped;
+      if (!currentSkipped.has(q.id)) return currentSkipped;
       const nextSkipped = new Set(currentSkipped);
-      nextSkipped.delete(id);
+      nextSkipped.delete(q.id);
       return nextSkipped;
     });
     onDraftChange?.(draftSafeAnswers(form, nextAnswers));
-    onAnswerChange?.(id, next);
+    onAnswerChange?.(q.id, next);
   }
 
   function updateCheckboxCustom(q: QuestionForm['questions'][number], raw: string) {
     if (locked) return;
     const current = Array.isArray(answers[q.id]) ? (answers[q.id] as string[]) : [];
     const fixed = current.filter((entry) => questionValueIsKnown(q, entry));
-    update(q.id, [...fixed, ...splitCustomEntries(raw)]);
+    update(q.id, raw.trim().length > 0 ? [...fixed, raw] : fixed);
   }
 
   function finalizeSubmission(
@@ -395,12 +406,10 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
     setActiveQuestionIndex((current) => current + 1);
   }
 
-  // Per-question checkbox selection caps must hold.
-  const withinSelectionLimits = form.questions.every((q) => {
-    if (q.type !== 'checkbox' || q.maxSelections === undefined) return true;
-    const v = currentAnswers[q.id];
-    return !Array.isArray(v) || v.length <= q.maxSelections;
-  });
+  // Per-question checkbox selection caps apply only to predefined choices.
+  const withinSelectionLimits = form.questions.every(
+    (q) => !selectionLimits.get(q.id)?.isOverLimit,
+  );
   // Required questions must carry a non-empty answer. Without this, main-path forms (the discovery router's
   // required taskType/output, the ElevenLabs voice picker) would accept an
   // empty submit and serialize "(skipped)" for fields the rest of the system
@@ -423,8 +432,9 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
     (canSkipAll || (ready && (!stepped || activeQuestion?.required !== true)));
   const currentQuestionReady =
     !activeQuestion ||
-    activeQuestion.required !== true ||
-    questionAnswerIsPresent(currentAnswers[activeQuestion.id]);
+    (!selectionLimits.get(activeQuestion.id)?.isOverLimit &&
+      (activeQuestion.required !== true ||
+        questionAnswerIsPresent(currentAnswers[activeQuestion.id])));
   const autoContinueCountdown = `${Math.floor(autoContinueRemaining / 60)}:${String(
     autoContinueRemaining % 60,
   ).padStart(2, '0')}`;
@@ -482,6 +492,7 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
       <div className="question-form-body">
         {questionsToRender.map((q) => {
           const value = currentAnswers[q.id];
+          const selectionLimit = selectionLimits.get(q.id)!;
           const visualStyleCards =
             visualStyleContext &&
             q.id === 'tone' &&
@@ -492,7 +503,8 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
           return (
             <div
               key={q.id}
-              className={`qf-field${visualStyleCards ? ' qf-field-visual' : ''}`}
+              className={`qf-field${visualStyleCards ? ' qf-field-visual' : ''}${selectionLimit.isOverLimit ? ' qf-field-invalid' : ''}`}
+              aria-invalid={selectionLimit.isOverLimit || undefined}
             >
               <label className="qf-label">
                 <span>{q.label}</span>
@@ -541,8 +553,7 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
                   {q.options.map((opt) => {
                     const arr = Array.isArray(value) ? value : [];
                     const on = arr.includes(opt.value);
-                    const maxed =
-                      q.maxSelections !== undefined && !on && arr.length >= q.maxSelections;
+                    const maxed = !on && selectionLimit.isAtLimit;
                     return (
                       <label
                         key={opt.value}
@@ -555,7 +566,7 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
                           checked={on}
                           disabled={locked || maxed}
                           aria-label={opt.label}
-                          onChange={() => toggleCheckbox(q.id, opt.value, q.maxSelections)}
+                          onChange={() => toggleCheckbox(q, opt.value)}
                         />
                         <OptionCopy option={opt} />
                       </label>
@@ -787,6 +798,14 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
                     />
                   </CollapsibleCustomChoice>
                 </>
+              ) : null}
+              {selectionLimit.isOverLimit ? (
+                <div className="qf-selection-error" role="alert">
+                  {t('qf.selectionLimitError', {
+                    max: selectionLimit.maxSelections ?? 0,
+                    count: selectionLimit.predefinedCount,
+                  })}
+                </div>
               ) : null}
             </div>
           );
@@ -1023,6 +1042,11 @@ function VisualStylePicker({
     galleryCategory === 'all'
       ? cards
       : cards.filter((card) => card.category === galleryCategory);
+  const selectionLimit = predefinedSelectionLimit(
+    value,
+    maxSelections,
+    (candidate) => cards.some((card) => card.value === candidate),
+  );
 
   function shuffle() {
     if (cards.length <= VISUAL_STYLE_PAGE_SIZE) return;
@@ -1050,7 +1074,7 @@ function VisualStylePicker({
       onChange(value.filter((candidate) => candidate !== card.value));
       return;
     }
-    if (maxSelections !== undefined && value.length >= maxSelections) return;
+    if (selectionLimit.isAtLimit) return;
     onChange([...value, card.value]);
   }
 
@@ -1088,8 +1112,7 @@ function VisualStylePicker({
                 disabled ||
                 (selectionMode === 'multiple' &&
                   !value.includes(card.value) &&
-                  maxSelections !== undefined &&
-                  value.length >= maxSelections)
+                  selectionLimit.isAtLimit)
               }
               inputType={selectionMode === 'single' ? 'radio' : 'checkbox'}
               onSelect={() => selectStyle(card, 'inline')}
@@ -1196,8 +1219,7 @@ function VisualStylePicker({
                         disabled ||
                         (selectionMode === 'multiple' &&
                           !value.includes(card.value) &&
-                          maxSelections !== undefined &&
-                          value.length >= maxSelections)
+                          selectionLimit.isAtLimit)
                       }
                       inputType={selectionMode === 'single' ? 'radio' : 'checkbox'}
                       onSelect={() => selectStyle(card, 'gallery')}
@@ -1212,13 +1234,7 @@ function VisualStylePicker({
                       className="qf-input"
                       value={customValue}
                       placeholder={customPlaceholder}
-                      disabled={
-                        disabled ||
-                        (selectionMode === 'multiple' &&
-                          !customValue &&
-                          maxSelections !== undefined &&
-                          value.length >= maxSelections)
-                      }
+                      disabled={disabled}
                       onChange={(event) => {
                         const presets = value.filter((candidate) =>
                           cards.some((card) => card.value === candidate),
@@ -1665,11 +1681,44 @@ function customCheckboxValue(
   return value.filter((entry) => !questionValueIsKnown(q, entry)).join(', ');
 }
 
-function splitCustomEntries(raw: string): string[] {
-  return raw
-    .split(/[\n,]/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+interface PredefinedSelectionLimit {
+  predefinedCount: number;
+  maxSelections: number | undefined;
+  isAtLimit: boolean;
+  isOverLimit: boolean;
+}
+
+function predefinedSelectionLimit(
+  value: string | string[] | undefined,
+  maxSelections: number | undefined,
+  isPredefined: (candidate: string) => boolean,
+): PredefinedSelectionLimit {
+  const predefinedCount = Array.isArray(value)
+    ? value.filter(isPredefined).length
+    : 0;
+  return {
+    predefinedCount,
+    maxSelections,
+    isAtLimit: maxSelections !== undefined && predefinedCount >= maxSelections,
+    isOverLimit: maxSelections !== undefined && predefinedCount > maxSelections,
+  };
+}
+
+function questionPredefinedSelectionLimit(
+  q: QuestionForm['questions'][number],
+  value: string | string[] | undefined,
+  visualStyleContext: VisualStyleContext | undefined,
+): PredefinedSelectionLimit {
+  if (q.type !== 'checkbox') {
+    return predefinedSelectionLimit(value, undefined, () => false);
+  }
+  return predefinedSelectionLimit(value, q.maxSelections, (candidate) => {
+    if (questionValueIsKnown(q, candidate)) return true;
+    if (!visualStyleContext || q.id !== 'tone' || !q.options) return false;
+    return visualStyleCardsForContext(visualStyleContext).some(
+      (card) => card.value === candidate,
+    );
+  });
 }
 
 function customInputCharCount(value: string, placeholder: string): number {
