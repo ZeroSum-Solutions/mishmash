@@ -16,6 +16,7 @@ import { parseDesignSystemRenameArgs } from './design-systems/rename-args.js';
 import { runLiveArtifactsToolCli } from './tools-live-artifacts-cli.js';
 import { splitResearchSubcommand } from './research/cli-args.js';
 import { resolveDaemonUrl } from './daemon-url.js';
+import { formatRunFailureSummary } from './run-failure-summary.js';
 import { requestJsonIpc } from '@open-design/sidecar';
 import { SIDECAR_ENV, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
 import { EXPORT_FORMATS, EXPORT_IMAGE_FORMATS, nativeSessionRecoveryNotice } from '@open-design/contracts';
@@ -7701,8 +7702,11 @@ async function runRun(args) {
   od run cancel <runId>                     Request cancellation.
   od run continue <runId> [--follow]        Continue a resumable failed run.
   od run list   [--project <id>]            List recent runs.
-  od run info   <runId> [--json]            One run's status, including what
-                                            happened to the agent session.
+  od run info   <runId> [--json]            One run's status: what happened to
+                                            the agent session and, for a run
+                                            that failed, the step, the cause,
+                                            whether files changed, and how to
+                                            resume.
   od run result-package <runId> [--json]    Inspect run outputs and workspace
                                             provenance without applying them.
 
@@ -7745,7 +7749,14 @@ Common options:
       // `recovered` is the shared reading from packages/contracts, so the CLI
       // and the chat agree on which states are worth reporting.
       const recovery = data?.nativeSessionRecovery ?? null;
-      console.log(`run\t${data?.id ?? id}\t${data?.status ?? '-'}`);
+      // A run that did not succeed leads with the failure summary -- the same
+      // four facts the chat alert states (step, cause, file-change state,
+      // resume). Its first line is this command's `run` line, so a healthy run
+      // prints that line on its own. The raw record stays one `--json` away.
+      const runLines = data?.status === 'failed' || data?.status === 'canceled'
+        ? formatRunFailureSummary(data)
+        : [`run\t${data?.id ?? id}\t${data?.status ?? '-'}`];
+      for (const line of runLines) console.log(line);
       console.log(`project\t${data?.projectId ?? '-'}\tconversation=${data?.conversationId ?? '-'}`);
       console.log(`agent\t${data?.agentId ?? '-'}\tresumable=${data?.resumable === true}`);
       console.log(

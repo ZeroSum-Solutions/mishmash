@@ -838,6 +838,17 @@
   gap: 9px;
 }
 
+/* Always-visible facts line under the named cause: which step stopped, and
+   whether the user's files changed. Deliberately outside the collapsed detail
+   area — a user must never have to expand anything to learn if work was lost. */
+.run-error__facts {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  max-width: 64ch;
+}
+
 .run-error__description {
   margin: 0;
   max-width: 64ch;

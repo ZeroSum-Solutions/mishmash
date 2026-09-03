@@ -160,8 +160,15 @@ describe('od run CLI', () => {
     const result = await runCli(['run', 'info', 'run-1', '--daemon-url', stub.baseUrl]);
 
     expect(result.code).toBe(0);
+    // A failed run leads with the failure summary (step, cause, file-change
+    // state, resume) and still ends with the session-recovery line: both
+    // surfaces of `od run info` print, and nothing else does.
     expect(result.stdout).toBe([
       'run\trun-1\tfailed',
+      'step\tnot reported',
+      'cause\tnot reported',
+      'files\tnot reported',
+      'resume\tnot resumable — re-send the turn to start a fresh run',
       'project\tproject-1\tconversation=conversation-1',
       'agent\tclaude\tresumable=false',
       'session-recovery\tresumed\trecovered=yes\tcontinuation=native-resume-by-id',

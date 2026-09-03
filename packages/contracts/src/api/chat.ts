@@ -18,6 +18,7 @@ import type { TrackingRuntimeType } from '../analytics/public-params.js';
 import type {
   TrackingRunFailureCategory,
   TrackingRunFailureDetail,
+  TrackingRunFailureStage,
 } from '../analytics/events.js';
 
 // The daemon's run-failure taxonomy, re-exported under product-facing names so
@@ -27,6 +28,7 @@ import type {
 // producer and consumer can't drift.
 export type RunFailureCategory = TrackingRunFailureCategory;
 export type RunFailureDetail = TrackingRunFailureDetail;
+export type RunFailureStage = TrackingRunFailureStage;
 
 export type ChatRole = 'user' | 'assistant';
 export type ChatSessionMode = 'design' | 'chat' | 'plan';
@@ -541,6 +543,11 @@ export interface ChatRunStatusResponse {
    *  cli_not_installed, invalid_api_key, …). Primary key the UI maps to a named
    *  failure type + fix. Absent on success / older daemons. */
   failureDetail?: RunFailureDetail | null;
+  /** The lifecycle step the run was in when it failed (spawn, session_init,
+   *  tool_execution, …). The step half of a failure alert: it says WHERE the
+   *  run stopped, next to the WHY that `failureDetail` names. Absent on success
+   *  / older daemons. */
+  failureStage?: RunFailureStage | null;
   /** True when this terminal failure can be recovered by resuming the agent's
    *  existing CLI session (a transient upstream drop / inactivity timeout on a
    *  session-resuming runtime), rather than only restarting from scratch. The
@@ -639,6 +646,8 @@ export type PersistedAgentEvent =
   // `failureCategory` / `failureDetail` carry the daemon's finer classification
   // for the same failure, so the error card can name a specific type + fix even
   // when many causes share one `code` (e.g. hard_quota vs a transient 429).
+  // `failureStage` / `artifactCount` carry the other two facts a failure alert
+  // owes the user: which step stopped, and whether their files changed.
   | {
       kind: 'status';
       label: string;
@@ -646,6 +655,11 @@ export type PersistedAgentEvent =
       code?: string;
       failureCategory?: RunFailureCategory;
       failureDetail?: RunFailureDetail;
+      failureStage?: RunFailureStage;
+      /** Authoritative count of artifact files this run created or modified
+       *  before it failed. Lets the failure alert state whether the user's
+       *  files changed without a separate status fetch. */
+      artifactCount?: number;
     }
   | { kind: 'text'; text: string }
   | { kind: 'conversation_title'; title: string }

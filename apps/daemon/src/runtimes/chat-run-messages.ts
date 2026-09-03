@@ -20,6 +20,8 @@ type ChatRunMessageState = {
   errorCode?: string | null;
   failureCategory?: string | null;
   failureDetail?: string | null;
+  failureStage?: string | null;
+  artifactCount?: number | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -46,15 +48,22 @@ export function persistRunEventToAssistantMessage(
  * Stamp the daemon's finalize-time failure classification onto the persisted
  * assistant message so a reload — or any consumer that reads the stored
  * message instead of the live SSE stream — still sees the fine-grained cause.
+ * Enriches an existing `status:error` event for any classified run; a
+ * cancellation never gains an error event it did not already have.
+ *
+ * Invariant: the persisted `status:error` event carries every fact a failure
+ * alert owes the user — the cause (`failureCategory` / `failureDetail`), the
+ * step that stopped (`failureStage`), and whether the user's files changed
+ * (`artifactCount`) — so the alert never has to degrade to "Task failed" after
+ * a reload.
  *
  * The `error` SSE frame is emitted from the child-close handler BEFORE the run
- * is finalized, so `failureCategory` / `failureDetail` (computed at finalize)
- * aren't known when that frame is first persisted. This enriches the last
- * persisted `status:error` event in place once the classification exists, and
- * appends one only if a failed run somehow never persisted an error frame.
- * Without this, a daemon-persisted failure (no live web error handler saving
- * the message, or a conversation reloaded before that save) falls back to the
- * coarse `errorCode` UI and loses the specific fix guidance.
+ * is finalized, so none of those fields are known when that frame is first
+ * persisted. This enriches the last persisted `status:error` event in place
+ * once each field exists, and appends one only if a failed run somehow never
+ * persisted an error frame. It is called twice per failed run — at child close
+ * for the cause and step, and again from the run's finalize hook once the
+ * artifact diff resolves — and is idempotent, writing only when a field is new.
  */
 export function persistRunFailureClassification(
   db: SqliteDb,
@@ -63,6 +72,10 @@ export function persistRunFailureClassification(
   if (!run.assistantMessageId) return;
   const failureCategory = run.failureCategory ?? null;
   const failureDetail = run.failureDetail ?? null;
+  const failureStage = run.failureStage ?? null;
+  const artifactCount = Number.isFinite(run.artifactCount)
+    ? Number(run.artifactCount)
+    : null;
   if (!failureCategory && !failureDetail) return;
   try {
     const row = db
@@ -92,12 +105,20 @@ export function persistRunFailureClassification(
       ...base,
       ...(failureCategory ? { failureCategory } : {}),
       ...(failureDetail ? { failureDetail } : {}),
+      ...(failureStage ? { failureStage } : {}),
+      ...(artifactCount === null ? {} : { artifactCount }),
     };
     if (run.errorCode && typeof enriched.code !== 'string') enriched.code = run.errorCode;
     if (idx >= 0) {
       if (JSON.stringify(enriched) === JSON.stringify(events[idx])) return;
       events[idx] = enriched;
     } else {
+      // A cancellation carries a classification too (user_cancel /
+      // user_cancelled) so the run record can name why it stopped, but it must
+      // never GAIN an error event it did not already have: writing one onto a
+      // message the user themselves stopped would make the chat paint a failure
+      // alert for a deliberate Stop.
+      if (failureCategory === 'user_cancel') return;
       if (run.error && typeof enriched.detail !== 'string') enriched.detail = run.error;
       events.push(enriched);
     }

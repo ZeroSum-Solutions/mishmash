@@ -7,6 +7,7 @@ This file is the single source of truth for agents entering this repository. Rea
 - Product and onboarding: `README.md`, `QUICKSTART.md`.
 - Contribution and environment: `CONTRIBUTING.md`.
 - Architecture and protocols: `docs/architecture.md`, `docs/skills-protocol.md`, `docs/agent-adapters.md`, `docs/modes.md`.
+- Subprocess budgets and the exit-137 kill: `docs/subprocess-limits.md` — the single list of per-child timeouts, the env vars that tune them, and what an unexplained kill means.
 - Historical product baseline: `docs/spec.md`, `docs/roadmap.md` (both explicitly archived; do not treat their dated decisions as current behavior).
 - References and current plans: `docs/references.md`, `docs/code-review-guidelines.md`, `specs/current/maintainability-roadmap.md`.
 - Directory-level agent guidance: `.github/AGENTS.md`, `apps/AGENTS.md`, `packages/AGENTS.md`, `tools/AGENTS.md`, `e2e/AGENTS.md`.

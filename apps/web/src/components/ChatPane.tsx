@@ -74,6 +74,7 @@ import {
   amrRechargeUrlForProfile,
   resolveRunFailureUi,
 } from '../runtime/amr-guidance';
+import { describeRunFailureFacts } from '../runtime/run-failure-facts';
 import {
   fetchVelaLoginStatus,
   type VelaLoginStatus,
@@ -1193,6 +1194,14 @@ export function ChatPane({
         failedRunErrorEvent?.failureDetail,
         retryAssistant.agentId,
       )
+    : null;
+  // The step that stopped and whether the user's files changed — the two facts
+  // the alert states up front, next to the named cause in its title.
+  const runFailureFacts = retryAssistant
+    ? describeRunFailureFacts({
+        failureStage: failedRunErrorEvent?.failureStage,
+        artifactCount: failedRunErrorEvent?.artifactCount,
+      })
     : null;
   const hasInlineAmrAuthorizeFailure = Boolean(
     retryAssistant && onRetry && runFailureUi?.primaryAction === 'authorize',
@@ -2437,6 +2446,26 @@ export function ChatPane({
                   }
                   open={errorSourceOpen}
                   onOpenChange={setErrorSourceOpen}
+                  status={
+                    runFailureFacts?.stepKey || runFailureFacts?.filesKey ? (
+                      <p className="run-error__facts">
+                        {runFailureFacts.stepKey ? (
+                          <span data-run-failure-step={runFailureFacts.stage ?? ''}>
+                            {t(runFailureFacts.stepKey)}
+                          </span>
+                        ) : null}
+                        {runFailureFacts.filesKey ? (
+                          <span data-run-failure-files={String(runFailureFacts.artifactCount)}>
+                            {runFailureFacts.filesKey === 'chat.runError.filesChangedMany'
+                              ? t(runFailureFacts.filesKey, {
+                                  count: runFailureFacts.artifactCount ?? 0,
+                                })
+                              : t(runFailureFacts.filesKey)}
+                          </span>
+                        ) : null}
+                      </p>
+                    ) : null
+                  }
                   detailsLabel={t('brand.viewDetails')}
                   details={
                     <div className="run-error__details">

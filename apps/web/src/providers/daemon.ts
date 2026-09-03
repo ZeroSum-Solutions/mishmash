@@ -1059,6 +1059,7 @@ async function consumeDaemonRun({
   // frame — both mirror the same finalize-time classification.
   let endFailureCategory: ChatRunStatusResponse['failureCategory'] = null;
   let endFailureDetail: ChatRunStatusResponse['failureDetail'] = null;
+  let endFailureStage: ChatRunStatusResponse['failureStage'] = null;
   let resolvedArtifactCount: number | undefined;
   const reportArtifactCount = (value: unknown) => {
     if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return;
@@ -1206,6 +1207,7 @@ async function consumeDaemonRun({
             if (event.data.resumable === true) endResumable = true;
             if (event.data.failureCategory) endFailureCategory = event.data.failureCategory;
             if (event.data.failureDetail) endFailureDetail = event.data.failureDetail;
+            if (event.data.failureStage) endFailureStage = event.data.failureStage;
             reportArtifactCount(event.data.artifactCount);
             // `serverDeclaredSuccess` records whether the server explicitly
             // set `status: 'succeeded'` in the end payload — the local
@@ -1233,6 +1235,7 @@ async function consumeDaemonRun({
           // run-error UI on reconnect.
           if (status.failureCategory) endFailureCategory = status.failureCategory;
           if (status.failureDetail) endFailureDetail = status.failureDetail;
+          if (status.failureStage) endFailureStage = status.failureStage;
           reportArtifactCount(status.artifactCount);
           onRunStatus?.(endStatus);
           break;
@@ -1265,6 +1268,7 @@ async function consumeDaemonRun({
         if (status.resumable === true) endResumable = true;
         if (status.failureCategory) endFailureCategory = status.failureCategory;
         if (status.failureDetail) endFailureDetail = status.failureDetail;
+        if (status.failureStage) endFailureStage = status.failureStage;
         reportArtifactCount(status.artifactCount);
         onRunStatus?.(endStatus);
       } else {
@@ -1302,6 +1306,8 @@ async function consumeDaemonRun({
           markErrorRunFailure(markErrorResumable(pendingStructuredError, endResumable), {
             failureCategory: endFailureCategory,
             failureDetail: endFailureDetail,
+            failureStage: endFailureStage,
+            artifactCount: resolvedArtifactCount,
           }),
         );
         return;
@@ -1321,7 +1327,12 @@ async function consumeDaemonRun({
             new Error(`agent exited with ${exitSignal ? `signal ${exitSignal}` : `code ${exitCode}`}${fallbackTail ? `\n${fallbackTail}` : ''}`),
             endResumable,
           ),
-          { failureCategory: endFailureCategory, failureDetail: endFailureDetail },
+          {
+            failureCategory: endFailureCategory,
+            failureDetail: endFailureDetail,
+            failureStage: endFailureStage,
+            artifactCount: resolvedArtifactCount,
+          },
         ),
       );
       return;
@@ -1367,22 +1378,30 @@ function markErrorResumable(err: Error, resumable: boolean): Error {
 }
 
 /** Stamp the daemon's failure classification onto a surfaced error so the chat
- *  error card can map `failureDetail` to a specific named failure type + fix
- *  (see resolveRunFailureUi). Only stamps present values so an older daemon that
- *  omits the fields leaves the error's classification undefined. */
+ *  error card can name the cause (`failureDetail` -> a specific failure type +
+ *  fix, see resolveRunFailureUi), name the step that stopped (`failureStage`),
+ *  and state whether the user's files changed (`artifactCount`). Only stamps
+ *  present values so an older daemon that omits the fields leaves the error's
+ *  classification undefined. */
 function markErrorRunFailure(
   err: Error,
   fields: {
     failureCategory?: ChatRunStatusResponse['failureCategory'];
     failureDetail?: ChatRunStatusResponse['failureDetail'];
+    failureStage?: ChatRunStatusResponse['failureStage'];
+    artifactCount?: number;
   },
 ): Error {
   const target = err as Error & {
     failureCategory?: ChatRunStatusResponse['failureCategory'];
     failureDetail?: ChatRunStatusResponse['failureDetail'];
+    failureStage?: ChatRunStatusResponse['failureStage'];
+    artifactCount?: number;
   };
   if (fields.failureCategory) target.failureCategory = fields.failureCategory;
   if (fields.failureDetail) target.failureDetail = fields.failureDetail;
+  if (fields.failureStage) target.failureStage = fields.failureStage;
+  if (typeof fields.artifactCount === 'number') target.artifactCount = fields.artifactCount;
   return err;
 }
 

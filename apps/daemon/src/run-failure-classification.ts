@@ -14,8 +14,15 @@ export interface RunEventForFailureClassification {
   data: unknown;
 }
 
+/** Why a run was cancelled. `user` is someone pressing Stop; `shutdown` is the
+ *  daemon ending an in-flight turn as it shuts down. They look identical on the
+ *  run object — both set `cancelRequested` — so the origin has to be carried
+ *  explicitly, or a shutdown would tell the user they cancelled their own turn. */
+export type RunCancelOrigin = 'user' | 'shutdown';
+
 export interface RunFailureClassificationInput {
   result: RunResult;
+  cancelOrigin?: RunCancelOrigin;
   status: RunStatusForAnalytics & {
     error?: string | null;
   };
@@ -413,6 +420,18 @@ const PROCESS_CRASH_SIGNALS = new Set([
 // stream disconnect is caught by the upstream branch. By the time control
 // reaches here a signal is the strongest evidence we have, so map it to a
 // non-retryable process_exit instead of laundering it into a retryable timeout.
+// A child that died on a signal is sometimes reported to us by exit code
+// instead: a shell (and Node, when the process group is reaped through one)
+// renders "killed by signal N" as exit code 128 + N. Those codes carry exactly
+// the same evidence as the signal name, so they classify through the same
+// branch rather than falling into the generic `exit_code` bucket — which is how
+// an out-of-memory kill (137 = 128 + SIGKILL) used to reach the user unnamed.
+const SIGNAL_BY_EXIT_CODE: Record<string, string> = {
+  AGENT_EXIT_137: 'SIGKILL',
+  AGENT_EXIT_139: 'SIGSEGV',
+  AGENT_EXIT_143: 'SIGTERM',
+};
+
 function signalInterruptClassification(
   errorCode: string,
   text: string,
@@ -421,7 +440,7 @@ function signalInterruptClassification(
   const isInterruptExit = errorCode === 'AGENT_EXIT_130';
   const signal = errorCode.startsWith('AGENT_SIGNAL_')
     ? errorCode.slice('AGENT_SIGNAL_'.length)
-    : '';
+    : SIGNAL_BY_EXIT_CODE[errorCode] ?? '';
   if (!signal && !isInterruptExit) return null;
 
   if (signal === 'SIGKILL') {
@@ -619,13 +638,12 @@ export function classifyRunFailure(
 ): RunFailureClassification | undefined {
   if (input.result === 'success') return undefined;
   if (input.result === 'cancelled') {
-    return classification(
-      'user_cancel',
-      'user_cancelled',
-      inferFailureStageFromEvents(input.events, 'first_token_wait'),
-      false,
-      'none',
-    );
+    const stage = inferFailureStageFromEvents(input.events, 'first_token_wait');
+    // A shutdown is not the user's doing, so it must not be reported as one.
+    if (input.cancelOrigin === 'shutdown') {
+      return classification('process_exit', 'interrupted', stage, true, 'retry');
+    }
+    return classification('user_cancel', 'user_cancelled', stage, false, 'none');
   }
 
   const errorCode = normalizeCode(input.errorCode ?? input.status.errorCode);
