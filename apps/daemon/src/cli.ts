@@ -19,7 +19,7 @@ import { resolveDaemonUrl } from './daemon-url.js';
 import { formatRunFailureSummary } from './run-failure-summary.js';
 import { requestJsonIpc } from '@open-design/sidecar';
 import { SIDECAR_ENV, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
-import { EXPORT_FORMATS, EXPORT_IMAGE_FORMATS } from '@open-design/contracts';
+import { EXPORT_FORMATS, EXPORT_IMAGE_FORMATS, nativeSessionRecoveryNotice } from '@open-design/contracts';
 import { buildExportCliRequestBody, buildExportCliResultEnvelope, resolveExportCliDeckMode } from './export-cli-request.js';
 import { exportRoutePath } from './export-cli-routing.js';
 import {
@@ -7702,7 +7702,11 @@ async function runRun(args) {
   od run cancel <runId>                     Request cancellation.
   od run continue <runId> [--follow]        Continue a resumable failed run.
   od run list   [--project <id>]            List recent runs.
-  od run info   <runId> [--json]            One run's status; a failed run\n                                            prints the step, cause, whether\n                                            files changed, and how to resume.
+  od run info   <runId> [--json]            One run's status: what happened to
+                                            the agent session and, for a run
+                                            that failed, the step, the cause,
+                                            whether files changed, and how to
+                                            resume.
   od run result-package <runId> [--json]    Inspect run outputs and workspace
                                             provenance without applying them.
 
@@ -7739,13 +7743,27 @@ Common options:
       const resp = await fetch(`${base}/api/runs/${encodeURIComponent(id)}`);
       if (!resp.ok) return structuredHttpFailure(resp, 'run-not-found');
       const data = await resp.json();
-      // A failed or canceled run gets the failure summary; anything else keeps
-      // the raw record, which is what the JSON consumers of this command read.
-      if (!flags.json && (data?.status === 'failed' || data?.status === 'canceled')) {
-        for (const line of formatRunFailureSummary(data)) console.log(line);
-        return;
-      }
-      process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      // T-05: the native-session resume path is hot, so one run's status has to
+      // say what happened to the agent's SESSION, not only how the run ended.
+      // `recovered` is the shared reading from packages/contracts, so the CLI
+      // and the chat agree on which states are worth reporting.
+      const recovery = data?.nativeSessionRecovery ?? null;
+      // A run that did not succeed leads with the failure summary -- the same
+      // four facts the chat alert states (step, cause, file-change state,
+      // resume). Its first line is this command's `run` line, so a healthy run
+      // prints that line on its own. The raw record stays one `--json` away.
+      const runLines = data?.status === 'failed' || data?.status === 'canceled'
+        ? formatRunFailureSummary(data)
+        : [`run\t${data?.id ?? id}\t${data?.status ?? '-'}`];
+      for (const line of runLines) console.log(line);
+      console.log(`project\t${data?.projectId ?? '-'}\tconversation=${data?.conversationId ?? '-'}`);
+      console.log(`agent\t${data?.agentId ?? '-'}\tresumable=${data?.resumable === true}`);
+      console.log(
+        `session-recovery\t${recovery?.state ?? '-'}`
+        + `\trecovered=${nativeSessionRecoveryNotice(recovery) ? 'yes' : 'no'}`
+        + `\tcontinuation=${recovery?.continuation ?? '-'}`,
+      );
       return;
     }
     case 'result-package': {

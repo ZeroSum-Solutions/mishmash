@@ -2031,6 +2031,8 @@ export const en: Dict = {
   'chat.mode.design.cost': 'Heavy',
   'chat.mode.design.costNote': 'Generates files and multimodal media, so a run can use the most.',
   'chat.routingIntent.debugSummary': 'Advanced debug metadata',
+  'chat.sessionRecovery.resumed': 'Session recovered — this turn continued the agent’s existing session.',
+  'chat.sessionRecovery.reseeded': 'Session recovered — the agent session was lost and rebuilt during this turn.',
   'chat.composerHint': '⌘/Ctrl + Enter to send · include goals, content, style, and format',
   'chat.cliSettingsTitle': 'CLI & model settings',
   'chat.cliSettingsAria': 'Open CLI and model settings',

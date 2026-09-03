@@ -13,6 +13,7 @@ const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'canceled']);
 const RESTART_ERROR_CODE = 'DAEMON_RESTARTED';
 const RESTART_ERROR_MESSAGE = 'Run interrupted because the daemon restarted.';
 const RECONCILED_STATUS_MESSAGE = 'Run terminal state reconciled after daemon restart.';
+const FOLLOWED_TERMINAL_STATUS_MESSAGE = 'Message reconciled to the run terminal event.';
 
 interface AnalyticsRecovery {
   context: Record<string, unknown>;
@@ -76,8 +77,301 @@ export interface RunTerminalReconciliationResult {
   scanned: number;
   interrupted: number;
   messagesReconciled: number;
+  messagesFollowedTerminal: number;
   analyticsReplayed: number;
   langfuseReplayed: number;
+}
+
+/**
+ * An assistant message row must follow the terminal event of the run it
+ * belongs to. A row may not stay `failed` beside a run that did not fail.
+ *
+ * Two writers stamp `failed` onto a row without knowing whether the run is
+ * still alive: `reconcileMessages()` below, which fails every `queued` /
+ * `running` row it finds at daemon startup, and a chat client whose SSE stream
+ * dropped. Neither revisits the row — the startup pass only ever selects
+ * `queued` / `running` — so a run that goes on to succeed leaves a row the
+ * chat renders as "Task failed" for a turn that finished and wrote files
+ * (issue #159 A).
+ *
+ * This is the single writer that restores the invariant, and it is the only
+ * one that needs to be: a `failed` row is only ever repaired towards the run's
+ * own terminal status, never away from it. It deliberately does NOT act when
+ * the run itself failed — a genuine failure needs no repair, and the existing
+ * failure-persistence paths own that row. Repairing only a disagreement makes
+ * it idempotent, which is what lets the startup backfill re-run on every boot.
+ * `endedAt` is rewritten rather than preserved because the row's current value
+ * came from the same wrong write this call is correcting.
+ *
+ * Called once from the run service's terminal hook (`server.ts`), so a live
+ * run repairs its own row the moment it ends, and once per stranded row from
+ * `followRunTerminalOnStuckMessages()` below.
+ *
+ * Every write is inside one guard, and the guard reports rather than swallows.
+ * The terminal hook calls this before the run's other terminal bookkeeping, so
+ * an exception escaping here would take that bookkeeping down with it; and a
+ * silently swallowed failure would leave exactly the stuck row this exists to
+ * prevent, with nothing in the daemon log to say so. `repaired` is set from the
+ * UPDATE itself, so a row that was fixed before the status-event append threw
+ * is still reported as repaired.
+ *
+ * Returns whether the row was repaired.
+ */
+export function followRunTerminalOnMessage(
+  db: Database.Database,
+  args: { assistantMessageId: string | null | undefined; endedAt: number; status: string },
+): boolean {
+  const { assistantMessageId, endedAt, status } = args;
+  if (!assistantMessageId) return false;
+  if (!TERMINAL_STATUSES.has(status) || status === 'failed') return false;
+  let repaired = false;
+  try {
+    repaired = db.prepare(
+      `UPDATE messages
+          SET run_status = ?, ended_at = ?
+        WHERE id = ?
+          AND role = 'assistant'
+          AND run_status = 'failed'`,
+    ).run(status, endedAt, assistantMessageId).changes > 0;
+    if (repaired) {
+      appendMessageStatusEvent(db, assistantMessageId, {
+        label: status,
+        detail: FOLLOWED_TERMINAL_STATUS_MESSAGE,
+      });
+    }
+  } catch (err) {
+    console.warn('[runs] message terminal reconciliation failed', err);
+  }
+  return repaired;
+}
+
+/**
+ * A message write may move an assistant row's run status TOWARDS its run's
+ * terminal event, never away from it.
+ *
+ * `followRunTerminalOnMessage` above repairs the row from inside the run's
+ * terminal hook, which fires while `finish()` is still running (`runtimes/
+ * runs.ts`). A chat client that already gave up on the turn holds its own copy
+ * of the row and can flush it afterwards — a retried PUT, a queued offline
+ * write, a second tab — and the message route upserts whatever it is handed
+ * (`routes/project/conversations.ts` -> `upsertMessage` in `db.ts`). Nothing
+ * revisits the row after that: the startup pass below only selects
+ * `queued`/`running` rows, and so does the post-end reconciler in
+ * `plugins/share-helpers.ts`. A write that lands one second late would make
+ * "Task failed" permanent again for a turn that succeeded (issue #159 A).
+ *
+ * So the invariant this holds is the write-side half of the same rule: once a
+ * row follows a non-failed terminal run status, only that status can be
+ * written onto it. Any disagreeing claim is held, not only a `failed` one — a
+ * stale copy that still believes the turn is `running`, or one carrying no run
+ * status at all (which `upsertMessage` stores as NULL), takes the row off its
+ * terminal just as effectively. `run_status` and `ended_at` are pinned back to
+ * the stored values and every other field passes through untouched, so a late
+ * write still delivers the content, events and produced files it carries.
+ *
+ * The row's `ended_at` is held on the same terms as its status, in the one
+ * direction that is drift: a stale copy that agrees the turn succeeded but
+ * carries an EARLIER timestamp its own writer stamped would drag the row back
+ * off the run's terminal clock. A write that agrees and moves the clock
+ * FORWARDS is not that copy — see `heldTerminalEndedAt` below.
+ *
+ * Two writes are deliberately let through. A write that already agrees on both
+ * status and timestamp has nothing to correct. And a write naming a DIFFERENT
+ * run is a new turn on that row, not a stale copy of the finished one, so it
+ * owns the row; only a write for the same run, or one that names no run at
+ * all, is held. It never invents a status either — a row with no non-failed
+ * terminal status stored is written exactly as sent.
+ *
+ * The ANSWER is held on the same terms as the status. A write that had to be
+ * held is by definition a copy of the turn made before it finished, so the
+ * body it carries is whatever that writer had when it gave up — for the
+ * dropped chat client, the empty string and the stale "daemon restarted"
+ * status event. Pinning only the status left the user reading a succeeded turn
+ * with no answer in it and two contradictory status events under it: the
+ * symptom moved rather than closing. So when the row already stores an answer
+ * and the held write carries none, the stored body and the events that belong
+ * to it stay. This never blocks a real late delivery: a write carrying content
+ * keeps its own content, and stored events replace nothing when there are
+ * none.
+ *
+ * Failing open is deliberate: a read error here must not reject the user's
+ * message write, so it warns and returns the write unchanged, which is exactly
+ * the behaviour that preceded this guard.
+ */
+export function holdTerminalRunStatusOnMessageWrite(
+  db: Database.Database,
+  message: Record<string, unknown>,
+): Record<string, unknown> {
+  const id = message.id;
+  if (typeof id !== 'string' || !id) return message;
+  try {
+    const stored = db.prepare(
+      `SELECT run_status AS runStatus, ended_at AS endedAt, run_id AS runId,
+              content AS content, events_json AS eventsJson
+         FROM messages
+        WHERE id = ? AND role = 'assistant'`,
+    ).get(id) as {
+      runStatus: string | null;
+      endedAt: number | null;
+      runId: string | null;
+      content: string | null;
+      eventsJson: string | null;
+    } | undefined;
+    const held = stored?.runStatus;
+    if (!held || held === 'failed' || !TERMINAL_STATUSES.has(held)) return message;
+    if (
+      typeof message.runId === 'string'
+      && typeof stored?.runId === 'string'
+      && message.runId !== stored.runId
+    ) return message;
+    const endedAt = heldTerminalEndedAt(stored, message, held);
+    if (message.runStatus === held && message.endedAt === endedAt) return message;
+    return { ...message, ...heldTerminalBody(stored, message), runStatus: held, endedAt };
+  } catch (err) {
+    console.warn('[runs] terminal run status hold failed', err);
+    return message;
+  }
+}
+
+/**
+ * The `ended_at` a held write leaves on the row.
+ *
+ * A write that agrees with the row's terminal status AND carries a later
+ * timestamp is the live client's own final save for that same terminal, not a
+ * stale copy of the turn: it saw the end the daemon saw. The daemon stamps the
+ * row the moment the run ends (`reconcileAssistantMessageOnRunEnd` in
+ * `plugins/share-helpers.ts`), and the client's onDone save lands a few hundred
+ * milliseconds later with the completion time it rendered, so pinning the
+ * stored stamp back would overwrite the client's `endedAt` on every turn that
+ * finishes normally — which `e2e/tests/dialog/retry-after-stop.test.ts` asserts
+ * must not happen for a retried turn.
+ *
+ * Every other write keeps the stored timestamp. A write that disagrees on the
+ * status is a stale copy whose clock is not evidence of anything, and a write
+ * that agrees but carries an EARLIER timestamp is the backwards drift this hold
+ * exists to stop. A write carrying no timestamp of its own takes the row's, as
+ * before.
+ */
+function heldTerminalEndedAt(
+  stored: { endedAt: number | null } | undefined,
+  message: Record<string, unknown>,
+  held: string,
+): unknown {
+  const storedEndedAt = stored?.endedAt ?? null;
+  const incoming = message.endedAt;
+  if (
+    message.runStatus === held
+    && typeof incoming === 'number'
+    && (storedEndedAt === null || incoming > storedEndedAt)
+  ) return incoming;
+  return storedEndedAt ?? incoming ?? null;
+}
+
+function isBlankText(value: unknown): boolean {
+  return typeof value !== 'string' || value.trim() === '';
+}
+
+/**
+ * The stored answer of a row whose write is being held, when the held write
+ * would erase it: the body plus the events recorded beside it. Empty when the
+ * row has no answer to protect or the write brings one of its own.
+ */
+function heldTerminalBody(
+  stored: { content: string | null; eventsJson: string | null } | undefined,
+  message: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!stored || isBlankText(stored.content)) return {};
+  if (!isBlankText(message.content)) return {};
+  const held: Record<string, unknown> = { content: stored.content };
+  const events = storedEvents(stored.eventsJson);
+  if (events) held.events = events;
+  return held;
+}
+
+function storedEvents(eventsJson: string | null): unknown[] | null {
+  if (typeof eventsJson !== 'string' || !eventsJson) return null;
+  try {
+    const parsed = JSON.parse(eventsJson) as unknown;
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The status the run's own durable terminal record carries: the last `end`
+ * event in its `events.jsonl`.
+ *
+ * `emit()` (`runtimes/runs.ts`) persists `state.json` BEFORE it appends the
+ * record to the event log, so a terminal `state.json` can exist with no `end`
+ * line behind it — the process died between the two writes, the stream never
+ * flushed, or the run directory was restored without its log. Reading history,
+ * `state.json` alone is therefore not proof the run reached that terminal.
+ * Returns null when the log carries no `end` record at all.
+ */
+function durableTerminalStatus(runsLogDir: string, runId: string): string | null {
+  let status: string | null = null;
+  for (const record of readEvents(runsLogDir, runId)) {
+    if (record.event !== 'end') continue;
+    const candidate = isObject(record.data) ? record.data.status : null;
+    if (typeof candidate === 'string') status = candidate;
+  }
+  return status;
+}
+
+/**
+ * Backfill for rows stranded before the terminal hook above existed: assistant
+ * rows still `failed` with EMPTY content whose run reached a non-failed
+ * terminal. Idempotent, so it can run on every daemon boot.
+ *
+ * The empty-content narrowing is what separates this pass from the live hook.
+ * At terminal time the hook knows the row's `failed` predates the run's
+ * terminal event, so the row is provably stale whatever it holds. Reading
+ * history, that ordering is unrecoverable — so this pass only touches rows
+ * that carry no answer body at all, and never rewrites a stored error the user
+ * may still be reading.
+ *
+ * It also requires the run's terminal to be durably RECORDED, not merely
+ * declared: `state.json` and the log's last `end` event must agree. A
+ * `state.json` written without the matching `end` line (see
+ * `durableTerminalStatus` above) says only that the daemon intended a
+ * terminal, and this pass rewrites a row the user reads — a repair is worth
+ * making only against the same evidence the symptom was measured against.
+ * Returns how many rows it repaired.
+ */
+function followRunTerminalOnStuckMessages(
+  db: Database.Database,
+  statesByRunId: Map<string, DurableRunState>,
+  runsLogDir: string,
+): number {
+  let rows: Array<{ id: string; runId: string }> = [];
+  try {
+    rows = db.prepare(
+      `SELECT id, run_id AS runId
+         FROM messages
+        WHERE role = 'assistant'
+          AND run_status = 'failed'
+          AND run_id IS NOT NULL
+          AND TRIM(COALESCE(content, '')) = ''`,
+    ).all() as Array<{ id: string; runId: string }>;
+  } catch (err) {
+    console.warn('[runs] stranded message scan failed', err);
+    return 0;
+  }
+  let repaired = 0;
+  for (const row of rows) {
+    const state = statesByRunId.get(row.runId);
+    if (!state) continue;
+    if (durableTerminalStatus(runsLogDir, row.runId) !== state.status) continue;
+    if (followRunTerminalOnMessage(db, {
+      assistantMessageId: row.id,
+      endedAt: state.updatedAt,
+      status: state.status,
+    })) {
+      repaired += 1;
+    }
+  }
+  return repaired;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -106,22 +400,49 @@ function writeState(filePath: string, state: DurableRunState): void {
   }
 }
 
+/**
+ * The run's event log, read as far as it is intact.
+ *
+ * A half-written LAST line is the ordinary shape of a log whose daemon was
+ * killed mid-append: every record before it is complete, and the run's `end`
+ * record is usually one of them. Discarding the whole file over that trailing
+ * fragment made `durableTerminalStatus` report no terminal, which left the
+ * stranded row unrepaired — the exact symptom the backfill exists to clear —
+ * with nothing to say why.
+ *
+ * A malformed line anywhere ELSE means damage this reader cannot reason about:
+ * records may be missing or interleaved, so the log is not evidence and the
+ * whole file is discarded exactly as before. Under-repairing is the safe
+ * direction; mis-repairing a row the user reads is not.
+ */
 function readEvents(runsLogDir: string, runId: string): Array<{
   id: number;
   event: string;
   data: unknown;
   timestamp?: number;
 }> {
+  let lines: string[];
   try {
-    return fs.readFileSync(path.join(runsLogDir, runId, 'events.jsonl'), 'utf8')
+    lines = fs.readFileSync(path.join(runsLogDir, runId, 'events.jsonl'), 'utf8')
       .split('\n')
-      .filter(Boolean)
-      .map((line) => JSON.parse(line) as unknown)
-      .filter((value): value is { id: number; event: string; data: unknown; timestamp?: number } =>
-        isObject(value) && typeof value.id === 'number' && typeof value.event === 'string');
+      .filter(Boolean);
   } catch {
     return [];
   }
+  const records: Array<{ id: number; event: string; data: unknown; timestamp?: number }> = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    let value: unknown;
+    try {
+      value = JSON.parse(lines[index] as string) as unknown;
+    } catch {
+      if (index === lines.length - 1) break;
+      return [];
+    }
+    if (isObject(value) && typeof value.id === 'number' && typeof value.event === 'string') {
+      records.push(value as { id: number; event: string; data: unknown; timestamp?: number });
+    }
+  }
+  return records;
 }
 
 function hydrateRun(state: DurableRunState, events: ReturnType<typeof readEvents>) {
@@ -199,6 +520,7 @@ export async function reconcileDurableRunTerminals(
     scanned: 0,
     interrupted: 0,
     messagesReconciled: 0,
+    messagesFollowedTerminal: 0,
     analyticsReplayed: 0,
     langfuseReplayed: 0,
   };
@@ -234,6 +556,11 @@ export async function reconcileDurableRunTerminals(
 
   const statesByRunId = new Map(states.map((entry) => [entry.state.id, entry.state]));
   result.messagesReconciled = reconcileMessages(options.db, statesByRunId, now);
+  result.messagesFollowedTerminal = followRunTerminalOnStuckMessages(
+    options.db,
+    statesByRunId,
+    options.runsLogDir,
+  );
 
   for (const entry of states) {
     const { state } = entry;

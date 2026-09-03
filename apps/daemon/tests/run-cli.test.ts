@@ -31,7 +31,10 @@ afterEach(async () => {
   stub = null;
 });
 
-async function startRunStubServer(resumable: boolean): Promise<StubServer> {
+async function startRunStubServer(
+  resumable: boolean,
+  extraStatusFields: Record<string, unknown> = {},
+): Promise<StubServer> {
   const requests: CapturedRequest[] = [];
   const server = http.createServer((req, res) => {
     let raw = '';
@@ -56,6 +59,7 @@ async function startRunStubServer(resumable: boolean): Promise<StubServer> {
           agentId: 'claude',
           status: 'failed',
           resumable,
+          ...extraStatusFields,
         }));
         return;
       }
@@ -133,6 +137,96 @@ describe('od run CLI', () => {
     expect(JSON.parse(stub.requests[1]!.body).message).toContain(
       'The previous turn was interrupted by a transient failure.',
     );
+  });
+
+  // T-05: the native-session resume path is hot (190 `resumed` states in the
+  // live run logs) and neither surface said so. `od run info` is where the CLI
+  // reports one run's status, so it is where an embedding agent has to be able
+  // to read whether the turn continued an existing agent session.
+  it('reports the native session recovery state in od run info', async () => {
+    stub = await startRunStubServer(false, {
+      nativeSessionRecovery: {
+        agentId: 'claude',
+        state: 'resumed',
+        acquisition: 'stream-captured',
+        continuation: 'native-resume-by-id',
+        handle: { present: true, kind: 'opaque-id', display: null, sha256: null, redacted: true },
+        guardReason: null,
+        fallbackReason: null,
+        updatedAt: 1700000004,
+      },
+    });
+
+    const result = await runCli(['run', 'info', 'run-1', '--daemon-url', stub.baseUrl]);
+
+    expect(result.code).toBe(0);
+    // A failed run leads with the failure summary (step, cause, file-change
+    // state, resume) and still ends with the session-recovery line: both
+    // surfaces of `od run info` print, and nothing else does.
+    expect(result.stdout).toBe([
+      'run\trun-1\tfailed',
+      'step\tnot reported',
+      'cause\tnot reported',
+      'files\tnot reported',
+      'resume\tnot resumable — re-send the turn to start a fresh run',
+      'project\tproject-1\tconversation=conversation-1',
+      'agent\tclaude\tresumable=false',
+      'session-recovery\tresumed\trecovered=yes\tcontinuation=native-resume-by-id',
+      '',
+    ].join('\n'));
+  });
+
+  it('reports no session recovery for a run that recovered nothing', async () => {
+    stub = await startRunStubServer(false, {
+      nativeSessionRecovery: {
+        agentId: 'claude',
+        state: 'no_recoverable_session',
+        acquisition: 'none',
+        continuation: 'none',
+        handle: { present: false, kind: 'unknown', display: null, sha256: null, redacted: true },
+        guardReason: 'missing_cursor',
+        fallbackReason: null,
+        updatedAt: 1700000004,
+      },
+    });
+
+    const result = await runCli(['run', 'info', 'run-1', '--daemon-url', stub.baseUrl]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('session-recovery\tno_recoverable_session\trecovered=no\tcontinuation=none');
+  });
+
+  it('reports a dash when the daemon carries no recovery metadata for the run', async () => {
+    stub = await startRunStubServer(false);
+
+    const result = await runCli(['run', 'info', 'run-1', '--daemon-url', stub.baseUrl]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('session-recovery\t-\trecovered=no\tcontinuation=-');
+  });
+
+  it('still emits the raw run status document under --json', async () => {
+    stub = await startRunStubServer(false, {
+      nativeSessionRecovery: {
+        agentId: 'claude',
+        state: 'resumed',
+        acquisition: 'stream-captured',
+        continuation: 'native-resume-by-id',
+        handle: { present: true, kind: 'opaque-id', display: null, sha256: null, redacted: true },
+        guardReason: null,
+        fallbackReason: null,
+        updatedAt: 1700000004,
+      },
+    });
+
+    const result = await runCli(['run', 'info', 'run-1', '--daemon-url', stub.baseUrl, '--json']);
+
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      id: 'run-1',
+      nativeSessionRecovery: { continuation: 'native-resume-by-id', state: 'resumed' },
+      status: 'failed',
+    });
   });
 
   it('refuses to continue a run without a safe recoverable native session', async () => {

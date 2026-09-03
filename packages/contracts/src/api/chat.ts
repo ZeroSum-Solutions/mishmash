@@ -482,6 +482,30 @@ export interface NativeSessionRecoveryMetadata {
   updatedAt: number;
 }
 
+/**
+ * The user-visible reading of a run's native-session recovery state: what
+ * actually happened to the agent's session for this turn.
+ *
+ * Only two of the seven states changed what the agent could see, so only two
+ * are worth telling anyone about. `resumed` means the turn continued the
+ * agent's existing CLI session; `auto_reseeded` means the session was lost and
+ * the daemon rebuilt it mid-run. Every other state — a fresh session, a
+ * runtime with no resume at all, an attempt that was never made — is ordinary
+ * operation and returns null, so neither surface narrates a healthy run.
+ *
+ * Shared so the chat and `od run info` read the same states the same way.
+ */
+export type NativeSessionRecoveryNotice = 'resumed' | 'reseeded';
+
+export function nativeSessionRecoveryNotice(
+  metadata: NativeSessionRecoveryMetadata | null | undefined,
+): NativeSessionRecoveryNotice | null {
+  if (!metadata) return null;
+  if (metadata.state === 'resumed') return 'resumed';
+  if (metadata.state === 'auto_reseeded') return 'reseeded';
+  return null;
+}
+
 export interface ChatRunStatusResponse {
   id: string;
   projectId: string | null;

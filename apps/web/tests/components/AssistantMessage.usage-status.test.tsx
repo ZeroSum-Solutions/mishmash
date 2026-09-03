@@ -47,7 +47,7 @@ function baseMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
   } as ChatMessage;
 }
 
-// Both useModelRoutingForRun (GET /api/runs/:id) and useRunUsageForRun
+// Both useRunStatusForRun (GET /api/runs/:id) and useRunUsageForRun
 // (GET /api/runs/:id/usage) fire from the same render; branch on the URL so
 // each hook gets a shape it can actually parse.
 function stubFetchWithRunUsage(

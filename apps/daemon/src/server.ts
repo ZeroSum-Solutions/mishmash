@@ -411,7 +411,7 @@ import {
   snapshotAiHtmlVersionsForRun,
 } from './run-html-version-snapshots.js';
 import { reportRunCompletedFromDaemon } from './langfuse-bridge.js';
-import { reconcileDurableRunTerminals } from './runtimes/run-terminal-reconciliation.js';
+import { followRunTerminalOnMessage, reconcileDurableRunTerminals } from './runtimes/run-terminal-reconciliation.js';
 import { buildPromptStackTelemetry } from './prompt-telemetry.js';
 import { readAnalyticsContext } from './analytics.js';
 import {
@@ -2783,6 +2783,19 @@ export async function startServer({
           run.failureDetail = canceled?.failure_detail ?? null;
           run.failureStage = canceled?.failure_stage ?? null;
         }
+        // The run's terminal event is the truth about how the turn ended, so
+        // repair an assistant row a mid-run writer already stamped `failed`
+        // before this run reached its terminal (issue #159 A). Uses the
+        // `status` argument, never `run.status`: this hook fires before
+        // `finish()` writes the terminal status onto the run. `Date.now()` IS
+        // the run's terminal clock here -- `finish()` (runtimes/runs.ts) calls
+        // this hook, then sets `run.updatedAt = Date.now()`, then emits `end`
+        // with its own `Date.now()` stamp, all in one synchronous block.
+        followRunTerminalOnMessage(db, {
+          assistantMessageId: run.assistantMessageId ?? null,
+          endedAt: Date.now(),
+          status,
+        });
         if (!run.projectId || !run.id) return;
         const record = computeRunUsageRecord({
           requestedRaw: run.modelRequested,
@@ -2858,7 +2871,11 @@ export async function startServer({
     reportLangfuse: reportRunCompletedFromDaemon,
     runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),
   }).then((reconciled) => {
-    if (reconciled.interrupted > 0 || reconciled.messagesReconciled > 0) {
+    if (
+      reconciled.interrupted > 0
+      || reconciled.messagesReconciled > 0
+      || reconciled.messagesFollowedTerminal > 0
+    ) {
       console.warn('[runs] reconciled interrupted run terminals', reconciled);
     }
   }).catch((error) => {
