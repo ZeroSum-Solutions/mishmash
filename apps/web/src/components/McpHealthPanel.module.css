@@ -94,3 +94,21 @@
   background: var(--bg-panel, transparent);
   font-size: 11px;
 }
+
+.repair {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.repairPrompt {
+  margin: 0;
+  word-break: break-word;
+}
+
+.repairActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
