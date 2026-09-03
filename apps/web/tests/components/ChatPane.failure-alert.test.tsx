@@ -12,13 +12,19 @@ import type { AppConfig, ChatMessage } from '../../src/types';
 // The failure alert must name the exact cause, the step that stopped, and
 // whether the user's files changed, for every failure the team daemon reported.
 //
-// Every fixture below carries EXACTLY the persisted `status:error` event that
+// Every fixture below carries the persisted `status:error` event that
 // `apps/daemon/tests/run-failure-alert-facts.test.ts` proves a real daemon
-// writes for that cause — same category, same detail, same stage, same artifact
-// count, resolved there from raw agent output with nothing pre-supplied. This
-// file therefore measures only what this layer owns: which sentence a carried
-// fact becomes, and which messages get an alert at all. The end-to-end chain
-// through a real daemon and the real chat is `e2e/ui/run-failure-alert-causes.test.ts`.
+// writes for that cause: same category, same detail, same stage — each pinned
+// to an exact value there, resolved from raw agent output with nothing
+// pre-supplied. The one field taken from elsewhere is STALL_RUN's
+// `artifactCount: 4`, which is run 63fc304f's own recorded count; the daemon
+// spec proves that field travels for every cause, and this fixture is what
+// exercises the "N files were changed" sentence, which a zero count cannot.
+//
+// This file therefore measures only what this layer owns: which sentence a
+// carried fact becomes, and which messages get an alert at all. The end-to-end
+// chain through a real daemon and the real chat is
+// `e2e/ui/run-failure-alert-causes.test.ts`.
 //
 // The reported runs (`.od/runs/<id>/state.json`) behind the fixtures:
 //
@@ -287,9 +293,11 @@ describe('the failure alert names the exact cause, the step, and the file-change
   it('stays silent about a Stop that follows an earlier failed attempt', () => {
     // A client may reuse one assistant message id across attempts, so an older
     // attempt's classified error can still be sitting on the row when the user
-    // stops the retry. The daemon enriches the last error event with
-    // `user_cancelled` for a Stop, so the alert must read that event and not
-    // the stale one underneath it.
+    // stops the retry. The daemon rewrites the last error event to
+    // `user_cancelled` for a Stop — proved on a real daemon by
+    // run-failure-alert-facts.test.ts, "rewrites an earlier attempt's error
+    // event when the user stops the retry" — so the alert must read that event
+    // and not the stale one underneath it.
     const { container } = renderFailure({
       id: 'stop-after-failed-attempt',
       runStatus: 'canceled',

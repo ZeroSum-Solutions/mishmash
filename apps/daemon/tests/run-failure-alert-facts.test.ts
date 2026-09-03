@@ -182,7 +182,10 @@ describe('a failed or cancelled run carries its cause, step and file-change stat
 
   it('names an inactivity stall as a timeout, from the daemon watchdog itself', async () => {
     binDir = await mkdtemp(path.join(os.tmpdir(), 'od-alert-facts-bin-'));
-    const fakeClaude = await writeSilentClaude(binDir, 'claude-stalls');
+    // Run 63fc304f stalled with a tool in flight ("last agent event:
+    // status:requesting", four files already written), so the fixture stalls the
+    // same way: the step the alert names is the one the agent was in.
+    const fakeClaude = await writeStallingClaude(binDir, 'claude-stalls');
 
     // The real stall is the daemon's own inactivity watchdog ending a turn that
     // stopped emitting. Shortening its window is what makes that reachable in a
@@ -203,11 +206,12 @@ describe('a failed or cancelled run carries its cause, step and file-change stat
     expect(run.status.failureCategory).toBe('timeout');
     expect(run.status.failureDetail).toBe('inactivity_timeout');
     expect(FAILURE_STAGES).toContain(run.status.failureStage);
+    expect(run.status.failureStage).toBe('tool_execution');
 
     const errorEvent = await storedErrorEvent(started.url, projectId, conversationId, run.assistantMessageId);
     expect(errorEvent?.failureCategory).toBe('timeout');
     expect(errorEvent?.failureDetail).toBe('inactivity_timeout');
-    expect(errorEvent?.failureStage).toBe(run.status.failureStage);
+    expect(errorEvent?.failureStage).toBe('tool_execution');
     expect(errorEvent?.artifactCount).toBe(0);
   }, 60_000);
 
@@ -241,6 +245,46 @@ describe('a failed or cancelled run carries its cause, step and file-change stat
       run.assistantMessageId,
     );
     expect(errorEvent).toBeUndefined();
+  }, 60_000);
+
+  it('rewrites an earlier attempt\'s error event when the user stops the retry', async () => {
+    // The consumer predicate (`isUnrequestedCancellation`, apps/web/src/runtime/
+    // design-delivery.ts) reads the LAST error event and admits only
+    // `interrupted`. That is only safe because the daemon rewrites the event a
+    // failed attempt left behind when the user then stops the retry on the same
+    // assistant row — otherwise the stale cause would still be the last word and
+    // the chat would paint a failure over the Stop. This proves that rewrite on
+    // a real daemon; without it the consumer's stop-after-failed-attempt case is
+    // asserting against a shape the daemon never produces.
+    binDir = await mkdtemp(path.join(os.tmpdir(), 'od-alert-facts-bin-'));
+    const fakeClaude = await writeFailThenHangClaude(binDir, 'claude-fail-then-hang');
+    started = await startDaemon({ CLAUDE_BIN: fakeClaude });
+
+    const { projectId, conversationId } = await createConversation(started.url);
+    const assistantMessageId = `assistant_alert_facts_${randomUUID()}`;
+
+    const failed = await waitForRun(
+      started.url,
+      (await startRun(started.url, projectId, conversationId, 'fail this attempt', assistantMessageId)).runId,
+    );
+    expect(failed.status).toBe('failed');
+    const afterFailure = await storedErrorEvent(started.url, projectId, conversationId, assistantMessageId);
+    expect(afterFailure?.failureDetail).toBe('permission_denied');
+
+    // The retry reuses the same assistant row, and the user stops it.
+    const retry = await startRun(started.url, projectId, conversationId, 'hold this attempt open', assistantMessageId);
+    await waitForRunning(started.url, retry.runId);
+    const cancelResponse = await fetch(
+      `${started.url}/api/runs/${encodeURIComponent(retry.runId)}/cancel`,
+      { method: 'POST' },
+    );
+    expect(cancelResponse.status).toBe(200);
+    expect((await waitForRun(started.url, retry.runId)).status).toBe('canceled');
+
+    const afterStop = await storedErrorEvent(started.url, projectId, conversationId, assistantMessageId);
+    expect(afterStop, 'the failed attempt left an error event behind').toBeTruthy();
+    expect(afterStop?.failureDetail).toBe('user_cancelled');
+    expect(afterStop?.failureDetail).not.toBe('permission_denied');
   }, 60_000);
 
   it('names a turn the daemon shutdown ended, on the message as well as the run', async () => {
@@ -360,6 +404,67 @@ setTimeout(() => process.exit(1), 20);
   return bin;
 }
 
+/**
+ * A fake Claude CLI that opens a tool call and then stops emitting, so the
+ * daemon's inactivity watchdog ends the turn while a tool is still in flight.
+ */
+async function writeStallingClaude(dir: string, name: string): Promise<string> {
+  const bin = path.join(dir, name);
+  await writeFile(
+    bin,
+    `#!/usr/bin/env node
+if (process.argv.includes('--version')) { console.log('claude-code 1.0.0-stalls'); process.exit(0); }
+if (process.argv.includes('--help')) { console.log('Usage: claude -p [--include-partial-messages]'); process.exit(0); }
+console.log(JSON.stringify({ type: 'system', subtype: 'init', model: 'claude-stalls' }));
+console.log(JSON.stringify({
+  type: 'assistant',
+  message: { id: 'msg-1', role: 'assistant', content: [{ type: 'tool_use', id: 'tool-1', name: 'Write', input: { file_path: 'index.html', content: '<!doctype html>' } }] },
+}));
+setInterval(() => {}, 1000);
+`,
+    'utf8',
+  );
+  await chmod(bin, 0o755);
+  return bin;
+}
+
+/**
+ * A fake Claude CLI that fails the first turn with the denied-permission output
+ * and then holds the next one open, so one assistant row can carry a failed
+ * attempt followed by a retry the user stops.
+ */
+async function writeFailThenHangClaude(dir: string, name: string): Promise<string> {
+  const bin = path.join(dir, name);
+  await writeFile(
+    bin,
+    `#!/usr/bin/env node
+const MESSAGE = ${JSON.stringify(AGENT_OUTPUT.deniedPermission)};
+if (process.argv.includes('--version')) { console.log('claude-code 1.0.0-fail-then-hang'); process.exit(0); }
+if (process.argv.includes('--help')) { console.log('Usage: claude -p [--include-partial-messages]'); process.exit(0); }
+console.log(JSON.stringify({ type: 'system', subtype: 'init', model: 'claude-fail-then-hang' }));
+let prompt = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => { prompt += chunk; });
+process.stdin.on('end', decide);
+setTimeout(decide, 400);
+let decided = false;
+function decide() {
+  if (decided) return;
+  decided = true;
+  if (prompt.includes('hold this attempt open') || process.argv.join(' ').includes('hold this attempt open')) {
+    setInterval(() => {}, 1000);
+    return;
+  }
+  process.stderr.write(MESSAGE + '\\n');
+  setTimeout(() => process.exit(1), 20);
+}
+`,
+    'utf8',
+  );
+  await chmod(bin, 0o755);
+  return bin;
+}
+
 /** A fake Claude CLI that starts its session and then emits nothing, ever. */
 async function writeSilentClaude(dir: string, name: string): Promise<string> {
   const bin = path.join(dir, name);
@@ -410,8 +515,9 @@ async function startRun(
   projectId: string,
   conversationId: string,
   message: string,
+  reuseAssistantMessageId?: string,
 ): Promise<{ runId: string; assistantMessageId: string }> {
-  const assistantMessageId = `assistant_alert_facts_${randomUUID()}`;
+  const assistantMessageId = reuseAssistantMessageId ?? `assistant_alert_facts_${randomUUID()}`;
   const response = await fetch(`${url}/api/runs`, {
     method: 'POST',
     headers: {
