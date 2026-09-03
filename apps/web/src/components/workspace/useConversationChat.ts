@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { streamViaDaemon } from '../../providers/daemon';
+import { fetchChatRunStatus, streamViaDaemon } from '../../providers/daemon';
 import { listMessages, saveMessage } from '../../state/projects';
 import { appendErrorStatusEvent, runFailureFieldsFromError } from '../../runtime/chat-events';
 import { agentModelDisplayName } from '../../utils/agentLabels';
@@ -14,6 +14,8 @@ import {
 } from '../ProjectView';
 import {
   RUN_FAILURE_RECHECK_DELAY_MS,
+  RUN_FAILURE_RECHECK_INTERVAL_MS,
+  nextInferredRunFailureStep,
   retractsStaleRunFailure,
 } from '../../runtime/run-failure-reconcile';
 import type {
@@ -93,6 +95,10 @@ export function useConversationChat(
   ctxRef.current = ctx;
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
+  // Which conversation this hook currently speaks for, readable from inside an
+  // in-flight re-check whose closure was bound to an earlier one.
+  const conversationRef = useRef(conversationId);
+  conversationRef.current = conversationId;
 
   const abortRef = useRef<AbortController | null>(null);
   const cancelRef = useRef<AbortController | null>(null);
@@ -115,26 +121,47 @@ export function useConversationChat(
    * as one the run reported: a non-OK event-stream response surfaces a plain
    * `daemon <status>` error and no terminal event ever arrives
    * (`consumeDaemonRun` in `providers/daemon.ts`), so `onRunStatus` cannot fire
-   * either. The run usually finishes and the daemon stamps the stored assistant
-   * row with its real terminal, but nothing here would ever read that row.
+   * either. The run usually keeps going and the daemon stamps the stored
+   * assistant row with its real terminal, but nothing here would ever read it.
    *
-   * So ask the conversation once, and apply the answer only when it retracts
-   * the failure on screen — `ChatPane` paints "Task failed" from either carrier,
-   * the failed row or this hook's error slot, so both move together. See
-   * `retractsStaleRunFailure`.
+   * So follow the run until it reports one — `nextInferredRunFailureStep` owns
+   * that rule and what bounds it — then read the conversation and apply it only
+   * when it retracts the failure on screen. `ChatPane` paints "Task failed"
+   * from either carrier, the failed row or this hook's error slot, so both move
+   * together. See `retractsStaleRunFailure`.
    */
-  const scheduleRunFailureRecheck = useCallback(() => {
-    clearFailureRecheck();
-    failureRecheckTimerRef.current = window.setTimeout(() => {
+  const scheduleRunFailureRecheck = useCallback((runId: string | undefined) => {
+    if (!runId) return;
+    const boundConversationId = conversationId;
+    let misses = 0;
+    const attempt = () => {
       failureRecheckTimerRef.current = null;
       void (async () => {
-        const serverMessages = await listMessages(projectId, conversationId).catch(() => null);
+        const latest = await fetchChatRunStatus(runId).catch(() => null);
+        // The read is async, so the tab may have moved to another conversation
+        // while it was in flight. A cleared timer cannot catch that one.
+        if (conversationRef.current !== boundConversationId) return;
+        if (!latest) misses += 1;
+        const step = nextInferredRunFailureStep(latest?.status, misses);
+        if (step === 'stop') return;
+        if (step === 'retry') {
+          failureRecheckTimerRef.current = window.setTimeout(
+            attempt,
+            RUN_FAILURE_RECHECK_INTERVAL_MS,
+          );
+          return;
+        }
+        const serverMessages = await listMessages(projectId, boundConversationId)
+          .catch(() => null);
         if (!serverMessages) return;
+        if (conversationRef.current !== boundConversationId) return;
         if (!retractsStaleRunFailure(messagesRef.current, serverMessages)) return;
         setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
         setError(null);
       })();
-    }, RUN_FAILURE_RECHECK_DELAY_MS);
+    };
+    clearFailureRecheck();
+    failureRecheckTimerRef.current = window.setTimeout(attempt, RUN_FAILURE_RECHECK_DELAY_MS);
   }, [clearFailureRecheck, conversationId, projectId]);
 
   // Load the conversation's persisted messages on mount / conversation switch.
@@ -264,6 +291,11 @@ export function useConversationChat(
       });
       textBufferRef.current = textBuffer;
 
+      // The run this send created, once the daemon has named it. A failure the
+      // pane only inferred is re-checked against this run, so a send that never
+      // reached `onRunCreated` has nothing to follow.
+      let currentRunId: string | undefined;
+
       const clearRefs = () => {
         if (abortRef.current === controller) abortRef.current = null;
         if (cancelRef.current === cancelController) cancelRef.current = null;
@@ -318,7 +350,7 @@ export function useConversationChat(
             return next;
           });
           clearRefs();
-          scheduleRunFailureRecheck();
+          scheduleRunFailureRecheck(currentRunId);
         },
       };
 
@@ -342,6 +374,7 @@ export function useConversationChat(
         locale: loc,
         sessionMode,
         onRunCreated: (runId) => {
+          currentRunId = runId;
           updateAssistant(assistantId, (prev) => ({
             ...prev,
             runId,

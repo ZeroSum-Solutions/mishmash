@@ -12,6 +12,11 @@ const LOAD_COUNTER_KEY = 'od-e2e-document-loads';
 // (`e2e/lib/fake-agents.ts`), so the run reaches `succeeded` on its own while
 // this spec holds the client's event stream open at the transport.
 const RUN_PROMPT = 'Create a delayed deterministic smoke artifact';
+// What the fake runtime answers that prompt with (`e2e/lib/fake-agents.ts`).
+// Asserted after the retraction so a build that merely drops the alert — leaving
+// a permanently running, content-less row — cannot pass as a build that
+// retracted the failure.
+const RUN_ANSWER = 'I recovered the delayed reasoning path';
 
 let fakeRuntimes: Awaited<ReturnType<typeof createFakeAgentRuntimes>>;
 
@@ -24,8 +29,11 @@ test.beforeEach(async ({ page }) => {
   await resetDaemonAppConfig(page);
   // Counts documents, not navigations, and survives them: each load bumps a
   // sessionStorage tally, so the assertions below can prove the alert left the
-  // DOM of the SAME document that painted it.
+  // DOM of the SAME document that painted it. Top-level documents only —
+  // `addInitScript` also runs in the artifact preview iframe, which shares this
+  // origin's sessionStorage and would otherwise read as a page reload.
   await page.addInitScript((key) => {
+    if (window.top !== window.self) return;
     const previous = Number(window.sessionStorage.getItem(key) ?? '0');
     window.sessionStorage.setItem(key, String((Number.isFinite(previous) ? previous : 0) + 1));
   }, LOAD_COUNTER_KEY);
@@ -64,17 +72,16 @@ test.afterEach(async ({ page }) => {
 //
 // Ordering is forced at the transport, not faked in state, exactly as the
 // sibling spec does it:
-//   1. the run's event stream is HELD until the daemon's own /api/runs/:id
-//      record reports `succeeded` — so the terminal is already authoritative,
-//      and the stored row already carries it, before the client sees any
-//      transport failure;
-//   2. only then is the stream answered 503, which is what makes the client
-//      paint the alert for a turn that succeeded. Every later request for that
-//      same stream is answered 503 too, so nothing recovers by reattaching:
-//      the conversation re-check is the only route left;
-//   3. the client's own post-error conversation read is HELD until this spec
-//      has observed the alert on screen, because on a fixed build the alert's
-//      whole life is the ~150ms between those two events.
+//   1. the run's event stream is answered 503 the moment the client OPENS it,
+//      which is when this fails in the wild — at the start of a turn that then
+//      runs on for seconds or minutes. The client paints the alert while the
+//      run is still going, so a pane that looked once and gave up would leave
+//      it there for the whole run;
+//   2. every later request for that same stream is answered 503 too, so nothing
+//      recovers by reattaching: following the run is the only route left;
+//   3. the client's own conversation read — which it makes only once the run
+//      reports a terminal — is HELD until this spec has observed the alert on
+//      screen, so the assertion is never a race with the retraction.
 // Nothing writes message state from the test: the failed row is the client's
 // own production PUT, and the daemon's write-side hold
 // (`holdTerminalRunStatusOnMessageWrite`) is what keeps the stored row on its
@@ -98,6 +105,10 @@ test('[P0] a non-ok live event stream leaves no failure alert once the run reach
     .toBeVisible({ timeout: 120_000 });
   await expect(failureAlert).toContainText('Task failed');
 
+  // The alert is already on screen while the run is still going. Let the run
+  // finish under it; that is the state the client has to notice on its own.
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+
   // Preconditions for the assertion below, asserted separately so a failure
   // names its own cause: the run really did succeed, the stored row really is
   // on that terminal, and the alert is up in the document about to receive it.
@@ -115,6 +126,12 @@ test('[P0] a non-ok live event stream leaves no failure alert once the run reach
   // for itself.
   await expect(failureAlert, 'the retracted run failure must leave the DOM')
     .toHaveCount(0, { timeout: T.long });
+  // The pane must land on the turn the run actually delivered, not on a blank
+  // row that merely stopped saying "failed".
+  await expect(
+    page.getByText(RUN_ANSWER).first(),
+    'the retracted turn must show the answer the run delivered',
+  ).toBeVisible({ timeout: T.long });
   expect(await documentLoadCount(page), 'the alert must clear without a page reload').toBe(documentLoads);
   expect(await storedAssistantRunStatus(page, projectId, conversationId)).toBe('succeeded');
 });
@@ -148,6 +165,8 @@ test('[P0] a non-ok Side Chat event stream leaves no failure alert once the run 
     .toBeVisible({ timeout: 120_000 });
   await expect(failureAlert).toContainText('Task failed');
 
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+
   expect(await daemonRunStatus(page, runId), 'precondition: the run must have succeeded').toBe('succeeded');
   expect(
     await storedAssistantRunStatus(page, projectId, sideConversationId),
@@ -159,6 +178,10 @@ test('[P0] a non-ok Side Chat event stream leaves no failure alert once the run 
 
   await expect(failureAlert, 'the retracted Side Chat run failure must leave the DOM')
     .toHaveCount(0, { timeout: T.long });
+  await expect(
+    sideChat.getByText(RUN_ANSWER).first(),
+    'the retracted Side Chat turn must show the answer the run delivered',
+  ).toBeVisible({ timeout: T.long });
   expect(await documentLoadCount(page), 'the alert must clear without a page reload').toBe(documentLoads);
   expect(await storedAssistantRunStatus(page, projectId, sideConversationId)).toBe('succeeded');
 });
@@ -171,11 +194,10 @@ interface RunEventStreamHold {
 }
 
 /**
- * Answer the held run's event stream 503 — but only after the daemon's own run
- * record says `succeeded`, so the client is refusing a stream for a turn that
- * already has an authoritative terminal. Later requests for the same stream are
- * refused immediately, so no reattach can recover what the conversation
- * re-check is supposed to.
+ * Answer the held run's event stream 503, starting with the very first request —
+ * the client's own live stream, opened the moment the run is created and long
+ * before the run finishes. Later requests for the same stream are refused too,
+ * so no reattach can recover what following the run is supposed to.
  *
  * Armed BEFORE the send, not after the create-run response, because the client
  * opens the stream the moment that response lands.
@@ -192,9 +214,7 @@ function holdRunEventStream(page: Page): RunEventStreamHold {
         await route.continue();
         return;
       }
-      const runId = heldRunId ?? requestedRunId;
-      heldRunId = runId;
-      if (!failed) await waitForDaemonRunStatus(page, runId, 'succeeded');
+      heldRunId = heldRunId ?? requestedRunId;
       failed = true;
       await route.fulfill({ status: 503, body: '' });
     },

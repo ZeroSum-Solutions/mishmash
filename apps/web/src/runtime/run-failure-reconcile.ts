@@ -1,3 +1,4 @@
+import type { ChatRunStatus } from '@open-design/contracts';
 import type { ChatMessage } from '../types';
 import { isRetryableAssistantTerminalFailure } from './design-delivery';
 
@@ -6,8 +7,8 @@ function isFailedAssistantRow(message: ChatMessage): boolean {
 }
 
 /**
- * How long a pane waits before asking the conversation whether the run
- * retracted a failure the pane only INFERRED from a dead stream.
+ * How long a pane waits before its FIRST re-check of a failure it only
+ * INFERRED from a dead stream.
  *
  * The pane's own save of the failed row is still in flight at that moment, and
  * the daemon holds a stored terminal against it
@@ -17,6 +18,43 @@ function isFailedAssistantRow(message: ChatMessage): boolean {
  * terminals a client does receive.
  */
 export const RUN_FAILURE_RECHECK_DELAY_MS = 150;
+
+/** Spacing between later re-checks; matches the generic-disconnect backoff. */
+export const RUN_FAILURE_RECHECK_INTERVAL_MS = 3000;
+
+/** How many status probes may return nothing before the pane gives up. */
+export const RUN_FAILURE_RECHECK_MAX_MISSES = 3;
+
+export type InferredRunFailureStep = 'retract' | 'retry' | 'stop';
+
+/**
+ * What a pane does next with a failure it inferred, given the run's own status.
+ *
+ * The failure is inferred, not reported: the event stream answered non-OK, so
+ * the pane never saw a terminal and wrote `failed` on a guess. The run itself is
+ * usually still going at that moment — a stream that fails when it OPENS fails
+ * at the start of a turn that then runs for seconds or minutes — so a single
+ * look decides nothing. The pane follows the run instead, and the run is what
+ * bounds it:
+ *
+ *  - a non-failed terminal is the retraction: read the conversation and let
+ *    `retractsStaleRunFailure` judge the rows the daemon settled on;
+ *  - `failed` agrees with the row on screen, so the pane stops at once and the
+ *    alert stays. A genuinely failed run is never re-queried;
+ *  - `queued` / `running` means the answer has not arrived yet — keep following;
+ *  - a probe that returns nothing is a miss, not an answer. A few are tolerated
+ *    (`RUN_FAILURE_RECHECK_MAX_MISSES`) so a hiccup does not end the recovery,
+ *    and then the pane stops rather than polling a daemon that cannot answer.
+ */
+export function nextInferredRunFailureStep(
+  status: ChatRunStatus | null | undefined,
+  misses: number,
+): InferredRunFailureStep {
+  if (status === 'succeeded' || status === 'canceled') return 'retract';
+  if (status === 'failed') return 'stop';
+  if (status === 'queued' || status === 'running') return 'retry';
+  return misses < RUN_FAILURE_RECHECK_MAX_MISSES ? 'retry' : 'stop';
+}
 
 /**
  * A mounted chat client may not keep showing a failure the run itself retracted.
@@ -48,10 +86,12 @@ export const RUN_FAILURE_RECHECK_DELAY_MS = 150;
  * `daemon <status>` error and returns (`providers/daemon.ts`), so no terminal
  * event ever arrives and no handler above can fire. The live send loop then
  * seals the run without a refresh, and Side Chat has no refresh at all. Both
- * ask the conversation once instead, after `RUN_FAILURE_RECHECK_DELAY_MS`, and
- * apply the answer only when `retractsStaleRunFailure` says it retracts the
- * failure on screen — see `reconcileInferredRunFailure` in `ProjectView.tsx`
- * and `scheduleRunFailureRecheck` in `workspace/useConversationChat.ts`.
+ * follow the run itself instead — see `nextInferredRunFailureStep` below for
+ * the rule and what bounds it — and read the conversation only once the run
+ * reports a non-failed terminal, applying it when `retractsStaleRunFailure`
+ * says it retracts the failure on screen. The call sites are
+ * `reconcileInferredRunFailure` in `ProjectView.tsx` and
+ * `scheduleRunFailureRecheck` in `workspace/useConversationChat.ts`.
  *
  * What this does NOT promise: the pane's error string is a single slot shared
  * with errors no row raised (a conversation-load failure, an audio error). One

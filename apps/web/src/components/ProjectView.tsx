@@ -119,6 +119,8 @@ import {
 } from '../runtime/design-delivery';
 import {
   RUN_FAILURE_RECHECK_DELAY_MS,
+  RUN_FAILURE_RECHECK_INTERVAL_MS,
+  nextInferredRunFailureStep,
   retractsRunFailure,
   retractsStaleRunFailure,
 } from '../runtime/run-failure-reconcile';
@@ -3150,12 +3152,13 @@ export function ProjectView({
   // A terminal this client only INFERRED is not a verdict on the run. When the
   // run's event stream answers non-OK, no terminal event ever arrives, so none
   // of the handlers that reconcile a failure can fire — the live `onError`
-  // seals the run instead. The run itself usually finishes, and the daemon
-  // stamps the stored assistant row with its real terminal.
+  // seals the run instead. The run itself usually keeps going, and the daemon
+  // stamps the stored assistant row with its real terminal when it ends.
   //
-  // So ask the conversation once, and apply the answer only when it retracts
-  // the failure this pane is painting: a snapshot that agrees the turn failed
-  // changes nothing. One read per inferred terminal, never a poll.
+  // So follow the run until it reports one. `nextInferredRunFailureStep` owns
+  // when to retract, when to keep following and when to stop; the conversation
+  // is read only on a non-failed terminal, and applied only when it retracts
+  // the failure this pane is painting.
   const reconcileInferredRunFailure = useCallback(
     async (conversationId: string) => {
       if (messagesConversationIdRef.current !== conversationId) return;
@@ -3175,10 +3178,24 @@ export function ProjectView({
   );
 
   const scheduleInferredRunFailureRecheck = useCallback(
-    (conversationId: string) => {
-      scheduleProjectTimeout(() => {
-        void reconcileInferredRunFailure(conversationId);
-      }, RUN_FAILURE_RECHECK_DELAY_MS);
+    (conversationId: string, runId: string) => {
+      let misses = 0;
+      const attempt = () => {
+        if (messagesConversationIdRef.current !== conversationId) return;
+        void (async () => {
+          const latest = await fetchChatRunStatus(runId).catch(() => null);
+          if (messagesConversationIdRef.current !== conversationId) return;
+          if (!latest) misses += 1;
+          const step = nextInferredRunFailureStep(latest?.status, misses);
+          if (step === 'stop') return;
+          if (step === 'retry') {
+            scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_INTERVAL_MS);
+            return;
+          }
+          await reconcileInferredRunFailure(conversationId);
+        })();
+      };
+      scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_DELAY_MS);
     },
     [reconcileInferredRunFailure, scheduleProjectTimeout],
   );
@@ -5886,7 +5903,7 @@ export function ProjectView({
           } else if (runMayFinalize && currentRunId && !isGenericDaemonDisconnect(err)) {
             // The branch above sealed this run without ever seeing its
             // terminal — the stream failed rather than reporting a verdict.
-            scheduleInferredRunFailureRecheck(runConversationId);
+            scheduleInferredRunFailureRecheck(runConversationId, currentRunId);
           }
           void refreshProjectFiles();
           clearTraceTouchedFilePaths();
