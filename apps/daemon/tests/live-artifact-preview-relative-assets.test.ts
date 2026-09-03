@@ -61,6 +61,10 @@ const PROJECT_ID = 'w24-relative-assets';
 const RELATIVE_REF = 'assets/pic.png';
 const DISK_PAGE = 'agent-written.html';
 const PAGE_HTML = `<!doctype html><html><body><img src="${RELATIVE_REF}" alt="shot"></body></html>`;
+// The same page, plus a `<base>` of its own written before `<html>`. The parser
+// hoists that tag into the head ahead of anything inside it, so a document in
+// this shape is the one place the page could take the resolution root back.
+const REBASING_PAGE_HTML = `<base href="/evil/"><html><body><img src="${RELATIVE_REF}" alt="shot"></body></html>`;
 const ASSET_BYTES = 'fake-png-bytes';
 
 /**
@@ -80,6 +84,7 @@ describe('relative asset resolution across the two page-creation paths', () => {
   let tempRoot: string;
   let projectsDir: string;
   let artifactId: string;
+  let rebasingArtifactId: string;
 
   beforeAll(async () => {
     tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w24-relative-assets-'));
@@ -110,6 +115,25 @@ describe('relative asset resolution across the two page-creation paths', () => {
       templateHtml: PAGE_HTML,
     });
     artifactId = created.artifact.id;
+
+    const rebasing = await createLiveArtifact({
+      projectsRoot: projectsDir,
+      projectId: PROJECT_ID,
+      input: {
+        title: 'Headshot drafts, self-rebasing',
+        slug: 'headshot-drafts-rebasing',
+        preview: { type: 'html', entry: 'index.html' },
+        document: {
+          format: 'html_template_v1',
+          templatePath: 'template.html',
+          generatedPreviewPath: 'index.html',
+          dataPath: 'data.json',
+          dataJson: {},
+        },
+      },
+      templateHtml: REBASING_PAGE_HTML,
+    });
+    rebasingArtifactId = rebasing.artifact.id;
 
     const daemonPaths = {
       ARTIFACTS_DIR: path.join(tempRoot, 'artifacts'),
@@ -276,6 +300,24 @@ describe('relative asset resolution across the two page-creation paths', () => {
     const asset = await fetch(resolved);
     expect(asset.status).toBe(200);
     expect(asset.headers.get('content-type')).toMatch(/^image\/png/);
+    expect(await asset.text()).toBe(ASSET_BYTES);
+  });
+
+  it('keeps the project raw base over one the artifact declares before <html>', async () => {
+    const previewUrl = `${baseUrl}/api/live-artifacts/${encodeURIComponent(rebasingArtifactId)}/preview?projectId=${encodeURIComponent(PROJECT_ID)}`;
+    const response = await fetch(previewUrl);
+    expect(response.status).toBe(200);
+    const previewHtml = await response.text();
+    expect(previewHtml).not.toContain('/evil/');
+
+    const resolved = new URL(RELATIVE_REF, assetBaseUrl(previewUrl, previewHtml));
+
+    expect(resolved.pathname).toBe(
+      `/api/projects/${encodeURIComponent(PROJECT_ID)}/raw/${RELATIVE_REF}`,
+    );
+
+    const asset = await fetch(resolved);
+    expect(asset.status).toBe(200);
     expect(await asset.text()).toBe(ASSET_BYTES);
   });
 

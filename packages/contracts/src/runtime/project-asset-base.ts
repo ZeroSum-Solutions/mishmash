@@ -57,19 +57,46 @@ function maskComments(html: string): string {
 }
 
 /**
+ * Insert `tag` at `at`, dropping any `<base>` the document wrote ahead of it.
+ *
+ * A base written before the insertion point does not stay where the author put
+ * it: the parser hoists a `<base>` that precedes `<head>` — that precedes
+ * `<html>`, even — into the head it creates, ahead of everything inside it.
+ * Since the document resolves against the first base in TREE order, leaving
+ * such a tag in place would hand the page back the rebasing this function
+ * exists to take over. Dropping it is what makes the injected base decisive for
+ * every document shape rather than only for a base written inside the head.
+ *
+ * Matching runs on the comment-masked copy, so a `<base>` inside a comment —
+ * inert already — is left where the author wrote it.
+ */
+function insertBaseTag(html: string, searchable: string, at: number, tag: string): string {
+  const prefix = searchable.slice(0, at);
+  const hoistable = /<base\b[^>]*>/gi;
+  let kept = '';
+  let cursor = 0;
+  for (let found = hoistable.exec(prefix); found !== null; found = hoistable.exec(prefix)) {
+    kept += html.slice(cursor, found.index);
+    cursor = found.index + found[0].length;
+  }
+  return `${kept}${html.slice(cursor, at)}${tag}${html.slice(at)}`;
+}
+
+/**
  * State the base inside the document, for a preview whose serving URL cannot.
  *
- * The tag goes first in the real `<head>`, so it is the document's effective
- * base even when the page carries one of its own: only the first `<base href>`
- * in a document takes effect. Overriding is the intended behaviour here — a
- * page served off its project's raw route cannot know a base that resolves to
- * project files, so its own would name nothing either. The insertion point is
- * found on a comment-masked copy so a commented-out `<head>` cannot capture the
- * tag and leave the page's own base in charge.
+ * The tag goes first in the real `<head>` and any base the page declared ahead
+ * of that point is dropped, so the injected base is the one the document
+ * resolves against whatever shape the page has (see `insertBaseTag`).
+ * Overriding is the intended behaviour here — a page served off its project's
+ * raw route cannot know a base that resolves to project files, so its own would
+ * name nothing either. The insertion point is found on a comment-masked copy so
+ * a commented-out `<head>` cannot capture the tag and leave the page's own base
+ * in charge.
  *
  * A stray `<!--` inside script text can mask past the real head; insertion then
- * falls back to just after `<html>`, which is still the first base in parse
- * order and so still the one that wins.
+ * falls back to just after `<html>`, which is still ahead of every base the
+ * page declares later and drops every one it declared earlier.
  *
  * The response carrying this document must allow the base under its `base-uri`
  * directive, or the browser drops the tag and the refs stay broken.
@@ -79,13 +106,13 @@ export function withProjectAssetBaseHref(html: string, baseHref: string): string
   const searchable = maskComments(html);
   const head = /<head[^>]*>/i.exec(searchable);
   if (head) {
-    const at = head.index + head[0].length;
-    return `${html.slice(0, at)}${tag}${html.slice(at)}`;
+    return insertBaseTag(html, searchable, head.index + head[0].length, tag);
   }
   const root = /<html[^>]*>/i.exec(searchable);
   if (root) {
-    const at = root.index + root[0].length;
-    return `${html.slice(0, at)}<head>${tag}</head>${html.slice(at)}`;
+    return insertBaseTag(html, searchable, root.index + root[0].length, `<head>${tag}</head>`);
   }
+  // Nothing precedes the tag here, so a base the fragment declares is already
+  // behind it in tree order and inert.
   return `${tag}${html}`;
 }

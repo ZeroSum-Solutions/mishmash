@@ -47,6 +47,26 @@ describe('withProjectAssetBaseHref', () => {
     expect(out.indexOf('/api/projects/p1/raw/')).toBeLessThan(out.indexOf('/elsewhere/'));
   });
 
+  it('drops a base the document declares ahead of the insertion point', () => {
+    // The parser hoists this one into the head it creates, ahead of the
+    // injected tag, so leaving it in place would let the page rebase itself.
+    expect(
+      withProjectAssetBaseHref('<base href="/evil/"><html><head><title>t</title></head></html>', '/api/projects/p1/raw/'),
+    ).toBe('<html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>');
+  });
+
+  it('drops a hoisted base when the document has no head of its own', () => {
+    expect(
+      withProjectAssetBaseHref('<!doctype html><base href="/evil/"><html><body>hi</body></html>', '/api/projects/p1/raw/'),
+    ).toBe('<!doctype html><html><head><base href="/api/projects/p1/raw/"></head><body>hi</body></html>');
+  });
+
+  it('leaves a commented-out base ahead of the head alone', () => {
+    expect(
+      withProjectAssetBaseHref('<!-- <base href="/evil/"> --><html><head></head></html>', '/api/projects/p1/raw/'),
+    ).toBe('<!-- <base href="/evil/"> --><html><head><base href="/api/projects/p1/raw/"></head></html>');
+  });
+
   it('adds a head when the document has none', () => {
     expect(withProjectAssetBaseHref('<html><body>hi</body></html>', '/api/projects/p1/raw/')).toBe(
       '<html><head><base href="/api/projects/p1/raw/"></head><body>hi</body></html>',
