@@ -13,6 +13,7 @@ const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'canceled']);
 const RESTART_ERROR_CODE = 'DAEMON_RESTARTED';
 const RESTART_ERROR_MESSAGE = 'Run interrupted because the daemon restarted.';
 const RECONCILED_STATUS_MESSAGE = 'Run terminal state reconciled after daemon restart.';
+const FOLLOWED_TERMINAL_STATUS_MESSAGE = 'Message reconciled to the run terminal event.';
 
 interface AnalyticsRecovery {
   context: Record<string, unknown>;
@@ -76,8 +77,107 @@ export interface RunTerminalReconciliationResult {
   scanned: number;
   interrupted: number;
   messagesReconciled: number;
+  messagesFollowedTerminal: number;
   analyticsReplayed: number;
   langfuseReplayed: number;
+}
+
+/**
+ * An assistant message row must follow the terminal event of the run it
+ * belongs to. A row may not stay `failed` beside a run that did not fail.
+ *
+ * Two writers stamp `failed` onto a row without knowing whether the run is
+ * still alive: `reconcileMessages()` below, which fails every `queued` /
+ * `running` row it finds at daemon startup, and a chat client whose SSE stream
+ * dropped. Neither revisits the row — the startup pass only ever selects
+ * `queued` / `running` — so a run that goes on to succeed leaves a row the
+ * chat renders as "Task failed" for a turn that finished and wrote files
+ * (issue #159 A).
+ *
+ * This is the single writer that restores the invariant, and it is the only
+ * one that needs to be: a `failed` row is only ever repaired towards the run's
+ * own terminal status, never away from it. It deliberately does NOT act when
+ * the run itself failed — a genuine failure needs no repair, and the existing
+ * failure-persistence paths own that row. Repairing only a disagreement makes
+ * it idempotent, which is what lets the startup backfill re-run on every boot.
+ * `endedAt` is rewritten rather than preserved because the row's current value
+ * came from the same wrong write this call is correcting.
+ *
+ * Called once from the run service's terminal hook (`server.ts`), so a live
+ * run repairs its own row the moment it ends, and once per stranded row from
+ * `followRunTerminalOnStuckMessages()` below.
+ *
+ * Returns whether the row was repaired.
+ */
+export function followRunTerminalOnMessage(
+  db: Database.Database,
+  args: { assistantMessageId: string | null | undefined; endedAt: number; status: string },
+): boolean {
+  const { assistantMessageId, endedAt, status } = args;
+  if (!assistantMessageId) return false;
+  if (!TERMINAL_STATUSES.has(status) || status === 'failed') return false;
+  let changes = 0;
+  try {
+    changes = db.prepare(
+      `UPDATE messages
+          SET run_status = ?, ended_at = ?
+        WHERE id = ?
+          AND role = 'assistant'
+          AND run_status = 'failed'`,
+    ).run(status, endedAt, assistantMessageId).changes;
+  } catch {
+    return false;
+  }
+  if (changes < 1) return false;
+  appendMessageStatusEvent(db, assistantMessageId, {
+    label: status,
+    detail: FOLLOWED_TERMINAL_STATUS_MESSAGE,
+  });
+  return true;
+}
+
+/**
+ * Backfill for rows stranded before the terminal hook above existed: assistant
+ * rows still `failed` with EMPTY content whose run's durable state carries a
+ * non-failed terminal status. Idempotent, so it can run on every daemon boot.
+ *
+ * The empty-content narrowing is what separates this pass from the live hook.
+ * At terminal time the hook knows the row's `failed` predates the run's
+ * terminal event, so the row is provably stale whatever it holds. Reading
+ * history, that ordering is unrecoverable — so this pass only touches rows
+ * that carry no answer body at all, and never rewrites a stored error the user
+ * may still be reading. Returns how many rows it repaired.
+ */
+function followRunTerminalOnStuckMessages(
+  db: Database.Database,
+  statesByRunId: Map<string, DurableRunState>,
+): number {
+  let rows: Array<{ id: string; runId: string }> = [];
+  try {
+    rows = db.prepare(
+      `SELECT id, run_id AS runId
+         FROM messages
+        WHERE role = 'assistant'
+          AND run_status = 'failed'
+          AND run_id IS NOT NULL
+          AND TRIM(COALESCE(content, '')) = ''`,
+    ).all() as Array<{ id: string; runId: string }>;
+  } catch {
+    return 0;
+  }
+  let repaired = 0;
+  for (const row of rows) {
+    const state = statesByRunId.get(row.runId);
+    if (!state) continue;
+    if (followRunTerminalOnMessage(db, {
+      assistantMessageId: row.id,
+      endedAt: state.updatedAt,
+      status: state.status,
+    })) {
+      repaired += 1;
+    }
+  }
+  return repaired;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -199,6 +299,7 @@ export async function reconcileDurableRunTerminals(
     scanned: 0,
     interrupted: 0,
     messagesReconciled: 0,
+    messagesFollowedTerminal: 0,
     analyticsReplayed: 0,
     langfuseReplayed: 0,
   };
@@ -234,6 +335,7 @@ export async function reconcileDurableRunTerminals(
 
   const statesByRunId = new Map(states.map((entry) => [entry.state.id, entry.state]));
   result.messagesReconciled = reconcileMessages(options.db, statesByRunId, now);
+  result.messagesFollowedTerminal = followRunTerminalOnStuckMessages(options.db, statesByRunId);
 
   for (const entry of states) {
     const { state } = entry;

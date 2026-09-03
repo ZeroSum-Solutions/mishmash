@@ -411,7 +411,7 @@ import {
   snapshotAiHtmlVersionsForRun,
 } from './run-html-version-snapshots.js';
 import { reportRunCompletedFromDaemon } from './langfuse-bridge.js';
-import { reconcileDurableRunTerminals } from './runtimes/run-terminal-reconciliation.js';
+import { followRunTerminalOnMessage, reconcileDurableRunTerminals } from './runtimes/run-terminal-reconciliation.js';
 import { buildPromptStackTelemetry } from './prompt-telemetry.js';
 import { readAnalyticsContext } from './analytics.js';
 import {
@@ -2757,7 +2757,17 @@ export async function startServer({
       // (SSE shape) and the routing-truth fields set during the spawn --
       // persisted durably so a project's cost total survives a daemon
       // restart and does not depend on the in-memory run surviving its TTL.
-      onRunFinished: (run) => {
+      onRunFinished: (run, status) => {
+        // The run's terminal event is the truth about how the turn ended, so
+        // repair an assistant row a mid-run writer already stamped `failed`
+        // before this run reached its terminal (issue #159 A). Uses the
+        // `status` argument, never `run.status`: this hook fires before
+        // `finish()` writes the terminal status onto the run.
+        followRunTerminalOnMessage(db, {
+          assistantMessageId: run.assistantMessageId ?? null,
+          endedAt: Date.now(),
+          status,
+        });
         if (!run.projectId || !run.id) return;
         const record = computeRunUsageRecord({
           requestedRaw: run.modelRequested,
@@ -2833,7 +2843,11 @@ export async function startServer({
     reportLangfuse: reportRunCompletedFromDaemon,
     runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),
   }).then((reconciled) => {
-    if (reconciled.interrupted > 0 || reconciled.messagesReconciled > 0) {
+    if (
+      reconciled.interrupted > 0
+      || reconciled.messagesReconciled > 0
+      || reconciled.messagesFollowedTerminal > 0
+    ) {
       console.warn('[runs] reconciled interrupted run terminals', reconciled);
     }
   }).catch((error) => {

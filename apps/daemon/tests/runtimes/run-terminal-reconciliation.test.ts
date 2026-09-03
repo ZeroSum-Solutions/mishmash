@@ -5,7 +5,10 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { reconcileDurableRunTerminals } from '../../src/runtimes/run-terminal-reconciliation.js';
+import {
+  followRunTerminalOnMessage,
+  reconcileDurableRunTerminals,
+} from '../../src/runtimes/run-terminal-reconciliation.js';
 
 describe('durable run terminal reconciliation', () => {
   let tmpDir: string;
@@ -17,6 +20,8 @@ describe('durable run terminal reconciliation', () => {
     db.exec(`
       CREATE TABLE messages (
         id TEXT PRIMARY KEY,
+        role TEXT,
+        content TEXT,
         run_id TEXT,
         run_status TEXT,
         ended_at INTEGER,
@@ -311,5 +316,131 @@ describe('durable run terminal reconciliation', () => {
     expect(reportLangfuse).toHaveBeenCalledTimes(2);
     expect(JSON.parse(fs.readFileSync(path.join(runDir, 'state.json'), 'utf8')))
       .not.toHaveProperty('langfuseCompletedAt');
+  });
+  describe('assistant rows follow the run terminal event (issue #159 A)', () => {
+    function writeTerminalState(runId: string, status: string, updatedAt: number): void {
+      const runDir = path.join(tmpDir, runId);
+      fs.mkdirSync(runDir, { recursive: true });
+      fs.writeFileSync(path.join(runDir, 'state.json'), JSON.stringify({
+        schemaVersion: 1,
+        id: runId,
+        projectId: 'p1',
+        conversationId: 'c1',
+        assistantMessageId: `m-${runId}`,
+        agentId: 'claude',
+        status,
+        createdAt: 1_000,
+        updatedAt,
+        langfuseCompletedAt: updatedAt,
+      }));
+    }
+
+    function insertStuckRow(messageId: string, runId: string, content = ''): void {
+      db.prepare(
+        `INSERT INTO messages (id, role, content, run_id, run_status, ended_at, events_json)
+         VALUES (?, 'assistant', ?, ?, 'failed', 2000, ?)`,
+      ).run(
+        messageId,
+        content,
+        runId,
+        JSON.stringify([
+          { kind: 'status', label: 'starting', detail: 'antigravity' },
+          { kind: 'status', label: 'error', detail: 'Run interrupted because the daemon restarted.' },
+        ]),
+      );
+    }
+
+    function readRow(messageId: string): { status: string; endedAt: number; eventsJson: string } {
+      return db.prepare(
+        `SELECT run_status AS status, ended_at AS endedAt, events_json AS eventsJson
+           FROM messages WHERE id = ?`,
+      ).get(messageId) as { status: string; endedAt: number; eventsJson: string };
+    }
+
+    it('backfills a row left failed with empty content beside a succeeded run, idempotently', async () => {
+      writeTerminalState('run-succeeded', 'succeeded', 9_000);
+      insertStuckRow('m-run-succeeded', 'run-succeeded');
+      const options = {
+        analytics: { capture: vi.fn() },
+        appVersion: '0.15.1',
+        db,
+        reportLangfuse: vi.fn(async () => ({ langfuse_expected: false })),
+        runsLogDir: tmpDir,
+      };
+
+      const first = await reconcileDurableRunTerminals(options);
+      expect(first.messagesFollowedTerminal).toBe(1);
+      const repaired = readRow('m-run-succeeded');
+      expect(repaired.status).toBe('succeeded');
+      expect(repaired.endedAt).toBe(9_000);
+      expect(repaired.eventsJson).toContain('Message reconciled to the run terminal event.');
+
+      const second = await reconcileDurableRunTerminals(options);
+      expect(second.messagesFollowedTerminal).toBe(0);
+      expect(readRow('m-run-succeeded').status).toBe('succeeded');
+    });
+
+    it('leaves a genuinely failed run and a failed row carrying content alone', async () => {
+      writeTerminalState('run-really-failed', 'failed', 9_000);
+      insertStuckRow('m-run-really-failed', 'run-really-failed');
+      writeTerminalState('run-with-body', 'succeeded', 9_000);
+      insertStuckRow('m-run-with-body', 'run-with-body', 'The agent could not reach the provider.');
+
+      const result = await reconcileDurableRunTerminals({
+        analytics: { capture: vi.fn() },
+        appVersion: '0.15.1',
+        db,
+        reportLangfuse: vi.fn(async () => ({ langfuse_expected: false })),
+        runsLogDir: tmpDir,
+      });
+
+      expect(result.messagesFollowedTerminal).toBe(0);
+      expect(readRow('m-run-really-failed').status).toBe('failed');
+      expect(readRow('m-run-with-body').status).toBe('failed');
+    });
+
+    it('repairs the row from the run terminal hook without waiting for a restart', () => {
+      insertStuckRow('m-live', 'run-live');
+
+      expect(followRunTerminalOnMessage(db, {
+        assistantMessageId: 'm-live',
+        endedAt: 7_000,
+        status: 'succeeded',
+      })).toBe(true);
+      const repaired = readRow('m-live');
+      expect(repaired.status).toBe('succeeded');
+      expect(repaired.endedAt).toBe(7_000);
+
+      expect(followRunTerminalOnMessage(db, {
+        assistantMessageId: 'm-live',
+        endedAt: 8_000,
+        status: 'succeeded',
+      })).toBe(false);
+      expect(readRow('m-live').endedAt).toBe(7_000);
+    });
+
+    it('repairs a failed row that already streamed content, because the terminal event is later', () => {
+      insertStuckRow('m-live-content', 'run-live-content', 'Partial answer streamed before the row was failed.');
+
+      expect(followRunTerminalOnMessage(db, {
+        assistantMessageId: 'm-live-content',
+        endedAt: 7_000,
+        status: 'succeeded',
+      })).toBe(true);
+      expect(readRow('m-live-content').status).toBe('succeeded');
+    });
+
+    it('never rewrites a row for a non-terminal or failed run status', () => {
+      insertStuckRow('m-guard', 'run-guard');
+
+      for (const status of ['running', 'queued', 'failed']) {
+        expect(followRunTerminalOnMessage(db, {
+          assistantMessageId: 'm-guard',
+          endedAt: 7_000,
+          status,
+        })).toBe(false);
+      }
+      expect(readRow('m-guard')).toMatchObject({ status: 'failed', endedAt: 2_000 });
+    });
   });
 });
