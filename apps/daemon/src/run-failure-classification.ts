@@ -247,6 +247,21 @@ function isPermissionRequestNotFoundText(text: string): boolean {
     .test(text);
 }
 
+/**
+ * A permission prompt the user answered "no" to.
+ *
+ * Distinct from `isPermissionRequestNotFoundText` above (the permission record
+ * itself was missing) and from an OS `EACCES`: nothing malfunctioned here, the
+ * user withheld consent for one tool call and the agent exited. Both spellings
+ * are the ones agents actually emit — `permission check failed for <tool>` from
+ * the host wrapper, `user denied permission` from the agent's own report — and
+ * both name the acting party, which is what keeps a filesystem permission error
+ * out of this branch.
+ */
+function isPermissionDeniedText(text: string): boolean {
+  return /\b(?:user denied permission|permission check failed for)\b/i.test(text);
+}
+
 function isAuthDetailText(text: string): boolean {
   return /\b(refresh token|access token could not be refreshed|stale local profile|different or stale local profile|credentials from a different local environment|missing environment variable: `?[A-Z0-9_]*(?:API_)?KEY`?|api key.*(?:missing|invalid)|invalid api key|credentials? (?:are )?missing|not logged in|Authentication required|carry the api (?:secret )?key|No auth type is selected|set an Auth method|organization has disabled .* subscription access)\b/i
     .test(text);
@@ -307,7 +322,7 @@ function clientRequestFailureDetail(text: string): TrackingRunFailureDetail | nu
 
 function isUpstreamDetailText(text: string): boolean {
   return isUpstreamClientErrorText(text) ||
-    /\b(stream disconnected before completion|(?:stream|upstream) idle timeout|response\.completed|Transport error: network error|Upstream request failed|websocket closed|socket connection was closed unexpectedly|tls handshake eof|Connection reset by (?:peer|server)|TLS close_notify|Broken pipe|remote host|远程主机强迫关闭|No route to host|Connection refused|ConnectionRefused|error sending request|Provider returned error|high demand|model is at capacity|selected model is at capacity|temporarily unavailable|upstream_error|http2: response body closed|peer closed connection|incomplete chunked read|Client network socket disconnected before secure TLS connection|Connection failed repeatedly|lost its connection to (?:the Anthropic API|the configured custom Anthropic endpoint)|Server error mid-response|empty or malformed response|Unexpected server error|Streaming response failed|Failed to process error response|AMR model catalog is (?:temporarily )?unavailable)\b/i
+    /\b(stream disconnected before completion|(?:stream|upstream) idle timeout|response\.completed|Transport error: network error|Upstream request failed|websocket closed|socket connection was closed unexpectedly|tls handshake eof|Connection reset by (?:peer|server)|TLS close_notify|Broken pipe|remote host|远程主机强迫关闭|No route to host|Connection refused|ConnectionRefused|error sending request|Provider returned error|high demand|model is at capacity|selected model is at capacity|temporarily unavailable|upstream_error|http2: response body closed|peer closed connection|incomplete chunked read|Client network socket disconnected before secure TLS connection|Connection failed repeatedly|(?:lost its connection to|could not reach) (?:the Anthropic API|the configured custom Anthropic endpoint)|Server error mid-response|empty or malformed response|Unexpected server error|Streaming response failed|Failed to process error response|AMR model catalog is (?:temporarily )?unavailable)\b/i
       .test(text);
 }
 
@@ -908,6 +923,20 @@ export function classifyRunFailure(
       'process_exit',
       'permission_request_not_found',
       'child_close',
+      retryable,
+      retryable ? 'retry' : 'none',
+    );
+  }
+
+  // A withheld permission is a tool-execution outcome, not a bad exit: the step
+  // that stopped is the tool call the user declined, and retrying is exactly
+  // how they approve it on the second ask.
+  if (isPermissionDeniedText(text)) {
+    const retryable = retryableHint ?? true;
+    return classification(
+      'process_exit',
+      'permission_denied',
+      inferFailureStageFromEvents(input.events, 'tool_execution'),
       retryable,
       retryable ? 'retry' : 'none',
     );

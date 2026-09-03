@@ -408,6 +408,7 @@ const RUN_FAILURE_TITLE_BY_DETAIL: Record<RunFailureDetail, RunFailureTitleKey> 
   cpu_unsupported: 'chat.runError.title.cpuUnsupported',
   session_resume_expired: 'chat.runError.title.sessionExpired',
   permission_request_not_found: 'chat.runError.title.permissionBlocked',
+  permission_denied: 'chat.runError.title.permissionBlocked',
   process_crashed: 'chat.runError.title.agentCrashed',
   // SIGKILL / exit 137 — the OS, not the agent, ended the step.
   signal_killed: 'chat.runError.title.stoppedBySystem',
