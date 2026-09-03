@@ -6,16 +6,20 @@
 // providers PUT uses (the daemon takes the full set rather than merging).
 
 import type {
+  McpHealthResponse,
   McpOAuthStatusResponse,
   McpServerConfig,
+  McpServerHealth,
   McpServersResponse,
   McpTemplate,
   StartMcpOAuthResponse,
 } from '@open-design/contracts';
 
 export type {
+  McpHealthResponse,
   McpOAuthStatusResponse,
   McpServerConfig,
+  McpServerHealth,
   McpTemplate,
   StartMcpOAuthResponse,
 };
@@ -178,4 +182,25 @@ export function suggestMcpServerId(
     if (!taken.has(next)) return next;
   }
   return `${base}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/**
+ * Per-server MCP connect state, measured by the daemon (`GET /api/mcp/health`).
+ *
+ * Its own surface on purpose: an MCP server that failed to start is not a run
+ * failure, and before this existed the only place that state ever showed up
+ * was a run's error card (issue #157).
+ */
+export async function fetchMcpHealth(): Promise<McpHealthResponse | null> {
+  try {
+    const res = await fetch('/api/mcp/health');
+    if (!res.ok) return null;
+    const data = (await res.json()) as McpHealthResponse;
+    return {
+      servers: Array.isArray(data?.servers) ? data.servers : [],
+      checkedAt: typeof data?.checkedAt === 'string' ? data.checkedAt : '',
+    };
+  } catch {
+    return null;
+  }
 }

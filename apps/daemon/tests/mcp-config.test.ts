@@ -1266,8 +1266,17 @@ describe('MCP_TEMPLATES', () => {
     expect(tpl?.category).toBe('image-generation');
     expect(tpl?.command).toBe('uvx');
     // `--from` is required because the package name and bin name differ
-    // (fal-mcp-server vs fal-mcp).
-    expect(tpl?.args).toEqual(['--from', 'fal-mcp-server', 'fal-mcp']);
+    // (fal-mcp-server vs fal-mcp). `--with mcp<1.10` is required because the
+    // package registers its tools through the pre-1.10 low-level `Server`
+    // API: unpinned, it dies on import with `'Server' object has no attribute
+    // 'list_tools'` before answering `initialize` (#157).
+    expect(tpl?.args).toEqual([
+      '--from',
+      'fal-mcp-server',
+      '--with',
+      'mcp<1.10',
+      'fal-mcp',
+    ]);
     const key = tpl?.envFields?.find((f) => f.key === 'FAL_KEY');
     expect(key?.required).toBe(true);
     expect(key?.secret).toBe(true);

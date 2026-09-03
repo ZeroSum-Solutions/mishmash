@@ -1,5 +1,6 @@
 import { execAgentFile } from './invocation.js';
 import { readCodexProviderEnvKey } from '../codex-config-normalize.js';
+import { withoutMcpServerHealthNoise } from '../mcp-health.js';
 import type { RuntimeAgentDef, RuntimeEnv } from './types.js';
 
 export type AgentAuthProbeResult = {
@@ -258,7 +259,11 @@ const AGENT_UPSTREAM_FAILURE_RE = new RegExp(
 export function classifyAgentServiceFailure(
   text: string,
 ): AgentServiceFailureCode | null {
-  const value = String(text || '');
+  // A run's failure class describes the run. External MCP server connection
+  // state travels in the same stdout/stderr tails but belongs to
+  // `GET /api/mcp/health`, so it is stripped before anything is classified
+  // (#157).
+  const value = withoutMcpServerHealthNoise(String(text || ''));
   if (!value.trim()) return null;
   if (AGENT_AUTH_FAILURE_RE.test(value)) return 'AGENT_AUTH_REQUIRED';
   if (AGENT_RATE_FAILURE_RE.test(value)) return 'RATE_LIMITED';

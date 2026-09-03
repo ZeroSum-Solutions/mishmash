@@ -1,0 +1,96 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle, var(--bg-panel));
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.error {
+  font-size: 12px;
+  color: var(--danger, #d9534f);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  /* State reads from the left edge only: a dead tool server is worth naming,
+     not worth painting the panel red. */
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.row[data-state='ok'] {
+  border-left-color: color-mix(in srgb, var(--success, #3aa675) 55%, var(--border));
+}
+
+.row[data-state='failed'],
+.row[data-state='timeout'] {
+  border-left-color: color-mix(in srgb, var(--danger, #d9534f) 45%, var(--border));
+}
+
+.row[data-state='disabled'] {
+  opacity: 0.55;
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.state {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+}
+
+.reason,
+.remedy {
+  margin: 0;
+}
+
+.stderr summary {
+  cursor: pointer;
+}
+
+.stderr pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: var(--radius);
+  background: var(--bg-panel, transparent);
+  font-size: 11px;
+}

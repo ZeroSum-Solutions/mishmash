@@ -1,5 +1,6 @@
 import path from 'node:path';
 
+import { withoutMcpServerHealthNoise } from './mcp-health.js';
 import { redactSecrets } from './redact.js';
 
 export interface ClaudeCliDiagnosticInput {
@@ -36,10 +37,17 @@ function envValue(
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+// The text this diagnostic is allowed to reason about. External MCP server
+// connection state is stripped first: it rides in the agent's output but
+// describes an optional accessory, not the run, and reading it here reported
+// healthy runs as dropped provider connections (#157). MCP state has its own
+// surface -- `GET /api/mcp/health`.
 function body(input: ClaudeCliDiagnosticInput): string {
-  return [input.stderrTail, input.stdoutTail]
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)
-    .join('\n');
+  return withoutMcpServerHealthNoise(
+    [input.stderrTail, input.stdoutTail]
+      .filter((value): value is string => typeof value === 'string' && value.length > 0)
+      .join('\n'),
+  );
 }
 
 function withContext(
