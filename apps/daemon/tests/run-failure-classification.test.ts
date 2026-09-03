@@ -746,6 +746,29 @@ describe('classifyRunFailure — signal and interrupt attribution', () => {
     });
   });
 
+  // W1.4 / B-04: an out-of-memory kill often reaches the daemon as exit code
+  // 137 with no signal name — a shell (or a reaped process group) renders
+  // "killed by signal N" as 128 + N. Before this mapping it fell into the
+  // generic `exit_code` bucket, which is how the report's 77-second ffmpeg
+  // encode died with no message the user could act on.
+  it('classifies 128+N exit codes through the signal they encode', () => {
+    expect(classifyExit(137, 'Killed')).toMatchObject({
+      failure_category: 'process_exit',
+      failure_detail: 'signal_killed',
+      retryable: false,
+    });
+    expect(classifyExit(139, 'Segmentation fault')).toMatchObject({
+      failure_detail: 'process_crashed',
+    });
+    expect(classifyExit(143, '')).toMatchObject({
+      failure_detail: 'terminated_unknown',
+    });
+    // An ordinary non-zero exit is NOT a signal and must keep its own bucket.
+    expect(classifyExit(1, 'command failed')).toMatchObject({
+      failure_detail: 'exit_code',
+    });
+  });
+
   it('classifies hard crash signals as non-retryable process crashes', () => {
     for (const signal of ['SIGSEGV', 'SIGABRT', 'SIGILL', 'SIGTRAP', 'SIGBUS']) {
       expect(classifySignal(signal, 'core dumped')).toMatchObject({

@@ -28,8 +28,10 @@ Values are milliseconds.
 
 `ffprobe` and `ffmpeg` children of the Remotion finishing pass are spawned
 through `apps/daemon/src/storyboards/remotion/spawn-with-timeout.ts`. On expiry
-they get `SIGTERM`, escalating to `SIGKILL` two seconds later — an abandoned
-encoder would otherwise keep burning CPU after the request has already failed.
+they get `SIGTERM`, escalating to `SIGKILL` after `KILL_ESCALATION_MS` (2000) —
+an abandoned encoder would otherwise keep burning CPU after the request has
+already failed. Several other daemon subprocesses (media, previews, cover
+rendering, connection tests) follow the same escalate-after-timeout shape.
 
 A run stopped by one of these budgets reports cause `timeout` or
 `inactivity_timeout` and shows as **Timed out** in the chat.
@@ -38,12 +40,23 @@ A run stopped by one of these budgets reports cause `timeout` or
 
 **Memory has no MishMash budget.** A heavy encode or a large download is bounded
 only by the machine. When the kernel's OOM killer (Linux) or the memory monitor
-(macOS) ends a child, the process dies on `SIGKILL` and the shell reports
-**exit 137** — 128 + 9. MishMash never sends an unsolicited `SIGKILL` to a
-subprocess outside the escalation path above, so an unexplained 137 is the
-operating system, not the product.
+(macOS) ends a child, the process dies on `SIGKILL`, which is reported either as
+the signal name or as **exit code 137** (128 + 9) when a shell or a reaped
+process group renders it. `apps/daemon/src/run-failure-classification.ts` maps
+both shapes to the same cause, so 137 never falls into the anonymous
+`exit_code` bucket.
 
-A run that ends this way reports cause `signal_killed` and shows as **Stopped by
+MishMash does send `SIGKILL` itself, but only as the escalation step of a
+timeout or a cancellation it already started — never unprompted. A kill with no
+preceding MishMash timeout is therefore the operating system.
+
+**This applies to the agent's own process.** A subprocess the agent spawns
+inside its turn — the ffmpeg encode in the report is the example — dies without
+the daemon ever seeing it; the agent notices the failed command and reports it
+in its own words, which the failure alert shows verbatim under the named cause.
+The run-level classification only fires when the agent process itself is killed.
+
+A run that ends that way reports cause `signal_killed` and shows as **Stopped by
 your system**, with copy that names the exit code and points back here. It is
 not a MishMash bug report; it is a machine that ran out of headroom.
 

@@ -413,6 +413,18 @@ const PROCESS_CRASH_SIGNALS = new Set([
 // stream disconnect is caught by the upstream branch. By the time control
 // reaches here a signal is the strongest evidence we have, so map it to a
 // non-retryable process_exit instead of laundering it into a retryable timeout.
+// A child that died on a signal is sometimes reported to us by exit code
+// instead: a shell (and Node, when the process group is reaped through one)
+// renders "killed by signal N" as exit code 128 + N. Those codes carry exactly
+// the same evidence as the signal name, so they classify through the same
+// branch rather than falling into the generic `exit_code` bucket — which is how
+// an out-of-memory kill (137 = 128 + SIGKILL) used to reach the user unnamed.
+const SIGNAL_BY_EXIT_CODE: Record<string, string> = {
+  AGENT_EXIT_137: 'SIGKILL',
+  AGENT_EXIT_139: 'SIGSEGV',
+  AGENT_EXIT_143: 'SIGTERM',
+};
+
 function signalInterruptClassification(
   errorCode: string,
   text: string,
@@ -421,7 +433,7 @@ function signalInterruptClassification(
   const isInterruptExit = errorCode === 'AGENT_EXIT_130';
   const signal = errorCode.startsWith('AGENT_SIGNAL_')
     ? errorCode.slice('AGENT_SIGNAL_'.length)
-    : '';
+    : SIGNAL_BY_EXIT_CODE[errorCode] ?? '';
   if (!signal && !isInterruptExit) return null;
 
   if (signal === 'SIGKILL') {

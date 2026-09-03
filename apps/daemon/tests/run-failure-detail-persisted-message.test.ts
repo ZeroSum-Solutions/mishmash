@@ -24,7 +24,14 @@ type StartedServer = {
   shutdown?: () => Promise<void> | void;
 };
 
-type RunStatus = { id: string; status: string };
+type RunStatus = {
+  id: string;
+  status: string;
+  failureCategory?: string | null;
+  failureDetail?: string | null;
+  failureStage?: string | null;
+  artifactCount?: number;
+};
 
 type PersistedEvent = {
   kind?: string;
@@ -33,6 +40,8 @@ type PersistedEvent = {
   code?: string;
   failureCategory?: string;
   failureDetail?: string;
+  failureStage?: string;
+  artifactCount?: number;
 };
 
 type StoredMessage = {
@@ -103,8 +112,78 @@ describe('run failure classification persisted to assistant message', () => {
     expect(errorEvent, 'persisted assistant message should carry a status:error event').toBeTruthy();
     expect(errorEvent?.failureCategory).toBe('rate_limit');
     expect(errorEvent?.failureDetail).toBe('hard_quota');
+
+    // W1.4: the alert also owes the user the step that stopped and whether
+    // their files changed, so both travel the same daemon-owned path. The
+    // artifact count is stamped by the run's finalize hook, after the diff
+    // resolves — a value here is what proves that second pass fired.
+    expect(errorEvent?.failureStage).toBe(run.status.failureStage);
+    expect(FAILURE_STAGES).toContain(errorEvent?.failureStage);
+    expect(errorEvent?.artifactCount).toBe(0);
+    expect(run.status.artifactCount).toBe(0);
+  });
+
+  // W1.4 / T-04: a canceled run is not a silent run. The daemon classifies the
+  // cancellation and reports it on the run record, so `od run info` and any
+  // embedding agent can say why the turn stopped instead of showing nothing.
+  it('names the cause of a canceled run without inventing a failure alert', async () => {
+    binDir = await mkdtemp(path.join(os.tmpdir(), 'od-failure-detail-msg-bin-'));
+    const fakeClaude = await writeHangingClaude(binDir, 'claude-hangs');
+
+    delete process.env.POSTHOG_KEY;
+    delete process.env.POSTHOG_HOST;
+
+    started = (await startServer({ port: 0, returnServer: true })) as StartedServer;
+    await putConfig(started.url, {
+      agentId: 'claude',
+      agentCliEnv: { claude: { CLAUDE_BIN: fakeClaude } },
+      telemetry: { metrics: true, content: false, artifactManifest: false },
+      privacyDecisionAt: Date.now(),
+    });
+
+    const { projectId, conversationId } = await createConversation(started.url);
+    const started_ = await startRun(started.url, projectId, conversationId);
+    const cancelResponse = await fetch(
+      `${started.url}/api/runs/${encodeURIComponent(started_.runId)}/cancel`,
+      { method: 'POST' },
+    );
+    expect(cancelResponse.status).toBe(200);
+    const status = await waitForRun(started.url, started_.runId);
+    expect(status.status).toBe('canceled');
+
+    expect(status.failureCategory).toBe('user_cancel');
+    expect(status.failureDetail).toBe('user_cancelled');
+    expect(FAILURE_STAGES).toContain(status.failureStage);
+
+    // …and the stored message must NOT gain an error event, or the chat would
+    // paint a failure alert for a Stop the user pressed themselves.
+    const stored = await fetchAssistantMessage(
+      started.url,
+      projectId,
+      conversationId,
+      started_.assistantMessageId,
+    );
+    const errorEvent = (stored?.events ?? []).find(
+      (event) => event.kind === 'status' && event.label === 'error',
+    );
+    expect(errorEvent).toBeUndefined();
   });
 });
+
+// The closed failure-stage union from packages/contracts, spelled out so a
+// stage the daemon invents outside it fails this test.
+const FAILURE_STAGES = [
+  'preflight',
+  'spawn',
+  'session_init',
+  'model_select',
+  'prompt_send',
+  'first_token_wait',
+  'tool_execution',
+  'artifact_write',
+  'child_close',
+  'finalize',
+];
 
 function snapshotEnv(): Record<string, string | undefined> {
   return {
@@ -137,6 +216,24 @@ if (process.argv.includes('--help')) { console.log('Usage: claude -p [--include-
 console.log(JSON.stringify({ type: 'system', subtype: 'init', model: 'claude-quota-test' }));
 process.stderr.write('You have exceeded your current quota. Please upgrade your plan to continue.\\n');
 setTimeout(() => process.exit(1), 20);
+`,
+    'utf8',
+  );
+  await chmod(bin, 0o755);
+  return bin;
+}
+
+// Fake Claude CLI that emits its init frame and then never exits, so the test
+// can cancel a genuinely running turn.
+async function writeHangingClaude(dir: string, name: string): Promise<string> {
+  const bin = path.join(dir, name);
+  await writeFile(
+    bin,
+    `#!/usr/bin/env node
+if (process.argv.includes('--version')) { console.log('claude-code 1.0.0-hangs'); process.exit(0); }
+if (process.argv.includes('--help')) { console.log('Usage: claude -p [--include-partial-messages]'); process.exit(0); }
+console.log(JSON.stringify({ type: 'system', subtype: 'init', model: 'claude-cancel-test' }));
+setInterval(() => {}, 1000);
 `,
     'utf8',
   );
@@ -200,6 +297,35 @@ async function sendRunAndWait(
   const body = (await runResponse.json()) as { runId: string };
   const status = await waitForRun(url, body.runId);
   return { projectId, conversationId, assistantMessageId, status };
+}
+
+async function startRun(
+  url: string,
+  projectId: string,
+  conversationId: string,
+): Promise<{ runId: string; assistantMessageId: string }> {
+  const assistantMessageId = `assistant_failure_detail_msg_${randomUUID()}`;
+  const runResponse = await fetch(`${url}/api/runs`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-od-analytics-device-id': 'failure-detail-msg-test',
+      'x-od-analytics-session-id': 'failure-detail-msg-session',
+      'x-od-analytics-client-type': 'web',
+    },
+    body: JSON.stringify({
+      projectId,
+      conversationId,
+      assistantMessageId,
+      clientRequestId: `client_failure_detail_msg_${randomUUID()}`,
+      agentId: 'claude',
+      message: 'please do the task',
+      currentPrompt: 'please do the task',
+    }),
+  });
+  expect(runResponse.status).toBe(202);
+  const body = (await runResponse.json()) as { runId: string };
+  return { runId: body.runId, assistantMessageId };
 }
 
 async function waitForRun(url: string, runId: string): Promise<RunStatus> {

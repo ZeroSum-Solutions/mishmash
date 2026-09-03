@@ -2757,7 +2757,31 @@ export async function startServer({
       // (SSE shape) and the routing-truth fields set during the spawn --
       // persisted durably so a project's cost total survives a daemon
       // restart and does not depend on the in-memory run surviving its TTL.
-      onRunFinished: (run) => {
+      onRunFinished: (run, status) => {
+        // Invariant: a run that did not succeed names why it stopped. The
+        // child-close classifier handles failures, but a cancellation finishes
+        // inside the run service itself — often before the chat run has even
+        // installed its finalize hooks — so it would otherwise reach
+        // statusBody, the SSE `end` frame and `od run info` with no cause at
+        // all. This hook is the one chokepoint every terminal path crosses.
+        if (status === 'canceled' && !run.failureCategory && !run.failureDetail) {
+          const canceled = classifyRunFailure({
+            result: 'cancelled',
+            status: {
+              status,
+              error: run.error,
+              errorCode: run.errorCode,
+              exitCode: run.exitCode,
+              signal: run.signal,
+            },
+            ...(run.errorCode ? { errorCode: run.errorCode } : {}),
+            agentId: run.agentId,
+            events: Array.isArray(run.events) ? run.events : [],
+          });
+          run.failureCategory = canceled?.failure_category ?? null;
+          run.failureDetail = canceled?.failure_detail ?? null;
+          run.failureStage = canceled?.failure_stage ?? null;
+        }
         if (!run.projectId || !run.id) return;
         const record = computeRunUsageRecord({
           requestedRaw: run.modelRequested,
@@ -5430,11 +5454,11 @@ export async function startServer({
             // Best-effort: marking must never break run finalization.
           }
         }
-        // Re-stamp the persisted failure classification now that the run's
-        // artifact diff is resolved. The child-close pass (below) knows the
-        // cause and the step but runs before `run.artifactCount` exists, so
-        // without this the reloaded alert could not state whether files
-        // changed. The write is idempotent and a no-op for an unclassified run.
+        // Re-stamp the persisted classification now that the run's artifact
+        // diff is resolved. The child-close pass (below) knows the cause and
+        // the step but runs before `run.artifactCount` exists, so without this
+        // the reloaded alert could not state whether files changed. The write
+        // is idempotent and a no-op for an unclassified run.
         persistRunFailureClassification(db, run);
       }
     };
@@ -6517,19 +6541,25 @@ export async function startServer({
         committedWorkSeen &&
         isResumableFailure(failure);
       run.resumable = resumableFailure;
-      // Surface the daemon's failure classification (already computed for
-      // retry-policy + telemetry) on the run so statusBody / the SSE `end` frame
-      // carry it to the chat, which maps failureDetail -> a specific named
-      // failure type + fix and failureStage -> the step that stopped. Only
-      // meaningful on a failed result.
-      run.failureCategory = result === 'failed' ? failure?.failure_category ?? null : null;
-      run.failureDetail = result === 'failed' ? failure?.failure_detail ?? null : null;
-      run.failureStage = result === 'failed' ? failure?.failure_stage ?? null : null;
+      // Surface the daemon's classification (already computed for retry-policy
+      // + telemetry) on the run so statusBody / the SSE `end` frame carry it to
+      // every consumer: failureDetail -> a named failure type + fix,
+      // failureStage -> the step that stopped.
+      //
+      // Invariant: every run that did not succeed carries a named cause. That
+      // includes a cancellation — `classifyRunFailure` returns
+      // user_cancel/user_cancelled for one — because a run that stopped without
+      // saying why is the whole complaint this surface exists to answer. Only a
+      // successful run has nothing to name.
+      const classified = result === 'success' ? null : failure ?? null;
+      run.failureCategory = classified?.failure_category ?? null;
+      run.failureDetail = classified?.failure_detail ?? null;
+      run.failureStage = classified?.failure_stage ?? null;
       // Stamp the classification onto the persisted assistant message too, so a
       // reload (or any daemon-side persistence without the live web error
-      // handler) keeps the specific failure guidance instead of the coarse
-      // errorCode UI. Mirrors what statusBody / the SSE `end` frame carry live.
-      if (result === 'failed') persistRunFailureClassification(db, run);
+      // handler) keeps the specific guidance instead of the coarse errorCode UI.
+      // Mirrors what statusBody / the SSE `end` frame carry live.
+      if (classified) persistRunFailureClassification(db, run);
       if (resumableFailure) {
         upsertAgentSession(db, {
           conversationId: run.conversationId,

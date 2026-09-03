@@ -48,6 +48,8 @@ export function persistRunEventToAssistantMessage(
  * Stamp the daemon's finalize-time failure classification onto the persisted
  * assistant message so a reload — or any consumer that reads the stored
  * message instead of the live SSE stream — still sees the fine-grained cause.
+ * Enriches an existing `status:error` event for any classified run; a
+ * cancellation never gains an error event it did not already have.
  *
  * Invariant: the persisted `status:error` event carries every fact a failure
  * alert owes the user — the cause (`failureCategory` / `failureDetail`), the
@@ -111,6 +113,12 @@ export function persistRunFailureClassification(
       if (JSON.stringify(enriched) === JSON.stringify(events[idx])) return;
       events[idx] = enriched;
     } else {
+      // A cancellation carries a classification too (user_cancel /
+      // user_cancelled) so the run record can name why it stopped, but it must
+      // never GAIN an error event it did not already have: writing one onto a
+      // message the user themselves stopped would make the chat paint a failure
+      // alert for a deliberate Stop.
+      if (failureCategory === 'user_cancel') return;
       if (run.error && typeof enriched.detail !== 'string') enriched.detail = run.error;
       events.push(enriched);
     }
