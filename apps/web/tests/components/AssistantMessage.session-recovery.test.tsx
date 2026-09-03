@@ -53,24 +53,34 @@ function baseMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
   } as ChatMessage;
 }
 
+// Routed by URL so the recovery payload can only reach the hook that asks the
+// run status endpoint for it. The other run-scoped hooks in this component
+// (usage, routing telemetry) hit their own endpoints and must get their own
+// empty answer — a single catch-all stub would hide a hook reading the wrong URL.
+const RUN_STATUS_URL = '/api/runs/run-1';
+
 function stubFetchWithRecoveryState(state: string | null) {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => ({
-      ok: true,
-      json: async () => (state === null ? {} : {
-        nativeSessionRecovery: {
-          agentId: 'claude',
-          state,
-          acquisition: 'stream-captured',
-          continuation: 'native-resume-by-id',
-          handle: { present: true, kind: 'opaque-id', display: null, sha256: null, redacted: true },
-          guardReason: null,
-          fallbackReason: null,
-          updatedAt: 1700000004,
-        },
-      }),
-    })),
+    vi.fn(async (input: unknown) => {
+      const url = String(input);
+      if (url !== RUN_STATUS_URL) return { ok: true, json: async () => ({}) };
+      return {
+        ok: true,
+        json: async () => (state === null ? {} : {
+          nativeSessionRecovery: {
+            agentId: 'claude',
+            state,
+            acquisition: 'stream-captured',
+            continuation: 'native-resume-by-id',
+            handle: { present: true, kind: 'opaque-id', display: null, sha256: null, redacted: true },
+            guardReason: null,
+            fallbackReason: null,
+            updatedAt: 1700000004,
+          },
+        }),
+      };
+    }),
   );
 }
 
@@ -95,6 +105,10 @@ describe('AssistantMessage native session recovery status', () => {
       name: (name) => /session recovered/i.test(name),
     }));
     expect(status.textContent ?? '').toMatch(/continued/i);
+    // The state was read from the run's own status record, not from whichever
+    // endpoint happened to answer first.
+    expect(vi.mocked(fetch).mock.calls.map((call) => String(call[0])))
+      .toContain(RUN_STATUS_URL);
   });
 
   it('says the session was rebuilt when the daemon auto-reseeded it mid-run', async () => {

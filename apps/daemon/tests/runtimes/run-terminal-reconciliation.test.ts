@@ -604,6 +604,37 @@ describe('durable run terminal reconciliation', () => {
         });
       });
 
+      // A stale copy of the turn does not have to claim `failed` to strand the
+      // row. `upsertMessage` writes `run_status` unconditionally, so a delayed
+      // write that still believes the turn is `running` — or one that carries no
+      // run status at all, which stores NULL — takes the row off its terminal
+      // just as effectively.
+      it('pins a delayed write that still claims the turn is running', () => {
+        insertRow('m-held-running', 'succeeded', 9_000);
+
+        expect(holdTerminalRunStatusOnMessageWrite(db, {
+          id: 'm-held-running',
+          runId: 'run-hold',
+          runStatus: 'running',
+        })).toMatchObject({ endedAt: 9_000, runStatus: 'succeeded' });
+      });
+
+      it('pins a delayed write that carries no run status at all', () => {
+        insertRow('m-held-absent', 'succeeded', 9_000);
+
+        expect(holdTerminalRunStatusOnMessageWrite(db, {
+          content: 'late content',
+          id: 'm-held-absent',
+        })).toMatchObject({ endedAt: 9_000, runStatus: 'succeeded' });
+      });
+
+      it('lets a write from a different run own the row', () => {
+        insertRow('m-held-other-run', 'succeeded', 9_000);
+
+        const write = { id: 'm-held-other-run', runId: 'run-other', runStatus: 'running' };
+        expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
+      });
+
       it('leaves a write alone when the row is not already on a non-failed terminal', () => {
         insertRow('m-running', 'running', 2_000);
         insertRow('m-already-failed', 'failed', 2_000);
@@ -615,11 +646,13 @@ describe('durable run terminal reconciliation', () => {
         }
       });
 
-      it('never touches a write that is not claiming failure', () => {
-        insertRow('m-not-failed', 'succeeded', 9_000);
+      it('never touches a write that already agrees with the row', () => {
+        insertRow('m-agrees', 'succeeded', 9_000);
+        insertRow('m-agrees-canceled', 'canceled', 9_000);
 
-        for (const runStatus of ['succeeded', 'canceled', 'running', 'queued', undefined]) {
-          const write = { id: 'm-not-failed', runStatus };
+        for (const id of ['m-agrees', 'm-agrees-canceled']) {
+          const held = id === 'm-agrees' ? 'succeeded' : 'canceled';
+          const write = { endedAt: 1_000, id, runStatus: held };
           expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
         }
       });

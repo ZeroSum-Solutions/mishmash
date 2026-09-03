@@ -162,11 +162,19 @@ export function followRunTerminalOnMessage(
  *
  * So the invariant this holds is the write-side half of the same rule: once a
  * row follows a non-failed terminal run status, only that status can be
- * written onto it. `run_status` and `ended_at` are pinned back to the stored
- * values and every other field passes through untouched, so a late write still
- * delivers the content, events and produced files it carries. It never invents
- * a status — a row with no non-failed terminal status stored is written
- * exactly as sent.
+ * written onto it. Any disagreeing claim is held, not only a `failed` one — a
+ * stale copy that still believes the turn is `running`, or one carrying no run
+ * status at all (which `upsertMessage` stores as NULL), takes the row off its
+ * terminal just as effectively. `run_status` and `ended_at` are pinned back to
+ * the stored values and every other field passes through untouched, so a late
+ * write still delivers the content, events and produced files it carries.
+ *
+ * Two writes are deliberately let through. A write that agrees with the stored
+ * status has nothing to correct. And a write naming a DIFFERENT run is a new
+ * turn on that row, not a stale copy of the finished one, so it owns the row;
+ * only a write for the same run, or one that names no run at all, is held.
+ * It never invents a status either — a row with no non-failed terminal status
+ * stored is written exactly as sent.
  *
  * Failing open is deliberate: a read error here must not reject the user's
  * message write, so it warns and returns the write unchanged, which is exactly
@@ -176,17 +184,22 @@ export function holdTerminalRunStatusOnMessageWrite(
   db: Database.Database,
   message: Record<string, unknown>,
 ): Record<string, unknown> {
-  if (message.runStatus !== 'failed') return message;
   const id = message.id;
   if (typeof id !== 'string' || !id) return message;
   try {
     const stored = db.prepare(
-      `SELECT run_status AS runStatus, ended_at AS endedAt
+      `SELECT run_status AS runStatus, ended_at AS endedAt, run_id AS runId
          FROM messages
         WHERE id = ? AND role = 'assistant'`,
-    ).get(id) as { runStatus: string | null; endedAt: number | null } | undefined;
+    ).get(id) as { runStatus: string | null; endedAt: number | null; runId: string | null } | undefined;
     const held = stored?.runStatus;
     if (!held || held === 'failed' || !TERMINAL_STATUSES.has(held)) return message;
+    if (message.runStatus === held) return message;
+    if (
+      typeof message.runId === 'string'
+      && typeof stored?.runId === 'string'
+      && message.runId !== stored.runId
+    ) return message;
     return {
       ...message,
       runStatus: held,
