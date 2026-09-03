@@ -17,8 +17,9 @@ export type PreviewRoutesDeps = {
   resolvePreviewCwd: (projectId: string, requestedCwd?: string) => string | null;
   /**
    * Launch a URL in Google Chrome on the daemon's own machine. Returns false
-   * when the launch could not even be started (no Chrome on this machine).
-   * Injectable so tests can assert the hand-off without opening a browser.
+   * when the launcher process never started — which means "no Chrome" only on
+   * Linux, where the launcher IS the browser. Injectable so tests can assert
+   * the hand-off without opening a browser.
    */
   openPreviewInChrome?: (url: string) => boolean;
 };
