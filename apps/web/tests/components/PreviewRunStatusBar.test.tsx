@@ -43,13 +43,14 @@ function failedMessage(): ChatMessage {
   };
 }
 
-function renderStatus(messages: ChatMessage[]) {
+function renderStatus(messages: ChatMessage[], previewUpdating = false) {
   return render(
     <I18nProvider initial="en">
       <PreviewRunStatusBar
         projectId="project-1"
         conversationId="conversation-1"
         messages={messages}
+        previewUpdating={previewUpdating}
       />
     </I18nProvider>,
   );
@@ -134,6 +135,39 @@ describe('PreviewRunStatusBar', () => {
     );
 
     expect(screen.getByTestId('preview-run-status')).toBeTruthy();
+  });
+
+  it('shows a progress hint while a settling agent write is being applied', () => {
+    renderStatus([], true);
+
+    expect(screen.getByTestId('preview-update-status')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('Updating preview\u2026');
+  });
+
+  it('leaves the canvas alone when no write is landing', () => {
+    renderStatus([], false);
+
+    expect(screen.queryByTestId('preview-update-status')).toBeNull();
+  });
+
+  it('lets the live run status speak for the work instead of the preview hint', () => {
+    renderStatus(
+      [
+        {
+          id: 'running-message',
+          role: 'assistant',
+          content: '',
+          sessionMode: 'design',
+          runStatus: 'running',
+          createdAt: STARTED_AT,
+          startedAt: STARTED_AT,
+        },
+      ],
+      true,
+    );
+
+    expect(screen.getByTestId('preview-run-status')).toBeTruthy();
+    expect(screen.queryByTestId('preview-update-status')).toBeNull();
   });
 
   it('does not offer dismissal while a run is still in flight', () => {

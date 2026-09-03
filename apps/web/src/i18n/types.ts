@@ -3409,6 +3409,7 @@ export interface Dict {
   'previewRunStatus.failed': string;
   'previewRunStatus.dismiss': string;
   'previewRunStatus.elapsed': string;
+  'previewRunStatus.updating': string;
   'designFiles.title': string;
   'designFiles.upload': string;
   'designFiles.pasteText': string;
@@ -3587,6 +3588,10 @@ export interface Dict {
   'sketch.tooltipClean': string;
   'fileViewer.empty': string;
   'fileViewer.loading': string;
+  'fileViewer.preparingPreviewAssets': string;
+  'fileViewer.preparingPreviewAssetsProgress': string;
+  'fileViewer.previewAssetsIncompleteTitle': string;
+  'fileViewer.previewAssetsIncompleteDetail': string;
   'fileViewer.exportPptx': string;
   'fileViewer.openInNewTab': string;
   'fileViewer.copyPath': string;

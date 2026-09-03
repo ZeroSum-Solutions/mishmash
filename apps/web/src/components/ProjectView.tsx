@@ -245,6 +245,7 @@ import {
   selectAutoOpenProducedArtifact,
   selectAutoOpenTurnArtifact,
 } from './auto-open-file';
+import { agentWriteMayFocusFile, SETTLED_WRITE_REFRESH } from './agent-write-viewport';
 import { buildRepoImportPrompt, designSystemNeedsRepoConnect } from './design-system-github-evidence';
 import { isDesignSystemProject, resolveProjectDesignSystemId } from './design-system-project';
 import { collectReferencedJsxNames } from '../runtime/jsx-module-refs';
@@ -1545,6 +1546,14 @@ export function ProjectView({
   const [error, setError] = useState<string | null>(null);
   const [artifact, setArtifact] = useState<Artifact | null>(null);
   const [filesRefresh, setFilesRefresh] = useState(0);
+  // Progress hint for the preview canvas: true from the first `file-changed`
+  // of a burst until the refresh that answers it has fetched the new file
+  // list. `fileChangeSeqRef` counts events seen; `settledFileChangeSeqRef`
+  // records the count a dispatched refresh covers, so a fetch that a newer
+  // burst has already overtaken cannot clear the hint.
+  const [previewUpdating, setPreviewUpdating] = useState(false);
+  const fileChangeSeqRef = useRef(0);
+  const settledFileChangeSeqRef = useRef(0);
   // True while a working-dir replace is reindexing the new folder. Surfaced
   // to the Design Files panel so the file list shows a loading state instead
   // of silently sitting on the old tree for the few seconds the scan takes.
@@ -1737,6 +1746,11 @@ export function ProjectView({
   }, [openTabsState.active, projectFiles, project.id]);
   const routeFileNameRef = useRef(routeFileName);
   routeFileNameRef.current = routeFileName;
+  // The tab the user is looking at right now, readable from the streaming
+  // handlers' closures. `agentWriteMayFocusFile` reads it to decide whether an
+  // agent-produced file may take the viewport.
+  const activeTabRef = useRef(openTabsState.active);
+  activeTabRef.current = openTabsState.active;
   const [activeWorkspaceContext, setActiveWorkspaceContext] =
     useState<WorkspaceContextItem | null>(null);
   const [workspaceContexts, setWorkspaceContexts] = useState<WorkspaceContextItem[]>([]);
@@ -2398,6 +2412,16 @@ export function ProjectView({
     setOpenRequest({ name, nonce: Date.now() });
   }, []);
 
+  // Every open that originates from an agent write — mid-turn Write/Edit tool
+  // results, turn-end artifact selection, reattach/replay recovery — goes
+  // through here instead of `requestOpenFile`, so `agentWriteMayFocusFile` is
+  // the single place that decides whether the viewport may move. User-driven
+  // opens (a chip, a tool card, a route) keep calling `requestOpenFile`.
+  const requestAgentWriteOpenFile = useCallback((name: string) => {
+    if (!agentWriteMayFocusFile(activeTabRef.current, name)) return;
+    requestOpenFile(name);
+  }, [requestOpenFile]);
+
   useEffect(() => {
     const designSystemId = brandReady?.designSystemId;
     if (!designSystemId) return;
@@ -2605,11 +2629,22 @@ export function ProjectView({
   // mount we also do an initial pull so attachments staged before the
   // agent has written anything still see the user's pasted images.
   useEffect(() => {
-    void refreshWorkspaceItems().catch(() => {
-      // The daemon probe can briefly lag behind a just-started local
-      // runtime. Retry when daemonLive flips or the explicit refresh key
-      // changes instead of leaving the project view in its empty shell.
-    });
+    const answeredSeq = settledFileChangeSeqRef.current;
+    void refreshWorkspaceItems()
+      .catch(() => {
+        // The daemon probe can briefly lag behind a just-started local
+        // runtime. Retry when daemonLive flips or the explicit refresh key
+        // changes instead of leaving the project view in its empty shell.
+      })
+      .finally(() => {
+        // The refreshed list is in hand, so the preview now has the new
+        // mtimes. Clear the progress hint — unless the burst has moved on.
+        // `answeredSeq` is captured per fetch rather than read from the ref,
+        // so a fetch that a later dispatch has already overtaken cannot clear
+        // a hint that the newer fetch is still working on.
+        if (fileChangeSeqRef.current !== answeredSeq) return;
+        setPreviewUpdating(false);
+      });
   }, [daemonLive, refreshWorkspaceItems, filesRefresh]);
 
   // Live-reload: when the daemon's chokidar watcher reports a file change,
@@ -2618,13 +2653,16 @@ export function ProjectView({
   // cache-bust, triggering an automatic preview reload without a click.
   //
   // Coalesce the refresh: agent rewrites surface to chokidar as an
-  // `unlink` + `add` (+ later `change`) burst within a single tick (#2195).
-  // Refreshing the file list on the intermediate `unlink` makes the open
-  // tab's active file vanish for one frame before the `add` restores it,
-  // and FileWorkspace's "tab no longer on disk" path then drops the user
-  // out of their preview. A short trailing wait absorbs the burst; the
-  // maxWait cap stops a sustained edit storm from starving the UI.
+  // `unlink` + `add` (+ later `change`) burst (#2195), and a turn that writes
+  // several files emits one burst per file. Refreshing on an intermediate
+  // event makes the open tab's active file vanish for one frame before the
+  // `add` restores it, and FileWorkspace's "tab no longer on disk" path then
+  // drops the user out of their preview. `SETTLED_WRITE_REFRESH` states the
+  // window that defines a settled write.
   const refreshFilesAndDesignMd = useCallback(() => {
+    // This refresh answers every file change seen so far; the fetch it
+    // triggers is what finally clears the progress hint.
+    settledFileChangeSeqRef.current = fileChangeSeqRef.current;
     setFilesRefresh((n) => n + 1);
     // Round 7 (mrcfps): file mutations are the dominant staleness signal
     // post-finalize — bump the refresh key so DESIGN.md staleness
@@ -2633,11 +2671,15 @@ export function ProjectView({
   }, []);
   const coalescedFileChangedRefresh = useCoalescedCallback(
     refreshFilesAndDesignMd,
-    { wait: 80, maxWait: 250 },
+    SETTLED_WRITE_REFRESH,
   );
   const handleProjectEvent = useCallback((evt: ProjectEvent) => {
     if (evt.type === 'file-changed') {
       iframeKeepAlivePool.evictProject(project.id);
+      // Deferring the refresh to the settle point means the user would
+      // otherwise watch nothing happen while the agent writes. Say so.
+      fileChangeSeqRef.current += 1;
+      setPreviewUpdating(true);
       coalescedFileChangedRefresh();
       return;
     }
@@ -3829,7 +3871,7 @@ export function ProjectView({
               if (recoveredExistingArtifact) {
                 artifactPersistenceSucceeded = true;
                 savedArtifactRef.current = recoveredExistingArtifact.name;
-                requestOpenFile(recoveredExistingArtifact.name);
+                requestAgentWriteOpenFile(recoveredExistingArtifact.name);
               } else {
                 savedArtifactRef.current = null;
                 const persistence = await persistArtifact(
@@ -3867,7 +3909,7 @@ export function ProjectView({
                 projectDetail.resolvedDir,
               ),
             });
-            if (producedArtifactToOpen) requestOpenFile(producedArtifactToOpen);
+            if (producedArtifactToOpen) requestAgentWriteOpenFile(producedArtifactToOpen);
             const deliveryOutcome = resolveDesignDeliveryOutcome({
               sessionMode: message.sessionMode,
               runStatus: 'succeeded',
@@ -4155,7 +4197,7 @@ export function ProjectView({
                   if (recoveredExistingArtifact) {
                     artifactPersistenceSucceeded = true;
                     savedArtifactRef.current = recoveredExistingArtifact.name;
-                    requestOpenFile(recoveredExistingArtifact.name);
+                    requestAgentWriteOpenFile(recoveredExistingArtifact.name);
                   } else {
                     savedArtifactRef.current = null;
                     const persistence = await persistArtifact(
@@ -4195,7 +4237,7 @@ export function ProjectView({
                     projectDetail.resolvedDir,
                   ),
                 });
-                if (producedArtifactToOpen) requestOpenFile(producedArtifactToOpen);
+                if (producedArtifactToOpen) requestAgentWriteOpenFile(producedArtifactToOpen);
                 const deliveryContent = needsFullReplay ? replayedContent : message.content;
                 const deliveryEvents = needsFullReplay ? replayedEvents : message.events;
                 const deliveryOutcome = resolveDesignDeliveryOutcome({
@@ -4292,7 +4334,7 @@ export function ProjectView({
                       );
                     if (recoveredExistingArtifact) {
                       savedArtifactRef.current = recoveredExistingArtifact.name;
-                      requestOpenFile(recoveredExistingArtifact.name);
+                      requestAgentWriteOpenFile(recoveredExistingArtifact.name);
                     } else {
                       savedArtifactRef.current = null;
                       await persistArtifact(
@@ -4314,7 +4356,7 @@ export function ProjectView({
                       recoveredArtifactMessagesRef.current.add(message.id);
                     }
                     const producedArtifactToOpen = selectAutoOpenProducedArtifact(produced, autoOpenArtifactOptions);
-                    if (producedArtifactToOpen) requestOpenFile(producedArtifactToOpen);
+                    if (producedArtifactToOpen) requestAgentWriteOpenFile(producedArtifactToOpen);
                     if (latestRunStatus?.status === 'succeeded') setError(null);
                     if (
                       shouldPublishRunFinishedEvent
@@ -4602,7 +4644,7 @@ export function ProjectView({
     refreshProjectFiles,
     readProjectHtml,
     persistArtifact,
-    requestOpenFile,
+    requestAgentWriteOpenFile,
     onProjectsRefresh,
     scheduleProjectTimeout,
     scheduleConversationMessageRefresh,
@@ -4687,7 +4729,7 @@ export function ProjectView({
             );
           if (recoveredExistingArtifact) {
             savedArtifactRef.current = recoveredExistingArtifact.name;
-            requestOpenFile(recoveredExistingArtifact.name);
+            requestAgentWriteOpenFile(recoveredExistingArtifact.name);
           } else {
             savedArtifactRef.current = null;
             await persistArtifact(
@@ -4711,7 +4753,7 @@ export function ProjectView({
           }
           recoveredArtifactMessagesRef.current.add(message.id);
           const producedArtifactToOpen = selectAutoOpenProducedArtifact(produced, autoOpenArtifactOptions);
-          if (producedArtifactToOpen) requestOpenFile(producedArtifactToOpen);
+          if (producedArtifactToOpen) requestAgentWriteOpenFile(producedArtifactToOpen);
           // This message's persisted runStatus was already terminal (a
           // precondition of hasRecoverableArtifactMessage); when it has no
           // stored endedAt, fall back to the daemon's authoritative terminal
@@ -4761,7 +4803,7 @@ export function ProjectView({
     artifactFromStandaloneHtml,
     refreshProjectFiles,
     persistArtifact,
-    requestOpenFile,
+    requestAgentWriteOpenFile,
     updateMessageById,
     auditDesignSystemWorkspaceAfterRun,
     scheduleConversationMessageRefresh,
@@ -5382,7 +5424,7 @@ export function ProjectView({
                   moduleFileNames,
                 });
                 if (decision.shouldOpen && decision.fileName) {
-                  requestOpenFile(decision.fileName);
+                  requestAgentWriteOpenFile(decision.fileName);
                 }
               });
             }
@@ -5611,7 +5653,7 @@ export function ProjectView({
                 if (sameTurnWrite) {
                   artifactPersistenceSucceeded = true;
                   savedArtifactRef.current = sameTurnWrite.name;
-                  requestOpenFile(sameTurnWrite.name);
+                  requestAgentWriteOpenFile(sameTurnWrite.name);
                 } else {
                   const persistence = await persistArtifact(artifactToPersist, nextFiles, finalText);
                   if (persistence.ok) artifactPersistenceSucceeded = true;
@@ -5660,7 +5702,7 @@ export function ProjectView({
                   projectDetail.resolvedDir,
                 ),
               });
-              if (producedArtifactToOpen) requestOpenFile(producedArtifactToOpen);
+              if (producedArtifactToOpen) requestAgentWriteOpenFile(producedArtifactToOpen);
               const deliveryCandidate: ChatMessage = {
                 ...latestAssistantMsg,
                 endedAt,
@@ -6246,6 +6288,7 @@ export function ProjectView({
       refreshLiveArtifacts,
       readProjectHtml,
       requestOpenFile,
+      requestAgentWriteOpenFile,
       persistMessage,
       persistMessageById,
       auditDesignSystemWorkspaceAfterRun,
@@ -8867,6 +8910,7 @@ export function ProjectView({
           files={projectFiles}
           liveArtifacts={liveArtifacts}
           filesRefreshKey={filesRefresh}
+          previewUpdating={previewUpdating}
           onRefreshFiles={() => {
             return refreshWorkspaceItems().then(() => undefined);
           }}
