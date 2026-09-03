@@ -10,7 +10,7 @@
  * have passed, and it is never labelled as answered.
  */
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AssistantMessage } from '../../src/components/AssistantMessage';
@@ -57,7 +57,7 @@ function formMessage(): ChatMessage {
     runStatus: 'succeeded',
     startedAt: 1700000000,
     endedAt: 1700000005,
-    events: [{ kind: 'text', text: PENDING_FORM } as ChatMessage['events'][number]],
+    events: [{ kind: 'text', text: PENDING_FORM } as NonNullable<ChatMessage['events']>[number]],
     producedFiles: [],
   } as ChatMessage;
 }
@@ -124,6 +124,19 @@ describe('AssistantMessage — a never-submitted question form (#155)', () => {
     expect(onSubmitQuestionForm).toHaveBeenCalledWith(
       expect.stringContaining('- Who is this for?: Product evaluators'),
     );
+  });
+
+  it('does not auto-continue on the user\'s behalf once the turn has moved on', () => {
+    vi.useFakeTimers();
+    try {
+      const { onSubmitQuestionForm } = renderOvertakenForm();
+      act(() => {
+        vi.advanceTimersByTime(11 * 60 * 1000);
+      });
+      expect(onSubmitQuestionForm).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('still collapses to the answered summary once its answers come back', () => {

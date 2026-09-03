@@ -904,6 +904,19 @@
   border: 1px solid var(--border);
   color: var(--text-muted);
 }
+/* Head affordance on an unanswered form that newer turns have scrolled past.
+   Pill-sized so it reads as status, but it is a real control. */
+.question-form-answer-now {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+}
 .question-form-body {
   display: flex;
   flex-direction: column;

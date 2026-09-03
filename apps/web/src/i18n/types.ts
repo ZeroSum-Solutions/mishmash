@@ -3915,7 +3915,6 @@ export interface Dict {
   // Question form (assistant question UX)
   'questionForm.submit': string;
   'questionForm.skip': string;
-  'questionForm.locked': string;
 
   // Conversations dropdown
   'conv.switch': string;
@@ -4078,7 +4077,8 @@ export interface Dict {
   'qf.otherOption': string;
   'qf.required': string;
   'qf.lockedSubmitted': string;
-  'qf.lockedPrev': string;
+  'qf.lockedUnanswered': string;
+  'qf.answerNow': string;
   'qf.hint': string;
   'qf.submitDefault': string;
   'qf.submitDisabledTitle': string;

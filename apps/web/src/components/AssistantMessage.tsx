@@ -2868,7 +2868,7 @@ function ProseBlock({
             projectId={projectId}
             conversationId={conversationId}
             nextUserContent={nextUserContent}
-            interactive={isLastAssistant}
+            isLatestAssistantMessage={isLastAssistant}
             onSubmit={onSubmitQuestionForm}
             submitDisabled={questionFormSubmitDisabled}
             visualStyleContext={visualStyleContext}
@@ -2900,7 +2900,7 @@ function FormBlock({
   projectId,
   conversationId,
   nextUserContent,
-  interactive,
+  isLatestAssistantMessage,
   onSubmit,
   submitDisabled,
   visualStyleContext,
@@ -2910,7 +2910,9 @@ function FormBlock({
   projectId?: string | null;
   conversationId?: string | null;
   nextUserContent?: string;
-  interactive: boolean;
+  // Only drives the "Answer now" affordance. It must never lock the form:
+  // an unanswered form stays answerable however many turns have passed.
+  isLatestAssistantMessage: boolean;
   onSubmit?: QuestionFormSubmitHandler;
   submitDisabled: boolean;
   visualStyleContext?: VisualStyleContext;
@@ -3281,7 +3283,10 @@ function FormBlock({
     <>
       <QuestionFormView
         form={form}
-        interactive={interactive}
+        // A form only reaches this branch while `submittedFromHistory` is
+        // null — its answers never came back — so it is still answerable.
+        interactive
+        isLatestTurn={isLatestAssistantMessage}
         draftAnswers={draftAnswers}
         onDraftChange={updateDraftAnswers}
         onAnswerChange={handleAnswerChange}
