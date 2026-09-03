@@ -130,20 +130,18 @@ export function deriveFileOps(events: AgentEvent[] | undefined): FileOpEntry[] {
 }
 
 /**
- * True when the run attempted any file mutation (write/edit/delete tool call,
- * or a simple Bash rm/unlink), regardless of whether the attempt succeeded.
- * Tool names must stay aligned with the daemon's cross-runtime
- * `WRITE_OR_EDIT_TOOL_NAMES` set in `apps/daemon/src/runtimes/run-artifacts.ts`.
+ * True when the run attempted to PRODUCE a file — a write or edit tool call —
+ * regardless of whether the attempt succeeded. Removing a file is deliberately
+ * not such an attempt: a turn that only cleans up owes the user no new
+ * deliverable. Tool names stay aligned with the daemon's cross-runtime
+ * `WRITE_OR_EDIT_TOOL_NAMES` set in `apps/daemon/src/runtimes/run-artifacts.ts`,
+ * which carries the same write/edit-only membership.
  */
-export function hasFileMutationToolUse(events: AgentEvent[] | undefined): boolean {
+export function hasFileWriteToolUse(events: AgentEvent[] | undefined): boolean {
   for (const ev of events ?? []) {
     if (ev.kind !== 'tool_use') continue;
-    if (ev.name === 'Bash') {
-      if (extractSimpleBashDeletes(ev.input).length > 0) return true;
-      continue;
-    }
     const kind = classify(ev.name);
-    if (kind === 'write' || kind === 'edit' || kind === 'delete') return true;
+    if (kind === 'write' || kind === 'edit') return true;
   }
   return false;
 }
