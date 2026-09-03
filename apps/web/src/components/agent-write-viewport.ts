@@ -38,17 +38,24 @@ export function agentWriteMayFocusFile(
  * Invariant: the preview refreshes once per settled write, not once per
  * intermediate filesystem event.
  *
- * A rewrite reaches the watcher as `unlink` + `add` and then a run of
- * `change` events that lasts as long as the write does. Each refresh
- * re-fetches the file list and cache-busts the viewer iframe, so refreshing
- * mid-write reloads the document under the user — losing scroll position and
- * showing half-written source.
+ * A rewrite reaches the client as a burst — `unlink` + `add` for a
+ * temp-file-and-move, `change` for an in-place edit, plus one burst per file
+ * when a turn writes several. Refreshing on an intermediate event of a burst
+ * makes the open tab's file vanish for a frame and re-fetches the list before
+ * the write is whole.
  *
- * `wait` is therefore the quiet window that defines "settled": longer than
- * any single rename burst, short enough that a finished write still appears
- * promptly. `maxWait` is the starvation bound for a write that never goes
- * quiet; it matches chokidar's own `awaitWriteFinish.stabilityThreshold`
- * default, so a pathological stream of events costs one refresh every two
- * seconds instead of four per second.
+ * `wait` is the quiet window that defines "settled": longer than one burst,
+ * short enough that a finished write still appears promptly. The producer
+ * already de-bounces per file — the daemon's project watcher runs chokidar
+ * with `awaitWriteFinish` (`apps/daemon/src/project-watchers.ts`,
+ * `DEFAULT_AWAIT_WRITE_FINISH`), so an event means that file has stopped
+ * changing, and the client never has to guess at a half-written file. If that
+ * threshold is ever retuned, retune this window with it.
+ *
+ * `maxWait` bounds how long a continuing stream of settled writes may defer
+ * the refresh. It is not a compromise on the invariant: past the cap the
+ * events being coalesced are many completed writes, not one unfinished one,
+ * and holding the preview back further would leave the canvas stale while the
+ * agent keeps working.
  */
 export const SETTLED_WRITE_REFRESH = { wait: 250, maxWait: 2_000 } as const;

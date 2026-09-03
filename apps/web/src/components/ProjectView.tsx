@@ -2644,13 +2644,12 @@ export function ProjectView({
   // cache-bust, triggering an automatic preview reload without a click.
   //
   // Coalesce the refresh: agent rewrites surface to chokidar as an
-  // `unlink` + `add` (+ later `change`) burst (#2195), and a large write
-  // keeps emitting `change` for as long as it takes. Refreshing on an
-  // intermediate event makes the open tab's active file vanish for one frame
-  // before the `add` restores it — FileWorkspace's "tab no longer on disk"
-  // path then drops the user out of their preview — and reloads the viewer
-  // under the user mid-write. `SETTLED_WRITE_REFRESH` states the window that
-  // defines a settled write.
+  // `unlink` + `add` (+ later `change`) burst (#2195), and a turn that writes
+  // several files emits one burst per file. Refreshing on an intermediate
+  // event makes the open tab's active file vanish for one frame before the
+  // `add` restores it, and FileWorkspace's "tab no longer on disk" path then
+  // drops the user out of their preview. `SETTLED_WRITE_REFRESH` states the
+  // window that defines a settled write.
   const refreshFilesAndDesignMd = useCallback(() => {
     // This refresh answers every file change seen so far; the fetch it
     // triggers is what finally clears the progress hint.
