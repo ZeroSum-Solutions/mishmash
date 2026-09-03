@@ -420,8 +420,12 @@ describe('daemon startup route smoke', () => {
         cancelRequested: true,
         error: null,
         errorCode: null,
-        failureCategory: null,
-        failureDetail: null,
+        // A canceled run now names why it stopped, so the late error frame is
+        // caught by the cause being the cancellation rather than by the fields
+        // staying empty: `user_cancel` proves the error frame did not overwrite
+        // the reason, which asserting `null` no longer can.
+        failureCategory: 'user_cancel',
+        failureDetail: 'user_cancelled',
       });
 
       const events = await readRunSse(started.url, runId);

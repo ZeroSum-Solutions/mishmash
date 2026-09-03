@@ -1,5 +1,5 @@
 import type { LiveArtifactRefreshStatus } from '../api/live-artifacts.js';
-import type { RunFailureCategory, RunFailureDetail } from '../api/chat.js';
+import type { RunFailureCategory, RunFailureDetail, RunFailureStage } from '../api/chat.js';
 import type { SseErrorPayload } from '../errors.js';
 import type { SseTransportEvent } from './common.js';
 
@@ -101,6 +101,9 @@ export interface ChatSseEndPayload {
    *  Mirror ChatRunStatusResponse.failureCategory / failureDetail. */
   failureCategory?: RunFailureCategory | null;
   failureDetail?: RunFailureDetail | null;
+  /** Lifecycle step the run was in when it failed. Mirrors
+   *  ChatRunStatusResponse.failureStage. */
+  failureStage?: RunFailureStage | null;
 }
 
 export type DaemonAgentPayload =

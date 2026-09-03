@@ -155,6 +155,33 @@ describe('classifyRunFailure', () => {
     });
   });
 
+  // W1.4: a daemon shutdown ends in-flight turns through the same
+  // `cancelRequested` path as a user pressing Stop, so without the origin the
+  // run record would tell the user they cancelled a turn the daemon killed.
+  it('does not report a daemon-shutdown cancellation as the user cancelling', () => {
+    expect(
+      classifyRunFailure({
+        result: 'cancelled',
+        cancelOrigin: 'shutdown',
+        status: { status: 'canceled', signal: 'SIGTERM' },
+      }),
+    ).toEqual({
+      failure_category: 'process_exit',
+      failure_detail: 'interrupted',
+      failure_stage: 'first_token_wait',
+      retryable: true,
+      user_action: 'retry',
+    });
+    // An explicit user origin, and an absent one, both stay the user's cancel.
+    expect(
+      classifyRunFailure({
+        result: 'cancelled',
+        cancelOrigin: 'user',
+        status: { status: 'canceled' },
+      }),
+    ).toMatchObject({ failure_detail: 'user_cancelled' });
+  });
+
   it('uses phase evidence for cancelled runs with tool activity', () => {
     expect(
       classifyRunFailure({
@@ -743,6 +770,29 @@ describe('classifyRunFailure — signal and interrupt attribution', () => {
       failure_detail: 'signal_killed',
       retryable: false,
       user_action: 'none',
+    });
+  });
+
+  // W1.4 / B-04: an out-of-memory kill often reaches the daemon as exit code
+  // 137 with no signal name — a shell (or a reaped process group) renders
+  // "killed by signal N" as 128 + N. Before this mapping it fell into the
+  // generic `exit_code` bucket, which is how the report's 77-second ffmpeg
+  // encode died with no message the user could act on.
+  it('classifies 128+N exit codes through the signal they encode', () => {
+    expect(classifyExit(137, 'Killed')).toMatchObject({
+      failure_category: 'process_exit',
+      failure_detail: 'signal_killed',
+      retryable: false,
+    });
+    expect(classifyExit(139, 'Segmentation fault')).toMatchObject({
+      failure_detail: 'process_crashed',
+    });
+    expect(classifyExit(143, '')).toMatchObject({
+      failure_detail: 'terminated_unknown',
+    });
+    // An ordinary non-zero exit is NOT a signal and must keep its own bucket.
+    expect(classifyExit(1, 'command failed')).toMatchObject({
+      failure_detail: 'exit_code',
     });
   });
 

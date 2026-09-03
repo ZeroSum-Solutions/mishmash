@@ -16,6 +16,7 @@ import { parseDesignSystemRenameArgs } from './design-systems/rename-args.js';
 import { runLiveArtifactsToolCli } from './tools-live-artifacts-cli.js';
 import { splitResearchSubcommand } from './research/cli-args.js';
 import { resolveDaemonUrl } from './daemon-url.js';
+import { formatRunFailureSummary } from './run-failure-summary.js';
 import { requestJsonIpc } from '@open-design/sidecar';
 import { SIDECAR_ENV, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
 import { EXPORT_FORMATS, EXPORT_IMAGE_FORMATS } from '@open-design/contracts';
@@ -7701,7 +7702,7 @@ async function runRun(args) {
   od run cancel <runId>                     Request cancellation.
   od run continue <runId> [--follow]        Continue a resumable failed run.
   od run list   [--project <id>]            List recent runs.
-  od run info   <runId>                     One run's status.
+  od run info   <runId> [--json]            One run's status; a failed run\n                                            prints the step, cause, whether\n                                            files changed, and how to resume.
   od run result-package <runId> [--json]    Inspect run outputs and workspace
                                             provenance without applying them.
 
@@ -7732,12 +7733,18 @@ Common options:
     case 'info': {
       const id = rest.find((a) => !a.startsWith('-'));
       if (!id) {
-        console.error('Usage: od run info <runId>');
+        console.error('Usage: od run info <runId> [--json]');
         process.exit(2);
       }
       const resp = await fetch(`${base}/api/runs/${encodeURIComponent(id)}`);
       if (!resp.ok) return structuredHttpFailure(resp, 'run-not-found');
       const data = await resp.json();
+      // A failed or canceled run gets the failure summary; anything else keeps
+      // the raw record, which is what the JSON consumers of this command read.
+      if (!flags.json && (data?.status === 'failed' || data?.status === 'canceled')) {
+        for (const line of formatRunFailureSummary(data)) console.log(line);
+        return;
+      }
       process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       return;
     }

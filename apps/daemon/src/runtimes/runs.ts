@@ -342,6 +342,7 @@ export function createChatRunService({
     errorCode: run.errorCode ?? null,
     failureCategory: run.failureCategory ?? null,
     failureDetail: run.failureDetail ?? null,
+    failureStage: run.failureStage ?? null,
     resumable: run.resumable ?? false,
     endedWithUnfinishedWork: !!run.endedWithUnfinishedWork,
     modelRouting: modelRoutingForRun(run),
@@ -410,6 +411,7 @@ export function createChatRunService({
       ...(Number.isFinite(run.artifactCount) ? { artifactCount: run.artifactCount } : {}),
       failureCategory: run.failureCategory ?? null,
       failureDetail: run.failureDetail ?? null,
+      failureStage: run.failureStage ?? null,
     });
     for (const sse of run.clients) sse.end();
     run.clients.clear();
@@ -634,6 +636,12 @@ export function createChatRunService({
   const cancel = async (run) => {
     if (TERMINAL_RUN_STATUSES.has(run.status)) return statusBody(run);
     run.cancelRequested = true;
+    // Someone pressed Stop. `shutdownActive` records a different origin below;
+    // both set `cancelRequested`, so this field is the only thing that can tell
+    // a deliberate Stop apart from the daemon ending the turn. First writer
+    // wins: whoever asked for the cancellation first is who cancelled it, and a
+    // shutdown racing a Stop must not restate the reason after the fact.
+    run.cancelOrigin ??= 'user';
     run.updatedAt = Date.now();
     clearPendingRetryRestart(run);
     closeRunStdin(run);
@@ -677,6 +685,8 @@ export function createChatRunService({
     const activeRuns = Array.from(runs.values()).filter((run) => !TERMINAL_RUN_STATUSES.has(run.status));
     await Promise.all(activeRuns.map(async (run) => {
       run.cancelRequested = true;
+      // First writer wins — see `cancel` above.
+      run.cancelOrigin ??= 'shutdown';
       run.updatedAt = Date.now();
       clearPendingRetryRestart(run);
       closeRunStdin(run);

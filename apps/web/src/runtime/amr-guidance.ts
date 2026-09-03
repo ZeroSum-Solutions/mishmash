@@ -1,3 +1,5 @@
+import type { RunFailureDetail } from '@open-design/contracts';
+
 // Shared logic that maps a failed run's error code + agent into the failure
 // UI: which contextual button the gray error card shows, whether to override
 // the error text, and whether to show the AMR promotion card below. Kept in
@@ -115,6 +117,7 @@ export type RunFailureMessageKey =
   | 'chat.runError.sessionExpiredMessage'
   | 'chat.runError.gitBashMissingMessage'
   | 'chat.runError.cpuUnsupportedMessage'
+  | 'chat.runError.stoppedBySystemMessage'
   | null;
 
 // i18n keys for the unified error card's TITLE (the "error type" line above the
@@ -142,6 +145,16 @@ export type RunFailureTitleKey =
   | 'chat.runError.title.gitBashMissing'
   | 'chat.runError.title.artifactMissing'
   | 'chat.runError.title.cpuUnsupported'
+  | 'chat.runError.title.cliOutdated'
+  | 'chat.runError.title.attachmentUnsupported'
+  | 'chat.runError.title.requestRejected'
+  | 'chat.runError.title.toolFailed'
+  | 'chat.runError.title.agentDidNotStart'
+  | 'chat.runError.title.agentStopped'
+  | 'chat.runError.title.agentCrashed'
+  | 'chat.runError.title.stoppedBySystem'
+  | 'chat.runError.title.permissionBlocked'
+  | 'chat.runError.title.stopped'
   | 'chat.runError.title.generic';
 
 export interface RunFailureUi {
@@ -307,6 +320,14 @@ const AGENT_AGNOSTIC_DETAIL_FAILURE_UI: Record<string, RunFailureUi> = {
   // switching hosted models doesn't help (the runtime binary is the problem).
   // The fix is updating MishMash to a build that bundles a compatible
   // (baseline) runtime, so show guidance copy without a dead Retry button.
+  // The OS killed a step in the run (SIGKILL / exit 137) — the case behind the
+  // 77s ffmpeg encode that died with no message. Name it and describe the
+  // likely causes (docs/subprocess-limits.md documents the full policy)
+  // instead of leaving the user with a silent kill.
+  signal_killed: retryWithGuidance(
+    'chat.runError.title.stoppedBySystem',
+    'chat.runError.stoppedBySystemMessage',
+  ),
   cpu_unsupported: {
     primaryAction: 'none',
     titleKey: 'chat.runError.title.cpuUnsupported',
@@ -315,6 +336,105 @@ const AGENT_AGNOSTIC_DETAIL_FAILURE_UI: Record<string, RunFailureUi> = {
     showSwitchCard: false,
   },
 };
+
+/**
+ * Every failure cause the daemon classifies has a user-facing name.
+ *
+ * `failureDetail` is a closed union owned by `packages/contracts`. Typing this
+ * map as a TOTAL `Record` over that union is what enforces the invariant: a
+ * cause cannot be added upstream without this file naming it, so a classified
+ * failure can never reach the user as the catch-all "Task failed". `unknown` is
+ * the single deliberate exception — it is the daemon saying it could not tell,
+ * and the generic title is then the honest answer.
+ *
+ * This map supplies the TITLE only. Which button the card offers, and any copy
+ * override, stay with the precedence rules in `resolveRunFailureUi` below; this
+ * fills the title the generic fallbacks would otherwise use.
+ */
+const RUN_FAILURE_TITLE_BY_DETAIL: Record<RunFailureDetail, RunFailureTitleKey> = {
+  // Sign-in and credentials.
+  auth_required: 'chat.runError.title.signInRequired',
+  stale_profile: 'chat.runError.title.signInRequired',
+  refresh_token_reused: 'chat.runError.title.signInRequired',
+  missing_api_key: 'chat.runError.title.authRequired',
+  invalid_api_key: 'chat.runError.title.authRequired',
+  // Quota, billing, and rate limits.
+  hard_quota: 'chat.runError.title.quotaExhausted',
+  workspace_credits_exhausted: 'chat.runError.title.quotaExhausted',
+  rate_limit_429: 'chat.runError.title.rateLimited',
+  amr_insufficient_balance: 'chat.runError.title.balance',
+  amr_tier_upgrade_required: 'chat.amrBalanceGate.title',
+  // Model selection.
+  model_not_found: 'chat.runError.title.modelUnavailable',
+  model_not_supported: 'chat.runError.title.modelUnavailable',
+  model_disabled: 'chat.runError.title.modelUnavailable',
+  local_model_not_loaded: 'chat.runError.title.modelUnavailable',
+  cli_version_incompatible: 'chat.runError.title.cliOutdated',
+  // What we sent.
+  prompt_too_large: 'chat.runError.title.promptTooLarge',
+  request_too_large: 'chat.runError.title.promptTooLarge',
+  attachment_media_type_unsupported: 'chat.runError.title.attachmentUnsupported',
+  tool_schema_invalid: 'chat.runError.title.requestRejected',
+  prompt_tokenization_failed: 'chat.runError.title.requestRejected',
+  provider_resource_not_found: 'chat.runError.title.requestRejected',
+  upstream_client_error: 'chat.runError.title.requestRejected',
+  // The model service.
+  upstream_5xx: 'chat.runError.title.upstreamUnavailable',
+  provider_high_demand: 'chat.runError.title.upstreamUnavailable',
+  provider_routing_error: 'chat.runError.title.upstreamUnavailable',
+  stream_disconnected: 'chat.runError.title.connectionDropped',
+  network_error: 'chat.runError.title.connectionDropped',
+  // A dropped stream mid-response: the shape a sleeping machine produces.
+  stream_error: 'chat.runError.title.connectionDropped',
+  stdin_write_eof: 'chat.runError.title.connectionDropped',
+  // Time.
+  inactivity_timeout: 'chat.runError.title.timedOut',
+  timeout: 'chat.runError.title.timedOut',
+  // What came back.
+  empty_output: 'chat.runError.title.emptyOutput',
+  tool_error: 'chat.runError.title.toolFailed',
+  plugin_artifact_missing: 'chat.runError.title.artifactMissing',
+  agent_protocol_error: 'chat.runError.title.outputInvalid',
+  fabricated_role_marker: 'chat.runError.title.outputInvalid',
+  qoder_stop_sequence: 'chat.runError.title.outputInvalid',
+  // The local agent process.
+  cli_not_installed: 'chat.runError.title.cliMissing',
+  git_bash_missing: 'chat.runError.title.gitBashMissing',
+  agent_config_invalid: 'chat.runError.title.runtimeConfig',
+  spawn_failed: 'chat.runError.title.agentDidNotStart',
+  spawn_enoexec: 'chat.runError.title.agentDidNotStart',
+  spawn_ebadf: 'chat.runError.title.agentDidNotStart',
+  spawn_eperm: 'chat.runError.title.agentDidNotStart',
+  cpu_unsupported: 'chat.runError.title.cpuUnsupported',
+  session_resume_expired: 'chat.runError.title.sessionExpired',
+  permission_request_not_found: 'chat.runError.title.permissionBlocked',
+  process_crashed: 'chat.runError.title.agentCrashed',
+  // SIGKILL / exit 137 — the OS, not the agent, ended the step.
+  signal_killed: 'chat.runError.title.stoppedBySystem',
+  // Someone or something stopped the run on purpose.
+  interrupted: 'chat.runError.title.stopped',
+  user_cancelled: 'chat.runError.title.stopped',
+  // The agent exited badly and said why only in its own text, which the card
+  // shows verbatim under the title.
+  exit_code: 'chat.runError.title.agentStopped',
+  exit_nonzero: 'chat.runError.title.agentStopped',
+  terminated_unknown: 'chat.runError.title.agentStopped',
+  fatal_rpc_error: 'chat.runError.title.agentStopped',
+  execution_failed: 'chat.runError.title.agentStopped',
+  // The daemon could not classify it; "Task failed" is then the honest title.
+  unknown: 'chat.runError.title.generic',
+};
+
+/** The named title for a classified cause, or null when the daemon reported no
+ *  cause (or only `unknown`) and the generic title is the truthful one. */
+function namedTitleForDetail(
+  detail: string | null | undefined,
+): RunFailureTitleKey | null {
+  if (typeof detail !== 'string') return null;
+  const titleKey = RUN_FAILURE_TITLE_BY_DETAIL[detail as RunFailureDetail];
+  if (!titleKey || titleKey === 'chat.runError.title.generic') return null;
+  return titleKey;
+}
 
 // Resolve the failure UI for a failed run:
 //   - agent-agnostic root cause (cli missing, prompt too large, model
@@ -378,7 +498,7 @@ export function resolveRunFailureUi(
     }
     return {
       primaryAction: 'retry',
-      titleKey: 'chat.runError.title.generic',
+      titleKey: namedTitleForDetail(detail) ?? 'chat.runError.title.generic',
       messageKey: null,
       secondaryRetry: false,
       showSwitchCard: false,
@@ -471,7 +591,8 @@ export function resolveRunFailureUi(
   const promote = typeof code === 'string' && PROMOTE_AMR_CODES.has(code);
   return {
     primaryAction: 'retry',
-    titleKey: 'chat.runError.title.generic',
+    // Last stop before the catch-all: name the cause the daemon classified.
+    titleKey: namedTitleForDetail(detail) ?? 'chat.runError.title.generic',
     messageKey: null,
     secondaryRetry: false,
     showSwitchCard: promote,
