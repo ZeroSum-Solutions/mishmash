@@ -117,6 +117,7 @@ import {
   resolveDesignDeliveryOutcome,
   type DesignDeliveryOutcome,
 } from '../runtime/design-delivery';
+import { retractsRunFailure, retractsStaleRunFailure } from '../runtime/run-failure-reconcile';
 import { RESUME_CONTINUE_PROMPT } from '../runtime/resume';
 import { checkAmrBalanceGate } from '../runtime/amr-balance-gate';
 import { isPaidAmrPlan, resolveAmrPlan } from '../runtime/amr-low-balance-plan';
@@ -3118,7 +3119,11 @@ export function ProjectView({
       try {
         const serverMessages = await listMessages(project.id, conversationId);
         if (messagesConversationIdRef.current !== conversationId) return;
+        const shownMessages = messagesRef.current;
         setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
+        // A row these server rows move out of terminal failure takes the pane's
+        // run-error alert with it — see `retractsStaleRunFailure`.
+        if (retractsStaleRunFailure(shownMessages, serverMessages)) setError(null);
         setMessagesInitialized(true);
         setMessagesConversationId(conversationId);
         setFailedMessagesConversationId(null);
@@ -4441,6 +4446,13 @@ export function ProjectView({
           },
           onRunStatus: (runStatus) => {
             textBuffer.flush();
+            // The authoritative status for the run this row was failed against.
+            // If it moves the row out of failure it retracts the pane's alert
+            // too — see `retractsRunFailure`.
+            const retractsFailure = retractsRunFailure(
+              messagesRef.current.find((m) => m.id === message.id),
+              runStatus,
+            );
             updateMessageById(
               message.id,
               (prev) => ({
@@ -4450,6 +4462,7 @@ export function ProjectView({
               }),
               true,
             );
+            if (retractsFailure) setError(null);
             latestReattachRunStatus = runStatus;
             if (runStatus === 'canceled') {
               textBuffer.cancel();
