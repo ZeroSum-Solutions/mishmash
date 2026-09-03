@@ -12,6 +12,7 @@ export type ChatRunCreateBody = {
   model?: string | null;
   projectId: string;
   reasoning?: string | null;
+  sessionMode?: 'chat' | 'design' | 'plan';
   skillId?: string | null;
   toolBundle?: {
     mcpServers?: Array<Record<string, unknown>>;

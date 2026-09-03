@@ -934,6 +934,29 @@ export async function listProjectPreviews(
 }
 
 /**
+ * Ask the daemon to open a running preview in Google Chrome on ITS OWN
+ * machine (issue #158): a default browser that refuses loopback makes a
+ * healthy preview server look dead, and only the daemon can name a browser.
+ * Resolves to the URL the daemon opened, or null when it could not.
+ */
+export async function openPreviewInChrome(
+  projectId: string,
+  previewId: string,
+): Promise<string | null> {
+  try {
+    const resp = await fetch(
+      `/api/projects/${encodeURIComponent(projectId)}/previews/${encodeURIComponent(previewId)}/open`,
+      { method: 'POST' },
+    );
+    if (!resp.ok) return null;
+    const json = (await resp.json()) as import('@open-design/contracts').PreviewOpenResponse;
+    return typeof json.url === 'string' ? json.url : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Preflight whether an external site allows the Design Browser's iframe
  * fallback to embed it. Returns null on any transport failure so callers
  * treat "cannot check" exactly like an unknown verdict and embed as-is.

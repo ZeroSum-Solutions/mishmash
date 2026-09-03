@@ -286,6 +286,19 @@ export interface Project {
   designSystemId: string | null;
   createdAt: number;
   updatedAt: number;
+  /**
+   * True when the daemon holds rendered cover image bytes for this project,
+   * i.e. when `GET /api/projects/:id/cover` will answer 200 rather than 404.
+   * That route's contract is frozen as "raw image bytes 200, or 404" (see
+   * `api/covers.ts`), so a client that points an `<img>` at it before the
+   * first render takes a guaranteed 404 — which the web's resource-health
+   * probe records as a `resource-failed` anomaly for entirely ordinary use.
+   * Consult this field first; it is the only supported way to know.
+   *
+   * Optional so a response that predates the field still parses; treat an
+   * absent value as "no cover".
+   */
+  hasCover?: boolean;
   status?: ProjectStatusInfo;
   pendingPrompt?: string;
   metadata?: ProjectMetadata;

@@ -15,7 +15,7 @@ import { BRAND_USAGE, isBrandHelpArg } from './cli-help/index.js';
 import { parseDesignSystemRenameArgs } from './design-systems/rename-args.js';
 import { runLiveArtifactsToolCli } from './tools-live-artifacts-cli.js';
 import { splitResearchSubcommand } from './research/cli-args.js';
-import { resolveDaemonUrl } from './daemon-url.js';
+import { resolveDaemonUrl, DaemonUrlDiscoveryError } from './daemon-url.js';
 import { formatRunFailureSummary } from './run-failure-summary.js';
 import { requestJsonIpc } from '@open-design/sidecar';
 import { SIDECAR_ENV, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
@@ -449,6 +449,7 @@ const RECOVERABLE_EXIT_CODES = {
   'genui-surface-awaiting':   73,
   'desktop-auth-pending':     74,
   'desktop-import-token-rejected': 75,
+  'daemon-url-unresolved':    76,
 };
 const PLUGIN_LIST_FILTER_FLAGS = new Set([
   ...PLUGIN_STRING_FLAGS,
@@ -1663,7 +1664,7 @@ async function runPreview(args) {
     printPreviewHelp();
     process.exit(sub === 'help' || args.includes('--help') || args.includes('-h') ? 0 : 2);
   }
-  if (sub !== 'start' && sub !== 'list' && sub !== 'stop') {
+  if (sub !== 'start' && sub !== 'list' && sub !== 'stop' && sub !== 'open') {
     console.error(`unknown subcommand: od preview ${sub}`);
     printPreviewHelp();
     process.exit(2);
@@ -1714,13 +1715,15 @@ async function runPreview(args) {
   if (sub === 'list') {
     return send(base, { method: 'GET' });
   }
-  if (sub === 'stop') {
+  if (sub === 'stop' || sub === 'open') {
     const previewId = typeof flags.id === 'string' ? flags.id.trim() : '';
     if (!previewId) {
       console.error('--id required');
       process.exit(2);
     }
-    return send(`${base}/${encodeURIComponent(previewId)}`, { method: 'DELETE' });
+    const target = `${base}/${encodeURIComponent(previewId)}`;
+    if (sub === 'open') return send(`${target}/open`, { method: 'POST' });
+    return send(target, { method: 'DELETE' });
   }
   const port = Number(flags.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -1747,6 +1750,7 @@ function printPreviewHelp() {
   od preview start --project <id> --port <n> [--dir <subdir>] [--daemon-url <url>] -- <command...>
   od preview list --project <id> [--daemon-url <url>]
   od preview stop --project <id> --id <previewId> [--daemon-url <url>]
+  od preview open --project <id> --id <previewId> [--daemon-url <url>]
 
 Daemon-managed preview servers (issue #38): the daemon owns the process, so it
 survives the agent tool call that started it; \`start\` returns ONLY after the
@@ -1754,11 +1758,17 @@ port verifiably answers HTTP — never report a preview URL as live any other
 way. \`stop\` succeeds only when the whole process group is confirmed gone.
 Output is JSON on stdout.
 
+\`start\` and \`list\` announce each preview on the host this command reached
+the daemon on, so a URL taken over a tailnet names the tailnet host instead of
+a loopback address the caller cannot reach (issue #158). \`open\` launches the
+preview in Google Chrome on the DAEMON's machine, for a default browser that
+refuses loopback.
+
 Flags:
   --project     Required project id.
   --port        start: the port the command will listen on (also passed as $PORT).
   --dir         start: working directory relative to the project dir (must stay inside it).
-  --id          stop: the preview session id from start/list.
+  --id          stop/open: the preview session id from start/list.
   --daemon-url  Local daemon URL. Defaults to OD_DAEMON_URL, OD_SIDECAR_IPC_PATH discovery, or http://127.0.0.1:7456.`);
 }
 
@@ -2429,8 +2439,22 @@ function surfaceFetchError(err, daemonUrl) {
   }
 }
 
+// Discovery that could not finish is refused by resolveDaemonUrl rather than
+// collapsed onto the default port (see daemon-url.ts,
+// `defaultDaemonUrlOrFailClosed`). Surface that as the same structured
+// envelope every other recoverable CLI failure uses, so an embedding agent
+// reads a code instead of an unhandled rejection, and name the two ways out.
 async function cliDaemonUrl(flags) {
-  return resolveDaemonUrl({ flagUrl: flags?.['daemon-url'] });
+  try {
+    return await resolveDaemonUrl({ flagUrl: flags?.['daemon-url'] });
+  } catch (err) {
+    if (!(err instanceof DaemonUrlDiscoveryError)) throw err;
+    exitWithStructuredError({
+      code:    'daemon-url-unresolved',
+      message: err.message,
+      data:    { reasons: err.reasons },
+    });
+  }
 }
 
 async function cliDaemonBaseUrl(flags) {
