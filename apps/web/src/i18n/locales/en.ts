@@ -2606,6 +2606,7 @@ export const en: Dict = {
   'previewRunStatus.failed': 'Delivery needs attention · Retry in Chat',
   'previewRunStatus.dismiss': 'Dismiss',
   'previewRunStatus.elapsed': 'Elapsed {time}',
+  'previewRunStatus.updating': 'Updating preview…',
   'workspace.designFilesLink': 'Design Files',
   'workspace.loadingSketch': 'Loading sketch…',
   'workspace.newTab': 'New tab',

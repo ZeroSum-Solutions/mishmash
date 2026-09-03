@@ -182,6 +182,10 @@ interface Props {
   files: ProjectFile[];
   liveArtifacts: LiveArtifactSummary[];
   filesRefreshKey?: number;
+  /** True while an agent write is landing and the refreshed file list is
+   *  being fetched. Drives the preview canvas's progress hint so deferring
+   *  the refresh to the settled write does not read as nothing happening. */
+  previewUpdating?: boolean;
   onRefreshFiles: () => Promise<void> | void;
   isDeck: boolean;
   streaming?: boolean;
@@ -1049,6 +1053,7 @@ export function FileWorkspace({
   files,
   liveArtifacts,
   filesRefreshKey = 0,
+  previewUpdating = false,
   onRefreshFiles,
   isDeck,
   streaming,
@@ -3801,6 +3806,7 @@ export function FileWorkspace({
               projectId={projectId}
               conversationId={conversationId}
               messages={messages}
+              previewUpdating={previewUpdating}
             />
           </div>
         ) : null}

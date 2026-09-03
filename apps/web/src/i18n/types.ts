@@ -3400,6 +3400,7 @@ export interface Dict {
   'previewRunStatus.failed': string;
   'previewRunStatus.dismiss': string;
   'previewRunStatus.elapsed': string;
+  'previewRunStatus.updating': string;
   'designFiles.title': string;
   'designFiles.upload': string;
   'designFiles.pasteText': string;
