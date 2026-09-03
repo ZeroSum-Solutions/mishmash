@@ -8,9 +8,17 @@ import type { McpServerConfig } from './mcp-config.js';
 import { applyMcpServerRepair, probeMcpServerHealth, probeMcpServersHealth } from './mcp-health.js';
 import { beginAuth, exchangeCodeForToken, refreshAccessToken } from './mcp-oauth.js';
 import { clearToken, getToken, isTokenExpired, readAllTokens, setToken } from './mcp-tokens.js';
+import type { createFilesystemWriteGateway } from './filesystem/write-gateway.js';
 import type { RouteDeps } from './server-context.js';
 
-export interface RegisterMcpRoutesDeps extends RouteDeps<'http' | 'paths' | 'mcp'> {}
+export interface RegisterMcpRoutesDeps extends RouteDeps<'http' | 'paths' | 'mcp'> {
+  // Declared here rather than on `ServerContext`, which carries no `filesystem`
+  // key: the other route modules that write (`design-library`, `library`,
+  // `storyboard`) each declare it the same way, and the daemon passes its
+  // audited factory in. `POST /api/mcp/repair` removes a directory outside the
+  // daemon's data, so it is one of those writers.
+  filesystem: { create: typeof createFilesystemWriteGateway };
+}
 
 export function registerMcpRoutes(app: Express, ctx: RegisterMcpRoutesDeps) {
   const { isLocalSameOrigin, resolvedPortRef, sendApiError } = ctx.http;
@@ -275,7 +283,8 @@ export function registerMcpRoutes(app: Express, ctx: RegisterMcpRoutesDeps) {
         );
       }
       const removed = await applyMcpServerRepair(repair, {
-        runtimeDataRoot: RUNTIME_DATA_DIR,
+        runtimeDataRoot:    RUNTIME_DATA_DIR,
+        createWriteGateway: ctx.filesystem.create,
       });
       res.json({ serverId, repair, removed });
     } catch (err: any) {
