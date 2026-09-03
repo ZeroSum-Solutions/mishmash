@@ -21,7 +21,7 @@ import { join } from 'node:path';
 import express from 'express';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { mcpNpxCacheRepair } from '../src/mcp-health.js';
+import { applyMcpServerRepair, mcpNpxCacheRepair } from '../src/mcp-health.js';
 import { registerMcpRoutes } from '../src/mcp-routes.js';
 import { isLocalSameOrigin } from '../src/origin-validation.js';
 
@@ -172,6 +172,27 @@ describe('the recognized npx-cache failure carries a repair, not only advice', (
     expect(mermaid?.remedy).toContain(cacheEntry);
   });
 
+  it('offers no repair when the directory the stderr names is not there', async () => {
+    // The stderr signature is unchanged; only the disk is. A path read out of
+    // third-party output is a claim, and an unverifiable claim earns no action.
+    await rm(cacheEntry, { recursive: true, force: true });
+
+    const res = await getJson('/api/mcp/health');
+    const mermaid = (res.json?.servers ?? []).find((entry: any) => entry.id === 'mermaid');
+
+    expect(mermaid?.state).toBe('failed');
+    expect(mermaid?.repair).toBeUndefined();
+  });
+
+  it('offers no repair when the entry is a complete package, not a broken one', async () => {
+    await writeFile(join(cacheEntry, 'package.json'), '{"name":"whole"}', 'utf8');
+
+    const res = await getJson('/api/mcp/health');
+    const mermaid = (res.json?.servers ?? []).find((entry: any) => entry.id === 'mermaid');
+
+    expect(mermaid?.repair).toBeUndefined();
+  });
+
   it('offers no repair for a server that started', async () => {
     const res = await getJson('/api/mcp/health');
     const healthy = (res.json?.servers ?? []).find(
@@ -211,6 +232,18 @@ describe('the repair endpoint refuses to act without an explicit confirmation', 
     expect(res.status).toBe(404);
   });
 
+  it('refuses once the entry the stderr names is gone', async () => {
+    await rm(cacheEntry, { recursive: true, force: true });
+
+    const res = await postJson('/api/mcp/repair', {
+      serverId: 'mermaid',
+      confirm: true,
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.json?.error?.code).toBe('MCP_REPAIR_UNAVAILABLE');
+  }, 40_000);
+
   it('rejects a server whose current state offers no repair', async () => {
     const res = await postJson('/api/mcp/repair', {
       serverId: 'healthy-probe',
@@ -238,25 +271,6 @@ describe('a confirmed repair removes the cache entry MishMash derived itself', (
       repair: { kind: 'npx-cache', target: cacheEntry },
     });
     expect(await exists(cacheEntry)).toBe(false);
-  }, 40_000);
-
-  it('reports removed: false when the entry was already gone', async () => {
-    // The signature is still in the server's stderr, so a repair is still
-    // offered — but there is nothing left to remove. `rm` runs with `force`,
-    // so only a presence check can tell the difference.
-    await rm(cacheEntry, { recursive: true, force: true });
-
-    const res = await postJson('/api/mcp/repair', {
-      serverId: 'mermaid',
-      confirm: true,
-    });
-
-    expect(res.status).toBe(200);
-    expect(res.json).toMatchObject({
-      serverId: 'mermaid',
-      removed: false,
-      repair: { kind: 'npx-cache', target: cacheEntry },
-    });
   }, 40_000);
 
   it('ignores a caller-supplied target and uses the one it derived', async () => {
@@ -306,5 +320,53 @@ describe('the derived repair path is an npx cache entry or it is nothing', () =>
     expect(
       mcpNpxCacheRepair(`warning: reading /home/u/.npm/_npx/${CACHE_HASH}/package.json`),
     ).toBeUndefined();
+  });
+});
+
+describe('the removal verifies the directory itself, not only the path', () => {
+  it('removes nothing when the target is absent', async () => {
+    await rm(cacheEntry, { recursive: true, force: true });
+
+    await expect(
+      applyMcpServerRepair(
+        { kind: 'npx-cache', target: cacheEntry },
+        { runtimeDataRoot: dataDir },
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it('removes nothing when the directory is a complete package', async () => {
+    await writeFile(join(cacheEntry, 'package.json'), '{"name":"whole"}', 'utf8');
+
+    await expect(
+      applyMcpServerRepair(
+        { kind: 'npx-cache', target: cacheEntry },
+        { runtimeDataRoot: dataDir },
+      ),
+    ).resolves.toBe(false);
+    expect(await exists(cacheEntry)).toBe(true);
+  });
+
+  it('removes nothing for a path that is not an npx cache entry', async () => {
+    const outside = join(dataDir, 'npm-cache', 'not-npx');
+    await mkdir(join(outside, 'node_modules'), { recursive: true });
+
+    await expect(
+      applyMcpServerRepair(
+        { kind: 'npx-cache', target: outside },
+        { runtimeDataRoot: dataDir },
+      ),
+    ).resolves.toBe(false);
+    expect(await exists(outside)).toBe(true);
+  });
+
+  it('removes the half-written entry and reports it', async () => {
+    await expect(
+      applyMcpServerRepair(
+        { kind: 'npx-cache', target: cacheEntry },
+        { runtimeDataRoot: dataDir },
+      ),
+    ).resolves.toBe(true);
+    expect(await exists(cacheEntry)).toBe(false);
   });
 });
