@@ -2762,7 +2762,10 @@ export async function startServer({
         // repair an assistant row a mid-run writer already stamped `failed`
         // before this run reached its terminal (issue #159 A). Uses the
         // `status` argument, never `run.status`: this hook fires before
-        // `finish()` writes the terminal status onto the run.
+        // `finish()` writes the terminal status onto the run. `Date.now()` IS
+        // the run's terminal clock here -- `finish()` (runtimes/runs.ts) calls
+        // this hook, then sets `run.updatedAt = Date.now()`, then emits `end`
+        // with its own `Date.now()` stamp, all in one synchronous block.
         followRunTerminalOnMessage(db, {
           assistantMessageId: run.assistantMessageId ?? null,
           endedAt: Date.now(),

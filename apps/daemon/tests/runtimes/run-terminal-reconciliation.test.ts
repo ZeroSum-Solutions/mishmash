@@ -430,6 +430,51 @@ describe('durable run terminal reconciliation', () => {
       expect(readRow('m-live-content').status).toBe('succeeded');
     });
 
+    it('reports a write failure instead of swallowing it, and never throws into the terminal hook', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      // The UPDATE itself fails: the row schema has no `role` column.
+      const noRole = new Database(':memory:');
+      noRole.exec(`CREATE TABLE messages (id TEXT PRIMARY KEY, run_status TEXT, ended_at INTEGER)`);
+      expect(followRunTerminalOnMessage(noRole, {
+        assistantMessageId: 'm-broken',
+        endedAt: 7_000,
+        status: 'succeeded',
+      })).toBe(false);
+      expect(warn).toHaveBeenCalledWith(
+        '[runs] message terminal reconciliation failed',
+        expect.anything(),
+      );
+      noRole.close();
+
+      // The UPDATE commits and the status-event append then fails: the row is
+      // still repaired and reported as repaired, and nothing propagates into
+      // the caller's remaining terminal bookkeeping.
+      warn.mockClear();
+      const noEvents = new Database(':memory:');
+      noEvents.exec(`
+        CREATE TABLE messages (
+          id TEXT PRIMARY KEY, role TEXT, content TEXT, run_status TEXT, ended_at INTEGER
+        )
+      `);
+      noEvents.prepare(
+        `INSERT INTO messages (id, role, content, run_status, ended_at)
+         VALUES ('m-no-events', 'assistant', '', 'failed', 2000)`,
+      ).run();
+      expect(followRunTerminalOnMessage(noEvents, {
+        assistantMessageId: 'm-no-events',
+        endedAt: 7_000,
+        status: 'succeeded',
+      })).toBe(true);
+      expect(noEvents.prepare(`SELECT run_status AS status FROM messages WHERE id = 'm-no-events'`).get())
+        .toEqual({ status: 'succeeded' });
+      expect(warn).toHaveBeenCalledWith(
+        '[runs] message terminal reconciliation failed',
+        expect.anything(),
+      );
+      noEvents.close();
+    });
+
     it('never rewrites a row for a non-terminal or failed run status', () => {
       insertStuckRow('m-guard', 'run-guard');
 

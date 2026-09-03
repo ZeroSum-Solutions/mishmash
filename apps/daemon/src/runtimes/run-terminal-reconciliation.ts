@@ -107,6 +107,14 @@ export interface RunTerminalReconciliationResult {
  * run repairs its own row the moment it ends, and once per stranded row from
  * `followRunTerminalOnStuckMessages()` below.
  *
+ * Every write is inside one guard, and the guard reports rather than swallows.
+ * The terminal hook calls this before the run's other terminal bookkeeping, so
+ * an exception escaping here would take that bookkeeping down with it; and a
+ * silently swallowed failure would leave exactly the stuck row this exists to
+ * prevent, with nothing in the daemon log to say so. `repaired` is set from the
+ * UPDATE itself, so a row that was fixed before the status-event append threw
+ * is still reported as repaired.
+ *
  * Returns whether the row was repaired.
  */
 export function followRunTerminalOnMessage(
@@ -116,24 +124,25 @@ export function followRunTerminalOnMessage(
   const { assistantMessageId, endedAt, status } = args;
   if (!assistantMessageId) return false;
   if (!TERMINAL_STATUSES.has(status) || status === 'failed') return false;
-  let changes = 0;
+  let repaired = false;
   try {
-    changes = db.prepare(
+    repaired = db.prepare(
       `UPDATE messages
           SET run_status = ?, ended_at = ?
         WHERE id = ?
           AND role = 'assistant'
           AND run_status = 'failed'`,
-    ).run(status, endedAt, assistantMessageId).changes;
-  } catch {
-    return false;
+    ).run(status, endedAt, assistantMessageId).changes > 0;
+    if (repaired) {
+      appendMessageStatusEvent(db, assistantMessageId, {
+        label: status,
+        detail: FOLLOWED_TERMINAL_STATUS_MESSAGE,
+      });
+    }
+  } catch (err) {
+    console.warn('[runs] message terminal reconciliation failed', err);
   }
-  if (changes < 1) return false;
-  appendMessageStatusEvent(db, assistantMessageId, {
-    label: status,
-    detail: FOLLOWED_TERMINAL_STATUS_MESSAGE,
-  });
-  return true;
+  return repaired;
 }
 
 /**
@@ -162,7 +171,8 @@ function followRunTerminalOnStuckMessages(
           AND run_id IS NOT NULL
           AND TRIM(COALESCE(content, '')) = ''`,
     ).all() as Array<{ id: string; runId: string }>;
-  } catch {
+  } catch (err) {
+    console.warn('[runs] stranded message scan failed', err);
     return 0;
   }
   let repaired = 0;
