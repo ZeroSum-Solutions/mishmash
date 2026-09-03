@@ -24,6 +24,11 @@ describe('projectRawAssetBaseHref', () => {
     );
   });
 
+  it('drops empty segments rather than emitting a doubled or leading slash', () => {
+    expect(projectRawAssetBaseHref('p1', 'a//page.html')).toBe('/api/projects/p1/raw/a/');
+    expect(projectRawAssetBaseHref('p1', '/a/page.html')).toBe('/api/projects/p1/raw/a/');
+  });
+
   it('resolves a relative ref to the project file it names', () => {
     const base = new URL(projectRawAssetBaseHref('p1', 'zh/index.html'), 'http://d');
     expect(new URL('../assets/pic.png', base).pathname).toBe('/api/projects/p1/raw/assets/pic.png');

@@ -28,7 +28,7 @@ const CASES: Array<[projectId: string, fileName: string]> = [
   ['項目', 'ümläut/index.html'],
 ];
 
-describe('projectRawAssetBaseHref matches the composition it replaced', () => {
+describe('projectRawAssetBaseHref matches the composition it replaced, on every project file path', () => {
   for (const [projectId, fileName] of CASES) {
     it(`${projectId} :: ${fileName}`, () => {
       expect(projectRawAssetBaseHref(projectId, fileName)).toBe(
@@ -36,4 +36,22 @@ describe('projectRawAssetBaseHref matches the composition it replaced', () => {
       );
     });
   }
+});
+
+// The one input class where the two differ, recorded rather than hidden: the old
+// composition preserved empty path segments; the shared rule drops them. No
+// FileViewer call site can reach it — `collectFiles`
+// (apps/daemon/src/projects.ts) builds every `file.name` by joining real
+// directory entries, so `/api/projects/:id/files` never reports a name with a
+// doubled or leading slash.
+describe('empty path segments — the one documented divergence', () => {
+  it('collapses a doubled slash the old composition preserved', () => {
+    expect(projectRawAssetBaseHref('p1', 'a//page.html')).toBe('/api/projects/p1/raw/a/');
+    expect(projectRawUrl('p1', assetBaseDirFor('a//page.html'))).toBe('/api/projects/p1/raw/a//');
+  });
+
+  it('collapses a leading slash the old composition preserved', () => {
+    expect(projectRawAssetBaseHref('p1', '/a/page.html')).toBe('/api/projects/p1/raw/a/');
+    expect(projectRawUrl('p1', assetBaseDirFor('/a/page.html'))).toBe('/api/projects/p1/raw//a/');
+  });
 });

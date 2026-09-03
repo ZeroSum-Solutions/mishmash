@@ -29,6 +29,13 @@
  * Every path segment is encoded on its own so a slash stays a separator, and
  * the result always ends in `/` — a base href without the trailing slash would
  * drop its last segment when the browser resolves against it.
+ *
+ * Empty segments are dropped, so `a//page.html` and `/a/page.html` both give
+ * `/api/projects/:id/raw/a/` rather than a base with a doubled or leading
+ * slash. A project file path never carries one: `collectFiles`
+ * (apps/daemon/src/projects.ts) builds every name by joining real directory
+ * entries, so `/api/projects/:id/files` cannot report a name with an empty
+ * segment.
  */
 export function projectRawAssetBaseHref(projectId: string, ownerFilePath: string): string {
   const ownerDir = ownerFilePath.replace(/\\/g, '/').replace(/[^/]*$/, '');
