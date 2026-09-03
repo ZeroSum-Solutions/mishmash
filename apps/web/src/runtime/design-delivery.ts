@@ -55,17 +55,51 @@ export function countFilesModifiedDuringTurn(
 }
 
 /**
+ * A cancellation nobody asked for.
+ *
+ * The daemon draws the line between the two cancellations for us, and it draws
+ * it on the message rather than on the run status. A Stop the user pressed is
+ * classified `user_cancel`, and `persistRunFailureClassification`
+ * (`apps/daemon/src/runtimes/chat-run-messages.ts`) deliberately refuses to give
+ * that message an error event it did not already have, because reporting the
+ * user's own action back to them as a failure is the wrong answer. A turn the
+ * daemon's own shutdown ended is classified `process_exit` / `interrupted` and
+ * DOES carry that event.
+ *
+ * So a classified error event on a canceled row means the turn was taken from
+ * the user — and reading the event rather than the status is what keeps a
+ * deliberate Stop silent.
+ */
+function isUnrequestedCancellation(
+  message: Pick<ChatMessage, 'runStatus' | 'events'>,
+): boolean {
+  if (message.runStatus !== 'canceled') return false;
+  return (message.events ?? []).some(
+    (event) =>
+      event.kind === 'status'
+      && event.label === 'error'
+      && typeof event.failureDetail === 'string'
+      && event.failureDetail.length > 0
+      && event.failureDetail !== 'user_cancelled',
+  );
+}
+
+/**
  * Delivery failures retain the agent-process `succeeded` status, but they are
  * terminal user-facing failures and must follow the same retry path as a
- * failed process run.
+ * failed process run. So does a turn the daemon ended without being asked —
+ * see `isUnrequestedCancellation` above: it owes the user the same named cause
+ * and the same recovery as any other failure, because the user did not do it
+ * and has no other way to learn why their turn stopped.
  */
 export function isRetryableAssistantTerminalFailure(
-  message: Pick<ChatMessage, 'runStatus' | 'resultDeliveryState'>,
+  message: Pick<ChatMessage, 'runStatus' | 'resultDeliveryState' | 'events'>,
 ): boolean {
   return (
     message.runStatus === 'failed' ||
     message.resultDeliveryState === 'no_result' ||
-    message.resultDeliveryState === 'delivery_failed'
+    message.resultDeliveryState === 'delivery_failed' ||
+    isUnrequestedCancellation(message)
   );
 }
 

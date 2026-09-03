@@ -253,6 +253,7 @@ export type TrackingRunFailureDetail =
   | 'session_resume_expired'
   | 'fabricated_role_marker'
   | 'permission_request_not_found'
+  | 'permission_denied'
   | 'qoder_stop_sequence'
   | 'signal_killed'
   | 'process_crashed'
