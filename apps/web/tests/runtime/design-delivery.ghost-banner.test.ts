@@ -119,6 +119,43 @@ describe('design delivery — ghost banner for a turn that delivered work', () =
     ).toBe('delivered');
   });
 
+  it('does not accept a preview server that never came up as delivery', () => {
+    // `od preview start` exits non-zero until the port answers HTTP, so an
+    // errored result is proof the server is NOT up.
+    expect(
+      resolveDesignDeliveryOutcome(
+        deliveryInput({
+          content: 'I tried to start the preview.',
+          events: [
+            {
+              kind: 'tool_use',
+              id: 'bash-fail',
+              name: 'Bash',
+              input: {
+                command:
+                  '"$OD_NODE_BIN" "$OD_BIN" preview start --project p --port 3000 -- npm run dev',
+              },
+            },
+            { kind: 'tool_result', toolUseId: 'bash-fail', content: 'EADDRINUSE', isError: true },
+          ],
+        }),
+      ),
+    ).toBe('report_only');
+  });
+
+  it('does not accept prose that merely names the preview command as delivery', () => {
+    // `--project` is required by `od preview start`, so a command without it
+    // never started a server.
+    expect(
+      resolveDesignDeliveryOutcome(
+        deliveryInput({
+          content: 'Run the preview yourself when you are ready.',
+          events: okBash('bash-prose', 'echo "next step: preview start, then open the URL"'),
+        }),
+      ),
+    ).toBe('report_only');
+  });
+
   it('never labels a turn that delivered work as a retryable delivery failure', () => {
     for (const outcome of [
       // Row 8e3977d6: regenerate an asset, then clear the scratch directory.
