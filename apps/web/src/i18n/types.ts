@@ -1510,6 +1510,15 @@ export interface Dict {
   'mcpClient.health.budgetMs': string;
   'mcpClient.health.stderrLabel': string;
   'mcpClient.health.remedyLabel': string;
+  'mcpClient.health.repair': string;
+  'mcpClient.health.repairPrompt': string;
+  'mcpClient.health.repairConfirm': string;
+  'mcpClient.health.repairCancel': string;
+  'mcpClient.health.repairing': string;
+  'mcpClient.health.repairDone': string;
+  'mcpClient.health.repairFailed': string;
+  'mcpClient.health.repairUnavailable': string;
+  'mcpClient.health.repairNothingRemoved': string;
   'useEverywhere.modalAria': string;
   'useEverywhere.modalTitle': string;
   'useEverywhere.modalSubtitle': string;
