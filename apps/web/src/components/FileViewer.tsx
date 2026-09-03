@@ -23,7 +23,7 @@ import {
 import { useAnalytics } from '../analytics/provider';
 import { exportErrorCode } from '../analytics/export-error-code';
 import { deployErrorCode } from '../analytics/deploy-error-code';
-import { trackIframeLoad } from '../observability/iframe-error';
+import { trackPreviewPaint } from '../observability/iframe-error';
 import {
   trackArtifactExportResult,
   trackArtifactDeployResult,
@@ -162,9 +162,11 @@ import {
   collectPreviewAssetPaths,
   hasRelativeAssetRefs,
   htmlHasRootRelativeProjectAssetRefs,
+  inlineBudgetExpiryRender,
   inlineRelativeAssets,
   PREVIEW_INLINE_PROGRESS_AFTER_MS,
   PREVIEW_INLINE_TIMEOUT_MS,
+  type InlinedPreviewRender,
   type PreviewAssetProgress,
 } from './file-viewer-preview-assets';
 import { projectRawAssetBaseHref } from '@open-design/contracts/runtime/project-asset-base';
@@ -321,12 +323,14 @@ type PreviewAssetWarning = { filePath: string };
  *
  * `slow` turns on once the pass passes `PREVIEW_INLINE_PROGRESS_AFTER_MS`, so
  * the gate stays quiet for the ordinary fast preview and speaks for the one
- * that keeps the canvas. `timedOut` records that the pass forfeited its turn
- * and the raw document is what is on screen.
+ * that keeps the canvas. `timedOut` records that the pass forfeited its turn,
+ * and which document that left on screen: `'raw'` when there was no render to
+ * keep, `'retained'` when a render for this file survived the timeout (see
+ * `inlineBudgetExpiryRender`). The two owe the reader different sentences.
  */
 type PreviewInlineStatus = {
   slow: boolean;
-  timedOut: boolean;
+  timedOut: false | 'raw' | 'retained';
   progress: PreviewAssetProgress | null;
 };
 const IDLE_PREVIEW_INLINE_STATUS: PreviewInlineStatus = {
@@ -1692,12 +1696,15 @@ export function LiveArtifactViewer({
   // Instrument the live-artifact iframe so failed loads — usually a
   // missing artifact file or a stuck `od://` resolver — surface in
   // PostHog. iframe load errors don't propagate to window.error, so
-  // observability/install.ts cannot catch them globally.
+  // observability/install.ts cannot catch them globally. The response the
+  // daemon serves here carries the paint-report producer (see
+  // `withPreviewPaintReport`), so this frame proves its document ran rather
+  // than settling on a 200 that rendered nothing.
   useEffect(() => {
     if (mode !== 'preview') return undefined;
     const node = iframeRef.current;
     if (!node) return undefined;
-    return trackIframeLoad({
+    return trackPreviewPaint({
       iframe: node,
       surface: 'live_artifact_preview',
       artifactId: liveArtifact.artifactId,
@@ -6335,9 +6342,13 @@ function HtmlViewer({
   // produced `value`, so a reader can tell a *retained-but-stale* inline
   // (built from a source the URL-load early return skipped re-inlining for)
   // apart from a *current* one — see `inlinedSourceUpToDate` below.
-  const [inlinedSource, setInlinedSource] = useState<
-    { key: string; forSource: string; value: string } | null
-  >(null);
+  const [inlinedSource, setInlinedSource] = useState<InlinedPreviewRender | null>(null);
+  // Read by the inlining budget's timer, which fires long after the effect that
+  // armed it closed over `inlinedSource`. Assigned during render (the same
+  // pattern `iframeRef` uses below) so the timer sees the render currently on
+  // screen rather than the one that existed when the pass started.
+  const inlinedSourceRef = useRef<InlinedPreviewRender | null>(null);
+  inlinedSourceRef.current = inlinedSource;
   const [zoom, setZoom] = useState(100);
   const [zoomMode, setZoomMode] = useState<'auto' | 'manual'>('auto');
   const fileViewportKey = previewViewportStateKey(projectId, file);
@@ -6473,6 +6484,19 @@ function HtmlViewer({
   const compositionMetricsMenuRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const urlPreviewIframeRef = useRef<HTMLIFrameElement | null>(null);
+  // The URL transport's frame is mounted with the rest of the canvas, several
+  // commits after the effects that want to watch it first run. A ref alone
+  // cannot wake them, so the node is mirrored into state and the paint watchdog
+  // below depends on it. The ref stays the hot path every other reader uses.
+  const [urlPreviewFrameNode, setUrlPreviewFrameNode] = useState<HTMLIFrameElement | null>(null);
+  const attachUrlPreviewIframe = useCallback((node: HTMLIFrameElement | null) => {
+    // The pooled transport re-attaches its forwarded ref on every render, so
+    // the state write has to be gated on an actual node change; an ungated one
+    // re-renders the tree from a layout effect that then re-attaches, forever.
+    if (urlPreviewIframeRef.current === node) return;
+    urlPreviewIframeRef.current = node;
+    setUrlPreviewFrameNode(node);
+  }, []);
   const srcDocPreviewIframeRef = useRef<HTMLIFrameElement | null>(null);
   const activatedSrcDocTransportHtmlRef = useRef<string | null>(null);
   // Tracks the iframe DOM node whose dedupe ref was last reset by the
@@ -7819,12 +7843,19 @@ function HtmlViewer({
     const progressTimer = setTimeout(() => {
       if (!cancelled) setPreviewInlineStatus((prev) => ({ ...prev, slow: true }));
     }, PREVIEW_INLINE_PROGRESS_AFTER_MS);
-    // Budget spent: hand over the raw document with a warning rather than hold
-    // a gate that never lifts. A pass that settles later still replaces this.
+    // Budget spent: show the reader a document with a warning rather than hold
+    // a gate that never lifts. Which document is `inlineBudgetExpiryRender`'s
+    // call — it keeps a render already on screen for this file and falls back
+    // to raw source only when there is none. A pass that settles later still
+    // replaces whatever this put up.
     const budgetTimer = setTimeout(() => {
       if (cancelled) return;
-      setPreviewInlineStatus((prev) => ({ ...prev, timedOut: true }));
-      setInlinedSource({ key, forSource: source, value: source });
+      const expiry = inlineBudgetExpiryRender(inlinedSourceRef.current, { key, source });
+      setPreviewInlineStatus((prev) => ({
+        ...prev,
+        timedOut: expiry.retained ? 'retained' : 'raw',
+      }));
+      setInlinedSource(expiry.render);
     }, PREVIEW_INLINE_TIMEOUT_MS);
     // Disarm both budgets the moment the pass settles. The effect does NOT
     // re-run on its own resolution — `inlinedSource` is not one of its
@@ -8032,18 +8063,17 @@ function HtmlViewer({
   // canvas. Instrument the srcDoc frame only while it is the visible transport
   // AND carries the real artifact — the lazy shell and the redirect-blocked
   // placeholder have no artifact document to wait for, so watching them would
-  // manufacture false timeouts. `settlesOn: 'document-report'` is what makes
-  // this useful: the frame's own `load` event fires for the empty shell, so it
-  // is not proof the artifact ever appeared.
+  // manufacture false timeouts. `trackPreviewPaint` is what makes this useful:
+  // the frame's own `load` event fires for the empty shell, so it is not proof
+  // the artifact ever appeared.
   useEffect(() => {
     if (mode !== 'preview') return undefined;
     if (useUrlLoadPreview || !srcDoc || srcDocTransportContent !== srcDoc) return undefined;
     const node = srcDocPreviewIframeRef.current;
     if (!node) return undefined;
-    return trackIframeLoad({
+    return trackPreviewPaint({
       iframe: node,
       surface: 'file_viewer_preview',
-      settlesOn: 'document-report',
       projectId,
     });
   }, [mode, useUrlLoadPreview, srcDoc, srcDocTransportContent, projectId, srcDocTransportResetKey]);
@@ -8084,6 +8114,25 @@ function HtmlViewer({
     ? POWERED_PREVIEW_SANDBOX
     : 'allow-scripts allow-downloads';
   const urlFrameAllow = usePoweredPreview ? POWERED_PREVIEW_ALLOW : undefined;
+  // The URL-load transport is a visible preview too, and until now it was the
+  // one nobody watched. Both URLs it can carry — the project raw route and the
+  // powered same-file copy — are requested with `PREVIEW_BRIDGE_QUERY`, so the
+  // daemon injects the `od:preview-content-size` producer into each and the
+  // frame can prove its own document ran. Watched only while URL-load is the
+  // ACTIVE transport and the frame holds a real preview URL: parked at
+  // `about:blank` (kept warm behind srcDoc, or waiting on the powered probe)
+  // there is no document to report, and watching one would manufacture a
+  // timeout for a preview nobody is looking at.
+  useEffect(() => {
+    if (mode !== 'preview') return undefined;
+    if (!useUrlLoadPreview || urlFrameSrc === 'about:blank') return undefined;
+    if (!urlPreviewFrameNode) return undefined;
+    return trackPreviewPaint({
+      iframe: urlPreviewFrameNode,
+      surface: 'file_viewer_preview_url_load',
+      projectId,
+    });
+  }, [mode, useUrlLoadPreview, urlFrameSrc, urlPreviewFrameNode, projectId]);
   const activateSrcDocTransport = useCallback((target: HTMLIFrameElement | null = srcDocPreviewIframeRef.current) => {
     if (!canActivateSrcDocTransport({
       srcDoc,
@@ -12992,7 +13041,7 @@ function HtmlViewer({
                     <div className="artifact-preview-transport-stack">
                       {OD_PREVIEW_KEEP_ALIVE ? (
                         <PooledIframe
-                          ref={urlPreviewIframeRef}
+                          ref={attachUrlPreviewIframe}
                           cacheKey={urlPreviewKeepAliveKey}
                           data-testid={useUrlLoadPreview ? 'artifact-preview-frame' : 'artifact-preview-frame-url-load'}
                           data-od-render-mode="url-load"
@@ -13021,7 +13070,7 @@ function HtmlViewer({
                         />
                       ) : (
                         <iframe
-                          ref={urlPreviewIframeRef}
+                          ref={attachUrlPreviewIframe}
                           data-testid={useUrlLoadPreview ? 'artifact-preview-frame' : 'artifact-preview-frame-url-load'}
                           data-od-render-mode="url-load"
                           data-od-active={useUrlLoadPreview ? 'true' : 'false'}
@@ -13127,7 +13176,11 @@ function HtmlViewer({
                       data-testid="preview-inline-timeout-warning"
                     >
                       <strong>{t('fileViewer.previewAssetsIncompleteTitle')}</strong>
-                      <span>{t('fileViewer.previewAssetsIncompleteDetail')}</span>
+                      <span>
+                        {previewInlineStatus.timedOut === 'retained'
+                          ? t('fileViewer.previewAssetsIncompleteRetainedDetail')
+                          : t('fileViewer.previewAssetsIncompleteDetail')}
+                      </span>
                     </div>
                   ) : null}
                   {/*

@@ -29,13 +29,13 @@ const ARTIFACT_DOCUMENT_REPORT_REQUEST = 'od:preview-content-size-request';
 /**
  * What counts as proof a frame is not stuck.
  *
- * - `'load'` — the frame's own `load` event. The only signal a plain
- *   URL-loaded artifact can give, so it stays the default.
+ * - `'load'` — the frame's own `load` event. Weak evidence, kept only for a
+ *   frame that carries no producer to ask: `load` fires for an empty shell,
+ *   for a 200 that rendered nothing, and for a document whose subresources
+ *   were all refused.
  * - `'document-report'` — a report posted by the artifact document itself.
- *   `load` is NOT accepted for these frames: it fires for the empty lazy
- *   transport shell, so a frame that never receives its artifact loads
- *   "successfully" and then sits blank forever. That stuck preview is the
- *   case `client_iframe_timeout` was written for and never fired on.
+ *   The only proof the document ran, and what every visible preview transport
+ *   uses; see `trackPreviewPaint`.
  */
 export type IframeSettleEvidence = 'load' | 'document-report';
 
@@ -49,6 +49,28 @@ interface TrackIframeOptions {
   surface: string;
   /** Defaults to `'load'`; see `IframeSettleEvidence`. */
   settlesOn?: IframeSettleEvidence;
+}
+
+/**
+ * Watch a VISIBLE preview frame, which settles only on proof its document ran.
+ *
+ * The invariant: no preview transport the user is looking at settles on its
+ * outer `load` event. Every document this app previews carries an
+ * `od:preview-content-size` producer — `buildSrcdoc` injects one into the
+ * srcDoc transport, and the daemon injects one into the URL-load and
+ * live-artifact responses — so each transport can prove its own document ran,
+ * and `load` is never the best evidence available. A transport that settles on
+ * `load` reports a blank canvas as a healthy preview, which is how
+ * `client_iframe_timeout` came to fire on nothing.
+ *
+ * The caller owns the other half: install this only while the frame is the
+ * visible transport AND carries a real artifact document. A watchdog over a
+ * lazy shell, a redirect-blocked placeholder, or a frame parked at
+ * `about:blank` waits for a report no document exists to make, and manufactures
+ * a false timeout.
+ */
+export function trackPreviewPaint(options: Omit<TrackIframeOptions, 'settlesOn'>): () => void {
+  return trackIframeLoad({ ...options, settlesOn: 'document-report' });
 }
 
 export function trackIframeLoad(options: TrackIframeOptions): () => void {

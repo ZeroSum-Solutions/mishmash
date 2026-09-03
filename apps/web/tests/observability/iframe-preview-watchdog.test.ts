@@ -14,7 +14,7 @@ import vm from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildSrcdoc } from '../../src/runtime/srcdoc';
-import { trackIframeLoad } from '../../src/observability/iframe-error';
+import { trackIframeLoad, trackPreviewPaint } from '../../src/observability/iframe-error';
 
 const REPORT = 'od:preview-content-size';
 const REPORT_REQUEST = 'od:preview-content-size-request';
@@ -128,11 +128,7 @@ describe('the host half of the preview watchdog protocol', () => {
     vi.stubGlobal('fetch', fetchMock);
     const { iframe, posted } = mountFrame();
 
-    const dispose = trackIframeLoad({
-      iframe,
-      surface: 'file_viewer_preview',
-      settlesOn: 'document-report',
-    });
+    const dispose = trackPreviewPaint({ iframe, surface: 'file_viewer_preview' });
 
     expect(posted).toContainEqual({ type: REPORT_REQUEST });
 
@@ -153,11 +149,7 @@ describe('the host half of the preview watchdog protocol', () => {
     vi.stubGlobal('fetch', fetchMock);
     const { iframe } = mountFrame();
 
-    const dispose = trackIframeLoad({
-      iframe,
-      surface: 'file_viewer_preview',
-      settlesOn: 'document-report',
-    });
+    const dispose = trackPreviewPaint({ iframe, surface: 'file_viewer_preview' });
 
     iframe.dispatchEvent(new Event('load'));
     vi.advanceTimersByTime(30_000);
@@ -168,14 +160,17 @@ describe('the host half of the preview watchdog protocol', () => {
     expect(filed[0]?.kind).toBe('preview-error');
   });
 
-  it('still settles a plain url-loaded frame on its own load event', () => {
+  it('keeps the frame-load default for an iframe with no document-report producer', () => {
+    // `trackIframeLoad` is the generic helper; `'load'` remains its default for
+    // an iframe that carries no producer to ask. Every PREVIEW transport now
+    // goes through `trackPreviewPaint` instead — see the specs above and the
+    // per-transport ones in tests/components.
     const fetchMock = vi.fn(async () => new Response('{"ok":true}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const { iframe, posted } = mountFrame();
 
-    const dispose = trackIframeLoad({ iframe, surface: 'live_artifact_preview' });
+    const dispose = trackIframeLoad({ iframe, surface: 'iframe_without_producer' });
 
-    // The default evidence is unchanged: no ask, and `load` is enough.
     expect(posted).toHaveLength(0);
     iframe.dispatchEvent(new Event('load'));
     vi.advanceTimersByTime(30_000);

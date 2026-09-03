@@ -328,7 +328,12 @@ const URL_PREVIEW_SCROLL_BRIDGE = `<script data-od-url-scroll-bridge>
       return;
     }
     if (data.type === 'od:preview-content-size-request') {
-      scheduleContentSize();
+      // Answered synchronously, never through scheduleContentSize():
+      // animation frames are paused in a hidden tab while the host watchdog's
+      // timeout keeps running, so a scheduled answer turns a healthy
+      // backgrounded preview into a client_iframe_timeout. Every other report
+      // path stays scheduled -- those are unsolicited and nothing waits on them.
+      postContentSize();
     }
   });
   window.addEventListener('scroll', schedule, true);

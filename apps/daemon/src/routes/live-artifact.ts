@@ -4,6 +4,7 @@ import {
   withProjectAssetBaseHref,
 } from '@open-design/contracts/runtime/project-asset-base';
 import type { RouteDeps } from '../server-context.js';
+import { withPreviewPaintReport } from './preview-paint-report.js';
 
 export interface RegisterLiveArtifactRoutesDeps extends RouteDeps<'db' | 'http' | 'paths' | 'auth' | 'liveArtifacts' | 'projectStore'> {}
 
@@ -64,9 +65,14 @@ export function registerLiveArtifactRoutes(app: Express, ctx: RegisterLiveArtifa
       });
       setLiveArtifactPreviewHeaders(res);
       // This route's URL names no project file, so the preview document has to
-      // carry the resolution root itself -- see projectRawAssetBaseHref.
+      // carry the resolution root itself -- see projectRawAssetBaseHref. The
+      // paint-report producer is what lets the viewer's watchdog tell a
+      // rendered artifact from a 200 that painted nothing -- see
+      // withPreviewPaintReport.
       res.status(200).send(
-        withProjectAssetBaseHref(record.html, projectRawAssetBaseHref(projectId, '')),
+        withPreviewPaintReport(
+          withProjectAssetBaseHref(record.html, projectRawAssetBaseHref(projectId, '')),
+        ),
       );
     } catch (err: any) {
       sendLiveArtifactRouteError(res, err);
