@@ -65,11 +65,10 @@ interface TrackIframeOptions {
  * The invariant: no preview transport the user is looking at settles on its
  * outer `load` event while a producer is there to ask. `buildSrcdoc` injects an
  * `od:preview-content-size` producer into the srcDoc transport, and the daemon
- * injects one into the project raw response and the live-artifact response, so
- * each of those transports can prove its own document ran. A transport that
- * settles on `load` reports a frame that never received its artifact as a
- * healthy preview, which is how `client_iframe_timeout` came to fire on
- * nothing.
+ * injects one into the project raw response, so both of those transports can
+ * prove their own document ran. A transport that settles on `load` reports a
+ * frame that never received its artifact as a healthy preview, which is how
+ * `client_iframe_timeout` came to fire on nothing.
  *
  * The caller owns two halves of this. Install it only while the frame is the
  * visible transport AND carries a real artifact document — a watchdog over a
@@ -79,7 +78,10 @@ interface TrackIframeOptions {
  * the frame; a transport whose producer is not confirmed takes
  * `trackIframeLoad`'s weaker `load` evidence with a stated reason instead of
  * pretending, because a report that never arrives is indistinguishable from a
- * preview that never ran.
+ * preview that never ran. Two transports are on `load` for that reason today:
+ * the live-artifact preview, whose response is served under `script-src 'none'`
+ * so no producer can run in it, and the powered cross-origin copy, whose report
+ * has not been confirmed to cross back. Both say so at their call sites.
  */
 export function trackPreviewPaint(options: Omit<TrackIframeOptions, 'settlesOn'>): () => void {
   return trackIframeLoad({ ...options, settlesOn: 'document-report' });

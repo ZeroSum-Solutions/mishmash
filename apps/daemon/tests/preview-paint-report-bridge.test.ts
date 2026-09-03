@@ -1,17 +1,24 @@
-// W2G.1 red spec — every preview response the daemon serves must let its
-// document prove it painted, and must be able to say so from a hidden tab.
+// W2G.1 red spec — a daemon-served preview whose document can report must be
+// able to do so from a hidden tab, and a response whose headers forbid scripts
+// must not be asked for a report at all.
 //
 // The host watchdog (`apps/web/src/observability/iframe-error.ts`) settles a
 // visible preview only on `od:preview-content-size` posted from inside the
 // document, and gives it 15 seconds. Two daemon-served transports feed that
-// watchdog:
+// watchdog, and they answer to it differently:
 //
-//   - the project raw route, which injects `URL_PREVIEW_SCROLL_BRIDGE` when the
-//     preview URL carries `odPreviewBridge=scroll` (F12: its answer to an
-//     explicit request goes through `requestAnimationFrame`, and animation
-//     frames are paused in a hidden tab while the host timeout keeps running);
-//   - the live-artifact preview route, which today injects no producer at all
-//     (F2: the host has nothing to settle on but the frame's own load event).
+//   - the project raw route injects `URL_PREVIEW_SCROLL_BRIDGE` when the
+//     preview URL carries `odPreviewBridge=scroll`, and that producer can run
+//     (F12: its answer to an explicit request used to go through
+//     `requestAnimationFrame`, and animation frames are paused in a hidden tab
+//     while the host timeout keeps running);
+//   - the live-artifact preview route serves its response under
+//     `script-src 'none'` and a CSP sandbox without `allow-scripts`
+//     (`setLiveArtifactPreviewHeaders`), so no producer it carried could ever
+//     run. That route therefore carries none, and the host settles its frame on
+//     the outer load event instead. The last case pins header and payload
+//     together: a producer may only be added to that response by relaxing the
+//     header that refuses it.
 //
 // Route-level Vitest against a real express app + http.Server, with the
 // live-artifact store rooted in a temp PROJECTS_DIR — the daemon never writes
@@ -309,7 +316,7 @@ describe('daemon-served previews can prove they painted, hidden tab included', (
     // measurement. Pinned so the semantics are on the record — the host's
     // matching case is in
     // apps/web/tests/observability/iframe-preview-watchdog.test.ts.
-    const url = `${baseUrl}/api/live-artifacts/${encodeURIComponent(artifactId)}/preview?projectId=${encodeURIComponent(PROJECT_ID)}`;
+    const url = `${baseUrl}/api/projects/${encodeURIComponent(PROJECT_ID)}/raw/${DISK_PAGE}?odPreviewBridge=scroll`;
     const producer = extractPaintReportProducer(await (await fetch(url)).text());
     expect(producer, 'the served document must carry an od:preview-content-size producer').not.toBeNull();
 
@@ -321,18 +328,27 @@ describe('daemon-served previews can prove they painted, hidden tab included', (
     expect(report?.width).toBeNull();
   });
 
-  it('serves the live-artifact preview with a producer that answers the same way', async () => {
+  it('serves the live-artifact preview with neither a producer nor a policy that would run one', async () => {
+    // Header and payload pinned together, in one assertion pair, because they
+    // only make sense as a pair. The response refuses scripts, so it carries no
+    // producer, so the host watchdog settles that frame on `load`
+    // (LiveArtifactViewer in apps/web/src/components/FileViewer.tsx, and
+    // apps/web/tests/components/LiveArtifactViewer.preview-paint.test.tsx).
+    // Injecting a producer here without first relaxing the policy would give
+    // the host a report that can never arrive, and every healthy live-artifact
+    // preview would file a false `preview-error` 15 seconds after it loaded.
     const url = `${baseUrl}/api/live-artifacts/${encodeURIComponent(artifactId)}/preview?projectId=${encodeURIComponent(PROJECT_ID)}`;
     const response = await fetch(url);
     expect(response.status).toBe(200);
 
-    const producer = extractPaintReportProducer(await response.text());
-    expect(producer, 'the served document must carry an od:preview-content-size producer').not.toBeNull();
-    const run = runProducerInHiddenTab(producer as string);
-    run.send({ type: REPORT_REQUEST });
+    const csp = response.headers.get('content-security-policy') ?? '';
+    const refusesScripts = csp.includes("script-src 'none'") && !/sandbox[^;]*allow-scripts/.test(csp);
+    expect(refusesScripts, 'this route is expected to refuse scripts; see the assertion below').toBe(true);
 
-    const report = run.parentMessages.find((message) => message?.type === REPORT);
-    expect(report).toBeDefined();
-    expect(report?.width).toBe(1280);
+    const producer = extractPaintReportProducer(await response.text());
+    expect(
+      producer,
+      'a response served under script-src none must not carry an od:preview-content-size producer: it could never run, and the host would time out every healthy preview waiting for it',
+    ).toBeNull();
   });
 });

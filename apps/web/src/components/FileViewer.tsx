@@ -1696,17 +1696,26 @@ export function LiveArtifactViewer({
   // Instrument the live-artifact iframe so failed loads — usually a
   // missing artifact file or a stuck `od://` resolver — surface in
   // PostHog. iframe load errors don't propagate to window.error, so
-  // observability/install.ts cannot catch them globally. The response the
-  // daemon serves here carries the paint-report producer (see
-  // `withPreviewPaintReport`), so this frame proves its document ran rather
-  // than settling on a 200 that rendered nothing.
+  // observability/install.ts cannot catch them globally.
+  //
+  // `load` is the strongest evidence this transport can give, and that is a
+  // property of the response, not an oversight: the daemon serves the
+  // live-artifact preview under "script-src 'none'" and a CSP sandbox without
+  // allow-scripts (`setLiveArtifactPreviewHeaders` in
+  // apps/daemon/src/live-artifacts/http-helpers.ts), so no
+  // `od:preview-content-size` producer can run inside it, and the iframe's own
+  // sandbox attribute cannot re-grant what the CSP sandbox removed. Asking for
+  // a report here would file a false `preview-error` on every healthy preview.
+  // Admitting a producer means relaxing that header first; the two are pinned
+  // together in apps/daemon/tests/preview-paint-report-bridge.test.ts.
   useEffect(() => {
     if (mode !== 'preview') return undefined;
     const node = iframeRef.current;
     if (!node) return undefined;
-    return trackPreviewPaint({
+    return trackIframeLoad({
       iframe: node,
       surface: 'live_artifact_preview',
+      settlesOn: 'load',
       artifactId: liveArtifact.artifactId,
       projectId,
     });
