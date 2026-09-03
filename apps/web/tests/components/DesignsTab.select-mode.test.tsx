@@ -98,6 +98,8 @@ describe('DesignsTab select mode', () => {
       name: 'WebGL Experience',
       updatedAt: 700,
       metadata: { kind: 'prototype', entryFile: 'index.html' },
+      // W2.6: the grid asks for a cover only when the daemon reports one.
+      hasCover: true,
     };
     const { container } = render(
       <DesignsTab
@@ -112,7 +114,7 @@ describe('DesignsTab select mode', () => {
       />,
     );
 
-    // S4-5: the not-yet-rendered fallback is a static <img> pointed at the
+    // S4-5: a reported cover renders as a static <img> pointed at the
     // daemon's persisted cover endpoint (never a live iframe of the raw
     // file), so no script/network-capable frame is ever created — see
     // apps/web/src/components/project-cover.tsx's HtmlProjectCoverFrame.
@@ -131,6 +133,8 @@ describe('DesignsTab select mode', () => {
       id: 'project-html-scan',
       name: 'Scanned HTML',
       metadata: { kind: 'prototype' },
+      // W2.6: the grid asks for a cover only when the daemon reports one.
+      hasCover: true,
     };
     const { container } = render(
       <DesignsTab

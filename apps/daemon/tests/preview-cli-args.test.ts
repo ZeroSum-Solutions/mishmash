@@ -26,6 +26,22 @@ describe('od preview argument parsing', () => {
     expect(code).toBe(3);
   });
 
+  it('routes `open` to the daemon with the session id', async () => {
+    const { code, stderr } = await runCli([
+      'preview', 'open', '--project', 'p1', '--id', 'pv1', '--daemon-url', DEAD_DAEMON,
+    ]);
+    expect(stderr).not.toContain('unknown subcommand');
+    expect(code).toBe(3);
+  });
+
+  it('requires --id for open', async () => {
+    const { code, stderr } = await runCli([
+      'preview', 'open', '--project', 'p1', '--daemon-url', DEAD_DAEMON,
+    ]);
+    expect(stderr).toContain('--id required');
+    expect(code).toBe(2);
+  });
+
   it('keeps a --dir value that equals the subcommand name', async () => {
     const { code, stderr } = await runCli([
       'preview', 'start', '--project', 'p1', '--port', '3000', '--dir', 'start',
