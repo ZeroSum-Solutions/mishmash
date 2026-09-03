@@ -8,9 +8,14 @@ import { effectiveAgentModelChoice } from '../agentModelSelection';
 import {
   createBufferedTextUpdates,
   finalizeActiveAssistantMessagesOnStop,
+  mergeServerMessagesIntoConversation,
   resolveRetryTarget,
   resolveSucceededRunStatus,
 } from '../ProjectView';
+import {
+  RUN_FAILURE_RECHECK_DELAY_MS,
+  retractsStaleRunFailure,
+} from '../../runtime/run-failure-reconcile';
 import type {
   AgentEvent,
   AgentInfo,
@@ -95,6 +100,42 @@ export function useConversationChat(
   // (same primitive the primary chat loop uses) so a side chat doesn't rebuild
   // the whole messages array on every SSE token.
   const textBufferRef = useRef<ReturnType<typeof createBufferedTextUpdates> | null>(null);
+  const failureRecheckTimerRef = useRef<number | null>(null);
+
+  const clearFailureRecheck = useCallback(() => {
+    if (failureRecheckTimerRef.current === null) return;
+    window.clearTimeout(failureRecheckTimerRef.current);
+    failureRecheckTimerRef.current = null;
+  }, []);
+
+  /**
+   * Side Chat's half of the run-failure retraction invariant.
+   *
+   * `onError` below is reached for a terminal this pane only INFERRED as well
+   * as one the run reported: a non-OK event-stream response surfaces a plain
+   * `daemon <status>` error and no terminal event ever arrives
+   * (`consumeDaemonRun` in `providers/daemon.ts`), so `onRunStatus` cannot fire
+   * either. The run usually finishes and the daemon stamps the stored assistant
+   * row with its real terminal, but nothing here would ever read that row.
+   *
+   * So ask the conversation once, and apply the answer only when it retracts
+   * the failure on screen — `ChatPane` paints "Task failed" from either carrier,
+   * the failed row or this hook's error slot, so both move together. See
+   * `retractsStaleRunFailure`.
+   */
+  const scheduleRunFailureRecheck = useCallback(() => {
+    clearFailureRecheck();
+    failureRecheckTimerRef.current = window.setTimeout(() => {
+      failureRecheckTimerRef.current = null;
+      void (async () => {
+        const serverMessages = await listMessages(projectId, conversationId).catch(() => null);
+        if (!serverMessages) return;
+        if (!retractsStaleRunFailure(messagesRef.current, serverMessages)) return;
+        setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
+        setError(null);
+      })();
+    }, RUN_FAILURE_RECHECK_DELAY_MS);
+  }, [clearFailureRecheck, conversationId, projectId]);
 
   // Load the conversation's persisted messages on mount / conversation switch.
   useEffect(() => {
@@ -110,8 +151,9 @@ export function useConversationChat(
     })();
     return () => {
       cancelled = true;
+      clearFailureRecheck();
     };
-  }, [projectId, conversationId]);
+  }, [projectId, conversationId, clearFailureRecheck]);
 
   // Tear down the live subscription when the tab unmounts. The daemon run
   // keeps going; we only stop the browser-side SSE.
@@ -276,6 +318,7 @@ export function useConversationChat(
             return next;
           });
           clearRefs();
+          scheduleRunFailureRecheck();
         },
       };
 
@@ -323,7 +366,7 @@ export function useConversationChat(
         },
       });
     },
-    [projectId, conversationId, persist, updateAssistant],
+    [projectId, conversationId, persist, scheduleRunFailureRecheck, updateAssistant],
   );
 
   const onSend = useCallback(

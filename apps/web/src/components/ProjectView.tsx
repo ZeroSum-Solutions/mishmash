@@ -117,7 +117,11 @@ import {
   resolveDesignDeliveryOutcome,
   type DesignDeliveryOutcome,
 } from '../runtime/design-delivery';
-import { retractsRunFailure, retractsStaleRunFailure } from '../runtime/run-failure-reconcile';
+import {
+  RUN_FAILURE_RECHECK_DELAY_MS,
+  retractsRunFailure,
+  retractsStaleRunFailure,
+} from '../runtime/run-failure-reconcile';
 import { RESUME_CONTINUE_PROMPT } from '../runtime/resume';
 import { checkAmrBalanceGate } from '../runtime/amr-balance-gate';
 import { isPaidAmrPlan, resolveAmrPlan } from '../runtime/amr-low-balance-plan';
@@ -3138,9 +3142,45 @@ export function ProjectView({
     (conversationId: string) => {
       scheduleProjectTimeout(() => {
         void refreshConversationMessagesFromServer(conversationId);
-      }, 150);
+      }, RUN_FAILURE_RECHECK_DELAY_MS);
     },
     [refreshConversationMessagesFromServer, scheduleProjectTimeout],
+  );
+
+  // A terminal this client only INFERRED is not a verdict on the run. When the
+  // run's event stream answers non-OK, no terminal event ever arrives, so none
+  // of the handlers that reconcile a failure can fire — the live `onError`
+  // seals the run instead. The run itself usually finishes, and the daemon
+  // stamps the stored assistant row with its real terminal.
+  //
+  // So ask the conversation once, and apply the answer only when it retracts
+  // the failure this pane is painting: a snapshot that agrees the turn failed
+  // changes nothing. One read per inferred terminal, never a poll.
+  const reconcileInferredRunFailure = useCallback(
+    async (conversationId: string) => {
+      if (messagesConversationIdRef.current !== conversationId) return;
+      let serverMessages: ChatMessage[];
+      try {
+        serverMessages = await listMessages(project.id, conversationId);
+      } catch (err) {
+        console.warn('Failed to re-check a run failure the client inferred', err);
+        return;
+      }
+      if (messagesConversationIdRef.current !== conversationId) return;
+      if (!retractsStaleRunFailure(messagesRef.current, serverMessages)) return;
+      setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
+      setError(null);
+    },
+    [project.id],
+  );
+
+  const scheduleInferredRunFailureRecheck = useCallback(
+    (conversationId: string) => {
+      scheduleProjectTimeout(() => {
+        void reconcileInferredRunFailure(conversationId);
+      }, RUN_FAILURE_RECHECK_DELAY_MS);
+    },
+    [reconcileInferredRunFailure, scheduleProjectTimeout],
   );
 
   // The programmatic brand-extraction transcript is a synthetic row the daemon
@@ -5843,6 +5883,10 @@ export function ProjectView({
           });
           if (refreshConversationAfterError) {
             scheduleConversationMessageRefresh(runConversationId);
+          } else if (runMayFinalize && currentRunId && !isGenericDaemonDisconnect(err)) {
+            // The branch above sealed this run without ever seeing its
+            // terminal — the stream failed rather than reporting a verdict.
+            scheduleInferredRunFailureRecheck(runConversationId);
           }
           void refreshProjectFiles();
           clearTraceTouchedFilePaths();
@@ -6195,6 +6239,7 @@ export function ProjectView({
       clearCurrentRunStreamingMarker,
       clearProjectTimeout,
       scheduleConversationMessageRefresh,
+      scheduleInferredRunFailureRecheck,
       scheduleProjectTimeout,
       onProjectsRefresh,
       onProjectChange,

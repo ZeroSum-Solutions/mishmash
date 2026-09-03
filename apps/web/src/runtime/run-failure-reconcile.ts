@@ -6,6 +6,19 @@ function isFailedAssistantRow(message: ChatMessage): boolean {
 }
 
 /**
+ * How long a pane waits before asking the conversation whether the run
+ * retracted a failure the pane only INFERRED from a dead stream.
+ *
+ * The pane's own save of the failed row is still in flight at that moment, and
+ * the daemon holds a stored terminal against it
+ * (`holdTerminalRunStatusOnMessageWrite`). Reading a beat later means the answer
+ * is the row the daemon settled on rather than a race with the pane's own write.
+ * It is the delay `scheduleConversationMessageRefresh` already uses for the
+ * terminals a client does receive.
+ */
+export const RUN_FAILURE_RECHECK_DELAY_MS = 150;
+
+/**
  * A mounted chat client may not keep showing a failure the run itself retracted.
  *
  * The client cannot tell a dead run from a dead connection, so a dropped SSE
@@ -29,6 +42,16 @@ function isFailedAssistantRow(message: ChatMessage): boolean {
  * in the same update. `retractsRunFailure` judges one row against the status
  * arriving for it; `retractsStaleRunFailure` judges the rows a conversation
  * refresh brings in. Rows that stay failed keep their alert.
+ *
+ * A client can also reach that failure WITHOUT any terminal: when the run's
+ * event stream answers non-OK, `consumeDaemonRun` surfaces a plain
+ * `daemon <status>` error and returns (`providers/daemon.ts`), so no terminal
+ * event ever arrives and no handler above can fire. The live send loop then
+ * seals the run without a refresh, and Side Chat has no refresh at all. Both
+ * ask the conversation once instead, after `RUN_FAILURE_RECHECK_DELAY_MS`, and
+ * apply the answer only when `retractsStaleRunFailure` says it retracts the
+ * failure on screen — see `reconcileInferredRunFailure` in `ProjectView.tsx`
+ * and `scheduleRunFailureRecheck` in `workspace/useConversationChat.ts`.
  *
  * What this does NOT promise: the pane's error string is a single slot shared
  * with errors no row raised (a conversation-load failure, an audio error). One
