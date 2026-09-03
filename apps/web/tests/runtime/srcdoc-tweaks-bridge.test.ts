@@ -9,7 +9,7 @@ import { buildSrcdoc } from '../../src/runtime/srcdoc';
 // contract relies on. The bridge is always injected into every srcDoc build
 // (see the comment above `injectTweaksBridge`'s call site: "tying it to a
 // per-call option would force iframe srcdoc regeneration ... every time the
-// host toggle flips"), so unlike the deck/comment/palette bridges it has no
+// host toggle flips"), so unlike the deck/comment bridges it has no
 // `options.*Bridge` flag to gate on.
 //
 // NOTE ON SCOPE: this file proves the bridge's own postMessage contract

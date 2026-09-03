@@ -91,7 +91,10 @@ to: the palette bridge was never injected (`FileViewer.tsx` passed `paletteBridg
 `buildSrcdoc`), nothing in `apps/web/src` posted the `od:palette` message the bridge listened
 for, and no host palette state existed. `paletteActive`, the `paletteBridge` / `initialPalette`
 options, `injectPaletteBridge` and its `od:palette` listener were a hook for a surface that
-was never built.
+was never built. For the record, at `aab82edc2` — the last commit that carried them — they sat
+at `file-viewer-render-mode.ts:41` and `:137`, `runtime/srcdoc.ts:46-47`, `:479-481` and
+`:1124-1316` (the `od:palette` listener at `:1309`), `FileViewer.tsx:7895` and
+`scripts/template-render-report-lib.ts:129`.
 
 **The decision.** Building the producer means designing a palette surface — feature work, not
 wiring, and the same toolbar CANVAS-1 is waiting on. Devin chose removal on 2026-09-03: the

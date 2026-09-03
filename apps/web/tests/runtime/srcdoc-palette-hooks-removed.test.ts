@@ -19,8 +19,17 @@ import { buildSrcdoc, type SrcdocOptions } from '../../src/runtime/srcdoc';
 // CANVAS-3's palette half was descoped by the owner on 2026-09-03 (decision
 // D-13), so the hooks are gone.
 //
-// Both cases pass an option the app never has to give and assert the module
-// ignores it, so the hooks cannot return unnoticed.
+// The runtime cases pass an option the app never has to give and assert the
+// module ignores it. The type-level case closes the shape the runtime cases
+// cannot see: a field re-declared on the contract but never read would ignore
+// the option too, and that is exactly the dead hook this track removed.
+//
+// If a palette is ever built (see CANVAS-3 / CANVAS-1), this file is the spec
+// that has to change first: it is the record that the capability was descoped,
+// not a rule against ever having one.
+
+/** `never` — and therefore a typecheck failure — when `K` is a key of `T`. */
+type AbsentKey<T, K extends string> = K extends keyof T ? never : true;
 
 describe('render-mode decision — no palette hook', () => {
   const base: UrlLoadDecision = {
@@ -29,6 +38,12 @@ describe('render-mode decision — no palette hook', () => {
     commentMode: false,
     forceInline: false,
   };
+
+  it('declares no palette field on the decision contract', () => {
+    const absent: AbsentKey<UrlLoadDecision, 'paletteActive'> = true;
+
+    expect(absent).toBe(true);
+  });
 
   it('URL-loads a plain HTML preview even when a caller sets a palette flag', () => {
     const withPaletteFlag = { ...base, paletteActive: true } as unknown as UrlLoadDecision;
@@ -42,6 +57,13 @@ describe('buildSrcdoc — no palette bridge', () => {
   const doc =
     '<!doctype html><html><head><style>:root { --bg: #ff5a3c; }</style></head>' +
     '<body><main>Hero</main></body></html>';
+
+  it('declares no palette option on the srcdoc contract', () => {
+    const bridgeAbsent: AbsentKey<SrcdocOptions, 'paletteBridge'> = true;
+    const initialAbsent: AbsentKey<SrcdocOptions, 'initialPalette'> = true;
+
+    expect([bridgeAbsent, initialAbsent]).toEqual([true, true]);
+  });
 
   it('injects no palette bridge and no od:palette listener when a caller asks for one', () => {
     const srcdoc = buildSrcdoc(doc, {
