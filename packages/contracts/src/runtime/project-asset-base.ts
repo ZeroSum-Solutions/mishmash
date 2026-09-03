@@ -209,6 +209,31 @@ function endOfRawText(html: string, name: string, from: number): number {
   return html.length;
 }
 
+/**
+ * Where the comment opened just before `from` ends: the offset just past its
+ * closing `>`, or the length of `html` for a comment the document never closes.
+ *
+ * `-->` is not the only close. The tokenizer reaches its comment-end state on
+ * `--` and leaves it on `>`, and a `!` there moves to comment-end-bang, which
+ * closes on `>` as well — so `--!>` ends a comment, and extra dashes before
+ * either form are comment content, which makes `--->` and `---!>` closes too.
+ * Reading only `-->` runs the comment on past its end, and a `<base>` written
+ * after it — a real element the parser hoists into the head — is then taken for
+ * comment content and left in place, ahead of the injected tag.
+ */
+function endOfComment(html: string, from: number): number {
+  for (let at = from; at < html.length; ) {
+    const dashes = html.indexOf('--', at);
+    if (dashes < 0) break;
+    let close = dashes + 2;
+    while (html[close] === '-') close += 1;
+    if (html[close] === '>') return close + 1;
+    if (html[close] === '!' && html[close + 1] === '>') return close + 2;
+    at = dashes + 2;
+  }
+  return html.length;
+}
+
 /** The source span of one start tag, as `[start, end)` offsets into the input. */
 interface TagSpan {
   readonly start: number;
@@ -279,8 +304,7 @@ function scanForBasePlacement(html: string): BasePlacement {
         at = start + 6;
         continue;
       }
-      const close = html.indexOf('-->', start + 4);
-      at = close < 0 ? html.length : close + 3;
+      at = endOfComment(html, start + 4);
       continue;
     }
     const marker = html[start + 1] ?? '';
