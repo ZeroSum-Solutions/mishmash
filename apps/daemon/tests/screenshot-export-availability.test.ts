@@ -9,7 +9,7 @@
 // message.
 
 import http from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { register } from 'prom-client';
@@ -88,5 +88,63 @@ describe('isImageScreenshotExportAvailable', () => {
     expect(resp.status).toBe(501);
     const body = (await resp.json()) as { error?: { message?: string } };
     expect(body.error?.message).toBe(SCREENSHOT_EXPORT_UNAVAILABLE_MESSAGE);
+  }, 60_000);
+
+  // The other direction: the predicate claims an artifact exporter ALONE is
+  // enough for `format === 'image'` (handleScreenshotExport's fallback branch).
+  // A daemon booted with only that renderer must therefore NOT 501 — otherwise
+  // the charter would name the command in a runtime that still refuses it.
+  // The slide-renderer direction is already covered end to end by
+  // screenshot-export-file-handoff.test.ts, which boots with a stub
+  // `desktopSlideRenderer` and gets 200 image bytes back.
+  it('does not 501 when only the artifact exporter is wired, which the predicate calls available', async () => {
+    const PNG = Buffer.from('89504e470d0a1a0a', 'hex');
+    const exporterDir = await mkdtemp(path.join(os.tmpdir(), 'od-export-artifact-'));
+    const renderers = {
+      desktopArtifactExporter: async () => {
+        const file = path.join(exporterDir, 'artifact.png');
+        await writeFile(file, PNG);
+        return { ok: true, path: file, mime: 'image/png' };
+      },
+    };
+    expect(isImageScreenshotExportAvailable(renderers)).toBe(true);
+
+    const { startServer } = await import('../src/server.js');
+    const started = (await startServer({
+      port: 0,
+      host: '127.0.0.1',
+      returnServer: true,
+      ...renderers,
+    })) as { url: string; server: http.Server; shutdown?: () => Promise<void> | void };
+
+    try {
+      const id = `export-artifact-${Date.now()}`;
+      const created = await fetch(`${started.url}/api/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name: id }),
+      });
+      expect(created.ok).toBe(true);
+      const projectDir = path.join(process.env.OD_DATA_DIR!, 'projects', id);
+      await mkdir(projectDir, { recursive: true });
+      await writeFile(path.join(projectDir, 'index.html'), '<html><body>hi</body></html>');
+
+      const resp = await fetch(`${started.url}/api/projects/${id}/export/image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: 'index.html' }),
+      });
+      expect(resp.status).not.toBe(501);
+      expect(resp.status).toBe(200);
+      expect(resp.headers.get('content-type')).toContain('image/png');
+    } finally {
+      await Promise.race([
+        Promise.resolve(started.shutdown?.()),
+        new Promise((r) => setTimeout(r, 2000)),
+      ]);
+      started.server.closeAllConnections?.();
+      await new Promise<void>((resolve) => started.server.close(() => resolve()));
+      await rm(exporterDir, { recursive: true, force: true }).catch(() => {});
+    }
   }, 60_000);
 });

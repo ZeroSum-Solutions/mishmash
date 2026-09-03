@@ -4,7 +4,13 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { coversRootDir, readCoverImageBytes, readCoverRecord, writeCover } from '../../src/covers/store.js';
+import {
+  coversRootDir,
+  hasCoverImage,
+  readCoverImageBytes,
+  readCoverRecord,
+  writeCover,
+} from '../../src/covers/store.js';
 
 let dataDir = '';
 
@@ -75,5 +81,41 @@ describe('cover store', () => {
     const record = await readCoverRecord(dataDir, 'proj-3');
     expect(record).toEqual(second);
     expect(record?.sourceHash).toBe('d'.repeat(16));
+  });
+});
+
+describe('hasCoverImage — the condition GET /api/projects/:id/cover answers on', () => {
+  it('is false before a write and true after one', async () => {
+    expect(await hasCoverImage(dataDir, 'proj-has')).toBe(false);
+    await writeCover(dataDir, 'proj-has', {
+      imageBytes: Buffer.from('fake-png-bytes'),
+      sourceHash: 'b'.repeat(16),
+      width: 1280,
+      height: 800,
+      generatedAt: new Date(),
+    });
+    expect(await hasCoverImage(dataDir, 'proj-has')).toBe(true);
+  });
+
+  it('is false for an unsafe id instead of throwing', async () => {
+    for (const id of ['..', '../..', 'a/b', '']) {
+      expect(await hasCoverImage(dataDir, id)).toBe(false);
+    }
+  });
+
+  /**
+   * The route reads ONLY the image bytes (routes/covers.ts: `readCoverImageBytes`
+   * then 404 when it finds nothing) — `readCoverRecord` takes no part in that
+   * decision. So bytes present with no record must still report true, or
+   * `hasCover` would under-report a cover the route serves.
+   */
+  it('agrees with readCoverImageBytes when the record is missing', async () => {
+    const dir = path.join(coversRootDir(dataDir), 'proj-orphan-bytes');
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, 'cover.png'), Buffer.from('bytes-without-record'));
+
+    expect(await readCoverRecord(dataDir, 'proj-orphan-bytes')).toBeNull();
+    expect(await readCoverImageBytes(dataDir, 'proj-orphan-bytes')).not.toBeNull();
+    expect(await hasCoverImage(dataDir, 'proj-orphan-bytes')).toBe(true);
   });
 });
