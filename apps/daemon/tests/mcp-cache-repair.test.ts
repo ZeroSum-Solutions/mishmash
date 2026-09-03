@@ -223,6 +223,14 @@ describe('the repair endpoint refuses to act without an explicit confirmation', 
     expect(await exists(cacheEntry)).toBe(true);
   });
 
+  it('rejects a request that names no server', async () => {
+    const res = await postJson('/api/mcp/repair', { confirm: true });
+
+    expect(res.status).toBe(400);
+    expect(res.json?.error?.code).toBe('MCP_REPAIR_SERVER_REQUIRED');
+    expect(await exists(cacheEntry)).toBe(true);
+  });
+
   it('rejects an unknown server', async () => {
     const res = await postJson('/api/mcp/repair', {
       serverId: 'not-configured',
