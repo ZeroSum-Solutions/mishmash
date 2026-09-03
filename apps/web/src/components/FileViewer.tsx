@@ -7709,6 +7709,13 @@ function HtmlViewer({
       : effectiveBasePreviewSrcUrl;
     const nextSrc = `${refreshBasePreviewSrcUrl}&fr=${filesRefreshKey}`;
     const timeout = window.setTimeout(() => {
+      // This is the one reload the reader did not ask for: it fires because a
+      // file changed on disk, so that a dependency the open page renders (a
+      // stylesheet, an image, a module) refreshes with it. Every other reload
+      // site already snapshots the reader's place first; without this one, an
+      // agent write resets their scroll — the second half of B-09. The
+      // iframe's onLoad restores the snapshot.
+      capturePreviewScrollPosition();
       if (useUrlLoadPreview && urlPreviewIframeRef.current?.contentWindow) {
         urlPreviewIframeRef.current.contentWindow.location.replace(nextSrc);
       } else {
@@ -7717,6 +7724,7 @@ function HtmlViewer({
     }, 180);
     return () => window.clearTimeout(timeout);
   }, [
+    capturePreviewScrollPosition,
     effectiveBasePreviewSrcUrl,
     filesRefreshKey,
     useUrlLoadPreview,
