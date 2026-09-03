@@ -335,6 +335,18 @@ describe('durable run terminal reconciliation', () => {
       }));
     }
 
+    // The run's own durable terminal record: the `end` line `emit()` appends to
+    // events.jsonl after it has already written state.json (runtimes/runs.ts).
+    function writeTerminalEvent(runId: string, status: string, timestamp: number): void {
+      const runDir = path.join(tmpDir, runId);
+      fs.mkdirSync(runDir, { recursive: true });
+      fs.writeFileSync(path.join(runDir, 'events.jsonl'), [
+        JSON.stringify({ id: 1, event: 'start', data: {}, timestamp: 1_000 }),
+        JSON.stringify({ id: 2, event: 'end', data: { status, code: null, signal: null }, timestamp }),
+        '',
+      ].join('\n'));
+    }
+
     function insertStuckRow(messageId: string, runId: string, content = ''): void {
       db.prepare(
         `INSERT INTO messages (id, role, content, run_id, run_status, ended_at, events_json)
@@ -359,6 +371,7 @@ describe('durable run terminal reconciliation', () => {
 
     it('backfills a row left failed with empty content beside a succeeded run, idempotently', async () => {
       writeTerminalState('run-succeeded', 'succeeded', 9_000);
+      writeTerminalEvent('run-succeeded', 'succeeded', 9_000);
       insertStuckRow('m-run-succeeded', 'run-succeeded');
       const options = {
         analytics: { capture: vi.fn() },
@@ -382,8 +395,10 @@ describe('durable run terminal reconciliation', () => {
 
     it('leaves a genuinely failed run and a failed row carrying content alone', async () => {
       writeTerminalState('run-really-failed', 'failed', 9_000);
+      writeTerminalEvent('run-really-failed', 'failed', 9_000);
       insertStuckRow('m-run-really-failed', 'run-really-failed');
       writeTerminalState('run-with-body', 'succeeded', 9_000);
+      writeTerminalEvent('run-with-body', 'succeeded', 9_000);
       insertStuckRow('m-run-with-body', 'run-with-body', 'The agent could not reach the provider.');
 
       const result = await reconcileDurableRunTerminals({
@@ -397,6 +412,67 @@ describe('durable run terminal reconciliation', () => {
       expect(result.messagesFollowedTerminal).toBe(0);
       expect(readRow('m-run-really-failed').status).toBe('failed');
       expect(readRow('m-run-with-body').status).toBe('failed');
+    });
+
+    // `emit()` (runtimes/runs.ts) persists state.json BEFORE it appends the
+    // record to events.jsonl, so a terminal state.json can exist with no
+    // durable `end` line behind it — a crash between the two writes, a log the
+    // stream never flushed, a run directory restored without its log. Reading
+    // history, state.json alone is therefore not proof the run reached that
+    // terminal; the backfill rewrites a user-visible row, so it must require
+    // the run's own durable terminal record and agree with it.
+    it('does not backfill a row whose run has no durable terminal event', async () => {
+      writeTerminalState('run-no-event', 'succeeded', 9_000);
+      insertStuckRow('m-run-no-event', 'run-no-event');
+
+      const result = await reconcileDurableRunTerminals({
+        analytics: { capture: vi.fn() },
+        appVersion: '0.15.1',
+        db,
+        reportLangfuse: vi.fn(async () => ({ langfuse_expected: false })),
+        runsLogDir: tmpDir,
+      });
+
+      expect(result.messagesFollowedTerminal).toBe(0);
+      expect(readRow('m-run-no-event').status).toBe('failed');
+    });
+
+    it('does not backfill a row whose durable terminal event disagrees with state.json', async () => {
+      writeTerminalState('run-mismatch', 'succeeded', 9_000);
+      writeTerminalEvent('run-mismatch', 'failed', 9_000);
+      insertStuckRow('m-run-mismatch', 'run-mismatch');
+
+      const result = await reconcileDurableRunTerminals({
+        analytics: { capture: vi.fn() },
+        appVersion: '0.15.1',
+        db,
+        reportLangfuse: vi.fn(async () => ({ langfuse_expected: false })),
+        runsLogDir: tmpDir,
+      });
+
+      expect(result.messagesFollowedTerminal).toBe(0);
+      expect(readRow('m-run-mismatch').status).toBe('failed');
+    });
+
+    it('does not backfill a row whose event log carries no end record at all', async () => {
+      const runId = 'run-truncated-log';
+      writeTerminalState(runId, 'succeeded', 9_000);
+      fs.writeFileSync(
+        path.join(tmpDir, runId, 'events.jsonl'),
+        `${JSON.stringify({ id: 1, event: 'start', data: {}, timestamp: 1_000 })}\n`,
+      );
+      insertStuckRow('m-run-truncated-log', runId);
+
+      const result = await reconcileDurableRunTerminals({
+        analytics: { capture: vi.fn() },
+        appVersion: '0.15.1',
+        db,
+        reportLangfuse: vi.fn(async () => ({ langfuse_expected: false })),
+        runsLogDir: tmpDir,
+      });
+
+      expect(result.messagesFollowedTerminal).toBe(0);
+      expect(readRow('m-run-truncated-log').status).toBe('failed');
     });
 
     it('repairs the row from the run terminal hook without waiting for a restart', () => {
