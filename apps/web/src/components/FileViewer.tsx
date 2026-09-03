@@ -13024,6 +13024,14 @@ function HtmlViewer({
                       </span>
                     </div>
                   ) : null}
+                  {/*
+                    Both banners occupy the same absolute slot over the preview,
+                    so at most one may render. The asset warning wins: it names
+                    a specific file the daemon refused, which is actionable now,
+                    while this notice explains a shape the artifact would have
+                    to change. A blocked asset is also the more likely cause of
+                    the blank canvas when both are true.
+                  */}
                   {buildsScriptAtRuntime && !previewAssetWarning ? (
                     <PreviewRuntimeScriptNotice />
                   ) : null}

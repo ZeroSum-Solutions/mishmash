@@ -105,10 +105,16 @@ function defaultDaemonUrlOrFailClosed(inconclusive: readonly string[]): string {
 }
 
 /**
- * Errno codes that mean "nothing is listening at this socket path". Any other
- * failure (a timeout, a protocol error) leaves the question open.
+ * Errno codes that mean "nothing is listening at this socket path": the path is
+ * gone, nothing accepted, or it is not a socket at all. Any other failure
+ * leaves the question open and must not reach the default port.
+ *
+ * EACCES is deliberately absent. Permission denied means the socket IS there
+ * and this client cannot reach it — very likely the user's own daemon — so
+ * treating it as absence would silently hand back DEFAULT_DAEMON_URL, which is
+ * the wrong-daemon hazard this module exists to close.
  */
-const IPC_ABSENT_CODES = new Set(["ENOENT", "ECONNREFUSED", "ENOTSOCK", "EACCES"]);
+const IPC_ABSENT_CODES = new Set(["ENOENT", "ECONNREFUSED", "ENOTSOCK"]);
 
 async function discoverDaemonUrlFromIpc(
   env: NodeJS.ProcessEnv,

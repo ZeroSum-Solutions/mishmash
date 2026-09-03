@@ -496,6 +496,34 @@ describe('HtmlViewer runtime-attached preview script (CANVAS-6)', () => {
     expect(await screen.findByTestId('preview-runtime-script-notice')).toBeTruthy();
   });
 
+  it('yields the shared banner slot to the blocked-asset warning when both conditions hold', async () => {
+    // Both banners are absolutely positioned in the same slot, so at most one
+    // may render. The asset warning wins because it names a specific file the
+    // daemon refused — actionable now — and is the likelier cause of the blank
+    // canvas when both are true.
+    stubPreviewFetch([
+      [
+        '/raw/blocked.png',
+        () => new Response(
+          JSON.stringify({ error: { code: 'BAD_REQUEST', message: 'Error: path escapes project dir via symlink /x' } }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ],
+    ]);
+
+    render(
+      <FileViewer
+        projectId="project-1"
+        projectKind="prototype"
+        file={htmlFile()}
+        liveHtml={DYNAMIC_SCRIPT_HTML.replace('<div id="root"></div>', '<img src="blocked.png" alt="">')}
+      />,
+    );
+
+    expect(await screen.findByTestId('preview-asset-warning')).toBeTruthy();
+    expect(screen.queryByTestId('preview-runtime-script-notice')).toBeNull();
+  });
+
   it('stays quiet for a plain artifact that attaches no script at runtime', async () => {
     stubPreviewFetch();
 

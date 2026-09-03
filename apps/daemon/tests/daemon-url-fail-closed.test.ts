@@ -88,6 +88,31 @@ describe("resolveDaemonUrl fail-closed discovery", () => {
     }
   });
 
+  it("refuses the default port when the sidecar socket exists but cannot be reached", async () => {
+    // Permission denied is NOT absence: the socket is there, very likely the
+    // user's own daemon, and this client simply cannot reach it. Windows named
+    // pipes do not model this, so the case is POSIX-only.
+    if (process.platform === "win32") return;
+    const socketPath = path.join(ipcBaseDir, "denied.sock");
+    const server = net.createServer(() => {});
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(socketPath, () => resolve());
+    });
+    fs.chmodSync(socketPath, 0o000);
+    try {
+      await expect(
+        resolveDaemonUrl({
+          env: { PATH: emptyBinDir, [SIDECAR_ENV.IPC_PATH]: socketPath },
+          timeoutMs: 2000,
+        }),
+      ).rejects.toThrow(/discovery/i);
+    } finally {
+      fs.chmodSync(socketPath, 0o600);
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it("still returns the documented default when discovery conclusively finds no daemon", async () => {
     // No flag, no env URL, no sidecar socket, and `pnpm` is not on PATH — every
     // probe reached a conclusion, so the legacy default stays the documented
