@@ -174,7 +174,7 @@ export function followRunTerminalOnMessage(
  * turn succeeded but carries the timestamp its own writer stamped would drag
  * the row off the run's terminal clock. What separates that copy from the live
  * client's final save is which run each one names, not which clock reads later
- * — see `heldTerminalEndedAt` and `writeNamesRowRun` below.
+ * — see `heldTerminalEndedAt` and `identifyWriteRun` below.
  *
  * Two writes are deliberately let through. A write that already agrees on both
  * status and timestamp has nothing to correct. And a write naming a DIFFERENT
@@ -236,46 +236,39 @@ export function holdTerminalRunStatusOnMessageWrite(
 }
 
 /**
- * The two fields a message write can name its run with, paired with the row's
- * own copy of each. `pinAssistantMessageOnRunCreate` (`runtimes/
- * chat-run-messages.ts`) stamps both onto the row when a run takes it, and
- * every writer of the message PUT sends both back in `ChatMessage`.
+ * Which run a message write speaks for, judged against the run the row is
+ * terminal for.
+ *
+ *   `own-run`       the write names this row's current run: the live client's
+ *                   final save for the terminal the row already follows.
+ *   `other-run`     the write names an earlier run of this row: a copy some
+ *                   writer made before this run took the row, flushed late.
+ *   `unverifiable`  the write and the row share no run-naming field, so the
+ *                   write has been neither confirmed nor refuted.
+ *
+ * `run_id` decides whenever both sides carry one. `pinAssistantMessageOnRunCreate`
+ * (`runtimes/chat-run-messages.ts`) rewrites `run_id` for every run that takes
+ * the row, but pins `started_at` with COALESCE, so a row reused across runs
+ * keeps the FIRST run's start — reading both together would call the current
+ * run's own save an impostor. `started_at` is the fallback for a save carrying
+ * no run id, the shape `e2e/tests/dialog/retry-after-stop.test.ts` writes.
+ *
+ * Sharing nothing is not disagreement, and callers must keep the two apart: a
+ * row written before either stamp existed has nothing to check a write against.
  */
-function runIdentity(
+type RunIdentityVerdict = 'own-run' | 'other-run' | 'unverifiable';
+
+function identifyWriteRun(
   stored: { runId: string | null; startedAt: number | null } | undefined,
   message: Record<string, unknown>,
-): Array<{ written: unknown; row: unknown }> {
-  const pairs: Array<{ written: unknown; row: unknown }> = [];
+): RunIdentityVerdict {
   if (typeof message.runId === 'string' && message.runId && typeof stored?.runId === 'string') {
-    pairs.push({ written: message.runId, row: stored.runId });
+    return message.runId === stored.runId ? 'own-run' : 'other-run';
   }
   if (typeof message.startedAt === 'number' && typeof stored?.startedAt === 'number') {
-    pairs.push({ written: message.startedAt, row: stored.startedAt });
+    return message.startedAt === stored.startedAt ? 'own-run' : 'other-run';
   }
-  return pairs;
-}
-
-/**
- * Whether a write is the row's OWN run speaking — the live client's final save
- * for the terminal the row already follows — rather than a copy of the turn
- * some earlier writer is flushing late.
- *
- * A write names the row's run when any identity the two of them share agrees:
- * the row's `run_id`, or its `started_at` for a save that carries no run id.
- * Both are stamped per run, so a copy made under an earlier run of the same row
- * carries neither and cannot claim to be this run's writer.
- *
- * Sharing no identity at all is not the same as disagreeing, and callers must
- * keep the two apart: an old row that predates the per-run stamps has nothing
- * to check a write against, so a write it cannot verify has not been refuted
- * either.
- */
-function writeNamesRowRun(
-  stored: { runId: string | null; startedAt: number | null } | undefined,
-  message: Record<string, unknown>,
-): boolean {
-  const identity = runIdentity(stored, message);
-  return identity.length > 0 && identity.every((pair) => pair.written === pair.row);
+  return 'unverifiable';
 }
 
 /**
@@ -314,9 +307,11 @@ function heldTerminalEndedAt(
   if (message.runStatus !== held || typeof incoming !== 'number') {
     return storedEndedAt ?? incoming ?? null;
   }
-  if (writeNamesRowRun(stored, message)) return incoming;
-  const unverifiable = runIdentity(stored, message).length === 0;
-  if (unverifiable && (storedEndedAt === null || incoming > storedEndedAt)) return incoming;
+  const identity = identifyWriteRun(stored, message);
+  if (identity === 'own-run') return incoming;
+  if (identity === 'unverifiable' && (storedEndedAt === null || incoming > storedEndedAt)) {
+    return incoming;
+  }
   return storedEndedAt ?? incoming;
 }
 

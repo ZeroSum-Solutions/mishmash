@@ -903,6 +903,30 @@ describe('durable run terminal reconciliation', () => {
           expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
         });
 
+        // `pinAssistantMessageOnRunCreate` rewrites `run_id` for every run that
+        // takes the row but pins `started_at` with COALESCE, so a row reused
+        // across runs keeps the FIRST run's start. Reading both together would
+        // call the current run's own final save an impostor over a stale start
+        // it never wrote — the very loss this track exists to stop. The run id
+        // decides whenever the row has one.
+        it('lets the current run own a reused row whose startedAt is still the first run\'s', () => {
+          db.prepare(
+            `INSERT INTO messages (id, role, content, run_id, run_status, started_at, ended_at, events_json)
+             VALUES ('m-reused-row', 'assistant', 'the answer', 'run-live', 'succeeded', ?, ?, NULL)`,
+          ).run(RUN_STARTED_AT, DAEMON_STAMP);
+
+          const write = {
+            content: 'the answer',
+            endedAt: DAEMON_STAMP - 1,
+            id: 'm-reused-row',
+            role: 'assistant',
+            runId: 'run-live',
+            runStatus: 'succeeded',
+            startedAt: RUN_STARTED_AT + 4_000,
+          };
+          expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
+        });
+
         // Sharing no identity is not the same as disagreeing. A row stamped
         // before `pinAssistantMessageOnRunCreate` put a run id and a start on
         // it has nothing to check a write against, so the write is neither
