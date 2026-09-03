@@ -64,6 +64,7 @@ flag it and continue with your original task.`;
 const EXECUTION_CONTEXT_PLACEHOLDER = '%%OD_SLIM_EXECUTION_CONTEXT%%';
 const HANDOFF_PLACEHOLDER = '%%OD_SLIM_HANDOFF%%';
 const COPYRIGHT_GUARDRAIL_PLACEHOLDER = '%%OD_SLIM_COPYRIGHT_GUARDRAIL%%';
+const VISUAL_PREVIEW_PLACEHOLDER = '%%OD_SLIM_VISUAL_PREVIEW%%';
 
 // Default Conduct-section clause. Template-derived runs (project metadata
 // `kind: 'template'`) swap it for an exemption: the design-templates
@@ -75,6 +76,24 @@ const COPYRIGHT_GUARDRAIL_PLACEHOLDER = '%%OD_SLIM_COPYRIGHT_GUARDRAIL%%';
 export const COPYRIGHT_GUARDRAIL_CLAUSE = "Don't recreate copyrighted designs.";
 export const TEMPLATE_COPYRIGHT_GUARDRAIL_CLAUSE =
   'This project was started from an MIT-licensed template — build directly from it, don\'t avoid reproducing it.';
+
+/**
+ * The optional render preview, in the two forms the runtime can support.
+ *
+ * `od export --format image` reaches `POST /api/projects/:id/export/image`
+ * (export-cli-routing.ts), which answers 501 UPSTREAM_UNAVAILABLE unless the
+ * daemon was started with a desktop renderer — see
+ * `isImageScreenshotExportAvailable`. Naming that command in a runtime that
+ * cannot serve it spends the agent's one render on a guaranteed failure and
+ * files a `request-failed` anomaly for it, so the unavailable form says so
+ * plainly instead. That covers a USER-requested export as well as the agent's
+ * own preview -- both reach the same 501 -- and both forms keep the "never your
+ * own browser" rule, so a missing preview cannot become a Playwright/headless
+ * attempt.
+ */
+const VISUAL_PREVIEW_AVAILABLE = `- For unresolved HTML visual risk, run ONE optional preview directly via \`"$OD_NODE_BIN" "$OD_BIN" export <file> --project "$OD_PROJECT_ID" --format image --out <path>\` — never your own browser (no Playwright/headless), even after a failure. No help/env/path probes first. One render is the whole budget; after failure, run at most one diagnostic and retry only after fixing the cause. A user-requested final export is delivery, outside this preview budget.`;
+
+const VISUAL_PREVIEW_UNAVAILABLE = `- This runtime cannot render an image: settle HTML visual risk by reading your own output — never your own browser (no Playwright/headless), and no export/render probes. An image export the USER asks for is unavailable here too — say so plainly rather than running it and reporting the failure.`;
 
 const FILESYSTEM_EXECUTION_CONTEXT = `You work in a filesystem-backed project: the project folder is your cwd; written files appear in the user's files panel, and root HTML renders in their preview pane.`;
 
@@ -155,7 +174,7 @@ Resolve the brand source; never re-ask direction. On \`[form answers — …]\` 
   - Static pass from context — broken tags/scripts, leftover tokens/stubs, main interaction. Batch independent assertions. After failure, allow one targeted fix/recheck on changed state; never reopen unrelated ranges.
   - Skill checklist — every P0 passes, fix in place.
   - Craft scan — philosophy / hierarchy / execution / specificity / restraint, plus objective layout failures (overlap, clipping, overflow, wireframe charts — see Craft); fix what's weak or broken.
-  - For unresolved HTML visual risk, run ONE optional preview directly via \`"$OD_NODE_BIN" "$OD_BIN" export <file> --project "$OD_PROJECT_ID" --format image --out <path>\` — never your own browser (no Playwright/headless), even after a failure. No help/env/path probes first. One render is the whole budget; after failure, run at most one diagnostic and retry only after fixing the cause. A user-requested final export is delivery, outside this preview budget.
+  %%OD_SLIM_VISUAL_PREVIEW%%
 
 ### Editing an existing artifact
 Every follow-up is an explicit instruction: the user asked for A, so the delivered file must actually be A — do exactly what was asked, in full, in every place it applies. "Make the primary color dark green" recolors every element that uses it, not one; "remove the sidebar" means gone, not hidden; "numbers in monospace" means all of them. Do not reinterpret it, "improve on" it, partially apply it, or substitute your own taste for what the user literally said — their words are the highest authority (Precedence #1). If you believe the ask is a mistake, do it anyway and say why in one line; never quietly do something else.
@@ -203,6 +222,10 @@ export interface RenderSlimCoreCharterOptions {
   // True for runs whose project metadata carries `kind: 'template'`. See
   // TEMPLATE_COPYRIGHT_GUARDRAIL_CLAUSE (MM-004-A).
   templateSourceExemption?: boolean;
+  // True only when the caller has proven the running daemon can rasterize an
+  // image export (`isImageScreenshotExportAvailable`). Fail-closed: absent
+  // means the charter does not name the export command at all.
+  screenshotExportAvailable?: boolean;
 }
 
 /**
@@ -229,5 +252,11 @@ export function renderSlimCoreCharter(
       options.templateSourceExemption === true
         ? TEMPLATE_COPYRIGHT_GUARDRAIL_CLAUSE
         : COPYRIGHT_GUARDRAIL_CLAUSE,
+    )
+    .replace(
+      VISUAL_PREVIEW_PLACEHOLDER,
+      options.screenshotExportAvailable === true
+        ? VISUAL_PREVIEW_AVAILABLE
+        : VISUAL_PREVIEW_UNAVAILABLE,
     );
 }

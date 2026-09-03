@@ -2978,6 +2978,8 @@ export const en: Dict = {
   'fileViewer.speakerNotesPlaceholder': 'Add speaker notes for this slide...',
   'fileViewer.previewAssetBlockedTitle': 'Preview asset blocked',
   'fileViewer.previewAssetBlockedDetail': '{filePath} could not be loaded. Replace external symlinks with files inside this project.',
+  'fileViewer.previewRuntimeScriptBlockedTitle': 'Preview may be blank',
+  'fileViewer.previewRuntimeScriptBlockedDetail': 'This artifact attaches a script at runtime, so the preview cannot inline it and the sandbox blocks it from loading. If the canvas is empty, that is why. Reference the script with a <script src="..."> tag instead and the preview will inline it.',
   'fileViewer.presenterReset': 'Reset',
   'fileViewer.present': 'Present',
   'fileViewer.presentInTab': 'In this tab',
