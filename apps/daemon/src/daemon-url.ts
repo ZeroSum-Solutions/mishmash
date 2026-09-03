@@ -176,6 +176,12 @@ async function discoverDaemonUrlFromToolsDev(
       stdout += typeof chunk === "string" ? chunk : chunk.toString("utf8");
     });
     child.on("error", () => done({ url: null }));
+    // A non-zero exit is conclusive absence, not an inconclusive probe. `od`
+    // runs from anywhere, and outside a workspace `pnpm exec tools-dev` simply
+    // fails — the overwhelmingly common shape of this branch, and exactly the
+    // direct launch the legacy default exists for. Treating it as inconclusive
+    // would fail closed on every such invocation. A probe that ran and reported
+    // no runtime is the same answer.
     child.on("close", (code) => {
       done({ url: code === 0 ? extractDaemonUrlFromToolsDevStatus(stdout) : null });
     });
