@@ -54,6 +54,20 @@ function timeoutReason(budgetMs: number): string {
 }
 
 /**
+ * The connect time to report when the budget ran out.
+ *
+ * A timeout consumed the whole budget by definition of the branch, but the
+ * wall clock can read a millisecond short of it: the elapsed clock starts at
+ * the `spawn()` call and the timer is armed just after, so timer granularity
+ * can land under. Reporting "no reply within 15000ms" beside "14999ms" would
+ * contradict itself, so take whichever is larger -- a probe held up past its
+ * own budget still reports the real number.
+ */
+function timedOutConnectMs(elapsedMs: number, budgetMs: number): number {
+  return Math.max(elapsedMs, budgetMs);
+}
+
+/**
  * Text describing an external MCP server's connection state.
  *
  * A line qualifies only when it pairs an MCP subject -- the words "MCP
@@ -189,7 +203,12 @@ async function connectStdio(
       resolve({ ...result, stderr });
     };
     const timer = setTimeout(
-      () => settle({ state: 'timeout', connectMs: elapsed(), reason: timeoutReason(budgetMs) }),
+      () =>
+        settle({
+          state: 'timeout',
+          connectMs: timedOutConnectMs(elapsed(), budgetMs),
+          reason: timeoutReason(budgetMs),
+        }),
       budgetMs,
     );
 
@@ -352,7 +371,7 @@ async function connectRemote(
     const aborted = (err as Error).name === 'AbortError';
     return {
       state: aborted ? 'timeout' : 'failed',
-      connectMs,
+      connectMs: aborted ? timedOutConnectMs(connectMs, budgetMs) : connectMs,
       stderr: '',
       reason: aborted ? timeoutReason(budgetMs) : String((err as Error).message),
     };
