@@ -150,11 +150,13 @@ import {
   htmlNeedsFocusGuard,
   htmlNeedsPoweredPreview,
   htmlNeedsRedirectGuard,
+  htmlBuildsScriptAtRuntime,
   htmlNeedsSandboxShim,
   parseForceInline,
   shouldUrlLoadHtmlPreview,
   type UrlLoadDecision,
 } from './file-viewer-render-mode';
+import { PreviewRuntimeScriptNotice } from './PreviewRuntimeScriptNotice';
 import {
   assetBaseDirFor,
   collectPreviewAssetPaths,
@@ -7356,6 +7358,16 @@ function HtmlViewer({
     const s = routingHtmlSource;
     return s != null && htmlNeedsFocusGuard(s);
   }, [passiveLargeHtmlPreview, routingHtmlSource]);
+  // The artifact attaches its script at runtime, so neither the literal-tag
+  // scan nor the srcDoc asset inliner can see it and no preview mode can run
+  // it. Not a render-mode disqualifier (see htmlBuildsScriptAtRuntime) — it
+  // only decides whether the viewer explains the blank canvas the user may be
+  // looking at.
+  const buildsScriptAtRuntime = useMemo(() => {
+    if (passiveLargeHtmlPreview) return false;
+    const s = routingHtmlSource;
+    return s != null && htmlBuildsScriptAtRuntime(s);
+  }, [passiveLargeHtmlPreview, routingHtmlSource]);
   // A self-redirecting artifact must render through srcDoc so buildSrcdoc's
   // redirect-loop guard is present; on the raw URL-load path the iframe reloads
   // itself forever and freezes the workspace (nexu-io/open-design#710).
@@ -13011,6 +13023,17 @@ function HtmlViewer({
                         {t('fileViewer.previewAssetBlockedDetail', { filePath: previewAssetWarning.filePath })}
                       </span>
                     </div>
+                  ) : null}
+                  {/*
+                    Both banners occupy the same absolute slot over the preview,
+                    so at most one may render. The asset warning wins: it names
+                    a specific file the daemon refused, which is actionable now,
+                    while this notice explains a shape the artifact would have
+                    to change. A blocked asset is also the more likely cause of
+                    the blank canvas when both are true.
+                  */}
+                  {buildsScriptAtRuntime && !previewAssetWarning ? (
+                    <PreviewRuntimeScriptNotice />
                   ) : null}
                 </div>
               </div>

@@ -213,13 +213,12 @@ export function parseForceInline(search: string | URLSearchParams | null | undef
  *     so the heuristic favors a few extra srcDoc-mode previews over those
  *     additional requests.
  *
- * Remaining known limitation: dynamically injected scripts
+ * Dynamically injected scripts
  * (`document.createElement('script'); s.src = '…'; head.appendChild(s)`)
- * are still invisible to this scan because the literal `<script src=…>`
- * tag never appears in the source. Such artifacts will still URL-load and
- * still throw on Web Storage access at startup. Workaround for now: users
- * can opt the artifact into srcDoc with `?forceInline=1` or by toggling
- * Tweaks.
+ * stay invisible to this scan because the literal `<script src=…>` tag never
+ * appears in the source. Routing them to srcDoc would not help either — see
+ * `htmlBuildsScriptAtRuntime` below, which names the shape so the viewer can
+ * tell the user why the canvas is blank.
  *
  * Pure string scan — caller passes the same `source` already fetched for
  * preview rendering, so this adds no extra I/O. Heuristic by design: false
@@ -305,6 +304,32 @@ export function htmlNeedsSandboxShim(source: string): boolean {
   // unrelated `src=` attributes on later tags in the same document.
   if (/<script\s[^>]*?\bsrc\s*=/i.test(source)) return true;
   return false;
+}
+
+/**
+ * Return true when the HTML source attaches a script element it builds at
+ * runtime (`document.createElement('script')` … `.src = …`) instead of
+ * shipping a literal `<script src=…>`.
+ *
+ * This is the exact residue `htmlNeedsSandboxShim` cannot see, and no preview
+ * mode can run such a script: the URL-load and srcDoc iframes both hold an
+ * opaque origin that cannot fetch the linked file, and the srcDoc pipeline's
+ * usual rescue — inlining the file into the document — reads the same literal
+ * tags this scan does, so it never sees the URL either. The app therefore
+ * never mounts and the canvas is blank (CANVAS-6).
+ *
+ * Deliberately NOT a render-mode disqualifier. Forcing srcDoc would make every
+ * false positive pay for a slower render AND would not fix the true positives.
+ * The viewer uses this only to say why the canvas is blank and to name the
+ * artifact-side remedy, so a false positive costs one line of copy.
+ *
+ * Both halves are required — a bare `createElement('script')` that is never
+ * given a `src` loads nothing external and cannot hit this wall.
+ */
+export function htmlBuildsScriptAtRuntime(source: string | null | undefined): boolean {
+  if (!source) return false;
+  if (!/\bcreateElement\s*\(\s*["'`]script["'`]\s*\)/i.test(source)) return false;
+  return /\.\s*src\s*=/.test(source);
 }
 
 /**
