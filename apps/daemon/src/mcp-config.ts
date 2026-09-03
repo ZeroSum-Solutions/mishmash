@@ -792,7 +792,11 @@ export const MCP_TEMPLATES: McpTemplate[] = [
     example:
       'Generate a 1024×1024 image of a misty Japanese garden using flux_dev, then upscale 2× and remove the background.',
     command: 'uvx',
-    args: ['--from', 'fal-mcp-server', 'fal-mcp'],
+    // `mcp<1.10` is load-bearing: fal-mcp-server registers its tools through
+    // the pre-1.10 low-level `Server` API, so the SDK uvx resolves by default
+    // makes it die on import with `'Server' object has no attribute
+    // 'list_tools'` before it ever answers `initialize` (#157).
+    args: ['--from', 'fal-mcp-server', '--with', 'mcp<1.10', 'fal-mcp'],
     envFields: [
       {
         key: 'FAL_KEY',

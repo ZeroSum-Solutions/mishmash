@@ -1498,6 +1498,18 @@ export interface Dict {
   'mcpClient.storedAt': string;
   'mcpClient.daemonError': string;
   'mcpClient.saveFailed': string;
+  'mcpClient.health.check': string;
+  'mcpClient.health.checking': string;
+  'mcpClient.health.failed': string;
+  'mcpClient.health.hint': string;
+  'mcpClient.health.stateOk': string;
+  'mcpClient.health.stateFailed': string;
+  'mcpClient.health.stateTimeout': string;
+  'mcpClient.health.stateDisabled': string;
+  'mcpClient.health.connectMs': string;
+  'mcpClient.health.budgetMs': string;
+  'mcpClient.health.stderrLabel': string;
+  'mcpClient.health.remedyLabel': string;
   'useEverywhere.modalAria': string;
   'useEverywhere.modalTitle': string;
   'useEverywhere.modalSubtitle': string;
