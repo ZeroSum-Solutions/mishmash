@@ -57,12 +57,44 @@ export type QuestionFormInteraction =
 
 const OPTIONAL_FORM_AUTO_CONTINUE_SECONDS = 10 * 60;
 
+/**
+ * What a rendered question form may still do.
+ *
+ * Invariant: only the form's own answer message closes it. A form the user
+ * never submitted stays answerable however many turns have passed, and it is
+ * never presented as answered — being overtaken by a newer assistant message
+ * is not an answer (issue #155). `interactive` is the host's live/busy gate
+ * and `canSubmit` its wiring; both suppress input without ever claiming an
+ * answer was given.
+ */
+function questionFormState(input: {
+  submittedAnswers: Record<string, string | string[]> | undefined;
+  canSubmit: boolean;
+  interactive: boolean;
+  isLatestTurn: boolean;
+}): { answered: boolean; locked: boolean; awaitingAnswerFromEarlierTurn: boolean } {
+  const answered = input.submittedAnswers !== undefined;
+  const locked = answered || !input.canSubmit || !input.interactive;
+  return {
+    answered,
+    locked,
+    // Answerable, but sitting behind newer turns: the head carries an
+    // "Answer now" affordance so the open questions stay reachable.
+    awaitingAnswerFromEarlierTurn: !locked && !input.isLatestTurn,
+  };
+}
+
 interface Props {
   form: QuestionForm;
-  // Whether the user can still submit answers. The owning AssistantMessage
-  // disables the form when the assistant turn is no longer the most recent
-  // one (i.e. the user has already moved past it).
+  // The host's live/busy gate: false while the host is mid-submit or
+  // rendering read-only history. It never means "answered" — see
+  // questionFormState.
   interactive: boolean;
+  // Whether this form sits in the newest turn. A form in an older turn is
+  // still answerable; it just carries an "Answer now" affordance so the open
+  // questions stay reachable. Defaults to true for hosts that render one
+  // form at a time.
+  isLatestTurn?: boolean;
   // Pre-existing answers — when we detect a follow-up user message that
   // begins with "[form answers — <id>]", we parse it back out and pass it
   // here so the rendered form reflects what was sent.
@@ -119,6 +151,7 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
     submitDisabled = false,
     visualStyleContext,
     autoContinueAfterTimeout = false,
+    isLatestTurn = true,
   },
   ref,
 ) {
@@ -153,7 +186,13 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
     OPTIONAL_FORM_AUTO_CONTINUE_SECONDS,
   );
   const autoContinuedRef = useRef(false);
-  const locked = !interactive || !onSubmit || submittedAnswers !== undefined;
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const { answered, locked, awaitingAnswerFromEarlierTurn } = questionFormState({
+    submittedAnswers,
+    canSubmit: Boolean(onSubmit),
+    interactive,
+    isLatestTurn,
+  });
   // Submitted answers are held by the host in their original wire format.
   // Use the normalized snapshot for rendering so legacy tone values select
   // the same visual card that a new submission will send.
@@ -425,9 +464,12 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
   // auto-continue once every required answer is present; a stepped form can
   // auto-continue on an optional active step after its earlier requirements
   // have been met. Fully optional forms retain the countdown throughout.
+  // Never on a form the conversation has moved past: an unattended answer
+  // must not be sent on the user's behalf turns after they left it open.
   const autoContinueEnabled =
     autoContinueAfterTimeout &&
     !locked &&
+    !awaitingAnswerFromEarlierTurn &&
     !submitDisabled &&
     (canSkipAll || (ready && (!stepped || activeQuestion?.required !== true)));
   const currentQuestionReady =
@@ -438,6 +480,17 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
   const autoContinueCountdown = `${Math.floor(autoContinueRemaining / 60)}:${String(
     autoContinueRemaining % 60,
   ).padStart(2, '0')}`;
+
+  // Backs the "Answer now" affordance: bring the first still-open control
+  // into view and hand it the caret.
+  function focusFirstAnswerControl() {
+    const control = bodyRef.current?.querySelector<HTMLElement>(
+      'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])',
+    );
+    if (!control) return;
+    control.scrollIntoView?.({ block: 'center' });
+    control.focus();
+  }
 
   useImperativeHandle(ref, () => ({ submit: handleSubmit, skipAll: handleSkipAll }));
   useEffect(() => {
@@ -487,9 +540,20 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
             {activeQuestionIndex + 1} / {form.questions.length}
           </span>
         ) : null}
-        {locked ? <span className="question-form-pill">{t('qf.answered')}</span> : null}
+        {answered ? (
+          <span className="question-form-pill">{t('qf.answered')}</span>
+        ) : awaitingAnswerFromEarlierTurn ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="question-form-answer-now"
+            onClick={focusFirstAnswerControl}
+          >
+            {t('qf.answerNow')}
+          </Button>
+        ) : null}
       </div>
-      <div className="question-form-body">
+      <div className="question-form-body" ref={bodyRef}>
         {questionsToRender.map((q) => {
           const value = currentAnswers[q.id];
           const selectionLimit = selectionLimits.get(q.id)!;
@@ -815,7 +879,7 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
         <div className="question-form-foot">
           {locked ? (
             <span className="qf-locked-note">
-              {submittedAnswers ? t('qf.lockedSubmitted') : t('qf.lockedPrev')}
+              {answered ? t('qf.lockedSubmitted') : t('qf.lockedUnanswered')}
             </span>
           ) : stepped ? (
             <>

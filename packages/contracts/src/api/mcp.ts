@@ -164,3 +164,64 @@ export interface DisconnectMcpOAuthRequest {
 export type McpOAuthPostMessage =
   | { type: 'mcp-oauth'; ok: true; serverId: string | null }
   | { type: 'mcp-oauth'; ok: false; message: string | null };
+
+// ─────────────────────────────────────────────────────────────────────
+// MCP health — the surface that owns per-server connection state.
+//
+// A configured MCP server is an optional accessory to a run: when one
+// fails to start, the run itself can still succeed, and the run's own
+// failure indicator must not speak for it (issue #157). This DTO is where
+// that state lives instead. The daemon measures it by connecting to each
+// configured server itself rather than repeating whatever the agent CLI
+// claimed, because the agent's report is exactly what was wrong.
+// ─────────────────────────────────────────────────────────────────────
+
+export type McpServerHealthState =
+  /** Connected inside the budget. For `stdio` and `http` that means the server
+   * answered `initialize`; for the older `sse` transport, whose handshake
+   * answers a GET with an event stream and only then accepts posts on a
+   * session endpoint it names, it means that event stream opened. The narrower
+   * `sse` meaning is stated here rather than left implied, because a health
+   * surface that overstates what it verified is the failure it exists to
+   * correct. */
+  | 'ok'
+  /** Exited, refused, or replied with an error before the budget ran out. */
+  | 'failed'
+  /** Still silent when the connect budget ran out. */
+  | 'timeout'
+  /** Configured but switched off, so it was never contacted. */
+  | 'disabled';
+
+export interface McpServerHealth {
+  id: string;
+  label?: string;
+  transport: McpTransport;
+  enabled: boolean;
+  state: McpServerHealthState;
+  /** Milliseconds from spawn (stdio) or request start (http, sse) to the point
+   * the server was judged connected -- its `initialize` reply for stdio and
+   * http, its event stream opening for sse -- or to the connect budget running
+   * out. Measured from the moment the process is launched, so a server that
+   * answers in three seconds can never be reported at the full budget. */
+  connectMs: number;
+  /** The connect budget this probe allowed, in milliseconds. */
+  budgetMs: number;
+  /** Secret-redacted tail of what the server wrote to stderr. Empty string
+   * when it wrote nothing. This is the excerpt the UI shows: without it a
+   * dead server is indistinguishable from a slow one. */
+  stderrExcerpt: string;
+  /** One line naming why the state is not `ok`. Absent when it is. */
+  reason?: string;
+  /** Concrete repair for a failure signature MishMash recognizes (a corrupt
+   * npx cache entry, an incompatible Python `mcp` SDK). Absent otherwise. */
+  remedy?: string;
+  /** ISO timestamp of this server's probe. */
+  checkedAt: string;
+}
+
+/** Response from `GET /api/mcp/health`. */
+export interface McpHealthResponse {
+  servers: McpServerHealth[];
+  /** ISO timestamp of the sweep as a whole. */
+  checkedAt: string;
+}

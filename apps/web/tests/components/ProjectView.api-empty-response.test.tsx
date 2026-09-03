@@ -470,6 +470,88 @@ describe('ProjectView API empty response handling', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('records delivery when a Design run rewrote an existing project file through Bash', async () => {
+    // A Bash `cp`/`magick`/`ffmpeg` write changes no file NAME, so the pre-turn
+    // name snapshot cannot see it; the file's mtime is the only signal that the
+    // turn wrote it (issue #159 section B). Stamping mtime at fetch time
+    // reproduces the real shape: the file existed before the turn and was
+    // rewritten during it.
+    mockedFetchProjectFiles.mockImplementation(async () => [
+      {
+        name: 'assets/hero.jpg',
+        path: 'assets/hero.jpg',
+        size: 2048,
+        mtime: Date.now(),
+        kind: 'image',
+        mime: 'image/jpeg',
+      },
+    ]);
+    mockedStreamViaDaemon.mockImplementation(async (options: DaemonStreamOptions) => {
+      const { handlers } = options;
+      handlers.onAgentEvent({
+        kind: 'tool_use',
+        id: 'bash-1',
+        name: 'Bash',
+        input: { command: 'magick /tmp/hero.png -quality 92 assets/hero.jpg' },
+      });
+      handlers.onAgentEvent({ kind: 'tool_result', toolUseId: 'bash-1', content: '', isError: false });
+      handlers.onDelta('hello');
+      handlers.onDone('hello');
+    });
+    renderProjectView();
+
+    await sendTestPrompt();
+
+    await waitFor(() => expect(screen.getAllByText('hello').length).toBeGreaterThan(0));
+    await waitFor(() => {
+      expect(
+        hasSavedAssistantMessage(
+          (message) =>
+            message.runStatus === 'succeeded' && message.resultDeliveryState === 'delivered',
+        ),
+      ).toBe(true);
+    });
+    expect(screen.queryByText(/without producing a deliverable project file/i)).toBeNull();
+  });
+
+  it('records delivery when a Design run started a daemon-managed preview server', async () => {
+    mockedStreamViaDaemon.mockImplementation(async (options: DaemonStreamOptions) => {
+      const { handlers } = options;
+      handlers.onAgentEvent({
+        kind: 'tool_use',
+        id: 'bash-2',
+        name: 'Bash',
+        input: {
+          command:
+            '"$OD_NODE_BIN" "$OD_BIN" preview start --project "$OD_PROJECT_ID"'
+            + ' --port 3000 --dir . -- npm run dev',
+        },
+      });
+      handlers.onAgentEvent({
+        kind: 'tool_result',
+        toolUseId: 'bash-2',
+        content: '{"url":"http://127.0.0.1:3000"}',
+        isError: false,
+      });
+      handlers.onDelta('hello');
+      handlers.onDone('hello');
+    });
+    renderProjectView();
+
+    await sendTestPrompt();
+
+    await waitFor(() => expect(screen.getAllByText('hello').length).toBeGreaterThan(0));
+    await waitFor(() => {
+      expect(
+        hasSavedAssistantMessage(
+          (message) =>
+            message.runStatus === 'succeeded' && message.resultDeliveryState === 'delivered',
+        ),
+      ).toBe(true);
+    });
+    expect(screen.queryByText(/without producing a deliverable project file/i)).toBeNull();
+  });
+
   it('passes attached document paths and preview context to BYOK OpenCode runs', async () => {
     chatPaneMockState.attachments = [
       { path: 'brief.docx', name: 'brief.docx', kind: 'file', size: 1024 },

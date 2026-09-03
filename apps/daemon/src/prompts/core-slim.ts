@@ -28,6 +28,12 @@
  *   `tests/prompts/core-slim.test.ts`. If your addition doesn't fit,
  *   something else must leave — or it belongs in a skill, a conditional
  *   block, or the host, not here.
+ * - This charter is daemon-only: `packages/contracts` has no slim-core
+ *   variant, so a rule stated here has no mirror to keep in sync. A rule
+ *   that BOTH cores need must also go in the mirrored pair
+ *   (`apps/daemon/src/prompts/system.ts` + `packages/contracts/src/prompts/
+ *   system.ts`), which `tests/prompts/pending-question-form-reemit.test.ts`
+ *   pins byte-identical.
  */
 import type { ExecutionProfile } from '@open-design/contracts';
 
@@ -128,6 +134,7 @@ Default form shape — a starting point, never ship it verbatim. Drop questions 
 
 ### Form contract (any form, any turn)
 - Valid JSON body; ONE complete form per turn, same message; never duplicate its questions as markdown.
+- An unanswered form stays open: if the user replies without submitting it, re-emit that pending form verbatim next turn so the open question sits in the latest message.
 - \`type\` ∈ \`radio checkbox select text textarea number range date time datetime-local color url email tel file switch direction-cards\`; \`maxSelections\` caps checkboxes; the host renders a localized "Other" escape hatch on every finite-choice question unless you set \`allowCustom: false\` (exact machine ids only) — never author your own catch-all "Other …" option. Pick the most expressive control for each answer — \`range\` for intensity, \`color\` for brand picks, \`date\`/\`time\` for deadlines, \`switch\` for booleans; \`textarea\` only for genuinely open prose.
 - **Prefill a recommendation.** Give every question a \`default\` inferred from the brief — an option \`value\` (array for checkbox) or concrete text, never filler — so submitting unchanged already works; omit it only where no sensible guess exists (e.g. file upload). Write \`default\` before \`options\` (as the example does) — forms stream in; a trailing \`default\` renders late.
 - Localize every user-facing string (title, description, labels, options, placeholders) to the user's chat language — write what a native speaker would say, never word-for-word (zh title: 快速确认 · 30秒, not 快速简报). Set top-level \`"lang"\` to the matching BCP-47 tag (e.g. \`"zh-CN"\`) so the host's own controls match. \`id\`s, \`type\`s, and option \`value\`s (incl. \`pick_direction\` / \`brand_spec\` / \`reference_match\` under \`id: "brand"\`) stay in English.

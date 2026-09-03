@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  countFilesModifiedDuringTurn,
   designDeliveryVerificationPending,
   resolveDesignDeliveryOutcome,
 } from '../../src/runtime/design-delivery';
+import type { ProjectFile } from '../../src/types';
 
 describe('resolveDesignDeliveryOutcome', () => {
   it('treats a text answer without any file-write attempt as a report-only result', () => {
@@ -39,7 +41,6 @@ describe('resolveDesignDeliveryOutcome', () => {
     for (const attempt of [
       { kind: 'tool_use' as const, id: 'w-1', name: 'Write', input: { file_path: 'index.html' } },
       { kind: 'tool_use' as const, id: 'e-1', name: 'Edit', input: { file_path: 'index.html' } },
-      { kind: 'tool_use' as const, id: 'b-1', name: 'Bash', input: { command: 'rm stale.html' } },
     ]) {
       expect(
         resolveDesignDeliveryOutcome({
@@ -52,6 +53,25 @@ describe('resolveDesignDeliveryOutcome', () => {
         }),
       ).toBe('no_result');
     }
+  });
+
+  it('does not treat a removal as an attempt to produce a file', () => {
+    // Removing a file owes the user no new deliverable, so a cleanup turn that
+    // answered with substantive text is a report, not a missing artifact
+    // (issue #159 section B).
+    expect(
+      resolveDesignDeliveryOutcome({
+        sessionMode: 'design',
+        runStatus: 'succeeded',
+        content: 'Dropped the stale page; the rest of the site is unchanged.',
+        events: [
+          { kind: 'tool_use', id: 'b-1', name: 'Bash', input: { command: 'rm stale.html' } },
+          { kind: 'tool_result', toolUseId: 'b-1', content: '', isError: false },
+        ],
+        producedFileCount: 0,
+        traceObjectFileCount: 0,
+      }),
+    ).toBe('report_only');
   });
 
   it('does not accept an empty answer as a report-only result', () => {
@@ -236,5 +256,42 @@ describe('resolveDesignDeliveryOutcome', () => {
         events: [],
       }),
     ).toBe(false);
+  });
+});
+
+describe('countFilesModifiedDuringTurn', () => {
+  const file = (name: string, mtime: number, extra: Partial<ProjectFile> = {}): ProjectFile => ({
+    name,
+    size: 1,
+    mtime,
+    kind: 'image',
+    mime: 'image/jpeg',
+    ...extra,
+  });
+
+  it('counts project files whose mtime lands at or after the pre-turn snapshot', () => {
+    const files = [
+      file('assets/hero.jpg', 1_500),
+      file('assets/logo.svg', 1_000),
+      file('assets/rewritten.jpg', 2_000),
+    ];
+    expect(countFilesModifiedDuringTurn(files, 1_500)).toBe(2);
+    expect(countFilesModifiedDuringTurn(files, 2_500)).toBe(0);
+  });
+
+  it('has no boundary to judge against without a snapshot timestamp', () => {
+    const files = [file('assets/hero.jpg', 1_500)];
+    expect(countFilesModifiedDuringTurn(files, null)).toBe(0);
+    expect(countFilesModifiedDuringTurn(files, undefined)).toBe(0);
+    expect(countFilesModifiedDuringTurn(undefined, 1_000)).toBe(0);
+  });
+
+  it('excludes directories and files barred from implicit attribution', () => {
+    const files = [
+      file('assets', 2_000, { type: 'dir' }),
+      file('board.sketch.json', 2_000, { kind: 'text', mime: 'application/json' }),
+      file('assets/hero.jpg', 2_000),
+    ];
+    expect(countFilesModifiedDuringTurn(files, 1_000)).toBe(1);
   });
 });

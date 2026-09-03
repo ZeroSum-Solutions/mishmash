@@ -92,6 +92,7 @@ const MCP_STRING_FLAGS = new Set([
 const MCP_BOOLEAN_FLAGS = new Set([
   'help',
   'h',
+  'json',
 ]);
 
 // Hoisted next to MCP_*_FLAGS for the same TDZ reason as the MEDIA flags
@@ -1401,6 +1402,11 @@ function printRootHelp() {
       to pull files from a local MishMash project and create
       project-scoped artifacts without exporting a zip.
 
+  od mcp health [--json] [--daemon-url <url>]
+      Report per-server state for the external MCP servers MishMash
+      connects agents to: whether each answered, the connect time
+      measured from spawn, and its stderr excerpt.
+
 Options:
   --port <n>       Port to listen on (default: 7456, env: OD_PORT).
   --host <addr>    Interface address to bind to (default: 127.0.0.1, env: OD_BIND_HOST).
@@ -2503,6 +2509,9 @@ async function runMcp(args) {
   if (args[0] === 'install') {
     return runMcpInstall(args.slice(1));
   }
+  if (args[0] === 'health') {
+    return runMcpHealth(args.slice(1));
+  }
   let flags;
   try {
     flags = parseFlags(args, {
@@ -2568,7 +2577,80 @@ for tool calls to succeed.
 
 To register this server into a coding agent's own config automatically:
   od mcp install <agent> [--uninstall] [--print] [--json] [--daemon-url <url>]
-  Agents: ${AGENT_SLUGS.join(' ')}`);
+  Agents: ${AGENT_SLUGS.join(' ')}
+
+To check the external MCP servers MishMash connects agents to:
+  od mcp health [--json] [--daemon-url <url>]`);
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: od mcp health
+//
+// The CLI half of the MCP health surface (issue #157). Same
+// `GET /api/mcp/health` the Settings panel reads, so an external agent can
+// tell a dead tool server from a failed run without rendering the web UI.
+// ---------------------------------------------------------------------------
+
+async function runMcpHealth(args) {
+  if (args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    console.log(`Usage: od mcp health [--json] [--daemon-url <url>]
+
+Connects to every configured external MCP server and reports what it found:
+whether the server answered, how long the connect took measured from spawn,
+and the tail of anything it wrote to stderr.
+
+This is per-server state, deliberately separate from any run's outcome. A
+server reported here as failed does not mean a run failed.
+
+  --json               Print the raw records for piping into jq.
+  --daemon-url <url>   Override the daemon HTTP base URL.`);
+    process.exit(0);
+  }
+  let flags;
+  try {
+    flags = parseFlags(args, {
+      string: MCP_STRING_FLAGS,
+      boolean: MCP_BOOLEAN_FLAGS,
+    });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const base = await cliDaemonBaseUrl(flags);
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/mcp/health`);
+  } catch (err) {
+    return exitWithStructuredError({
+      code:    'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+    });
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const data = await resp.json();
+
+  if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+
+  const servers = Array.isArray(data?.servers) ? data.servers : [];
+  if (servers.length === 0) {
+    console.log('No external MCP servers configured.');
+    return;
+  }
+  for (const server of servers) {
+    const name = server.label ? `${server.label} (${server.id})` : server.id;
+    const timing = server.state === 'disabled' ? '' : ` in ${server.connectMs}ms`;
+    console.log(`${server.state.toUpperCase().padEnd(8)} ${name}${timing}`);
+    if (server.reason) console.log(`         ${server.reason}`);
+    if (server.remedy) console.log(`         fix: ${server.remedy}`);
+    // Only for a server that is not ok: a healthy npx server routinely writes
+    // warnings, and echoing those would bury the one line that matters. The
+    // full excerpt is always in --json and in the Settings panel.
+    if (server.state !== 'ok' && server.stderrExcerpt) {
+      for (const line of server.stderrExcerpt.trim().split('\n').slice(-6)) {
+        console.log(`         | ${line}`);
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
