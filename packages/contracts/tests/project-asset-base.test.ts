@@ -152,3 +152,48 @@ describe('withProjectAssetBaseHref edits only real base elements', () => {
     );
   });
 });
+
+// Round-1 track audit (proof/w2fix/2G.4-glm-r1.json), findings 1 and 2. Removing
+// a real base is only safe if the bytes it sat between cannot join into markup,
+// and a start tag the input never closes is a tag no parser emits.
+describe('withProjectAssetBaseHref keeps a removal from opening a tag', () => {
+  const BASE = '/api/projects/p1/raw/';
+
+  it('escapes a stray < left touching the gap where a base was', () => {
+    // `<` before `<base` is text: the tokenizer only opens a tag on a letter.
+    // Cutting the base out would push that `<` against `base href="/evil/">`
+    // and mint the base this function exists to outrank.
+    expect(
+      withProjectAssetBaseHref('<<base href="x">base href="/evil/"><html><head><title>t</title></head></html>', BASE),
+    ).toBe(
+      '&lt;base href="/evil/"><html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>',
+    );
+  });
+
+  it('escapes a stray < rather than letting a removal mint a script', () => {
+    expect(
+      withProjectAssetBaseHref('<<base href="x">script>window.PWNED=1;</script><html><head></head></html>', BASE),
+    ).toBe(
+      '&lt;script>window.PWNED=1;</script><html><head><base href="/api/projects/p1/raw/"></head></html>',
+    );
+  });
+
+  it('ignores a head start tag the document never closes', () => {
+    // A tag still open at the end of the input is never emitted, so `<head` is
+    // not this document's head; appending to it would make `head<base` one tag
+    // and the preview would carry no base at all.
+    expect(withProjectAssetBaseHref('<html><head', BASE)).toBe(
+      '<html><head><base href="/api/projects/p1/raw/"></head><head',
+    );
+  });
+
+  it('ignores an html start tag the document never closes', () => {
+    expect(withProjectAssetBaseHref('<html', BASE)).toBe('<base href="/api/projects/p1/raw/"><html');
+  });
+
+  it('reads <!--> as the empty comment it is', () => {
+    expect(
+      withProjectAssetBaseHref('<!--><base href="/evil/"><html><head><title>t</title></head></html>', BASE),
+    ).toBe('<!--><html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>');
+  });
+});

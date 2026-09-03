@@ -97,3 +97,39 @@ describe('withProjectAssetBaseHref forges no element the input did not contain',
     expect(parse(withProjectAssetBaseHref(input, BASE)).scripts).toBe(0);
   });
 });
+
+// Round-1 track audit (proof/w2fix/2G.4-glm-r1.json), findings 1 and 2, in the
+// same parsed-shape terms as the block above.
+describe('withProjectAssetBaseHref stays first in tree order for inputs the audit found', () => {
+  const BASE = '/api/projects/p1/raw/';
+  const PREVIEW_URL = 'http://d/preview';
+
+  function parse(html: string) {
+    const { document } = new JSDOM(html, { url: PREVIEW_URL }).window;
+    return {
+      bases: Array.from(document.querySelectorAll('base'), (base) => base.getAttribute('href')),
+      scripts: document.querySelectorAll('script').length,
+      baseURI: document.baseURI,
+    };
+  }
+
+  it('mints no base when the base it removes sat behind a stray `<`', () => {
+    const input = '<<base href="x">base href="/evil/"><html><head><title>t</title></head></html>';
+    expect(parse(input).bases).toEqual(['x']);
+
+    const parsed = parse(withProjectAssetBaseHref(input, BASE));
+    expect(parsed.bases).toEqual([BASE]);
+    expect(parsed.baseURI).toBe(`http://d${BASE}`);
+  });
+
+  it('mints no script when the base it removes sat behind a stray `<`', () => {
+    const input = '<<base href="x">script>window.PWNED=1;</script><html><head></head></html>';
+    expect(parse(input).scripts).toBe(0);
+
+    expect(parse(withProjectAssetBaseHref(input, BASE)).scripts).toBe(0);
+  });
+
+  it('still carries a base when the document breaks off inside its head tag', () => {
+    expect(parse(withProjectAssetBaseHref('<html><head', BASE)).baseURI).toBe(`http://d${BASE}`);
+  });
+});
