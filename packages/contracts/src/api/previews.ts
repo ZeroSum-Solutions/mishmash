@@ -9,6 +9,14 @@ export type PreviewInfo = {
   projectId: string;
   pid: number;
   port: number;
+  /**
+   * The preview's address on the host the request arrived on, with the
+   * preview's own port (issue #158). A caller on the daemon's machine gets
+   * `http://127.0.0.1:<port>/`; a collaborator reaching the daemon over a
+   * tailnet gets that tailnet host, because the loopback address would
+   * resolve to their own machine. Always plain `http:` — the preview process
+   * speaks HTTP on its port whatever scheme fronted the daemon.
+   */
   url: string;
   command: string[];
   cwd: string;
@@ -25,4 +33,17 @@ export type PreviewStartRequest = {
 
 export type PreviewListResponse = {
   previews: PreviewInfo[];
+};
+
+/**
+ * Result of `POST /api/projects/:id/previews/:previewId/open` — the daemon
+ * launched the preview in Google Chrome on ITS OWN machine, because the
+ * host's default browser may refuse loopback connections (issue #158
+ * comment: EGO Lite task spaces do). The URL is the loopback one, since that
+ * is the address the daemon's machine reaches the preview on.
+ */
+export type PreviewOpenResponse = {
+  opened: true;
+  url: string;
+  browser: 'chrome';
 };

@@ -1,3 +1,4 @@
+import type { PreviewInfo } from '@open-design/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAnalytics } from '../analytics/provider';
 import { trackFileManagerClick } from '../analytics/events';
@@ -5,7 +6,7 @@ import { useT } from '../i18n';
 import { LIBRARY_UI_VISIBLE } from '../features/libraryUi';
 import type { Dict } from '../i18n/types';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
-import { projectFileUrl, projectRawUrl } from '../providers/registry';
+import { listProjectPreviews, openPreviewInChrome, projectFileUrl, projectRawUrl } from '../providers/registry';
 import { buildSrcdoc } from '../runtime/srcdoc';
 import type { LiveArtifactWorkspaceEntry, ProjectFile, ProjectFileKind, ProjectFolder } from '../types';
 import {
@@ -15,6 +16,7 @@ import {
 } from '../utils/fileSystemErrors';
 import { isVisualStabilityMode } from '../utils/visualStability';
 import { selectInitialDesignPreviewFile } from './design-files/designArtifacts';
+import { htmlNeedsPreviewServerForRootAbsoluteAssets } from './file-viewer-preview-assets';
 import type { PluginFolderAgentAction } from './design-files/pluginFolderActions';
 import { getPluginFolderCandidates } from './design-files/pluginFolders';
 import { Icon } from './Icon';
@@ -1430,6 +1432,9 @@ function DfPreview({
   const rendersSketchJson = isRenderableSketchJson(file);
   const openPreviewLabel = `${t('designFiles.previewOpen')} ${file.name}`;
   const thumbCanOpen = file.kind !== 'audio' && file.kind !== 'video';
+  const isHtml = file.kind === 'html';
+  const previewServers = usePreviewServers(projectId, isHtml);
+  const [needsServerRoot, setNeedsServerRoot] = useState(false);
   return (
     <aside className="df-preview">
       <button
@@ -1451,8 +1456,12 @@ function DfPreview({
             loading="lazy"
             decoding="async"
           />
-        ) : file.kind === 'html' ? (
-          <HtmlPreviewThumbnail projectId={projectId} file={file} />
+        ) : isHtml ? (
+          <HtmlPreviewThumbnail
+            projectId={projectId}
+            file={file}
+            onRootAbsoluteAssets={setNeedsServerRoot}
+          />
         ) : file.kind === 'video' ? (
           <video
             src={`${url}?v=${Math.round(file.mtime)}`}
@@ -1493,17 +1502,126 @@ function DfPreview({
           <Icon name="download" size={13} />
           <span>{t('designFiles.download')}</span>
         </a>
+        {isHtml ? (
+          <DfPreviewServerOffer
+            projectId={projectId}
+            previews={previewServers}
+            needsServerRoot={needsServerRoot}
+          />
+        ) : null}
       </div>
     </aside>
   );
 }
 
+/**
+ * The project's daemon-managed preview servers (`od preview start`), listed
+ * only while an HTML file is previewed — the one case where a server root
+ * changes what the user can see. Empty on any failure: the offer is extra
+ * help, never a reason for the panel to report an error.
+ */
+function usePreviewServers(projectId: string, enabled: boolean): PreviewInfo[] {
+  const [previews, setPreviews] = useState<PreviewInfo[]>([]);
+  useEffect(() => {
+    if (!enabled) {
+      setPreviews([]);
+      return;
+    }
+    let cancelled = false;
+    void listProjectPreviews(projectId).then((list) => {
+      if (!cancelled) setPreviews(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, projectId]);
+  return previews;
+}
+
+/**
+ * A running preview server is the only surface in this product that serves a
+ * page from a site root, so it is what the panel offers when the srcdoc
+ * render cannot show the page (issue #158). Each URL is the one the daemon
+ * announced for THIS browser, so a collaborator on the tailnet gets a host
+ * they can reach.
+ *
+ * "Open in Chrome" asks the daemon to launch the preview on its own machine,
+ * for a host whose default browser refuses loopback. It is therefore offered
+ * only when the announced URL is that machine's loopback address — the
+ * signal that the person reading this panel is sitting at it.
+ */
+function DfPreviewServerOffer({
+  projectId,
+  previews,
+  needsServerRoot,
+}: {
+  projectId: string;
+  previews: PreviewInfo[];
+  needsServerRoot: boolean;
+}) {
+  const t = useT();
+  if (previews.length === 0) {
+    if (!needsServerRoot) return null;
+    return (
+      <div className="df-preview-server" data-testid="design-file-preview-server">
+        <p className="df-preview-server-why">{t('designFiles.previewServer.rootAbsolute')}</p>
+        <p className="df-preview-server-hint">{t('designFiles.previewServer.none')}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="df-preview-server" data-testid="design-file-preview-server">
+      {needsServerRoot ? (
+        <p className="df-preview-server-why">{t('designFiles.previewServer.rootAbsolute')}</p>
+      ) : null}
+      <div className="df-preview-server-title">{t('designFiles.previewServer.title')}</div>
+      {previews.map((preview) => (
+        <div className="df-preview-server-row" key={preview.id}>
+          <a
+            className="df-preview-server-link"
+            href={preview.url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Icon name="globe" size={13} />
+            <span>{preview.url}</span>
+          </a>
+          {isLoopbackPreviewUrl(preview.url) ? (
+            <button
+              type="button"
+              className="df-preview-server-chrome"
+              onClick={() => {
+                void openPreviewInChrome(projectId, preview.id);
+              }}
+            >
+              {t('designFiles.previewServer.openInChrome')}
+            </button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** True when an announced preview URL names the reader's own machine. */
+function isLoopbackPreviewUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname;
+    return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
 function HtmlPreviewThumbnail({
   projectId,
   file,
+  onRootAbsoluteAssets,
 }: {
   projectId: string;
   file: ProjectFile;
+  /** Reports whether this document needs a real server root to render. */
+  onRootAbsoluteAssets?: (needsServer: boolean) => void;
 }) {
   const t = useT();
   const tooLargeForThumbnail = file.size > HTML_THUMBNAIL_INLINE_MAX_BYTES;
@@ -1519,7 +1637,9 @@ function HtmlPreviewThumbnail({
       .then((html) => {
         if (cancelled || html === null) return;
         const nextSrcDoc = buildSrcdoc(html, { baseHref: projectRawUrl(projectId, baseDirForFile(file.name)) });
-        if (!cancelled) setSrcDoc(nextSrcDoc);
+        if (cancelled) return;
+        setSrcDoc(nextSrcDoc);
+        onRootAbsoluteAssets?.(htmlNeedsPreviewServerForRootAbsoluteAssets(html));
       })
       .catch((err) => {
         if (err instanceof DOMException && err.name === 'AbortError') return;
@@ -1529,17 +1649,22 @@ function HtmlPreviewThumbnail({
       cancelled = true;
       controller.abort();
     };
-  }, [file.mtime, file.name, projectId, tooLargeForThumbnail, url]);
+  }, [file.mtime, file.name, onRootAbsoluteAssets, projectId, tooLargeForThumbnail, url]);
 
   if (tooLargeForThumbnail || srcDoc === null) {
     return <FilePreviewPlaceholder file={file} title={t('designFiles.previewOpen')} />;
   }
 
+  // allow-popups + allow-popups-to-escape-sandbox: the shim injected by
+  // buildSrcdoc intercepts target="_blank" clicks and calls window.open,
+  // which a sandbox without those grants drops silently (issue #158). The
+  // frame has an opaque origin, so the popup needs the escape grant to land
+  // in a normal tab. Same string PreviewModal and FileWorkspace already use.
   return (
     <iframe
       title={file.name}
       srcDoc={srcDoc}
-      sandbox="allow-scripts allow-downloads"
+      sandbox="allow-scripts allow-downloads allow-popups allow-popups-to-escape-sandbox"
       loading="lazy"
     />
   );
