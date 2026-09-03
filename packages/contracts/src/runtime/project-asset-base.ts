@@ -60,6 +60,10 @@ function maskComments(html: string): string {
  * found on a comment-masked copy so a commented-out `<head>` cannot capture the
  * tag and leave the page's own base in charge.
  *
+ * A stray `<!--` inside script text can mask past the real head; insertion then
+ * falls back to just after `<html>`, which is still the first base in parse
+ * order and so still the one that wins.
+ *
  * The response carrying this document must allow the base under its `base-uri`
  * directive, or the browser drops the tag and the refs stay broken.
  */
