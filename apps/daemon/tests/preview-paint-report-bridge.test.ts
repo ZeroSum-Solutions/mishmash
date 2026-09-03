@@ -93,7 +93,7 @@ interface HiddenTabRun {
  * browser does for a hidden tab. Timers are inert too, so an answer can only
  * arrive if the producer posts synchronously.
  */
-function runProducerInHiddenTab(script: string): HiddenTabRun {
+function runProducerInHiddenTab(script: string, measures = 1280): HiddenTabRun {
   const parentMessages: Array<{ type?: string; width?: number | null }> = [];
   const listeners: Record<string, Array<(ev: unknown) => void>> = {};
   const win: Record<string, unknown> = {
@@ -110,8 +110,8 @@ function runProducerInHiddenTab(script: string): HiddenTabRun {
     readyState: 'complete',
     visibilityState: 'hidden',
     hidden: true,
-    documentElement: { scrollWidth: 1280, offsetWidth: 1280, clientWidth: 1280 },
-    body: { scrollWidth: 1280, offsetWidth: 1280, clientWidth: 1280 },
+    documentElement: { scrollWidth: measures, offsetWidth: measures, clientWidth: measures },
+    body: { scrollWidth: measures, offsetWidth: measures, clientWidth: measures },
     addEventListener: () => {},
     querySelector: () => null,
     scrollingElement: null,
@@ -300,6 +300,25 @@ describe('daemon-served previews can prove they painted, hidden tab included', (
     const report = run.parentMessages.find((message) => message?.type === REPORT);
     expect(report).toBeDefined();
     expect(report?.width).toBe(1280);
+  });
+
+  it('answers for a document that measured nothing, because a report means the document ran', async () => {
+    // The report says "this document is the one running in the frame", which
+    // the frame's own load event does not. It is not a claim about pixels: a
+    // document that runs and lays out to nothing still answers, carrying a null
+    // measurement. Pinned so the semantics are on the record — the host's
+    // matching case is in
+    // apps/web/tests/observability/iframe-preview-watchdog.test.ts.
+    const url = `${baseUrl}/api/live-artifacts/${encodeURIComponent(artifactId)}/preview?projectId=${encodeURIComponent(PROJECT_ID)}`;
+    const producer = extractPaintReportProducer(await (await fetch(url)).text());
+    expect(producer, 'the served document must carry an od:preview-content-size producer').not.toBeNull();
+
+    const run = runProducerInHiddenTab(producer as string, 0);
+    run.send({ type: REPORT_REQUEST });
+
+    const report = run.parentMessages.find((message) => message?.type === REPORT);
+    expect(report).toBeDefined();
+    expect(report?.width).toBeNull();
   });
 
   it('serves the live-artifact preview with a producer that answers the same way', async () => {

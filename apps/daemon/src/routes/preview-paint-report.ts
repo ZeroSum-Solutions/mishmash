@@ -17,6 +17,13 @@
  * An explicit request is answered synchronously. `requestAnimationFrame` is
  * paused in a hidden tab while the host's timeout keeps running, so a scheduled
  * answer turns a healthy backgrounded preview into a false `preview-error`.
+ *
+ * What a report does and does not say: it is proof this document RAN in the
+ * frame, which the frame's `load` event is not. It is not proof the document
+ * put pixels on screen — a document that runs and renders nothing still
+ * reports. Distinguishing those two is a different detector's job; this one
+ * exists so a frame that never received its artifact can be told apart from
+ * one that did.
  */
 const PREVIEW_PAINT_REPORT_MARKER = 'data-od-preview-paint-report-bridge';
 
@@ -61,6 +68,14 @@ const PREVIEW_PAINT_REPORT_BRIDGE = `<script ${PREVIEW_PAINT_REPORT_MARKER}>
  * Add the paint-report producer to a preview document, once. Appended before
  * `</body>` so it runs after the document's own markup, and at the end when the
  * document has no body close tag.
+ *
+ * Known limitation, shared with every other injector in this repository
+ * (`withProjectAssetBaseHref`, `applyUrlPreviewBridgesToHtml`): the match is
+ * textual, so a document that writes the characters `</body>` inside an inline
+ * script or a comment takes the injection at that point rather than at its real
+ * body close. Left as-is deliberately — diverging from the neighbouring
+ * injectors would give one document two different insertion rules — and
+ * recorded here so the next reader does not have to rediscover it.
  */
 export function withPreviewPaintReport(html: string): string {
   if (html.includes(PREVIEW_PAINT_REPORT_MARKER)) return html;

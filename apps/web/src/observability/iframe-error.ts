@@ -29,13 +29,21 @@ const ARTIFACT_DOCUMENT_REPORT_REQUEST = 'od:preview-content-size-request';
 /**
  * What counts as proof a frame is not stuck.
  *
- * - `'load'` — the frame's own `load` event. Weak evidence, kept only for a
- *   frame that carries no producer to ask: `load` fires for an empty shell,
- *   for a 200 that rendered nothing, and for a document whose subresources
- *   were all refused.
+ * - `'load'` — the frame's own `load` event. Weak evidence, kept for a frame
+ *   with no producer to ask, or one whose producer cannot be confirmed to
+ *   answer: `load` fires for an empty shell, for a 200 that rendered nothing,
+ *   and for a document whose subresources were all refused.
  * - `'document-report'` — a report posted by the artifact document itself.
- *   The only proof the document ran, and what every visible preview transport
- *   uses; see `trackPreviewPaint`.
+ *   Proof the artifact document RAN in the frame, which `load` is not.
+ *
+ * The report carries a measurement, but settling does not require a
+ * particular one: a report of any width settles the watchdog. That is track
+ * 2.1's protocol and it is deliberately unchanged here. It draws the line
+ * between "the artifact document is the one running in this frame" and "some
+ * document loaded"; it does not, and cannot from outside the frame, decide
+ * whether that document put pixels on screen. A document that runs and then
+ * renders nothing visible is a different defect from a frame that never
+ * received its artifact, and it needs a different detector.
  */
 export type IframeSettleEvidence = 'load' | 'document-report';
 
@@ -55,19 +63,23 @@ interface TrackIframeOptions {
  * Watch a VISIBLE preview frame, which settles only on proof its document ran.
  *
  * The invariant: no preview transport the user is looking at settles on its
- * outer `load` event. Every document this app previews carries an
- * `od:preview-content-size` producer — `buildSrcdoc` injects one into the
- * srcDoc transport, and the daemon injects one into the URL-load and
- * live-artifact responses — so each transport can prove its own document ran,
- * and `load` is never the best evidence available. A transport that settles on
- * `load` reports a blank canvas as a healthy preview, which is how
- * `client_iframe_timeout` came to fire on nothing.
+ * outer `load` event while a producer is there to ask. `buildSrcdoc` injects an
+ * `od:preview-content-size` producer into the srcDoc transport, and the daemon
+ * injects one into the project raw response and the live-artifact response, so
+ * each of those transports can prove its own document ran. A transport that
+ * settles on `load` reports a frame that never received its artifact as a
+ * healthy preview, which is how `client_iframe_timeout` came to fire on
+ * nothing.
  *
- * The caller owns the other half: install this only while the frame is the
- * visible transport AND carries a real artifact document. A watchdog over a
+ * The caller owns two halves of this. Install it only while the frame is the
+ * visible transport AND carries a real artifact document — a watchdog over a
  * lazy shell, a redirect-blocked placeholder, or a frame parked at
  * `about:blank` waits for a report no document exists to make, and manufactures
- * a false timeout.
+ * a false timeout. And use it only where the producer is confirmed to reach
+ * the frame; a transport whose producer is not confirmed takes
+ * `trackIframeLoad`'s weaker `load` evidence with a stated reason instead of
+ * pretending, because a report that never arrives is indistinguishable from a
+ * preview that never ran.
  */
 export function trackPreviewPaint(options: Omit<TrackIframeOptions, 'settlesOn'>): () => void {
   return trackIframeLoad({ ...options, settlesOn: 'document-report' });

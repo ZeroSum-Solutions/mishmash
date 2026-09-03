@@ -23,7 +23,7 @@ import {
 import { useAnalytics } from '../analytics/provider';
 import { exportErrorCode } from '../analytics/export-error-code';
 import { deployErrorCode } from '../analytics/deploy-error-code';
-import { trackPreviewPaint } from '../observability/iframe-error';
+import { trackIframeLoad, trackPreviewPaint } from '../observability/iframe-error';
 import {
   trackArtifactExportResult,
   trackArtifactDeployResult,
@@ -8115,24 +8115,39 @@ function HtmlViewer({
     : 'allow-scripts allow-downloads';
   const urlFrameAllow = usePoweredPreview ? POWERED_PREVIEW_ALLOW : undefined;
   // The URL-load transport is a visible preview too, and until now it was the
-  // one nobody watched. Both URLs it can carry — the project raw route and the
-  // powered same-file copy — are requested with `PREVIEW_BRIDGE_QUERY`, so the
-  // daemon injects the `od:preview-content-size` producer into each and the
-  // frame can prove its own document ran. Watched only while URL-load is the
-  // ACTIVE transport and the frame holds a real preview URL: parked at
-  // `about:blank` (kept warm behind srcDoc, or waiting on the powered probe)
-  // there is no document to report, and watching one would manufacture a
-  // timeout for a preview nobody is looking at.
+  // one nobody watched. Watched only while URL-load is the ACTIVE transport and
+  // the frame holds a real preview URL: parked at `about:blank` (kept warm
+  // behind srcDoc, or waiting on the powered probe) there is no document to
+  // report, and watching one would manufacture a timeout for a preview nobody
+  // is looking at.
+  //
+  // The two URLs this frame can carry get different evidence. The project raw
+  // route is same-origin and requested with `PREVIEW_BRIDGE_QUERY`, so the
+  // daemon injects the `od:preview-content-size` producer and the document can
+  // prove it ran. The powered copy is deliberately cross-origin: the daemon
+  // injects the same producer into that response, but nothing here has
+  // confirmed the report crosses back from an isolated origin under this
+  // sandbox, and a report that never arrives is indistinguishable from a
+  // preview that never ran. Until a staged run shows otherwise, the powered
+  // frame takes the weaker `load` evidence rather than a watchdog that would
+  // file a false timeout on every healthy powered preview.
   useEffect(() => {
     if (mode !== 'preview') return undefined;
     if (!useUrlLoadPreview || urlFrameSrc === 'about:blank') return undefined;
     if (!urlPreviewFrameNode) return undefined;
-    return trackPreviewPaint({
-      iframe: urlPreviewFrameNode,
-      surface: 'file_viewer_preview_url_load',
-      projectId,
-    });
-  }, [mode, useUrlLoadPreview, urlFrameSrc, urlPreviewFrameNode, projectId]);
+    return usePoweredPreview
+      ? trackIframeLoad({
+          iframe: urlPreviewFrameNode,
+          surface: 'file_viewer_preview_powered',
+          settlesOn: 'load',
+          projectId,
+        })
+      : trackPreviewPaint({
+          iframe: urlPreviewFrameNode,
+          surface: 'file_viewer_preview_url_load',
+          projectId,
+        });
+  }, [mode, useUrlLoadPreview, usePoweredPreview, urlFrameSrc, urlPreviewFrameNode, projectId]);
   const activateSrcDocTransport = useCallback((target: HTMLIFrameElement | null = srcDocPreviewIframeRef.current) => {
     if (!canActivateSrcDocTransport({
       srcDoc,
