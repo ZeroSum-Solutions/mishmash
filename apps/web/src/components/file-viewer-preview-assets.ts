@@ -504,9 +504,61 @@ export function hasRelativeAssetRefs(html: string): boolean {
   return found;
 }
 
+/**
+ * Feedback budget for one asset-inlining pass, in milliseconds.
+ *
+ * The invariant these two numbers encode: a preview never leaves the user
+ * without an answer. Past `PREVIEW_INLINE_PROGRESS_AFTER_MS` the loading gate
+ * has to say what it is doing and how far along it is; past
+ * `PREVIEW_INLINE_TIMEOUT_MS` the pass has forfeited its turn and the raw
+ * document is shown with a warning rather than a gate that never lifts. A
+ * pass that settles later still replaces what the timeout put on screen.
+ */
+export const PREVIEW_INLINE_PROGRESS_AFTER_MS = 1_000;
+export const PREVIEW_INLINE_TIMEOUT_MS = 15_000;
+
+/** How many referenced assets have settled, out of how many are known. */
+export interface PreviewAssetProgress {
+  completed: number;
+  total: number;
+}
+
 export interface PreviewAssetAccess {
   fetch: typeof globalThis.fetch;
   rawUrl: (projectId: string, filePath: string) => string;
+  /**
+   * Progress sink for a caller that shows the pass to the user. Called once
+   * per discovery and once per settled asset, so the gate can state real
+   * counts ("inlining 27 / 50") instead of an unmeasured spinner.
+   */
+  onProgress?: (progress: PreviewAssetProgress) => void;
+}
+
+/**
+ * Progress bookkeeping for one inlining pass.
+ *
+ * `total` grows as assets are discovered — a stylesheet's own `url(...)` refs
+ * are invisible until that stylesheet has been fetched — so every report is
+ * "settled out of what is known so far", never a guess, and `completed` never
+ * passes `total`.
+ */
+function trackInlineProgress(
+  onProgress: ((progress: PreviewAssetProgress) => void) | undefined,
+): { expect: (count: number) => void; settle: () => void } {
+  let completed = 0;
+  let total = 0;
+  const emit = (): void => onProgress?.({ completed, total });
+  return {
+    expect: (count) => {
+      if (count <= 0) return;
+      total += count;
+      emit();
+    },
+    settle: () => {
+      completed += 1;
+      emit();
+    },
+  };
 }
 
 /**
@@ -524,6 +576,7 @@ export async function inlineRelativeAssets(
   access: PreviewAssetAccess,
 ): Promise<string> {
   const toRawUrl = (projectPath: string) => access.rawUrl(projectId, projectPath);
+  const progress = trackInlineProgress(access.onProgress);
   const normalized = projectFilePaths
     ? normalizeRootRelativeProjectAssetRefs(html, fileName, projectFilePaths)
     : html;
@@ -532,17 +585,14 @@ export async function inlineRelativeAssets(
     const rel = readHtmlAttr(tag, 'rel');
     return !!rel && /\bstylesheet\b/i.test(rel) && !!readHtmlAttr(tag, 'href');
   });
+  progress.expect(linkTags.length);
   const sheets = await Promise.all(
-    linkTags.map(async (tag) => ({
-      tag,
-      href: readHtmlAttr(tag, 'href') as string,
-      asset: await fetchProjectRelativeText(
-        projectId,
-        fileName,
-        readHtmlAttr(tag, 'href') as string,
-        access,
-      ),
-    })),
+    linkTags.map(async (tag) => {
+      const href = readHtmlAttr(tag, 'href') as string;
+      const asset = await fetchProjectRelativeText(projectId, fileName, href, access);
+      progress.settle();
+      return { tag, href, asset };
+    }),
   );
 
   const binaryDataUrls = projectFilePaths
@@ -557,6 +607,7 @@ export async function inlineRelativeAssets(
           ),
         ],
         access,
+        progress,
       )
     : new Map<string, string>();
 
@@ -581,11 +632,13 @@ export async function inlineRelativeAssets(
 
   const scripts =
     normalized.match(/<script\b[^>]*\bsrc\s*=\s*["'][^"']+["'][^>]*>\s*<\/script>/gi) ?? [];
+  progress.expect(scripts.length);
   for (const tag of scripts) {
     const src = readHtmlAttr(tag, 'src');
     if (!src) continue;
     replacements.push(
       fetchProjectRelativeText(projectId, fileName, src, access).then((asset) => {
+        progress.settle();
         if (asset == null) return null;
         const js = projectFilePaths
           ? rewriteInlinedScriptAssetRefs(asset.text, asset.filePath, projectFilePaths, toRawUrl)
@@ -622,11 +675,20 @@ async function resolveBinaryAssetDataUrls(
   projectId: string,
   paths: readonly string[],
   access: PreviewAssetAccess,
+  progress: { expect: (count: number) => void; settle: () => void },
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
+  const unique = new Set(paths);
+  progress.expect(unique.size);
   let spent = 0;
-  for (const path of new Set(paths)) {
-    if (spent >= BINARY_ASSET_TOTAL_BUDGET_BYTES) break;
+  for (const path of unique) {
+    // Past the budget the remaining refs are left as-is, but they are no
+    // longer pending work — settle them so the reported total stays reachable
+    // instead of stranding the progress line short of its own denominator.
+    if (spent >= BINARY_ASSET_TOTAL_BUDGET_BYTES) {
+      progress.settle();
+      continue;
+    }
     try {
       const resp = await access.fetch(access.rawUrl(projectId, path));
       if (!resp.ok) continue;
@@ -641,6 +703,10 @@ async function resolveBinaryAssetDataUrls(
       spent += blob.size;
     } catch {
       // Leave the ref as-is; one missing asset must not break the preview.
+    } finally {
+      // `finally`, not a trailing statement: every skip inside the try block
+      // above uses `continue`, and a skipped asset is still a settled one.
+      progress.settle();
     }
   }
   return out;

@@ -161,6 +161,9 @@ import {
   hasRelativeAssetRefs,
   htmlHasRootRelativeProjectAssetRefs,
   inlineRelativeAssets,
+  PREVIEW_INLINE_PROGRESS_AFTER_MS,
+  PREVIEW_INLINE_TIMEOUT_MS,
+  type PreviewAssetProgress,
 } from './file-viewer-preview-assets';
 import { resolvePoweredPreviewUrl } from '../runtime/powered-preview';
 import { saveTemplate } from '../state/projects';
@@ -310,6 +313,24 @@ const HTML_ROUTING_TEXT_PREVIEW_LIMIT = 96 * 1024;
 export const HTML_PREVIEW_ASSET_PREFLIGHT_LIMIT = 32;
 type HtmlSourceLoadMode = 'full' | 'routing-preview';
 type PreviewAssetWarning = { filePath: string };
+/**
+ * What the user is owed about an asset-inlining pass that is still open.
+ *
+ * `slow` turns on once the pass passes `PREVIEW_INLINE_PROGRESS_AFTER_MS`, so
+ * the gate stays quiet for the ordinary fast preview and speaks for the one
+ * that keeps the canvas. `timedOut` records that the pass forfeited its turn
+ * and the raw document is what is on screen.
+ */
+type PreviewInlineStatus = {
+  slow: boolean;
+  timedOut: boolean;
+  progress: PreviewAssetProgress | null;
+};
+const IDLE_PREVIEW_INLINE_STATUS: PreviewInlineStatus = {
+  slow: false,
+  timedOut: false,
+  progress: null,
+};
 
 export function previewTextNeedsFullSourceForSafeInline(source: string | null): boolean {
   if (!source) return false;
@@ -6301,6 +6322,9 @@ function HtmlViewer({
   const [routingSource, setRoutingSource] = useState<string | null>(liveHtml ?? null);
   const [serverPoweredPreviewRequired, setServerPoweredPreviewRequired] = useState(false);
   const [previewAssetWarning, setPreviewAssetWarning] = useState<PreviewAssetWarning | null>(null);
+  const [previewInlineStatus, setPreviewInlineStatus] = useState<PreviewInlineStatus>(
+    IDLE_PREVIEW_INLINE_STATUS,
+  );
   // Keyed so a retained inline survives a re-render of the SAME file but is
   // never read under a different one. Clearing it unconditionally on every
   // effect run is what made the canvas paint the raw document first and the
@@ -7763,26 +7787,50 @@ function HtmlViewer({
       // file did not change. Without this clear, an edit that removes the last
       // relative ref leaves the previous document on screen for good.
       setInlinedSource(null);
+      setPreviewInlineStatus(IDLE_PREVIEW_INLINE_STATUS);
       return;
     }
     let cancelled = false;
     const key = inlinedSourceKey;
+    setPreviewInlineStatus(IDLE_PREVIEW_INLINE_STATUS);
+    // A pass under a second needs no narration; past that the gate has to say
+    // what it is doing, with the inliner's own counts.
+    const progressTimer = setTimeout(() => {
+      if (!cancelled) setPreviewInlineStatus((prev) => ({ ...prev, slow: true }));
+    }, PREVIEW_INLINE_PROGRESS_AFTER_MS);
+    // Budget spent: hand over the raw document with a warning rather than hold
+    // a gate that never lifts. A pass that settles later still replaces this.
+    const budgetTimer = setTimeout(() => {
+      if (cancelled) return;
+      setPreviewInlineStatus((prev) => ({ ...prev, timedOut: true }));
+      setInlinedSource({ key, forSource: source, value: source });
+    }, PREVIEW_INLINE_TIMEOUT_MS);
     void inlineRelativeAssets(source, projectId, file.name, projectFilePathSet, {
       fetch: globalThis.fetch.bind(globalThis),
       rawUrl: projectRawUrl,
+      onProgress: (progress) => {
+        if (!cancelled) setPreviewInlineStatus((prev) => ({ ...prev, progress }));
+      },
     })
       .then((next) => {
-        if (!cancelled) setInlinedSource({ key, forSource: source, value: next });
+        if (cancelled) return;
+        setPreviewInlineStatus(IDLE_PREVIEW_INLINE_STATUS);
+        setInlinedSource({ key, forSource: source, value: next });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         // Fall back to the raw document rather than holding the loading gate
         // open forever: unstyled but visible beats a frame that never resolves.
         console.error('[FileViewer] inlineRelativeAssets failed, showing raw source:', err);
+        // Keep any timeout warning already on screen: the assets really did
+        // not finish, and the reader still needs to know why.
+        setPreviewInlineStatus((prev) => ({ ...prev, slow: false, progress: null }));
         setInlinedSource({ key, forSource: source, value: source });
       });
     return () => {
       cancelled = true;
+      clearTimeout(progressTimer);
+      clearTimeout(budgetTimer);
     };
   }, [
     source,
@@ -7949,6 +7997,25 @@ function HtmlViewer({
     : useLazySrcDocTransport
       ? lazySrcDocTransport
       : srcDoc;
+  // A preview that never paints has to become a record, not just a blank
+  // canvas. Instrument the srcDoc frame only while it is the visible transport
+  // AND carries the real artifact — the lazy shell and the redirect-blocked
+  // placeholder have no artifact document to wait for, so watching them would
+  // manufacture false timeouts. `settlesOn: 'document-report'` is what makes
+  // this useful: the frame's own `load` event fires for the empty shell, so it
+  // is not proof the artifact ever appeared.
+  useEffect(() => {
+    if (mode !== 'preview') return undefined;
+    if (useUrlLoadPreview || !srcDoc || srcDocTransportContent !== srcDoc) return undefined;
+    const node = srcDocPreviewIframeRef.current;
+    if (!node) return undefined;
+    return trackIframeLoad({
+      iframe: node,
+      surface: 'file_viewer_preview',
+      settlesOn: 'document-report',
+      projectId,
+    });
+  }, [mode, useUrlLoadPreview, srcDoc, srcDocTransportContent, projectId, srcDocTransportResetKey]);
   // Materialize the srcDoc iframe the first time it actually becomes the active
   // (visible) transport — i.e. the first Mark/Edit/Comment/Inspect entry. We do
   // NOT pre-render it while hidden/idle: that ran a second live copy during
@@ -12826,6 +12893,16 @@ function HtmlViewer({
                 </span>
               </span>
             </div>
+            {previewInlineStatus.slow ? (
+              <p className="viewer-loading-progress" data-testid="preview-inline-progress">
+                {previewInlineStatus.progress
+                  ? t('fileViewer.preparingPreviewAssetsProgress', {
+                      done: String(previewInlineStatus.progress.completed),
+                      total: String(previewInlineStatus.progress.total),
+                    })
+                  : t('fileViewer.preparingPreviewAssets')}
+              </p>
+            ) : null}
           </div>
           ) : (
             <div className="viewer-empty">{t('fileViewer.loading')}</div>
@@ -13010,6 +13087,16 @@ function HtmlViewer({
                       <span>
                         {t('fileViewer.previewAssetBlockedDetail', { filePath: previewAssetWarning.filePath })}
                       </span>
+                    </div>
+                  ) : null}
+                  {previewInlineStatus.timedOut ? (
+                    <div
+                      className="preview-asset-warning"
+                      role="alert"
+                      data-testid="preview-inline-timeout-warning"
+                    >
+                      <strong>{t('fileViewer.previewAssetsIncompleteTitle')}</strong>
+                      <span>{t('fileViewer.previewAssetsIncompleteDetail')}</span>
                     </div>
                   ) : null}
                 </div>
