@@ -37,6 +37,7 @@ import { fetchAgents } from '../providers/registry';
 import type { AgentInfo } from '../types';
 import { isVisibleLocalCliAgent } from '../utils/visibleAgents';
 import { Icon } from './Icon';
+import { McpHealthPanel } from './McpHealthPanel';
 import { useT } from '../i18n';
 
 interface Props {
@@ -497,6 +498,8 @@ export const McpClientSection = forwardRef<McpClientSectionHandle, Props>(
       </div>
 
       <McpAgentSupportBanner agents={agents} />
+
+      <McpHealthPanel />
 
       {pickerOpen ? (
         <PickerPanel

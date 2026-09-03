@@ -4,6 +4,7 @@ import { SIDECAR_ENV } from '@open-design/sidecar-proto';
 import { buildMcpInstallPayload, type McpInstallPayload } from './mcp-install-info.js';
 import { installCodexMcp, probeCodexInstall, uninstallCodexMcp } from './codex-cli.js';
 import { MCP_TEMPLATES, buildAcpMcpServers, buildClaudeMcpJson, isManagedProjectCwd, readMcpConfig, writeMcpConfig } from './mcp-config.js';
+import { probeMcpServersHealth } from './mcp-health.js';
 import { beginAuth, exchangeCodeForToken, refreshAccessToken } from './mcp-oauth.js';
 import { clearToken, getToken, isTokenExpired, readAllTokens, setToken } from './mcp-tokens.js';
 import type { RouteDeps } from './server-context.js';
@@ -172,6 +173,37 @@ export function registerMcpRoutes(app: Express, ctx: RegisterMcpRoutesDeps) {
     } catch (err: any) {
       res
         .status(400)
+        .json({ error: String(err && err.message ? err.message : err) });
+    }
+  });
+
+  // MCP health. Per-server connection state MishMash measures itself, so a
+  // server that failed to start is diagnosable on its own surface instead of
+  // being smeared into whatever run happened to be open (#157). Deliberately
+  // uncached: the user asks for this exactly when they want to know whether
+  // the state changed since the last answer.
+  app.get('/api/mcp/health', async (req, res) => {
+    if (!isLocalSameOrigin(req, getResolvedPort())) {
+      return res.status(403).json({ error: 'cross-origin request rejected' });
+    }
+    try {
+      const cfg = await readMcpConfig(RUNTIME_DATA_DIR);
+      // Servers the daemon already holds an OAuth token for are probed with
+      // it, so an authenticated remote server is not reported as a 401.
+      const headersByServerId: Record<string, Record<string, string>> = {};
+      for (const server of cfg.servers) {
+        if (server.transport === 'stdio') continue;
+        const token = await getToken(RUNTIME_DATA_DIR, server.id);
+        if (token?.accessToken && !isTokenExpired(token)) {
+          headersByServerId[server.id] = {
+            authorization: `Bearer ${token.accessToken}`,
+          };
+        }
+      }
+      res.json(await probeMcpServersHealth(cfg.servers, { headersByServerId }));
+    } catch (err: any) {
+      res
+        .status(500)
         .json({ error: String(err && err.message ? err.message : err) });
     }
   });
