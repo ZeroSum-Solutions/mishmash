@@ -142,24 +142,38 @@ honest fix — removing the option until it works — is a UX decision, not a ha
 
 ## CANVAS-6 — Dynamically-injected preview scripts can blank the canvas with no recovery — RESOLVED
 
-**Severity:** medium · **Area:** runtime-wiring · **Status:** fixed by surfacing the cause,
-not by changing the render path
+**Severity:** medium · **Area:** runtime-wiring · **Status:** fixed by surfacing the cause;
+this entry's stated workaround was wrong and is corrected below
 
-The detection cost this entry described is real, so the disqualifier set is unchanged: an
-artifact that builds its boot script at runtime still URL-loads. What changed is that the
-blank is no longer silent. `htmlBuildsScriptAtRuntime`
-(`apps/web/src/components/file-viewer-render-mode.ts`) names the exact residue
-`htmlNeedsSandboxShim` cannot see — `document.createElement('script')` plus a `src`
-assignment, with no literal `<script src>` and no literal Web Storage mention — and
-`FileViewer.tsx` renders `PreviewInlineFallbackNotice` over the URL-loaded preview when it
-matches. The notice states the cause and offers the inline render, which is the same escape
-hatch `?forceInline=1` provided but no longer requires knowing the query parameter.
+**The stated workaround does not work.** This entry claimed "the only recovery is knowing to
+append `?forceInline=1`". Driven for real against a tools-dev runtime, it does not recover the
+artifact. The srcDoc path rescues a linked file by *inlining* it, and the inliner reads the same
+literal `<script src>` tags `htmlNeedsSandboxShim` does — so a runtime-attached `src` stays
+external there too, and the srcDoc iframe's opaque origin cannot fetch it
+(`net::ERR_BLOCKED_BY_ORB`). Observed: with the shim confirmed working in that same frame
+(`localStorage.setItem` succeeds), the document still renders empty because `boot.js` never
+loads. A control artifact identical except for a literal `<script src="./boot.js">` renders
+correctly, and its script is visibly inlined into the srcDoc. No host-side render-mode toggle
+fixes this shape.
+
+**What changed.** The disqualifier set is unchanged — the detection cost this entry described is
+real. `htmlBuildsScriptAtRuntime` (`apps/web/src/components/file-viewer-render-mode.ts`) names
+the residue `htmlNeedsSandboxShim` cannot see (`document.createElement('script')` plus a `src`
+assignment), and `FileViewer.tsx` renders `PreviewRuntimeScriptNotice` over the preview when it
+matches. The notice states the cause and the remedy that does work: reference the script with a
+`<script src="...">` tag so the preview can inline it. It carries no action button, because
+every host-side action available here would be a false promise.
 
 Because it drives copy rather than the render path, a false positive costs one line of text
 instead of a slower render for every artifact that merely mentions the pattern.
 
-**Repro.** Preview an HTML artifact whose only script tag builds another script at runtime;
-the notice appears under the canvas and its action switches the preview to srcDoc.
+**Repro.** Preview an HTML artifact whose only script tag attaches another script at runtime;
+the canvas is empty and the notice under it names why.
+
+**Still open, deliberately.** The powered preview (`htmlNeedsPoweredPreview`) gives an artifact
+a real same-origin document, where such a script would both load and read storage — so it is a
+real recovery. Offering it here would escalate an artifact's trust surface off a source-text
+heuristic, which is a product decision, not a hardening call. Left to the owner.
 
 ---
 

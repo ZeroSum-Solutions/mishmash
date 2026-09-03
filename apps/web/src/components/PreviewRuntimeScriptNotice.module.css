@@ -1,5 +1,5 @@
-/* Owner: the URL-load preview's "this canvas may be blank" notice in
-   FileViewer (CANVAS-6). Sits over the preview iframe like
+/* Owner: PreviewRuntimeScriptNotice, the preview's "this canvas may be blank"
+   banner in FileViewer (CANVAS-6). Sits over the preview iframe like
    `.preview-asset-warning` does, and borrows the same panel/shadow tokens so
    the two read as one family. */
 .notice {
@@ -31,9 +31,4 @@
 .detail {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-.action {
-  flex: 0 0 auto;
-  margin-left: auto;
 }

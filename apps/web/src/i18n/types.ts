@@ -3749,9 +3749,8 @@ export interface Dict {
   'fileViewer.speakerNotesPlaceholder': string;
   'fileViewer.previewAssetBlockedTitle': string;
   'fileViewer.previewAssetBlockedDetail': string;
-  'fileViewer.previewInlineFallbackTitle': string;
-  'fileViewer.previewInlineFallbackDetail': string;
-  'fileViewer.previewInlineFallbackAction': string;
+  'fileViewer.previewRuntimeScriptBlockedTitle': string;
+  'fileViewer.previewRuntimeScriptBlockedDetail': string;
   'fileViewer.presenterReset': string;
   'fileViewer.present': string;
   'fileViewer.presentInTab': string;

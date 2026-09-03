@@ -216,11 +216,9 @@ export function parseForceInline(search: string | URLSearchParams | null | undef
  * Dynamically injected scripts
  * (`document.createElement('script'); s.src = '…'; head.appendChild(s)`)
  * stay invisible to this scan because the literal `<script src=…>` tag never
- * appears in the source, so such artifacts still URL-load and can still throw
- * on Web Storage access at startup. Routing them to srcDoc on a source-text
- * guess would cost every false positive a slower render, so instead
- * `htmlBuildsScriptAtRuntime` below names the same shape and the viewer tells
- * the user why the canvas may be blank and offers the inline render.
+ * appears in the source. Routing them to srcDoc would not help either — see
+ * `htmlBuildsScriptAtRuntime` below, which names the shape so the viewer can
+ * tell the user why the canvas is blank.
  *
  * Pure string scan — caller passes the same `source` already fetched for
  * preview rendering, so this adds no extra I/O. Heuristic by design: false
@@ -313,16 +311,17 @@ export function htmlNeedsSandboxShim(source: string): boolean {
  * runtime (`document.createElement('script')` … `.src = …`) instead of
  * shipping a literal `<script src=…>`.
  *
- * This is the exact residue `htmlNeedsSandboxShim` cannot see: with no literal
- * tag and no literal `localStorage` / `sessionStorage` mention, the artifact
- * URL-loads, its linked file evaluates at the iframe's opaque origin, and any
- * Web Storage read there throws `SecurityError` — the app never mounts and the
- * canvas is blank with nothing on screen saying why (CANVAS-6).
+ * This is the exact residue `htmlNeedsSandboxShim` cannot see, and no preview
+ * mode can run such a script: the URL-load and srcDoc iframes both hold an
+ * opaque origin that cannot fetch the linked file, and the srcDoc pipeline's
+ * usual rescue — inlining the file into the document — reads the same literal
+ * tags this scan does, so it never sees the URL either. The app therefore
+ * never mounts and the canvas is blank (CANVAS-6).
  *
- * Deliberately NOT a render-mode disqualifier. Forcing srcDoc on this guess
- * would make every false positive pay for a slower render; the viewer uses it
- * only to surface the cause and offer the inline render, so a false positive
- * costs one dismissible line of copy.
+ * Deliberately NOT a render-mode disqualifier. Forcing srcDoc would make every
+ * false positive pay for a slower render AND would not fix the true positives.
+ * The viewer uses this only to say why the canvas is blank and to name the
+ * artifact-side remedy, so a false positive costs one line of copy.
  *
  * Both halves are required — a bare `createElement('script')` that is never
  * given a `src` loads nothing external and cannot hit this wall.

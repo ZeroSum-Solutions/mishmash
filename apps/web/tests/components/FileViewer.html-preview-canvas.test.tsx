@@ -8,7 +8,7 @@
 // security detector, the powered-preview capability strings, the asset
 // preflight limit boundary, and the forceInline query-param wiring.
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   FileViewer,
@@ -412,13 +412,18 @@ describe('HtmlViewer ?forceInline=1 wiring', () => {
 });
 
 // CANVAS-6 (docs/KNOWN-ISSUES-CANVAS.md). `htmlNeedsSandboxShim` only sees a
-// LITERAL `<script src=...>` tag, so an artifact that builds its boot script
-// with `document.createElement('script')` URL-loads. The URL-load iframe runs
-// at an opaque origin with no `allow-same-origin`, so the moment that linked
-// file touches `localStorage` / `sessionStorage` at module eval it throws, the
-// app never mounts, and the canvas is blank with nothing on screen saying why.
-// The only recovery today is knowing to append `?forceInline=1` by hand.
-describe('HtmlViewer runtime-injected preview script (CANVAS-6)', () => {
+// LITERAL `<script src=...>` tag, so an artifact that attaches its boot script
+// with `document.createElement('script')` URL-loads. The preview iframe runs at
+// an opaque origin, so that linked file cannot be fetched at all, the app never
+// mounts, and the canvas is blank with nothing on screen saying why.
+//
+// The srcDoc path does not rescue it either: srcDoc recovers a linked file by
+// INLINING it, and the inliner reads the same literal tags, so a runtime-built
+// `src` stays external there too. Verified in a real browser against the
+// tools-dev runtime — see the proof file. That is why the notice states the
+// cause and the artifact-side remedy instead of offering a host-side toggle
+// that would not work.
+describe('HtmlViewer runtime-attached preview script (CANVAS-6)', () => {
   const DYNAMIC_SCRIPT_HTML = [
     '<html><body><div id="root"></div>',
     '<script>',
@@ -429,7 +434,7 @@ describe('HtmlViewer runtime-injected preview script (CANVAS-6)', () => {
     '</body></html>',
   ].join('\n');
 
-  it('tells the user why the canvas can be blank when the artifact builds its script at runtime', async () => {
+  it('tells the user why the canvas can be blank when the artifact attaches its script at runtime', async () => {
     stubPreviewFetch();
 
     render(
@@ -442,17 +447,17 @@ describe('HtmlViewer runtime-injected preview script (CANVAS-6)', () => {
     );
 
     // The literal-tag scan cannot see this script, so the artifact takes the
-    // URL-load path — the one path where the Web Storage shim is absent.
+    // URL-load path — the one path this file's other specs treat as default.
     expect(
       (screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement).getAttribute('data-od-render-mode'),
     ).toBe('url-load');
 
     // ...and the viewer must say so instead of leaving a silent blank canvas.
-    const notice = await screen.findByTestId('preview-inline-fallback-notice');
+    const notice = await screen.findByTestId('preview-runtime-script-notice');
     expect(notice.textContent).toMatch(/blank/i);
   });
 
-  it('recovers to the inline srcDoc render when the user takes the offered action', async () => {
+  it('names the artifact-side remedy rather than a host toggle that cannot help', async () => {
     stubPreviewFetch();
 
     render(
@@ -464,17 +469,34 @@ describe('HtmlViewer runtime-injected preview script (CANVAS-6)', () => {
       />,
     );
 
-    const action = await screen.findByTestId('preview-inline-fallback-action');
-    fireEvent.click(action);
-
-    await waitFor(() => {
-      expect(
-        (screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement).getAttribute('data-od-render-mode'),
-      ).toBe('srcdoc');
-    });
+    const notice = await screen.findByTestId('preview-runtime-script-notice');
+    expect(notice.textContent).toMatch(/<script src/i);
+    // No action button: switching render mode does not make the script load,
+    // so offering one would be a false promise.
+    expect(notice.querySelector('button')).toBeNull();
   });
 
-  it('stays quiet for a plain artifact that ships no runtime-built script', async () => {
+  it('keeps saying so on the srcDoc path, where the inliner cannot see the script either', async () => {
+    stubPreviewFetch();
+    // `?forceInline=1` is read once at mount, so it must be set before render.
+    window.history.replaceState(null, '', '/?forceInline=1');
+
+    render(
+      <FileViewer
+        projectId="project-1"
+        projectKind="prototype"
+        file={htmlFile()}
+        liveHtml={DYNAMIC_SCRIPT_HTML}
+      />,
+    );
+
+    expect(
+      (screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement).getAttribute('data-od-render-mode'),
+    ).toBe('srcdoc');
+    expect(await screen.findByTestId('preview-runtime-script-notice')).toBeTruthy();
+  });
+
+  it('stays quiet for a plain artifact that attaches no script at runtime', async () => {
     stubPreviewFetch();
 
     render(
@@ -489,6 +511,6 @@ describe('HtmlViewer runtime-injected preview script (CANVAS-6)', () => {
     expect(
       (screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement).getAttribute('data-od-render-mode'),
     ).toBe('url-load');
-    expect(screen.queryByTestId('preview-inline-fallback-notice')).toBeNull();
+    expect(screen.queryByTestId('preview-runtime-script-notice')).toBeNull();
   });
 });

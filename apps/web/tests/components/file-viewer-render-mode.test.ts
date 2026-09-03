@@ -359,11 +359,11 @@ describe('htmlBuildsScriptAtRuntime (CANVAS-6)', () => {
     expect(htmlBuildsScriptAtRuntime("var i = document.createElement('iframe'); i.src = url;")).toBe(false);
   });
 
-  it('is not wired as a render-mode disqualifier — it only decides whether to explain a blank canvas', () => {
+  it('is not wired as a render-mode disqualifier — srcDoc cannot run the script either', () => {
     const base = { mode: 'preview' as const, isDeck: false, commentMode: false, forceInline: false };
-    // No `dynamicScript` field exists on UrlLoadDecision on purpose: forcing
-    // srcDoc on this source-text guess would make every false positive pay for
-    // a slower render.
+    // No `dynamicScript` field exists on UrlLoadDecision on purpose: the srcDoc
+    // asset inliner reads the same literal tags this detector's absence covers,
+    // so forcing srcDoc would cost a slower render and fix nothing.
     expect(shouldUrlLoadHtmlPreview(base)).toBe(true);
   });
 });
