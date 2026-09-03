@@ -412,6 +412,10 @@ import {
 } from './run-html-version-snapshots.js';
 import { reportRunCompletedFromDaemon } from './langfuse-bridge.js';
 import { followRunTerminalOnMessage, reconcileDurableRunTerminals } from './runtimes/run-terminal-reconciliation.js';
+import {
+  classifyUnattendedRunDelivery,
+  UNATTENDED_DELIVERY_SETTLE_MS,
+} from './runtimes/run-delivery-classification.js';
 import { buildPromptStackTelemetry } from './prompt-telemetry.js';
 import { readAnalyticsContext } from './analytics.js';
 import {
@@ -2796,6 +2800,13 @@ export async function startServer({
           endedAt: Date.now(),
           status,
         });
+        // A succeeded design turn must end with a recorded delivery
+        // classification and file list even when no web client was watching it
+        // -- the classifier used to live only in the chat, so an unattended turn
+        // was never classified at all. The daemon is deliberately the SECOND
+        // writer: it waits one settle window, then claims only a row an
+        // attached client left with neither a delivery state nor a file list.
+        scheduleUnattendedDeliveryClassification(run, status);
         if (!run.projectId || !run.id) return;
         const record = computeRunUsageRecord({
           requestedRaw: run.modelRequested,
@@ -2890,6 +2901,48 @@ export async function startServer({
   // call that started them and are torn down (whole process group, confirmed)
   // on daemon shutdown alongside terminals.
   const previewService = createPreviewService();
+
+  /**
+   * Record the daemon's own delivery verdict for a run whose turn no web client
+   * finalized. Fires one settle window after the run's terminal event so an
+   * attached client -- which knows the pre-turn file names and the outcome of
+   * its own artifact save -- always writes first and wins;
+   * `classifyUnattendedRunDelivery` then finds the row already claimed and does
+   * nothing. Unref'd so a pending timer never holds the daemon open.
+   */
+  const scheduleUnattendedDeliveryClassification = (run: any, status: string) => {
+    if (status !== 'succeeded') return;
+    if (!run?.assistantMessageId || !run?.projectId || !run?.id) return;
+    const runStartedAt = typeof run.createdAt === 'number' ? run.createdAt : Date.now();
+    const timer = setTimeout(() => {
+      void classifyUnattendedRunDelivery(
+        db,
+        {
+          assistantMessageId: run.assistantMessageId,
+          conversationId: run.conversationId ?? null,
+          id: run.id,
+          projectId: run.projectId,
+          sessionMode: run.sessionMode ?? null,
+          startedAt: runStartedAt,
+        },
+        {
+          listProjectFiles: async (projectId: string) => {
+            const project = getProject(db, projectId);
+            return await listFiles(PROJECTS_DIR, projectId, { metadata: project?.metadata });
+          },
+          previewStartedDuringRun: (projectId: string, startedAt: number) =>
+            previewService
+              .list(projectId)
+              .some((session) => isRunTouchedProjectFile(session.startedAt, startedAt)),
+          runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),
+        },
+        isRunTouchedProjectFile,
+      ).catch((error) => {
+        console.warn('[runs] unattended delivery classification failed', error);
+      });
+    }, UNATTENDED_DELIVERY_SETTLE_MS);
+    timer.unref?.();
+  };
 
   // Tracks runs whose finalized assistant message has already been forwarded
   // to Langfuse so repeated message updates only emit one final trace per run.
