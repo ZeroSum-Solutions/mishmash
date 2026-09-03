@@ -23,10 +23,10 @@ beforeAll(async () => {
   hangingBinDir = await mkdtemp(path.join(os.tmpdir(), 'od-cli-daemon-url-'));
   const pnpmShim = path.join(hangingBinDir, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm');
   if (process.platform === 'win32') {
-    await writeFile(pnpmShim, '@echo off\r\ntimeout /t 30 /nobreak > nul\r\n');
+    await writeFile(pnpmShim, '@echo off\r\ntimeout /t 5 /nobreak > nul\r\n');
   } else {
     // Absolute path: PATH is replaced below, so `sleep` would not resolve.
-    await writeFile(pnpmShim, '#!/bin/sh\nexec /bin/sleep 30\n');
+    await writeFile(pnpmShim, '#!/bin/sh\nexec /bin/sleep 5\n');
     await chmod(pnpmShim, 0o755);
   }
 });
@@ -59,6 +59,10 @@ describe('od with an inconclusive daemon discovery', () => {
       stderr = e.stderr ?? '';
     }
 
+    // On base this is where the row bites: discovery times out, `od` silently
+    // adopts port 7456, and the command succeeds against whatever daemon
+    // happens to be there — so the failure to pin is a wrong exit code, not a
+    // missing one.
     expect(status, stderr).toBe(DAEMON_URL_UNRESOLVED_EXIT);
     const envelope = JSON.parse(stderr.trim().split('\n').pop() ?? '{}') as {
       error?: { code?: string; message?: string; data?: { reasons?: string[] } };
@@ -72,5 +76,8 @@ describe('od with an inconclusive daemon discovery', () => {
     expect(envelope.error?.data?.reasons?.join(' ')).toMatch(/tools-dev status probe exceeded/);
     // And it must not have quietly picked the legacy port.
     expect(stderr).not.toMatch(/failed to reach daemon at http:\/\/127\.0\.0\.1:7456/);
-  });
+    // Generous ceiling: on base source this spawn runs to completion against
+    // whatever answers on the default port, which must produce an assertion
+    // about the exit code rather than a suite timeout.
+  }, 60_000);
 });

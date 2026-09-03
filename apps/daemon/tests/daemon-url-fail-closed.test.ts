@@ -33,9 +33,9 @@ describe("resolveDaemonUrl fail-closed discovery", () => {
 
     const pnpmShim = path.join(hangingBinDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm");
     if (process.platform === "win32") {
-      fs.writeFileSync(pnpmShim, "@echo off\r\ntimeout /t 30 /nobreak > nul\r\n");
+      fs.writeFileSync(pnpmShim, "@echo off\r\ntimeout /t 5 /nobreak > nul\r\n");
     } else {
-      fs.writeFileSync(pnpmShim, "#!/bin/sh\nexec /bin/sleep 30\n");
+      fs.writeFileSync(pnpmShim, "#!/bin/sh\nexec /bin/sleep 5\n");
       fs.chmodSync(pnpmShim, 0o755);
     }
   });
