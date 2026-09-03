@@ -48,10 +48,9 @@ type ProjectResponse = {
 const DELIVERING_PROMPT = 'Generate the deterministic artifact from the plan document';
 
 // The daemon may only classify a turn once it is sure no client will. That
-// settle window is bounded by the daemon's existing terminal-fallback window
-// (15s, `LANGFUSE_TERMINAL_FALLBACK_DELAY_MS` in `apps/daemon/src/server.ts`),
-// so give the poll comfortably more than that before declaring the row
-// unclassified.
+// settle window is the daemon's own client-finalize window
+// (`CLIENT_FINALIZE_SETTLE_MS` in `apps/daemon/src/server.ts`), so give the
+// poll comfortably more than that before declaring the row unclassified.
 const CLASSIFICATION_TIMEOUT_MS = 60_000;
 
 async function readAssistantRow(
@@ -192,6 +191,93 @@ describe('dialog unattended delivery classification', () => {
         producedNames,
         'the daemon records the produced-file list instead of writing null',
       ).not.toBeNull();
+      expect(
+        producedNames,
+        'the produced-file list names the file the turn wrote',
+      ).toContain('index.html');
+    });
+  }, 240_000);
+
+  // The harder half of "no attached client": a turn whose assistant row no
+  // client ever wrote at all. The chat pre-stamps that row before it starts a
+  // run; a caller that only speaks HTTP -- the `od` CLI, an external agent, a
+  // routine -- does not, and the daemon creates the row itself on run create
+  // (`pinAssistantMessageOnRunCreate`, `apps/daemon/src/runtimes/
+  // chat-run-messages.ts`). That row is the one the classification has to be
+  // able to claim.
+  test('a design turn whose assistant row only the daemon ever wrote is classified too', async () => {
+    const suite = await createSmokeSuite('dialog-unattended-delivery-no-row');
+
+    await suite.with.toolsDev(async ({ webUrl }) => {
+      const fakeAgents = await createFakeAgentRuntimes({
+        root: join(suite.scratchDir, 'fake-agents'),
+        runtimeIds: ['codex'],
+      });
+
+      await requestJson<{ config: Record<string, unknown> }>(webUrl, '/api/app-config', {
+        body: {
+          agentCliEnv: { codex: fakeAgents.codex.env },
+          agentId: 'codex',
+          agentModels: { codex: { model: 'default', reasoning: 'default' } },
+          designSystemId: null,
+          onboardingCompleted: true,
+          skillId: null,
+          telemetry: { artifactManifest: true, content: false, metrics: false },
+        },
+        method: 'PUT',
+      });
+
+      const project = await requestJson<ProjectResponse>(webUrl, '/api/projects', {
+        body: {
+          designSystemId: null,
+          id: randomUUID(),
+          metadata: { kind: 'prototype' },
+          name: 'Dialog unattended delivery, daemon-created row',
+          pendingPrompt: null,
+          skillId: null,
+        },
+      });
+      const projectId = project.project.id;
+      const conversationId = project.conversationId;
+
+      const startedAt = Date.now();
+      const assistantMessageId = `assistant-daemon-row-${startedAt}`;
+      // Nothing is saved for this turn: the run request is the first and only
+      // thing this caller sends.
+      const run = await startRun(webUrl, {
+        agentId: 'codex',
+        assistantMessageId,
+        clientRequestId: `req-daemon-row-${startedAt}`,
+        conversationId,
+        designSystemId: null,
+        message: DELIVERING_PROMPT,
+        model: 'default',
+        projectId,
+        reasoning: 'default',
+        skillId: null,
+      });
+
+      const finalRun = await waitForRunTerminal(webUrl, run.runId, { timeoutMs: 90_000 });
+      expect(finalRun.status, 'run reached its succeeded terminal event').toBe('succeeded');
+
+      const assistant = await waitForClassifiedRow(
+        webUrl,
+        projectId,
+        conversationId,
+        assistantMessageId,
+      );
+
+      expect(
+        assistant.sessionMode,
+        'the daemon stamped the row it created as a design turn',
+      ).toBe('design');
+      expect(
+        assistant.resultDeliveryState,
+        'the daemon classifies a turn whose row it created itself',
+      ).toBe('delivered');
+      const producedNames = Array.isArray(assistant.producedFiles)
+        ? (assistant.producedFiles as Array<{ name?: unknown }>).map((f) => f?.name)
+        : null;
       expect(
         producedNames,
         'the produced-file list names the file the turn wrote',

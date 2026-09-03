@@ -414,7 +414,7 @@ import { reportRunCompletedFromDaemon } from './langfuse-bridge.js';
 import { followRunTerminalOnMessage, reconcileDurableRunTerminals } from './runtimes/run-terminal-reconciliation.js';
 import {
   classifyUnattendedRunDelivery,
-  UNATTENDED_DELIVERY_SETTLE_MS,
+  type UnattendedDeliveryRun,
 } from './runtimes/run-delivery-classification.js';
 import { buildPromptStackTelemetry } from './prompt-telemetry.js';
 import { readAnalyticsContext } from './analytics.js';
@@ -1310,7 +1310,18 @@ export function composeProjectDisplayStatus(
 }
 
 const TERMINAL_RUN_STATUSES = new Set(['succeeded', 'failed', 'canceled']);
-const LANGFUSE_TERMINAL_FALLBACK_DELAY_MS = 15_000;
+/**
+ * How long a terminal run waits before the daemon concludes that no attached
+ * client is going to finalize the turn.
+ *
+ * Both consumers ask exactly that question and must ask it of the same clock:
+ * the Langfuse terminal fallback (which reports the run itself when the
+ * client's telemetry-finalized message never arrives) and the unattended
+ * delivery classification (`runtimes/run-delivery-classification.ts`), which
+ * records the turn's own delivery state and file list. Tuning one and not the
+ * other would let the daemon claim a turn a slow client was still finishing.
+ */
+const CLIENT_FINALIZE_SETTLE_MS = 15_000;
 
 // Fold per-run work-completeness signals off the agent event stream (#1247 /
 // #1060). Invoked for EVERY agent event via the single emitAgentEvent choke
@@ -2910,37 +2921,38 @@ export async function startServer({
    * `classifyUnattendedRunDelivery` then finds the row already claimed and does
    * nothing. Unref'd so a pending timer never holds the daemon open.
    */
-  const scheduleUnattendedDeliveryClassification = (run: any, status: string) => {
+  const scheduleUnattendedDeliveryClassification = (
+    run: Partial<UnattendedDeliveryRun> & { createdAt?: unknown },
+    status: string,
+  ) => {
     if (status !== 'succeeded') return;
-    if (!run?.assistantMessageId || !run?.projectId || !run?.id) return;
-    const runStartedAt = typeof run.createdAt === 'number' ? run.createdAt : Date.now();
+    if (!run.assistantMessageId || !run.projectId || !run.id) return;
+    const classified: UnattendedDeliveryRun = {
+      assistantMessageId: run.assistantMessageId,
+      conversationId: run.conversationId ?? null,
+      id: run.id,
+      projectId: run.projectId,
+      sessionMode: run.sessionMode ?? null,
+      startedAt: typeof run.createdAt === 'number' ? run.createdAt : Date.now(),
+    };
     const timer = setTimeout(() => {
       void classifyUnattendedRunDelivery(
         db,
-        {
-          assistantMessageId: run.assistantMessageId,
-          conversationId: run.conversationId ?? null,
-          id: run.id,
-          projectId: run.projectId,
-          sessionMode: run.sessionMode ?? null,
-          startedAt: runStartedAt,
-        },
+        classified,
         {
           listProjectFiles: async (projectId: string) => {
             const project = getProject(db, projectId);
             return await listFiles(PROJECTS_DIR, projectId, { metadata: project?.metadata });
           },
           previewStartedDuringRun: (projectId: string, startedAt: number) =>
-            previewService
-              .list(projectId)
-              .some((session) => isRunTouchedProjectFile(session.startedAt, startedAt)),
+            previewService.list(projectId).some((session) => session.startedAt >= startedAt),
           runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),
         },
         isRunTouchedProjectFile,
       ).catch((error) => {
         console.warn('[runs] unattended delivery classification failed', error);
       });
-    }, UNATTENDED_DELIVERY_SETTLE_MS);
+    }, CLIENT_FINALIZE_SETTLE_MS);
     timer.unref?.();
   };
 
@@ -2990,7 +3002,7 @@ export async function startServer({
           reportTrigger: 'terminal_fallback',
         },
       );
-    }, LANGFUSE_TERMINAL_FALLBACK_DELAY_MS);
+    }, CLIENT_FINALIZE_SETTLE_MS);
     timer.unref?.();
   };
 

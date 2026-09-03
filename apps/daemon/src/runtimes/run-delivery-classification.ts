@@ -20,19 +20,6 @@ import {
   type RunEventLike,
 } from './run-artifacts.js';
 
-/**
- * How long the daemon waits after a run's terminal event before deciding that
- * no web client is going to classify the turn.
- *
- * The same question the daemon's Langfuse terminal fallback already asks —
- * "did the attached client ever finalize this turn?" — so it waits the same
- * window (`LANGFUSE_TERMINAL_FALLBACK_DELAY_MS`, `apps/daemon/src/server.ts`).
- * An attached client finalizes within a second or two of the run ending, after
- * its own project-file refresh and artifact save; waiting past that is what
- * keeps the daemon from recording a verdict the client is about to improve on.
- */
-export const UNATTENDED_DELIVERY_SETTLE_MS = 15_000;
-
 /** The run's persisted `end` record, as `events.jsonl` stores it. */
 interface RunTerminalRecord {
   status: string | null;
