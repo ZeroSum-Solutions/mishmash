@@ -347,10 +347,12 @@ describe('dialog delayed write hold', () => {
         'precondition: the daemon recorded the file the turn wrote',
       ).toContain('index.html');
 
-      // The delayed write. The dropped client made this copy of the turn before
-      // the daemon classified it: it saw no delivery of its own, so it carries
-      // `no_result` and no file list at all. It names the SAME run, so run
-      // identity cannot tell it apart from the row's own live save.
+      // The delayed write, in the shape a real dropped client sends: the chat
+      // computes `producedFiles: computeProducedFiles(...) ?? []` and ships the
+      // list beside the verdict it reached (`apps/web/src/components/
+      // ProjectView.tsx`), so a client that saw no delivery of its own carries
+      // `no_result` with EMPTY lists, not absent ones. It names the SAME run,
+      // so run identity cannot tell it apart from the row's own live save.
       await saveMessage(webUrl, projectId, conversationId, {
         agentId: 'codex',
         agentName: 'Codex',
@@ -359,12 +361,14 @@ describe('dialog delayed write hold', () => {
         endedAt: Date.now(),
         events: [],
         id: assistantMessageId,
+        producedFiles: [],
         resultDeliveryState: 'no_result',
         role: 'assistant',
         runId: run.runId,
         runStatus: 'succeeded',
         sessionMode: 'design',
         startedAt,
+        traceObjectFiles: [],
       });
 
       const afterStaleWrite = await readAssistantRow(

@@ -835,6 +835,36 @@ describe('durable run terminal reconciliation', () => {
         });
       });
 
+      // The shape a real dropped client actually sends. The chat computes
+      // `producedFiles: computeProducedFiles(...) ?? []` and ships the list
+      // beside the verdict it reached, so the stale copy carries EMPTY lists,
+      // not absent ones. An empty list is a claim, and it counts on the same
+      // terms the verdict it came with does.
+      it('keeps the daemon file lists when the held write carries empty ones', () => {
+        db.prepare(
+          `INSERT INTO messages (
+             id, role, content, run_id, run_status, ended_at, events_json,
+             result_delivery_state, produced_files_json, trace_object_files_json
+           ) VALUES ('m-held-delivery-empty', 'assistant', 'the answer', 'run-hold', 'succeeded', 9000, NULL,
+                     'delivered', ?, ?)`,
+        ).run(JSON.stringify([{ name: 'index.html' }]), JSON.stringify([{ name: 'index.html' }]));
+
+        expect(holdTerminalRunStatusOnMessageWrite(db, {
+          content: '',
+          endedAt: 9_000,
+          id: 'm-held-delivery-empty',
+          producedFiles: [],
+          resultDeliveryState: 'no_result',
+          runId: 'run-hold',
+          runStatus: 'succeeded',
+          traceObjectFiles: [],
+        })).toMatchObject({
+          producedFiles: [{ name: 'index.html' }],
+          resultDeliveryState: 'delivered',
+          traceObjectFiles: [{ name: 'index.html' }],
+        });
+      });
+
       // And a write that found the delivery the daemon could not still wins:
       // the hold only ever stops a recorded delivery from being taken back.
       it('lets a later write upgrade a stored failure verdict to delivered', () => {

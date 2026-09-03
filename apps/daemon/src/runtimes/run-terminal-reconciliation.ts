@@ -400,9 +400,12 @@ const DELIVERY_LIST_FIELDS = [
  *     so honouring that claim over the daemon's own evidence puts the failure
  *     surface back in front of a user whose turn worked.
  *
- * Nothing else is held. A write that agrees, one carrying a file list of its
- * own, and one that found the delivery the daemon could not — a stored failure
- * verdict upgraded to `delivered` — all keep their own values.
+ * The hold is one-directional on purpose, so two writes still land that a
+ * symmetrical rule would block: one that found the delivery the daemon could
+ * not, upgrading a stored failure verdict to `delivered`, and one that swaps a
+ * stored failure verdict for the other failure verdict — a swap the user cannot
+ * see, since both read as the same retryable failure and the wording the user
+ * reads travels in the write's own status event.
  */
 function heldTerminalDelivery(
   stored: StoredTerminalRow | undefined,
@@ -412,19 +415,33 @@ function heldTerminalDelivery(
   const held: Record<string, unknown> = {};
   const storedState = stored.resultDeliveryState;
   const writeState = message.resultDeliveryState;
-  if (
-    typeof storedState === 'string'
+  const verdictHeld = typeof storedState === 'string'
     && (typeof writeState !== 'string'
-      || (storedState === 'delivered' && DELIVERY_FAILURE_STATES.has(writeState)))
-  ) {
-    held.resultDeliveryState = storedState;
-  }
+      || (storedState === 'delivered' && DELIVERY_FAILURE_STATES.has(writeState)));
+  if (verdictHeld) held.resultDeliveryState = storedState;
   for (const [field, column] of DELIVERY_LIST_FIELDS) {
-    if (message[field] !== undefined && message[field] !== null) continue;
+    if (writeSpeaksForDeliveryList(message[field], verdictHeld)) continue;
     const list = storedJsonArray(stored[column]);
     if (list) held[field] = list;
   }
   return held;
+}
+
+/**
+ * Whether a write is speaking for a delivery file list of its own.
+ *
+ * An absent list is not a claim, and never clears the stored one. An EMPTY list
+ * is a claim — "I looked and found nothing" — and it counts on exactly the
+ * terms the write's verdict does. The chat client always sends a list beside
+ * the verdict it computed (`producedFiles: computeProducedFiles(...) ?? []`,
+ * `apps/web/src/components/ProjectView.tsx`), so the empty list is the shape a
+ * dropped client's stale copy really carries; letting it through while holding
+ * the verdict it came with would keep the row's `delivered` and empty out the
+ * evidence for it in the same write.
+ */
+function writeSpeaksForDeliveryList(value: unknown, verdictHeld: boolean): boolean {
+  if (value === undefined || value === null) return false;
+  return !verdictHeld || !(Array.isArray(value) && value.length === 0);
 }
 
 function isBlankText(value: unknown): boolean {
