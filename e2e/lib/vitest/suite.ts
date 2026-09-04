@@ -59,9 +59,22 @@ export type SmokeSuiteAmr = {
 export type ToolsDevSuiteContext = {
   check: () => Promise<ToolsDevCheckResult>;
   logs: () => Promise<Record<string, ToolsDevLogResult>>;
+  restart: () => Promise<ToolsDevRestart>;
   runtime: ToolsDevPortAllocation;
   start: ToolsDevStartResult;
   status: ToolsDevStatusResult;
+  webUrl: string;
+};
+
+/** One `restart()` of the suite's tools-dev runtime. */
+export type ToolsDevRestart = {
+  /** When the replacement runtime reported ready. */
+  startedAt: number;
+  /** When `stop` returned -- an upper bound on when the old daemon process
+   *  died, which is what a spec about surviving a daemon exit asserts on. */
+  stoppedAt: number;
+  /** The replacement web runtime's URL. Ports are reallocated on every start,
+   *  so this is normally NOT the URL the previous runtime served. */
   webUrl: string;
 };
 
@@ -249,17 +262,32 @@ async function runToolsDevSuite(
     const start = await toolsDev.startWeb(options.env);
     const runtime = toolsDev.portAllocation;
     if (runtime == null) throw new Error('tools-dev did not expose its allocated ports');
-    const webUrl = assertRuntimeUrl(start.web?.status.url, 'web');
+    let webUrl = assertRuntimeUrl(start.web?.status.url, 'web');
     const status = await toolsDev.status(options.env);
     assertToolsDevStatus(suite, status);
 
     context = {
       check: () => toolsDev.check(options.env),
       logs: () => toolsDev.logs(options.env),
+      // Stop this namespace's daemon and web, then start them again against
+      // the SAME daemon data root (`OD_DATA_DIR` is the suite's, and
+      // `lib/tools-dev/cli.ts` passes it on every command). A spec uses this to
+      // observe what a daemon exit does and does not lose. `context.webUrl`
+      // follows the replacement runtime, whose ports are freshly allocated.
+      restart: async () => {
+        await toolsDev.stopWeb(options.env);
+        const stoppedAt = Date.now();
+        const restarted = await toolsDev.startWeb(options.env);
+        const startedAt = Date.now();
+        webUrl = assertRuntimeUrl(restarted.web?.status.url, 'web');
+        return { startedAt, stoppedAt, webUrl };
+      },
       runtime,
       start,
       status,
-      webUrl,
+      get webUrl() {
+        return webUrl;
+      },
     };
 
     await run(context);

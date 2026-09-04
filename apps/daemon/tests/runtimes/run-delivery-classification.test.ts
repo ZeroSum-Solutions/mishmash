@@ -10,10 +10,12 @@ import { isRunTouchedProjectFile } from '../../src/projects.js';
 import {
   classifyUnattendedRunDelivery,
   producedFilesForRun,
+  replayUnattendedDeliveryClassifications,
 } from '../../src/runtimes/run-delivery-classification.js';
 
 const RUN_ID = 'run-unattended';
 const MESSAGE_ID = 'assistant-unattended';
+const CONVERSATION_ID = 'conversation-1';
 const PROJECT_ID = 'project-1';
 const RUN_STARTED_AT = 100_000;
 
@@ -38,6 +40,7 @@ describe('unattended run delivery classification', () => {
     db.exec(`
       CREATE TABLE messages (
         id TEXT PRIMARY KEY,
+        conversation_id TEXT,
         role TEXT,
         content TEXT,
         run_id TEXT,
@@ -45,8 +48,15 @@ describe('unattended run delivery classification', () => {
         result_delivery_state TEXT,
         produced_files_json TEXT,
         trace_object_files_json TEXT,
-        session_mode TEXT
-      )
+        session_mode TEXT,
+        started_at INTEGER,
+        created_at INTEGER
+      );
+      CREATE TABLE conversations (
+        id TEXT PRIMARY KEY,
+        project_id TEXT
+      );
+      INSERT INTO conversations (id, project_id) VALUES ('${CONVERSATION_ID}', '${PROJECT_ID}');
     `);
   });
 
@@ -81,6 +91,7 @@ describe('unattended run delivery classification', () => {
   function insertRow(overrides: Partial<Record<string, unknown>> = {}): void {
     const row = {
       id: MESSAGE_ID,
+      conversation_id: CONVERSATION_ID,
       role: 'assistant',
       content: 'Generated index.html.',
       run_id: RUN_ID,
@@ -89,14 +100,16 @@ describe('unattended run delivery classification', () => {
       produced_files_json: null,
       trace_object_files_json: null,
       session_mode: 'design',
+      started_at: RUN_STARTED_AT,
+      created_at: RUN_STARTED_AT,
       ...overrides,
     };
     db.prepare(
       `INSERT INTO messages
-         (id, role, content, run_id, run_status, result_delivery_state, produced_files_json,
-          trace_object_files_json, session_mode)
-       VALUES (@id, @role, @content, @run_id, @run_status, @result_delivery_state, @produced_files_json,
-               @trace_object_files_json, @session_mode)`,
+         (id, conversation_id, role, content, run_id, run_status, result_delivery_state,
+          produced_files_json, trace_object_files_json, session_mode, started_at, created_at)
+       VALUES (@id, @conversation_id, @role, @content, @run_id, @run_status, @result_delivery_state,
+               @produced_files_json, @trace_object_files_json, @session_mode, @started_at, @created_at)`,
     ).run(row);
   }
 
@@ -105,7 +118,7 @@ describe('unattended run delivery classification', () => {
       db,
       {
         assistantMessageId: MESSAGE_ID,
-        conversationId: 'conversation-1',
+        conversationId: CONVERSATION_ID,
         id: RUN_ID,
         projectId: PROJECT_ID,
         sessionMode: 'design',
@@ -288,5 +301,92 @@ describe('unattended run delivery classification', () => {
     await expect(classify([])).resolves.toBe(true);
     // Substantive text with no write attempt is a report, not a failed delivery.
     expect(storedRow().resultDeliveryState).toBeNull();
+  });
+
+  // The daemon exits inside the settle window and the timer never fires. The
+  // replay is the daemon's next boot asking the same question from durable
+  // state only.
+  describe('replayUnattendedDeliveryClassifications', () => {
+    function replay(files: ProjectFile[]) {
+      return replayUnattendedDeliveryClassifications(
+        db,
+        {
+          listProjectFiles: async () => files,
+          previewStartedDuringRun: () => false,
+          runsLogDir: tmpDir,
+        },
+        isRunTouchedProjectFile,
+      );
+    }
+
+    it('classifies a succeeded design turn whose settle-window timer never fired', async () => {
+      insertRow();
+      succeededRunLog();
+
+      await expect(replay([projectFile('index.html', RUN_STARTED_AT + 500)]))
+        .resolves.toEqual({ candidates: 1, classified: 1 });
+      expect(storedRow().resultDeliveryState).toBe('delivered');
+      expect(JSON.parse(storedRow().producedFilesJson ?? '[]'))
+        .toEqual([expect.objectContaining({ name: 'index.html' })]);
+    });
+
+    it('is idempotent: a second boot finds nothing left to decide', async () => {
+      insertRow();
+      succeededRunLog();
+      const files = [projectFile('index.html', RUN_STARTED_AT + 500)];
+
+      await replay(files);
+      const afterFirst = storedRow();
+
+      await expect(replay(files)).resolves.toEqual({ candidates: 0, classified: 0 });
+      expect(storedRow()).toEqual(afterFirst);
+    });
+
+    it('never overwrites a verdict a client already wrote', async () => {
+      insertRow({
+        produced_files_json: '[]',
+        result_delivery_state: 'no_result',
+        trace_object_files_json: '[]',
+      });
+      succeededRunLog();
+
+      await expect(replay([projectFile('index.html', RUN_STARTED_AT + 500)]))
+        .resolves.toEqual({ candidates: 0, classified: 0 });
+      expect(storedRow()).toEqual({
+        producedFilesJson: '[]',
+        resultDeliveryState: 'no_result',
+        traceObjectFilesJson: '[]',
+      });
+    });
+
+    it('leaves a run that did not succeed alone', async () => {
+      insertRow({ run_status: 'failed' });
+      writeRunLog([
+        { event: 'start', data: {} },
+        { event: 'end', data: { status: 'failed', endedWithUnfinishedWork: false } },
+      ]);
+
+      await expect(replay([projectFile('index.html', RUN_STARTED_AT + 500)]))
+        .resolves.toEqual({ candidates: 0, classified: 0 });
+      expect(storedRow().resultDeliveryState).toBeNull();
+    });
+
+    it('leaves a chat-mode turn alone', async () => {
+      insertRow({ session_mode: 'chat' });
+      succeededRunLog();
+
+      await expect(replay([projectFile('index.html', RUN_STARTED_AT + 500)]))
+        .resolves.toEqual({ candidates: 0, classified: 0 });
+      expect(storedRow().resultDeliveryState).toBeNull();
+    });
+
+    it('declines a candidate whose run log did not survive the exit', async () => {
+      insertRow();
+
+      await expect(replay([projectFile('index.html', RUN_STARTED_AT + 500)]))
+        .resolves.toEqual({ candidates: 1, classified: 0 });
+      expect(storedRow().resultDeliveryState).toBeNull();
+      expect(storedRow().producedFilesJson).toBeNull();
+    });
   });
 });
