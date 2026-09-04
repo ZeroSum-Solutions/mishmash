@@ -171,6 +171,49 @@ test('[P1] Paint Timing answers for content the scan cannot enumerate', async ({
   expect(scanned.reason, 'no contentful paint for a background-only document; the scan answers').toBe('painted');
 });
 
+test('[P1] no contentful paint fires for content nobody can see', async ({ page }) => {
+  // The measurement the "Paint Timing first" ordering rests on, kept in the
+  // repo rather than in a run log. Asking Paint Timing before the scan is only
+  // safe because the user agent reports NO contentful paint for the cases this
+  // file exists to catch: if that ever changed, preferring it would settle a
+  // preview the user sees as blank, and this case is where that would surface.
+  const fcpFor = async (body: string): Promise<boolean> => {
+    await page.goto('about:blank');
+    await page.setContent(
+      `<!doctype html><html><head><meta charset="utf-8"></head><body>${body}</body></html>`,
+    );
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 120)));
+        }),
+    );
+    return page.evaluate(() =>
+      performance.getEntriesByType('paint').some((entry) => entry.name === 'first-contentful-paint'),
+    );
+  };
+
+  expect(await fcpFor('<div style="visibility:hidden"><h1>Hidden</h1></div>')).toBe(false);
+  expect(await fcpFor('<h1 style="opacity:0">Transparent</h1>')).toBe(false);
+  expect(await fcpFor('<div style="width:0;height:0;overflow:hidden"><h1>Clipped</h1></div>')).toBe(false);
+  expect(await fcpFor('<h1 style="position:absolute;left:-9999px;top:0">Offscreen</h1>')).toBe(false);
+  expect(await fcpFor('<canvas width="200" height="100"></canvas>')).toBe(false);
+  expect(await fcpFor('<svg width="200" height="100"></svg>')).toBe(false);
+
+  // And the other side of the same measurement: these two paint sources fire no
+  // contentful paint either, which is why the scan has to enumerate them itself
+  // rather than lean on Paint Timing for them.
+  expect(await fcpFor('<div style="width:120px;height:80px;box-shadow:0 0 12px 6px #111"></div>')).toBe(false);
+  expect(await fcpFor('<div style="width:120px;height:80px;outline:3px solid #111"></div>')).toBe(false);
+
+  // What Paint Timing does answer for.
+  expect(await fcpFor('<h1>Visible</h1>')).toBe(true);
+  expect(
+    await fcpFor('<style>#p::before { content: "Generated"; color: #111 }</style><div id="p"></div>'),
+    'generated content has no element of its own for the scan to inspect',
+  ).toBe(true);
+});
+
 test('[P2] the scan is bounded, and says so when it stops early', async ({ page }) => {
   const many = `<div>${'<span style="visibility:hidden">x</span>'.repeat(5000)}</div>`;
   const report = await reportFor(page, many);
