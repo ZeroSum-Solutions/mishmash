@@ -216,3 +216,109 @@ describe('a watchdog is bound to the document it was installed for', () => {
     expect(previewErrors(fetchMock)).toHaveLength(0);
   });
 });
+
+// W2H.1b red spec — D-17 landing condition 1. `arm()` mints a navigation token
+// and immediately posts it to whichever document still occupies the
+// WindowProxy, so the OUTGOING document learns the token minted for its
+// replacement and can settle the replacement's watchdog before `load`. If the
+// replacement then hangs, nothing ever fires. The same call also restarts the
+// 15 s deadline on every `load`, so a document that takes 10 s to commit gets
+// 25 s of budget instead of 15 s.
+//
+// The fix is a two-phase epoch: arming starts the deadline and discloses
+// nothing; the incoming `load` is what discloses the token, and it neither
+// mints a new one nor restarts the deadline.
+describe('a navigation epoch is bound to the document that commits into the frame', () => {
+  it('discloses nothing to the frame until a document commits into it', () => {
+    const frame = mountFrame();
+    const dispose = trackPreviewPaint({ iframe: frame.iframe, surface: 'file_viewer_preview' });
+
+    expect(
+      frame.posted.filter((message) => message?.type === REPORT_REQUEST),
+      'the document still in the frame must not learn the token minted for its replacement',
+    ).toHaveLength(0);
+
+    frame.iframe.dispatchEvent(new Event('load'));
+    expect(
+      frame.posted.filter((message) => message?.type === REPORT_REQUEST),
+      'the committed document is asked, exactly once, for the epoch it commits into',
+    ).toHaveLength(1);
+
+    dispose();
+  });
+
+  it('does not let the document still in the frame settle a navigation the host just armed', () => {
+    const frame = mountFrame();
+
+    // A first document loads and paints; the watchdog settles on it.
+    const first = trackPreviewPaint({ iframe: frame.iframe, surface: 'live_artifact_preview' });
+    frame.iframe.dispatchEvent(new Event('load'));
+    answerFrom(frame, {
+      type: REPORT,
+      width: 1280,
+      painted: true,
+      token: latestRequestToken(frame.posted),
+    });
+    first();
+
+    // The host now points the frame at a different artifact and installs a
+    // fresh watchdog. The browser has not swapped documents yet, so the OLD
+    // document is still the one listening — and it still paints, so it answers
+    // with the newest token this frame has been given.
+    const dispose = trackPreviewPaint({ iframe: frame.iframe, surface: 'live_artifact_preview' });
+    answerFrom(frame, {
+      type: REPORT,
+      width: 1280,
+      painted: true,
+      token: latestRequestToken(frame.posted),
+    });
+
+    // The replacement then hangs: it never commits at all.
+    vi.advanceTimersByTime(30_000);
+    dispose();
+
+    expect(
+      previewErrors(fetchMock),
+      'the outgoing document answered for a navigation that never loaded, and the stuck replacement escaped the watchdog',
+    ).toHaveLength(1);
+  });
+
+  it('starts the deadline when the navigation is armed, not when the document loads', () => {
+    const frame = mountFrame();
+    const dispose = trackPreviewPaint({ iframe: frame.iframe, surface: 'file_viewer_preview' });
+
+    vi.advanceTimersByTime(10_000);
+    frame.iframe.dispatchEvent(new Event('load'));
+    vi.advanceTimersByTime(6_000);
+    dispose();
+
+    expect(
+      previewErrors(fetchMock),
+      'the 15 s budget covers the whole navigation, not just the part after the document commits',
+    ).toHaveLength(1);
+  });
+
+  it('files one preview-error for a failure, however many stale reports arrived', () => {
+    const frame = mountFrame();
+
+    const first = trackPreviewPaint({ iframe: frame.iframe, surface: 'file_viewer_preview' });
+    frame.iframe.dispatchEvent(new Event('load'));
+    const staleToken = latestRequestToken(frame.posted);
+    first();
+
+    const dispose = trackPreviewPaint({ iframe: frame.iframe, surface: 'file_viewer_preview' });
+    for (let i = 0; i < 5; i += 1) {
+      answerFrom(frame, { type: REPORT, width: 1280, painted: true, token: staleToken });
+    }
+
+    vi.advanceTimersByTime(30_000);
+    dispose();
+
+    const filed = previewErrors(fetchMock);
+    expect(filed, 'stale reports are counted, not filed one anomaly each').toHaveLength(1);
+    expect(
+      (filed[0]?.detail as Record<string, unknown> | undefined)?.stale_token_reports,
+      'the count of reports the epoch rejected belongs in the one failure record',
+    ).toBe(5);
+  });
+});
