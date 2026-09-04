@@ -187,6 +187,7 @@ describe('DesignBrowserStart running previews', () => {
         pid: 4242,
         port: 3000,
         url: 'http://127.0.0.1:3000/',
+        frontServesRootAbsoluteAssets: true,
         command: ['npm', 'run', 'dev'],
         cwd: '/tmp/app',
         startedAt: 0,
