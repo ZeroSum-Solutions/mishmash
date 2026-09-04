@@ -183,7 +183,10 @@ describe('preview URL announcement', () => {
       projectStore: { getProject: (id: string) => (id === 'p1' ? { id: 'p1' } : null) },
       resolvePreviewCwd: () => tempDir,
     });
-    app.use(createPreviewRootAssetFallback({ getPreview: (id) => previews.get(id) }));
+    app.use(createPreviewRootAssetFallback({
+      getPreview: (id) => previews.get(id),
+      hasLivePreview: () => previews.list().length > 0,
+    }));
     const server = http.createServer(app);
     server.on('upgrade', createPreviewProxyUpgradeHandler({ getPreview: (id) => previews.get(id) }));
     servers.push(server);

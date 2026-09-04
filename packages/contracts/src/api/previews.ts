@@ -20,8 +20,10 @@ export type PreviewInfo = {
    *
    * Three shapes a proxied preview cannot serve. Two are inherent to hosting a
    * dev server under a path: a root-absolute request whose initiator sends no
-   * `Referer` (a `no-referrer` policy, a WebSocket handshake), and a request
-   * body over the daemon's 4mb API limit. The third depends on who the front
+   * `Referer` (a `no-referrer` policy, a WebSocket handshake) — which the
+   * daemon answers with a named `PREVIEW_REFERRER_REQUIRED` failure rather
+   * than leaving the page to half-render in silence — and a request body over
+   * the daemon's 4mb API limit. The third depends on who the front
    * is: root-absolute assets are answered by the daemon, so they only arrive
    * when the daemon IS the front. That is the shipped runtime, where the
    * daemon serves the web app itself — but under `tools-dev` the front is the
