@@ -164,11 +164,24 @@ export function useConversationChat(
         }
         const serverMessages = await listMessages(projectId, boundConversationId)
           .catch(() => null);
-        if (!serverMessages) return;
         if (conversationRef.current !== boundConversationId) return;
-        if (!retracted && !retractsStaleRunFailure(messagesRef.current, serverMessages)) return;
-        setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
-        setError(null);
+        if (
+          serverMessages
+          && (retracted || retractsStaleRunFailure(messagesRef.current, serverMessages))
+        ) {
+          setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
+          setError(null);
+          return;
+        }
+        if (retracted) return;
+        // The 'reconcile' fallback read answered nothing, so the outage that
+        // exhausted the probes is still running and the failure on screen is
+        // still unresolved. Keep following.
+        misses = 0;
+        failureRecheckTimerRef.current = window.setTimeout(
+          attempt,
+          RUN_FAILURE_RECHECK_INTERVAL_MS,
+        );
       })();
     };
     clearFailureRecheck();

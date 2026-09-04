@@ -3205,20 +3205,26 @@ export function ProjectView({
   // alert and moved the row (`retractRunFailureFromStatus`). This read is then
   // only there to improve the row's content, and cannot judge the failure a
   // second time: the rows it is compared against no longer carry one.
+  //
+  // Returns whether the pane is SETTLED — the read applied, or this pane has
+  // moved to another conversation and no longer owns the question. `false` means
+  // the read answered nothing and an unresolved failure is still on screen, so
+  // the caller must keep following rather than stop here.
   const reconcileInferredRunFailure = useCallback(
-    async (conversationId: string, alreadyRetracted: boolean) => {
-      if (messagesConversationIdRef.current !== conversationId) return;
+    async (conversationId: string, alreadyRetracted: boolean): Promise<boolean> => {
+      if (messagesConversationIdRef.current !== conversationId) return true;
       let serverMessages: ChatMessage[];
       try {
         serverMessages = await listMessages(project.id, conversationId);
       } catch (err) {
         console.warn('Failed to re-check a run failure the client inferred', err);
-        return;
+        return false;
       }
-      if (messagesConversationIdRef.current !== conversationId) return;
-      if (!alreadyRetracted && !retractsStaleRunFailure(messagesRef.current, serverMessages)) return;
+      if (messagesConversationIdRef.current !== conversationId) return true;
+      if (!alreadyRetracted && !retractsStaleRunFailure(messagesRef.current, serverMessages)) return false;
       setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
       setError(null);
+      return true;
     },
     [project.id],
   );
@@ -3248,7 +3254,13 @@ export function ProjectView({
             setMessages((current) => retractRunFailureFromStatus(current, runId, latest) ?? current);
             setError(null);
           }
-          await reconcileInferredRunFailure(conversationId, retracted);
+          const settled = await reconcileInferredRunFailure(conversationId, retracted);
+          if (retracted || settled) return;
+          // The 'reconcile' fallback read answered nothing, so the outage that
+          // exhausted the probes is still running and the failure on screen is
+          // still unresolved. Keep following.
+          misses = 0;
+          scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_INTERVAL_MS);
         })();
       };
       scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_DELAY_MS);

@@ -238,6 +238,10 @@ test('[P0] a live inferred failure is retracted after three status probes answer
   await expect(failureAlert).toContainText('Task failed');
 
   await waitForDaemonRunStatus(page, runId, 'succeeded');
+  // A coarse gate, not the mechanism: `refused` also counts the unrelated
+  // per-message status read described on `holdRunStatusProbes`. What makes the
+  // reconciliation meet three misses is the window's length, and what proves it
+  // is that this case is red on a build whose rule stops at three.
   await expect
     .poll(() => probeHold.refused, { intervals: [250], timeout: 60_000 })
     .toBeGreaterThanOrEqual(RECHECK_MISSES_UNDER_TEST);
@@ -328,6 +332,10 @@ test('[P0] a Side Chat inferred failure is retracted after three status probes a
   await expect(failureAlert).toContainText('Task failed');
 
   await waitForDaemonRunStatus(page, runId, 'succeeded');
+  // A coarse gate, not the mechanism: `refused` also counts the unrelated
+  // per-message status read described on `holdRunStatusProbes`. What makes the
+  // reconciliation meet three misses is the window's length, and what proves it
+  // is that this case is red on a build whose rule stops at three.
   await expect
     .poll(() => probeHold.refused, { intervals: [250], timeout: 60_000 })
     .toBeGreaterThanOrEqual(RECHECK_MISSES_UNDER_TEST);

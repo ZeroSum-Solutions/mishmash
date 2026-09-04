@@ -36,8 +36,16 @@ export const RUN_FAILURE_RECHECK_INTERVAL_MS = 3000;
  * This bound is therefore long — about five minutes of a daemon that never
  * answers, well past the point at which a daemon that came back would already
  * have been seen. An answered probe resets the count, so only an unbroken
- * outage reaches it, and reaching it ends in one conversation read
- * (`'reconcile'`), never in a silent stop.
+ * outage reaches it.
+ *
+ * Reaching it is NOT the end. It yields `'reconcile'`: fall back to one
+ * conversation read, which can retract the failure from the row the daemon
+ * settled on even while the run's own status is unreachable. If that read
+ * answers nothing either — `listMessages` reports a non-OK response as an empty
+ * array, so an outage still running looks the same as a conversation with
+ * nothing to say — the pane resets the count and keeps following. The bound is
+ * how long an unbroken outage runs BETWEEN fallback reads, not a budget after
+ * which an unresolved failure is abandoned.
  */
 export const RUN_FAILURE_RECHECK_MAX_MISSES = 100;
 
@@ -61,9 +69,10 @@ export type InferredRunFailureStep = 'retract' | 'retry' | 'reconcile' | 'stop';
  *  - `queued` / `running` means the answer has not arrived yet — keep following;
  *  - a probe that returns nothing is a miss, not an answer, so it decides
  *    nothing either. Misses are counted consecutively and the pane keeps
- *    following; only an unbroken outage of `RUN_FAILURE_RECHECK_MAX_MISSES`
- *    probes ends the following, and it ends in `'reconcile'` — one conversation
- *    read — so an unresolved inferred failure is never abandoned in silence.
+ *    following. An unbroken outage of `RUN_FAILURE_RECHECK_MAX_MISSES` probes
+ *    yields `'reconcile'`, which is a fallback conversation read rather than a
+ *    verdict: a pane whose read answers nothing resets and follows again. Only
+ *    `'stop'` ends the following, and only the run's own `failed` produces it.
  */
 export function nextInferredRunFailureStep(
   status: ChatRunStatus | null | undefined,
