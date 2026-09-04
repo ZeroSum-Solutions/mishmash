@@ -1195,6 +1195,15 @@ interface ProvisionalErrorFrameHold {
  * daemon's own `error` frame, and then the connection ends with no terminal
  * `end` frame. `providers/daemon.ts` caches this frame rather than surfacing it
  * and asks the run's status which of the two it was.
+ *
+ * The body is written here rather than emitted by a failing fake agent, because
+ * the fault this case pins is on the CLIENT side of the wire: the stream ends
+ * with no `end` frame and the status read answers nothing. The payload shape is
+ * the daemon's own — `SseErrorPayload` from `@open-design/contracts` — but the
+ * daemon's exact error text for a first-attempt failure is NOT pinned by this
+ * test. A stronger form would drive the fake-agent held-run/retry fixture in
+ * `e2e/lib/fake-agents.ts` and intercept only the stream close; do that if a
+ * later track needs the daemon's real frame payload covered here.
  */
 const PROVISIONAL_ERROR_FRAME =
   'event: start\ndata: {"bin":"fake-agent"}\n\n'
