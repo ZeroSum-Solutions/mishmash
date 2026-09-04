@@ -45,6 +45,11 @@ function chunkOf(bytes: Buffer, type: string): Chunk {
   return chunk;
 }
 
+/** Inverts the byte at `offset`, in place. */
+function flipByte(bytes: Buffer, offset: number): void {
+  bytes.writeUInt8(bytes.readUInt8(offset) ^ 0xff, offset);
+}
+
 /** Rewrites a chunk's CRC so only the edit under test is wrong. */
 function withRepairedCrc(bytes: Buffer, chunk: Chunk): Buffer {
   const repaired = Buffer.from(bytes);
@@ -67,7 +72,7 @@ describe('isIntactPng', () => {
   it('rejects a byte flipped inside the IDAT payload, frame untouched', () => {
     const idat = chunkOf(intact, 'IDAT');
     const damaged = Buffer.from(intact);
-    damaged[idat.offset + 8 + 3] ^= 0xff;
+    flipByte(damaged, idat.offset + 8 + 3);
     expect(damaged.subarray(0, 8).equals(intact.subarray(0, 8))).toBe(true);
     expect(damaged.subarray(damaged.length - 8, damaged.length - 4).toString('ascii')).toBe('IEND');
     expect(isIntactPng(damaged)).toBe(false);
@@ -76,7 +81,7 @@ describe('isIntactPng', () => {
   it('rejects an IDAT whose CRC alone was rewritten', () => {
     const idat = chunkOf(intact, 'IDAT');
     const damaged = Buffer.from(intact);
-    damaged[idat.offset + 8 + idat.length] ^= 0xff;
+    flipByte(damaged, idat.offset + 8 + idat.length);
     expect(isIntactPng(damaged)).toBe(false);
   });
 

@@ -138,6 +138,11 @@ async function decodesToPixels(bytes: Buffer): Promise<boolean> {
   }
 }
 
+/** Inverts the byte at `offset`, in place. */
+function flipByte(bytes: Buffer, offset: number): void {
+  bytes.writeUInt8(bytes.readUInt8(offset) ^ 0xff, offset);
+}
+
 /** A cover whose frame survives the damage: the predicate's two edges intact. */
 function hasIntactFrame(bytes: Buffer): boolean {
   return (
@@ -167,7 +172,7 @@ describe('W2H.5 — a cover with a valid frame but corrupt interior is never ser
       // Three shapes of interior damage, each one leaving the frame the W2G.6
       // predicate inspects exactly as it found it.
       const flippedIdatByte = Buffer.from(original);
-      flippedIdatByte[idat!.offset + 8 + 3] ^= 0xff;
+      flipByte(flippedIdatByte, idat!.offset + 8 + 3);
 
       const wrongIhdrLength = Buffer.from(original);
       wrongIhdrLength.writeUInt32BE(12, ihdr!.offset);
