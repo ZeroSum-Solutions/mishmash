@@ -9,18 +9,28 @@
 // watchdog, so the watchdog's own `load` listener never fires and the host is
 // the only one left who can answer.
 //
-// The reviewer of 2H.1b asked for this case in a real browser, and it has to be
-// one: the gap it turns on is React's commit-to-passive-effect window against
-// Chromium's actual srcDoc load timing, and jsdom cannot schedule either. The
-// deterministic version of the race — the `load` placed inside that window by
-// hand — is `apps/web/tests/components/preview-committed-document-fast-load.test.tsx`.
+// The reviewer of 2H.1b asked for a cached/tiny srcDoc case in a real browser.
+// This is it, and its limits are worth stating outright: it does NOT go red on
+// the pre-fix code. Measured — the same file, run against `d284766e4` with only
+// the four `apps/web/src` files restored to that revision, passes in 2.9s. In
+// Chromium the srcDoc navigation and React's passive-effect flush are two tasks
+// whose order is not fixed, and on this machine the effect wins, so the
+// watchdog's own `load` listener catches the commit and the host's answer is
+// never needed. Which way that race falls is what the fix stops mattering.
+//
+// So the deterministic red spec for the race is the jsdom one, where the `load`
+// can be placed inside the commit-to-passive-effect window by hand:
+// `apps/web/tests/components/preview-committed-document-fast-load.test.tsx`.
+// What THIS case is for is the half no unit test can reach — that a real
+// artifact, previewed through the real file viewer in the srcDoc transport,
+// really is asked and really does answer. It fails if disclosure breaks
+// outright on this transport, whichever of the two paths a given load takes.
 //
 // The oracle is the protocol's own token. The host mints one per navigation and
 // discloses it ONLY to a document it knows has committed; the producer echoes
 // whatever it was last asked with (`rememberToken` ignores an ask that carries
 // none, which is how the zoom-fit measurement stays out of it). So a report
-// carrying a non-empty token is the frame saying "the watchdog asked me" —
-// exactly the disclosure that goes missing when the host's answer is stale.
+// carrying a non-empty token is the frame saying "the watchdog asked me".
 
 import type { Page } from '@playwright/test';
 

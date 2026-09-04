@@ -62,6 +62,25 @@ describe('a body close hidden from the parser is not a body close', () => {
   });
 });
 
+describe('tag names are matched the way the parser matches them', () => {
+  // The tokenizer is case-insensitive for HTML tag names, and so is the
+  // scanner (its `SCANNER` and every helper regex carry the `i` flag). The
+  // srcDoc transport used to lowercase the whole document before searching,
+  // so this is the property that had to survive the move.
+  it('finds an upper-case body close', () => {
+    const html = '<!DOCTYPE HTML><HTML><BODY><H1>Artifact</H1></BODY></HTML>';
+    expect(lastGenuineBodyCloseIndex(html)).toBe(html.indexOf('</BODY>'));
+  });
+
+  it('reads an upper-case raw-text element as raw text', () => {
+    expectGenuineClose(`${OPEN}<STYLE>a{} /* </BODY> */</STYLE>`, '</html>');
+  });
+
+  it('reads an upper-case template as a fragment of its own', () => {
+    expectGenuineClose(`${OPEN}<TEMPLATE></BODY></TEMPLATE>`, '</html>');
+  });
+});
+
 describe('a comment ends at every spelling the tokenizer accepts', () => {
   // A comment read as running past its close swallows the real markup after
   // it, which loses the document's genuine body close.
