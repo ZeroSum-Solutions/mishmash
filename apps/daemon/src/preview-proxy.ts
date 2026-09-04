@@ -94,16 +94,55 @@ export function parsePreviewProxyPath(pathAndQuery: string | null | undefined): 
   return { projectId, previewId, upstreamPath: `${match[3] || '/'}${query}` };
 }
 
-/** The path part of a same-origin `Referer`, or null when there is none. */
-function refererPath(referer: unknown): string | null {
-  const raw = Array.isArray(referer) ? referer[0] : referer;
-  if (typeof raw !== 'string' || !raw) return null;
+/**
+ * The preview page a browser attributes this request to, or null when it
+ * attributes it to no preview page.
+ *
+ * `Referer` is the attribution, and its HOST must name this daemon front: a
+ * `Referer` written by some other site names some other site's page, whatever
+ * path it carries, so the path alone must never be enough to claim a session.
+ */
+function referringPreviewPage(headers: IncomingHttpHeaders): ParsedPreviewProxyPath | null {
+  const raw = headerText(headers.referer).trim();
+  if (!raw) return null;
+  let referer: URL;
   try {
-    const url = new URL(raw);
-    return `${url.pathname}${url.search}`;
+    referer = new URL(raw);
   } catch {
     return null;
   }
+  if (!frontHosts(headers).includes(referer.host)) return null;
+  return parsePreviewProxyPath(`${referer.pathname}${referer.search}`);
+}
+
+/**
+ * A preview page is somebody else's program served from the daemon's own
+ * origin, so it must not be able to act as the Open Design app: every `/api`
+ * request a browser attributes to a preview page is confined to THAT
+ * preview's own subtree, and any other `/api` path is refused.
+ *
+ * This is the containment the daemon already applies to the powered-preview
+ * surface (`_POWERED_PREVIEW_SAFE_RE`, `server.ts`), restated for the shape
+ * where a sibling origin is not available: a collaborator reaches the daemon
+ * under exactly one name, so a preview cannot be handed a second one the way
+ * `poweredPreviewHost()` hands one to a loopback caller.
+ *
+ * What it does NOT do: `Referer` is attribution, not a sandbox. A preview page
+ * that suppresses its own `Referer` (`referrerPolicy: 'no-referrer'`) is
+ * attributed to nothing and is then held only by the daemon's ordinary gates,
+ * which admit any loopback peer on the daemon's own machine. A CSP sandbox
+ * would be browser-enforced instead, but only without `allow-same-origin`,
+ * which puts the preview in an opaque origin and breaks every dev server that
+ * calls its own API. So serving a preview from the daemon's origin trusts the
+ * preview's code as far as the session that started it — which is the audience
+ * D-14 fixed, authenticated Open Design sessions. `PreviewInfo.url` records
+ * that where a reader meets the URL.
+ */
+export function isPreviewProxyOriginEscape(headers: IncomingHttpHeaders, apiPath: string): boolean {
+  const page = referringPreviewPage(headers);
+  if (!page) return false;
+  const target = parsePreviewProxyPath(apiPath);
+  return !target || target.projectId !== page.projectId || target.previewId !== page.previewId;
 }
 
 /**
@@ -325,7 +364,7 @@ export function createPreviewProxyHandler(deps: PreviewProxyDeps): RequestHandle
  * resolves to the daemon's root rather than the preview's base path. The
  * browser names the page that asked in `Referer`, and `Referer` cannot be
  * forged from script, so a root-absolute GET whose referring page IS a live
- * preview is answered from that preview.
+ * preview on this front is answered from that preview.
  *
  * Registered last, after every daemon route, so it can only claim paths the
  * daemon does not own. It carries no more authority than the proxy route it
@@ -342,7 +381,7 @@ export function createPreviewProxyHandler(deps: PreviewProxyDeps): RequestHandle
 export function createPreviewRootAssetFallback(deps: PreviewProxyDeps): RequestHandler {
   return (req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    const referred = parsePreviewProxyPath(refererPath(req.headers.referer));
+    const referred = referringPreviewPage(req.headers);
     if (!referred) return next();
     const session = deps.getPreview(referred.previewId);
     if (!session || session.projectId !== referred.projectId) return next();

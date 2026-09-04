@@ -8,38 +8,31 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { startServer } from '../src/server.js';
 
 /**
- * Red spec for W2G.2 (findings F1 / F6 in `proof/w2/codex-wave-r1.json`).
+ * A preview is served from the daemon's OWN origin (decision D-14, option A),
+ * so a preview page's scripts are same-origin with every `/api` route. The
+ * daemon confines them: a request a browser attributes to a preview page
+ * reaches that preview's own subtree and nothing else under `/api`.
  *
- * Track 2.2 made the daemon announce a preview on the host the request
- * arrived on. Nothing behind that name is listening: the preview child binds
- * `127.0.0.1` and the daemon only ever passes it `PORT`, so a collaborator is
- * handed `http://<their front>:<preview port>/` and their browser gets
- * ECONNREFUSED. The announcement is a label, not a route.
- *
- * This spec refuses to assert on the URL STRING, which is what F6 says the
- * wave-2 spec did wrong. It runs the real daemon on a NON-loopback interface
- * with `OD_API_TOKEN` set — the production remote gate — starts a preview whose
- * child binds loopback only, and then FETCHES the announced URL from that same
- * non-loopback network context. The bar is bytes, not a string.
+ * This runs the real daemon on a NON-loopback interface with `OD_API_TOKEN`
+ * set — the production remote gate — and asserts on the daemon's answer to
+ * three requests that differ only in the page the browser says asked. A
+ * request refused for some incidental reason would not distinguish them, so
+ * every case asserts the named confinement error rather than the status alone.
  */
 
-const API_TOKEN = 'w2g2-preview-proxy-token';
-const PREVIEW_BODY = 'preview-ok';
+const API_TOKEN = 'w2g2-preview-confinement-token';
+const CONFINEMENT_ERROR = 'Preview origin cannot access this API route';
 
 /** A loopback-only child: exactly the shape every framework dev server has. */
 const LOOPBACK_CHILD = `
 const http = require('node:http');
 http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': 'text/html' });
-  res.end('${PREVIEW_BODY}');
+  res.end('preview-ok');
 }).listen(Number(process.env.PORT), '127.0.0.1');
 `;
 
-/**
- * An address of this machine that is NOT loopback — the collaborator-side
- * network context. Private LAN first so the daemon's own browser-origin rules
- * see a familiar shape; any non-internal IPv4 will do.
- */
+/** An address of this machine that is NOT loopback: the collaborator side. */
 function nonLoopbackIPv4(): string | null {
   const candidates: string[] = [];
   for (const entries of Object.values(os.networkInterfaces())) {
@@ -66,11 +59,6 @@ function freePort(): Promise<number> {
 
 type Reply = { status: number; body: string };
 
-/**
- * A transport failure is the SYMPTOM here, so it must arrive as a value the
- * test can assert on — never as a rejected promise that reads like a broken
- * fixture.
- */
 async function get(url: string, headers: Record<string, string>): Promise<Reply> {
   try {
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(5_000) });
@@ -80,7 +68,7 @@ async function get(url: string, headers: Record<string, string>): Promise<Reply>
   }
 }
 
-describe('an announced preview URL is reachable from the host it names', () => {
+describe('a preview page cannot act as the Open Design app', () => {
   const PREVIOUS_TOKEN = process.env.OD_API_TOKEN;
   let server: http.Server | undefined;
   let shutdown: (() => Promise<void> | void) | undefined;
@@ -97,12 +85,10 @@ describe('an announced preview URL is reachable from the host it names', () => {
     else process.env.OD_API_TOKEN = PREVIOUS_TOKEN;
   });
 
-  it('serves the preview to a collaborator off the daemon loopback', async () => {
-    // A loopback-only runner cannot reproduce the bug at all: every fetch it
-    // could make is from the child's own bind address, which is the string
-    // oracle F6 rejects. The spec fails there rather than skipping, because a
-    // skip reports this criterion green on a run that never made the request
-    // the bar is about.
+  it('confines a preview page to its own subtree under /api', async () => {
+    // A loopback-only runner cannot stand a collaborator up at all, and a
+    // confinement that was never asked to decide anything is not evidence.
+    // The spec fails rather than reporting a green it did not earn.
     const remoteHost = nonLoopbackIPv4();
     expect(
       remoteHost,
@@ -119,23 +105,19 @@ describe('an announced preview URL is reachable from the host it names', () => {
     shutdown = started.shutdown;
     const daemonPort = (started.server.address() as AddressInfo).port;
     const front = `http://${remoteHost}:${daemonPort}`;
-    // Every request below crosses the daemon's remote gate: a non-loopback
-    // peer with the bearer the deployment requires.
     const auth = { Authorization: `Bearer ${API_TOKEN}` };
 
-    const projectId = `w2g2-preview-${Date.now()}`;
+    const projectId = `w2g2-confine-${Date.now()}`;
     const createdProject = await fetch(`${front}/api/projects`, {
       method: 'POST',
       headers: { ...auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: projectId, name: projectId }),
     });
     expect(createdProject.status).toBeLessThan(300);
-    // Materialize the project directory the preview will run in — the same
-    // call the web file panel makes.
     const seeded = await fetch(`${front}/api/projects/${projectId}/files`, {
       method: 'POST',
       headers: { ...auth, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'README.md', content: 'w2g2 preview fixture' }),
+      body: JSON.stringify({ name: 'README.md', content: 'w2g2 confinement fixture' }),
     });
     expect(seeded.status).toBeLessThan(300);
 
@@ -148,15 +130,38 @@ describe('an announced preview URL is reachable from the host it names', () => {
     expect(startedPreview.status).toBe(200);
     const announced = (await startedPreview.json()) as { id: string; url: string };
 
-    try {
-      // THE BAR. The announced URL is fetched from the same non-loopback
-      // context the announcement was made to. Bytes, not a string.
-      expect(await get(announced.url, auth)).toEqual({ status: 200, body: PREVIEW_BODY });
+    // What a browser sends for a same-origin call made BY the preview page.
+    const fromPreviewPage = {
+      ...auth,
+      Origin: front,
+      Referer: announced.url,
+      'Sec-Fetch-Site': 'same-origin',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Dest': 'empty',
+    };
 
-      // And the loopback child is not what got announced: its own port is a
-      // private implementation detail of the daemon's machine.
-      expect(announced.url).not.toContain(`:${previewPort}`);
-      expect(announced.url).not.toContain('127.0.0.1');
+    try {
+      // A privileged route the preview page has no business reaching.
+      const escaped = await get(`${front}/api/projects`, fromPreviewPage);
+      expect(escaped.status).toBe(403);
+      expect(escaped.body).toContain(CONFINEMENT_ERROR);
+
+      // The same route, asked for by the app's own page, is untouched.
+      const fromAppPage = await get(`${front}/api/projects`, {
+        ...auth,
+        Origin: front,
+        Referer: `${front}/projects/${projectId}`,
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Dest': 'empty',
+      });
+      expect(fromAppPage.body).not.toContain(CONFINEMENT_ERROR);
+      expect(fromAppPage.status).toBe(200);
+
+      // And the preview still reaches its own subtree, which is the whole
+      // point of serving it here: the confinement must not close the route it
+      // is guarding.
+      expect(await get(announced.url, fromPreviewPage)).toEqual({ status: 200, body: 'preview-ok' });
     } finally {
       await fetch(`${front}/api/projects/${projectId}/previews/${announced.id}`, {
         method: 'DELETE',

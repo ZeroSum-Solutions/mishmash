@@ -106,6 +106,9 @@ describe('the preview proxy gate on the entry points outside the router', () => 
    * handlers apply by hand, not the middleware that already covers `/api`.
    */
   async function boot(): Promise<{ apiPort: number; previewId: string; base: string }> {
+    // Fails rather than skips, for the reason given on `nonLoopbackIPv4`: a
+    // loopback peer passes the membership rule by definition, so a skip would
+    // report these gate cases green on a run that exercised no branch of them.
     const host = nonLoopbackIPv4();
     expect(host, 'this spec needs a non-loopback IPv4 address to stand in for a collaborator machine').not.toBeNull();
     peerHost = host;
@@ -236,6 +239,23 @@ describe('the preview proxy gate on the entry points outside the router', () => 
 
     expect(served.status).toBe(200);
     expect(served.body).toBe('body{color:red}');
+  }, 30_000);
+
+  it('refuses a root-absolute preview asset whose Referer names another site', async () => {
+    const { apiPort, base } = await boot();
+
+    // The path is a real preview's, but the page that carries it is not on
+    // this front. A `Referer` any site can write must not name a session.
+    const refused = await get(apiPort, '/style.css', {
+      host: TAILNET_HOST,
+      headers: {
+        Referer: `https://attacker.example${base}`,
+        Authorization: `Bearer ${API_TOKEN}`,
+      },
+    });
+
+    expect(refused.status).toBe(404);
+    expect(refused.body).not.toContain('body{color:red}');
   }, 30_000);
 
   it('refuses a root-absolute preview asset asked for by another site', async () => {

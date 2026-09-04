@@ -28,6 +28,15 @@ export type PreviewInfo = {
    * Next dev server, which forwards only `/api`, `/artifacts` and `/frames`
    * (`apps/web/next.config.ts`), so a preview page's `/_nuxt/entry.js` stops
    * at Next.
+   *
+   * And one thing it means for who may see it. A preview runs somebody else's
+   * program on the daemon's own origin, so the daemon confines it: a request a
+   * browser attributes to a preview page reaches that preview's own subtree
+   * and no other API route. The confinement reads the browser's `Referer`, so
+   * a preview page that suppresses its own is held only by the daemon's
+   * ordinary gates, which admit any loopback peer on the daemon's machine.
+   * Start previews for programs you would run yourself, and hand the link to
+   * the audience decision D-14 fixed: authenticated Open Design sessions.
    */
   url: string;
   command: string[];

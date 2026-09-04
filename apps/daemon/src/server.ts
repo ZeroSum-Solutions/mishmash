@@ -673,6 +673,8 @@ import {
   PREVIEW_PROXY_MOUNT,
   createPreviewProxyUpgradeHandler,
   createPreviewRootAssetFallback,
+  isAuthorizedPreviewProxyRequest,
+  isPreviewProxyOriginEscape,
 } from './preview-proxy.js';
 import { registerSocialShareRoutes } from './routes/social-share.js';
 import { registerInterviewRoutes } from './routes/interviews.js';
@@ -2219,7 +2221,13 @@ export async function startServer({
   // proxy re-states `Content-Length` and drops `Content-Encoding` before
   // forwarding (see `preview-proxy.ts`). The API's own 4mb limit applies, which
   // bounds what a preview can be POSTed through the daemon.
-  app.use(PREVIEW_PROXY_MOUNT, express.raw({ type: () => true, limit: '4mb' }));
+  // Behind the same membership rule the route applies, so an unauthorized
+  // peer is refused before the daemon buffers its body rather than after.
+  const previewProxyRawBody = express.raw({ type: () => true, limit: '4mb' });
+  app.use(PREVIEW_PROXY_MOUNT, (req, res, next) => {
+    if (!isAuthorizedPreviewProxyRequest(req)) return next();
+    return previewProxyRawBody(req, res, next);
+  });
   app.use(express.json({ limit: '4mb' }));
   const projectPreviewScopes = createProjectPreviewScopeRegistry();
 
@@ -2441,6 +2449,17 @@ export async function startServer({
           error: 'Powered preview origin cannot access this API route',
         });
       }
+    }
+
+    // The same containment for the preview proxy, which shares this origin
+    // instead of getting a sibling one: a page a browser attributes to a
+    // preview reaches that preview's own subtree and nothing else under
+    // `/api`. `req.path` is mount-relative here, so the `/api` prefix the
+    // proxy path carries is put back before the comparison.
+    if (isPreviewProxyOriginEscape(req.headers, `/api${req.path}`)) {
+      return res.status(403).json({
+        error: 'Preview origin cannot access this API route',
+      });
     }
 
     const origin = req.headers.origin;
