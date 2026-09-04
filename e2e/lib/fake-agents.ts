@@ -171,6 +171,10 @@ async function emitRun(promptText) {
     setInterval(() => {}, 1 << 30);
     return;
   }
+  if (promptText.includes('Write the deterministic artifact then hold the daemon run open')) {
+    await emitClaudeHeldArtifactWriteRun(promptText);
+    return;
+  }
   if (promptText.includes('Return an intentional daemon smoke failure')) {
     emitFailure();
     return;
@@ -306,6 +310,31 @@ async function emitRun(promptText) {
   emitSuccess(assistantText, isChunked, isDelayed || isSlowReload);
   process.exitCode = 0;
   exitSoon(0);
+}
+
+// W1H.2: write one artifact through the real Claude tool_use/tool_result shape
+// and then keep the turn open, so a test can kill the daemon with the run still
+// in flight. The run never reaches a terminal event, which is what leaves
+// startup reconciliation to classify it. The hold is a bounded timer rather
+// than an interval so a child orphaned by that kill exits on its own.
+async function emitClaudeHeldArtifactWriteRun(promptText) {
+  if (agentId !== 'claude') {
+    throw new Error('the held artifact-write fixture requires the claude fake runtime, got ' + agentId);
+  }
+  const dir = projectDir(promptText);
+  const html = '<!doctype html><html><body><main><h1>Held Daemon Smoke</h1></main></body></html>';
+  await mkdir(dir, { recursive: true });
+  await writeFileFs(join(dir, 'index.html'), html, 'utf8');
+  writeJson({ type: 'system', subtype: 'init', model: 'fake-claude', session_id: 'fake-session' });
+  writeJson({
+    type: 'assistant',
+    message: {
+      id: 'msg-held-1',
+      content: [{ type: 'tool_use', id: 'toolu-held-html', name: 'Write', input: { file_path: join(dir, 'index.html'), content: html } }],
+    },
+  });
+  writeJson({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu-held-html', content: 'ok' }] } });
+  setTimeout(() => process.exit(0), 60000);
 }
 
 async function emitPluginAuthoringRun() {

@@ -105,7 +105,16 @@ function latestRetryable(
   return undefined;
 }
 
-function inferFailureStageFromEvents(
+/**
+ * The lifecycle step a run had reached, read from the run's own event records.
+ *
+ * Exported so the startup reconciliation of runs a daemon restart interrupted
+ * (`runtimes/run-terminal-reconciliation.ts`) names the step from the same
+ * evidence and by the same rules the live classifier uses. A restarted daemon
+ * has no run object left to ask, only the run's persisted `events.jsonl`, and
+ * these records are exactly what that file holds.
+ */
+export function inferFailureStageFromEvents(
   events: RunEventForFailureClassification[] | undefined,
   fallback: TrackingRunFailureStage,
 ): TrackingRunFailureStage {

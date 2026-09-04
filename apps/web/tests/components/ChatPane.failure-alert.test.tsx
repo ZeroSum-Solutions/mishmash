@@ -222,6 +222,23 @@ const SHUTDOWN_CANCEL_RUN: TerminalRunFixture = {
   artifactCount: 0,
 };
 
+// W1H.2 — the OTHER shutdown shape. The daemon did not shut down under the
+// turn; it died with the turn in flight and never reached `shutdownActive`, so
+// nothing classified the run until startup reconciliation did
+// (`apps/daemon/src/runtimes/run-terminal-reconciliation.ts`). The event below
+// is what that pass now stores, and the alert owes this run the same three
+// facts it owes every other failure.
+const DAEMON_RESTART_RUN: TerminalRunFixture = {
+  id: 'daemon-restart',
+  runStatus: 'failed',
+  detail: 'Run interrupted because the daemon restarted.',
+  code: 'DAEMON_RESTARTED',
+  failureCategory: 'process_exit',
+  failureDetail: 'interrupted',
+  failureStage: 'tool_execution',
+  artifactCount: 2,
+};
+
 describe('the failure alert names the exact cause, the step, and the file-change state', () => {
   it.each([
     ['the agent stalled for 600s', STALL_RUN, 'chat.runError.title.timedOut'],
@@ -230,6 +247,7 @@ describe('the failure alert names the exact cause, the step, and the file-change
     ['the provider refused the request for quota', QUOTA_RUN, 'chat.runError.title.quotaExhausted'],
     ['the user denied a write_file permission', DENIED_PERMISSION_RUN, 'chat.runError.title.permissionBlocked'],
     ['the daemon shut down under the turn', SHUTDOWN_CANCEL_RUN, 'chat.runError.title.stopped'],
+    ['the daemon restarted under the turn', DAEMON_RESTART_RUN, 'chat.runError.title.daemonRestarted'],
   ])('names the exact cause when %s', (_label, fixture, titleKey) => {
     const { container } = renderFailure(fixture);
 
@@ -248,6 +266,7 @@ describe('the failure alert names the exact cause, the step, and the file-change
     ['the provider refused the request for quota', QUOTA_RUN, 'session_init', 'chat.runError.step.sessionInit'],
     ['the user denied a write_file permission', DENIED_PERMISSION_RUN, 'tool_execution', 'chat.runError.step.toolExecution'],
     ['the daemon shut down under the turn', SHUTDOWN_CANCEL_RUN, 'first_token_wait', 'chat.runError.step.firstTokenWait'],
+    ['the daemon restarted under the turn', DAEMON_RESTART_RUN, 'tool_execution', 'chat.runError.step.toolExecution'],
   ])('names the step that stopped when %s', (_label, fixture, stage, stepKey) => {
     const { container } = renderFailure(fixture);
 
@@ -264,6 +283,15 @@ describe('the failure alert names the exact cause, the step, and the file-change
     expect(files).toBeTruthy();
     expect(files?.getAttribute('data-run-failure-files')).toBe('0');
     expect(files?.textContent).toBe('chat.runError.filesUnchanged');
+  });
+
+  it('states the file-change state of a turn a daemon restart interrupted', () => {
+    const { container } = renderFailure(DAEMON_RESTART_RUN);
+
+    const files = container.querySelector('[data-run-failure-files]');
+    expect(files, 'the restart alert states whether the user\'s files changed').toBeTruthy();
+    expect(files?.getAttribute('data-run-failure-files')).toBe('2');
+    expect(files?.textContent).toContain('2');
   });
 
   it('states how many files were changed when the run wrote some before failing', () => {
