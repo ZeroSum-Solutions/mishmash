@@ -2325,8 +2325,33 @@ export async function startServer({
     /^\/projects\/[^/]+\/(?:raw|preview)\/|^\/codex-pets\/[^/]+\/spritesheet$|^\/asset-cache$/;
   const _POWERED_PREVIEW_SAFE_RE = /^\/projects\/[^/]+\/powered\/.+$/u;
 
+  // The containment claim a sandboxed preview subresource has to satisfy: the
+  // path names ONE skill's asset tree, ONE design-library entry's preview
+  // assets, or ONE project's raw-file tree — never an API route, never a
+  // prefix that covers more than the previewed document's own files. A path
+  // outside those three families has no scope and stays behind the gate.
   function sandboxedPreviewAssetScope(pathname: string): string | null {
     const apiRelativePath = pathname.startsWith('/api/') ? pathname.slice(4) : pathname;
+    // A previewed project HTML page resolves every relative `src`/`href`
+    // against its project's raw-file route, whichever way the page arrived —
+    // an agent wrote it to disk, or the daemon rendered it from a live
+    // artifact and stated the base in the document (see
+    // packages/contracts/src/runtime/project-asset-base.ts). Both preview
+    // iframes are sandboxed WITHOUT `allow-same-origin`, so those subresource
+    // requests are cross-site and were refused, leaving every relative image
+    // on a previewed page broken (B-10 / decision D-11, option B). The
+    // document itself is a navigation the gate already admits; this entry
+    // covers its assets. A trailing `/raw/` with no file below it is not a
+    // scope, so the exception can never be used to walk the tree, and the
+    // sibling `/powered/`, `/preview/` and JSON project routes are untouched.
+    const project = /^\/projects\/([^/]+)\/raw\/.+$/u.exec(apiRelativePath);
+    if (project?.[1]) {
+      try {
+        return `project:${decodeURIComponent(project[1])}`;
+      } catch {
+        return null;
+      }
+    }
     const skill = /^\/skills\/([^/]+)\/(?:assets|fonts)\//u.exec(apiRelativePath);
     if (skill?.[1]) {
       try {
@@ -2361,10 +2386,15 @@ export async function startServer({
   // A sandboxed document has an opaque origin. Its passive CSS/image/font
   // requests commonly omit Origin entirely, while CORS-enabled resources can
   // send the literal value "null". Permit only browser-classified resource
-  // destinations under the two contained preview prefixes. A scripted
+  // destinations under the contained preview scopes above. A scripted
   // fetch() has Sec-Fetch-Dest: empty and remains denied, so template code
   // cannot use this exception to read daemon API responses or another
-  // collection's source bytes.
+  // collection's source bytes. Sec-Fetch-* are forbidden header names: a page
+  // cannot set them from JavaScript, so the classification is the user
+  // agent's, not the document's. The exception is GET-only, so a mutating
+  // request to the same path stays refused; and it only lets the request
+  // REACH the route, whose own project/artifact resolution still decides
+  // whether any bytes exist to send.
   function isSandboxedPreviewResourceRequest(req: express.Request): boolean {
     if (req.method !== 'GET' || req.headers['sec-fetch-site'] !== 'cross-site') return false;
     const origin = req.headers.origin;
