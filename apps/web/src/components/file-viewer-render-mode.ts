@@ -217,11 +217,15 @@ export function parseForceInline(search: string | URLSearchParams | null | undef
  * Dynamically injected scripts
  * (`document.createElement('script'); s.src = '…'; head.appendChild(s)`)
  * stay invisible to this scan because the literal `<script src=…>` tag never
- * appears in the source, and they need nothing from it: the daemon serves a
- * project raw asset a sandboxed preview requests as a browser-classified
- * `script` (decision D-11, option B), so the linked file loads on either
- * transport and runs before any Web Storage read of its own could matter.
- * That is measured, not assumed — `e2e/ui/preview-runtime-script.test.ts`.
+ * appears in the source. That no longer stops them loading: the daemon serves
+ * a project raw asset a sandboxed preview requests as a browser-classified
+ * `script` (decision D-11, option B), and
+ * `e2e/ui/preview-runtime-script.test.ts` measures such a script running on
+ * BOTH transports. What this scan still cannot do for them is arrive first —
+ * a runtime-attached script that reads Web Storage at eval gets no shim on
+ * the URL-load path, because the shim is injected by the srcDoc pipeline this
+ * scan is the entrance to. Reading it needs a fetch of the linked file, which
+ * is the round trip this heuristic exists to avoid.
  *
  * Pure string scan — caller passes the same `source` already fetched for
  * preview rendering, so this adds no extra I/O. Heuristic by design: false
