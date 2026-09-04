@@ -2632,7 +2632,9 @@ export interface Dict {
   'chat.runError.title.stoppedBySystem': string;
   'chat.runError.title.permissionBlocked': string;
   'chat.runError.title.stopped': string;
+  'chat.runError.title.daemonRestarted': string;
   'chat.runError.stoppedBySystemMessage': string;
+  'chat.runError.daemonRestartedMessage': string;
   'chat.runError.step.preflight': string;
   'chat.runError.step.spawn': string;
   'chat.runError.step.sessionInit': string;

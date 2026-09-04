@@ -4,14 +4,36 @@ import { randomUUID } from 'node:crypto';
 
 import type Database from 'better-sqlite3';
 
+import type { TrackingRunFailureStage } from '@open-design/contracts/analytics';
+
 import { appendMessageStatusEvent } from '../db.js';
-import { classifyRunFailure } from '../run-failure-classification.js';
+import {
+  classifyRunFailure,
+  inferFailureStageFromEvents,
+} from '../run-failure-classification.js';
 import { deriveRunErrorCode, runResultFromStatus } from '../run-result.js';
-import { runAskedUserQuestion } from './run-artifacts.js';
+import { persistRunFailureClassification } from './chat-run-messages.js';
+import { countNewArtifacts, runAskedUserQuestion } from './run-artifacts.js';
 
 const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'canceled']);
 const RESTART_ERROR_CODE = 'DAEMON_RESTARTED';
 const RESTART_ERROR_MESSAGE = 'Run interrupted because the daemon restarted.';
+
+/**
+ * The cause a daemon restart gives every run it interrupted.
+ *
+ * A restart takes a turn from the user with the process still mid-flight,
+ * which is the same shape `classifyRunFailure` gives a shutdown-origin stop —
+ * so it carries the same cause, and a plain retry is the whole recovery. Held
+ * as one constant because two consumers below must agree about the same run:
+ * the analytics replay and the error event the chat alert reads.
+ */
+const RESTART_FAILURE_CAUSE = {
+  failure_category: 'process_exit',
+  failure_detail: 'interrupted',
+  retryable: true,
+  user_action: 'retry',
+} as const;
 const RECONCILED_STATUS_MESSAGE = 'Run terminal state reconciled after daemon restart.';
 const FOLLOWED_TERMINAL_STATUS_MESSAGE = 'Message reconciled to the run terminal event.';
 
@@ -665,9 +687,47 @@ function hydrateRun(state: DurableRunState, events: ReturnType<typeof readEvents
   };
 }
 
+/**
+ * What the durable record can say about a run a daemon restart interrupted,
+ * beyond its cause: the step it reached, and the files it is proved to have
+ * written.
+ *
+ * Invariant: every fact this returns is read from the run's own `events.jsonl`
+ * and is `null` when that log does not carry it. A restarted daemon has no run
+ * object and no filesystem baseline left — both died with the process — so the
+ * event log is the only witness, and a field it cannot support stays absent
+ * rather than becoming a guess the alert would state as fact.
+ *
+ * Stage: `inferFailureStageFromEvents`, the live classifier's own reader, so a
+ * restart names the step by the same rules every other failure does. With no
+ * records there is no defensible step, and the alert renders none.
+ *
+ * Artifact count: `countNewArtifacts`, the derivation the finalize hook falls
+ * back to when its filesystem baseline is unusable. Only a POSITIVE count is
+ * evidence. The log proves the writes it recorded; it cannot prove that none
+ * happened — a runtime can put a file on disk through a path the log does not
+ * pair — so a zero is reported as `null`, and the alert says nothing about
+ * files instead of claiming they are unchanged. `state.json` is not consulted
+ * for this at all: `durableRunState` (`runtimes/runs.ts`) journals
+ * `artifactCount: 0` for every run that never finalized, so its zero is a
+ * default rather than a measurement.
+ */
+function daemonRestartEvidence(events: ReturnType<typeof readEvents>): {
+  failureStage: TrackingRunFailureStage | null;
+  artifactCount: number | null;
+} {
+  if (events.length === 0) return { failureStage: null, artifactCount: null };
+  const artifactCount = countNewArtifacts(events);
+  return {
+    failureStage: inferFailureStageFromEvents(events, 'first_token_wait'),
+    artifactCount: artifactCount > 0 ? artifactCount : null,
+  };
+}
+
 function reconcileMessages(
   db: Database.Database,
   statesByRunId: Map<string, DurableRunState>,
+  runsLogDir: string,
   now: number,
 ): number {
   let rows: Array<{ id: string; runId: string | null }> = [];
@@ -698,6 +758,21 @@ function reconcileMessages(
             : state?.error ?? RECONCILED_STATUS_MESSAGE,
         }
       : { label: status, detail: RECONCILED_STATUS_MESSAGE });
+    // The error event above carries only a label and a detail, which is all
+    // `appendMessageStatusEvent` stores. Enrich it here through the same writer
+    // the live failure path uses, so a run the restart interrupted reaches the
+    // chat alert with a named cause, its step, and its file-change state
+    // instead of the generic "Task failed".
+    if (state && isDaemonRestart) {
+      persistRunFailureClassification(db, {
+        id: state.id,
+        assistantMessageId: row.id,
+        errorCode: RESTART_ERROR_CODE,
+        failureCategory: RESTART_FAILURE_CAUSE.failure_category,
+        failureDetail: RESTART_FAILURE_CAUSE.failure_detail,
+        ...daemonRestartEvidence(readEvents(runsLogDir, state.id)),
+      });
+    }
   }
   return rows.length;
 }
@@ -744,7 +819,12 @@ export async function reconcileDurableRunTerminals(
   }
 
   const statesByRunId = new Map(states.map((entry) => [entry.state.id, entry.state]));
-  result.messagesReconciled = reconcileMessages(options.db, statesByRunId, now);
+  result.messagesReconciled = reconcileMessages(
+    options.db,
+    statesByRunId,
+    options.runsLogDir,
+    now,
+  );
   result.messagesFollowedTerminal = followRunTerminalOnStuckMessages(
     options.db,
     statesByRunId,
@@ -772,11 +852,13 @@ export async function reconcileDurableRunTerminals(
       const failure = failed
         ? recoveryReason === 'daemon_restart'
           ? {
-              failure_category: 'process_exit' as const,
-              failure_detail: 'interrupted' as const,
-              failure_stage: 'finalize' as const,
-              retryable: true,
-              user_action: 'retry' as const,
+              ...RESTART_FAILURE_CAUSE,
+              // `failure_stage` is a required enum on this tracking event, so
+              // it cannot go absent the way the message event's can. It takes
+              // the durable evidence when there is any and keeps its historical
+              // `finalize` only when the log is silent.
+              failure_stage:
+                daemonRestartEvidence(events).failureStage ?? ('finalize' as const),
             }
           : classifyRunFailure({
               result: runResult,
