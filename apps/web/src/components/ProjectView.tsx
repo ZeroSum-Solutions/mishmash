@@ -3242,6 +3242,20 @@ export function ProjectView({
   );
 
 
+  // Residual 8, the write side: whoever puts a message in the pane's single
+  // error slot must say WHOSE it is, because only a writer that named its run
+  // can have that message taken back by `clearPaneErrorForRun` below. A message
+  // written without a name is another source's, and stays.
+  //
+  // `runId` names the run the message belongs to. `null` says no run raised it,
+  // and retires whatever carrier a run left behind — the string that carrier
+  // named is no longer the string on screen, so a later clear for that run must
+  // not reach this one.
+  const setPaneError = useCallback((runId: string | null, message: string | null) => {
+    runErrorCarrierRef.current = runId !== null && message !== null ? { runId, message } : null;
+    setError(message);
+  }, []);
+
   // Residual 8: `error` is a single slot the run shares with errors no run
   // raised. Take back only what this run put there — a carrier holding another
   // source's message is left standing.
@@ -3350,10 +3364,9 @@ export function ProjectView({
         }),
         true,
       );
-      runErrorCarrierRef.current = { runId, message };
-      setError(message);
+      setPaneError(runId, message);
     },
-    [updateMessageById],
+    [setPaneError, updateMessageById],
   );
 
   const scheduleInferredRunFailureRecheck = useCallback(
@@ -3951,7 +3964,7 @@ export function ProjectView({
           continue;
         }
         if (spuriouslyFailedPending && status.status === 'canceled') {
-          setError(null);
+          clearPaneErrorForRun(runId);
           // Route through the shared invariant helper: `status` is already
           // terminal here, so this resolves to `status.updatedAt` directly.
           const endedAt = await resolveTerminalEndedAt(runId, status);
@@ -3972,7 +3985,7 @@ export function ProjectView({
           continue;
         }
         if (spuriouslyFailedPending && status.status === 'succeeded') {
-          setError(null);
+          clearPaneErrorForRun(runId);
           transientFailedRetriesRef.current.delete(runId);
           genericDisconnectRetriesRef.current.delete(runId);
           genericDisconnectBackoffUntilRef.current.delete(runId);
@@ -4181,7 +4194,7 @@ export function ProjectView({
           // clear any stale "daemon stream disconnected" error banner that the
           // original onError path may have set, so the chat does not show a
           // stale error after the reattach succeeds.
-          setError(null);
+          clearPaneErrorForRun(runId);
         }
 
         let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -4323,7 +4336,7 @@ export function ProjectView({
               // Clear any stale error banner set by the original onError path
               // (e.g. "daemon stream disconnected") so the chat does not show it
               // after the spuriously-failed message reattaches and succeeds.
-              if (runMayFinalize && spuriouslyFailedPending) setError(null);
+              if (runMayFinalize && spuriouslyFailedPending) clearPaneErrorForRun(runId);
               if (!runMayFinalize) return;
               for (const ev of parser.flush()) {
                 if (ev.type === 'artifact:end') {
@@ -4485,8 +4498,30 @@ export function ProjectView({
               textBuffer.flush();
               textBuffer.cancel();
               unregisterTextBuffer();
-              if (runMayFinalize) {
-                setError(err.message);
+              // A stream failure the daemon has not adjudicated says nothing
+              // about the run. This client reloaded onto a run in FLIGHT, so the
+              // turn is usually still going: the reattached stream failed when
+              // it OPENED. The pane says so in neutral words rather than
+              // painting a failure it would have to take back, and the run's own
+              // terminal answers it through the follow scheduled at the end of
+              // this handler.
+              //
+              // The generic disconnect is the one unadjudicated class this path
+              // keeps out, and it is kept out HERE rather than in the class
+              // itself. Its recovery on this path is not the pane's to run: the
+              // `failed` row this handler writes is what makes the next
+              // `attachRecoverableRuns` pass see a spuriously-failed message and
+              // re-query the run, and that re-query is what upgrades the row to
+              // the daemon's terminal. Take the row away and the recovery loses
+              // its trigger. The live loop has no such machinery, which is why
+              // 1I.1 could move the class there; moving it here means replacing
+              // that recovery, not adding to it.
+              const unresolvedRunId =
+                isUnadjudicatedStreamFailure(err) && !genericDisconnect ? runId : undefined;
+              if (runMayFinalize && unresolvedRunId !== undefined) {
+                setRunCheck({ runId: unresolvedRunId, unreachable: false, message: err.message });
+              } else if (runMayFinalize) {
+                setPaneError(runId, err.message);
                 appendAssistantErrorEvent(message.id, err.message, errorCode, failure);
                 updateMessageById(
                   message.id,
@@ -4550,7 +4585,7 @@ export function ProjectView({
                     }
                     const producedArtifactToOpen = selectAutoOpenProducedArtifact(produced, autoOpenArtifactOptions);
                     if (producedArtifactToOpen) requestAgentWriteOpenFile(producedArtifactToOpen);
-                    if (latestRunStatus?.status === 'succeeded') setError(null);
+                    if (latestRunStatus?.status === 'succeeded') clearPaneErrorForRun(runId);
                     if (
                       shouldPublishRunFinishedEvent
                       && latestRunStatus?.status === 'succeeded'
@@ -4650,7 +4685,7 @@ export function ProjectView({
                       });
                     }
                     clearProjectTimeout(backoffTimer);
-                    setError(null);
+                    clearPaneErrorForRun(runId);
                     // If the resumed stream already replayed some content/events
                     // before disconnecting again, finalizing this row as
                     // succeeded would persist a truncated transcript. Clear the
@@ -4700,7 +4735,7 @@ export function ProjectView({
                     genericDisconnectBackoffUntilRef.current.delete(runId);
                   } else {
                     clearProjectTimeout(backoffTimer);
-                    if (latestRunStatus.status === 'canceled') setError(null);
+                    if (latestRunStatus.status === 'canceled') clearPaneErrorForRun(runId);
                     updateMessageById(
                       message.id,
                       (prev) => ({
@@ -4734,6 +4769,14 @@ export function ProjectView({
               if (!skipFinalPersistNow) persistNow({ telemetryFinalized: true });
               if (retryFullReplayAfterCleanup) setRecoveryTick((t) => t + 1);
               scheduleConversationMessageRefresh(reattachConversationId);
+              // The stream reported no verdict, so nothing here knows how the
+              // run ends. Follow the run itself until it says.
+              if (unresolvedRunId !== undefined) {
+                scheduleInferredRunFailureRecheck(reattachConversationId, runId, {
+                  unresolved: true,
+                  message: err.message,
+                });
+              }
             },
           },
           onRunStatus: (runStatus) => {
@@ -4754,7 +4797,7 @@ export function ProjectView({
               }),
               true,
             );
-            if (retractsFailure) setError(null);
+            if (retractsFailure) clearPaneErrorForRun(runId);
             latestReattachRunStatus = runStatus;
             if (runStatus === 'canceled') {
               textBuffer.cancel();
@@ -4786,7 +4829,7 @@ export function ProjectView({
               !supersededRunsRef.current.has(controller);
             if ((err as Error).name !== 'AbortError' && runMayFinalize) {
               const msg = err instanceof Error ? err.message : String(err);
-              setError(msg);
+              setPaneError(runId, msg);
               appendAssistantErrorEvent(message.id, msg);
               updateMessageById(
                 message.id,
@@ -4833,12 +4876,15 @@ export function ProjectView({
     clearStreamingMarker,
     clearActiveRunRefs,
     clearCurrentRunStreamingMarker,
+    clearPaneErrorForRun,
     clearProjectTimeout,
     refreshProjectFiles,
     readProjectHtml,
     persistArtifact,
     requestAgentWriteOpenFile,
     onProjectsRefresh,
+    scheduleInferredRunFailureRecheck,
+    setPaneError,
     scheduleProjectTimeout,
     scheduleConversationMessageRefresh,
     recoveryTick,
@@ -5988,10 +6034,7 @@ export function ProjectView({
           if (runMayFinalize && unresolvedRunId !== undefined) {
             setRunCheck({ runId: unresolvedRunId, unreachable: false, message: err.message });
           } else if (runMayFinalize) {
-            runErrorCarrierRef.current = currentRunId
-              ? { runId: currentRunId, message: err.message }
-              : null;
-            setError(err.message);
+            setPaneError(currentRunId || null, err.message);
             appendAssistantErrorEvent(assistantId, err.message, errorCode, failure);
             updateAssistant((prev) => ({
               ...prev,
@@ -6515,6 +6558,7 @@ export function ProjectView({
       scheduleConversationMessageRefresh,
       scheduleInferredRunFailureRecheck,
       scheduleProjectTimeout,
+      setPaneError,
       onProjectsRefresh,
       onProjectChange,
       onOpenSettings,
@@ -7539,11 +7583,11 @@ export function ProjectView({
           { replace: true },
         );
         onProjectsRefresh();
-        setError(null);
+        setPaneError(null, null);
       } catch (err) {
         const message = err instanceof Error ? err.message : t('chat.forkConversationFailed');
         setConversationLoadError(message);
-        setError(message);
+        setPaneError(null, message);
       } finally {
         setForkingMessageId(null);
       }
@@ -7558,6 +7602,7 @@ export function ProjectView({
       onProjectsRefresh,
       openTabsState.active,
       project.id,
+      setPaneError,
       t,
     ],
   );

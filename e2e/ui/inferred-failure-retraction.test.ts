@@ -1,3 +1,10 @@
+import {
+  CHECKING_NOTICE_TEXT,
+  runCheckingNotice,
+  runErrorCard,
+  runFailureCardSightings,
+  watchRunFailureCard,
+} from '@/playwright/chat';
 import { createFakeAgentRuntimes } from '@/playwright/fake-agents';
 import type { FakeAgentId } from '@/playwright/fake-agents';
 import { APP_LOADING_TEXT } from '@/playwright/loading';
@@ -31,11 +38,6 @@ const STATUS_OUTAGE_WINDOW_MS = 7_500;
 // (`e2e/lib/fake-agents.ts`, REPORTED_AGENT_FAILURE_OUTPUT.sleep). Used by the
 // verdict cases: a run the daemon adjudicated keeps the failure card.
 const FAILING_RUN_PROMPT = 'Return the reported sleep-drop failure';
-// Part of the neutral notice a pane shows while a stream failure carries no run
-// verdict, in the shipped English copy (`chat.runChecking.message`).
-const CHECKING_NOTICE_TEXT = 'Checking its result';
-// Where the in-page failure-card watcher below records its sightings.
-const CARD_SIGHTINGS_KEY = 'od-e2e-failure-card-sightings';
 
 let fakeRuntimes: Awaited<ReturnType<typeof createFakeAgentRuntimes>>;
 
@@ -128,7 +130,7 @@ test('[P0] a non-ok live event stream leaves no failure alert once the run reach
   const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
-  const failureAlert = runRecoveryCard(page);
+  const failureAlert = runErrorCard(page);
   const checkingNotice = runCheckingNotice(page);
   await expect(checkingNotice, 'the non-ok live event stream must paint the neutral checking notice')
     .toBeVisible({ timeout: 120_000 });
@@ -193,7 +195,7 @@ test('[P0] a non-ok Side Chat event stream leaves no failure alert once the run 
   const runResponse = await sendPrompt(page, await composerInside(page, sideChat), RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
-  const failureAlert = runRecoveryCard(sideChat);
+  const failureAlert = runErrorCard(sideChat);
   const checkingNotice = runCheckingNotice(sideChat);
   await expect(checkingNotice, 'the non-ok Side Chat event stream must paint the neutral checking notice')
     .toBeVisible({ timeout: 120_000 });
@@ -260,7 +262,7 @@ test('[P0] a live inferred failure is retracted after three status probes answer
   const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
-  const failureAlert = runRecoveryCard(page);
+  const failureAlert = runErrorCard(page);
   const checkingNotice = runCheckingNotice(page);
   await expect(checkingNotice, 'the non-ok live event stream must paint the neutral checking notice')
     .toBeVisible({ timeout: 120_000 });
@@ -315,7 +317,7 @@ test('[P0] a live inferred failure is retracted when the first message read afte
   const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
-  const failureAlert = runRecoveryCard(page);
+  const failureAlert = runErrorCard(page);
   const checkingNotice = runCheckingNotice(page);
   await expect(checkingNotice, 'the non-ok live event stream must paint the neutral checking notice')
     .toBeVisible({ timeout: 120_000 });
@@ -364,7 +366,7 @@ test('[P0] a Side Chat inferred failure is retracted after three status probes a
   const runResponse = await sendPrompt(page, await composerInside(page, sideChat), RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
-  const failureAlert = runRecoveryCard(sideChat);
+  const failureAlert = runErrorCard(sideChat);
   const checkingNotice = runCheckingNotice(sideChat);
   await expect(checkingNotice, 'the non-ok Side Chat event stream must paint the neutral checking notice')
     .toBeVisible({ timeout: 120_000 });
@@ -423,7 +425,7 @@ test('[P0] a Side Chat inferred failure is retracted when the first message read
   const runResponse = await sendPrompt(page, await composerInside(page, sideChat), RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
-  const failureAlert = runRecoveryCard(sideChat);
+  const failureAlert = runErrorCard(sideChat);
   const checkingNotice = runCheckingNotice(sideChat);
   await expect(checkingNotice, 'the non-ok Side Chat event stream must paint the neutral checking notice')
     .toBeVisible({ timeout: 120_000 });
@@ -482,7 +484,7 @@ test('[P0] a live stream failure with no run verdict never paints the failure ca
   const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
-  const failureAlert = runRecoveryCard(page);
+  const failureAlert = runErrorCard(page);
   const checkingNotice = runCheckingNotice(page);
 
   // Whatever the pane paints for an unresolved stream failure, it paints here:
@@ -553,7 +555,7 @@ test('[P0] a Side Chat stream failure with no run verdict never paints the failu
   const runResponse = await sendPrompt(page, await composerInside(page, sideChat), RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
-  const failureAlert = runRecoveryCard(sideChat);
+  const failureAlert = runErrorCard(sideChat);
   const checkingNotice = runCheckingNotice(sideChat);
 
   await expect
@@ -617,7 +619,7 @@ test('[P0] a stream failure whose run then really fails adopts the daemon verdic
   // reading the daemon's own stored row after the run reported `failed`.
   await sendPrompt(page, page.getByTestId('chat-composer').first(), FAILING_RUN_PROMPT);
 
-  const failureAlert = runRecoveryCard(page);
+  const failureAlert = runErrorCard(page);
   await expect(failureAlert, 'the run own failed verdict must still reach the user')
     .toBeVisible({ timeout: 120_000 });
   await expect(
@@ -634,7 +636,7 @@ test('[P1] a run the daemon reported failed still shows the failure card with it
 
   await sendPrompt(page, page.getByTestId('chat-composer').first(), FAILING_RUN_PROMPT);
 
-  const failureAlert = runRecoveryCard(page);
+  const failureAlert = runErrorCard(page);
   await expect(failureAlert, 'a run the daemon adjudicated must show the failure card')
     .toBeVisible({ timeout: 120_000 });
   await expect(
@@ -658,7 +660,7 @@ test('[P1] a Side Chat run the daemon reported failed still shows the failure ca
 
   await sendPrompt(page, await composerInside(page, sideChat), FAILING_RUN_PROMPT);
 
-  const failureAlert = runRecoveryCard(sideChat);
+  const failureAlert = runErrorCard(sideChat);
   await expect(failureAlert, 'a run the daemon adjudicated must show the failure card')
     .toBeVisible({ timeout: 120_000 });
   await expect(
@@ -827,52 +829,6 @@ function refuseFirstConversationRead(page: Page, isArmed: () => boolean): Conver
       return refused;
     },
   };
-}
-
-function runRecoveryCard(scope: Page | Locator): Locator {
-  return scope.locator('[data-user-action-card="run-recovery"]').last();
-}
-
-/** The neutral notice a pane shows while a stream failure carries no verdict. */
-function runCheckingNotice(scope: Page | Locator): Locator {
-  return scope.locator('[data-user-action-card="run-checking"]').last();
-}
-
-/**
- * Record EVERY appearance of the failure card in this document, from the moment
- * this is installed until it is read.
- *
- * A single `toHaveCount(0)` at the end of a run cannot see a card that was
- * painted and then retracted, which is exactly the shape W1G.1 and W1H.1 shipped
- * and this track forbids. The watcher lives in the page — a MutationObserver
- * plus a 50 ms sweep — so it observes the DOM continuously rather than whenever
- * the test process happens to look.
- *
- * Install it AFTER the last navigation: a document load drops it.
- */
-async function watchRunFailureCard(page: Page): Promise<void> {
-  await page.evaluate((key) => {
-    const scope = window as unknown as Record<string, unknown>;
-    if (scope[key]) return;
-    const sightings: string[] = [];
-    scope[key] = sightings;
-    const scan = () => {
-      document.querySelectorAll('[data-user-action-card="run-recovery"]').forEach((node) => {
-        sightings.push((node.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 160));
-      });
-    };
-    scan();
-    new MutationObserver(scan).observe(document.body, { childList: true, subtree: true });
-    window.setInterval(scan, 50);
-  }, CARD_SIGHTINGS_KEY);
-}
-
-/** The distinct failure-card texts the watcher has seen, at most five of them. */
-async function runFailureCardSightings(page: Page): Promise<string[]> {
-  return page.evaluate((key) => {
-    const seen = (window as unknown as Record<string, string[] | undefined>)[key] ?? [];
-    return [...new Set(seen)].slice(0, 5);
-  }, CARD_SIGHTINGS_KEY);
 }
 
 /**

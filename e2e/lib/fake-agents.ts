@@ -195,6 +195,14 @@ async function emitRun(promptText) {
     emitSocketDropFailure();
     return;
   }
+  // The reported sleep-drop failure, held long enough for a spec to reload onto
+  // the run while it is still in flight. Matched before the immediate form
+  // below so the shared wording does not claim it first.
+  if (promptText.includes('Return the slow reload reported sleep-drop failure')) {
+    await new Promise((resolve) => setTimeout(resolve, 15_000));
+    emitReportedFailure('sleep');
+    return;
+  }
   if (promptText.includes('Return the reported sleep-drop failure')) {
     emitReportedFailure('sleep');
     return;
