@@ -31,11 +31,18 @@ const RUN_PROMPT = 'Create a delayed deterministic smoke artifact';
 // retracted the failure.
 const RUN_ANSWER = 'I recovered the delayed reasoning path';
 // W1L.1: the prompt whose FIRST ATTEMPT really fails on the daemon. The fake
-// runtime exits 0 with no output, so the daemon's empty-output guard emits its
-// own retryable `error` frame and `decideSafeRunRetry` restarts the SAME run
-// (`apps/daemon/src/run-retry-policy.ts`); the second attempt answers with
-// `RUN_ANSWER` after 1.2s, so the run reaches `succeeded` on its own. This is
-// what lets a spec observe a real daemon error frame on a run that succeeds.
+// runtime reports the shared upstream 503 (`emitServiceFailure(503)` in
+// `e2e/lib/fake-agents.ts`), which the daemon classifies
+// `upstream_unavailable`/`upstream_5xx` at `first_token_wait`, emits its OWN
+// retryable `error` frame for, and retries as the SAME run
+// (`decideSafeRunRetry`, `apps/daemon/src/run-retry-policy.ts`); the second
+// attempt answers with `RUN_ANSWER` after 1.2s, so the run reaches `succeeded`
+// on its own. That is what lets this spec observe a real daemon error frame on a
+// run that succeeds. An empty first attempt would be the more literal reading of
+// the prompt, but the daemon's empty-output message names quota
+// ("…checking quota, or switching models"), so `classifyRunFailure` calls it
+// `rate_limit`/`hard_quota` and SUPPRESSES the retry — see the proof file's
+// adjacent issue B. Do not "simplify" this fixture to that path.
 const RETRY_RUN_PROMPT = 'Spend one empty attempt then deliver the delayed artifact';
 // W1J.4: what the user types while the run is unresolved. A draft is required
 // to see the pause at all — the Send button is also disabled on an empty
@@ -835,6 +842,14 @@ test('[P0] a provisional error frame paired with a readable failed status keeps 
  * a fixture that fulfils a body the daemon cannot write. The payload shape is
  * the daemon's own (`{ message, error: { code, … } }`), so a frame invented at
  * the flat `{ code, message }` shape fails here rather than passing quietly.
+ *
+ * These are the bytes the proxy relayed, not the bytes the browser parsed — but
+ * the browser-side oracle covers that half already. `consumeDaemonRun` only
+ * enters the provisional branch when it CACHED an error frame; a frame lost on
+ * the wire would leave `pendingStructuredError` null, so the reconnect would pass
+ * through the (single-cut) proxy, read the run's own `end`, and neither the
+ * checking notice nor a failure card would ever appear — which is exactly what
+ * the poll below waits for.
  */
 function expectDaemonErrorFrameWasCut(cut: RunStreamTransportCut): void {
   expect(cut.cuts, 'the daemon error frame must have reached the client').toBeGreaterThanOrEqual(1);
