@@ -215,7 +215,13 @@ describe('preview routes', () => {
     });
     expect(created.status).toBe(200);
     const session = (await created.json()) as { id: string; status: string; url: string };
-    expect(session).toMatchObject({ status: 'ready', url: `http://127.0.0.1:${port}/` });
+    // The daemon serves the preview from its own origin (decision D-14), so
+    // the announced URL is a path on this caller's front, never the child's
+    // own port.
+    expect(session).toMatchObject({
+      status: 'ready',
+      url: `${base}/api/projects/p1/previews/${session.id}/proxy/`,
+    });
 
     const listed = (await (await fetch(`${base}/api/projects/p1/previews`)).json()) as { previews: unknown[] };
     expect(listed.previews).toHaveLength(1);

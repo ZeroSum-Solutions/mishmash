@@ -145,6 +145,20 @@ export function followRunTerminalOnMessage(
   return repaired;
 }
 
+/** The assistant row a client message write lands on, as the hold reads it. */
+interface StoredTerminalRow {
+  runStatus: string | null;
+  endedAt: number | null;
+  runId: string | null;
+  startedAt: number | null;
+  content: string | null;
+  eventsJson: string | null;
+  resultDeliveryState: string | null;
+  preTurnFileNamesJson: string | null;
+  producedFilesJson: string | null;
+  traceObjectFilesJson: string | null;
+}
+
 /**
  * A message write may move an assistant row's run status TOWARDS its run's
  * terminal event, never away from it.
@@ -176,12 +190,16 @@ export function followRunTerminalOnMessage(
  * client's final save is which run each one names, not which clock reads later
  * — see `heldTerminalEndedAt` and `identifyWriteRun` below.
  *
- * Two writes are deliberately let through. A write that already agrees on both
- * status and timestamp has nothing to correct. And a write naming a DIFFERENT
- * run is a new turn on that row, not a stale copy of the finished one, so it
- * owns the row; only a write for the same run, or one that names no run at
- * all, is held. It never invents a status either — a row with no non-failed
- * terminal status stored is written exactly as sent.
+ * One write is deliberately let through: one that already agrees on the status,
+ * the timestamp and the row's delivery record has nothing to correct. A write
+ * naming a DIFFERENT run is not one of them. Run ownership is the daemon's own
+ * act — `pinAssistantMessageOnRunCreate` (`runtimes/chat-run-messages.ts`)
+ * rewrites `run_id` when a run takes the row, before that run id is ever handed
+ * back to the client that asked for it — so a write naming another run is a
+ * copy of an EARLIER turn on this row, flushed after a retry took it over. It
+ * is held on the same terms as any other stale copy, `run_id` included; see
+ * `heldTerminalRunId`. The hold never invents a status either — a row with no
+ * non-failed terminal status stored is written exactly as sent.
  *
  * The ANSWER is held on the same terms as the status. A write that had to be
  * held is by definition a copy of the turn made before it finished, so the
@@ -194,6 +212,11 @@ export function followRunTerminalOnMessage(
  * to it stay. This never blocks a real late delivery: a write carrying content
  * keeps its own content, and stored events replace nothing when there are
  * none.
+ *
+ * The DELIVERY record — the verdict and the file lists through which the chat
+ * reads whether a succeeded turn produced anything — is held on the same terms
+ * again, for the same reason one step further out: `upsertMessage` rewrites
+ * those columns unconditionally too. See `heldTerminalDelivery`.
  *
  * Failing open is deliberate: a read error here must not reject the user's
  * message write, so it warns and returns the write unchanged, which is exactly
@@ -208,27 +231,33 @@ export function holdTerminalRunStatusOnMessageWrite(
   try {
     const stored = db.prepare(
       `SELECT run_status AS runStatus, ended_at AS endedAt, run_id AS runId,
-              started_at AS startedAt, content AS content, events_json AS eventsJson
+              started_at AS startedAt, content AS content, events_json AS eventsJson,
+              result_delivery_state AS resultDeliveryState,
+              pre_turn_file_names_json AS preTurnFileNamesJson,
+              produced_files_json AS producedFilesJson,
+              trace_object_files_json AS traceObjectFilesJson
          FROM messages
         WHERE id = ? AND role = 'assistant'`,
-    ).get(id) as {
-      runStatus: string | null;
-      endedAt: number | null;
-      runId: string | null;
-      startedAt: number | null;
-      content: string | null;
-      eventsJson: string | null;
-    } | undefined;
+    ).get(id) as StoredTerminalRow | undefined;
     const held = stored?.runStatus;
     if (!held || held === 'failed' || !TERMINAL_STATUSES.has(held)) return message;
-    if (
-      typeof message.runId === 'string'
-      && typeof stored?.runId === 'string'
-      && message.runId !== stored.runId
-    ) return message;
+    const identity = identifyWriteRun(stored, message);
+    const delivery = heldTerminalDelivery(stored, message);
     const endedAt = heldTerminalEndedAt(stored, message, held);
-    if (message.runStatus === held && message.endedAt === endedAt) return message;
-    return { ...message, ...heldTerminalBody(stored, message), runStatus: held, endedAt };
+    if (
+      identity !== 'other-run'
+      && message.runStatus === held
+      && message.endedAt === endedAt
+      && Object.keys(delivery).length === 0
+    ) return message;
+    return {
+      ...message,
+      ...heldTerminalBody(stored, message),
+      ...delivery,
+      ...heldTerminalRunId(stored, identity),
+      runStatus: held,
+      endedAt,
+    };
   } catch (err) {
     console.warn('[runs] terminal run status hold failed', err);
     return message;
@@ -315,6 +344,106 @@ function heldTerminalEndedAt(
   return storedEndedAt ?? incoming;
 }
 
+/**
+ * The `run_id` a held write leaves on the row.
+ *
+ * Only a write naming ANOTHER run is corrected here, and it is corrected back
+ * to the run the row already belongs to. Run ownership is established by
+ * `pinAssistantMessageOnRunCreate` (`runtimes/chat-run-messages.ts`), which
+ * rewrites `run_id` as each run takes the row and runs before the daemon hands
+ * that run id back to the client that asked for it. A write naming a different
+ * run is therefore a copy of an earlier turn, and letting `upsertMessage`
+ * re-stamp `run_id` from it would do more than mislabel the row: the next write
+ * from the run that actually owns it would then read as the impostor.
+ */
+function heldTerminalRunId(
+  stored: StoredTerminalRow | undefined,
+  identity: RunIdentityVerdict,
+): Record<string, unknown> {
+  return identity === 'other-run' ? { runId: stored?.runId ?? null } : {};
+}
+
+/** The delivery verdicts that make a succeeded turn read as a terminal failure
+ *  (`isRetryableAssistantTerminalFailure`, `apps/web/src/runtime/
+ *  design-delivery.ts`). */
+const DELIVERY_FAILURE_STATES = new Set(['no_result', 'delivery_failed']);
+
+/** The row's delivery file lists, each paired with the stored column
+ *  `upsertMessage` writes it to. */
+const DELIVERY_LIST_FIELDS = [
+  ['preTurnFileNames', 'preTurnFileNamesJson'],
+  ['producedFiles', 'producedFilesJson'],
+  ['traceObjectFiles', 'traceObjectFilesJson'],
+] as const;
+
+/**
+ * The delivery record a held row keeps when a delayed write would take it away:
+ * the verdict the daemon reached and the file lists recorded beside it.
+ *
+ * `upsertMessage` (`db.ts`) rewrites `result_delivery_state`,
+ * `pre_turn_file_names_json`, `produced_files_json` and
+ * `trace_object_files_json` from the write it is handed, storing NULL for every
+ * one the write omits. The writes this hold sees are copies of a turn that has
+ * already reached a non-failed terminal, so the delivery picture they carry is
+ * whatever their writer had — often none at all, because that writer gave up
+ * before the daemon classified the turn
+ * (`runtimes/run-delivery-classification.ts` runs one settle window after the
+ * run's terminal event, precisely so an unattended turn still gets a verdict).
+ *
+ * Two things must hold, and they are the delivery half of the status rule:
+ *
+ *   - A field the write does not carry is not a field it is clearing. An
+ *     omitted verdict or file list keeps the stored one.
+ *   - A recorded `delivered` is not taken back by a later write claiming the
+ *     turn produced nothing. `no_result` and `delivery_failed` are exactly what
+ *     the chat reads to show a succeeded turn as a retryable terminal failure,
+ *     so honouring that claim over the daemon's own evidence puts the failure
+ *     surface back in front of a user whose turn worked.
+ *
+ * The hold is one-directional on purpose, so two writes still land that a
+ * symmetrical rule would block: one that found the delivery the daemon could
+ * not, upgrading a stored failure verdict to `delivered`, and one that swaps a
+ * stored failure verdict for the other failure verdict — a swap the user cannot
+ * see, since both read as the same retryable failure and the wording the user
+ * reads travels in the write's own status event.
+ */
+function heldTerminalDelivery(
+  stored: StoredTerminalRow | undefined,
+  message: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!stored) return {};
+  const held: Record<string, unknown> = {};
+  const storedState = stored.resultDeliveryState;
+  const writeState = message.resultDeliveryState;
+  const verdictHeld = typeof storedState === 'string'
+    && (typeof writeState !== 'string'
+      || (storedState === 'delivered' && DELIVERY_FAILURE_STATES.has(writeState)));
+  if (verdictHeld) held.resultDeliveryState = storedState;
+  for (const [field, column] of DELIVERY_LIST_FIELDS) {
+    if (writeSpeaksForDeliveryList(message[field], verdictHeld)) continue;
+    const list = storedJsonArray(stored[column]);
+    if (list) held[field] = list;
+  }
+  return held;
+}
+
+/**
+ * Whether a write is speaking for a delivery file list of its own.
+ *
+ * An absent list is not a claim, and never clears the stored one. An EMPTY list
+ * is a claim — "I looked and found nothing" — and it counts on exactly the
+ * terms the write's verdict does. The chat client always sends a list beside
+ * the verdict it computed (`producedFiles: computeProducedFiles(...) ?? []`,
+ * `apps/web/src/components/ProjectView.tsx`), so the empty list is the shape a
+ * dropped client's stale copy really carries; letting it through while holding
+ * the verdict it came with would keep the row's `delivered` and empty out the
+ * evidence for it in the same write.
+ */
+function writeSpeaksForDeliveryList(value: unknown, verdictHeld: boolean): boolean {
+  if (value === undefined || value === null) return false;
+  return !verdictHeld || !(Array.isArray(value) && value.length === 0);
+}
+
 function isBlankText(value: unknown): boolean {
   return typeof value !== 'string' || value.trim() === '';
 }
@@ -337,10 +466,22 @@ function heldTerminalBody(
 }
 
 function storedEvents(eventsJson: string | null): unknown[] | null {
-  if (typeof eventsJson !== 'string' || !eventsJson) return null;
+  const events = storedJsonArray(eventsJson);
+  return events && events.length > 0 ? events : null;
+}
+
+/**
+ * A stored JSON list column, or null when it is SQL NULL, empty text, or not a
+ * readable list. An empty list is a real answer and is returned as one: the
+ * chat reads a missing file list and an empty one differently
+ * (`designDeliveryVerificationPending`, `apps/web/src/runtime/
+ * design-delivery.ts`).
+ */
+function storedJsonArray(json: string | null): unknown[] | null {
+  if (typeof json !== 'string' || !json) return null;
   try {
-    const parsed = JSON.parse(eventsJson) as unknown;
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+    const parsed = JSON.parse(json) as unknown;
+    return Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;
   }

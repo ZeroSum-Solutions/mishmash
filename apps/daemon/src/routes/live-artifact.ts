@@ -65,6 +65,17 @@ export function registerLiveArtifactRoutes(app: Express, ctx: RegisterLiveArtifa
       setLiveArtifactPreviewHeaders(res);
       // This route's URL names no project file, so the preview document has to
       // carry the resolution root itself -- see projectRawAssetBaseHref.
+      //
+      // No od:preview-content-size producer is injected here, and none can be:
+      // setLiveArtifactPreviewHeaders serves this response under
+      // "script-src 'none'" and a CSP sandbox without allow-scripts, so any
+      // script in the body is refused before it runs. The viewer's watchdog
+      // therefore settles this frame on its outer load event
+      // (LiveArtifactViewer in apps/web/src/components/FileViewer.tsx), which is
+      // weaker evidence, rather than waiting for a report that cannot arrive.
+      // The pairing is pinned in apps/daemon/tests/preview-paint-report-bridge.test.ts:
+      // relaxing the CSP to admit a producer is what would let the watchdog ask
+      // for one.
       res.status(200).send(
         withProjectAssetBaseHref(record.html, projectRawAssetBaseHref(projectId, '')),
       );

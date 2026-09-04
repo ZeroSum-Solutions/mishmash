@@ -19,7 +19,12 @@ import { resolveDaemonUrl, DaemonUrlDiscoveryError } from './daemon-url.js';
 import { formatRunFailureSummary } from './run-failure-summary.js';
 import { requestJsonIpc } from '@open-design/sidecar';
 import { SIDECAR_ENV, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
-import { EXPORT_FORMATS, EXPORT_IMAGE_FORMATS, nativeSessionRecoveryNotice } from '@open-design/contracts';
+import {
+  EXPORT_FORMATS,
+  EXPORT_IMAGE_FORMATS,
+  PROJECT_COVER_PLACEHOLDER_HEADER,
+  nativeSessionRecoveryNotice,
+} from '@open-design/contracts';
 import { buildExportCliRequestBody, buildExportCliResultEnvelope, resolveExportCliDeckMode } from './export-cli-request.js';
 import { exportRoutePath } from './export-cli-routing.js';
 import {
@@ -100,6 +105,11 @@ const MCP_REPAIR_BOOLEAN_FLAGS = new Set([
   ...MCP_BOOLEAN_FLAGS,
   'yes',
 ]);
+// Exit code every `od mcp repair` refusal keeps, with or without `--json`.
+// Declared beside the MCP flag sets for the same TDZ reason: the subcommand
+// dispatch runs during module evaluation, so a const declared next to the
+// subcommand itself is not yet initialized when the refusal path reads it.
+const MCP_REPAIR_REFUSAL_EXIT = 2;
 
 // Hoisted next to MCP_*_FLAGS for the same TDZ reason as the MEDIA flags
 // above: `od mcp install <agent>` dispatches through SUBCOMMAND_MAP during
@@ -496,7 +506,9 @@ Subcommands:
   generate   POST .../cover/generate -- synchronously (re)render the
              project's cover, reusing the stored one when its content
              hash is unchanged.
-  show       GET .../cover -- fetch the currently stored cover bytes.
+  show       GET .../cover -- fetch the currently stored cover bytes, or
+             the neutral placeholder (reported as placeholder=true) when
+             the daemon advertises a cover it cannot read right now.
 
 Options:
   --project <id>   Project id (required).
@@ -567,8 +579,18 @@ async function runCover(args) {
     if (!resp.ok) return structuredHttpFailure(resp);
     const buf = Buffer.from(await resp.arrayBuffer());
     const contentType = resp.headers.get('content-type') ?? 'application/octet-stream';
+    // The route serves a placeholder rather than a 404 for a cover the daemon
+    // advertised but cannot read right now (routes/covers.ts: servedCoverImage).
+    // Report that instead of presenting the placeholder as the stored cover.
+    const placeholder = resp.headers.get(PROJECT_COVER_PLACEHOLDER_HEADER) === '1';
     if (flags.out) writeFileSync(flags.out, buf);
-    if (flags.json) return writeJson({ ok: true, projectId, contentType, bytes: buf.length, savedTo: flags.out ?? null });
+    if (flags.json) return writeJson({ ok: true, projectId, contentType, bytes: buf.length, placeholder, savedTo: flags.out ?? null });
+    if (placeholder) {
+      console.log(
+        `Cover for ${projectId}: placeholder -- the stored cover bytes could not be read (${contentType}, ${buf.length} bytes)${flags.out ? ` (saved to ${flags.out})` : ''}`,
+      );
+      return;
+    }
     console.log(`Cover for ${projectId}: ${contentType}, ${buf.length} bytes${flags.out ? ` (saved to ${flags.out})` : ''}`);
     return;
   }
@@ -1764,11 +1786,11 @@ port verifiably answers HTTP — never report a preview URL as live any other
 way. \`stop\` succeeds only when the whole process group is confirmed gone.
 Output is JSON on stdout.
 
-\`start\` and \`list\` announce each preview on the host this command reached
-the daemon on, so a URL taken over a tailnet names the tailnet host instead of
-a loopback address the caller cannot reach (issue #158). \`open\` launches the
-preview in Google Chrome on the DAEMON's machine, for a default browser that
-refuses loopback.
+\`start\` and \`list\` announce each preview as a path on the Open Design front
+this command reached the daemon on. The daemon serves the preview itself, so
+that URL works for anyone who can reach Open Design rather than only on the
+daemon's own machine (issue #158). \`open\` launches the preview in Google
+Chrome on the DAEMON's machine, for a default browser that refuses loopback.
 
 Flags:
   --project     Required project id.
@@ -2702,6 +2724,25 @@ server reported here as failed does not mean a run failed.
 // all. `--yes` is the caller saying the word the endpoint requires.
 // ---------------------------------------------------------------------------
 
+/**
+ * INVARIANT: `od mcp repair` never leaves by a path that ignores `--json`.
+ *
+ * A refusal is the path a script most needs to branch on, so the machine
+ * readable contract the flag states has to hold there too: with `--json` the
+ * caller gets the same `{ error: { code, message, data } }` envelope on stderr
+ * that this command's daemon failures already emit, keyed by a stable `code`
+ * that mirrors the endpoint's own error codes. Without `--json` it gets the
+ * prose it always got. Either way the exit code stays 2 and nothing is
+ * removed, so a script that only reads the status is unaffected.
+ */
+function refuseMcpRepair(flags, { code, message, data, prose, stream = 'stderr' }) {
+  if (flags?.json) {
+    return exitWithStructuredError({ code, message, data, exit: MCP_REPAIR_REFUSAL_EXIT });
+  }
+  (stream === 'stdout' ? console.log : console.error)(prose ?? message);
+  process.exit(MCP_REPAIR_REFUSAL_EXIT);
+}
+
 async function runMcpRepair(args) {
   if (args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
     console.log(`Usage: od mcp repair <server-id> [--yes] [--json] [--daemon-url <url>]
@@ -2715,7 +2756,9 @@ Without --yes this prints the directory a repair would remove and exits 2
 without touching anything.
 
   --yes                Confirm the removal. Required; nothing is removed without it.
-  --json               Print the raw result for piping into jq.
+  --json               Print the raw result for piping into jq. A refusal or
+                       error is printed as {"error":{code,message,data}} on
+                       stderr instead, keeping the same exit code.
   --daemon-url <url>   Override the daemon HTTP base URL.`);
     process.exit(0);
   }
@@ -2731,8 +2774,11 @@ without touching anything.
   }
   const serverId = positionalArgs(args, MCP_STRING_FLAGS)[0];
   if (!serverId) {
-    console.error('Usage: od mcp repair <server-id> [--yes] [--json] [--daemon-url <url>]');
-    process.exit(2);
+    return refuseMcpRepair(flags, {
+      code:    'mcp-repair-server-id-required',
+      message: 'a server id is required',
+      prose:   'Usage: od mcp repair <server-id> [--yes] [--json] [--daemon-url <url>]',
+    });
   }
   const base = await cliDaemonBaseUrl(flags);
 
@@ -2752,20 +2798,32 @@ without touching anything.
   const servers = Array.isArray(health?.servers) ? health.servers : [];
   const server = servers.find((entry) => entry?.id === serverId);
   if (!server) {
-    console.error(`No MCP server configured with id ${serverId}.`);
-    process.exit(2);
+    return refuseMcpRepair(flags, {
+      code:    'mcp-server-not-found',
+      message: `No MCP server configured with id ${serverId}.`,
+      data:    { serverId },
+    });
   }
   if (!server.repair) {
-    console.error(
-      `${serverId} is ${server.state}; MishMash has no repair for that state.` +
-      (server.remedy ? `\n${server.remedy}` : ''),
-    );
-    process.exit(2);
+    return refuseMcpRepair(flags, {
+      code:    'mcp-repair-unavailable',
+      message: `${serverId} is ${server.state}; MishMash has no repair for that state.`,
+      data:    { serverId, state: server.state, ...(server.remedy ? { remedy: server.remedy } : {}) },
+      prose:
+        `${serverId} is ${server.state}; MishMash has no repair for that state.` +
+        (server.remedy ? `\n${server.remedy}` : ''),
+    });
   }
   if (!flags.yes) {
-    console.log(`Repairing ${serverId} removes ${server.repair.target}`);
-    console.log('Nothing has been removed. Re-run with --yes to confirm.');
-    process.exit(2);
+    return refuseMcpRepair(flags, {
+      code:    'mcp-repair-not-confirmed',
+      message: `Repairing ${serverId} removes ${server.repair.target}. Nothing has been removed. Re-run with --yes to confirm.`,
+      data:    { serverId, target: server.repair.target, kind: server.repair.kind },
+      prose:
+        `Repairing ${serverId} removes ${server.repair.target}\n` +
+        'Nothing has been removed. Re-run with --yes to confirm.',
+      stream:  'stdout',
+    });
   }
 
   let resp;
@@ -3047,8 +3105,10 @@ otherwise a minimal \`od mcp --daemon-url <url>\` command is used.`);
 // code + a JSON envelope on stderr. Code agents read these to decide
 // whether the failure is recoverable (re-grant capabilities, prompt
 // the user, retry with --grant-caps, etc.).
-function exitWithStructuredError({ code, message, data }) {
-  const exit = RECOVERABLE_EXIT_CODES[code] ?? 1;
+// `exit` overrides the table for a code whose command already owns its exit
+// status (`od mcp repair` refusals keep 2); without it the table decides.
+function exitWithStructuredError({ code, message, data, exit: exitOverride }) {
+  const exit = exitOverride ?? RECOVERABLE_EXIT_CODES[code] ?? 1;
   const envelope = { error: { code, message, data: data ?? {} } };
   process.stderr.write(JSON.stringify(envelope) + '\n');
   process.exit(exit);

@@ -28,7 +28,7 @@ import type {
   McpServerRepair,
 } from '@open-design/contracts';
 
-import { createFilesystemWriteGateway } from './filesystem/write-gateway.js';
+import type { createFilesystemWriteGateway } from './filesystem/write-gateway.js';
 import type { McpServerConfig } from './mcp-config.js';
 import { redactSecrets } from './redact.js';
 
@@ -228,6 +228,12 @@ export async function verifyNpxCacheRepair(
  * relocated entry from letting the removal reach anything but the one
  * directory this repair named.
  *
+ * The gateway factory is an argument rather than an import because the daemon
+ * wraps that factory with its configured audit sink before handing it to a
+ * route (`createRouteFilesystemWriteGateway` in `server.ts`). Deleting another
+ * tool's directory is exactly the write that has to appear in that record, and
+ * a module-level import is a factory the daemon cannot configure.
+ *
  * The return value is a fact, not the absence of an exception. `rm` runs with
  * `force` so a target that vanished between the probe and this call does not
  * throw, which means the call alone cannot say whether anything went. Present
@@ -235,10 +241,13 @@ export async function verifyNpxCacheRepair(
  */
 export async function applyMcpServerRepair(
   repair: McpServerRepair,
-  options: { runtimeDataRoot: string },
+  options: {
+    runtimeDataRoot: string;
+    createWriteGateway: typeof createFilesystemWriteGateway;
+  },
 ): Promise<boolean> {
   if (!(await verifyNpxCacheRepair(repair))) return false;
-  const gateway = createFilesystemWriteGateway({ runtimeDataRoot: options.runtimeDataRoot });
+  const gateway = options.createWriteGateway({ runtimeDataRoot: options.runtimeDataRoot });
   const capability = await gateway.externalTool(path.dirname(repair.target));
   await gateway.rm(capability, repair.target, { recursive: true, force: true });
   return !(await exists(repair.target));

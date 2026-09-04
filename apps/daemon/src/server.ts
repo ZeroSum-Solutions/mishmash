@@ -414,6 +414,8 @@ import { reportRunCompletedFromDaemon } from './langfuse-bridge.js';
 import { followRunTerminalOnMessage, reconcileDurableRunTerminals } from './runtimes/run-terminal-reconciliation.js';
 import {
   classifyUnattendedRunDelivery,
+  replayUnattendedDeliveryClassifications,
+  type UnattendedDeliveryDeps,
   type UnattendedDeliveryRun,
 } from './runtimes/run-delivery-classification.js';
 import { buildPromptStackTelemetry } from './prompt-telemetry.js';
@@ -669,6 +671,13 @@ import { registerTerminalRoutes } from './routes/terminal.js';
 import { createTerminalService } from './terminals.js';
 import { confinePreviewCwd, createPreviewService } from './previews.js';
 import { registerPreviewRoutes } from './routes/preview.js';
+import {
+  PREVIEW_PROXY_MOUNT,
+  createPreviewProxyUpgradeHandler,
+  createPreviewRootAssetFallback,
+  isAuthorizedPreviewProxyRequest,
+  isPreviewProxyOriginEscape,
+} from './preview-proxy.js';
 import { registerSocialShareRoutes } from './routes/social-share.js';
 import { registerInterviewRoutes } from './routes/interviews.js';
 import { registerOpenDesignPublicMetadataRoutes } from './routes/open-design-public-metadata.js';
@@ -735,7 +744,7 @@ import {
   seedLibraryExtensionOrigins,
 } from './library-tokens.js';
 import { listLibraryTokenOrigins } from './library-store.js';
-import { apiTokenFromEnv, isApiAuthDisabled, isApiTokenMiddlewareEnabled, isMatchingApiToken } from './api-token-auth.js';
+import { API_TOKEN_REQUIRED_ERROR, apiTokenFromEnv, isApiAuthDisabled, isApiTokenMiddlewareEnabled, isMatchingApiToken } from './api-token-auth.js';
 import { createOpenDesignPublicMetadataService } from './services/open-design-public-metadata.js';
 import { createWhatsNewService } from './services/whats-new.js';
 import { execCommandViaLoginShell } from './services/login-shell.js';
@@ -2206,6 +2215,27 @@ export async function startServer({
   // registered before the global parser so it claims the body first (same
   // pattern as the routes above).
   app.use('/api/routing/decision/preview', express.json({ limit: '256kb' }));
+  // The preview proxy forwards a request body to the project's dev server, and
+  // a body the JSON parser has already consumed cannot be re-streamed. Capture
+  // it as bytes first (registered before the global parser, same pattern as the
+  // dedicated limits above); body-parser marks the request read, so the parser
+  // below leaves it alone. It also decodes a compressed body, which is why the
+  // proxy re-states `Content-Length` and drops `Content-Encoding` before
+  // forwarding (see `preview-proxy.ts`). The API's own 4mb limit applies, which
+  // bounds what a preview can be POSTed through the daemon.
+  // Behind the same membership rule the route applies, so an unauthorized
+  // peer is refused before the daemon buffers its body rather than after — and
+  // refused HERE, not passed on. The bearer middleware below answers such a
+  // request 401 anyway, but only after the global JSON parser has read it, and
+  // a request another parser has consumed cannot be re-streamed: the proxy
+  // would hand the child an empty body under the caller's own Content-Length.
+  // It answers with that middleware's own 401 body, `API_TOKEN_REQUIRED_ERROR`,
+  // which both read from `api-token-auth.ts` so the two cannot drift apart.
+  const previewProxyRawBody = express.raw({ type: () => true, limit: '4mb' });
+  app.use(PREVIEW_PROXY_MOUNT, (req, res, next) => {
+    if (isAuthorizedPreviewProxyRequest(req)) return previewProxyRawBody(req, res, next);
+    return res.status(401).json(API_TOKEN_REQUIRED_ERROR);
+  });
   app.use(express.json({ limit: '4mb' }));
   const projectPreviewScopes = createProjectPreviewScopeRegistry();
 
@@ -2249,9 +2279,7 @@ export async function startServer({
       const auth = req.get('authorization') ?? '';
       const match = /^Bearer\s+(\S+)\s*$/i.exec(auth);
       if (!match || !isMatchingApiToken(match[1], apiToken)) {
-        return res.status(401).json({
-          error: { code: 'API_TOKEN_REQUIRED', message: 'Authorization: Bearer <OD_API_TOKEN> required' },
-        });
+        return res.status(401).json(API_TOKEN_REQUIRED_ERROR);
       }
       return next();
     });
@@ -2325,8 +2353,33 @@ export async function startServer({
     /^\/projects\/[^/]+\/(?:raw|preview)\/|^\/codex-pets\/[^/]+\/spritesheet$|^\/asset-cache$/;
   const _POWERED_PREVIEW_SAFE_RE = /^\/projects\/[^/]+\/powered\/.+$/u;
 
+  // The containment claim a sandboxed preview subresource has to satisfy: the
+  // path names ONE skill's asset tree, ONE design-library entry's preview
+  // assets, or ONE project's raw-file tree — never an API route, never a
+  // prefix that covers more than the previewed document's own files. A path
+  // outside those three families has no scope and stays behind the gate.
   function sandboxedPreviewAssetScope(pathname: string): string | null {
     const apiRelativePath = pathname.startsWith('/api/') ? pathname.slice(4) : pathname;
+    // A previewed project HTML page resolves every relative `src`/`href`
+    // against its project's raw-file route, whichever way the page arrived —
+    // an agent wrote it to disk, or the daemon rendered it from a live
+    // artifact and stated the base in the document (see
+    // packages/contracts/src/runtime/project-asset-base.ts). Both preview
+    // iframes are sandboxed WITHOUT `allow-same-origin`, so those subresource
+    // requests are cross-site and were refused, leaving every relative image
+    // on a previewed page broken (B-10 / decision D-11, option B). The
+    // document itself is a navigation the gate already admits; this entry
+    // covers its assets. A trailing `/raw/` with no file below it is not a
+    // scope, so the exception can never be used to walk the tree, and the
+    // sibling `/powered/`, `/preview/` and JSON project routes are untouched.
+    const project = /^\/projects\/([^/]+)\/raw\/.+$/u.exec(apiRelativePath);
+    if (project?.[1]) {
+      try {
+        return `project:${decodeURIComponent(project[1])}`;
+      } catch {
+        return null;
+      }
+    }
     const skill = /^\/skills\/([^/]+)\/(?:assets|fonts)\//u.exec(apiRelativePath);
     if (skill?.[1]) {
       try {
@@ -2361,10 +2414,15 @@ export async function startServer({
   // A sandboxed document has an opaque origin. Its passive CSS/image/font
   // requests commonly omit Origin entirely, while CORS-enabled resources can
   // send the literal value "null". Permit only browser-classified resource
-  // destinations under the two contained preview prefixes. A scripted
+  // destinations under the contained preview scopes above. A scripted
   // fetch() has Sec-Fetch-Dest: empty and remains denied, so template code
   // cannot use this exception to read daemon API responses or another
-  // collection's source bytes.
+  // collection's source bytes. Sec-Fetch-* are forbidden header names: a page
+  // cannot set them from JavaScript, so the classification is the user
+  // agent's, not the document's. The exception is GET-only, so a mutating
+  // request to the same path stays refused; and it only lets the request
+  // REACH the route, whose own project/artifact resolution still decides
+  // whether any bytes exist to send.
   function isSandboxedPreviewResourceRequest(req: express.Request): boolean {
     if (req.method !== 'GET' || req.headers['sec-fetch-site'] !== 'cross-site') return false;
     const origin = req.headers.origin;
@@ -2382,6 +2440,20 @@ export async function startServer({
   // Health/version remain open for monitoring probes.
   // Non-browser clients (no Origin header, no fetch metadata) are allowed.
   app.use('/api', (req, res, next) => {
+    // Containment for the preview proxy, which shares this origin instead of
+    // getting a sibling one: a page a browser attributes to a preview reaches
+    // that preview's own subtree and nothing else under `/api`. First in this
+    // middleware, ahead of every early return below, so no route is exempt
+    // from it — a preview page must not reach the live-artifact embed route or
+    // the clipper bootstrap routes either. `req.path` is mount-relative here,
+    // so the `/api` prefix the proxy path carries is put back before the
+    // comparison.
+    if (isPreviewProxyOriginEscape(req.headers, `/api${req.path}`)) {
+      return res.status(403).json({
+        error: 'Preview origin cannot access this API route',
+      });
+    }
+
     // Live artifact previews have stricter local-daemon validation and
     // loopback CORS handling on the route itself. Let that middleware produce
     // the structured error shape and preflight headers for preview embeds.
@@ -2886,7 +2958,7 @@ export async function startServer({
   // fresh daemon boot, repair stale message rows and replay any PostHog or
   // Langfuse terminal work whose checkpoint was not committed. Network work
   // stays off the startup critical path.
-  void reconcileDurableRunTerminals({
+  const durableRunTerminalsReconciled = reconcileDurableRunTerminals({
     analytics: analyticsService,
     appVersion: telemetry.getCachedAppVersion()?.version ?? '0.0.0',
     appVersionInfo: telemetry.getCachedAppVersion(),
@@ -2915,12 +2987,32 @@ export async function startServer({
   const previewService = createPreviewService();
 
   /**
+   * What the delivery classification reads the world through, shared by the
+   * settle-window timer below and the startup replay that covers the turns the
+   * timer never got to fire for. One object so the two paths cannot drift into
+   * judging the same turn against different project state.
+   */
+  const unattendedDeliveryDeps: UnattendedDeliveryDeps = {
+    listProjectFiles: async (projectId: string) => {
+      const project = getProject(db, projectId);
+      return await listFiles(PROJECTS_DIR, projectId, { metadata: project?.metadata });
+    },
+    previewStartedDuringRun: (projectId: string, startedAt: number) =>
+      previewService.list(projectId).some((session) => session.startedAt >= startedAt),
+    runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),
+  };
+
+  /**
    * Record the daemon's own delivery verdict for a run whose turn no web client
    * finalized. Fires one settle window after the run's terminal event so an
    * attached client -- which knows the pre-turn file names and the outcome of
    * its own artifact save -- always writes first and wins;
    * `classifyUnattendedRunDelivery` then finds the row already claimed and does
    * nothing. Unref'd so a pending timer never holds the daemon open.
+   *
+   * The window and the unref together mean this verdict is in memory only until
+   * it fires. A daemon exit inside the window is covered by the startup replay
+   * wired below, not by holding the process open.
    */
   const scheduleUnattendedDeliveryClassification = (
     run: Partial<UnattendedDeliveryRun> & { createdAt?: unknown },
@@ -2940,15 +3032,7 @@ export async function startServer({
       void classifyUnattendedRunDelivery(
         db,
         classified,
-        {
-          listProjectFiles: async (projectId: string) => {
-            const project = getProject(db, projectId);
-            return await listFiles(PROJECTS_DIR, projectId, { metadata: project?.metadata });
-          },
-          previewStartedDuringRun: (projectId: string, startedAt: number) =>
-            previewService.list(projectId).some((session) => session.startedAt >= startedAt),
-          runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),
-        },
+        unattendedDeliveryDeps,
         isRunTouchedProjectFile,
       ).catch((error) => {
         console.warn('[runs] unattended delivery classification failed', error);
@@ -2956,6 +3040,25 @@ export async function startServer({
     }, CLIENT_FINALIZE_SETTLE_MS);
     timer.unref?.();
   };
+
+  // The daemon's second durable startup obligation, kept separate from the
+  // first: a succeeded design turn whose verdict was still sitting in the
+  // settle-window timer when the daemon exited is decided now, from the run's
+  // own durable record. Ordered after the reconciliation above because that
+  // pass repairs the assistant row's run status from the durable run state,
+  // and this pass reads that status to find the succeeded turns.
+  void durableRunTerminalsReconciled.then(async () => {
+    const replayed = await replayUnattendedDeliveryClassifications(
+      db,
+      unattendedDeliveryDeps,
+      isRunTouchedProjectFile,
+    );
+    if (replayed.classified > 0) {
+      console.warn('[runs] replayed unattended delivery classifications', replayed);
+    }
+  }).catch((error) => {
+    console.warn('[runs] unattended delivery classification replay failed', error);
+  });
 
   // Tracks runs whose finalized assistant message has already been forwarded
   // to Langfuse so repeated message updates only emit one final trace per run.
@@ -3350,6 +3453,7 @@ export async function startServer({
     http: httpDeps,
     paths: pathDeps,
     mcp: { pendingAuth: mcpPendingAuth, daemonUrlRef },
+    filesystem: { create: createRouteFilesystemWriteGateway },
   });
   registerXaiRoutes(app, {
     http: httpDeps,
@@ -10097,6 +10201,10 @@ export async function startServer({
     telemetry: { reportFinalizedMessage, reportFeedback },
   });
 
+  // Root-absolute preview assets (`/_next/static/...`), attributed to the
+  // preview page that asked for them. Registered here so it can only claim
+  // paths no daemon route owns.
+  app.use(createPreviewRootAssetFallback({ getPreview: (id) => previewService.get(id) }));
   registerStaticSpaFallback(app, STATIC_DIR);
 
   // Wait for `listen` to bind so callers always see the resolved URL —
@@ -10126,6 +10234,15 @@ export async function startServer({
     let server;
     try {
       server = app.listen(port, host);
+      // A WebSocket upgrade never enters the Express router, so the preview
+      // proxy's HMR channel is wired to the listener itself. Registering a
+      // handler takes over what Node would otherwise do with an upgrade —
+      // including its own error handling — so the handler closes every socket
+      // that names no live preview, and owns the socket's failures from the
+      // moment it is called (`ownUpgradeSocket`, preview-proxy.ts).
+      server.on('upgrade', createPreviewProxyUpgradeHandler({
+        getPreview: (id) => previewService.get(id),
+      }));
       server.once('listening', () => {
         // Widen the between-request idle window so kept-alive sockets
         // belonging to chat/SSE clients survive the gaps between bursts.

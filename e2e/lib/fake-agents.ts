@@ -277,6 +277,14 @@ async function emitRun(promptText) {
     await emitOrbitRun();
     return;
   }
+  // W2G.4b: a live artifact whose rendered page references a project file by a
+  // relative path. The project file itself is seeded by the spec over
+  // POST /api/projects/:id/files, so both preview creation paths end at the
+  // same project raw-asset URL.
+  if (promptText.includes('Create a relative-asset Live Artifact.')) {
+    await emitRelativeAssetLiveArtifactRun();
+    return;
+  }
   const isRuntime = promptText.match(/Fake runtime smoke for ([a-z0-9-]+)/i);
   const runtimeId = isRuntime ? isRuntime[1] : agentId;
   const heading = isSlowReload ? 'Slow Reload Daemon Smoke' : isDelayed ? 'Delayed Daemon Smoke' : isChunked ? 'Chunked Daemon Smoke' : isFollowUp ? 'Follow-up Daemon Smoke' : isDefaultSmoke ? 'Real Daemon Smoke' : 'Fake Agent Runtime ' + runtimeId;
@@ -624,14 +632,34 @@ async function emitOrbitRun() {
   exitSoon(0);
 }
 
+async function emitRelativeAssetLiveArtifactRun() {
+  const artifact = await createLiveArtifact({
+    input: {
+      title: 'Relative Asset Live Artifact',
+      slug: 'relative-asset-live-artifact',
+      preview: { type: 'html', entry: 'index.html' },
+      document: {
+        format: 'html_template_v1',
+        templatePath: 'template.html',
+        generatedPreviewPath: 'index.html',
+        dataPath: 'data.json',
+        dataJson: { headline: 'Relative asset live artifact' },
+      },
+    },
+    templateHtml: '<!doctype html><html><body><main><h1>{{data.headline}}</h1><img id="relative-asset" src="assets/pic.png" alt="seeded relative asset" width="240" height="160"></main></body></html>',
+    provenanceJson: {
+      generatedAt: new Date().toISOString(),
+      generatedBy: 'agent',
+      sources: [{ label: 'Fake relative-asset e2e data', type: 'derived' }],
+    },
+  });
+  emitSuccess('Registered relative-asset live artifact ' + artifact.id + ' for project ' + artifact.projectId + '.', false);
+  process.exitCode = 0;
+  exitSoon(0);
+}
+
 async function createOrbitLiveArtifact() {
-  const baseUrl = process.env.OD_DAEMON_URL;
-  const token = process.env.OD_TOOL_TOKEN;
-  if (!baseUrl || !token) {
-    throw new Error('Orbit fake run requires OD_DAEMON_URL and OD_TOOL_TOKEN');
-  }
-  const url = new URL('/api/tools/live-artifacts/create', baseUrl);
-  const payload = {
+  return await createLiveArtifact({
     input: {
       title: 'Orbit Daily Digest',
       slug: 'orbit-daily-digest',
@@ -656,7 +684,16 @@ async function createOrbitLiveArtifact() {
       generatedBy: 'agent',
       sources: [{ label: 'Fake Orbit e2e data', type: 'derived' }],
     },
-  };
+  });
+}
+
+async function createLiveArtifact(payload) {
+  const baseUrl = process.env.OD_DAEMON_URL;
+  const token = process.env.OD_TOOL_TOKEN;
+  if (!baseUrl || !token) {
+    throw new Error('Live artifact fake run requires OD_DAEMON_URL and OD_TOOL_TOKEN');
+  }
+  const url = new URL('/api/tools/live-artifacts/create', baseUrl);
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -673,7 +710,7 @@ async function createOrbitLiveArtifact() {
     body = { raw: text };
   }
   if (!response.ok || !body.artifact) {
-    throw new Error('Orbit live artifact create failed: HTTP ' + response.status + ' ' + text.slice(0, 500));
+    throw new Error('Live artifact create failed: HTTP ' + response.status + ' ' + text.slice(0, 500));
   }
   return body.artifact;
 }

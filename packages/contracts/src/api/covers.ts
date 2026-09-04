@@ -14,6 +14,23 @@ export function projectCoverFetchPath(projectId: string): string {
   return `/api/projects/${encodeURIComponent(projectId)}/cover`;
 }
 
+/**
+ * Response header on `GET /api/projects/:id/cover`, set to `1` when the image
+ * bytes in the body are the neutral placeholder rather than the project's
+ * stored cover.
+ *
+ * The route answers 200 for every cover the daemon has advertised, including
+ * one whose stored bytes it cannot read at that instant -- otherwise the
+ * `<img>` a client opened on the strength of `Project.hasCover` breaks and
+ * files a `resource-failed` anomaly for a resource the daemon itself
+ * advertised. This header is how a caller that wants the real answer
+ * (`od cover show`, a script, a future UI affordance) still tells the two
+ * apart, without a second endpoint.
+ *
+ * Absent on a 200 carrying the stored cover, and on every 404.
+ */
+export const PROJECT_COVER_PLACEHOLDER_HEADER = 'x-cover-placeholder';
+
 /** Persisted cover record (S4-1 — cover as data). */
 export interface ProjectCoverRecord {
   /** Data-root-relative path to the stored cover image bytes. */

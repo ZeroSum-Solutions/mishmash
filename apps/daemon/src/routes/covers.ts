@@ -3,12 +3,16 @@
 //
 //   POST /api/projects/:id/cover/generate -- SYNCHRONOUS, blocks until the
 //     render job finishes (success, failure, or internal timeout).
-//   GET  /api/projects/:id/cover           -- raw image bytes 200, or 404.
+//   GET  /api/projects/:id/cover           -- raw image bytes 200 if a cover
+//     has been generated, 404 otherwise. "Has been generated" is the frozen
+//     condition, not "is readable this instant" -- see servedCoverImage below.
 
 import type { Express } from 'express';
+import { PROJECT_COVER_PLACEHOLDER_HEADER } from '@open-design/contracts';
 import { generateProjectCover } from '../covers/service.js';
 import { isTypedCoverError } from '../covers/errors.js';
-import { readCoverImageBytes } from '../covers/store.js';
+import { COVER_PLACEHOLDER_PNG } from '../covers/placeholder.js';
+import { hasAdvertisedCover, readCoverImageBytes } from '../covers/store.js';
 import { isSafeId } from '../projects.js';
 import type { RouteDeps } from '../server-context.js';
 
@@ -16,6 +20,76 @@ export interface RegisterCoversRoutesDeps extends RouteDeps<'db' | 'paths' | 'pr
 
 function errorMessage(err: unknown): string {
   return String((err as { message?: unknown } | null)?.message ?? err);
+}
+
+interface ServedCoverImage {
+  bytes: Buffer;
+  placeholder: boolean;
+}
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+/** PNG signature (8) + the shortest possible IEND chunk (12). */
+const SMALLEST_POSSIBLE_PNG_BYTES = PNG_SIGNATURE.length + 12;
+
+/**
+ * Whether `bytes` are a COMPLETE PNG file, rather than merely a non-empty
+ * read.
+ *
+ * The route's promise is that what it serves renders. An `<img>` fires the
+ * same `client_resource_error` -> `resource-failed` anomaly for bytes it
+ * cannot decode as it does for a 404, so "the read returned something" is the
+ * wrong line to draw: a zero-length file, a foreign file left at the path, and
+ * a write cut short after the header all pass that test and still break the
+ * image.
+ *
+ * The two checks are the file's own frame. Every PNG opens with the 8-byte
+ * signature and closes with an IEND chunk, whose 4-byte type sits at
+ * `bytes[-8..-4]`, so a file that has both is whole at its edges. This is
+ * deliberately a frame check and not a decode: the store only ever writes what
+ * the renderer produced, so anything failing it is damage, and decoding every
+ * cover on every request to catch that would cost far more than serving the
+ * placeholder.
+ */
+function isCompleteCoverImage(bytes: Buffer): boolean {
+  if (bytes.length < SMALLEST_POSSIBLE_PNG_BYTES) return false;
+  if (!bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return false;
+  return bytes.subarray(bytes.length - 8, bytes.length - 4).toString('ascii') === 'IEND';
+}
+
+/**
+ * The image bytes `GET /api/projects/:id/cover` must answer for a project the
+ * caller is allowed to address, or `null` when the project has advertised no
+ * cover and the route answers 404.
+ *
+ * INVARIANT: a cover the daemon advertises never answers 404.
+ *
+ * `Project.hasCover` is published from an existence check (`hasCoverImage`) at
+ * the moment the projects list is built, and these bytes are read in a later,
+ * separate request. Between the two the file can be deleted from another tab,
+ * truncated mid-replace, or become unreadable. The client has already put the
+ * URL in an `<img>` on the strength of that advertisement, so failing it now
+ * breaks the image and files a `resource-failed` anomaly against a resource
+ * the daemon itself advertised.
+ *
+ * So an advertised cover whose stored bytes cannot be served serves the
+ * neutral placeholder instead, flagged with
+ * `PROJECT_COVER_PLACEHOLDER_HEADER` so a caller that wants the real answer
+ * can still tell. "Cannot be served" is `isCompleteCoverImage`, not merely a
+ * failed read: `readCoverImageBytes` returns a zero-length Buffer for a
+ * truncated file, which is truthy, and damaged bytes break the `<img>` exactly
+ * as a 404 does.
+ *
+ * This says nothing about the two guards at the call site. An unsafe id and an
+ * unknown project are a path-traversal defence, not an answer about cover
+ * availability, and they still answer 404.
+ */
+async function servedCoverImage(runtimeDataDir: string, projectId: string): Promise<ServedCoverImage | null> {
+  const bytes = await readCoverImageBytes(runtimeDataDir, projectId);
+  if (bytes && isCompleteCoverImage(bytes)) return { bytes, placeholder: false };
+  if (await hasAdvertisedCover(runtimeDataDir, projectId)) {
+    return { bytes: COVER_PLACEHOLDER_PNG, placeholder: true };
+  }
+  return null;
 }
 
 export function registerCoverRoutes(app: Express, ctx: RegisterCoversRoutesDeps): void {
@@ -64,10 +138,13 @@ export function registerCoverRoutes(app: Express, ctx: RegisterCoversRoutesDeps)
     if (!isSafeId(projectId) || !getProject(db, projectId)) {
       return res.status(404).end();
     }
-    const bytes = await readCoverImageBytes(RUNTIME_DATA_DIR, projectId);
-    if (!bytes) return res.status(404).end();
+    const served = await servedCoverImage(RUNTIME_DATA_DIR, projectId);
+    if (!served) return res.status(404).end();
     res.setHeader('Content-Type', 'image/png');
+    // `no-store` on both answers: a placeholder that outlived the moment its
+    // bytes were unreadable would keep a recovered cover off the screen.
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).end(bytes);
+    if (served.placeholder) res.setHeader(PROJECT_COVER_PLACEHOLDER_HEADER, '1');
+    return res.status(200).end(served.bytes);
   });
 }

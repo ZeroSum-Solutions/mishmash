@@ -10,12 +10,33 @@ export type PreviewInfo = {
   pid: number;
   port: number;
   /**
-   * The preview's address on the host the request arrived on, with the
-   * preview's own port (issue #158). A caller on the daemon's machine gets
-   * `http://127.0.0.1:<port>/`; a collaborator reaching the daemon over a
-   * tailnet gets that tailnet host, because the loopback address would
-   * resolve to their own machine. Always plain `http:` — the preview process
-   * speaks HTTP on its port whatever scheme fronted the daemon.
+   * Where to fetch the preview: its path on the Open Design front the request
+   * arrived on, which the daemon serves by proxying to the loopback child
+   * (issue #158, decision D-14). It is reachable wherever the daemon is,
+   * under the same scheme and the same authentication, so a collaborator gets
+   * a working link and `port` below stays a detail of the daemon's own
+   * machine. A request no header can place is answered with the path alone,
+   * to be resolved against the origin the caller used.
+   *
+   * Three shapes a proxied preview cannot serve. Two are inherent to hosting a
+   * dev server under a path: a root-absolute request whose initiator sends no
+   * `Referer` (a `no-referrer` policy, a WebSocket handshake), and a request
+   * body over the daemon's 4mb API limit. The third depends on who the front
+   * is: root-absolute assets are answered by the daemon, so they only arrive
+   * when the daemon IS the front. That is the shipped runtime, where the
+   * daemon serves the web app itself — but under `tools-dev` the front is the
+   * Next dev server, which forwards only `/api`, `/artifacts` and `/frames`
+   * (`apps/web/next.config.ts`), so a preview page's `/_nuxt/entry.js` stops
+   * at Next.
+   *
+   * And one thing it means for who may see it. A preview runs somebody else's
+   * program on the daemon's own origin, so the daemon confines it: a request a
+   * browser attributes to a preview page reaches that preview's own subtree
+   * and no other API route. The confinement reads the browser's `Referer`, so
+   * a preview page that suppresses its own is held only by the daemon's
+   * ordinary gates, which admit any loopback peer on the daemon's machine.
+   * Start previews for programs you would run yourself, and hand the link to
+   * the audience decision D-14 fixed: authenticated Open Design sessions.
    */
   url: string;
   command: string[];
