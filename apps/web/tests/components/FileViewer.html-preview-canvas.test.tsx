@@ -542,3 +542,63 @@ describe('HtmlViewer runtime-attached preview script (CANVAS-6)', () => {
     expect(screen.queryByTestId('preview-runtime-script-notice')).toBeNull();
   });
 });
+
+// W2H.4 red spec, consumer half. The browser spec
+// `e2e/ui/preview-runtime-script.test.ts` establishes the fact these cases
+// depend on: after W2G.4b (decision D-11, option B) the daemon serves a
+// project raw asset requested by a sandboxed preview as a browser-classified
+// `script`, so a runtime-attached project script now loads and runs in BOTH
+// preview transports. jsdom cannot fetch it, so what is asserted here is the
+// consumer's contract rather than the load: whichever transport the artifact
+// takes, the viewer must not tell the user the sandbox blocked the script.
+describe('HtmlViewer runtime-attached preview script (CANVAS-6 after D-11)', () => {
+  const RUNTIME_ATTACHED_HTML = [
+    '<html><body><div id="root"></div>',
+    '<script>',
+    "  var s = document.createElement('script');",
+    "  s.src = './boot.js';",
+    '  document.head.appendChild(s);',
+    '</script>',
+    '</body></html>',
+  ].join('\n');
+
+  it('says nothing about a blocked script on the URL-load transport', async () => {
+    stubPreviewFetch();
+
+    render(
+      <FileViewer
+        projectId="project-1"
+        projectKind="prototype"
+        file={htmlFile()}
+        liveHtml={RUNTIME_ATTACHED_HTML}
+      />,
+    );
+
+    // The literal-tag scan cannot see this script, so the artifact takes the
+    // URL-load path — the transport the daemon exception was written for.
+    expect(
+      (screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement).getAttribute('data-od-render-mode'),
+    ).toBe('url-load');
+    await waitFor(() => expect(screen.queryByTestId('preview-runtime-script-notice')).toBeNull());
+  });
+
+  it('says nothing about a blocked script on the srcDoc transport either', async () => {
+    stubPreviewFetch();
+    // `?forceInline=1` is read once at mount, so it must be set before render.
+    window.history.replaceState(null, '', '/?forceInline=1');
+
+    render(
+      <FileViewer
+        projectId="project-1"
+        projectKind="prototype"
+        file={htmlFile()}
+        liveHtml={RUNTIME_ATTACHED_HTML}
+      />,
+    );
+
+    expect(
+      (screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement).getAttribute('data-od-render-mode'),
+    ).toBe('srcdoc');
+    await waitFor(() => expect(screen.queryByTestId('preview-runtime-script-notice')).toBeNull());
+  });
+});
