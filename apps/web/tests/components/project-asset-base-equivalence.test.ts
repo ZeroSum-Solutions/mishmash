@@ -206,3 +206,23 @@ describe('withProjectAssetBaseHref leaves a base a --!-> keeps inside a comment'
     expect(parsed.baseURI).toBe(`http://d${BASE}`);
   });
 });
+
+// Round-6 track audit (proof/w2fix/2G.4-glm-r6.json), its one LOW, in parsed
+// terms. Foreign content is read as HTML rather than tracked, and what matters
+// is the direction of the error: whichever way the parser resolves the subtree,
+// the injected base still comes first and the page cannot re-root itself.
+describe('withProjectAssetBaseHref stays first in tree order across foreign content', () => {
+  const BASE = '/api/projects/p1/raw/';
+  const PREVIEW_URL = 'http://d/preview';
+
+  function parse(html: string) {
+    const { document } = new JSDOM(html, { url: PREVIEW_URL }).window;
+    return { baseURI: document.baseURI };
+  }
+
+  it('resolves against the injected base when a head sits inside an svg subtree', () => {
+    const input = '<svg><head></head></svg><html><head><base href="/evil/"><title>t</title></head></html>';
+    expect(parse(input).baseURI).toBe('http://d/evil/');
+    expect(parse(withProjectAssetBaseHref(input, BASE)).baseURI).toBe(`http://d${BASE}`);
+  });
+});

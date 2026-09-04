@@ -252,18 +252,23 @@ interface BasePlacement {
   readonly headEnd: number | null;
   /** Just past the document's real `<html>` start tag, or `null` if it has none. */
   readonly htmlEnd: number | null;
-  /** Every `<base>` start tag the parser would hoist, in source order. */
+  /**
+   * Every `<base>` start tag the parser would hoist, in source order — plus one
+   * written inside an `<svg>` or `<math>` subtree, which this scan reads as HTML
+   * and the parser does not. See `scanForBasePlacement`.
+   */
   readonly hoistedBases: readonly TagSpan[];
 }
 
 /**
  * Read `html` the way an HTML tokenizer does, far enough to place the base tag.
  *
- * What this holds: `headEnd` and `htmlEnd` sit just past a start tag a parser
- * would emit for that element in the document itself — never one written inside
- * a comment, inside raw-text content, inside an attribute value, or inside a
- * `<template>` — and `hoistedBases` spans every `<base>` start tag the parser
- * would lift into the head, in source order.
+ * What this holds, outside the foreign-content corner below: `headEnd` and
+ * `htmlEnd` sit just past a start tag a parser would emit for that element in
+ * the document itself — never one written inside a comment, inside raw-text
+ * content, inside an attribute value, or inside a `<template>` — and
+ * `hoistedBases` spans every `<base>` start tag the parser would lift into the
+ * head, in source order.
  *
  * Text that only looks like a tag stays out of both. `<ba<base href="x">` is a
  * single start tag named `ba<base`, because `<` is an ordinary character in a
@@ -278,11 +283,21 @@ interface BasePlacement {
  * the parser reaches end-of-file inside it and emits no token for it, so
  * `<html><head` holds no head element and nothing follows it to find.
  *
- * Two corners are read conservatively rather than exactly, and both fail
- * towards placing the injected tag earlier, which keeps it first in tree order:
- * a `<!` construct is read to its first `>`, which under-skips a CDATA section
- * in foreign content, and an unterminated comment is read to the end of the
- * input. `noscript` is the one deliberate divergence and is argued at
+ * Foreign content — an `<svg>` or `<math>` subtree — is read as HTML rather
+ * than tracked, and both consequences fail towards putting the injected tag
+ * first, which is what makes them corners rather than defects. A `<base>` there
+ * is collected and removed, although the parser gives it the SVG or MathML
+ * namespace and never hoists it: the transform drops an element it did not have
+ * to. A `<head>` there is taken for `headEnd`, although the breakout rule
+ * (13.2.6.5) pops the subtree and reprocesses that token in HTML mode, where
+ * in-head ignores it: the injected tag lands inside the subtree, and the
+ * reprocessing still leaves it ahead of any base the page declares later.
+ * Neither shape lets a page re-root itself, and both are pinned by cases.
+ *
+ * Two more corners are read conservatively rather than exactly, and both fail
+ * the same way: a `<!` construct is read to its first `>`, which under-skips a
+ * CDATA section in foreign content, and an unterminated comment is read to the
+ * end of the input. `noscript` is the one deliberate divergence and is argued at
  * `RAW_TEXT_ELEMENTS`.
  */
 function scanForBasePlacement(html: string): BasePlacement {
@@ -415,10 +430,14 @@ function insertBaseTag(html: string, hoistedBases: readonly TagSpan[], at: numbe
  * The document is read with an HTML start-tag scan rather than matched with a
  * regex over source text, so what comes back is the input with whole `<base>`
  * elements removed and one tag inserted. No removal forges an element the input
- * did not contain or loses one it did, and the only byte outside a `<base>`
- * start tag that can change is a `<` the parser reads as text immediately in
- * front of a removed tag, rewritten as `&lt;` so the gap cannot open a tag (see
- * `insertBaseTag` and `scanForBasePlacement`).
+ * did not contain, and the only byte outside a `<base>` start tag that can
+ * change is a `<` the parser reads as text immediately in front of a removed
+ * tag, rewritten as `&lt;` so the gap cannot open a tag (see `insertBaseTag`).
+ * No element is lost either, with one exception the scan states rather than
+ * hides: a `<base>` inside an `<svg>` or `<math>` subtree is read as HTML and
+ * removed, though the parser would namespace it and never hoist it. That
+ * direction of error keeps the injected tag first; `scanForBasePlacement`
+ * carries the argument.
  *
  * The response carrying this document must allow the base under its `base-uri`
  * directive, or the browser drops the tag and the refs stay broken.

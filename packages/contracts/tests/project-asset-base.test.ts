@@ -326,3 +326,43 @@ describe('withProjectAssetBaseHref treats a --!-> as comment content, not a clos
     );
   });
 });
+
+// Round-6 track audit (proof/w2fix/2G.4-glm-r6.json), the one LOW it left on an
+// otherwise CLEAN verdict: foreign content is read as HTML, so a `<base>` inside
+// an `<svg>`/`<math>` subtree is dropped although the parser namespaces it and
+// never hoists it, and a `<head>` there is taken for the insertion point although
+// the breakout rule (13.2.6.5) pops the subtree and the reprocessed token is
+// ignored. Both fail towards putting the injected tag first -- pinned here so the
+// direction of the error stays the safe one and the docblock keeps matching it.
+describe('withProjectAssetBaseHref reads foreign content conservatively', () => {
+  const BASE = '/api/projects/p1/raw/';
+
+  it('drops a base inside an svg subtree the parser would not hoist', () => {
+    expect(
+      withProjectAssetBaseHref(
+        '<svg><base href="/evil/"></svg><html><head><title>t</title></head></html>',
+        BASE,
+      ),
+    ).toBe('<svg></svg><html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>');
+  });
+
+  it('drops a base inside a math subtree the parser would not hoist', () => {
+    expect(
+      withProjectAssetBaseHref(
+        '<math><base href="/evil/"></math><html><head><title>t</title></head></html>',
+        BASE,
+      ),
+    ).toBe('<math></math><html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>');
+  });
+
+  it('inserts at a head written inside an svg subtree, ahead of a later base', () => {
+    expect(
+      withProjectAssetBaseHref(
+        '<svg><head></head></svg><html><head><base href="/evil/"><title>t</title></head></html>',
+        BASE,
+      ),
+    ).toBe(
+      '<svg><head><base href="/api/projects/p1/raw/"></head></svg><html><head><base href="/evil/"><title>t</title></head></html>',
+    );
+  });
+});
