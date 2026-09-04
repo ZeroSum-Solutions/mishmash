@@ -111,10 +111,51 @@ export function previewProxyUrlForRequest(
   return origin ? `${origin}${path}` : path;
 }
 
+/**
+ * Whether the front this request arrived on will hand the daemon a preview
+ * page's root-absolute asset request.
+ *
+ * The daemon answers `/_nuxt/entry.js` for the preview page that referred it
+ * (`createPreviewRootAssetFallback`, `preview-proxy.ts`), and a daemon route
+ * can only answer a request that reaches the daemon. It does when the daemon
+ * IS the front — the shipped runtime, where it serves the web app itself —
+ * and when a reverse proxy such as `tailscale serve` forwards the whole
+ * origin to it.
+ *
+ * It does not when a separate web front is running in front of the daemon.
+ * `tools-dev` starts one and hands the daemon its port (`OD_WEB_PORT`), and
+ * that front is the Next dev server, whose rewrites forward `/api`,
+ * `/artifacts` and `/frames` and nothing else (`apps/web/next.config.ts`), so
+ * a preview page's root-absolute asset stops there. A caller placed on that
+ * port therefore gets `false`, and so does a caller no header can place while
+ * that front is running: an announcement that cannot prove the assets arrive
+ * must not claim they do.
+ */
+export function frontServesRootAbsoluteAssets(
+  headers: PreviewRequestHeaders,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const webFrontPort = Number(env.OD_WEB_PORT);
+  if (!Number.isInteger(webFrontPort) || webFrontPort <= 0) return true;
+  const origin = previewFrontOrigin(headers);
+  if (!origin) return false;
+  try {
+    const url = new URL(origin);
+    const port = url.port ? Number(url.port) : url.protocol === 'https:' ? 443 : 80;
+    return port !== webFrontPort;
+  } catch {
+    return false;
+  }
+}
+
 /** Re-announce one preview session for the request that is reading it. */
 export function announcePreviewOnRequestHost(
   preview: PreviewInfo,
   headers: PreviewRequestHeaders,
 ): PreviewInfo {
-  return { ...preview, url: previewProxyUrlForRequest(headers, preview) };
+  return {
+    ...preview,
+    url: previewProxyUrlForRequest(headers, preview),
+    frontServesRootAbsoluteAssets: frontServesRootAbsoluteAssets(headers),
+  };
 }

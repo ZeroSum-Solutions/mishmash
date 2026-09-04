@@ -237,21 +237,48 @@ function upstreamRequestHeaders(
 }
 
 /**
- * A redirect the child wrote against its own root would send the browser to
- * the daemon's root instead, so root-absolute and loopback-absolute targets
- * are re-anchored on the preview's base path. Anything else (an off-site
- * redirect, a relative one) is already correct.
+ * Every name the preview child's own origin answers to. The daemon binds the
+ * child to a loopback interface on the machine it runs on, but the child
+ * chooses how to spell that interface when it writes a redirect: a dev server
+ * echoes back the `localhost` it was configured with, an IPv6 stack writes
+ * `[::1]`, and a wildcard bind reports `0.0.0.0`. All of them mean the same
+ * unreachable address to a collaborator.
+ */
+const CHILD_LOOPBACK_HOSTNAMES = new Set([LOOPBACK_HOST, 'localhost', '::1', '0.0.0.0']);
+
+/** An absolute or scheme-relative target, read for the origin it names. */
+function parseLocationOrigin(location: string): URL | null {
+  try {
+    // A scheme-relative target carries no scheme, so it needs a base to parse
+    // against. Which base does not matter: only the host and port it names
+    // decide the answer, and both are written in the target itself.
+    return location.startsWith('//') ? new URL(location, 'http://scheme-relative.invalid') : new URL(location);
+  } catch {
+    return null;
+  }
+}
+
+/** The registered session's own origin, under any loopback spelling. */
+function isPreviewChildOrigin(url: URL, port: number): boolean {
+  const hostname = url.hostname.replace(/^\[/, '').replace(/\]$/, '').toLowerCase();
+  return CHILD_LOOPBACK_HOSTNAMES.has(hostname) && url.port === String(port);
+}
+
+/**
+ * A redirect that leaves the proxy leaves the collaborator's reach, so every
+ * target that names the child itself comes back re-anchored on the preview's
+ * base path: a root-absolute path, which resolves to the daemon's root rather
+ * than the preview's, and any spelling of the child's own loopback origin on
+ * the port this session registered — written absolutely or scheme-relatively
+ * (`//127.0.0.1:<port>/next`). Anything else (an off-site redirect, a
+ * loopback port that is not this session's, a relative target) is already
+ * correct and passes through untouched.
  */
 export function rewriteUpstreamLocation(location: string, basePath: string, port: number): string {
-  if (location.startsWith('//')) return location;
-  if (location.startsWith('/')) return `${basePath}${location.slice(1)}`;
-  try {
-    const url = new URL(location);
-    if (url.hostname !== LOOPBACK_HOST || url.port !== String(port)) return location;
-    return `${basePath}${url.pathname.replace(/^\//, '')}${url.search}${url.hash}`;
-  } catch {
-    return location;
-  }
+  if (location.startsWith('/') && !location.startsWith('//')) return `${basePath}${location.slice(1)}`;
+  const url = parseLocationOrigin(location);
+  if (!url || !isPreviewChildOrigin(url, port)) return location;
+  return `${basePath}${url.pathname.replace(/^\//, '')}${url.search}${url.hash}`;
 }
 
 /**
@@ -383,8 +410,9 @@ export function createPreviewProxyHandler(deps: PreviewProxyDeps): RequestHandle
  * the shipped runtime, where the daemon serves the web app too; under
  * `tools-dev` the front is the Next dev server, which forwards only `/api`,
  * `/artifacts` and `/frames`, so a root-absolute asset asked for through that
- * front stops there. Recorded on `PreviewInfo.url` as one of the shapes a
- * proxied preview does not serve.
+ * front stops there. Which front a caller is on is reported to them on
+ * `PreviewInfo.frontServesRootAbsoluteAssets` (`preview-origin.ts`), so the
+ * surface offering the link can say so rather than half-render in silence.
  */
 export function createPreviewRootAssetFallback(deps: PreviewProxyDeps): RequestHandler {
   return (req, res, next) => {
