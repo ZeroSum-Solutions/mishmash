@@ -293,6 +293,120 @@ describe('streamViaDaemon', () => {
     const err = handlers.onError.mock.calls[0]![0] as Error & { resumable?: boolean };
     expect(err.resumable).toBe(true);
   });
+  // W1K.1 — the post-stream fallback's three branches, named by what the client
+  // is allowed to CONCLUDE from each.
+  //
+  // `providers/daemon.ts` caches a daemon `error` frame instead of surfacing it,
+  // because the frame can describe a failed FIRST ATTEMPT while the same run's
+  // retry is still going. Only an authoritative terminal pairs with the frame to
+  // make it a verdict: the SSE `end` frame, or the post-stream run-status read.
+  // When that read answers nothing, the client has learned nothing — so the
+  // frame stays provisional and the error is reported UNADJUDICATED, leaving the
+  // row active for the run-scoped follow to resolve.
+  const PROVISIONAL_ERROR_FRAME =
+    'event: error\ndata: {"code":"AGENT_EXECUTION_FAILED","message":"upstream drop on the first attempt","retryable":true}\n\n';
+
+  it('leaves an error frame provisional when the post-stream status read answers nothing', async () => {
+    const handlers = createDaemonHandlers();
+    const onRunStatus = vi.fn();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/runs') return jsonResponse({ runId: 'run-1' });
+      // The stream closes after the error frame with no terminal `end`.
+      if (url === '/api/runs/run-1/events') return sseResponse(PROVISIONAL_ERROR_FRAME);
+      // The one read the fallback makes is answered by nothing at all.
+      if (url === '/api/runs/run-1') return new Response('down', { status: 503 });
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await streamViaDaemon({
+      agentId: 'mock',
+      history: [{ id: '1', role: 'user', content: 'do the thing' }],
+      systemPrompt: '',
+      signal: new AbortController().signal,
+      handlers,
+      onRunStatus,
+    });
+
+    expect(
+      onRunStatus,
+      'an unreadable status is not a terminal: the run keeps its active status',
+    ).not.toHaveBeenCalledWith('failed');
+    expect(handlers.onError).toHaveBeenCalledTimes(1);
+    const [reported] = handlers.onError.mock.calls[0] as [Error];
+    expect(reported.message).toBe('upstream drop on the first attempt');
+    expect(
+      isUnadjudicatedStreamFailure(reported),
+      'an error frame with no authoritative terminal is provisional, not a verdict',
+    ).toBe(true);
+    expect(handlers.onDone).not.toHaveBeenCalled();
+  });
+
+  it('keeps an error frame paired with a readable terminal status a verdict', async () => {
+    const handlers = createDaemonHandlers();
+    const onRunStatus = vi.fn();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/runs') return jsonResponse({ runId: 'run-1' });
+      if (url === '/api/runs/run-1/events') return sseResponse(PROVISIONAL_ERROR_FRAME);
+      if (url === '/api/runs/run-1') {
+        return jsonResponse({ id: 'run-1', status: 'failed', failureStage: 'agent' });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await streamViaDaemon({
+      agentId: 'mock',
+      history: [{ id: '1', role: 'user', content: 'do the thing' }],
+      systemPrompt: '',
+      signal: new AbortController().signal,
+      handlers,
+      onRunStatus,
+    });
+
+    expect(onRunStatus).toHaveBeenCalledWith('failed');
+    expect(handlers.onError).toHaveBeenCalledTimes(1);
+    const [reported] = handlers.onError.mock.calls[0] as [Error];
+    expect(
+      isUnadjudicatedStreamFailure(reported),
+      'the daemon terminal adjudicated this run: the pane must keep painting the card',
+    ).toBe(false);
+    expect((reported as Error & { failureStage?: string }).failureStage).toBe('agent');
+  });
+
+  it('reattaches on an error frame whose readable status is still active', async () => {
+    const handlers = createDaemonHandlers();
+    const onRunStatus = vi.fn();
+    let streamRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/runs') return jsonResponse({ runId: 'run-1' });
+      if (url.startsWith('/api/runs/run-1/events')) {
+        streamRequests += 1;
+        if (streamRequests === 1) return sseResponse(PROVISIONAL_ERROR_FRAME);
+        return sseResponse('event: end\ndata: {"code":0,"status":"succeeded"}\n\n');
+      }
+      if (url === '/api/runs/run-1') return jsonResponse({ id: 'run-1', status: 'running' });
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await streamViaDaemon({
+      agentId: 'mock',
+      history: [{ id: '1', role: 'user', content: 'do the thing' }],
+      systemPrompt: '',
+      signal: new AbortController().signal,
+      handlers,
+      onRunStatus,
+    });
+
+    expect(streamRequests, 'a run the daemon still calls active is reattached, not failed').toBe(2);
+    expect(handlers.onError).not.toHaveBeenCalled();
+    expect(onRunStatus).toHaveBeenLastCalledWith('succeeded');
+    expect(handlers.onDone).toHaveBeenCalledTimes(1);
+  });
 
   it('sends run-scoped media execution policy to the daemon', async () => {
     const handlers = createDaemonHandlers();

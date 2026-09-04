@@ -640,6 +640,175 @@ test('[P0] a Side Chat stream failure with no run verdict never paints the failu
   ).toEqual([]);
   await expect(failureAlert).toHaveCount(0);
 });
+// W1K.1 — the outage class the two cases above do not reach: the daemon SPOKE.
+//
+// The three cases above hold the run's event stream open at the transport, so
+// the client never receives a daemon frame at all. One shape is left: the
+// stream DELIVERS a daemon `error` frame, then closes with no terminal `end`.
+// `providers/daemon.ts` caches that frame rather than surfacing it, and says why
+// at its own comment — the frame can describe a failed FIRST ATTEMPT while the
+// same run's retry is still going — then asks the run's status which of the two
+// it was. When that read answers nothing, the client has learned nothing, and
+// the frame is still provisional.
+//
+// Forced at the transport, in the wire shape the daemon really produces:
+//   1. the run's event stream is answered with a `start` frame and an `error`
+//      frame and then closed, with no `end` — the connection dropping between a
+//      failed first attempt and its retry;
+//   2. every status probe for that run is answered 503 for a window that covers
+//      the fallback's single read and the follow's first probes, so the client
+//      cannot pair the frame with a terminal;
+//   3. the run itself goes on to succeed, on the same fake runtime the cases
+//      above use.
+// The continuous card watcher then fails on the FIRST sighting rather than on a
+// count at the end, because a card painted and retracted still violates the bar.
+
+test('[P0] a live provisional error frame with no readable status never paints the failure card', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live provisional error frame checking smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const frameHold = serveProvisionalErrorFrame(page);
+  const probeHold = holdRunStatusProbes(page, STATUS_OUTAGE_WINDOW_MS, () => frameHold.runId);
+  await watchRunFailureCard(page);
+
+  frameHold.arm();
+  const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
+  const { runId } = (await runResponse.json()) as { runId: string };
+
+  const failureAlert = runErrorCard(page);
+  const checkingNotice = runCheckingNotice(page);
+
+  // Whatever the pane paints for a provisional error frame, it paints here:
+  // within a beat of the stream closing, while the run is still going.
+  await expect
+    .poll(
+      async () =>
+        (await runFailureCardSightings(page)).length > 0 || (await checkingNotice.count()) > 0,
+      { intervals: [200], timeout: T.long },
+    )
+    .toBe(true);
+  expect(
+    await runFailureCardSightings(page),
+    'an error frame with no authoritative terminal must never paint the failure card',
+  ).toEqual([]);
+  await expect(checkingNotice, 'the provisional error frame must read as a neutral checking state')
+    .toBeVisible();
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+  expect(frameHold.served, 'the error frame must have reached the client').toBeGreaterThanOrEqual(1);
+  await expect
+    .poll(() => probeHold.refused, { intervals: [250], timeout: 60_000 })
+    .toBeGreaterThanOrEqual(1);
+  await expect
+    .poll(() => probeHold.outageOpen, { intervals: [250], timeout: 60_000 })
+    .toBe(false);
+
+  await expect(checkingNotice, 'the checking notice must leave once the run answers')
+    .toHaveCount(0, { timeout: T.long });
+  expect(
+    await storedAssistantRunStatus(page, projectId, conversationId),
+    'the row must read succeeded once the run answers',
+  ).toBe('succeeded');
+  expect(
+    await runFailureCardSightings(page),
+    'the failure card must never have appeared at any point during a run that succeeded',
+  ).toEqual([]);
+  await expect(failureAlert).toHaveCount(0);
+});
+
+test('[P0] a Side Chat provisional error frame with no readable status never paints the failure card', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Side chat provisional error frame checking smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const sideConversationId = await createConversation(page, projectId, 'Side chat');
+  await openSideChatTab(page, projectId, conversationId, sideConversationId);
+
+  const sideChat = page.getByTestId('side-chat-tab');
+  await expect(sideChat, 'the persisted side chat tab must mount').toBeVisible({ timeout: T.long });
+
+  const frameHold = serveProvisionalErrorFrame(page);
+  const probeHold = holdRunStatusProbes(page, STATUS_OUTAGE_WINDOW_MS, () => frameHold.runId);
+  // Installed after the last navigation, so the watcher lives in the document
+  // that receives the run.
+  await watchRunFailureCard(page);
+
+  frameHold.arm();
+  const runResponse = await sendPrompt(page, await composerInside(page, sideChat), RUN_PROMPT);
+  const { runId } = (await runResponse.json()) as { runId: string };
+
+  const failureAlert = runErrorCard(sideChat);
+  const checkingNotice = runCheckingNotice(sideChat);
+
+  await expect
+    .poll(
+      async () =>
+        (await runFailureCardSightings(page)).length > 0 || (await checkingNotice.count()) > 0,
+      { intervals: [200], timeout: T.long },
+    )
+    .toBe(true);
+  expect(
+    await runFailureCardSightings(page),
+    'a Side Chat error frame with no authoritative terminal must never paint the failure card',
+  ).toEqual([]);
+  await expect(checkingNotice, 'the provisional error frame must read as a neutral checking state')
+    .toBeVisible();
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+  expect(frameHold.served, 'the error frame must have reached the client').toBeGreaterThanOrEqual(1);
+  await expect
+    .poll(() => probeHold.refused, { intervals: [250], timeout: 60_000 })
+    .toBeGreaterThanOrEqual(1);
+  await expect
+    .poll(() => probeHold.outageOpen, { intervals: [250], timeout: 60_000 })
+    .toBe(false);
+
+  await expect(checkingNotice, 'the checking notice must leave once the run answers')
+    .toHaveCount(0, { timeout: T.long });
+  expect(
+    await storedAssistantRunStatus(page, projectId, sideConversationId),
+    'the row must read succeeded once the run answers',
+  ).toBe('succeeded');
+  expect(
+    await runFailureCardSightings(page),
+    'the failure card must never have appeared at any point during a run that succeeded',
+  ).toEqual([]);
+  await expect(failureAlert).toHaveCount(0);
+});
+
+// The other half of the W1K.1 rule, and the branch that must NOT move: the same
+// error frame, this time paired with a status read the client CAN make. That
+// read is the authoritative terminal the frame was waiting for, so the frame
+// becomes a verdict and keeps the daemon's own failure card. The frame is held
+// back until the daemon has adjudicated the run, so the read the fallback makes
+// is the terminal one rather than a race with the still-running turn.
+
+test('[P0] a provisional error frame paired with a readable failed status keeps the daemon card', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live adjudicated error frame smoke');
+  await expectWorkspaceReady(page);
+
+  const frameHold = serveProvisionalErrorFrame(page, { untilRunIsTerminal: true });
+  await watchRunFailureCard(page);
+
+  frameHold.arm();
+  await sendPrompt(page, page.getByTestId('chat-composer').first(), FAILING_RUN_PROMPT);
+
+  const failureAlert = runErrorCard(page);
+  await expect(failureAlert, 'an error frame the daemon terminal confirms must reach the user')
+    .toBeVisible({ timeout: 120_000 });
+  await expect(
+    failureAlert.locator('[data-run-failure-step]'),
+    'the adjudicated card must carry the daemon facts, not a client-invented one',
+  ).toHaveCount(1);
+  await expect(runCheckingNotice(page), 'a verdict ends the checking state').toHaveCount(0);
+  expect(frameHold.served, 'the error frame must have reached the client').toBeGreaterThanOrEqual(1);
+});
 
 // The other half of the rule: a verdict is still a verdict. Nothing is
 // intercepted in these two — the fake runtime fails the way the team daemon
@@ -1270,6 +1439,96 @@ function holdConversationRead(page: Page, isArmed: () => boolean): { release: ()
     },
   );
   return { release: () => release() };
+}
+
+interface ProvisionalErrorFrameHold {
+  /** Start answering the next run event stream this page opens with the frame. */
+  arm: () => void;
+  /** How many times the frame has been served. */
+  readonly served: number;
+  /** The run whose stream is held, known from the first held request. */
+  readonly runId: string | null;
+}
+
+/**
+ * The wire shape of a failed FIRST ATTEMPT whose retry is still in flight: the
+ * daemon's own `error` frame, and then the connection ends with no terminal
+ * `end` frame. `providers/daemon.ts` caches this frame rather than surfacing it
+ * and asks the run's status which of the two it was.
+ *
+ * The body is written here rather than emitted by a failing fake agent, because
+ * the fault this case pins is on the CLIENT side of the wire: the stream ends
+ * with no `end` frame and the status read answers nothing. The payload shape is
+ * the daemon's own — `SseErrorPayload` from `@open-design/contracts` — but the
+ * daemon's exact error text for a first-attempt failure is NOT pinned by this
+ * test. A stronger form would drive the fake-agent held-run/retry fixture in
+ * `e2e/lib/fake-agents.ts` and intercept only the stream close; do that if a
+ * later track needs the daemon's real frame payload covered here.
+ */
+const PROVISIONAL_ERROR_FRAME =
+  'event: start\ndata: {"bin":"fake-agent"}\n\n'
+  + 'event: error\ndata: {"code":"AGENT_EXECUTION_FAILED",'
+  + '"message":"upstream drop on the first attempt","retryable":true}\n\n';
+
+/**
+ * Answer the held run's event stream with that frame and close it.
+ *
+ * The daemon's real stream is replaced rather than refused, because the frame is
+ * the point: this case is the one where the daemon SPOKE and the client still
+ * has no terminal to pair the words with. The run itself is untouched and runs
+ * to its own terminal on the daemon.
+ *
+ * With `untilRunIsTerminal`, the frame is withheld until the daemon has
+ * adjudicated the run, so the fallback's status read lands on that terminal
+ * instead of racing the still-running turn. The status is read through
+ * `page.request`, which does not pass through `page.route`.
+ *
+ * Armed BEFORE the send, not after the create-run response, because the client
+ * opens the stream the moment that response lands.
+ */
+function serveProvisionalErrorFrame(
+  page: Page,
+  options: { untilRunIsTerminal?: boolean } = {},
+): ProvisionalErrorFrameHold {
+  let armed = false;
+  let heldRunId: string | null = null;
+  let served = 0;
+  void page.route(
+    (url) => /^\/api\/runs\/[^/]+\/events$/.test(url.pathname),
+    async (route) => {
+      const requestedRunId = new URL(route.request().url()).pathname.split('/')[3] ?? '';
+      if (!armed || (heldRunId !== null && requestedRunId !== heldRunId)) {
+        await route.continue();
+        return;
+      }
+      heldRunId = requestedRunId;
+      if (options.untilRunIsTerminal) {
+        await expect
+          .poll(async () => daemonRunStatus(page, requestedRunId), {
+            intervals: [250],
+            timeout: 120_000,
+          })
+          .not.toMatch(/^(queued|running)$/);
+      }
+      served += 1;
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },
+        body: PROVISIONAL_ERROR_FRAME,
+      });
+    },
+  );
+  return {
+    arm: () => {
+      armed = true;
+    },
+    get served() {
+      return served;
+    },
+    get runId() {
+      return heldRunId;
+    },
+  };
 }
 
 interface RunStatusProbeHold {

@@ -381,6 +381,31 @@ export function createGenericDaemonDisconnectError(): Error & { code: string } {
   return markStreamUnadjudicated(error);
 }
 
+/**
+ * The invariant a daemon `error` frame is held to: A FRAME IS PROVISIONAL UNTIL
+ * AN AUTHORITATIVE TERMINAL PAIRS WITH IT.
+ *
+ * The daemon emits the frame for a failed ATTEMPT, and it emits it before it
+ * decides whether to retry the same run (the `error` branch in
+ * `consumeDaemonRun` says so). The frame therefore reports that an attempt
+ * failed, never that the run did. Exactly two things adjudicate it: the terminal
+ * `end` frame, and the post-stream run-status read. Paired with either, the
+ * frame is a verdict and keeps its failure card, classification and all.
+ *
+ * Paired with neither — the stream closed with no `end` AND the status read
+ * answered nothing — the client has learned nothing, so it may claim nothing.
+ * The frame's error is reported unadjudicated and NO run status is emitted, so
+ * the row stays on the last status the daemon itself declared and the panes'
+ * run-scoped follow resolves it from the daemon's own terminal.
+ *
+ * This corrects the W1J.1 round-1 refutation, which characterized an error
+ * frame as itself a run verdict with or without a terminal status. It is not:
+ * the comment on the `error` branch above has always said the opposite.
+ */
+function provisionalDaemonErrorFrame(frameError: Error): Error {
+  return markStreamUnadjudicated(frameError);
+}
+
 function notifyRunsChanged() {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new Event(RUNS_CHANGED_EVENT));
@@ -1281,8 +1306,7 @@ async function consumeDaemonRun({
           break;
         }
         if (!status) {
-          onRunStatus?.('failed');
-          handlers.onError(pendingStructuredError);
+          handlers.onError(provisionalDaemonErrorFrame(pendingStructuredError));
           return;
         }
         // The connection closed after an error frame but before a terminal
