@@ -46,7 +46,10 @@
   color: var(--text-muted, var(--text));
 }
 
+/* Sits beside the sentence it acts on rather than pushed to the far edge: the
+   viewer's floating presence avatar occupies the banner's bottom-right corner
+   and would cover a right-aligned control. */
 .action {
   flex: 0 0 auto;
-  margin-left: auto;
+  margin-left: 4px;
 }
