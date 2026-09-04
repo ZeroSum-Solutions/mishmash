@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  RUN_FAILURE_RECHECK_MAX_MISSES,
+  nextInferredRunFailureStep,
   retractsRunFailure,
   retractsStaleRunFailure,
 } from '../../src/runtime/run-failure-reconcile';
@@ -85,5 +87,32 @@ describe('retractsStaleRunFailure — rows a conversation refresh brings in', ()
     const shown = [assistant({ id: 'msg-1', runStatus: 'succeeded' })];
     const incoming = [assistant({ id: 'msg-1', runStatus: 'succeeded' })];
     expect(retractsStaleRunFailure(shown, incoming)).toBe(false);
+  });
+});
+
+describe('nextInferredRunFailureStep — following a run the pane never saw finish', () => {
+  it('retracts on a non-failed terminal', () => {
+    expect(nextInferredRunFailureStep('succeeded', 0)).toBe('retract');
+    expect(nextInferredRunFailureStep('canceled', 0)).toBe('retract');
+  });
+
+  it('stops at once when the run really did fail, so a failed row is never re-queried', () => {
+    expect(nextInferredRunFailureStep('failed', 0)).toBe('stop');
+  });
+
+  // The realistic shape of this defect: the stream fails when it OPENS, at the
+  // start of a turn that then runs for seconds or minutes. A pane that looked
+  // once and gave up would leave the alert on screen for the whole run.
+  it('keeps following while the run is still going', () => {
+    expect(nextInferredRunFailureStep('queued', 0)).toBe('retry');
+    expect(nextInferredRunFailureStep('running', 0)).toBe('retry');
+    expect(nextInferredRunFailureStep('running', RUN_FAILURE_RECHECK_MAX_MISSES + 10)).toBe('retry');
+  });
+
+  it('tolerates a few probes that answer nothing, then stops', () => {
+    expect(nextInferredRunFailureStep(null, 0)).toBe('retry');
+    expect(nextInferredRunFailureStep(null, RUN_FAILURE_RECHECK_MAX_MISSES - 1)).toBe('retry');
+    expect(nextInferredRunFailureStep(null, RUN_FAILURE_RECHECK_MAX_MISSES)).toBe('stop');
+    expect(nextInferredRunFailureStep(undefined, RUN_FAILURE_RECHECK_MAX_MISSES)).toBe('stop');
   });
 });

@@ -205,8 +205,53 @@ describe('covers backup class (C4-11) + od cover CLI parity (C4-12)', () => {
       const showBody = JSON.parse(showRun.stdout.trim()) as {
         ok: boolean;
         bytes?: number;
+        placeholder?: boolean;
       };
       expect(showBody.ok).toBe(true);
+      expect(showBody.bytes).toBeGreaterThan(0);
+      expect(showBody.placeholder).toBe(false);
+    },
+    60_000,
+  );
+
+  // W2G.6 -- the CLI half of "a cover the project advertises never answers
+  // 404". The route serves a placeholder instead of 404 when it cannot read
+  // the advertised bytes, so `od cover show` must report that rather than
+  // present the placeholder as the stored cover.
+  it(
+    '`od cover show` reports placeholder=true when the advertised cover bytes cannot be read',
+    async () => {
+      const id = `cover-cli-placeholder-${Date.now()}`;
+      await fetch(`${baseUrl}/api/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name: id }),
+      });
+      const form = new FormData();
+      form.append('files', new Blob(['<!doctype html><html><body>cli placeholder</body></html>'], { type: 'text/html' }), 'index.html');
+      await fetch(`${baseUrl}/api/projects/${id}/upload`, { method: 'POST', body: form });
+
+      const genResp = await fetch(`${baseUrl}/api/projects/${id}/cover/generate`, { method: 'POST' });
+      expect(genResp.status).toBe(200);
+
+      // The advertised bytes go away between the advertisement and the fetch.
+      fs.unlinkSync(path.join(dataDir, 'covers', id, 'cover.png'));
+
+      const cliEnv = {
+        ...process.env,
+        OD_DATA_DIR: dataDir,
+        OD_DAEMON_CLI_PATH: path.join(repoRoot, 'apps/daemon/dist/cli.js'),
+        OD_DAEMON_URL: baseUrl,
+      };
+      const showRun = await runOdAsync(['cover', 'show', '--project', id, '--json'], cliEnv);
+      expect(showRun.status).toBe(0);
+      const showBody = JSON.parse(showRun.stdout.trim()) as {
+        ok: boolean;
+        bytes?: number;
+        placeholder?: boolean;
+      };
+      expect(showBody.ok).toBe(true);
+      expect(showBody.placeholder).toBe(true);
       expect(showBody.bytes).toBeGreaterThan(0);
     },
     60_000,

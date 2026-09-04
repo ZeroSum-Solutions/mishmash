@@ -8,9 +8,11 @@ export type E2eChatMessage = {
   endedAt?: number;
   events?: unknown[];
   id: string;
+  preTurnFileNames?: unknown[];
   producedFiles?: unknown[];
   resultDeliveryState?: 'delivered' | 'no_result' | 'delivery_failed';
   role: 'assistant' | 'user';
+  traceObjectFiles?: unknown[];
   runId?: string;
   runStatus?: 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';
   sessionMode?: 'chat' | 'design' | 'plan';
