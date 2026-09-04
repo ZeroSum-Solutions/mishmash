@@ -38,6 +38,10 @@ const STATUS_OUTAGE_WINDOW_MS = 7_500;
 // (`e2e/lib/fake-agents.ts`, REPORTED_AGENT_FAILURE_OUTPUT.sleep). Used by the
 // verdict cases: a run the daemon adjudicated keeps the failure card.
 const FAILING_RUN_PROMPT = 'Return the reported sleep-drop failure';
+// The title the honest "the daemon never took this request" failure carries
+// (`chat.runError.title.notStarted`). Distinct from the generic "Task failed",
+// which is what a client paints when it declares a turn dead without looking.
+const RUN_NOT_STARTED_TITLE = 'The run could not be started';
 
 let fakeRuntimes: Awaited<ReturnType<typeof createFakeAgentRuntimes>>;
 
@@ -670,6 +674,245 @@ test('[P1] a Side Chat run the daemon reported failed still shows the failure ca
   await expect(runCheckingNotice(sideChat), 'a verdict is not a checking state').toHaveCount(0);
 });
 
+// W1J.2 — the create response the client never read.
+//
+// The two cases above start from a run the client KNOWS the id of: the 202 was
+// read, `onRunCreated` fired, and only the event stream then failed. One door is
+// still open before that point. `apps/daemon/src/routes/runs.ts` creates the
+// run, pins it onto the stored assistant row, and only then sends the 202 —
+// starting the turn AFTER the response is on the wire. A client that never reads
+// that response therefore holds no run id for a run that is already going, and
+// `providers/daemon.ts` surfaced the transport error with `onRunCreated` never
+// called: `currentRunId` is undefined, so both panes fall through to the pane
+// error and the failed row, and neither schedules a follow. The daemon runs the
+// turn to success under a "Task failed" card.
+//
+// Both halves are forced at the transport, on the real create request:
+//   * the response is LOST after the daemon accepted it — the request is
+//     forwarded with `route.fetch()`, so the run is really created, pinned and
+//     started, and the body the client reads back is truncated so its `json()`
+//     throws. The client is left with exactly the two ids it minted itself;
+//   * the request is never DELIVERED — `route.abort()` with no fetch, so the
+//     daemon never sees it and no run exists. That one is an honest failure, and
+//     the spec asserts it is named as one rather than dressed up as a turn that
+//     might still be running.
+
+test('[P0] a live create response lost after the daemon accepted the run never paints the failure card', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live lost create response smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const createHold = dropCreateRunResponseBody(page);
+  await watchRunFailureCard(page);
+
+  createHold.arm();
+  await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
+  await expect
+    .poll(() => createHold.acceptedRunId, { intervals: [100], timeout: T.medium })
+    .not.toBeNull();
+  const runId = createHold.acceptedRunId as string;
+
+  const failureAlert = runErrorCard(page);
+  const checkingNotice = runCheckingNotice(page);
+
+  // Whatever the pane paints for a create response it could not read, it paints
+  // here: within a beat of the send, while the run is still going.
+  await expect
+    .poll(
+      async () =>
+        (await runFailureCardSightings(page)).length > 0 || (await checkingNotice.count()) > 0,
+      { intervals: [200], timeout: T.long },
+    )
+    .toBe(true);
+  expect(
+    await runFailureCardSightings(page),
+    'a create response the client lost must never paint the failure card',
+  ).toEqual([]);
+  await expect(checkingNotice, 'the lost create response must read as a neutral checking state')
+    .toBeVisible();
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+  await expect(
+    checkingNotice.getByRole('button', { name: /retry/i }),
+    'a run that may exist must not offer Retry (the B-02 double-send hazard)',
+  ).toHaveCount(0);
+
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+
+  await expect(checkingNotice, 'the checking notice must leave once the looked-up run answers')
+    .toHaveCount(0, { timeout: T.long });
+  // The pane must land on the turn the run actually delivered, not on a blank
+  // row that merely stopped saying "failed".
+  await expect(
+    page.getByText(RUN_ANSWER).first(),
+    'the adopted turn must show the answer the run delivered',
+  ).toBeVisible({ timeout: T.long });
+  expect(
+    await storedAssistantRunStatus(page, projectId, conversationId),
+    'the row must read succeeded once the looked-up run answers',
+  ).toBe('succeeded');
+  expect(
+    await runFailureCardSightings(page),
+    'the failure card must never have appeared at any point during a run that succeeded',
+  ).toEqual([]);
+  await expect(failureAlert).toHaveCount(0);
+});
+
+test('[P0] a Side Chat create response lost after the daemon accepted the run never paints the failure card', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Side chat lost create response smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const sideConversationId = await createConversation(page, projectId, 'Side chat');
+  await openSideChatTab(page, projectId, conversationId, sideConversationId);
+
+  const sideChat = page.getByTestId('side-chat-tab');
+  await expect(sideChat, 'the persisted side chat tab must mount').toBeVisible({ timeout: T.long });
+
+  const createHold = dropCreateRunResponseBody(page);
+  // Installed after the last navigation, so the watcher lives in the document
+  // that receives the run.
+  await watchRunFailureCard(page);
+
+  createHold.arm();
+  await sendPrompt(page, await composerInside(page, sideChat), RUN_PROMPT);
+  await expect
+    .poll(() => createHold.acceptedRunId, { intervals: [100], timeout: T.medium })
+    .not.toBeNull();
+  const runId = createHold.acceptedRunId as string;
+
+  const failureAlert = runErrorCard(sideChat);
+  const checkingNotice = runCheckingNotice(sideChat);
+
+  await expect
+    .poll(
+      async () =>
+        (await runFailureCardSightings(page)).length > 0 || (await checkingNotice.count()) > 0,
+      { intervals: [200], timeout: T.long },
+    )
+    .toBe(true);
+  expect(
+    await runFailureCardSightings(page),
+    'a Side Chat create response the client lost must never paint the failure card',
+  ).toEqual([]);
+  await expect(checkingNotice, 'the lost create response must read as a neutral checking state')
+    .toBeVisible();
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+  await expect(
+    checkingNotice.getByRole('button', { name: /retry/i }),
+    'a run that may exist must not offer Retry (the B-02 double-send hazard)',
+  ).toHaveCount(0);
+
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+
+  await expect(checkingNotice, 'the checking notice must leave once the looked-up run answers')
+    .toHaveCount(0, { timeout: T.long });
+  await expect(
+    sideChat.getByText(RUN_ANSWER).first(),
+    'the adopted Side Chat turn must show the answer the run delivered',
+  ).toBeVisible({ timeout: T.long });
+  expect(
+    await storedAssistantRunStatus(page, projectId, sideConversationId),
+    'the row must read succeeded once the looked-up run answers',
+  ).toBe('succeeded');
+  expect(
+    await runFailureCardSightings(page),
+    'the failure card must never have appeared at any point during a run that succeeded',
+  ).toEqual([]);
+  await expect(failureAlert).toHaveCount(0);
+});
+
+test('[P0] a live create the daemon never received reads as a run that could not be started', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live create never delivered smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId } = await currentProjectContext(page);
+  const createRefusal = refuseCreateRunRequest(page);
+  await watchRunFailureCard(page);
+
+  createRefusal.arm();
+  await sendPromptWithoutCreateResponse(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
+
+  const checkingNotice = runCheckingNotice(page);
+  const failureAlert = runErrorCard(page);
+
+  // The client cannot tell this apart from a lost response until it has looked,
+  // so it must look before it names anything.
+  await expect(
+    checkingNotice,
+    'a create with no answer is unresolved until the lookup has ruled a run out',
+  ).toBeVisible({ timeout: T.long });
+  expect(
+    await runFailureCardSightings(page),
+    'the failure card must not be painted before the lookup has ruled a run out',
+  ).toEqual([]);
+
+  // Once the lookup finds no run under either of the client's own ids, nothing
+  // ran and the honest answer is a real failure — not a generic "Task failed".
+  await expect(
+    failureAlert,
+    'a request the daemon never took must end as a named "could not be started" failure',
+  ).toBeVisible({ timeout: T.long });
+  await expect(failureAlert).toContainText(RUN_NOT_STARTED_TITLE);
+  await expect(
+    failureAlert.getByRole('button', { name: /retry/i }),
+    'no run exists, so Retry carries no double-send hazard',
+  ).toHaveCount(1);
+  await expect(checkingNotice, 'the named failure ends the checking state').toHaveCount(0);
+  expect(
+    await conversationRunCount(page, conversationId),
+    'precondition: the daemon must never have accepted the refused request',
+  ).toBe(0);
+});
+
+test('[P0] a Side Chat create the daemon never received reads as a run that could not be started', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Side chat create never delivered smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const sideConversationId = await createConversation(page, projectId, 'Side chat');
+  await openSideChatTab(page, projectId, conversationId, sideConversationId);
+
+  const sideChat = page.getByTestId('side-chat-tab');
+  await expect(sideChat, 'the persisted side chat tab must mount').toBeVisible({ timeout: T.long });
+
+  const createRefusal = refuseCreateRunRequest(page);
+  await watchRunFailureCard(page);
+
+  createRefusal.arm();
+  await sendPromptWithoutCreateResponse(page, await composerInside(page, sideChat), RUN_PROMPT);
+
+  const checkingNotice = runCheckingNotice(sideChat);
+  const failureAlert = runErrorCard(sideChat);
+
+  await expect(
+    checkingNotice,
+    'a create with no answer is unresolved until the lookup has ruled a run out',
+  ).toBeVisible({ timeout: T.long });
+  expect(
+    await runFailureCardSightings(page),
+    'the failure card must not be painted before the lookup has ruled a run out',
+  ).toEqual([]);
+
+  await expect(
+    failureAlert,
+    'a request the daemon never took must end as a named "could not be started" failure',
+  ).toBeVisible({ timeout: T.long });
+  await expect(failureAlert).toContainText(RUN_NOT_STARTED_TITLE);
+  await expect(
+    failureAlert.getByRole('button', { name: /retry/i }),
+    'no run exists, so Retry carries no double-send hazard',
+  ).toHaveCount(1);
+  await expect(checkingNotice, 'the named failure ends the checking state').toHaveCount(0);
+  expect(
+    await conversationRunCount(page, sideConversationId),
+    'precondition: the daemon must never have accepted the refused request',
+  ).toBe(0);
+});
+
 interface RunEventStreamHold {
   /** Start refusing the next run event stream this page opens. */
   arm: () => void;
@@ -1071,4 +1314,131 @@ async function currentProjectContext(
     throw new Error(`no conversations found for project ${projectId}`);
   }
   return { conversationId: active.id, projectId };
+}
+
+interface CreateResponseHold {
+  /** Lose the body of the next create response this page reads. */
+  arm: () => void;
+  /** The run the daemon really created for the request whose body was lost. */
+  readonly acceptedRunId: string | null;
+}
+
+/**
+ * Let the create request through to the daemon, then give the client back a
+ * truncated body so `createResp.json()` throws.
+ *
+ * This is the wire shape of the door under test and not a simulation of it: the
+ * daemon receives the request, creates the run, pins it onto the stored
+ * assistant row and starts the turn (`apps/daemon/src/routes/runs.ts`), while
+ * the client is left holding only the `clientRequestId` and
+ * `assistantMessageId` it minted itself. Only the FIRST create is held, so a
+ * Retry offered afterwards would reach the daemon normally.
+ */
+function dropCreateRunResponseBody(page: Page): CreateResponseHold {
+  let armed = false;
+  let acceptedRunId: string | null = null;
+  void page.route(
+    (url) => url.pathname === '/api/runs',
+    async (route) => {
+      if (!armed || route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      armed = false;
+      const response = await route.fetch();
+      const body = await response.text();
+      acceptedRunId = (JSON.parse(body) as { runId: string }).runId;
+      await route.fulfill({
+        status: response.status(),
+        headers: { 'content-type': 'application/json' },
+        // Truncated at the first key: a 202 whose body cannot be parsed is the
+        // same to the client as a connection dropped after the commit.
+        body: body.slice(0, 9),
+      });
+    },
+  );
+  return {
+    arm: () => {
+      armed = true;
+    },
+    get acceptedRunId() {
+      return acceptedRunId;
+    },
+  };
+}
+
+interface CreateRequestRefusal {
+  /** Refuse to deliver the next create request this page makes. */
+  arm: () => void;
+  /** True once a create request has been refused. */
+  readonly refused: boolean;
+}
+
+/**
+ * Fail the create request before it reaches the daemon, so no run is ever
+ * created. The other half of the ambiguity: the client sees the same transport
+ * error as the lost-response case and must not name either outcome before it
+ * has looked.
+ */
+function refuseCreateRunRequest(page: Page): CreateRequestRefusal {
+  let armed = false;
+  let refused = false;
+  void page.route(
+    (url) => url.pathname === '/api/runs',
+    async (route) => {
+      if (!armed || route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      armed = false;
+      refused = true;
+      await route.abort();
+    },
+  );
+  return {
+    arm: () => {
+      armed = true;
+    },
+    get refused() {
+      return refused;
+    },
+  };
+}
+
+/**
+ * Send a prompt whose create request never produces a response.
+ *
+ * `sendPrompt` waits for the create RESPONSE, which never arrives when the
+ * request is aborted at the transport; wait for the request leaving the page
+ * instead.
+ */
+async function sendPromptWithoutCreateResponse(page: Page, composer: Locator, prompt: string) {
+  const input = composer.getByTestId('chat-composer-input').first();
+  const sendButton = composer.getByTestId('chat-send').first();
+  await expect(input).toBeVisible({ timeout: T.medium });
+  await input.click();
+  await input.fill(prompt);
+  await expect(input).toHaveText(prompt);
+  await expect(sendButton).toBeEnabled();
+  const request = page.waitForRequest(
+    (candidate) =>
+      new URL(candidate.url()).pathname === '/api/runs' && candidate.method() === 'POST',
+    { timeout: T.medium },
+  );
+  await sendButton.click();
+  await request;
+}
+
+/**
+ * How many runs the daemon holds for a conversation. Read through
+ * `page.request`, which does not pass through `page.route`, so a refused create
+ * cannot hide behind the same interception that refused it.
+ */
+async function conversationRunCount(page: Page, conversationId: string): Promise<number> {
+  const response = await page.request.get(
+    `/api/runs?conversationId=${encodeURIComponent(conversationId)}`,
+  );
+  expect(response.ok()).toBeTruthy();
+  const { runs } = (await response.json()) as { runs: unknown[] };
+  return runs.length;
 }
