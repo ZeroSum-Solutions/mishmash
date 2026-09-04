@@ -671,6 +671,13 @@ import { registerTerminalRoutes } from './routes/terminal.js';
 import { createTerminalService } from './terminals.js';
 import { confinePreviewCwd, createPreviewService } from './previews.js';
 import { registerPreviewRoutes } from './routes/preview.js';
+import {
+  PREVIEW_PROXY_MOUNT,
+  createPreviewProxyUpgradeHandler,
+  createPreviewRootAssetFallback,
+  isAuthorizedPreviewProxyRequest,
+  isPreviewProxyOriginEscape,
+} from './preview-proxy.js';
 import { registerSocialShareRoutes } from './routes/social-share.js';
 import { registerInterviewRoutes } from './routes/interviews.js';
 import { registerOpenDesignPublicMetadataRoutes } from './routes/open-design-public-metadata.js';
@@ -737,7 +744,7 @@ import {
   seedLibraryExtensionOrigins,
 } from './library-tokens.js';
 import { listLibraryTokenOrigins } from './library-store.js';
-import { apiTokenFromEnv, isApiAuthDisabled, isApiTokenMiddlewareEnabled, isMatchingApiToken } from './api-token-auth.js';
+import { API_TOKEN_REQUIRED_ERROR, apiTokenFromEnv, isApiAuthDisabled, isApiTokenMiddlewareEnabled, isMatchingApiToken } from './api-token-auth.js';
 import { createOpenDesignPublicMetadataService } from './services/open-design-public-metadata.js';
 import { createWhatsNewService } from './services/whats-new.js';
 import { execCommandViaLoginShell } from './services/login-shell.js';
@@ -2208,6 +2215,27 @@ export async function startServer({
   // registered before the global parser so it claims the body first (same
   // pattern as the routes above).
   app.use('/api/routing/decision/preview', express.json({ limit: '256kb' }));
+  // The preview proxy forwards a request body to the project's dev server, and
+  // a body the JSON parser has already consumed cannot be re-streamed. Capture
+  // it as bytes first (registered before the global parser, same pattern as the
+  // dedicated limits above); body-parser marks the request read, so the parser
+  // below leaves it alone. It also decodes a compressed body, which is why the
+  // proxy re-states `Content-Length` and drops `Content-Encoding` before
+  // forwarding (see `preview-proxy.ts`). The API's own 4mb limit applies, which
+  // bounds what a preview can be POSTed through the daemon.
+  // Behind the same membership rule the route applies, so an unauthorized
+  // peer is refused before the daemon buffers its body rather than after — and
+  // refused HERE, not passed on. The bearer middleware below answers such a
+  // request 401 anyway, but only after the global JSON parser has read it, and
+  // a request another parser has consumed cannot be re-streamed: the proxy
+  // would hand the child an empty body under the caller's own Content-Length.
+  // It answers with that middleware's own 401 body, `API_TOKEN_REQUIRED_ERROR`,
+  // which both read from `api-token-auth.ts` so the two cannot drift apart.
+  const previewProxyRawBody = express.raw({ type: () => true, limit: '4mb' });
+  app.use(PREVIEW_PROXY_MOUNT, (req, res, next) => {
+    if (isAuthorizedPreviewProxyRequest(req)) return previewProxyRawBody(req, res, next);
+    return res.status(401).json(API_TOKEN_REQUIRED_ERROR);
+  });
   app.use(express.json({ limit: '4mb' }));
   const projectPreviewScopes = createProjectPreviewScopeRegistry();
 
@@ -2251,9 +2279,7 @@ export async function startServer({
       const auth = req.get('authorization') ?? '';
       const match = /^Bearer\s+(\S+)\s*$/i.exec(auth);
       if (!match || !isMatchingApiToken(match[1], apiToken)) {
-        return res.status(401).json({
-          error: { code: 'API_TOKEN_REQUIRED', message: 'Authorization: Bearer <OD_API_TOKEN> required' },
-        });
+        return res.status(401).json(API_TOKEN_REQUIRED_ERROR);
       }
       return next();
     });
@@ -2414,6 +2440,20 @@ export async function startServer({
   // Health/version remain open for monitoring probes.
   // Non-browser clients (no Origin header, no fetch metadata) are allowed.
   app.use('/api', (req, res, next) => {
+    // Containment for the preview proxy, which shares this origin instead of
+    // getting a sibling one: a page a browser attributes to a preview reaches
+    // that preview's own subtree and nothing else under `/api`. First in this
+    // middleware, ahead of every early return below, so no route is exempt
+    // from it — a preview page must not reach the live-artifact embed route or
+    // the clipper bootstrap routes either. `req.path` is mount-relative here,
+    // so the `/api` prefix the proxy path carries is put back before the
+    // comparison.
+    if (isPreviewProxyOriginEscape(req.headers, `/api${req.path}`)) {
+      return res.status(403).json({
+        error: 'Preview origin cannot access this API route',
+      });
+    }
+
     // Live artifact previews have stricter local-daemon validation and
     // loopback CORS handling on the route itself. Let that middleware produce
     // the structured error shape and preflight headers for preview embeds.
@@ -10161,6 +10201,10 @@ export async function startServer({
     telemetry: { reportFinalizedMessage, reportFeedback },
   });
 
+  // Root-absolute preview assets (`/_next/static/...`), attributed to the
+  // preview page that asked for them. Registered here so it can only claim
+  // paths no daemon route owns.
+  app.use(createPreviewRootAssetFallback({ getPreview: (id) => previewService.get(id) }));
   registerStaticSpaFallback(app, STATIC_DIR);
 
   // Wait for `listen` to bind so callers always see the resolved URL —
@@ -10190,6 +10234,15 @@ export async function startServer({
     let server;
     try {
       server = app.listen(port, host);
+      // A WebSocket upgrade never enters the Express router, so the preview
+      // proxy's HMR channel is wired to the listener itself. Registering a
+      // handler takes over what Node would otherwise do with an upgrade —
+      // including its own error handling — so the handler closes every socket
+      // that names no live preview, and owns the socket's failures from the
+      // moment it is called (`ownUpgradeSocket`, preview-proxy.ts).
+      server.on('upgrade', createPreviewProxyUpgradeHandler({
+        getPreview: (id) => previewService.get(id),
+      }));
       server.once('listening', () => {
         // Widen the between-request idle window so kept-alive sockets
         // belonging to chat/SSE clients survive the gaps between bursts.

@@ -4,6 +4,7 @@ import type { PreviewOpenResponse } from '@open-design/contracts';
 
 import { openInChrome } from '../browser/browser-open.js';
 import { announcePreviewOnRequestHost, loopbackPreviewUrl } from '../preview-origin.js';
+import { PREVIEW_PROXY_MOUNT, createPreviewProxyHandler } from '../preview-proxy.js';
 import { PreviewLifecycleError, type createPreviewService } from '../previews.js';
 
 export type PreviewRoutesDeps = {
@@ -29,6 +30,10 @@ export type PreviewRoutesDeps = {
  * (issue #38): start resolves only after the port verifiably answers HTTP,
  * previews outlive the agent tool call that asked for them, and stop reports
  * success only when the whole process group is confirmed gone.
+ *
+ * The preview itself is served under `.../previews/:previewId/proxy/`
+ * (decision D-14): inside `/api`, so it sits behind the daemon's origin gate
+ * and bearer policy, and reachable wherever the daemon is.
  */
 export function registerPreviewRoutes(app: Express, deps: PreviewRoutesDeps): void {
   const { previews, projectStore, resolvePreviewCwd } = deps;
@@ -80,6 +85,10 @@ export function registerPreviewRoutes(app: Express, deps: PreviewRoutesDeps): vo
       res.status(500).json({ error: 'PREVIEW_START_FAILED', message: String(error) });
     }
   });
+
+  // Registered before the list route only for readability; the mount path is
+  // distinct so order does not matter.
+  app.use(PREVIEW_PROXY_MOUNT, createPreviewProxyHandler({ getPreview: (id) => previews.get(id) }));
 
   app.get('/api/projects/:id/previews', (req, res) => {
     if (!assertProject(req, res)) return;

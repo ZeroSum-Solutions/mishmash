@@ -1542,9 +1542,10 @@ function usePreviewServers(projectId: string, enabled: boolean): PreviewInfo[] {
 /**
  * A running preview server is the only surface in this product that serves a
  * page from a site root, so it is what the panel offers when the srcdoc
- * render cannot show the page (issue #158). Each URL is the one the daemon
- * announced for THIS browser, so a collaborator on the tailnet gets a host
- * they can reach.
+ * render cannot show the page (issue #158). Each URL is the preview's path on
+ * the Open Design front this browser is on: the daemon serves the preview
+ * itself (decision D-14), so the link works for anyone who can open this
+ * workspace, not only for someone sitting at the daemon's machine.
  *
  * "Open in Chrome" asks the daemon to launch the preview on its own machine,
  * for a host whose default browser refuses loopback. It is therefore offered
@@ -1580,6 +1581,7 @@ function DfPreviewServerOffer({
         <p className="df-preview-server-why">{t('designFiles.previewServer.rootAbsolute')}</p>
       ) : null}
       <div className="df-preview-server-title">{t('designFiles.previewServer.title')}</div>
+      <p className="df-preview-server-hint">{t('designFiles.previewServer.sharedLink')}</p>
       {previews.map((preview) => (
         <div className="df-preview-server-row" key={preview.id}>
           <a
@@ -1616,7 +1618,11 @@ function DfPreviewServerOffer({
   );
 }
 
-/** True when an announced preview URL names the reader's own machine. */
+/**
+ * True when an announced preview URL names the reader's own machine. A URL
+ * with no origin (the daemon could not place the caller) is a path this
+ * browser resolves against its own front, which says nothing about loopback.
+ */
 function isLoopbackPreviewUrl(url: string): boolean {
   try {
     const hostname = new URL(url).hostname;
