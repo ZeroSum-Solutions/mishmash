@@ -78,6 +78,7 @@ import {
   resolveRunFailureUi,
 } from '../runtime/amr-guidance';
 import { describeRunFailureFacts } from '../runtime/run-failure-facts';
+import { answersRunCheck } from '../runtime/run-failure-reconcile';
 import type { RunCheckState } from '../runtime/run-failure-reconcile';
 import {
   fetchVelaLoginStatus,
@@ -1218,18 +1219,15 @@ export function ChatPane({
         fileChangeState: failedRunErrorEvent?.fileChangeState,
       })
     : null;
-  // The checking notice is keyed to a run, and that run's ROW answers it: once
-  // the row reaches any terminal — from the follow, from a reattach, from a
-  // conversation refresh — the question the notice asks has been answered and
-  // it leaves without anyone clearing it. A pane showing another conversation
-  // has no such row and shows nothing.
+  // The checking notice is keyed to a ROW, and that row answers it: once it
+  // reaches any terminal — from the follow, from a reattach, from a conversation
+  // refresh — the question the notice asks has been answered and it leaves
+  // without anyone clearing it. `answersRunCheck` picks the row by run id, or by
+  // the client's own assistant id while a lost create response is still being
+  // looked up. A pane showing another conversation has no such row and shows
+  // nothing.
   const activeRunCheck =
-    runCheck
-    && displayMessages.some(
-      (m) => m.role === 'assistant' && m.runId === runCheck.runId && isActiveRunStatus(m.runStatus),
-    )
-      ? runCheck
-      : null;
+    runCheck && displayMessages.some((m) => answersRunCheck(m, runCheck)) ? runCheck : null;
   const hasInlineAmrAuthorizeFailure = Boolean(
     retryAssistant && onRetry && runFailureUi?.primaryAction === 'authorize',
   );

@@ -49,7 +49,7 @@ function detectClientType(): 'desktop' | 'web' | 'unknown' {
   return 'unknown';
 }
 import { parseSseFrame } from './sse';
-import { markStreamUnadjudicated } from '../runtime/run-failure-reconcile';
+import { markLostRunCreate, markStreamUnadjudicated } from '../runtime/run-failure-reconcile';
 import {
   summarizeArtifactsForTranscript,
   type PersistedArtifactFileRef,
@@ -696,6 +696,15 @@ export async function streamViaDaemon({
   };
   const body = JSON.stringify(request);
 
+  // Reading the create response is its own step, because the two ways it can
+  // fail mean opposite things. A non-OK status is the daemon REFUSING the
+  // request — it named no run because it made none. A response that never
+  // arrives, or a body that will not parse, says nothing at all: the daemon
+  // creates and pins the run BEFORE it answers and starts the turn afterwards
+  // (`apps/daemon/src/routes/runs.ts`), so the run may already be running.
+  // Only the second is stamped `markLostRunCreate`, and it emits no run status:
+  // stamping the row `failed` is the same unearned verdict as the card.
+  let created: ChatRunCreateResponse;
   try {
     const createResp = await fetch('/api/runs', {
       method: 'POST',
@@ -718,7 +727,16 @@ export async function streamViaDaemon({
       return;
     }
 
-    const created = (await createResp.json()) as ChatRunCreateResponse;
+    created = (await createResp.json()) as ChatRunCreateResponse;
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') return;
+    handlers.onError(
+      markLostRunCreate(err instanceof Error ? err : new Error(String(err))),
+    );
+    return;
+  }
+
+  try {
     const runId = created.runId;
     onRunCreated?.(runId);
     // Start the stuck-run watchdog. trackRunProgress is called inside the

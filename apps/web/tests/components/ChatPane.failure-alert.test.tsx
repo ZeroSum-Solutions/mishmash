@@ -378,10 +378,11 @@ describe('the failure alert names the exact cause, the step, and the file-change
 // failure card with the daemon's own facts.
 
 const UNRESOLVED_RUN_ID = 'run-unresolved';
+const UNRESOLVED_ROW_ID = 'msg-unresolved';
 
 function unresolvedRow(runStatus: string = 'running'): ChatMessage {
   return {
-    id: 'msg-unresolved',
+    id: UNRESOLVED_ROW_ID,
     role: 'assistant',
     content: '',
     createdAt: 1,
@@ -404,7 +405,11 @@ describe('a stream failure with no run verdict is a checking state, never a fail
   it('names the unresolved run in neutral words instead of painting a failure', () => {
     const { container } = renderPane({
       messages: [unresolvedRow()],
-      runCheck: { runId: UNRESOLVED_RUN_ID, unreachable: false },
+      runCheck: {
+        runId: UNRESOLVED_RUN_ID,
+        assistantMessageId: UNRESOLVED_ROW_ID,
+        unreachable: false,
+      },
     });
 
     expect(checkingNotice(container), 'an unresolved run must show the checking notice').toBeTruthy();
@@ -416,7 +421,11 @@ describe('a stream failure with no run verdict is a checking state, never a fail
   it('offers no recovery action while the run may still be running', () => {
     const { container } = renderPane({
       messages: [unresolvedRow()],
-      runCheck: { runId: UNRESOLVED_RUN_ID, unreachable: false },
+      runCheck: {
+        runId: UNRESOLVED_RUN_ID,
+        assistantMessageId: UNRESOLVED_ROW_ID,
+        unreachable: false,
+      },
     });
 
     const notice = checkingNotice(container);
@@ -432,7 +441,11 @@ describe('a stream failure with no run verdict is a checking state, never a fail
     const onRunCheckAgain = vi.fn();
     const { container } = renderPane({
       messages: [unresolvedRow()],
-      runCheck: { runId: UNRESOLVED_RUN_ID, unreachable: true },
+      runCheck: {
+        runId: UNRESOLVED_RUN_ID,
+        assistantMessageId: UNRESOLVED_ROW_ID,
+        unreachable: true,
+      },
       onRunCheckAgain,
     });
 
@@ -449,10 +462,54 @@ describe('a stream failure with no run verdict is a checking state, never a fail
   it('drops the notice once the row reaches its own terminal', () => {
     const { container } = renderPane({
       messages: [unresolvedRow('succeeded')],
-      runCheck: { runId: UNRESOLVED_RUN_ID, unreachable: false },
+      runCheck: {
+        runId: UNRESOLVED_RUN_ID,
+        assistantMessageId: UNRESOLVED_ROW_ID,
+        unreachable: false,
+      },
     });
 
     expect(checkingNotice(container), 'a settled row answers the question the notice asked').toBeNull();
+  });
+
+  // W1J.2 — before the lookup names a run there IS no run id, so the notice
+  // has to be keyed on the client's own row or it cannot render at all.
+  it('shows the notice for a row whose run is still being looked up', () => {
+    const { container } = renderPane({
+      messages: [{ ...unresolvedRow(), runId: undefined } as ChatMessage],
+      runCheck: {
+        runId: null,
+        assistantMessageId: UNRESOLVED_ROW_ID,
+        unreachable: false,
+      },
+    });
+
+    expect(
+      checkingNotice(container),
+      'a create response the client lost must read as a neutral checking state',
+    ).toBeTruthy();
+    expect(failureCard(container), 'a run that may exist must not paint the failure card').toBeNull();
+  });
+
+  // W1J.2 — the one honest failure on this path: the lookup ruled every run
+  // out, so nothing ran and Retry carries no double-send hazard.
+  it('names a run the daemon never started, and offers Retry for it', () => {
+    const { container } = renderPane({
+      messages: [
+        terminalMessage({
+          id: 'not-started',
+          runStatus: 'failed',
+          detail: 'chat.runError.notStartedMessage',
+          code: 'RUN_NOT_STARTED',
+        }),
+      ],
+    });
+
+    expect(failureCard(container), 'a request that never reached the daemon really did fail')
+      .toBeTruthy();
+    expect(screen.getByText('chat.runError.title.notStarted')).toBeTruthy();
+    expect(screen.queryByText('chat.runError.title.generic')).toBeNull();
+    expect(screen.getByRole('button', { name: 'promptTemplates.retry' })).toBeTruthy();
   });
 
   it('keeps the failure card for a run the daemon adjudicated', () => {

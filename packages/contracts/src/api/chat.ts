@@ -529,6 +529,13 @@ export interface ChatRunStatusResponse {
   projectId: string | null;
   conversationId: string | null;
   assistantMessageId: string | null;
+  /** The id the CLIENT minted for the create request that made this run, echoed
+   *  back so a client whose create response was lost can find its own run in
+   *  `GET /api/runs?conversationId=…&status=active`. The daemon creates and pins
+   *  the run before it answers that request, so a lost response never means a
+   *  lost run — but without this id the list cannot be matched back to the
+   *  request. Null for callers that send none (CLI / MCP / SDK). */
+  clientRequestId?: string | null;
   agentId: string | null;
   /** Design system whose prompt context was actually injected for this run. */
   designSystemId?: string | null;

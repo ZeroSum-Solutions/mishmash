@@ -325,6 +325,10 @@ export function createChatRunService({
     projectId: run.projectId,
     conversationId: run.conversationId,
     assistantMessageId: run.assistantMessageId,
+    // The client's own handle on this run. A client that never read the create
+    // response holds only this id and `assistantMessageId`, so both must come
+    // back out of every run read-back or its run cannot be looked up at all.
+    clientRequestId: run.clientRequestId ?? null,
     agentId: run.agentId,
     designSystemId: run.designSystemId ?? null,
     designSystemRequestedId: run.designSystemRequestedId ?? null,

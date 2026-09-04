@@ -4,8 +4,11 @@ import { createGenericDaemonDisconnectError } from '../../src/providers/daemon';
 import {
   RUN_FAILURE_RECHECK_INTERVAL_MS,
   RUN_FAILURE_RECHECK_MAX_MISSES,
+  answersRunCheck,
   applyRunTerminalFromStatus,
+  isLostRunCreateFailure,
   isUnadjudicatedStreamFailure,
+  markLostRunCreate,
   markStreamUnadjudicated,
   nextInferredRunFailureStep,
   retractsRunFailure,
@@ -274,10 +277,65 @@ describe('isUnadjudicatedStreamFailure — a verdict is still a verdict', () => 
   });
 });
 
+// W1J.2 — a create response the client never read is the one unadjudicated
+// failure that also leaves it with NO run id.
+describe('isLostRunCreateFailure — a create whose answer never arrived', () => {
+  it('marks the create failure that leaves the run existence open', () => {
+    const err = markLostRunCreate(new Error('Failed to fetch'));
+    expect(isLostRunCreateFailure(err)).toBe(true);
+  });
+
+  // A run that may exist is never adjudicated, so the narrower mark must imply
+  // the wider one — every pane already reads the wider one.
+  it('implies the unadjudicated mark', () => {
+    expect(isUnadjudicatedStreamFailure(markLostRunCreate(new Error('Failed to fetch')))).toBe(true);
+  });
+
+  // A non-OK create is the daemon REFUSING the request: it named no run because
+  // it made none, and that answer must keep its own wording.
+  it('is not claimed by an ordinary unadjudicated stream failure', () => {
+    expect(isLostRunCreateFailure(markStreamUnadjudicated(new Error('daemon 400: bad request'))))
+      .toBe(false);
+    expect(isLostRunCreateFailure(createGenericDaemonDisconnectError())).toBe(false);
+    expect(isLostRunCreateFailure(new Error('plain'))).toBe(false);
+    expect(isLostRunCreateFailure(null)).toBe(false);
+  });
+});
+
+// W1J.2 — the notice belongs to a ROW, which is the only handle a client has
+// before the lookup names a run.
+describe('answersRunCheck — the row a checking notice is asking about', () => {
+  const withRun = { runId: 'run-1', assistantMessageId: 'msg-1', unreachable: false };
+  const lookingUp = { runId: null, assistantMessageId: 'msg-1', unreachable: false };
+
+  it('matches the run own row once the client knows the run id', () => {
+    expect(answersRunCheck(assistant({ runStatus: 'running' }), withRun)).toBe(true);
+    expect(answersRunCheck(assistant({ runId: 'run-2', runStatus: 'running' }), withRun)).toBe(false);
+  });
+
+  it('matches the client own assistant row while the run is still being looked up', () => {
+    expect(answersRunCheck(assistant({ runId: undefined, runStatus: 'running' }), lookingUp))
+      .toBe(true);
+    expect(answersRunCheck(assistant({ id: 'msg-2', runId: undefined, runStatus: 'running' }), lookingUp))
+      .toBe(false);
+  });
+
+  // A settled row has answered the question the notice asked, in both states.
+  it('has nothing to ask once the row reaches a terminal', () => {
+    expect(answersRunCheck(assistant({ runStatus: 'succeeded' }), withRun)).toBe(false);
+    expect(answersRunCheck(assistant({ runId: undefined, runStatus: 'failed' }), lookingUp))
+      .toBe(false);
+  });
+
+  it('ignores a user row', () => {
+    expect(answersRunCheck(assistant({ role: 'user', runStatus: 'running' }), withRun)).toBe(false);
+  });
+});
+
 // W1I.1 — the notice's wording follows the DAEMON, not the run.
 describe('runCheckWithDaemonReachability — a daemon that answers is not silent', () => {
-  const checking = { runId: 'run-1', unreachable: false } as const;
-  const unreachable = { runId: 'run-1', unreachable: true } as const;
+  const checking = { runId: 'run-1', assistantMessageId: 'msg-1', unreachable: false } as const;
+  const unreachable = { runId: 'run-1', assistantMessageId: 'msg-1', unreachable: true } as const;
 
   it('says the daemon is not answering once nothing has answered', () => {
     expect(runCheckWithDaemonReachability(checking, 'run-1', false)).toEqual(unreachable);
@@ -301,7 +359,12 @@ describe('runCheckWithDaemonReachability — a daemon that answers is not silent
   });
 
   it('carries the rest of the pane own marker through', () => {
-    const carried = { runId: 'run-1', unreachable: false, message: 'daemon 503: no body' };
+    const carried = {
+      runId: 'run-1',
+      assistantMessageId: 'msg-1',
+      unreachable: false,
+      message: 'daemon 503: no body',
+    };
     expect(runCheckWithDaemonReachability(carried, 'run-1', false))
       .toEqual({ ...carried, unreachable: true });
   });

@@ -122,13 +122,22 @@ import {
   RUN_FAILURE_RECHECK_INTERVAL_MS,
   applyRunTerminalFromStatus,
   conversationAnswersRunCheck,
+  isLostRunCreateFailure,
   isUnadjudicatedStreamFailure,
   nextInferredRunFailureStep,
-  runCheckWithDaemonReachability,
   retractsRunFailure,
   retractsStaleRunFailure,
+  runCheckWithDaemonReachability,
 } from '../runtime/run-failure-reconcile';
 import type { RunCheckState } from '../runtime/run-failure-reconcile';
+import {
+  LOST_RUN_CREATE_PROBE_INTERVAL_MS,
+  RUN_NOT_STARTED_ERROR_CODE,
+  matchLostRunCreate,
+  nextLostRunCreateStep,
+  pinnedRunIdForAssistantRow,
+} from '../runtime/lost-run-create';
+import type { LostRunCreateIdentity } from '../runtime/lost-run-create';
 import { RESUME_CONTINUE_PROMPT } from '../runtime/resume';
 import { checkAmrBalanceGate } from '../runtime/amr-balance-gate';
 import { isPaidAmrPlan, resolveAmrPlan } from '../runtime/amr-low-balance-plan';
@@ -1561,6 +1570,11 @@ export function ProjectView({
   // Retires the follow a re-check replaces, so "Check again" cannot leave two
   // loops probing the same run.
   const inferredFollowGenerationsRef = useRef(new Map<string, number>());
+  // Assistant rows whose run is being looked up after a lost create response.
+  // The phantom-row self-heal in `attachRecoverableRuns` reads this: a row with
+  // no run id is normally a send that never landed, but one of these has a
+  // lookup still deciding that question and must not be failed under it.
+  const lostRunCreateRowsRef = useRef(new Set<string>());
   const [artifact, setArtifact] = useState<Artifact | null>(null);
   const [filesRefresh, setFilesRefresh] = useState(0);
   // Progress hint for the preview canvas: true from the first `file-changed`
@@ -3435,14 +3449,119 @@ export function ProjectView({
     ],
   );
 
+  /**
+   * Find the run a lost create response never named, and hand it to the follow.
+   *
+   * The client holds two ids for it and the daemon answers under both — the
+   * conversation's active runs carry the `clientRequestId` this client minted,
+   * and the assistant row the daemon pinned before it answered carries the run
+   * id durably (`runtime/lost-run-create.ts`). Until one of them answers the row
+   * stays on its active status behind the neutral checking notice: a run that
+   * may be running is never painted as a failure.
+   *
+   * Only the bound running out ends it the other way, and only because the
+   * lookup itself is what rules a live run out: neither read names a run, so
+   * nothing is running, and the honest outcome is a named "could not be started"
+   * failure whose Retry carries no double-send hazard.
+   */
+  const scheduleLostRunCreateLookup = useCallback(
+    (conversationId: string, identity: LostRunCreateIdentity, streamMessage: string) => {
+      lostRunCreateRowsRef.current.add(identity.assistantMessageId);
+      const release = () => lostRunCreateRowsRef.current.delete(identity.assistantMessageId);
+      let probes = 0;
+      const attempt = () => {
+        if (messagesConversationIdRef.current !== conversationId) {
+          release();
+          return;
+        }
+        void (async () => {
+          // Anything else that adopted this run first — a reattach pass over the
+          // still-active row — has already answered the question.
+          const localRunId = pinnedRunIdForAssistantRow(
+            messagesRef.current,
+            identity.assistantMessageId,
+          );
+          if (localRunId) {
+            release();
+            return;
+          }
+          probes += 1;
+          const active = await listActiveChatRuns(project.id, conversationId);
+          let runId = matchLostRunCreate(active, identity);
+          if (!runId) {
+            const stored = await listMessages(project.id, conversationId).catch(() => null);
+            runId = stored ? pinnedRunIdForAssistantRow(stored, identity.assistantMessageId) : null;
+          }
+          if (messagesConversationIdRef.current !== conversationId) {
+            release();
+            return;
+          }
+          const step = nextLostRunCreateStep(runId, probes);
+          if (step === 'probe') {
+            scheduleProjectTimeout(attempt, LOST_RUN_CREATE_PROBE_INTERVAL_MS);
+            return;
+          }
+          release();
+          if (step === 'adopt' && runId) {
+            // Pin the run onto the row. `attachRecoverableRuns` reattaches the
+            // event stream from there, so the user sees the turn's output and
+            // not only its verdict; the follow is the net under that.
+            const adoptedRunId = runId;
+            updateMessageById(
+              identity.assistantMessageId,
+              (prev) => ({ ...prev, runId: adoptedRunId }),
+              true,
+            );
+            setRunCheck({
+              runId: adoptedRunId,
+              assistantMessageId: identity.assistantMessageId,
+              unreachable: false,
+              message: streamMessage,
+            });
+            scheduleInferredRunFailureRecheck(conversationId, adoptedRunId, {
+              unresolved: true,
+              message: streamMessage,
+            });
+            return;
+          }
+          const notStarted = t('chat.runError.notStartedMessage');
+          updateMessageById(
+            identity.assistantMessageId,
+            (prev) => ({
+              ...appendErrorStatusEvent(prev, notStarted, RUN_NOT_STARTED_ERROR_CODE),
+              endedAt: prev.endedAt ?? Date.now(),
+              runStatus: 'failed',
+            }),
+            true,
+          );
+          setPaneError(null, notStarted);
+          settleConversationLatestRun(conversationId, 'failed', Date.now());
+        })();
+      };
+      scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_DELAY_MS);
+    },
+    [
+      project.id,
+      scheduleInferredRunFailureRecheck,
+      scheduleProjectTimeout,
+      setPaneError,
+      settleConversationLatestRun,
+      t,
+      updateMessageById,
+    ],
+  );
+
   // The manual re-check behind the "MishMash is not answering" notice: follow the
   // run again now instead of waiting out the interval.
   const recheckUnresolvedRun = useCallback(() => {
     const pending = runCheck;
     const conversationId = messagesConversationIdRef.current;
-    if (!pending || !conversationId) return;
+    // A check with no run id is still LOOKING for one; its lookup is already
+    // running and the notice offers no manual re-check in that state.
+    if (!pending || !pending.runId || !conversationId) return;
+    const pendingRunId = pending.runId;
     setRunCheck({ ...pending, unreachable: false });
-    scheduleInferredRunFailureRecheck(conversationId, pending.runId, {
+    scheduleInferredRunFailureRecheck(conversationId, pendingRunId, {
       unresolved: true,
       message: pending.message,
     });
@@ -3872,6 +3991,10 @@ export function ProjectView({
           if (isProgrammaticBrandExtractionStatusMessage(message, currentProject.metadata)) {
             continue;
           }
+          // A row whose create response was lost has a lookup deciding whether
+          // its run exists. Failing it here would answer that question with a
+          // guess, which is the claim this whole path exists to avoid.
+          if (lostRunCreateRowsRef.current.has(message.id)) continue;
           updateMessageById(
             message.id,
             (prev) => ({
@@ -4519,7 +4642,12 @@ export function ProjectView({
               const unresolvedRunId =
                 isUnadjudicatedStreamFailure(err) && !genericDisconnect ? runId : undefined;
               if (runMayFinalize && unresolvedRunId !== undefined) {
-                setRunCheck({ runId: unresolvedRunId, unreachable: false, message: err.message });
+                setRunCheck({
+                  runId: unresolvedRunId,
+                  assistantMessageId: message.id,
+                  unreachable: false,
+                  message: err.message,
+                });
               } else if (runMayFinalize) {
                 setPaneError(runId, err.message);
                 appendAssistantErrorEvent(message.id, err.message, errorCode, failure);
@@ -5392,6 +5520,10 @@ export function ProjectView({
           : apiProtocolModelLabel(config.apiProtocol, config.model);
       const preTurnFileNames = projectFiles.map((f) => f.name);
       const assistantId = randomUUID();
+      // The id this send is known by on the daemon side even when the create
+      // response never comes back. Minted here rather than at the call site so
+      // `onError` can look the run up under it (`scheduleLostRunCreateLookup`).
+      const runClientRequestId = randomUUID();
       const assistantMsg: ChatMessage = {
         id: assistantId,
         role: 'assistant',
@@ -6028,11 +6160,28 @@ export function ProjectView({
           // back. Only a run this client can still follow qualifies — an error
           // raised before the daemon named a run has nothing to check.
           const unresolvedRunId = isUnadjudicatedStreamFailure(err) ? currentRunId : undefined;
+          // The same claim one step earlier: the create response was lost, so
+          // this client has no run id for a run the daemon may already be
+          // running. It owns two ids for it, so the honest move is to look it up
+          // rather than to paint anything.
+          const lostRunCreate = isLostRunCreateFailure(err) && currentRunId === undefined;
           textBuffer.flush();
           textBuffer.cancel();
           cancelSendTextBuffer();
           if (runMayFinalize && unresolvedRunId !== undefined) {
-            setRunCheck({ runId: unresolvedRunId, unreachable: false, message: err.message });
+            setRunCheck({
+              runId: unresolvedRunId,
+              assistantMessageId: assistantId,
+              unreachable: false,
+              message: err.message,
+            });
+          } else if (runMayFinalize && lostRunCreate) {
+            setRunCheck({
+              runId: null,
+              assistantMessageId: assistantId,
+              unreachable: false,
+              message: err.message,
+            });
           } else if (runMayFinalize) {
             setPaneError(currentRunId || null, err.message);
             appendAssistantErrorEvent(assistantId, err.message, errorCode, failure);
@@ -6186,7 +6335,12 @@ export function ProjectView({
           // The sidebar's latest-run status is the same claim in miniature, so an
           // unresolved stream failure must not stamp the conversation failed
           // either. It stays on the status the send left it with.
-          if (ownsCurrentRun && !conversationFinalizedInline && unresolvedRunId === undefined) {
+          if (
+            ownsCurrentRun
+            && !conversationFinalizedInline
+            && unresolvedRunId === undefined
+            && !lostRunCreate
+          ) {
             updateConversationLatestRun(finalRunStatusAfterError, endedAt);
           }
           setMessages((curr) => {
@@ -6203,6 +6357,12 @@ export function ProjectView({
               unresolved: unresolvedRunId !== undefined,
               message: err.message,
             });
+          } else if (runMayFinalize && lostRunCreate) {
+            scheduleLostRunCreateLookup(
+              runConversationId,
+              { clientRequestId: runClientRequestId, assistantMessageId: assistantId },
+              err.message,
+            );
           }
           void refreshProjectFiles();
           clearTraceTouchedFilePaths();
@@ -6292,7 +6452,7 @@ export function ProjectView({
           projectId: project.id,
           conversationId: runConversationId,
           assistantMessageId: assistantId,
-          clientRequestId: randomUUID(),
+          clientRequestId: runClientRequestId,
           skillId: project.skillId ?? null,
           skillIds: Array.isArray(meta?.skillIds) ? meta.skillIds : [],
           context: runContext,
@@ -6452,7 +6612,7 @@ export function ProjectView({
           projectId: project.id,
           conversationId: runConversationId,
           assistantMessageId: assistantId,
-          clientRequestId: randomUUID(),
+          clientRequestId: runClientRequestId,
           skillId: project.skillId ?? null,
           skillIds: Array.isArray(meta?.skillIds) ? meta.skillIds : [],
           context: runContext,
@@ -6557,6 +6717,7 @@ export function ProjectView({
       clearProjectTimeout,
       scheduleConversationMessageRefresh,
       scheduleInferredRunFailureRecheck,
+      scheduleLostRunCreateLookup,
       scheduleProjectTimeout,
       setPaneError,
       onProjectsRefresh,
