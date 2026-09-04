@@ -213,6 +213,20 @@ describe('a root-absolute preview asset the daemon cannot attribute to a page', 
     expect(answered.body).not.toContain('PREVIEW_REFERRER_REQUIRED');
   }, 30_000);
 
+  it('says nothing to a subresource asked for by another site', async () => {
+    const { apiPort } = await boot();
+
+    // The same unattributable shape as the named case above, but the fetch is
+    // made by a page on another origin. The daemon must not tell it that a
+    // preview is running here, so the answer stays the ordinary one.
+    const answered = await get(apiPort, '/assets/x.js', {
+      headers: { Accept: SCRIPT_ACCEPT, Origin: 'https://attacker.example' },
+    });
+
+    expect(answered.body).not.toContain('PREVIEW_REFERRER_REQUIRED');
+    expect(answered.body).not.toContain('body{color:red}');
+  }, 30_000);
+
   it('says nothing to a page on another site', async () => {
     const { apiPort, base } = await boot();
 
