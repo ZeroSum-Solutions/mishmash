@@ -74,6 +74,26 @@ function isActiveRunStatus(status: ChatMessage['runStatus']): boolean {
   return status === 'queued' || status === 'running';
 }
 
+/**
+ * The run a conversation is still waiting on at the moment it mounts.
+ *
+ * INVARIANT: a conversation that mounts onto one of its own active runs must
+ * reach that run's terminal without being remounted. The composer pause below
+ * is keyed on the assistant row's status, and for a run this pane did not
+ * start, the mount-time message load is its only writer: no stream is attached
+ * to that row, and `ProjectView`'s recoverable-run pass speaks for the primary
+ * conversation alone. Left unfollowed, the pause outlives the run.
+ *
+ * Only the LATEST assistant row can be waiting — an earlier one the daemon has
+ * already superseded — and it must carry the run id, which is the handle the
+ * follow needs. Returns `undefined` when there is nothing to follow.
+ */
+function activeRunAwaitingTerminal(messages: readonly ChatMessage[]): string | undefined {
+  const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
+  if (!latestAssistant || !isActiveRunStatus(latestAssistant.runStatus)) return undefined;
+  return latestAssistant.runId;
+}
+
 export interface ConversationChatContext {
   /** Live app config — selects daemon-vs-api mode and the active agent. */
   config: AppConfig;
@@ -207,9 +227,15 @@ export function useConversationChat(
    * inferred failure is never painted, so the follow's other job is to ADOPT
    * the daemon's verdict when the run really did fail: its stored row carries
    * the structured facts this client cannot invent.
+   *
+   * `stream` is the stream failure this pane raised for the run. It is `null`
+   * for the follow's OTHER entry, `activeRunAwaitingTerminal` above: a row that
+   * was already active when the conversation mounted. That follow saw no stream
+   * error, so it has nothing of its own either to leave standing or to paint —
+   * it only carries the run to its terminal.
    */
   const scheduleRunFailureRecheck = useCallback(
-    (runId: string | undefined, stream: { unresolved: boolean; message: string }) => {
+    (runId: string | undefined, stream: { unresolved: boolean; message: string } | null) => {
       if (!runId) return;
       const boundConversationId = conversationId;
       const generation = (followGenerationsRef.current.get(runId) ?? 0) + 1;
@@ -235,7 +261,7 @@ export function useConversationChat(
             // for it. A pane that already painted the failure is done; a pane
             // still checking adopts the daemon's row for its facts, and keeps
             // reading for them if that read answers nothing.
-            if (!stream.unresolved) return;
+            if (stream && !stream.unresolved) return;
             const adopted = await listMessages(projectId, boundConversationId).catch(() => null);
             if (superseded()) return;
             const daemonRow = adopted?.find(
@@ -250,6 +276,17 @@ export function useConversationChat(
               // while its row was unreadable, so the stream error must not stay
               // in the slot and be shown under the daemon's title.
               clearErrorForRun(runId);
+              return;
+            }
+            if (!stream) {
+              // A mount follow has no error of its own, so it has no card to
+              // fall back to: the row keeps its active status and the composer
+              // stays paused, which is honest while the daemon's own row is
+              // unreadable. Keep reading for it.
+              failureRecheckTimerRef.current = window.setTimeout(
+                attempt,
+                RUN_FAILURE_RECHECK_INTERVAL_MS,
+              );
               return;
             }
             // A failed run is not a succeeded run, so naming it costs the bar
@@ -333,13 +370,20 @@ export function useConversationChat(
       if (cancelled) return;
       setMessages(list);
       setLoading(false);
+      scheduleRunFailureRecheck(activeRunAwaitingTerminal(list), null);
     })();
     return () => {
       cancelled = true;
       clearFailureRecheck();
       clearLostRunCreateLookup();
     };
-  }, [projectId, conversationId, clearFailureRecheck, clearLostRunCreateLookup]);
+  }, [
+    projectId,
+    conversationId,
+    clearFailureRecheck,
+    clearLostRunCreateLookup,
+    scheduleRunFailureRecheck,
+  ]);
 
   // Tear down the live subscription when the tab unmounts. The daemon run
   // keeps going; we only stop the browser-side SSE.
