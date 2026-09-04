@@ -24,6 +24,26 @@ import {
 interface RunTerminalRecord {
   status: string | null;
   endedWithUnfinishedWork: boolean;
+  /** The clock `emit()` (`runtimes/runs.ts`) stamped on the `end` record, i.e.
+   *  the run's own terminal time. Null for a log whose terminal record predates
+   *  that stamp; see `classifyUnattendedRunDelivery`. */
+  endedAt: number | null;
+}
+
+/** One record as `readRunEventRecords` reads it back off disk. */
+interface RunEventRecord {
+  event: string;
+  data: unknown;
+  timestamp?: number;
+}
+
+/**
+ * The window a run's writes belong to: its own start and its own terminal, both
+ * taken from the durable record. Files outside it are another turn's work.
+ */
+export interface RunInterval {
+  startedAt: number;
+  endedAt: number;
 }
 
 export interface UnattendedDeliveryRun {
@@ -71,7 +91,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function readRunEventRecords(
   runsLogDir: string,
   runId: string,
-): Array<{ event: string; data: unknown }> {
+): RunEventRecord[] {
   let lines: string[];
   try {
     lines = fs.readFileSync(path.join(runsLogDir, runId, 'events.jsonl'), 'utf8')
@@ -80,7 +100,7 @@ export function readRunEventRecords(
   } catch {
     return [];
   }
-  const records: Array<{ event: string; data: unknown }> = [];
+  const records: RunEventRecord[] = [];
   for (let index = 0; index < lines.length; index += 1) {
     let value: unknown;
     try {
@@ -90,7 +110,11 @@ export function readRunEventRecords(
       return [];
     }
     if (isRecord(value) && typeof value.event === 'string') {
-      records.push({ event: value.event, data: value.data });
+      records.push({
+        event: value.event,
+        data: value.data,
+        ...(typeof value.timestamp === 'number' ? { timestamp: value.timestamp } : {}),
+      });
     }
   }
   return records;
@@ -104,8 +128,12 @@ export function readRunEventRecords(
  * through the canonical `todoSnapshotHasUnfinishedWork` predicate and stamps it
  * onto the `end` event, so reading it back is the only way to stay in lockstep
  * with the chat footer and the project pill (#1247 / #1060).
+ *
+ * `endedAt` comes from the record's own `timestamp`, which `emit()` stamps on
+ * every event it writes. That is the run's terminal clock as the run itself
+ * recorded it, so it stays true however long afterwards this is read.
  */
-function runTerminalRecord(records: readonly RunEventLike[]): RunTerminalRecord | null {
+function runTerminalRecord(records: readonly RunEventRecord[]): RunTerminalRecord | null {
   let terminal: RunTerminalRecord | null = null;
   for (const record of records) {
     if (record?.event !== 'end') continue;
@@ -113,6 +141,7 @@ function runTerminalRecord(records: readonly RunEventLike[]): RunTerminalRecord 
     terminal = {
       status: typeof data.status === 'string' ? data.status : null,
       endedWithUnfinishedWork: data.endedWithUnfinishedWork === true,
+      endedAt: Number.isFinite(record.timestamp) ? (record.timestamp as number) : null,
     };
   }
   return terminal;
@@ -173,22 +202,27 @@ function hasUnfinishedTodos(
  * in place through `cp` / `magick` / `ffmpeg`, and touched trace objects —
  * because all three end as a project file written during the turn.
  *
- * The mtime window is coarser than a name diff: it can also catch a file
- * written in the second before the run's recorded start (the grace the shared
- * predicate allows). Over-reporting a neighbouring write is the safe direction
- * here — under-reporting is what leaves the user with a delivered turn recorded
- * as empty.
+ * The mtime window is coarser than a name diff: it also catches a file written
+ * in the second either side of the run's own boundaries (the grace the shared
+ * predicate allows). Over-reporting a neighbouring write by that second is the
+ * safe direction — under-reporting is what leaves the user with a delivered
+ * turn recorded as empty.
+ *
+ * The window is the run's INTERVAL, not everything after its start. Reading the
+ * tree at the run's terminal, the two are the same; reading it later — the
+ * startup replay deciding a backlog row — they are not, and a lower bound alone
+ * would hand this run every file written by every turn that came after it.
  */
 export function producedFilesForRun(
   files: readonly ProjectFile[],
-  runStartedAt: number,
-  isRunTouched: (fileMtimeMs: number, runStartTimeMs: number) => boolean,
+  interval: RunInterval,
+  isRunTouched: (fileMtimeMs: number, runStartTimeMs: number, runEndTimeMs: number) => boolean,
 ): ProjectFile[] {
   return files.filter(
     (file) =>
       file.type !== 'dir' &&
       isImplicitProducedFileCandidate(file) &&
-      isRunTouched(file.mtime, runStartedAt),
+      isRunTouched(file.mtime, interval.startedAt, interval.endedAt),
   );
 }
 
@@ -209,17 +243,17 @@ export function deliveryEvidenceForRun(args: {
   files: readonly ProjectFile[];
   previewStarted: boolean;
   records: readonly RunEventLike[];
-  runStartedAt: number;
+  runInterval: RunInterval;
   sessionMode: ChatSessionMode | null | undefined;
   terminal: RunTerminalRecord;
-  isRunTouched: (fileMtimeMs: number, runStartTimeMs: number) => boolean;
+  isRunTouched: (fileMtimeMs: number, runStartTimeMs: number, runEndTimeMs: number) => boolean;
 }): DesignDeliveryEvidence {
   return {
     sessionMode: args.sessionMode,
     runStatus: args.terminal.status as DesignDeliveryEvidence['runStatus'],
     content: args.content,
     hasUnfinishedTodos: hasUnfinishedTodos(args.records, args.terminal),
-    deliveredFileCount: producedFilesForRun(args.files, args.runStartedAt, args.isRunTouched).length,
+    deliveredFileCount: producedFilesForRun(args.files, args.runInterval, args.isRunTouched).length,
     hasLiveArtifactDelivery: hasLiveArtifactDelivery(args.records),
     hasPreviewServerStart: args.previewStarted,
     persistenceSucceeded: false,
@@ -266,7 +300,7 @@ export async function classifyUnattendedRunDelivery(
   db: Database.Database,
   run: UnattendedDeliveryRun,
   deps: UnattendedDeliveryDeps,
-  isRunTouched: (fileMtimeMs: number, runStartTimeMs: number) => boolean,
+  isRunTouched: (fileMtimeMs: number, runStartTimeMs: number, runEndTimeMs: number) => boolean,
 ): Promise<boolean> {
   if (!run.assistantMessageId || !run.projectId) return false;
   try {
@@ -289,6 +323,13 @@ export async function classifyUnattendedRunDelivery(
     const records = readRunEventRecords(deps.runsLogDir, run.id);
     const terminal = runTerminalRecord(records);
     if (!terminal || terminal.status !== 'succeeded') return false;
+    // No terminal clock, no interval, and file attribution by lower bound alone
+    // would hand this run every later turn's work. There is no truthful list to
+    // store instead: the chat reads a succeeded design turn missing either list
+    // as still verifying, so a verdict without one is not a verdict. Decline the
+    // row on the same terms as one whose run log did not survive at all.
+    if (terminal.endedAt === null) return false;
+    const runInterval: RunInterval = { startedAt: run.startedAt, endedAt: terminal.endedAt };
 
     // The row's own session mode is what the chat renders against; the run's is
     // the fallback for a row a client never stamped.
@@ -306,7 +347,7 @@ export async function classifyUnattendedRunDelivery(
       files,
       previewStarted: deps.previewStartedDuringRun(run.projectId, run.startedAt),
       records,
-      runStartedAt: run.startedAt,
+      runInterval,
       sessionMode,
       terminal,
       isRunTouched,
@@ -321,7 +362,7 @@ export async function classifyUnattendedRunDelivery(
     // (`designDeliveryVerificationPending`, `apps/web/src/runtime/
     // design-delivery.ts`), which is the stuck state this classification exists
     // to clear.
-    const produced = JSON.stringify(producedFilesForRun(files, run.startedAt, isRunTouched));
+    const produced = JSON.stringify(producedFilesForRun(files, runInterval, isRunTouched));
     return db.prepare(
       `UPDATE messages
           SET result_delivery_state = ?, produced_files_json = ?, trace_object_files_json = ?
@@ -396,6 +437,14 @@ export interface DeliveryClassificationReplayResult {
  * row still stamped `running` by the process that died, using the durable run
  * state, and this pass reads the repaired status to find succeeded turns.
  *
+ * What a replay must not borrow from the timer is the timer's sense of "now".
+ * The timer reads the project tree seconds after the run ended, so a run's
+ * interval and the tree's state coincide; a replay may read it days later, over
+ * a backlog, with every later turn's files present. Attribution is therefore
+ * bounded by the run's own interval — its start and the terminal clock on its
+ * `end` record — and a row whose terminal record carries no clock is declined
+ * rather than attributed by lower bound alone.
+ *
  * A row whose `session_mode` is not `design` is skipped in SQL rather than
  * handed to the classifier, which would decline it anyway. The run's own
  * session mode is not a fallback here the way it is for the timer: the timer
@@ -405,7 +454,7 @@ export interface DeliveryClassificationReplayResult {
 export async function replayUnattendedDeliveryClassifications(
   db: Database.Database,
   deps: UnattendedDeliveryDeps,
-  isRunTouched: (fileMtimeMs: number, runStartTimeMs: number) => boolean,
+  isRunTouched: (fileMtimeMs: number, runStartTimeMs: number, runEndTimeMs: number) => boolean,
 ): Promise<DeliveryClassificationReplayResult> {
   const result: DeliveryClassificationReplayResult = { candidates: 0, classified: 0 };
   let rows: UnclassifiedDeliveryRow[];

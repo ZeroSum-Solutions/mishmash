@@ -150,6 +150,52 @@ describe('unattended run delivery classification', () => {
     };
   }
 
+  // The shared predicate the classifier and the run-end artifact-manifest
+  // reconciliation both attribute through: a run owns the writes inside its own
+  // interval, widened by one grace at each end.
+  describe('isRunTouchedProjectFile', () => {
+    const GRACE_MS = 1_000;
+
+    it('keeps a file written between the run start and its terminal', () => {
+      expect(isRunTouchedProjectFile(RUN_STARTED_AT + 500, RUN_STARTED_AT, RUN_ENDED_AT))
+        .toBe(true);
+    });
+
+    it('keeps a file written one grace before the run started', () => {
+      expect(isRunTouchedProjectFile(RUN_STARTED_AT - GRACE_MS, RUN_STARTED_AT, RUN_ENDED_AT))
+        .toBe(true);
+    });
+
+    it('keeps a file written one grace after the run ended', () => {
+      expect(isRunTouchedProjectFile(RUN_ENDED_AT + GRACE_MS, RUN_STARTED_AT, RUN_ENDED_AT))
+        .toBe(true);
+    });
+
+    it('rejects a file written before the run started, beyond the grace', () => {
+      expect(isRunTouchedProjectFile(RUN_STARTED_AT - GRACE_MS - 1, RUN_STARTED_AT, RUN_ENDED_AT))
+        .toBe(false);
+    });
+
+    it('rejects a file written after the run ended, beyond the grace', () => {
+      expect(isRunTouchedProjectFile(RUN_ENDED_AT + GRACE_MS + 1, RUN_STARTED_AT, RUN_ENDED_AT))
+        .toBe(false);
+    });
+
+    it('rejects an unusable bound rather than attributing on one side alone', () => {
+      expect(isRunTouchedProjectFile(RUN_STARTED_AT + 500, RUN_STARTED_AT, Number.NaN))
+        .toBe(false);
+      expect(isRunTouchedProjectFile(Number.NaN, RUN_STARTED_AT, RUN_ENDED_AT)).toBe(false);
+    });
+
+    // The run-end artifact-manifest reconciliation (`server.ts`) reads the
+    // project tree from inside the run's terminal handler, so its interval
+    // genuinely ends where it looks.
+    it('ends the interval at now for a caller that names no terminal', () => {
+      expect(isRunTouchedProjectFile(Date.now(), Date.now() - 5_000)).toBe(true);
+      expect(isRunTouchedProjectFile(Date.now() + 60_000, Date.now() - 5_000)).toBe(false);
+    });
+  });
+
   describe('producedFilesForRun', () => {
     it('keeps only non-directory files written inside the run window', () => {
       const produced = producedFilesForRun(
@@ -158,7 +204,7 @@ describe('unattended run delivery classification', () => {
           projectFile('stale.html', RUN_STARTED_AT - 60_000),
           projectFile('assets', RUN_STARTED_AT + 500, { type: 'dir' }),
         ],
-        RUN_STARTED_AT,
+        { startedAt: RUN_STARTED_AT, endedAt: RUN_ENDED_AT },
         isRunTouchedProjectFile,
       );
       expect(produced.map((file) => file.name)).toEqual(['index.html']);
@@ -167,7 +213,7 @@ describe('unattended run delivery classification', () => {
     it('never attributes a user sketch to the run', () => {
       const produced = producedFilesForRun(
         [projectFile('board.sketch.json', RUN_STARTED_AT + 500)],
-        RUN_STARTED_AT,
+        { startedAt: RUN_STARTED_AT, endedAt: RUN_ENDED_AT },
         isRunTouchedProjectFile,
       );
       expect(produced).toEqual([]);
