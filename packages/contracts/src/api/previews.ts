@@ -18,10 +18,16 @@ export type PreviewInfo = {
    * machine. A request no header can place is answered with the path alone,
    * to be resolved against the origin the caller used.
    *
-   * Two shapes a proxied preview cannot serve, both inherent to hosting a dev
-   * server under a path: a root-absolute request whose initiator sends no
+   * Three shapes a proxied preview cannot serve. Two are inherent to hosting a
+   * dev server under a path: a root-absolute request whose initiator sends no
    * `Referer` (a `no-referrer` policy, a WebSocket handshake), and a request
-   * body over the daemon's 4mb API limit.
+   * body over the daemon's 4mb API limit. The third depends on who the front
+   * is: root-absolute assets are answered by the daemon, so they only arrive
+   * when the daemon IS the front. That is the shipped runtime, where the
+   * daemon serves the web app itself — but under `tools-dev` the front is the
+   * Next dev server, which forwards only `/api`, `/artifacts` and `/frames`
+   * (`apps/web/next.config.ts`), so a preview page's `/_nuxt/entry.js` stops
+   * at Next.
    */
   url: string;
   command: string[];

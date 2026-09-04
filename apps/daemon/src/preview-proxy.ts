@@ -331,6 +331,13 @@ export function createPreviewProxyHandler(deps: PreviewProxyDeps): RequestHandle
  * daemon does not own. It carries no more authority than the proxy route it
  * borrows its session from, and it applies the same membership rule, because
  * paths outside `/api` do not pass through the bearer middleware.
+ *
+ * It can only answer requests that reach the daemon. That is every request in
+ * the shipped runtime, where the daemon serves the web app too; under
+ * `tools-dev` the front is the Next dev server, which forwards only `/api`,
+ * `/artifacts` and `/frames`, so a root-absolute asset asked for through that
+ * front stops there. Recorded on `PreviewInfo.url` as one of the shapes a
+ * proxied preview does not serve.
  */
 export function createPreviewRootAssetFallback(deps: PreviewProxyDeps): RequestHandler {
   return (req, res, next) => {
