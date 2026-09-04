@@ -30,6 +30,24 @@ export type RunFailureCategory = TrackingRunFailureCategory;
 export type RunFailureDetail = TrackingRunFailureDetail;
 export type RunFailureStage = TrackingRunFailureStage;
 
+/**
+ * Whether a failed run changed the user's files, as a fact in its own right.
+ *
+ * `artifactCount` answers the same question with a NUMBER, and a number is
+ * always the richer answer — so a producer that has one sends it, and this
+ * field only ever accompanies or replaces it. `'unknown'` is what a producer
+ * sends when its surviving evidence cannot decide either way: it is not the
+ * absence of the field, because a consumer reads an absent field as "say
+ * nothing", and a failure alert that says nothing about files leaves the user
+ * to guess whether their work survived.
+ *
+ * Only the daemon-restart reconciliation
+ * (`apps/daemon/src/runtimes/run-terminal-reconciliation.ts`) has evidence weak
+ * enough to need it. A live run always measures its own writes and keeps
+ * sending `artifactCount` alone.
+ */
+export type RunFileChangeState = 'changed' | 'unchanged' | 'unknown';
+
 export type ChatRole = 'user' | 'assistant';
 export type ChatSessionMode = 'design' | 'chat' | 'plan';
 export type ChatCommentSelectionKind = PreviewCommentSelectionKind | 'visual';
@@ -660,6 +678,10 @@ export type PersistedAgentEvent =
        *  before it failed. Lets the failure alert state whether the user's
        *  files changed without a separate status fetch. */
       artifactCount?: number;
+      /** The file-change fact for a producer whose evidence cannot yield a
+       *  count. Absent whenever `artifactCount` alone already answers, which is
+       *  every live failure. */
+      fileChangeState?: RunFileChangeState;
     }
   | { kind: 'text'; text: string }
   | { kind: 'conversation_title'; title: string }

@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { PersistedAgentEvent } from '@open-design/contracts';
+import type { PersistedAgentEvent, RunFileChangeState } from '@open-design/contracts';
 import {
   appendMessageAgentEvent,
   upsertMessage,
@@ -22,6 +22,7 @@ type ChatRunMessageState = {
   failureDetail?: string | null;
   failureStage?: string | null;
   artifactCount?: number | null;
+  fileChangeState?: RunFileChangeState | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -54,8 +55,9 @@ export function persistRunEventToAssistantMessage(
  * Invariant: the persisted `status:error` event carries every fact a failure
  * alert owes the user — the cause (`failureCategory` / `failureDetail`), the
  * step that stopped (`failureStage`), and whether the user's files changed
- * (`artifactCount`) — so the alert never has to degrade to "Task failed" after
- * a reload.
+ * (`artifactCount`, and `fileChangeState` for a caller whose evidence yields a
+ * verdict but no number) — so the alert never has to degrade to "Task failed"
+ * after a reload.
  *
  * The `error` SSE frame is emitted from the child-close handler BEFORE the run
  * is finalized, so none of those fields are known when that frame is first
@@ -76,6 +78,7 @@ export function persistRunFailureClassification(
   const artifactCount = Number.isFinite(run.artifactCount)
     ? Number(run.artifactCount)
     : null;
+  const fileChangeState = run.fileChangeState ?? null;
   if (!failureCategory && !failureDetail) return;
   try {
     const row = db
@@ -107,6 +110,7 @@ export function persistRunFailureClassification(
       ...(failureDetail ? { failureDetail } : {}),
       ...(failureStage ? { failureStage } : {}),
       ...(artifactCount === null ? {} : { artifactCount }),
+      ...(fileChangeState === null ? {} : { fileChangeState }),
     };
     if (run.errorCode && typeof enriched.code !== 'string') enriched.code = run.errorCode;
     if (idx >= 0) {

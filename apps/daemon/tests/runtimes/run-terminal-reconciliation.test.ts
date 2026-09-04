@@ -417,6 +417,7 @@ describe('durable run terminal reconciliation', () => {
     expect(stored).not.toHaveProperty('artifactCount');
     expect(stored?.fileChangeState).toBe('unknown');
   });
+
   // The guard on the enrichment, not the enrichment itself. A run can still be
   // carrying `errorCode: 'DAEMON_RESTARTED'` from an earlier boot while having
   // gone on to reach a NON-failed terminal. Enriching that row would append an
