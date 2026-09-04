@@ -95,6 +95,21 @@ test('[P1] a document whose only content is invisible does not report itself pai
     '<h1 style="position:absolute;left:-9999px;top:0">Offscreen</h1>',
   );
   expect(offscreen.painted, 'content laid out outside the viewport is not visible output').toBe(false);
+
+  // W2H.1c: the same offscreen text, this time behind an `overflow:hidden`
+  // ancestor. The ancestor's clip intersects the viewport to NOTHING, which is
+  // the opposite of "no clip at all" — and reading the empty intersection as
+  // unbounded let a document nobody can see report itself painted.
+  const clippedAway = await reportFor(
+    page,
+    '<div style="position:absolute;left:-9999px;top:0;width:200px;height:100px;overflow:hidden">' +
+      '<h1>Clipped away</h1></div>',
+  );
+  expect(
+    clippedAway.painted,
+    'an empty clipping intersection hides everything inside it; it does not stop clipping',
+  ).toBe(false);
+  expect(clippedAway.reason).toBe('no-visible-output');
 });
 
 test('[P1] blank replaced geometry is not visible output, drawn content is', async ({ page }) => {
@@ -106,6 +121,18 @@ test('[P1] blank replaced geometry is not visible output, drawn content is', asy
 
   const blankSvg = await reportFor(page, '<svg width="200" height="100"></svg>');
   expect(blankSvg.painted, 'an svg with no painted children is a blank rectangle').toBe(false);
+
+  // W2H.1c: the third member of the same family, asked for by D-17 round 3.
+  // The border is switched off deliberately — a UA-default iframe border is
+  // real ink, and this case is about the blank rectangle, not about the frame.
+  const blankIframe = await reportFor(
+    page,
+    '<iframe style="width:200px;height:100px;border:0"></iframe>',
+  );
+  expect(
+    blankIframe.painted,
+    'an iframe the scan cannot see into is a blank rectangle, and its geometry must not settle the watchdog',
+  ).toBe(false);
 
   const drawn = await reportFor(
     page,
@@ -199,6 +226,13 @@ test('[P1] no contentful paint fires for content nobody can see', async ({ page 
   expect(await fcpFor('<h1 style="position:absolute;left:-9999px;top:0">Offscreen</h1>')).toBe(false);
   expect(await fcpFor('<canvas width="200" height="100"></canvas>')).toBe(false);
   expect(await fcpFor('<svg width="200" height="100"></svg>')).toBe(false);
+  expect(await fcpFor('<iframe style="width:200px;height:100px;border:0"></iframe>')).toBe(false);
+  expect(
+    await fcpFor(
+      '<div style="position:absolute;left:-9999px;top:0;width:200px;height:100px;overflow:hidden">' +
+        '<h1>Clipped away</h1></div>',
+    ),
+  ).toBe(false);
 
   // And the other side of the same measurement: these two paint sources fire no
   // contentful paint either, which is why the scan has to enumerate them itself

@@ -132,3 +132,72 @@ describe('the splice leaves template content alone', () => {
     expect(producerIndex(out)).toBeGreaterThan(out.lastIndexOf('</template>'));
   });
 });
+
+// W2H.1c red spec — D-17 dialogue round 3, blocking finding 3. The tokenizer
+// states the scan did not model.
+//
+// GPT-5.6 round 3: "for `</body><?bogus </body> ?>` the scanner selects the
+// decoy inside `<?…>`, and the injected producer becomes text (no script
+// element, no execution)." The HTML tokenizer sends `<?` and a `<!` that is not
+// a comment, a DOCTYPE or a CDATA section into the bogus comment state, which
+// runs to the next `>`; a `</body>` written in there is comment text, and a
+// producer spliced there never runs.
+describe('the splice steps over bogus comments and markup declarations', () => {
+  it('ignores a decoy </body> inside a `<?` bogus comment', () => {
+    const html =
+      '<!doctype html><html><body><h1>Artifact</h1></body><?bogus </body> ?></html>';
+    const out = injectLiveArtifactPaintReporter(html, NONCE);
+
+    expect(
+      producerIndex(out),
+      'a producer spliced inside `<?…>` is bogus-comment text, not a script',
+    ).toBeLessThan(out.indexOf('<?bogus'));
+  });
+
+  it('ignores a decoy </body> inside a `<!` markup declaration', () => {
+    const html =
+      '<!doctype html><html><body><h1>Artifact</h1></body><!bogus </body> ></html>';
+    const out = injectLiveArtifactPaintReporter(html, NONCE);
+
+    expect(
+      producerIndex(out),
+      'a `<!` that opens neither a comment nor a DOCTYPE is a bogus comment too',
+    ).toBeLessThan(out.indexOf('<!bogus'));
+  });
+
+  it('ignores a decoy </body> inside a CDATA section in inline SVG', () => {
+    const html =
+      '<!doctype html><html><body><h1>Artifact</h1></body>' +
+      '<svg><![CDATA[ </body> ]]></svg></html>';
+    const out = injectLiveArtifactPaintReporter(html, NONCE);
+
+    expect(
+      producerIndex(out),
+      'CDATA content in foreign markup is character data, not a body close for this document',
+    ).toBeLessThan(out.indexOf('<svg>'));
+  });
+
+  it('reads a CDATA section to `]]>`, not to the first `>` inside it', () => {
+    // The half that separates a CDATA section from a bogus comment: in foreign
+    // content the section ends at `]]>`, so a `>` written before the decoy does
+    // not hand the rest of the section back to the markup scan.
+    const html =
+      '<!doctype html><html><body><h1>Artifact</h1></body>' +
+      '<svg><![CDATA[ a > b </body> ]]></svg></html>';
+    const out = injectLiveArtifactPaintReporter(html, NONCE);
+
+    expect(producerIndex(out)).toBeLessThan(out.indexOf('<svg>'));
+  });
+
+  it('still finds a genuine body close written after a bogus comment', () => {
+    // The other side of the rule: stepping over a bogus comment must not step
+    // over the document, or a healthy artifact loses its producer to an EOF
+    // append it did not need.
+    const html =
+      '<!doctype html><html><body><?bogus x ?><h1>Artifact</h1></body></html>';
+    const out = injectLiveArtifactPaintReporter(html, NONCE);
+
+    expect(producerIndex(out)).toBeGreaterThan(out.indexOf('<h1>Artifact</h1>'));
+    expect(producerIndex(out)).toBeLessThan(out.indexOf('</body>'));
+  });
+});
