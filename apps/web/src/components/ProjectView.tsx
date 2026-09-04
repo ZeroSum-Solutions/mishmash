@@ -129,6 +129,8 @@ import {
   retractsRunFailure,
   retractsStaleRunFailure,
   runCheckWithDaemonReachability,
+  withUnresolvedRunStatus,
+  SEND_PAUSED_UNRESOLVED_RUN_KEY,
 } from '../runtime/run-failure-reconcile';
 import type { RunCheckState } from '../runtime/run-failure-reconcile';
 import {
@@ -1830,6 +1832,18 @@ export function ProjectView({
   const reattachControllersRef = useRef<Map<string, AbortController>>(new Map());
   const reattachCancelControllersRef = useRef<Map<string, AbortController>>(new Map());
   const completedReattachRunsRef = useRef<Set<string>>(new Set());
+  // The runs whose reattached stream ended with NO verdict, and the trigger that
+  // brings the next `attachRecoverableRuns` pass back to each of them.
+  //
+  // That pass used to be triggered by the `failed` row the reattach handler
+  // wrote for such a stream — the row `spuriouslyFailedPending` and
+  // `hasGenericDisconnectFailureEvent` match. That row is also what painted
+  // "Task failed" for a turn the daemon went on to record as succeeded, so it
+  // cannot be the trigger. This mark carries the same signal and claims nothing
+  // about the run: the pass re-queries a marked run, upgrades the row from the
+  // daemon's own status, and the reattach re-arms the mark if the next stream
+  // ends with no verdict either.
+  const unresolvedReattachRunsRef = useRef<Set<string>>(new Set());
   // A locally finished run briefly has terminal status before its async
   // project-file refresh attaches delivery evidence. Do not let that same
   // browser session reattach the run during this handoff; reattach remains
@@ -1926,6 +1940,12 @@ export function ProjectView({
     || failedMessagesConversationId === activeConversationId
     || currentConversationAwaitingActiveRunAttach;
   const currentConversationActionDisabled = currentConversationBusy || currentConversationSendDisabled;
+  // The unresolved run is the only one of the three holds above the user cannot
+  // account for: the other two last one fetch, while this one stands until the
+  // run answers. Naming it here is what lets the composer stop being silent.
+  const currentConversationSendDisabledReason = currentConversationAwaitingActiveRunAttach
+    ? t(SEND_PAUSED_UNRESOLVED_RUN_KEY)
+    : undefined;
   const currentConversationQueueDisabled = currentConversationLoading
     || failedMessagesConversationId === activeConversationId;
 
@@ -3921,6 +3941,7 @@ export function ProjectView({
     transientFailedRetriesRef.current = new Map();
     genericDisconnectRetriesRef.current = new Map();
     genericDisconnectBackoffUntilRef.current = new Map();
+    unresolvedReattachRunsRef.current = new Set();
   }, [activeConversationId, daemonLive]);
 
   useEffect(() => {
@@ -3980,13 +4001,21 @@ export function ProjectView({
           message.runStatus === 'failed' &&
           !!message.runId &&
           hasGenericDisconnectFailureEvent(message);
+        // The neutral trigger. A row left unresolved by a reattached stream is
+        // not necessarily matched by any of the shapes above — a terminal replay
+        // that restored partial content before the connection broke is neither
+        // active nor replayable — so the mark is the only thing that can bring
+        // this pass back to it.
+        const unresolvedReattachRun =
+          !!message.runId && unresolvedReattachRunsRef.current.has(message.runId);
         const replayingTerminalRun =
           shouldReplayTerminalRunMessage(message) || spuriouslyFailedPending;
         const needsFullReplay =
           isActiveRunStatus(message.runStatus) ||
           replayingTerminalRun ||
           spuriouslyFailedPending ||
-          recoverableGenericDisconnectFailed;
+          recoverableGenericDisconnectFailed ||
+          unresolvedReattachRun;
         if (!needsFullReplay) continue;
         const fallbackRun = !message.runId
           ? activeByMessage.get(message.id) ?? historicalByMessage.get(message.id) ?? null
@@ -4020,11 +4049,19 @@ export function ProjectView({
         }
         if (finalizingLocalRunIdsRef.current.has(runId)) continue;
         if (reattachControllersRef.current.has(runId)) continue;
-        if (completedReattachRunsRef.current.has(runId)) continue;
+        if (completedReattachRunsRef.current.has(runId)) {
+          // A sealed run has its answer; drop any mark it left behind.
+          unresolvedReattachRunsRef.current.delete(runId);
+          continue;
+        }
         const genericDisconnectBackoffUntil =
           genericDisconnectBackoffUntilRef.current.get(runId) ?? 0;
         if (genericDisconnectBackoffUntil > Date.now()) continue;
         genericDisconnectBackoffUntilRef.current.delete(runId);
+        // The mark is consumed by the pass it brought here: the run is re-queried
+        // below from the daemon's own status. A stream that ends with no verdict
+        // again re-arms it.
+        unresolvedReattachRunsRef.current.delete(runId);
 
         if (fallbackRun && !message.runId) {
           updateMessageById(
@@ -4125,15 +4162,43 @@ export function ProjectView({
           genericDisconnectRetriesRef.current.delete(runId);
           genericDisconnectBackoffUntilRef.current.delete(runId);
         }
+        // Only blank content/events/producedFiles when the daemon confirms the run
+        // is still recoverable (queued/running/succeeded).  A genuinely failed run
+        // already carries diagnostic information in `events`; clearing it before
+        // re-running the reattach path would erase the error context and loop the
+        // message through reattach even when the daemon still reports `failed`.
+        const daemonStatusIsRecoverable =
+          status.status === 'queued' ||
+          status.status === 'running' ||
+          status.status === 'succeeded';
+        const willFullyReplay = needsFullReplay && daemonStatusIsRecoverable;
+        // A row this pass is about to replay whole may still hold a PARTIAL
+        // transcript, left by a stream that broke mid-replay. The daemon's
+        // status is applied to it on screen either way, but it is not WRITTEN
+        // over that partial turn: a truncated transcript must never be stored
+        // as the run's terminal. The replay finalizers persist the row once it
+        // carries the real one.
+        const holdsPartialTranscript =
+          willFullyReplay
+          && !(message.producedFiles?.length)
+          && (message.content.trim().length > 0 || (message.events?.length ?? 0) > 0);
         if (!(spuriouslyFailedPending && status.status === 'succeeded')) {
           updateMessageById(
             message.id,
             (prev) => ({
               ...prev,
               runStatus: status.status,
+              // This pass can carry a row straight onto a terminal — a run left
+              // unresolved by a reattached stream reaches its verdict right
+              // here. `resolveTerminalEndedAt`'s invariant holds for that too:
+              // a terminal row's time is the daemon's own, taken from the
+              // terminal snapshot in hand, never this pass's wall clock.
+              ...(isTerminalRunStatus(status.status)
+                ? { endedAt: prev.endedAt ?? status.updatedAt }
+                : {}),
               ...(status.resumable !== undefined ? { resumable: status.resumable } : {}),
             }),
-            true,
+            !holdsPartialTranscript,
           );
         }
 
@@ -4303,16 +4368,7 @@ export function ProjectView({
           cancelRef.current = cancelController;
           markStreamingConversation(reattachConversationId);
         }
-        // Only blank content/events/producedFiles when the daemon confirms the run
-        // is still recoverable (queued/running/succeeded).  A genuinely failed run
-        // already carries diagnostic information in `events`; clearing it before
-        // re-running the reattach path would erase the error context and loop the
-        // message through reattach even when the daemon still reports `failed`.
-        const daemonStatusIsRecoverable =
-          status.status === 'queued' ||
-          status.status === 'running' ||
-          status.status === 'succeeded';
-        if (needsFullReplay && daemonStatusIsRecoverable) {
+        if (willFullyReplay) {
           updateMessageById(
             message.id,
             // Clear endedAt only for spuriously-failed pending messages so the
@@ -4354,6 +4410,15 @@ export function ProjectView({
         let replayedContent = needsFullReplay ? '' : message.content;
         let replayedEvents: AgentEvent[] = needsFullReplay ? [] : [...(message.events ?? [])];
         let latestReattachRunStatus: ChatMessage['runStatus'] = status.status;
+        // The last status the DAEMON itself declared for this run.
+        // `consumeDaemonRun` also reports `failed` from its OWN inference — once
+        // when a daemon error frame is followed by an unreadable status probe,
+        // once when its reconnect budget runs out (`providers/daemon.ts`) — and
+        // in both cases the error it then surfaces decides whether that terminal
+        // is real. So a `failed` from the stream is not recorded here; a run
+        // left unresolved is restored to this value instead
+        // (`withUnresolvedRunStatus`).
+        let daemonDeclaredRunStatus: ChatMessage['runStatus'] = status.status;
         const applyContentDelta = (delta: string) => {
           for (const ev of parser.feed(delta)) {
             if (ev.type === 'artifact:start') {
@@ -4636,24 +4701,36 @@ export function ProjectView({
               // A stream failure the daemon has not adjudicated says nothing
               // about the run. This client reloaded onto a run in FLIGHT, so the
               // turn is usually still going: the reattached stream failed when
-              // it OPENED. The pane says so in neutral words rather than
-              // painting a failure it would have to take back, and the run's own
-              // terminal answers it through the follow scheduled at the end of
-              // this handler.
+              // it OPENED, or this client's reconnect budget ran out while the
+              // daemon still reported the run queued or running. The pane says
+              // so in neutral words rather than painting a failure it would have
+              // to take back, and the run's own terminal answers it through the
+              // follow scheduled at the end of this handler.
               //
-              // The generic disconnect is the one unadjudicated class this path
-              // keeps out, and it is kept out HERE rather than in the class
-              // itself. Its recovery on this path is not the pane's to run: the
-              // `failed` row this handler writes is what makes the next
-              // `attachRecoverableRuns` pass see a spuriously-failed message and
-              // re-query the run, and that re-query is what upgrades the row to
-              // the daemon's terminal. Take the row away and the recovery loses
-              // its trigger. The live loop has no such machinery, which is why
-              // 1I.1 could move the class there; moving it here means replacing
-              // that recovery, not adding to it.
-              const unresolvedRunId =
-                isUnadjudicatedStreamFailure(err) && !genericDisconnect ? runId : undefined;
+              // The whole class is here, the generic disconnect included. Its
+              // recovery no longer needs the `failed` row this handler used to
+              // write: `unresolvedReattachRunsRef` carries the same signal to the
+              // next `attachRecoverableRuns` pass and claims nothing about the
+              // run, so the re-query that upgrades the row still happens and the
+              // card no longer appears on the way there.
+              const unresolvedRunId = isUnadjudicatedStreamFailure(err) ? runId : undefined;
               if (runMayFinalize && unresolvedRunId !== undefined) {
+                unresolvedReattachRunsRef.current.add(unresolvedRunId);
+                // Take back the terminal the transport inferred before the pane
+                // reads the row: it is the second thing a failure card is
+                // painted from, and an inactive row also hides the notice that
+                // replaces it.
+                updateMessageById(
+                  message.id,
+                  (prev) => withUnresolvedRunStatus(prev, daemonDeclaredRunStatus),
+                  true,
+                );
+                // Residual 8: one carrier, last unresolved run wins. Two runs can
+                // be unresolved at once here, and `ChatPane` paints ONE notice,
+                // so keying this per run would only move the choice. Nothing is
+                // lost by it: each run keeps its own follow and its own active
+                // row, so both still resolve and neither is described falsely —
+                // the earlier one is simply not the run the notice names.
                 setRunCheck({
                   runId: unresolvedRunId,
                   assistantMessageId: message.id,
@@ -4939,6 +5016,14 @@ export function ProjectView({
             );
             if (retractsFailure) clearPaneErrorForRun(runId);
             latestReattachRunStatus = runStatus;
+            // A `failed` from the stream is never recorded as the daemon's
+            // word, and it cannot cost a real verdict: `consumeDaemonRun`
+            // surfaces an UNADJUDICATED error only while its own `endStatus` is
+            // still null (`providers/daemon.ts:1105`, `:1281`), and its other
+            // `failed` (`:1250`) returns with a daemon error frame, which is a
+            // verdict. So a daemon-declared terminal never reaches the branch
+            // that reads this value.
+            if (runStatus !== 'failed') daemonDeclaredRunStatus = runStatus;
             if (runStatus === 'canceled') {
               textBuffer.cancel();
               unregisterTextBuffer();
@@ -7811,6 +7896,7 @@ export function ProjectView({
 	            streaming: currentConversationControlStreaming,
 	            loading: currentConversationLoading,
 	            sendDisabled: currentConversationSendDisabled,
+	            sendDisabledReason: currentConversationSendDisabledReason,
             queuedItems: currentConversationQueuedItems,
             error: conversationLoadError ?? error,
             runCheck,
@@ -7831,6 +7917,7 @@ export function ProjectView({
       currentConversationActionDisabled,
 	      currentConversationQueuedItems,
 	      currentConversationSendDisabled,
+	      currentConversationSendDisabledReason,
 	      currentConversationLoading,
 	      currentConversationControlStreaming,
       error,
@@ -9132,6 +9219,7 @@ export function ProjectView({
               liveToolInput={liveToolInput}
               loading={currentConversationLoading}
               sendDisabled={currentConversationSendDisabled}
+              sendDisabledReason={currentConversationSendDisabledReason}
               queuedItems={currentConversationQueuedItems}
               error={conversationLoadError ?? error}
               runCheck={runCheck}

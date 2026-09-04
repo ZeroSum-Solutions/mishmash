@@ -14,6 +14,7 @@ import {
   retractsRunFailure,
   runCheckWithDaemonReachability,
   retractsStaleRunFailure,
+  withUnresolvedRunStatus,
 } from '../../src/runtime/run-failure-reconcile';
 import type { ChatMessage } from '../../src/types';
 
@@ -216,6 +217,42 @@ describe('applyRunTerminalFromStatus — the run own terminal, before any read',
       }),
     ];
     expect(applyRunTerminalFromStatus(delivery, 'run-1', succeeded)).toBeNull();
+  });
+});
+
+// W1J.1 — the row half of the same rule: a terminal the TRANSPORT inferred is
+// not the daemon's word either, and a pane that leaves it standing keeps both
+// the failure it stopped painting and the notice it meant to show instead.
+describe('withUnresolvedRunStatus — the row an unresolved run keeps', () => {
+  it('takes back a terminal the transport inferred', () => {
+    const row = assistant({ runStatus: 'failed', endedAt: 500 });
+    expect(withUnresolvedRunStatus(row, 'running')).toMatchObject({
+      runStatus: 'running',
+      endedAt: undefined,
+    });
+  });
+
+  it('drops the disconnect-time stamp, because nothing ended', () => {
+    const row = assistant({ runStatus: 'failed', endedAt: 500 });
+    expect(withUnresolvedRunStatus(row, 'queued').endedAt).toBeUndefined();
+  });
+
+  it("keeps a terminal the daemon itself declared, and the time that came with it", () => {
+    const row = assistant({ runStatus: 'failed', endedAt: 500 });
+    expect(withUnresolvedRunStatus(row, 'succeeded')).toMatchObject({
+      runStatus: 'succeeded',
+      endedAt: 500,
+    });
+  });
+
+  it('returns the row untouched when it already says the right thing', () => {
+    const row = assistant({ runStatus: 'running' });
+    expect(withUnresolvedRunStatus(row, 'running')).toBe(row);
+  });
+
+  it('leaves the rest of the row alone', () => {
+    const row = assistant({ runStatus: 'failed', endedAt: 500, content: 'partial' });
+    expect(withUnresolvedRunStatus(row, 'running').content).toBe('partial');
   });
 });
 

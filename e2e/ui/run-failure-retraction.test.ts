@@ -27,6 +27,15 @@ const SLOW_FAILING_RUN_PROMPT = 'Return the slow reload reported sleep-drop fail
 // settles so a build that merely drops the notice — leaving a permanently
 // running, content-less row — cannot pass as a build that resolved the check.
 const SLOW_RUN_ANSWER = 'I stayed attached after the reload';
+// How many consecutive transport failures `consumeDaemonRun` absorbs before it
+// gives up and mints the generic disconnect (`providers/daemon.ts`). The web
+// package owns the number; e2e restates it because it cannot import app-private
+// source, and a drift there makes these cases wait rather than lie.
+const RECONNECT_BUDGET = 5;
+// The client's own word for a connection IT could not keep, as the pane would
+// render it (`GENERIC_DAEMON_DISCONNECT_MESSAGE` in `providers/daemon.ts`). No
+// failure card may ever carry it: it is not a verdict on the run.
+const DISCONNECT_CARD_TEXT = 'daemon stream disconnected before run completed';
 
 let fakeRuntimes: Awaited<ReturnType<typeof createFakeAgentRuntimes>>;
 
@@ -248,6 +257,205 @@ test('[P0] a dropped reattached stream whose run then really fails adopts the da
     failureAlert.locator('[data-run-failure-step]'),
     'the adopted card must carry the daemon facts, not a client-invented one',
   ).toHaveCount(1);
+  await expect(runCheckingNotice(page), 'the verdict ends the checking state').toHaveCount(0);
+});
+
+// W1J.1 browser-level regression: the GENERIC disconnect on a reattached stream
+// is a checking state too.
+//
+// W1I.3 closed the reattach door for a stream that answers non-OK, and
+// deliberately left one class outside it: the browser's own reconnect budget
+// running out (`GENERIC_DAEMON_DISCONNECT_CODE`, `providers/daemon.ts`). That
+// exclusion existed because the `failed` row the handler wrote was the trigger
+// the next `attachRecoverableRuns` pass needed to re-query the run. The row is
+// also what paints "Task failed" for a turn that then succeeds, so this spec
+// pins the replacement: a run-scoped mark drives the re-query, and the run's own
+// terminal is the only thing that resolves the notice.
+//
+// Ordering is forced at the transport, not faked in state:
+//   1. every request the RELOADED document makes for the run's event stream is
+//      dropped at the connection, which is what `consumeDaemonRun` counts
+//      against its five-reconnect budget. The pre-reload page's own live stream
+//      is untouched;
+//   2. exhausting that budget is what mints the generic disconnect, and the
+//      daemon still reports the run queued/running when it does — the exact
+//      state this track says must never paint a card;
+//   3. the run is then left alone to reach its own `succeeded` terminal, and
+//      the client's conversation read is HELD until this spec has observed the
+//      notice, so the assertion is never a race with that terminal.
+// The failure card is watched CONTINUOUSLY from before the reload, because a
+// card that is painted and then retracted is exactly what this track forbids.
+test('[P0] a reattached stream that exhausts its reconnect budget shows the checking state and never the failure card', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Reattach reconnect budget smoke');
+  await expectWorkspaceReady(page);
+
+  const runResponse = await sendPrompt(page, SLOW_RUN_PROMPT);
+  const { runId } = (await runResponse.json()) as { runId: string };
+  const { conversationId, projectId } = await currentProjectContext(page);
+
+  // Documents, not navigations: the reattach must be the stream the RELOADED
+  // page opens. `framenavigated` commits the new document before it issues any
+  // request.
+  let documentsSeen = 0;
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) documentsSeen += 1;
+  });
+  let holdFromDocument = Number.POSITIVE_INFINITY;
+  let droppedReattachAttempts = 0;
+  let reconnectBudgetExhausted = false;
+  let releaseRefresh: () => void = () => {};
+  const refreshGate = new Promise<void>((resolve) => {
+    releaseRefresh = resolve;
+  });
+
+  // The run's event stream. Every request the reloaded document makes for it is
+  // dropped at the connection — a transport failure, which is what the client
+  // counts against its reconnect budget; a non-OK answer would surface the
+  // OTHER unadjudicated class (the one W1I.3 already closed) instead.
+  await page.route(
+    (url) => /^\/api\/runs\/[^/]+\/events$/.test(url.pathname),
+    async (route) => {
+      if (documentsSeen < holdFromDocument) {
+        await route.continue();
+        return;
+      }
+      droppedReattachAttempts += 1;
+      if (droppedReattachAttempts >= RECONNECT_BUDGET) reconnectBudgetExhausted = true;
+      await route.abort('connectionfailed');
+    },
+  );
+
+  // The conversation read the client makes for itself once the budget is gone.
+  // Held so the notice can be observed on screen before the answer lands; reads
+  // issued earlier (the reload's own message load) pass through.
+  await page.route(
+    (url) => /^\/api\/projects\/[^/]+\/conversations\/[^/]+\/messages$/.test(url.pathname),
+    async (route) => {
+      if (!reconnectBudgetExhausted || route.request().method() !== 'GET') {
+        await route.continue();
+        return;
+      }
+      await refreshGate;
+      await route.continue();
+    },
+  );
+
+  // Armed BEFORE the reload: the card this track forbids would be painted by
+  // the reloaded document within a beat of the budget running out.
+  await armRunFailureCardWatcher(page);
+  holdFromDocument = documentsSeen + 1;
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expectWorkspaceReady(page);
+
+  const failureAlert = runErrorCard(page);
+  const checkingNotice = runCheckingNotice(page);
+
+  // The budget really did run out — the precondition this whole case rests on,
+  // asserted separately so a failure names its own cause.
+  await expect
+    .poll(() => droppedReattachAttempts, { intervals: [250], timeout: 120_000 })
+    .toBeGreaterThanOrEqual(RECONNECT_BUDGET);
+
+  // The client has answered the exhausted budget one way or the other.
+  await expect
+    .poll(
+      async () =>
+        (await runFailureCardSightings(page)).length > 0
+        || (await failureAlert.count()) > 0
+        || (await checkingNotice.count()) > 0,
+      { intervals: [250], timeout: 120_000 },
+    )
+    .toBe(true);
+  expect(
+    await runFailureCardSightings(page),
+    'a reattached stream whose reconnect budget ran out must not paint the failure card',
+  ).toEqual([]);
+  await expect(
+    checkingNotice,
+    'the exhausted reconnect budget must paint the neutral checking notice',
+  ).toBeVisible({ timeout: T.long });
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+
+  // The notice is already on screen while the run is still going. Let the run
+  // finish under it; that is the state the client has to notice on its own.
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+  expect(await daemonRunStatus(page, runId), 'precondition: the run must have succeeded').toBe('succeeded');
+  expect(
+    await storedAssistantRunStatus(page, projectId, conversationId),
+    'precondition: the daemon must hold the stored assistant row on the run terminal',
+  ).toBe('succeeded');
+  const documentLoads = await documentLoadCount(page);
+
+  releaseRefresh();
+
+  await expect(checkingNotice, 'the checking notice must leave once the run answers')
+    .toHaveCount(0, { timeout: T.long });
+  await expect(failureAlert, 'no failure alert may stand for a run that succeeded')
+    .toHaveCount(0, { timeout: T.long });
+  await expect(
+    page.getByText(SLOW_RUN_ANSWER).first(),
+    'the settled turn must show the answer the run delivered',
+  ).toBeVisible({ timeout: T.long });
+  expect(
+    await runFailureCardSightings(page),
+    'the failure card must never have appeared, not merely be gone by the end',
+  ).toEqual([]);
+  expect(await documentLoadCount(page), 'the notice must clear without a page reload').toBe(documentLoads);
+  expect(await storedAssistantRunStatus(page, projectId, conversationId)).toBe('succeeded');
+});
+
+// The other half of the rule for this class: a verdict is still a verdict. The
+// reconnect budget is exhausted exactly as above, but this run really fails, so
+// the card must appear carrying the DAEMON's own facts — never the client's own
+// word for its broken connection.
+test('[P0] a reattached stream whose reconnect budget ran out on a run that really fails adopts the daemon verdict', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Reattach budget failed run smoke');
+  await expectWorkspaceReady(page);
+
+  await sendPrompt(page, SLOW_FAILING_RUN_PROMPT);
+
+  let documentsSeen = 0;
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) documentsSeen += 1;
+  });
+  let holdFromDocument = Number.POSITIVE_INFINITY;
+  let droppedReattachAttempts = 0;
+  await page.route(
+    (url) => /^\/api\/runs\/[^/]+\/events$/.test(url.pathname),
+    async (route) => {
+      if (documentsSeen < holdFromDocument) {
+        await route.continue();
+        return;
+      }
+      droppedReattachAttempts += 1;
+      await route.abort('connectionfailed');
+    },
+  );
+
+  await armRunFailureCardWatcher(page);
+  holdFromDocument = documentsSeen + 1;
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expectWorkspaceReady(page);
+
+  await expect
+    .poll(() => droppedReattachAttempts, { intervals: [250], timeout: 120_000 })
+    .toBeGreaterThanOrEqual(RECONNECT_BUDGET);
+
+  const failureAlert = runErrorCard(page);
+  await expect(failureAlert, "the run's own failed verdict must still reach the user")
+    .toBeVisible({ timeout: 120_000 });
+  await expect(
+    failureAlert.locator('[data-run-failure-step]'),
+    'the adopted card must carry the daemon facts, not a client-invented one',
+  ).toHaveCount(1);
+  expect(
+    (await runFailureCardSightings(page)).filter((text) =>
+      text.includes(DISCONNECT_CARD_TEXT),
+    ),
+    "the client's own word for its broken connection must never be shown as the failure",
+  ).toEqual([]);
   await expect(runCheckingNotice(page), 'the verdict ends the checking state').toHaveCount(0);
 });
 

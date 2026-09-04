@@ -617,3 +617,63 @@ describe('a restart-interrupted alert states the file-change state on every shap
     expect(files?.textContent).toBe('chat.runError.filesUnknown');
   });
 });
+
+// W1J.4 red spec — the checking notice must disclose that sending is paused.
+//
+// While the notice is up the conversation's run is unresolved: the assistant
+// row is still active and no stream is attached, which is exactly the state
+// `ProjectView` turns into `currentConversationSendDisabled`
+// (ProjectView.tsx:1905-1912). The notice is the only thing on screen at that
+// moment, so if it does not say the user's next turn will not go out, nothing
+// does — and with the 100 x 3 s probe allowance that silence can last about
+// five minutes.
+//
+// The composer half of the same disclosure is
+// `apps/web/tests/components/ChatComposer.send-disabled-reason.test.tsx`; the
+// end-to-end chain is the W1J.4 assertion in
+// `e2e/ui/inferred-failure-retraction.test.ts`.
+
+function unresolvedRunMessage(): ChatMessage {
+  return {
+    id: 'msg-unresolved',
+    role: 'assistant',
+    content: '',
+    createdAt: 1,
+    runId: 'run-unresolved',
+    runStatus: 'running',
+    agentId: 'claude',
+    events: [],
+  } as unknown as ChatMessage;
+}
+
+function renderChecking(unreachable: boolean) {
+  return renderPane({
+    messages: [unresolvedRunMessage()],
+    runCheck: { runId: 'run-unresolved', assistantMessageId: 'msg-unresolved', unreachable },
+    sendDisabled: true,
+  });
+}
+
+describe('the checking notice states that sending is paused', () => {
+  it('says sending is paused while the run is still being checked', () => {
+    const { container } = renderChecking(false);
+
+    const notice = container.querySelector('[data-user-action-card="run-checking"]');
+    expect(notice, 'precondition: the unresolved run must paint the checking notice').toBeTruthy();
+    expect(
+      notice?.textContent,
+      'a notice that never mentions the paused composer leaves the lock silent',
+    ).toContain('chat.sendPaused.unresolvedRun');
+  });
+
+  it('says sending is paused when the daemon has gone silent too', () => {
+    const { container } = renderChecking(true);
+
+    const notice = container.querySelector('[data-user-action-card="run-checking"]');
+    expect(notice, 'precondition: the unreachable variant must paint the checking notice').toBeTruthy();
+    expect(
+      notice?.textContent,
+      'the longest unresolved window is the one that most needs the sentence',
+    ).toContain('chat.sendPaused.unresolvedRun');
+  });
+});

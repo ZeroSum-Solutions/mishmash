@@ -23,6 +23,9 @@ export interface ActiveConversationChatState {
   streaming: boolean;
   loading?: boolean;
   sendDisabled?: boolean;
+  /** Why `sendDisabled` holds, when the owner can name one. Rendered beside the
+   *  composer's Send button; see `SEND_PAUSED_UNRESOLVED_RUN_KEY`. */
+  sendDisabledReason?: string;
   queuedItems?: Array<{
     id: string;
     prompt: string;
@@ -144,6 +147,7 @@ export function SideChatTab({
           streaming={controlledChat?.streaming ?? chat.streaming}
           loading={controlledChat?.loading ?? chat.loading}
           sendDisabled={controlledChat?.sendDisabled}
+          sendDisabledReason={controlledChat?.sendDisabledReason}
           queuedItems={controlledChat?.queuedItems}
           onRemoveQueuedSend={controlledChat?.onRemoveQueuedSend}
           onUpdateQueuedSend={controlledChat?.onUpdateQueuedSend}

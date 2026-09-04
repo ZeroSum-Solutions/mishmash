@@ -93,6 +93,7 @@ export const en: Dict = {
   'chat.runChecking.unreachableTitle': 'MishMash is not answering',
   'chat.runChecking.unreachableMessage': 'The connection to the run was lost and MishMash has not answered since. The turn may still be running.',
   'chat.runChecking.checkAgainCta': 'Check again',
+  'chat.sendPaused.unresolvedRun': 'Sending is paused until this run’s result is known.',
   'chat.runError.title.cliMissing': 'Agent not installed',
   'chat.runError.title.promptTooLarge': 'Input too long',
   'chat.runError.title.modelUnavailable': 'Model unavailable',

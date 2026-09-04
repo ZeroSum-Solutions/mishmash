@@ -92,6 +92,31 @@ export function isUnadjudicatedStreamFailure(err: unknown): boolean {
 }
 
 /**
+ * The row a run keeps while a stream failure leaves it UNRESOLVED.
+ *
+ * A pane that only stops PAINTING the failure has closed one carrier and left
+ * the other open. `consumeDaemonRun` reports `failed` through `onRunStatus`
+ * before it surfaces an error it minted out of a connection IT could not keep
+ * (`providers/daemon.ts`), so the row itself still carries a terminal the daemon
+ * never declared — and that terminal is both the second thing `ChatPane` paints
+ * a failure from and the reason its checking notice would not show, because the
+ * notice is keyed to an ACTIVE row.
+ *
+ * So an unadjudicated stream failure takes that terminal back. The row returns
+ * to `daemonDeclared` — the last status the DAEMON itself declared for the run —
+ * and drops the disconnect-time `endedAt` when that status is active, because
+ * nothing has ended. Only the run's own terminal moves it again.
+ */
+export function withUnresolvedRunStatus<T extends ChatMessage>(
+  message: T,
+  daemonDeclared: ChatMessage['runStatus'],
+): T {
+  const endedAt = isActiveRunStatus(daemonDeclared) ? undefined : message.endedAt;
+  if (message.runStatus === daemonDeclared && message.endedAt === endedAt) return message;
+  return { ...message, runStatus: daemonDeclared, endedAt };
+}
+
+/**
  * What a pane tells `ChatPane` while one of its runs is unresolved.
  *
  * `unreachable` turns true once the follow has exhausted its status probes AND
@@ -142,6 +167,28 @@ export function answersRunCheck(message: ChatMessage, check: RunCheckState): boo
       : message.id === check.assistantMessageId;
   return belongsToCheck && isActiveRunStatus(message.runStatus);
 }
+
+/**
+ * The one sentence a user is owed while an unresolved run holds their next turn.
+ *
+ * INVARIANT: an unresolved run pauses sending, and a paused composer says so.
+ * `ProjectView`'s `currentConversationAwaitingActiveRunAttach` — this
+ * conversation's own assistant row still active while no stream is attached —
+ * disables the composer's Send, and the probe allowance lets that stand for
+ * about five minutes during an outage. Wherever that state disables Send, this
+ * key must be readable: the checking notice states it, and the composer repeats
+ * it beside the control it explains. A disabled Send with nothing to read is
+ * the silent lock this exists to prevent.
+ *
+ * It is deliberately NOT shown for the other two causes `ProjectView` folds
+ * into the same boolean — a conversation still loading, and a failed message
+ * read. Each lasts one fetch, and this sentence would misdescribe them.
+ *
+ * Disclosure only. WHEN sending is disabled is unchanged, and no turn is
+ * queued: a queued-send path is a feature with its own hazards, not a fix for
+ * an undisclosed pause.
+ */
+export const SEND_PAUSED_UNRESOLVED_RUN_KEY = 'chat.sendPaused.unresolvedRun' as const;
 
 /**
  * What the checking notice says next, given what the daemon just did.
