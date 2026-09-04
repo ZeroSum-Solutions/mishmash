@@ -742,7 +742,7 @@ import {
   seedLibraryExtensionOrigins,
 } from './library-tokens.js';
 import { listLibraryTokenOrigins } from './library-store.js';
-import { apiTokenFromEnv, isApiAuthDisabled, isApiTokenMiddlewareEnabled, isMatchingApiToken } from './api-token-auth.js';
+import { API_TOKEN_REQUIRED_ERROR, apiTokenFromEnv, isApiAuthDisabled, isApiTokenMiddlewareEnabled, isMatchingApiToken } from './api-token-auth.js';
 import { createOpenDesignPublicMetadataService } from './services/open-design-public-metadata.js';
 import { createWhatsNewService } from './services/whats-new.js';
 import { execCommandViaLoginShell } from './services/login-shell.js';
@@ -2227,14 +2227,12 @@ export async function startServer({
   // request 401 anyway, but only after the global JSON parser has read it, and
   // a request another parser has consumed cannot be re-streamed: the proxy
   // would hand the child an empty body under the caller's own Content-Length.
-  // Answering with that middleware's own 401 keeps the two in step whatever
-  // either one grows into.
+  // It answers with that middleware's own 401 body, `API_TOKEN_REQUIRED_ERROR`,
+  // which both read from `api-token-auth.ts` so the two cannot drift apart.
   const previewProxyRawBody = express.raw({ type: () => true, limit: '4mb' });
   app.use(PREVIEW_PROXY_MOUNT, (req, res, next) => {
     if (isAuthorizedPreviewProxyRequest(req)) return previewProxyRawBody(req, res, next);
-    return res.status(401).json({
-      error: { code: 'API_TOKEN_REQUIRED', message: 'Authorization: Bearer <OD_API_TOKEN> required' },
-    });
+    return res.status(401).json(API_TOKEN_REQUIRED_ERROR);
   });
   app.use(express.json({ limit: '4mb' }));
   const projectPreviewScopes = createProjectPreviewScopeRegistry();
@@ -2279,9 +2277,7 @@ export async function startServer({
       const auth = req.get('authorization') ?? '';
       const match = /^Bearer\s+(\S+)\s*$/i.exec(auth);
       if (!match || !isMatchingApiToken(match[1], apiToken)) {
-        return res.status(401).json({
-          error: { code: 'API_TOKEN_REQUIRED', message: 'Authorization: Bearer <OD_API_TOKEN> required' },
-        });
+        return res.status(401).json(API_TOKEN_REQUIRED_ERROR);
       }
       return next();
     });
