@@ -1,3 +1,11 @@
+import {
+  CHECKING_NOTICE_TEXT,
+  SEND_PAUSED_TEXT,
+  runCheckingNotice,
+  runErrorCard,
+  runFailureCardSightings,
+  watchRunFailureCard,
+} from '@/playwright/chat';
 import { createFakeAgentRuntimes } from '@/playwright/fake-agents';
 import type { FakeAgentId } from '@/playwright/fake-agents';
 import { APP_LOADING_TEXT } from '@/playwright/loading';
@@ -17,6 +25,24 @@ const RUN_PROMPT = 'Create a delayed deterministic smoke artifact';
 // a permanently running, content-less row — cannot pass as a build that
 // retracted the failure.
 const RUN_ANSWER = 'I recovered the delayed reasoning path';
+// W1J.4: what the user types while the run is unresolved. A draft is required
+// to see the pause at all — the Send button is also disabled on an empty
+// composer, so an empty one cannot tell "paused" from "nothing to send".
+const PAUSED_DRAFT = 'A follow-up turn typed while the run is unresolved';
+// How many consecutive unanswered status probes the W1H.1 cases force before
+// letting the run's real terminal through. Three is what the pre-fix rule
+// treated as the end of the recovery, and at `RUN_FAILURE_RECHECK_INTERVAL_MS`
+// spacing it is a nine-second daemon hiccup.
+const RECHECK_MISSES_UNDER_TEST = 3;
+// The reconciliation probes the run's status at `RUN_FAILURE_RECHECK_DELAY_MS`
+// (150 ms) and then every `RUN_FAILURE_RECHECK_INTERVAL_MS` (3 s), so a 7.5 s
+// outage covers its probes at ~0.15 s, ~3.15 s and ~6.15 s and ends before its
+// fourth at ~9.15 s.
+const STATUS_OUTAGE_WINDOW_MS = 7_500;
+// The prompt the fake runtime answers with a real, daemon-classified failure
+// (`e2e/lib/fake-agents.ts`, REPORTED_AGENT_FAILURE_OUTPUT.sleep). Used by the
+// verdict cases: a run the daemon adjudicated keeps the failure card.
+const FAILING_RUN_PROMPT = 'Return the reported sleep-drop failure';
 
 let fakeRuntimes: Awaited<ReturnType<typeof createFakeAgentRuntimes>>;
 
@@ -46,6 +72,15 @@ test.afterEach(async ({ page }) => {
   await resetDaemonAppConfig(page);
 });
 
+// SUPERSESSION (W1I.1). W1G.1 and W1H.1 asserted that the generic "Task failed"
+// card was PAINTED first and then retracted — `expect(failureAlert).toBeVisible()`
+// followed by `toContainText('Task failed')`, before waiting for the same run to
+// reach `succeeded`. W1I.1 makes that impossible: a stream failure the daemon has
+// not adjudicated is an unresolved state, so the pane shows a neutral checking
+// notice and never the failure card. The retraction those two tracks proved is
+// now the notice LEAVING, and every terminal assertion they carried is kept
+// unchanged below.
+//
 // W1G.1 browser-level regression, the two halves W1F.1 left open.
 //
 // `run-failure-retraction.test.ts` covers the REATTACHED stream: a client that
@@ -74,16 +109,16 @@ test.afterEach(async ({ page }) => {
 // sibling spec does it:
 //   1. the run's event stream is answered 503 the moment the client OPENS it,
 //      which is when this fails in the wild — at the start of a turn that then
-//      runs on for seconds or minutes. The client paints the alert while the
-//      run is still going, so a pane that looked once and gave up would leave
-//      it there for the whole run;
+//      runs on for seconds or minutes. The client paints the checking notice
+//      while the run is still going, so a pane that looked once and gave up
+//      would leave it there for the whole run;
 //   2. every later request for that same stream is answered 503 too, so nothing
 //      recovers by reattaching: following the run is the only route left;
 //   3. the client's own conversation read — which it makes only once the run
-//      reports a terminal — is HELD until this spec has observed the alert on
-//      screen, so the assertion is never a race with the retraction.
-// Nothing writes message state from the test: the failed row is the client's
-// own production PUT, and the daemon's write-side hold
+//      reports a terminal — is HELD until this spec has observed the notice on
+//      screen, so the assertion is never a race with the terminal.
+// Nothing writes message state from the test: the row is the client's own
+// production PUT, and the daemon's write-side hold
 // (`holdTerminalRunStatusOnMessageWrite`) is what keeps the stored row on its
 // terminal.
 
@@ -100,12 +135,15 @@ test('[P0] a non-ok live event stream leaves no failure alert once the run reach
   const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
-  const failureAlert = runRecoveryCard(page);
-  await expect(failureAlert, 'the non-ok live event stream must paint the run-recovery alert')
+  const failureAlert = runErrorCard(page);
+  const checkingNotice = runCheckingNotice(page);
+  await expect(checkingNotice, 'the non-ok live event stream must paint the neutral checking notice')
     .toBeVisible({ timeout: 120_000 });
-  await expect(failureAlert).toContainText('Task failed');
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+  await expect(failureAlert, 'an unresolved stream failure must not paint the failure card')
+    .toHaveCount(0);
 
-  // The alert is already on screen while the run is still going. Let the run
+  // The notice is already on screen while the run is still going. Let the run
   // finish under it; that is the state the client has to notice on its own.
   await waitForDaemonRunStatus(page, runId, 'succeeded');
 
@@ -124,6 +162,8 @@ test('[P0] a non-ok live event stream leaves no failure alert once the run reach
   // The alert must leave the DOM on the authoritative terminal alone: no page
   // reload, no manual refetch, nothing but the re-check the client schedules
   // for itself.
+  await expect(checkingNotice, 'the checking notice must leave once the run answers')
+    .toHaveCount(0, { timeout: T.long });
   await expect(failureAlert, 'the retracted run failure must leave the DOM')
     .toHaveCount(0, { timeout: T.long });
   // The pane must land on the turn the run actually delivered, not on a blank
@@ -160,10 +200,13 @@ test('[P0] a non-ok Side Chat event stream leaves no failure alert once the run 
   const runResponse = await sendPrompt(page, await composerInside(page, sideChat), RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
-  const failureAlert = runRecoveryCard(sideChat);
-  await expect(failureAlert, 'the non-ok Side Chat event stream must paint the run-recovery alert')
+  const failureAlert = runErrorCard(sideChat);
+  const checkingNotice = runCheckingNotice(sideChat);
+  await expect(checkingNotice, 'the non-ok Side Chat event stream must paint the neutral checking notice')
     .toBeVisible({ timeout: 120_000 });
-  await expect(failureAlert).toContainText('Task failed');
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+  await expect(failureAlert, 'an unresolved stream failure must not paint the failure card')
+    .toHaveCount(0);
 
   await waitForDaemonRunStatus(page, runId, 'succeeded');
 
@@ -176,6 +219,8 @@ test('[P0] a non-ok Side Chat event stream leaves no failure alert once the run 
 
   refreshGate.release();
 
+  await expect(checkingNotice, 'the checking notice must leave once the run answers')
+    .toHaveCount(0, { timeout: T.long });
   await expect(failureAlert, 'the retracted Side Chat run failure must leave the DOM')
     .toHaveCount(0, { timeout: T.long });
   await expect(
@@ -186,11 +231,479 @@ test('[P0] a non-ok Side Chat event stream leaves no failure alert once the run 
   expect(await storedAssistantRunStatus(page, projectId, sideConversationId)).toBe('succeeded');
 });
 
+// W1H.1 — the two ways the follow itself quits early.
+//
+// W1G.1 (above) made both panes FOLLOW the run instead of looking once. Its two
+// cases answer every status probe and every conversation read, so they only
+// exercise the happy path of that follow. Two transient failures inside it are
+// still terminal:
+//
+//   * three status probes that answer nothing END the follow for good.
+//     `fetchChatRunStatus` turns a network error and a non-OK response alike
+//     into `null` (`providers/daemon.ts`), which the rule counts as a miss, and
+//     three misses used to be `'stop'`. Three misses is a nine-second daemon
+//     hiccup — the very outage class that produced the inferred failure — after
+//     which nothing retracts: the live `onError` sealed the run in
+//     `completedReattachRunsRef`, so no reattach re-queries it either;
+//   * ONE failed conversation read after the run reports success ends it too.
+//     `listMessages` returns `[]` on a thrown fetch and on `!resp.ok`
+//     (`state/projects.ts`), so `retractsStaleRunFailure` sees nothing to
+//     retract and the pane returns — still holding the authoritative
+//     `succeeded` it had just read, and still painting "Task failed".
+//
+// Both are forced at the transport, on the same live-send and Side Chat paths,
+// with the same production writes as the cases above.
+
+test('[P0] a live inferred failure is retracted after three status probes answer nothing', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live status-probe miss retraction smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const streamHold = holdRunEventStream(page);
+  const probeHold = holdRunStatusProbes(page, STATUS_OUTAGE_WINDOW_MS, () => streamHold.runId);
+
+  streamHold.arm();
+  const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
+  const { runId } = (await runResponse.json()) as { runId: string };
+
+  const failureAlert = runErrorCard(page);
+  const checkingNotice = runCheckingNotice(page);
+  await expect(checkingNotice, 'the non-ok live event stream must paint the neutral checking notice')
+    .toBeVisible({ timeout: 120_000 });
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+  await expect(failureAlert, 'an unresolved stream failure must not paint the failure card')
+    .toHaveCount(0);
+
+  // W1J.4: the unresolved window pauses sending, and the user must be able to
+  // read that. The probe allowance lets this window last minutes, so a Send
+  // that is merely disabled is a silent lock.
+  const composer = page.getByTestId('chat-composer').first();
+  const sendButton = composer.getByTestId('chat-send').first();
+  await composer.getByTestId('chat-composer-input').first().fill(PAUSED_DRAFT);
+  await expect(sendButton, 'an unresolved run must hold Send even with a draft ready')
+    .toBeDisabled();
+  await expect(checkingNotice, 'the checking notice must say sending is paused')
+    .toContainText(SEND_PAUSED_TEXT);
+  await expect(
+    composer.getByText(SEND_PAUSED_TEXT).first(),
+    'the composer must explain why its Send is disabled',
+  ).toBeVisible();
+
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+  // A coarse gate, not the mechanism: `refused` also counts the unrelated
+  // per-message status read described on `holdRunStatusProbes`. What makes the
+  // reconciliation meet three misses is the window's length, and what proves it
+  // is that this case is red on a build whose rule stops at three.
+  await expect
+    .poll(() => probeHold.refused, { intervals: [250], timeout: 60_000 })
+    .toBeGreaterThanOrEqual(RECHECK_MISSES_UNDER_TEST);
+  // Let the outage end before asserting, so the retraction below can only come
+  // from a probe ANSWERED after the three that were not.
+  await expect
+    .poll(() => probeHold.outageOpen, { intervals: [250], timeout: 60_000 })
+    .toBe(false);
+
+  expect(await daemonRunStatus(page, runId), 'precondition: the run must have succeeded').toBe('succeeded');
+  expect(
+    await storedAssistantRunStatus(page, projectId, conversationId),
+    'precondition: the daemon must hold the stored assistant row on the run terminal',
+  ).toBe('succeeded');
+  const documentLoads = await documentLoadCount(page);
+
+  // Every probe from here answers. The pane must still be following the run,
+  // so the very next one is the terminal that retracts the alert.
+  await expect(checkingNotice, 'the checking notice must leave once the run answers')
+    .toHaveCount(0, { timeout: T.long });
+  await expect(failureAlert, 'three unanswered probes must not end the recovery')
+    .toHaveCount(0, { timeout: T.long });
+  await expect(
+    page.getByText(RUN_ANSWER).first(),
+    'the retracted turn must show the answer the run delivered',
+  ).toBeVisible({ timeout: T.long });
+  // W1J.4: the pause ends with the run, and its explanation leaves with it.
+  await expect(sendButton, 'sending must resume once the run answers')
+    .toBeEnabled({ timeout: T.long });
+  await expect(
+    composer.getByText(SEND_PAUSED_TEXT),
+    'the paused sentence must not outlive the pause',
+  ).toHaveCount(0, { timeout: T.long });
+  expect(await documentLoadCount(page), 'the alert must clear without a page reload').toBe(documentLoads);
+});
+
+test('[P0] a live inferred failure is retracted when the first message read after success fails', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live failed-read retraction smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const streamHold = holdRunEventStream(page);
+  const readRefusal = refuseFirstConversationRead(page, () => streamHold.failed);
+
+  streamHold.arm();
+  const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
+  const { runId } = (await runResponse.json()) as { runId: string };
+
+  const failureAlert = runErrorCard(page);
+  const checkingNotice = runCheckingNotice(page);
+  await expect(checkingNotice, 'the non-ok live event stream must paint the neutral checking notice')
+    .toBeVisible({ timeout: 120_000 });
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+  await expect(failureAlert, 'an unresolved stream failure must not paint the failure card')
+    .toHaveCount(0);
+
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+  await expect
+    .poll(() => readRefusal.refused, { intervals: [250], timeout: 60_000 })
+    .toBe(1);
+
+  expect(await daemonRunStatus(page, runId), 'precondition: the run must have succeeded').toBe('succeeded');
+  expect(
+    await storedAssistantRunStatus(page, projectId, conversationId),
+    'precondition: the daemon must hold the stored assistant row on the run terminal',
+  ).toBe('succeeded');
+  const documentLoads = await documentLoadCount(page);
+
+  // The pane already holds the authoritative `succeeded`. A conversation read
+  // that failed cannot take that fact away from it.
+  await expect(checkingNotice, 'the checking notice must leave once the run answers')
+    .toHaveCount(0, { timeout: T.long });
+  await expect(failureAlert, 'a failed message read must not leave the retracted failure on screen')
+    .toHaveCount(0, { timeout: T.long });
+  expect(await documentLoadCount(page), 'the alert must clear without a page reload').toBe(documentLoads);
+  expect(await storedAssistantRunStatus(page, projectId, conversationId)).toBe('succeeded');
+});
+
+test('[P0] a Side Chat inferred failure is retracted after three status probes answer nothing', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Side chat status-probe miss retraction smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const sideConversationId = await createConversation(page, projectId, 'Side chat');
+  await openSideChatTab(page, projectId, conversationId, sideConversationId);
+
+  const sideChat = page.getByTestId('side-chat-tab');
+  await expect(sideChat, 'the persisted side chat tab must mount').toBeVisible({ timeout: T.long });
+
+  const streamHold = holdRunEventStream(page);
+  const probeHold = holdRunStatusProbes(page, STATUS_OUTAGE_WINDOW_MS, () => streamHold.runId);
+
+  streamHold.arm();
+  const runResponse = await sendPrompt(page, await composerInside(page, sideChat), RUN_PROMPT);
+  const { runId } = (await runResponse.json()) as { runId: string };
+
+  const failureAlert = runErrorCard(sideChat);
+  const checkingNotice = runCheckingNotice(sideChat);
+  await expect(checkingNotice, 'the non-ok Side Chat event stream must paint the neutral checking notice')
+    .toBeVisible({ timeout: 120_000 });
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+  await expect(failureAlert, 'an unresolved stream failure must not paint the failure card')
+    .toHaveCount(0);
+
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+  // A coarse gate, not the mechanism: `refused` also counts the unrelated
+  // per-message status read described on `holdRunStatusProbes`. What makes the
+  // reconciliation meet three misses is the window's length, and what proves it
+  // is that this case is red on a build whose rule stops at three.
+  await expect
+    .poll(() => probeHold.refused, { intervals: [250], timeout: 60_000 })
+    .toBeGreaterThanOrEqual(RECHECK_MISSES_UNDER_TEST);
+  // Let the outage end before asserting, so the retraction below can only come
+  // from a probe ANSWERED after the three that were not.
+  await expect
+    .poll(() => probeHold.outageOpen, { intervals: [250], timeout: 60_000 })
+    .toBe(false);
+
+  expect(await daemonRunStatus(page, runId), 'precondition: the run must have succeeded').toBe('succeeded');
+  expect(
+    await storedAssistantRunStatus(page, projectId, sideConversationId),
+    'precondition: the daemon must hold the stored assistant row on the run terminal',
+  ).toBe('succeeded');
+  const documentLoads = await documentLoadCount(page);
+
+  await expect(checkingNotice, 'the checking notice must leave once the run answers')
+    .toHaveCount(0, { timeout: T.long });
+  await expect(failureAlert, 'three unanswered probes must not end the Side Chat recovery')
+    .toHaveCount(0, { timeout: T.long });
+  await expect(
+    sideChat.getByText(RUN_ANSWER).first(),
+    'the retracted Side Chat turn must show the answer the run delivered',
+  ).toBeVisible({ timeout: T.long });
+  expect(await documentLoadCount(page), 'the alert must clear without a page reload').toBe(documentLoads);
+});
+
+test('[P0] a Side Chat inferred failure is retracted when the first message read after success fails', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Side chat failed-read retraction smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const sideConversationId = await createConversation(page, projectId, 'Side chat');
+  await openSideChatTab(page, projectId, conversationId, sideConversationId);
+
+  const sideChat = page.getByTestId('side-chat-tab');
+  await expect(sideChat, 'the persisted side chat tab must mount').toBeVisible({ timeout: T.long });
+
+  const streamHold = holdRunEventStream(page);
+  const readRefusal = refuseFirstConversationRead(page, () => streamHold.failed);
+
+  streamHold.arm();
+  const runResponse = await sendPrompt(page, await composerInside(page, sideChat), RUN_PROMPT);
+  const { runId } = (await runResponse.json()) as { runId: string };
+
+  const failureAlert = runErrorCard(sideChat);
+  const checkingNotice = runCheckingNotice(sideChat);
+  await expect(checkingNotice, 'the non-ok Side Chat event stream must paint the neutral checking notice')
+    .toBeVisible({ timeout: 120_000 });
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+  await expect(failureAlert, 'an unresolved stream failure must not paint the failure card')
+    .toHaveCount(0);
+
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+  await expect
+    .poll(() => readRefusal.refused, { intervals: [250], timeout: 60_000 })
+    .toBe(1);
+
+  expect(await daemonRunStatus(page, runId), 'precondition: the run must have succeeded').toBe('succeeded');
+  expect(
+    await storedAssistantRunStatus(page, projectId, sideConversationId),
+    'precondition: the daemon must hold the stored assistant row on the run terminal',
+  ).toBe('succeeded');
+  const documentLoads = await documentLoadCount(page);
+
+  await expect(checkingNotice, 'the checking notice must leave once the run answers')
+    .toHaveCount(0, { timeout: T.long });
+  await expect(failureAlert, 'a failed Side Chat message read must not leave the retracted failure on screen')
+    .toHaveCount(0, { timeout: T.long });
+  expect(await documentLoadCount(page), 'the alert must clear without a page reload').toBe(documentLoads);
+  expect(await storedAssistantRunStatus(page, projectId, sideConversationId)).toBe('succeeded');
+});
+
+// W1I.1 — the card is not merely retracted, it is never painted.
+//
+// W1G.1 and W1H.1 made both panes follow the run to its own terminal, so the
+// alert left the screen for a turn that succeeded. It was still PAINTED first:
+// both clients wrote the pane error, stamped the local assistant row `failed`
+// and showed the generic "Task failed" card the moment the event stream
+// answered non-OK — which is the start of a turn that then runs for seconds or
+// minutes. The wave bar admits no "Task failed" for a turn that succeeded, so a
+// temporary one is still a violation.
+//
+// The two cases below hold the whole outage class open at once — the event
+// stream answered non-OK, the status probes answered 503 three times, and the
+// first message read after the run succeeded answered 503 — and watch the DOM
+// continuously from the send, failing on the first sighting rather than on a
+// single count at the end.
+
+test('[P0] a live stream failure with no run verdict never paints the failure card', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live unresolved stream checking smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const streamHold = holdRunEventStream(page);
+  const probeHold = holdRunStatusProbes(page, STATUS_OUTAGE_WINDOW_MS, () => streamHold.runId);
+  const readRefusal = refuseFirstConversationRead(page, () => streamHold.failed);
+  await watchRunFailureCard(page);
+
+  streamHold.arm();
+  const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
+  const { runId } = (await runResponse.json()) as { runId: string };
+
+  const failureAlert = runErrorCard(page);
+  const checkingNotice = runCheckingNotice(page);
+
+  // Whatever the pane paints for an unresolved stream failure, it paints here:
+  // within a beat of the stream answering non-OK, while the run is still going.
+  await expect
+    .poll(
+      async () =>
+        (await runFailureCardSightings(page)).length > 0 || (await checkingNotice.count()) > 0,
+      { intervals: [200], timeout: T.long },
+    )
+    .toBe(true);
+  expect(
+    await runFailureCardSightings(page),
+    'a stream failure with no run verdict must never paint the failure card',
+  ).toEqual([]);
+  await expect(checkingNotice, 'the unresolved stream failure must read as a neutral checking state')
+    .toBeVisible();
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+  await expect(
+    checkingNotice.getByRole('button', { name: /retry/i }),
+    'a run that may still be running must not offer Retry (the B-02 double-send hazard)',
+  ).toHaveCount(0);
+
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+  await expect
+    .poll(() => probeHold.refused, { intervals: [250], timeout: 60_000 })
+    .toBeGreaterThanOrEqual(RECHECK_MISSES_UNDER_TEST);
+  await expect
+    .poll(() => probeHold.outageOpen, { intervals: [250], timeout: 60_000 })
+    .toBe(false);
+  await expect
+    .poll(() => readRefusal.refused, { intervals: [250], timeout: 60_000 })
+    .toBe(1);
+
+  await expect(checkingNotice, 'the checking notice must leave once the run answers')
+    .toHaveCount(0, { timeout: T.long });
+  expect(
+    await storedAssistantRunStatus(page, projectId, conversationId),
+    'the row must read succeeded once the run answers',
+  ).toBe('succeeded');
+  expect(
+    await runFailureCardSightings(page),
+    'the failure card must never have appeared at any point during a run that succeeded',
+  ).toEqual([]);
+  await expect(failureAlert).toHaveCount(0);
+});
+
+test('[P0] a Side Chat stream failure with no run verdict never paints the failure card', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Side chat unresolved stream checking smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const sideConversationId = await createConversation(page, projectId, 'Side chat');
+  await openSideChatTab(page, projectId, conversationId, sideConversationId);
+
+  const sideChat = page.getByTestId('side-chat-tab');
+  await expect(sideChat, 'the persisted side chat tab must mount').toBeVisible({ timeout: T.long });
+
+  const streamHold = holdRunEventStream(page);
+  const probeHold = holdRunStatusProbes(page, STATUS_OUTAGE_WINDOW_MS, () => streamHold.runId);
+  const readRefusal = refuseFirstConversationRead(page, () => streamHold.failed);
+  // Installed after the last navigation, so the watcher lives in the document
+  // that receives the run.
+  await watchRunFailureCard(page);
+
+  streamHold.arm();
+  const runResponse = await sendPrompt(page, await composerInside(page, sideChat), RUN_PROMPT);
+  const { runId } = (await runResponse.json()) as { runId: string };
+
+  const failureAlert = runErrorCard(sideChat);
+  const checkingNotice = runCheckingNotice(sideChat);
+
+  await expect
+    .poll(
+      async () =>
+        (await runFailureCardSightings(page)).length > 0 || (await checkingNotice.count()) > 0,
+      { intervals: [200], timeout: T.long },
+    )
+    .toBe(true);
+  expect(
+    await runFailureCardSightings(page),
+    'a Side Chat stream failure with no run verdict must never paint the failure card',
+  ).toEqual([]);
+  await expect(checkingNotice, 'the unresolved stream failure must read as a neutral checking state')
+    .toBeVisible();
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+  await expect(
+    checkingNotice.getByRole('button', { name: /retry/i }),
+    'a run that may still be running must not offer Retry (the B-02 double-send hazard)',
+  ).toHaveCount(0);
+
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+  await expect
+    .poll(() => probeHold.refused, { intervals: [250], timeout: 60_000 })
+    .toBeGreaterThanOrEqual(RECHECK_MISSES_UNDER_TEST);
+  await expect
+    .poll(() => probeHold.outageOpen, { intervals: [250], timeout: 60_000 })
+    .toBe(false);
+  await expect
+    .poll(() => readRefusal.refused, { intervals: [250], timeout: 60_000 })
+    .toBe(1);
+
+  await expect(checkingNotice, 'the checking notice must leave once the run answers')
+    .toHaveCount(0, { timeout: T.long });
+  expect(
+    await storedAssistantRunStatus(page, projectId, sideConversationId),
+    'the row must read succeeded once the run answers',
+  ).toBe('succeeded');
+  expect(
+    await runFailureCardSightings(page),
+    'the failure card must never have appeared at any point during a run that succeeded',
+  ).toEqual([]);
+  await expect(failureAlert).toHaveCount(0);
+});
+
+// The other half of the rule: a verdict is still a verdict. Nothing is
+// intercepted in these two — the fake runtime fails the way the team daemon
+// recorded, the daemon classifies it, and the card must appear with the
+// daemon's own facts rather than a neutral notice.
+
+test('[P0] a stream failure whose run then really fails adopts the daemon verdict', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live unresolved then failed smoke');
+  await expectWorkspaceReady(page);
+
+  const streamHold = holdRunEventStream(page);
+
+  streamHold.arm();
+  // The stream is refused for the life of the run, so the client never receives
+  // the daemon's error frame. The card below can only come from the follow
+  // reading the daemon's own stored row after the run reported `failed`.
+  await sendPrompt(page, page.getByTestId('chat-composer').first(), FAILING_RUN_PROMPT);
+
+  const failureAlert = runErrorCard(page);
+  await expect(failureAlert, 'the run own failed verdict must still reach the user')
+    .toBeVisible({ timeout: 120_000 });
+  await expect(
+    failureAlert.locator('[data-run-failure-step]'),
+    'the adopted card must carry the daemon facts, not a client-invented one',
+  ).toHaveCount(1);
+  await expect(runCheckingNotice(page), 'the verdict ends the checking state').toHaveCount(0);
+});
+
+test('[P1] a run the daemon reported failed still shows the failure card with its facts', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live adjudicated failure smoke');
+  await expectWorkspaceReady(page);
+
+  await sendPrompt(page, page.getByTestId('chat-composer').first(), FAILING_RUN_PROMPT);
+
+  const failureAlert = runErrorCard(page);
+  await expect(failureAlert, 'a run the daemon adjudicated must show the failure card')
+    .toBeVisible({ timeout: 120_000 });
+  await expect(
+    failureAlert.locator('[data-run-failure-step]'),
+    'the card must state the step the daemon says stopped, not a client-invented one',
+  ).toHaveCount(1);
+  await expect(runCheckingNotice(page), 'a verdict is not a checking state').toHaveCount(0);
+});
+
+test('[P1] a Side Chat run the daemon reported failed still shows the failure card with its facts', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Side chat adjudicated failure smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const sideConversationId = await createConversation(page, projectId, 'Side chat');
+  await openSideChatTab(page, projectId, conversationId, sideConversationId);
+
+  const sideChat = page.getByTestId('side-chat-tab');
+  await expect(sideChat, 'the persisted side chat tab must mount').toBeVisible({ timeout: T.long });
+
+  await sendPrompt(page, await composerInside(page, sideChat), FAILING_RUN_PROMPT);
+
+  const failureAlert = runErrorCard(sideChat);
+  await expect(failureAlert, 'a run the daemon adjudicated must show the failure card')
+    .toBeVisible({ timeout: 120_000 });
+  await expect(
+    failureAlert.locator('[data-run-failure-step]'),
+    'the card must state the step the daemon says stopped, not a client-invented one',
+  ).toHaveCount(1);
+  await expect(runCheckingNotice(sideChat), 'a verdict is not a checking state').toHaveCount(0);
+});
+
 interface RunEventStreamHold {
   /** Start refusing the next run event stream this page opens. */
   arm: () => void;
   /** True once the stream has been answered non-OK at least once. */
   readonly failed: boolean;
+  /** The run whose stream is held, known from the first refused request. */
+  readonly runId: string | null;
 }
 
 /**
@@ -226,6 +739,9 @@ function holdRunEventStream(page: Page): RunEventStreamHold {
     get failed() {
       return failed;
     },
+    get runId() {
+      return heldRunId;
+    },
   };
 }
 
@@ -253,8 +769,93 @@ function holdConversationRead(page: Page, isArmed: () => boolean): { release: ()
   return { release: () => release() };
 }
 
-function runRecoveryCard(scope: Page | Locator): Locator {
-  return scope.locator('[data-user-action-card="run-recovery"]').last();
+interface RunStatusProbeHold {
+  /** How many status probes have been answered 503 so far. */
+  readonly refused: number;
+  /** True while the outage is still running; false before it and after it. */
+  readonly outageOpen: boolean;
+}
+
+/**
+ * Answer every status probe for the held run 503 for `windowMs` after the first
+ * one, then let every later probe through.
+ *
+ * `fetchChatRunStatus` turns a non-OK response and a thrown fetch alike into
+ * `null` (`apps/web/src/providers/daemon.ts`), which is exactly what the
+ * reconciliation counts as a miss — so a 503 here is indistinguishable from the
+ * daemon hiccup this reproduces.
+ *
+ * A time window rather than a probe count because the page has a second,
+ * unrelated reader of the same endpoint: `AssistantMessage` fetches
+ * `GET /api/runs/:id` once per settled message (`useRunStatusForRun`), so a
+ * count would be spent by whichever reader asked first and the reconciliation
+ * would meet fewer misses than the case names. The window is scoped to the run
+ * whose event stream is held; the spec reads run status through `page.request`,
+ * which does not pass through `page.route` at all.
+ */
+function holdRunStatusProbes(
+  page: Page,
+  windowMs: number,
+  heldRunId: () => string | null,
+): RunStatusProbeHold {
+  let refused = 0;
+  let outageStartedAt: number | null = null;
+  const outageOpen = () => outageStartedAt !== null && Date.now() - outageStartedAt < windowMs;
+  void page.route(
+    (url) => /^\/api\/runs\/[^/]+$/.test(url.pathname),
+    async (route) => {
+      const requestedRunId = new URL(route.request().url()).pathname.split('/')[3] ?? '';
+      const held = heldRunId();
+      if (held === null || requestedRunId !== held || (outageStartedAt !== null && !outageOpen())) {
+        await route.continue();
+        return;
+      }
+      outageStartedAt = outageStartedAt ?? Date.now();
+      refused += 1;
+      await route.fulfill({ status: 503, body: '' });
+    },
+  );
+  return {
+    get refused() {
+      return refused;
+    },
+    get outageOpen() {
+      return outageOpen();
+    },
+  };
+}
+
+interface ConversationReadRefusal {
+  /** How many conversation reads have been answered 503 so far. */
+  readonly refused: number;
+}
+
+/**
+ * Answer the FIRST conversation read the client makes after the stream failed
+ * with 503, and let every later one through.
+ *
+ * `listMessages` swallows that into an empty array (`state/projects.ts`), which
+ * is the read the pane makes once the run reports its terminal. Reads issued
+ * before the failure (the pane's own initial load) pass through.
+ */
+function refuseFirstConversationRead(page: Page, isArmed: () => boolean): ConversationReadRefusal {
+  let refused = 0;
+  void page.route(
+    (url) => /^\/api\/projects\/[^/]+\/conversations\/[^/]+\/messages$/.test(url.pathname),
+    async (route) => {
+      if (!isArmed() || route.request().method() !== 'GET' || refused >= 1) {
+        await route.continue();
+        return;
+      }
+      refused += 1;
+      await route.fulfill({ status: 503, body: '' });
+    },
+  );
+  return {
+    get refused() {
+      return refused;
+    },
+  };
 }
 
 /**

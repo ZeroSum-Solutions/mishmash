@@ -22,6 +22,7 @@ import {
   PREVIEW_PAINT_REPORT_PRODUCER_SOURCE,
   PREVIEW_PAINT_REPORT_REQUEST,
 } from '@open-design/contracts/runtime/preview-paint-report';
+import { withProjectAssetBaseHref } from '@open-design/contracts/runtime/project-asset-base';
 
 import {
   buildManualEditBridge,
@@ -433,7 +434,13 @@ export function buildSrcdoc(
   const withSafeTitle = sanitizeTitleInDoc(wrapped);
   const withOdIds = annotateMissingOdIds(withSafeTitle);
   const withSourcePaths = options.editBridge ? annotateManualEditSourcePaths(withOdIds) : withOdIds;
-  const withBase = options.baseHref ? injectBaseHref(withSourcePaths, options.baseHref) : withSourcePaths;
+  // One rule for every preview path: the srcDoc frame and the live-artifact
+  // route both state the project's asset base with `withProjectAssetBaseHref`,
+  // so the same page resolves `assets/pic.png` to the same URL whichever way it
+  // reached the viewer.
+  const withBase = options.baseHref
+    ? withProjectAssetBaseHref(withSourcePaths, options.baseHref)
+    : withSourcePaths;
   // Decks handle their own click-driven navigation (slide advance); a
   // standalone HTML/multi-page preview is the case that needs its in-page
   // links routed back through the host instead of navigating the iframe.
@@ -1231,26 +1238,14 @@ function injectBeforeBodyEnd(doc: string, payload: string): string {
   return doc + payload;
 }
 
-function injectBaseHref(doc: string, baseHref: string): string {
-  const safeHref = escapeAttr(baseHref);
-  const tag = `<base href="${safeHref}">`;
-  if (/<head[^>]*>/i.test(doc)) {
-    return doc.replace(/<head[^>]*>/i, (m) => `${m}${tag}`);
-  }
-  if (/<html[^>]*>/i.test(doc)) {
-    return doc.replace(/<html[^>]*>/i, (m) => `${m}<head>${tag}</head>`);
-  }
-  return tag + doc;
-}
-
 /**
  * Intercept clicks on the previewed document's own in-page links that target
  * a sibling project file, so the host can re-render the target through the
  * srcDoc pipeline instead of letting the sandboxed iframe navigate itself to
  * the raw file (see the "Preview navigation bridge" note above
- * `PREVIEW_NAVIGATE_MESSAGE`). Only called when `injectBaseHref` already ran,
- * since the click handler trusts `document.baseURI` to name the project's
- * raw-file directory.
+ * `PREVIEW_NAVIGATE_MESSAGE`). Only called when `withProjectAssetBaseHref`
+ * already ran, since the click handler trusts `document.baseURI` to name the
+ * project's raw-file directory.
  */
 function injectPreviewNavigationBridge(doc: string, navigationRootHref?: string): string {
   const script = `<script data-od-preview-navigation-bridge>(function(){
@@ -1284,14 +1279,6 @@ function injectPreviewNavigationBridge(doc: string, navigationRootHref?: string)
   }, true);
 })();</script>`;
   return injectAfterHeadOpen(doc, script);
-}
-
-function escapeAttr(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
 }
 
 // Sandboxed iframes (we use `sandbox="allow-scripts"`) without

@@ -151,14 +151,12 @@ import {
   htmlNeedsFocusGuard,
   htmlNeedsPoweredPreview,
   htmlNeedsRedirectGuard,
-  htmlBuildsScriptAtRuntime,
   htmlNeedsSandboxShim,
   parseForceInline,
   shouldUrlLoadHtmlPreview,
   type UrlLoadDecision,
 } from './file-viewer-render-mode';
 import { PreviewNoRenderNotice } from './PreviewNoRenderNotice';
-import { PreviewRuntimeScriptNotice } from './PreviewRuntimeScriptNotice';
 import {
   assetBaseDirFor,
   collectPreviewAssetPaths,
@@ -7434,16 +7432,6 @@ function HtmlViewer({
     const s = routingHtmlSource;
     return s != null && htmlNeedsFocusGuard(s);
   }, [passiveLargeHtmlPreview, routingHtmlSource]);
-  // The artifact attaches its script at runtime, so neither the literal-tag
-  // scan nor the srcDoc asset inliner can see it and no preview mode can run
-  // it. Not a render-mode disqualifier (see htmlBuildsScriptAtRuntime) — it
-  // only decides whether the viewer explains the blank canvas the user may be
-  // looking at.
-  const buildsScriptAtRuntime = useMemo(() => {
-    if (passiveLargeHtmlPreview) return false;
-    const s = routingHtmlSource;
-    return s != null && htmlBuildsScriptAtRuntime(s);
-  }, [passiveLargeHtmlPreview, routingHtmlSource]);
   // A self-redirecting artifact must render through srcDoc so buildSrcdoc's
   // redirect-loop guard is present; on the raw URL-load path the iframe reloads
   // itself forever and freezes the workspace (nexu-io/open-design#710).
@@ -13236,32 +13224,15 @@ function HtmlViewer({
                     </div>
                   ) : null}
                   {/*
-                    Three banners want the one absolute slot over the preview.
-                    The two `.preview-asset-warning` ones stack (see the
-                    adjacent-sibling rule in viewer/core.css), so a blocked
-                    asset and a pass that ran out of budget can both show. This
-                    notice has its own slot at the same offset and cannot
-                    stack, so it yields to either of them: both name something
-                    happening to THIS render — a file the daemon refused, or a
-                    pass that never settled — while this one explains a shape
-                    the artifact would have to change. Either is also the
-                    likelier cause of the blank canvas when both are true.
-                  */}
-                  {buildsScriptAtRuntime && !previewAssetWarning && !previewInlineStatus.timedOut ? (
-                    <PreviewRuntimeScriptNotice />
-                  ) : null}
-                  {/*
-                    Last in the yield order, and it shares the runtime-script
-                    notice's slot. Every banner above names something specific
-                    about this render — a file the daemon refused, a pass that
-                    ran out of budget, a script shape the preview cannot run —
-                    and any of those is a better answer to "why is it blank"
-                    than this one, which only reports that nothing was laid
-                    out. It is the banner for a blank canvas nothing else
-                    explains.
+                    Last in the yield order: every banner above names something
+                    specific about this render — a file the daemon refused, a pass
+                    that ran out of budget — and either is a better answer to "why
+                    is it blank" than this one, which only reports that nothing
+                    was laid out. It is the banner for a blank canvas nothing else
+                    explains. (The runtime-script notice that once shared this
+                    slot was removed by 2H.4: the daemon serves such scripts now.)
                   */}
                   {previewDidNotRender
-                    && !buildsScriptAtRuntime
                     && !previewAssetWarning
                     && !previewInlineStatus.timedOut ? (
                     <PreviewNoRenderNotice />

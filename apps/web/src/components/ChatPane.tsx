@@ -79,6 +79,10 @@ import {
 } from '../runtime/amr-guidance';
 import { describeRunFailureFacts } from '../runtime/run-failure-facts';
 import {
+  SEND_PAUSED_UNRESOLVED_RUN_KEY,
+  type RunCheckState,
+} from '../runtime/run-failure-reconcile';
+import {
   fetchVelaLoginStatus,
   type VelaLoginStatus,
 } from '../providers/daemon';
@@ -472,6 +476,14 @@ interface Props {
   streaming: boolean;
   loading?: boolean;
   error: string | null;
+  // Set by the pane that owns a run whose event stream failed without the
+  // daemon adjudicating it. The run is UNRESOLVED, not failed, so this is
+  // rendered as a neutral notice and never as the failure card.
+  runCheck?: RunCheckState | null;
+  // Re-runs the follow behind that notice. Only offered once the daemon has
+  // stopped answering; a run that may still be running gets no action at all,
+  // because re-sending it is the double-send hazard (B-02).
+  onRunCheckAgain?: () => void;
   projectId: string | null;
   sessionMode?: ChatSessionMode;
   onSessionModeChange?: (mode: ChatSessionMode) => void;
@@ -485,6 +497,10 @@ interface Props {
   hasActiveDesignSystem?: boolean;
   activeDesignSystem?: DesignSystemSummary | null;
   sendDisabled?: boolean;
+  // Why `sendDisabled` holds, in the words the user reads, when the owner of
+  // the flag can name one. Shown beside the composer's Send button; see
+  // `SEND_PAUSED_UNRESOLVED_RUN_KEY`.
+  sendDisabledReason?: string;
   queuedItems?: QueuedSendItem[];
   onRemoveQueuedSend?: (id: string) => void;
   onUpdateQueuedSend?: (id: string, update: QueuedSendUpdate) => void;
@@ -797,8 +813,11 @@ export function ChatPane({
   streaming,
   loading = false,
   sendDisabled = false,
+  sendDisabledReason,
   queuedItems = [],
   error,
+  runCheck = null,
+  onRunCheckAgain,
   projectId,
   sessionMode = 'design',
   onSessionModeChange,
@@ -1204,8 +1223,21 @@ export function ChatPane({
     ? describeRunFailureFacts({
         failureStage: failedRunErrorEvent?.failureStage,
         artifactCount: failedRunErrorEvent?.artifactCount,
+        fileChangeState: failedRunErrorEvent?.fileChangeState,
       })
     : null;
+  // The checking notice is keyed to a run, and that run's ROW answers it: once
+  // the row reaches any terminal — from the follow, from a reattach, from a
+  // conversation refresh — the question the notice asks has been answered and
+  // it leaves without anyone clearing it. A pane showing another conversation
+  // has no such row and shows nothing.
+  const activeRunCheck =
+    runCheck
+    && displayMessages.some(
+      (m) => m.role === 'assistant' && m.runId === runCheck.runId && isActiveRunStatus(m.runStatus),
+    )
+      ? runCheck
+      : null;
   const hasInlineAmrAuthorizeFailure = Boolean(
     retryAssistant && onRetry && runFailureUi?.primaryAction === 'authorize',
   );
@@ -2065,6 +2097,7 @@ export function ChatPane({
       skills={skills}
       streaming={streaming}
       sendDisabled={sendDisabled}
+      sendDisabledReason={sendDisabledReason}
       initialDraft={initialDraft}
       composerPlaceholder={composerPlaceholder}
       placeholderScenarios={composerPlaceholderScenarios}
@@ -2448,6 +2481,46 @@ export function ChatPane({
                 questionFormSubmitDisabled={questionFormSubmitDisabled}
                 scrollContainerRef={logRef}
               />
+              {activeRunCheck ? (
+                <UserActionCard
+                  dataKind="run-checking"
+                  icon="refresh"
+                  tone="neutral"
+                  title={t(
+                    activeRunCheck.unreachable
+                      ? 'chat.runChecking.unreachableTitle'
+                      : 'chat.runChecking.title',
+                  )}
+                  status={
+                    <>
+                      <p>
+                        {t(
+                          activeRunCheck.unreachable
+                            ? 'chat.runChecking.unreachableMessage'
+                            : 'chat.runChecking.message',
+                        )}
+                      </p>
+                      {/* The notice is the only thing on screen for as long as
+                          the run stays unresolved, so it carries the pause it
+                          causes. Gated on this pane's own Send state, because a
+                          pane whose composer still sends must not claim
+                          otherwise. */}
+                      {sendDisabled ? <p>{t(SEND_PAUSED_UNRESOLVED_RUN_KEY)}</p> : null}
+                    </>
+                  }
+                  footerActions={
+                    activeRunCheck.unreachable && onRunCheckAgain ? (
+                      <button
+                        type="button"
+                        className="chat-error-action"
+                        onClick={onRunCheckAgain}
+                      >
+                        {t('chat.runChecking.checkAgainCta')}
+                      </button>
+                    ) : null
+                  }
+                />
+              ) : null}
               {displayError ? (
                 <UserActionCard
                   dataKind="run-recovery"
@@ -2469,7 +2542,13 @@ export function ChatPane({
                           </span>
                         ) : null}
                         {runFailureFacts.filesKey ? (
-                          <span data-run-failure-files={String(runFailureFacts.artifactCount)}>
+                          <span
+                            data-run-failure-files={
+                              runFailureFacts.artifactCount === null
+                                ? 'unknown'
+                                : String(runFailureFacts.artifactCount)
+                            }
+                          >
                             {runFailureFacts.filesKey === 'chat.runError.filesChangedMany'
                               ? t(runFailureFacts.filesKey, {
                                   count: runFailureFacts.artifactCount ?? 0,

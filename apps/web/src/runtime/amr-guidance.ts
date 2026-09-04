@@ -118,6 +118,7 @@ export type RunFailureMessageKey =
   | 'chat.runError.gitBashMissingMessage'
   | 'chat.runError.cpuUnsupportedMessage'
   | 'chat.runError.stoppedBySystemMessage'
+  | 'chat.runError.daemonRestartedMessage'
   | null;
 
 // i18n keys for the unified error card's TITLE (the "error type" line above the
@@ -155,6 +156,7 @@ export type RunFailureTitleKey =
   | 'chat.runError.title.stoppedBySystem'
   | 'chat.runError.title.permissionBlocked'
   | 'chat.runError.title.stopped'
+  | 'chat.runError.title.daemonRestarted'
   | 'chat.runError.title.generic';
 
 export interface RunFailureUi {
@@ -226,6 +228,14 @@ const AGENT_AGNOSTIC_FAILURE_UI: Record<string, RunFailureUi> = {
   ROLE_MARKER_HALLUCINATION: retryWithGuidance(
     'chat.runError.title.outputInvalid',
     'chat.runError.outputInvalidMessage',
+  ),
+  // MishMash itself restarted while the turn was in flight, so the run never
+  // reached its own terminal event and startup reconciliation classified it
+  // (`apps/daemon/src/runtimes/run-terminal-reconciliation.ts`). Nothing about
+  // the request was wrong, so a plain retry is the whole recovery.
+  DAEMON_RESTARTED: retryWithGuidance(
+    'chat.runError.title.daemonRestarted',
+    'chat.runError.daemonRestartedMessage',
   ),
   // Checked-in runtime def failed strict validation (user_action: fix_config);
   // the user can't self-repair, so the copy points at update/support.

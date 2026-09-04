@@ -27,6 +27,7 @@ import { chromium, type Browser, type Route } from "playwright";
 import sharp from "sharp";
 
 import { DECK_SLIDE_SELECTOR } from "@open-design/contracts/runtime/deck-stage-fallback";
+import { withProjectAssetBaseHref } from "@open-design/contracts/runtime/project-asset-base";
 import type {
   DesktopExportArtifactInput,
   DesktopExportArtifactResult,
@@ -126,10 +127,13 @@ export interface RenderNetworkPolicy {
    * recognized -- narrower-than-expected is always the safe failure mode
    * here. */
   readonly assetPrefix: string;
-  /** The parsed, re-serialized `baseHref` (`URL#href`) injected into
-   * `<base href>` -- never the raw caller string, so an unusual encoding
-   * in the input can't smuggle a different string past validation
-   * (review finding 9). */
+  /** The parsed, re-serialized `baseHref` (`URL#href`) the rendered document
+   * states as its asset base through `withProjectAssetBaseHref` -- the same
+   * rule the srcDoc preview and the live-artifact route apply, so a deck
+   * exported from a page resolves that page's relative CSS/JS/image URLs
+   * exactly where the preview did. Always an http URL, never a filesystem
+   * path, and never the raw caller string, so an unusual encoding in the
+   * input can't smuggle a different string past validation (review finding 9). */
   readonly injectedHref: string;
 }
 
@@ -268,17 +272,6 @@ async function fulfillAllowedRequest(route: Route, policy: RenderNetworkPolicy |
     }
     currentUrl = nextUrl;
   }
-}
-
-/** Injects `<base href="...">` into the document head so the browser
- * resolves the deck/page's relative asset URLs (CSS/JS/images) against the
- * daemon's own /api/projects/:id/raw/ origin -- baseHref is always an http
- * URL (deck-export.ts's rawBaseHref), never a filesystem path. */
-function injectBaseHref(html: string, injectedHref: string): string {
-  const tag = `<base href="${injectedHref.replace(/"/g, "&quot;")}">`;
-  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (match) => `${match}${tag}`);
-  if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (match) => `${match}<head>${tag}</head>`);
-  return `${tag}${html}`;
 }
 
 type BrowserJob<T> = (page: Awaited<ReturnType<Browser["newPage"]>>) => Promise<T>;
@@ -685,7 +678,8 @@ export async function renderSlides(
   }
   try {
     const policy = resolveRenderNetworkPolicy(input.baseHref);
-    const html = policy == null ? input.html : injectBaseHref(input.html, policy.injectedHref);
+    const html =
+      policy == null ? input.html : withProjectAssetBaseHref(input.html, policy.injectedHref);
     const jpeg = input.pageImageFormat === "jpeg";
 
     const result = await runBoundedRender(runtimeDataDir, html, policy, async (page) => {
@@ -759,7 +753,8 @@ export async function exportArtifact(
   }
   try {
     const policy = resolveRenderNetworkPolicy(input.baseHref);
-    const html = policy == null ? input.html : injectBaseHref(input.html, policy.injectedHref);
+    const html =
+      policy == null ? input.html : withProjectAssetBaseHref(input.html, policy.injectedHref);
     const jpeg = input.imageFormat === "jpeg";
 
     const image = await runBoundedRender(runtimeDataDir, html, policy, async (page) => {

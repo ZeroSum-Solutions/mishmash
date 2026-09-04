@@ -2632,7 +2632,9 @@ export interface Dict {
   'chat.runError.title.stoppedBySystem': string;
   'chat.runError.title.permissionBlocked': string;
   'chat.runError.title.stopped': string;
+  'chat.runError.title.daemonRestarted': string;
   'chat.runError.stoppedBySystemMessage': string;
+  'chat.runError.daemonRestartedMessage': string;
   'chat.runError.step.preflight': string;
   'chat.runError.step.spawn': string;
   'chat.runError.step.sessionInit': string;
@@ -2646,6 +2648,7 @@ export interface Dict {
   'chat.runError.filesUnchanged': string;
   'chat.runError.filesChangedOne': string;
   'chat.runError.filesChangedMany': string;
+  'chat.runError.filesUnknown': string;
   'chat.runError.title.generic': string;
   'chat.runError.title.artifactMissing': string;
   'chat.runError.signInMessage.amr': string;
@@ -2670,6 +2673,17 @@ export interface Dict {
   'chat.runError.sourceLabel': string;
   'chat.runError.sourceExpandAria': string;
   'chat.runError.sourceCollapseAria': string;
+  // The neutral state a pane shows while a stream failure carries no run
+  // verdict. Not a failure: the run is unresolved until it answers for itself.
+  'chat.runChecking.title': string;
+  'chat.runChecking.message': string;
+  'chat.runChecking.unreachableTitle': string;
+  'chat.runChecking.unreachableMessage': string;
+  'chat.runChecking.checkAgainCta': string;
+  // Why the composer will not send while that state stands. Rendered by the
+  // checking notice and repeated beside the disabled Send button; see
+  // `SEND_PAUSED_UNRESOLVED_RUN_KEY` in `runtime/run-failure-reconcile.ts`.
+  'chat.sendPaused.unresolvedRun': string;
   'chat.tabComments': string;
   'chat.commentsSoon': string;
   'chat.comments.attached': string;
@@ -3471,6 +3485,7 @@ export interface Dict {
   'designFiles.previewServer.openInChrome': string;
   'designFiles.previewServer.sharedLink': string;
   'designFiles.previewServer.openFailed': string;
+  'designFiles.previewServer.frontRootAssets': string;
   'designFiles.previewServer.rootAbsolute': string;
   'designFiles.previewServer.none': string;
   'designFiles.modified': string;
@@ -3772,8 +3787,6 @@ export interface Dict {
   'fileViewer.previewAssetBlockedDetail': string;
   'fileViewer.previewNoRenderTitle': string;
   'fileViewer.previewNoRenderDetail': string;
-  'fileViewer.previewRuntimeScriptBlockedTitle': string;
-  'fileViewer.previewRuntimeScriptBlockedDetail': string;
   'fileViewer.presenterReset': string;
   'fileViewer.present': string;
   'fileViewer.presentInTab': string;

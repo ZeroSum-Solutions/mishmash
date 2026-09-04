@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
+import { createGenericDaemonDisconnectError } from '../../src/providers/daemon';
 import {
+  RUN_FAILURE_RECHECK_INTERVAL_MS,
   RUN_FAILURE_RECHECK_MAX_MISSES,
+  applyRunTerminalFromStatus,
+  isUnadjudicatedStreamFailure,
+  markStreamUnadjudicated,
   nextInferredRunFailureStep,
   retractsRunFailure,
+  runCheckWithDaemonReachability,
   retractsStaleRunFailure,
+  withUnresolvedRunStatus,
 } from '../../src/runtime/run-failure-reconcile';
 import type { ChatMessage } from '../../src/types';
 
@@ -91,13 +98,16 @@ describe('retractsStaleRunFailure — rows a conversation refresh brings in', ()
 });
 
 describe('nextInferredRunFailureStep — following a run the pane never saw finish', () => {
-  it('retracts on a non-failed terminal', () => {
-    expect(nextInferredRunFailureStep('succeeded', 0)).toBe('retract');
-    expect(nextInferredRunFailureStep('canceled', 0)).toBe('retract');
+  it('settles on a non-failed terminal', () => {
+    expect(nextInferredRunFailureStep('succeeded', 0)).toBe('settle');
+    expect(nextInferredRunFailureStep('canceled', 0)).toBe('settle');
   });
 
-  it('stops at once when the run really did fail, so a failed row is never re-queried', () => {
-    expect(nextInferredRunFailureStep('failed', 0)).toBe('stop');
+  // W1I.1 renames the old `'stop'`: an unresolved stream failure paints nothing,
+  // so the run's own `failed` is the step that ADOPTS the daemon verdict rather
+  // than the step that leaves an already-painted alert standing.
+  it('adopts the daemon verdict when the run really did fail', () => {
+    expect(nextInferredRunFailureStep('failed', 0)).toBe('fail');
   });
 
   // The realistic shape of this defect: the stream fails when it OPENS, at the
@@ -109,10 +119,227 @@ describe('nextInferredRunFailureStep — following a run the pane never saw fini
     expect(nextInferredRunFailureStep('running', RUN_FAILURE_RECHECK_MAX_MISSES + 10)).toBe('retry');
   });
 
-  it('tolerates a few probes that answer nothing, then stops', () => {
+  // Supersedes "tolerates a few probes that answer nothing, then stops", which
+  // asserted `'stop'` at a cap of three. Three misses is a nine-second daemon
+  // hiccup — the outage class that produces an inferred failure in the first
+  // place — so ending the recovery there abandoned it for the very reason it
+  // existed.
+  it('keeps following through an outage that would have ended the recovery', () => {
     expect(nextInferredRunFailureStep(null, 0)).toBe('retry');
+    expect(nextInferredRunFailureStep(null, 3)).toBe('retry');
     expect(nextInferredRunFailureStep(null, RUN_FAILURE_RECHECK_MAX_MISSES - 1)).toBe('retry');
-    expect(nextInferredRunFailureStep(null, RUN_FAILURE_RECHECK_MAX_MISSES)).toBe('stop');
-    expect(nextInferredRunFailureStep(undefined, RUN_FAILURE_RECHECK_MAX_MISSES)).toBe('stop');
+  });
+
+  it('falls back to a conversation read when an unbroken outage exhausts the bound', () => {
+    expect(nextInferredRunFailureStep(null, RUN_FAILURE_RECHECK_MAX_MISSES)).toBe('reconcile');
+    expect(nextInferredRunFailureStep(undefined, RUN_FAILURE_RECHECK_MAX_MISSES)).toBe('reconcile');
+  });
+
+  // The bound is a duration, not a count: it must outlast the hiccup class the
+  // recovery exists for. Five minutes of a daemon that never answers.
+  it('bounds the outage at five minutes of unanswered probes', () => {
+    expect(RUN_FAILURE_RECHECK_MAX_MISSES * RUN_FAILURE_RECHECK_INTERVAL_MS)
+      .toBeGreaterThanOrEqual(5 * 60_000);
+  });
+});
+
+describe('applyRunTerminalFromStatus — the run own terminal, before any read', () => {
+  const shown = [assistant({ id: 'msg-1', runId: 'run-1', runStatus: 'failed', endedAt: 10 })];
+  const succeeded = { status: 'succeeded' as const, updatedAt: 42 };
+
+  it('moves the failed row onto the terminal the run reports', () => {
+    const next = applyRunTerminalFromStatus(shown, 'run-1', succeeded);
+    expect(next?.[0]?.runStatus).toBe('succeeded');
+    expect(next?.[0]?.endedAt).toBe(42);
+  });
+
+  it('does not mutate the rows it was given', () => {
+    applyRunTerminalFromStatus(shown, 'run-1', succeeded);
+    expect(shown[0]?.runStatus).toBe('failed');
+    expect(shown[0]?.endedAt).toBe(10);
+  });
+
+  it('keeps the row own endedAt when the status carries no clock', () => {
+    expect(applyRunTerminalFromStatus(shown, 'run-1', { status: 'canceled' })?.[0]?.endedAt).toBe(10);
+  });
+
+  it('retracts nothing while the run is still going, or when it really failed', () => {
+    expect(applyRunTerminalFromStatus(shown, 'run-1', { status: 'running', updatedAt: 42 })).toBeNull();
+    expect(applyRunTerminalFromStatus(shown, 'run-1', { status: 'failed', updatedAt: 42 })).toBeNull();
+  });
+
+  it('retracts nothing when the probe answered nothing at all', () => {
+    expect(applyRunTerminalFromStatus(shown, 'run-1', null)).toBeNull();
+    expect(applyRunTerminalFromStatus(shown, 'run-1', undefined)).toBeNull();
+  });
+
+  it('leaves rows belonging to another run alone', () => {
+    expect(applyRunTerminalFromStatus(shown, 'run-2', succeeded)).toBeNull();
+  });
+
+  // W1I.1: an unresolved stream failure leaves the row on its last ACTIVE
+  // status instead of stamping it `failed`, so the run's own terminal has to
+  // move a row that is still running rather than one that is already failing.
+  it('moves a row still shown as running onto the terminal the run reports', () => {
+    const running = [assistant({ id: 'msg-1', runId: 'run-1', runStatus: 'running' })];
+    const next = applyRunTerminalFromStatus(running, 'run-1', succeeded);
+    expect(next?.[0]?.runStatus).toBe('succeeded');
+    expect(next?.[0]?.endedAt).toBe(42);
+  });
+
+  it('moves a row still shown as queued onto the terminal the run reports', () => {
+    const queued = [assistant({ id: 'msg-1', runId: 'run-1', runStatus: 'queued' })];
+    expect(applyRunTerminalFromStatus(queued, 'run-1', succeeded)?.[0]?.runStatus).toBe('succeeded');
+  });
+
+  it('leaves a row that already settled on its own terminal alone', () => {
+    const settled = [assistant({ id: 'msg-1', runId: 'run-1', runStatus: 'succeeded', endedAt: 10 })];
+    expect(applyRunTerminalFromStatus(settled, 'run-1', succeeded)).toBeNull();
+  });
+
+  it('ignores a user row that happens to carry the run id', () => {
+    const userRow = [
+      { ...assistant({ id: 'msg-1', runId: 'run-1', runStatus: 'running' }), role: 'user' } as ChatMessage,
+    ];
+    expect(applyRunTerminalFromStatus(userRow, 'run-1', succeeded)).toBeNull();
+  });
+
+  it('keeps a row that fails on delivery rather than on run status', () => {
+    const delivery = [
+      assistant({
+        id: 'msg-1',
+        runId: 'run-1',
+        runStatus: 'succeeded',
+        resultDeliveryState: 'no_result',
+      }),
+    ];
+    expect(applyRunTerminalFromStatus(delivery, 'run-1', succeeded)).toBeNull();
+  });
+});
+
+// W1J.1 — the row half of the same rule: a terminal the TRANSPORT inferred is
+// not the daemon's word either, and a pane that leaves it standing keeps both
+// the failure it stopped painting and the notice it meant to show instead.
+describe('withUnresolvedRunStatus — the row an unresolved run keeps', () => {
+  it('takes back a terminal the transport inferred', () => {
+    const row = assistant({ runStatus: 'failed', endedAt: 500 });
+    expect(withUnresolvedRunStatus(row, 'running')).toMatchObject({
+      runStatus: 'running',
+      endedAt: undefined,
+    });
+  });
+
+  it('drops the disconnect-time stamp, because nothing ended', () => {
+    const row = assistant({ runStatus: 'failed', endedAt: 500 });
+    expect(withUnresolvedRunStatus(row, 'queued').endedAt).toBeUndefined();
+  });
+
+  it("keeps a terminal the daemon itself declared, and the time that came with it", () => {
+    const row = assistant({ runStatus: 'failed', endedAt: 500 });
+    expect(withUnresolvedRunStatus(row, 'succeeded')).toMatchObject({
+      runStatus: 'succeeded',
+      endedAt: 500,
+    });
+  });
+
+  it('returns the row untouched when it already says the right thing', () => {
+    const row = assistant({ runStatus: 'running' });
+    expect(withUnresolvedRunStatus(row, 'running')).toBe(row);
+  });
+
+  it('leaves the rest of the row alone', () => {
+    const row = assistant({ runStatus: 'failed', endedAt: 500, content: 'partial' });
+    expect(withUnresolvedRunStatus(row, 'running').content).toBe('partial');
+  });
+});
+
+// W1I.1 — which stream errors are the daemon's verdict on the run, and which
+// this client only inferred from a broken transport.
+describe('isUnadjudicatedStreamFailure — a verdict is still a verdict', () => {
+  it('reads a non-OK event-stream response as unresolved', () => {
+    // `consumeDaemonRun` surfaces exactly this text for a stream answered
+    // non-OK, and marks it because it minted the error itself.
+    expect(isUnadjudicatedStreamFailure(markStreamUnadjudicated(new Error('daemon 503: no body'))))
+      .toBe(true);
+  });
+
+  it('reads a transport failure as unresolved', () => {
+    expect(isUnadjudicatedStreamFailure(markStreamUnadjudicated(new TypeError('Failed to fetch'))))
+      .toBe(true);
+  });
+
+  it('reads a stream that closed without a terminal as unresolved', () => {
+    // The generic disconnect carries a code, but it is minted by this client
+    // after its own reconnect budget ran out — the daemon said nothing.
+    expect(isUnadjudicatedStreamFailure(createGenericDaemonDisconnectError())).toBe(true);
+  });
+
+  it('keeps the mark off the enumerable shape of the error', () => {
+    const marked = markStreamUnadjudicated(new Error('daemon 503: no body'));
+    expect(Object.keys(marked)).toEqual([]);
+    expect(JSON.parse(JSON.stringify({ ...marked }))).toEqual({});
+  });
+
+  it('reads a daemon-classified failure as a verdict', () => {
+    const classified = Object.assign(new Error('agent exited with code 1'), {
+      failureCategory: 'process_exit',
+      failureDetail: 'stream_error',
+      failureStage: 'child_close',
+    });
+    expect(isUnadjudicatedStreamFailure(classified)).toBe(false);
+  });
+
+  // The distinction the mark exists for: a daemon `error` frame with no code
+  // reads exactly like a transport failure, and is the daemon's verdict.
+  it('reads an unmarked daemon error frame as a verdict, code or no code', () => {
+    expect(isUnadjudicatedStreamFailure(new Error('daemon error'))).toBe(false);
+    const coded = Object.assign(new Error('daemon error'), { code: 'AGENT_EXECUTION_FAILED' });
+    expect(isUnadjudicatedStreamFailure(coded)).toBe(false);
+  });
+
+  it('reads the restart verdict as a verdict, so it keeps the card', () => {
+    const restarted = Object.assign(new Error('Run interrupted because the daemon restarted.'), {
+      code: 'DAEMON_RESTARTED',
+    });
+    expect(isUnadjudicatedStreamFailure(restarted)).toBe(false);
+  });
+
+  it('says nothing about a value that is not an error at all', () => {
+    expect(isUnadjudicatedStreamFailure(null)).toBe(false);
+    expect(isUnadjudicatedStreamFailure(undefined)).toBe(false);
+    expect(isUnadjudicatedStreamFailure('daemon 503')).toBe(false);
+  });
+});
+
+// W1I.1 — the notice's wording follows the DAEMON, not the run.
+describe('runCheckWithDaemonReachability — a daemon that answers is not silent', () => {
+  const checking = { runId: 'run-1', unreachable: false } as const;
+  const unreachable = { runId: 'run-1', unreachable: true } as const;
+
+  it('says the daemon is not answering once nothing has answered', () => {
+    expect(runCheckWithDaemonReachability(checking, 'run-1', false)).toEqual(unreachable);
+  });
+
+  // The bug this closes: after the probes were exhausted the wording stood even
+  // while the daemon answered every later probe, offering "Check again" for a
+  // daemon that was demonstrably reachable.
+  it('retires that wording the moment anything answers', () => {
+    expect(runCheckWithDaemonReachability(unreachable, 'run-1', true)).toEqual(checking);
+  });
+
+  it('is a no-op when the wording is already right, so a pane may call it on every probe', () => {
+    expect(runCheckWithDaemonReachability(checking, 'run-1', true)).toBe(checking);
+    expect(runCheckWithDaemonReachability(unreachable, 'run-1', false)).toBe(unreachable);
+  });
+
+  it('leaves another run notice alone, and has nothing to say with no notice', () => {
+    expect(runCheckWithDaemonReachability(checking, 'run-2', false)).toBe(checking);
+    expect(runCheckWithDaemonReachability(null, 'run-1', false)).toBeNull();
+  });
+
+  it('carries the rest of the pane own marker through', () => {
+    const carried = { runId: 'run-1', unreachable: false, message: 'daemon 503: no body' };
+    expect(runCheckWithDaemonReachability(carried, 'run-1', false))
+      .toEqual({ ...carried, unreachable: true });
   });
 });
