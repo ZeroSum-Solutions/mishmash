@@ -182,7 +182,18 @@ script at runtime, and a notice scoped to the runtime-attached shape would be ar
 **Repro (historical).** Preview an HTML artifact whose only script tag attaches another script at
 runtime. Before D-11 the canvas was empty; at `ee7d42eb4` and after, the artifact renders.
 
-**Still open, deliberately.** The powered preview (`htmlNeedsPoweredPreview`) remains the only
+**Still open — and newly fixable.** Loading the file and surviving a Web Storage read at eval are
+separate questions, and only the first one changed. The storage shim (`injectSandboxShim`,
+`apps/web/src/runtime/srcdoc.ts`) is injected by the srcDoc pipeline alone, so a runtime-attached
+script that reads `localStorage` at eval still throws on the URL-load path — the other half of what
+this entry originally described. Making that shape a render-mode disqualifier would now actually
+repair it; the removed detector's docblock refused exactly that on the ground that srcDoc could not
+run the script either, and D-11 removed the ground. It needs its own red spec (an artifact whose
+linked boot file reads Web Storage at eval) and its own PR, and it has to weigh the cost the
+original decision named: every artifact that merely mentions the pattern would pay for the slower
+srcDoc render. Left to the owner as an actionable follow-up, not as a limitation.
+
+**Also still open, deliberately.** The powered preview (`htmlNeedsPoweredPreview`) remains the only
 path that gives an artifact a real same-origin document. Escalating to it off a source-text
 heuristic is a product decision, not a hardening call. Left to the owner.
 
