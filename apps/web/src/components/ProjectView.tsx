@@ -120,11 +120,15 @@ import {
 import {
   RUN_FAILURE_RECHECK_DELAY_MS,
   RUN_FAILURE_RECHECK_INTERVAL_MS,
+  applyRunTerminalFromStatus,
+  conversationAnswersRunCheck,
+  isUnadjudicatedStreamFailure,
   nextInferredRunFailureStep,
-  retractRunFailureFromStatus,
+  runCheckWithDaemonReachability,
   retractsRunFailure,
   retractsStaleRunFailure,
 } from '../runtime/run-failure-reconcile';
+import type { RunCheckState } from '../runtime/run-failure-reconcile';
 import { RESUME_CONTINUE_PROMPT } from '../runtime/resume';
 import { checkAmrBalanceGate } from '../runtime/amr-balance-gate';
 import { isPaidAmrPlan, resolveAmrPlan } from '../runtime/amr-low-balance-plan';
@@ -1545,6 +1549,18 @@ export function ProjectView({
     if (!streaming) setLiveToolInput((prev) => (Object.keys(prev).length ? {} : prev));
   }, [streaming]);
   const [error, setError] = useState<string | null>(null);
+  // A run whose event stream failed without the daemon adjudicating it. The run
+  // is unresolved, so the pane says so in neutral words; `message` is the stream
+  // error the follow falls back to if the run turns out to have really failed
+  // and its stored row cannot be read.
+  const [runCheck, setRunCheck] = useState<(RunCheckState & { message: string }) | null>(null);
+  // Residual 8: `error` is ONE slot, shared with errors no run raised (a
+  // conversation-load failure, an audio error). Remember what a run put there so
+  // the run can take back its own value and nothing else.
+  const runErrorCarrierRef = useRef<{ runId: string; message: string } | null>(null);
+  // Retires the follow a re-check replaces, so "Check again" cannot leave two
+  // loops probing the same run.
+  const inferredFollowGenerationsRef = useRef(new Map<string, number>());
   const [artifact, setArtifact] = useState<Artifact | null>(null);
   const [filesRefresh, setFilesRefresh] = useState(0);
   // Progress hint for the preview canvas: true from the first `file-changed`
@@ -3192,81 +3208,232 @@ export function ProjectView({
     [refreshConversationMessagesFromServer, scheduleProjectTimeout],
   );
 
+  // The sidebar's latest-run status is the same claim as the row's. An
+  // unresolved stream failure leaves it on the status the send set, so the run's
+  // own terminal has to move it too — nothing else will until the conversation
+  // list is reloaded.
+  const settleConversationLatestRun = useCallback(
+    (
+      conversationId: string,
+      status: NonNullable<ChatMessage['runStatus']>,
+      endedAt: number | undefined,
+    ) => {
+      setConversations((current) =>
+        current.map((conversation) => {
+          if (conversation.id !== conversationId || !conversation.latestRun) return conversation;
+          const startedAt = conversation.latestRun.startedAt;
+          const duration =
+            endedAt === undefined || startedAt === undefined
+              ? {}
+              : { durationMs: Math.max(0, endedAt - startedAt) };
+          return {
+            ...conversation,
+            updatedAt: endedAt ?? conversation.updatedAt,
+            latestRun: {
+              ...conversation.latestRun,
+              status,
+              ...(endedAt === undefined ? {} : { endedAt, ...duration }),
+            },
+          };
+        }),
+      );
+    },
+    [],
+  );
+
+
+  // Residual 8: `error` is a single slot the run shares with errors no run
+  // raised. Take back only what this run put there — a carrier holding another
+  // source's message is left standing.
+  const clearPaneErrorForRun = useCallback((runId: string) => {
+    const carried = runErrorCarrierRef.current;
+    if (!carried || carried.runId !== runId) return;
+    runErrorCarrierRef.current = null;
+    setError((current) => (current === carried.message ? null : current));
+  }, []);
+
   // A terminal this client only INFERRED is not a verdict on the run. When the
   // run's event stream answers non-OK, no terminal event ever arrives, so none
-  // of the handlers that reconcile a failure can fire — the live `onError`
-  // seals the run instead. The run itself usually keeps going, and the daemon
-  // stamps the stored assistant row with its real terminal when it ends.
+  // of the handlers that reconcile a run can fire — the live `onError` seals the
+  // run instead. The run itself usually keeps going, and the daemon stamps the
+  // stored assistant row with its real terminal when it ends.
   //
   // So follow the run until it reports one. `nextInferredRunFailureStep` owns
-  // when to retract, when to keep following and when to stop.
+  // when the question is settled, when to keep following, and when the daemon's
+  // own `failed` has answered it.
   //
-  // `alreadyRetracted` says the run's own terminal has already cleared the
-  // alert and moved the row (`retractRunFailureFromStatus`). This read is then
-  // only there to improve the row's content, and cannot judge the failure a
-  // second time: the rows it is compared against no longer carry one.
+  // `alreadyApplied` says the run's own terminal has already moved the row
+  // (`applyRunTerminalFromStatus`). This read is then only there to improve the
+  // row's content, and cannot judge the run a second time.
   //
   // Returns whether the pane is SETTLED — the read applied, or this pane has
   // moved to another conversation and no longer owns the question. `false` means
-  // the read answered nothing and an unresolved failure is still on screen, so
-  // the caller must keep following rather than stop here.
+  // the read answered nothing and the run is still unresolved on screen, so the
+  // caller must keep following rather than stop here.
   const reconcileInferredRunFailure = useCallback(
-    async (conversationId: string, alreadyRetracted: boolean): Promise<boolean> => {
+    async (conversationId: string, runId: string, alreadyApplied: boolean): Promise<boolean> => {
       if (messagesConversationIdRef.current !== conversationId) return true;
       let serverMessages: ChatMessage[];
       try {
         serverMessages = await listMessages(project.id, conversationId);
       } catch (err) {
-        console.warn('Failed to re-check a run failure the client inferred', err);
+        console.warn('Failed to re-check a run the client could not resolve', err);
         return false;
       }
       if (messagesConversationIdRef.current !== conversationId) return true;
-      if (!alreadyRetracted && !retractsStaleRunFailure(messagesRef.current, serverMessages)) return false;
+      const answered =
+        alreadyApplied
+        || retractsStaleRunFailure(messagesRef.current, serverMessages)
+        || conversationAnswersRunCheck(runId, serverMessages);
+      if (!answered) return false;
       setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
-      setError(null);
+      clearPaneErrorForRun(runId);
+      // The read can be the ONLY answer this run gets — the exhausted-probe
+      // fallback carries no status of its own — so the sidebar takes its
+      // terminal from the row that arrived, not only from a status probe.
+      const settledRow = serverMessages.find(
+        (message) => message.role === 'assistant' && message.runId === runId,
+      );
+      if (settledRow?.runStatus && !isActiveRunStatus(settledRow.runStatus)) {
+        settleConversationLatestRun(conversationId, settledRow.runStatus, settledRow.endedAt);
+      }
       return true;
     },
-    [project.id],
+    [clearPaneErrorForRun, project.id, settleConversationLatestRun],
+  );
+
+  // The daemon's verdict, taken from its own stored row: a failed run owes the
+  // user the daemon's structured facts (the cause, the step, the file-change
+  // state), never a client-invented card. Returns whether such a row arrived.
+  const adoptRunFailureFromConversation = useCallback(
+    async (conversationId: string, runId: string): Promise<boolean> => {
+      if (messagesConversationIdRef.current !== conversationId) return true;
+      let serverMessages: ChatMessage[];
+      try {
+        serverMessages = await listMessages(project.id, conversationId);
+      } catch (err) {
+        console.warn('Failed to read the daemon row for a run it reported failed', err);
+        return false;
+      }
+      if (messagesConversationIdRef.current !== conversationId) return true;
+      const daemonRow = serverMessages.find(
+        (message) =>
+          message.role === 'assistant' && message.runId === runId && message.runStatus === 'failed',
+      );
+      if (!daemonRow) return false;
+      setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
+      // The daemon's words supersede any generic card this run painted while its
+      // row was unreadable, so the stream error must not stay in the slot and be
+      // shown under the daemon's title.
+      clearPaneErrorForRun(runId);
+      return true;
+    },
+    [clearPaneErrorForRun, project.id],
+  );
+
+  // A run the daemon reports failed whose stored row this pane cannot read. The
+  // turn did fail, so the user is owed the card even without the daemon's own
+  // words for it: a failed run is not a succeeded run, so naming it costs the
+  // bar nothing.
+  const paintUnreadableRunFailure = useCallback(
+    (runId: string, message: string) => {
+      const row = messagesRef.current.find(
+        (candidate) => candidate.role === 'assistant' && candidate.runId === runId,
+      );
+      if (!row) return;
+      updateMessageById(
+        row.id,
+        (prev) => ({
+          ...appendErrorStatusEvent(prev, message),
+          endedAt: prev.endedAt ?? Date.now(),
+          runStatus: 'failed',
+        }),
+        true,
+      );
+      runErrorCarrierRef.current = { runId, message };
+      setError(message);
+    },
+    [updateMessageById],
   );
 
   const scheduleInferredRunFailureRecheck = useCallback(
-    (conversationId: string, runId: string) => {
+    (conversationId: string, runId: string, stream: { unresolved: boolean; message: string }) => {
+      const generation = (inferredFollowGenerationsRef.current.get(runId) ?? 0) + 1;
+      inferredFollowGenerationsRef.current.set(runId, generation);
+      const superseded = () => inferredFollowGenerationsRef.current.get(runId) !== generation;
       let misses = 0;
       const attempt = () => {
-        if (messagesConversationIdRef.current !== conversationId) return;
+        if (messagesConversationIdRef.current !== conversationId || superseded()) return;
         void (async () => {
           const latest = await fetchChatRunStatus(runId).catch(() => null);
-          if (messagesConversationIdRef.current !== conversationId) return;
+          if (messagesConversationIdRef.current !== conversationId || superseded()) return;
           misses = latest ? 0 : misses + 1;
+          // Any answer at all retires the "not answering" wording, however long
+          // the run then takes.
+          if (latest) setRunCheck((current) => runCheckWithDaemonReachability(current, runId, true));
           const step = nextInferredRunFailureStep(latest?.status, misses);
-          if (step === 'stop') return;
+          if (step === 'fail') {
+            // The run's own verdict, and the only thing that may produce a card
+            // for it. A pane that already painted the failure is done; a pane
+            // still checking adopts the daemon's row for its facts, and keeps
+            // reading for them if that read answers nothing.
+            if (!stream.unresolved) return;
+            settleConversationLatestRun(conversationId, 'failed', latest?.updatedAt);
+            if (await adoptRunFailureFromConversation(conversationId, runId)) return;
+            if (superseded()) return;
+            paintUnreadableRunFailure(runId, stream.message);
+            scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_INTERVAL_MS);
+            return;
+          }
           if (step === 'retry') {
             scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_INTERVAL_MS);
             return;
           }
-          // 'retract' is the run's own non-failed terminal, and it settles the
-          // question on its own: clear the pane's error carrier and move the row
-          // it belongs to before reading anything. 'reconcile' is the
+          // 'settle' is the run's own non-failed terminal, and it answers the
+          // question on its own: move the row it belongs to and take back this
+          // run's error carrier before reading anything. 'reconcile' is the
           // exhausted-probe fallback and carries no status, so it can only fall
           // through to the read.
-          const retracted = step === 'retract';
-          if (retracted) {
-            setMessages((current) => retractRunFailureFromStatus(current, runId, latest) ?? current);
-            setError(null);
+          const settled = step === 'settle';
+          if (settled && latest) {
+            setMessages((current) => applyRunTerminalFromStatus(current, runId, latest) ?? current);
+            settleConversationLatestRun(conversationId, latest.status, latest.updatedAt);
+            clearPaneErrorForRun(runId);
           }
-          const settled = await reconcileInferredRunFailure(conversationId, retracted);
-          if (retracted || settled) return;
-          // The 'reconcile' fallback read answered nothing, so the outage that
-          // exhausted the probes is still running and the failure on screen is
-          // still unresolved. Keep following.
+          const applied = await reconcileInferredRunFailure(conversationId, runId, settled);
+          if (settled || applied || superseded()) return;
+          // The 'reconcile' fallback read answered nothing either, so the outage
+          // that exhausted the probes is still running and the run is still
+          // unresolved. Say so in the notice, and keep following.
+          setRunCheck((current) => runCheckWithDaemonReachability(current, runId, false));
           misses = 0;
           scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_INTERVAL_MS);
         })();
       };
       scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_DELAY_MS);
     },
-    [reconcileInferredRunFailure, scheduleProjectTimeout],
+    [
+      adoptRunFailureFromConversation,
+      clearPaneErrorForRun,
+      paintUnreadableRunFailure,
+      reconcileInferredRunFailure,
+      scheduleProjectTimeout,
+      settleConversationLatestRun,
+    ],
   );
+
+  // The manual re-check behind the "MishMash is not answering" notice: follow the
+  // run again now instead of waiting out the interval.
+  const recheckUnresolvedRun = useCallback(() => {
+    const pending = runCheck;
+    const conversationId = messagesConversationIdRef.current;
+    if (!pending || !conversationId) return;
+    setRunCheck({ ...pending, unreachable: false });
+    scheduleInferredRunFailureRecheck(conversationId, pending.runId, {
+      unresolved: true,
+      message: pending.message,
+    });
+  }, [runCheck, scheduleInferredRunFailureRecheck]);
 
   // The programmatic brand-extraction transcript is a synthetic row the daemon
   // reconciles to a terminal state out of band (finalize success, the 30s
@@ -5807,10 +5974,23 @@ export function ProjectView({
           // tagged superseded. See the onDone above for the ownership rationale.
           const runMayFinalize =
             !supersededRunsRef.current.has(controller);
+          // A stream failure the daemon has not adjudicated says nothing about
+          // the run, which is usually still going: this stream failed when it
+          // OPENED, at the start of a turn that then runs for seconds or
+          // minutes. So it is an UNRESOLVED state, and the pane says so in
+          // neutral words rather than painting a failure it would have to take
+          // back. Only a run this client can still follow qualifies — an error
+          // raised before the daemon named a run has nothing to check.
+          const unresolvedRunId = isUnadjudicatedStreamFailure(err) ? currentRunId : undefined;
           textBuffer.flush();
           textBuffer.cancel();
           cancelSendTextBuffer();
-          if (runMayFinalize) {
+          if (runMayFinalize && unresolvedRunId !== undefined) {
+            setRunCheck({ runId: unresolvedRunId, unreachable: false, message: err.message });
+          } else if (runMayFinalize) {
+            runErrorCarrierRef.current = currentRunId
+              ? { runId: currentRunId, message: err.message }
+              : null;
             setError(err.message);
             appendAssistantErrorEvent(assistantId, err.message, errorCode, failure);
             updateAssistant((prev) => ({
@@ -5880,7 +6060,7 @@ export function ProjectView({
                   // matching the message row's endedAt set further down.
                   endedAt = latestRunStatus.updatedAt;
                   if (runMayFinalize) {
-                    setError(null);
+                    clearPaneErrorForRun(runIdForGenericDisconnect);
                     updateAssistant((prev) => {
                       const recovered = removeErrorStatusEvent(prev, err.message, errorCode);
                       if (
@@ -5926,7 +6106,9 @@ export function ProjectView({
                   // conversation-level stamp in step with the message row.
                   endedAt = latestRunStatus.updatedAt;
                   if (runMayFinalize) {
-                    if (latestRunStatus.status === 'canceled') setError(null);
+                    if (latestRunStatus.status === 'canceled') {
+                      clearPaneErrorForRun(runIdForGenericDisconnect);
+                    }
                     updateAssistant((prev) => ({
                       ...prev,
                       endedAt: latestRunStatus.updatedAt,
@@ -5958,7 +6140,10 @@ export function ProjectView({
             controller,
             cancelController,
           );
-          if (ownsCurrentRun && !conversationFinalizedInline) {
+          // The sidebar's latest-run status is the same claim in miniature, so an
+          // unresolved stream failure must not stamp the conversation failed
+          // either. It stays on the status the send left it with.
+          if (ownsCurrentRun && !conversationFinalizedInline && unresolvedRunId === undefined) {
             updateConversationLatestRun(finalRunStatusAfterError, endedAt);
           }
           setMessages((curr) => {
@@ -5971,7 +6156,10 @@ export function ProjectView({
           } else if (runMayFinalize && currentRunId && !isGenericDaemonDisconnect(err)) {
             // The branch above sealed this run without ever seeing its
             // terminal — the stream failed rather than reporting a verdict.
-            scheduleInferredRunFailureRecheck(runConversationId, currentRunId);
+            scheduleInferredRunFailureRecheck(runConversationId, currentRunId, {
+              unresolved: unresolvedRunId !== undefined,
+              message: err.message,
+            });
           }
           void refreshProjectFiles();
           clearTraceTouchedFilePaths();
@@ -7407,6 +7595,8 @@ export function ProjectView({
 	            sendDisabled: currentConversationSendDisabled,
             queuedItems: currentConversationQueuedItems,
             error: conversationLoadError ?? error,
+            runCheck,
+            onRunCheckAgain: recheckUnresolvedRun,
             onSend: handleComposerSend,
             onRetry: handleRetry,
             onStop: handleStop,
@@ -7426,6 +7616,8 @@ export function ProjectView({
 	      currentConversationLoading,
 	      currentConversationControlStreaming,
       error,
+      runCheck,
+      recheckUnresolvedRun,
       handleAssistantFeedback,
       handleRetry,
       handleComposerSend,
@@ -8724,6 +8916,8 @@ export function ProjectView({
               sendDisabled={currentConversationSendDisabled}
               queuedItems={currentConversationQueuedItems}
               error={conversationLoadError ?? error}
+              runCheck={runCheck}
+              onRunCheckAgain={recheckUnresolvedRun}
               projectId={project.id}
               sessionMode={activeSessionMode}
               onSessionModeChange={handleActiveConversationSessionModeChange}

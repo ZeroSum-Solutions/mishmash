@@ -49,6 +49,7 @@ function detectClientType(): 'desktop' | 'web' | 'unknown' {
   return 'unknown';
 }
 import { parseSseFrame } from './sse';
+import { markStreamUnadjudicated } from '../runtime/run-failure-reconcile';
 import {
   summarizeArtifactsForTranscript,
   type PersistedArtifactFileRef,
@@ -375,7 +376,9 @@ export const GENERIC_DAEMON_DISCONNECT_CODE = 'DAEMON_STREAM_DISCONNECTED';
 export function createGenericDaemonDisconnectError(): Error & { code: string } {
   const error = new Error(GENERIC_DAEMON_DISCONNECT_MESSAGE) as Error & { code: string };
   error.code = GENERIC_DAEMON_DISCONNECT_CODE;
-  return error;
+  // This client's reconnect budget ran out while the daemon still reported the
+  // run queued or running. The code is our word, not a verdict on the run.
+  return markStreamUnadjudicated(error);
 }
 
 function notifyRunsChanged() {
@@ -710,7 +713,8 @@ export async function streamViaDaemon({
     if (!createResp.ok) {
       const text = await createResp.text().catch(() => '');
       emitRunStatus('failed');
-      handlers.onError(new Error(`daemon ${createResp.status}: ${text || 'no body'}`));
+      // The daemon never named a run, so nothing was adjudicated.
+      handlers.onError(markStreamUnadjudicated(new Error(`daemon ${createResp.status}: ${text || 'no body'}`)));
       return;
     }
 
@@ -744,7 +748,7 @@ export async function streamViaDaemon({
   } catch (err) {
     if ((err as Error).name === 'AbortError') return;
     emitRunStatus('failed');
-    handlers.onError(err instanceof Error ? err : new Error(String(err)));
+    handlers.onError(markStreamUnadjudicated(err instanceof Error ? err : new Error(String(err))));
   }
 }
 
@@ -1096,7 +1100,9 @@ async function consumeDaemonRun({
 
       if (!resp.ok || !resp.body) {
         const text = await resp.text().catch(() => '');
-        handlers.onError(new Error(`daemon ${resp.status}: ${text || 'no body'}`));
+        // The run's event stream answered non-OK. The run itself is usually
+        // still going; this says nothing about it.
+        handlers.onError(markStreamUnadjudicated(new Error(`daemon ${resp.status}: ${text || 'no body'}`)));
         return;
       }
 

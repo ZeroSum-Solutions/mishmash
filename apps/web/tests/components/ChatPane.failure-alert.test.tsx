@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
-import { forwardRef } from 'react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { forwardRef, type ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatPane } from '../../src/components/ChatPane';
@@ -116,10 +116,10 @@ function terminalMessage(fixture: TerminalRunFixture): ChatMessage {
   } as unknown as ChatMessage;
 }
 
-function renderFailure(fixture: TerminalRunFixture) {
+function renderPane(overrides: Partial<ComponentProps<typeof ChatPane>>) {
   return render(
     <ChatPane
-      messages={[terminalMessage(fixture)]}
+      messages={[]}
       streaming={false}
       error={null}
       projectId="project-1"
@@ -136,8 +136,13 @@ function renderFailure(fixture: TerminalRunFixture) {
       onSelectConversation={vi.fn()}
       onDeleteConversation={vi.fn()}
       config={{ agentId: 'claude', agentCliEnv: {} } as unknown as AppConfig}
+      {...overrides}
     />,
   );
+}
+
+function renderFailure(fixture: TerminalRunFixture) {
+  return renderPane({ messages: [terminalMessage(fixture)] });
 }
 
 // The reported failures, each carrying the persisted error event the daemon
@@ -358,6 +363,107 @@ describe('the failure alert names the exact cause, the step, and the file-change
     expect(container.querySelector('[data-user-action-card="run-recovery"]')).toBeNull();
     expect(screen.queryByText('chat.runError.title.generic')).toBeNull();
     expect(screen.queryByText('chat.runError.title.stopped')).toBeNull();
+  });
+});
+
+// W1I.1 — the consumer half of "a stream failure with no run verdict is a
+// checking state, never a failure card".
+//
+// The pane owning the run decides the class (`isUnadjudicatedStreamFailure`);
+// this layer decides what each class LOOKS like. An unresolved run keeps its
+// row on the last active status and hands `ChatPane` a run-scoped check marker;
+// the pane must answer with a neutral, named notice and no recovery action,
+// because retrying a run that may still be running is the double-send hazard
+// W1.1 closed (B-02). A run the daemon adjudicated is unchanged: it keeps the
+// failure card with the daemon's own facts.
+
+const UNRESOLVED_RUN_ID = 'run-unresolved';
+
+function unresolvedRow(runStatus: string = 'running'): ChatMessage {
+  return {
+    id: 'msg-unresolved',
+    role: 'assistant',
+    content: '',
+    createdAt: 1,
+    runId: UNRESOLVED_RUN_ID,
+    runStatus,
+    agentId: 'claude',
+    events: [],
+  } as unknown as ChatMessage;
+}
+
+function checkingNotice(container: HTMLElement): HTMLElement | null {
+  return container.querySelector('[data-user-action-card="run-checking"]');
+}
+
+function failureCard(container: HTMLElement): HTMLElement | null {
+  return container.querySelector('[data-user-action-card="run-recovery"]');
+}
+
+describe('a stream failure with no run verdict is a checking state, never a failure card', () => {
+  it('names the unresolved run in neutral words instead of painting a failure', () => {
+    const { container } = renderPane({
+      messages: [unresolvedRow()],
+      runCheck: { runId: UNRESOLVED_RUN_ID, unreachable: false },
+    });
+
+    expect(checkingNotice(container), 'an unresolved run must show the checking notice').toBeTruthy();
+    expect(screen.getByText('chat.runChecking.message')).toBeTruthy();
+    expect(failureCard(container), 'an unresolved run must not show the failure card').toBeNull();
+    expect(screen.queryByText('chat.runError.title.generic')).toBeNull();
+  });
+
+  it('offers no recovery action while the run may still be running', () => {
+    const { container } = renderPane({
+      messages: [unresolvedRow()],
+      runCheck: { runId: UNRESOLVED_RUN_ID, unreachable: false },
+    });
+
+    const notice = checkingNotice(container);
+    expect(notice).toBeTruthy();
+    expect(
+      notice?.querySelectorAll('button').length,
+      'retrying a run that may still be running is the B-02 double-send hazard',
+    ).toBe(0);
+    expect(screen.queryByRole('button', { name: 'promptTemplates.retry' })).toBeNull();
+  });
+
+  it('says the daemon is not answering and offers Check again once the probes are exhausted', () => {
+    const onRunCheckAgain = vi.fn();
+    const { container } = renderPane({
+      messages: [unresolvedRow()],
+      runCheck: { runId: UNRESOLVED_RUN_ID, unreachable: true },
+      onRunCheckAgain,
+    });
+
+    expect(checkingNotice(container)).toBeTruthy();
+    expect(screen.getByText('chat.runChecking.unreachableTitle')).toBeTruthy();
+    expect(screen.getByText('chat.runChecking.unreachableMessage')).toBeTruthy();
+    expect(failureCard(container), 'an unanswered daemon is still not a failed run').toBeNull();
+
+    const checkAgain = screen.getByRole('button', { name: 'chat.runChecking.checkAgainCta' });
+    fireEvent.click(checkAgain);
+    expect(onRunCheckAgain).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops the notice once the row reaches its own terminal', () => {
+    const { container } = renderPane({
+      messages: [unresolvedRow('succeeded')],
+      runCheck: { runId: UNRESOLVED_RUN_ID, unreachable: false },
+    });
+
+    expect(checkingNotice(container), 'a settled row answers the question the notice asked').toBeNull();
+  });
+
+  it('keeps the failure card for a run the daemon adjudicated', () => {
+    const { container } = renderPane({
+      messages: [terminalMessage(SLEEP_RUN)],
+      runCheck: null,
+    });
+
+    expect(failureCard(container)).toBeTruthy();
+    expect(screen.getByText('chat.runError.title.connectionDropped')).toBeTruthy();
+    expect(checkingNotice(container)).toBeNull();
   });
 });
 

@@ -12,6 +12,7 @@ import type {
   ProjectFile,
 } from '../../types';
 import type { ChatSessionMode } from '@open-design/contracts';
+import type { RunCheckState } from '../../runtime/run-failure-reconcile';
 import type { ChatSendMeta } from '../ChatComposer';
 import { useConversationChat } from './useConversationChat';
 import styles from './SideChatTab.module.css';
@@ -29,6 +30,10 @@ export interface ActiveConversationChatState {
     commentAttachments?: ChatCommentAttachment[];
   }>;
   error: string | null;
+  /** Set while a run this conversation started is unresolved (see
+   *  `isUnadjudicatedStreamFailure`); rendered as a neutral checking notice. */
+  runCheck?: RunCheckState | null;
+  onRunCheckAgain?: () => void;
   onSend: (
     prompt: string,
     attachments: ChatAttachment[],
@@ -145,6 +150,10 @@ export function SideChatTab({
           onReorderQueuedSends={controlledChat?.onReorderQueuedSends}
           onSendQueuedNow={controlledChat?.onSendQueuedNow}
           error={controlledChat ? controlledChat.error : chat.error}
+          runCheck={controlledChat ? controlledChat.runCheck ?? null : chat.runCheck}
+          onRunCheckAgain={
+            controlledChat ? controlledChat.onRunCheckAgain : chat.onRunCheckAgain
+          }
           projectId={projectId}
           sessionMode={sessionMode}
           onSessionModeChange={(mode) => onSessionModeChange?.(conversationId, mode)}
