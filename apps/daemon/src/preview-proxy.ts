@@ -137,6 +137,14 @@ function referringPreviewPage(headers: IncomingHttpHeaders): ParsedPreviewProxyP
  * preview's code as far as the session that started it — which is the audience
  * D-14 fixed, authenticated Open Design sessions. `PreviewInfo.url` records
  * that where a reader meets the URL.
+ *
+ * And under `tools-dev` it is inert. The Next dev front forwards `/api` with
+ * its own upstream `Host` and no `X-Forwarded-Host`, so `frontHosts()` never
+ * holds the host the browser used, `referringPreviewPage` attributes every
+ * request to nothing, and a preview page is held only by the daemon's ordinary
+ * gates. That is the same front behaviour `preview-origin.ts` records for HMR.
+ * The runtime this rule guards is the shipped one, where the daemon serves the
+ * web app itself and a preview page's `Referer` reaches it intact.
  */
 export function isPreviewProxyOriginEscape(headers: IncomingHttpHeaders, apiPath: string): boolean {
   const page = referringPreviewPage(headers);
@@ -410,6 +418,25 @@ function refusePreviewUpgrade(socket: Duplex, reason: string): void {
 }
 
 /**
+ * An upgrade socket this handler touches always has an `error` listener, and
+ * it is attached before anything can await.
+ *
+ * Node removes its own `error` listener from the socket before it emits
+ * `upgrade`, so from that moment the socket belongs to whoever took the event.
+ * A socket held with none of its own turns an ordinary client reset — a browser
+ * that reloads or closes the tab while the preview child is still compiling and
+ * has not answered the handshake — into an unheard `error` event, which Node
+ * raises as an `uncaughtException`. The daemon's fatal handler
+ * (`registerTelemetryRoutes`, `routes/telemetry.ts`) escalates that to
+ * `process.exit(1)`, so one abandoned HMR connect would take down every session
+ * on the machine. `streamAssetFileToResponse` (`routes/library.ts`) names the
+ * same class on the HTTP side, where the request object carries the listener.
+ */
+function ownUpgradeSocket(socket: Duplex): void {
+  socket.on('error', () => socket.destroy());
+}
+
+/**
  * The WebSocket half of the same route: a dev server's HMR channel. An
  * upgrade never enters the Express router, so the membership rule and the
  * same-site check are applied here, and a request that names no live preview
@@ -419,6 +446,7 @@ export function createPreviewProxyUpgradeHandler(
   deps: PreviewProxyDeps,
 ): (req: IncomingMessage, socket: Duplex, head: Buffer) => void {
   return (req, socket, head) => {
+    ownUpgradeSocket(socket);
     const parsed = parsePreviewProxyPath(req.url);
     if (!parsed) {
       socket.destroy();
@@ -447,6 +475,13 @@ export function createPreviewProxyUpgradeHandler(
     upstream.setTimeout(PREVIEW_PROXY_IDLE_TIMEOUT_MS, () => {
       upstream.destroy(new Error('preview server stopped responding'));
     });
+
+    // The mirror of the HTTP path's `res.on('close')`: a caller who leaves
+    // must not leave the child holding a connection. Before the handshake that
+    // is the pending request, which would otherwise sit until the idle
+    // timeout; after it, the same call destroys the piped upstream socket,
+    // which by then has nowhere left to write.
+    socket.on('close', () => upstream.destroy());
 
     upstream.on('upgrade', (upstreamRes, upstreamSocket, upstreamHead) => {
       const statusLine = `HTTP/1.1 ${upstreamRes.statusCode} ${upstreamRes.statusMessage}\r\n`;

@@ -44,6 +44,24 @@ server.listen(Number(process.env.PORT), '127.0.0.1');
 `;
 
 /**
+ * The same child, still compiling: it accepts the upgrade and does not answer
+ * it. This is the ordinary state of a dev server's HMR endpoint for the first
+ * seconds of its life, and the window in which a browser reload abandons the
+ * handshake.
+ */
+const SLOW_UPGRADE_FIXTURE = `
+const http = require('node:http');
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'content-type': 'text/css' });
+  res.end('body{color:red}');
+});
+server.on('upgrade', (req, socket) => {
+  socket.on('error', () => {});
+});
+server.listen(Number(process.env.PORT), '127.0.0.1');
+`;
+
+/**
  * An address of this machine that is not loopback: the collaborator-side
  * network context. Without one the gate under test never runs, so the spec
  * says so rather than passing quietly.
@@ -105,7 +123,7 @@ describe('the preview proxy gate on the entry points outside the router', () => 
    * carry no bearer middleware here: what is under test is the rule the two
    * handlers apply by hand, not the middleware that already covers `/api`.
    */
-  async function boot(): Promise<{ apiPort: number; previewId: string; base: string }> {
+  async function boot(fixture: string = SERVER_FIXTURE): Promise<{ apiPort: number; previewId: string; base: string }> {
     // Fails rather than skips, for the reason given on `nonLoopbackIPv4`: a
     // loopback peer passes the membership rule by definition, so a skip would
     // report these gate cases green on a run that exercised no branch of them.
@@ -116,7 +134,7 @@ describe('the preview proxy gate on the entry points outside the router', () => 
 
     const tempDir = mkdtempSync(path.join(os.tmpdir(), 'od-preview-gate-'));
     tempDirs.push(tempDir);
-    writeFileSync(path.join(tempDir, 'server.js'), SERVER_FIXTURE);
+    writeFileSync(path.join(tempDir, 'server.js'), fixture);
 
     const previews = createPreviewService();
     services.push(previews);
@@ -214,6 +232,59 @@ describe('the preview proxy gate on the entry points outside the router', () => 
       req.end();
     });
   }
+
+  /**
+   * A browser that gives up on a handshake the preview child has not answered:
+   * the raw request bytes, then an RST. `net` rather than `http.request`,
+   * because a Node client will not reset a request it owns, and a FIN does not
+   * reproduce the failure — the socket must raise `ECONNRESET`.
+   */
+  function resetPendingUpgrade(apiPort: number, pathname: string): Promise<void> {
+    return new Promise((resolve) => {
+      const client = net.connect(apiPort, peerHost!, () => {
+        client.write(
+          `GET ${pathname} HTTP/1.1\r\n`
+          + `Host: ${TAILNET_HOST}\r\n`
+          + 'Connection: Upgrade\r\nUpgrade: websocket\r\n'
+          + 'Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n'
+          + `Authorization: Bearer ${API_TOKEN}\r\n\r\n`,
+        );
+        setTimeout(() => {
+          client.resetAndDestroy();
+          resolve();
+        }, 150);
+      });
+      client.on('error', () => resolve());
+    });
+  }
+
+  it('survives a client that resets a handshake the preview has not answered', async () => {
+    const { apiPort, base } = await boot(SLOW_UPGRADE_FIXTURE);
+
+    // Node hands the upgrade socket over with its own error listener removed,
+    // so an unheard reset here reaches the process as an `uncaughtException` —
+    // which the daemon's fatal telemetry handler turns into `process.exit(1)`
+    // for every session on the machine.
+    const uncaught: unknown[] = [];
+    const capture = (error: unknown) => uncaught.push(error);
+    process.on('uncaughtException', capture);
+    try {
+      await resetPendingUpgrade(apiPort, `${base}_hmr`);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    } finally {
+      process.off('uncaughtException', capture);
+    }
+
+    expect(uncaught).toEqual([]);
+
+    // And the daemon is still the daemon: the next request is served.
+    const served = await get(apiPort, '/style.css', {
+      host: TAILNET_HOST,
+      headers: { Referer: `https://${TAILNET_HOST}${base}`, Authorization: `Bearer ${API_TOKEN}` },
+    });
+    expect(served.status).toBe(200);
+    expect(served.body).toBe('body{color:red}');
+  }, 30_000);
 
   it('refuses a root-absolute preview asset from a collaborator with no bearer', async () => {
     const { apiPort, base } = await boot();

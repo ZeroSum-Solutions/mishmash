@@ -2404,6 +2404,20 @@ export async function startServer({
   // Health/version remain open for monitoring probes.
   // Non-browser clients (no Origin header, no fetch metadata) are allowed.
   app.use('/api', (req, res, next) => {
+    // Containment for the preview proxy, which shares this origin instead of
+    // getting a sibling one: a page a browser attributes to a preview reaches
+    // that preview's own subtree and nothing else under `/api`. First in this
+    // middleware, ahead of every early return below, so no route is exempt
+    // from it — a preview page must not reach the live-artifact embed route or
+    // the clipper bootstrap routes either. `req.path` is mount-relative here,
+    // so the `/api` prefix the proxy path carries is put back before the
+    // comparison.
+    if (isPreviewProxyOriginEscape(req.headers, `/api${req.path}`)) {
+      return res.status(403).json({
+        error: 'Preview origin cannot access this API route',
+      });
+    }
+
     // Live artifact previews have stricter local-daemon validation and
     // loopback CORS handling on the route itself. Let that middleware produce
     // the structured error shape and preflight headers for preview embeds.
@@ -2449,17 +2463,6 @@ export async function startServer({
           error: 'Powered preview origin cannot access this API route',
         });
       }
-    }
-
-    // The same containment for the preview proxy, which shares this origin
-    // instead of getting a sibling one: a page a browser attributes to a
-    // preview reaches that preview's own subtree and nothing else under
-    // `/api`. `req.path` is mount-relative here, so the `/api` prefix the
-    // proxy path carries is put back before the comparison.
-    if (isPreviewProxyOriginEscape(req.headers, `/api${req.path}`)) {
-      return res.status(403).json({
-        error: 'Preview origin cannot access this API route',
-      });
     }
 
     const origin = req.headers.origin;

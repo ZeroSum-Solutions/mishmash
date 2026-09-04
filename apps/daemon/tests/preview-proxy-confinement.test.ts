@@ -146,6 +146,14 @@ describe('a preview page cannot act as the Open Design app', () => {
       expect(escaped.status).toBe(403);
       expect(escaped.body).toContain(CONFINEMENT_ERROR);
 
+      // Including the routes that return early from the `/api` origin
+      // middleware. The live-artifact embed route reads as loopback-only, but
+      // a preview page running on the daemon's own machine IS a loopback peer,
+      // so the confinement has to be ahead of that early return.
+      const embed = await get(`${front}/api/live-artifacts/w2g2-no-such-artifact/preview`, fromPreviewPage);
+      expect(embed.status).toBe(403);
+      expect(embed.body).toContain(CONFINEMENT_ERROR);
+
       // The same route, asked for by the app's own page, is untouched.
       const fromAppPage = await get(`${front}/api/projects`, {
         ...auth,
