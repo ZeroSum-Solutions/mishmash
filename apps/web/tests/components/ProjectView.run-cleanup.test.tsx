@@ -2471,7 +2471,11 @@ describe('ProjectView daemon cleanup', () => {
     let statusChecks = 0;
     fetchChatRunStatus.mockImplementation(async () => {
       statusChecks += 1;
-      if (statusChecks === 3) return statusProbe;
+      // W1J.1: the unresolved-run follow now probes this run too, so the
+      // retry-cap probe is no longer necessarily the third call. Every probe
+      // from the third on is the slow one, which holds the state this case is
+      // about for as long as it needs it.
+      if (statusChecks >= 3) return statusProbe;
       return {
         id: 'run-reattach-slow-status-probe',
         status: 'running' as const,
@@ -2512,7 +2516,7 @@ describe('ProjectView daemon cleanup', () => {
 
     await waitFor(() => {
       expect(reattachDaemonRun).toHaveBeenCalledTimes(2);
-      expect(fetchChatRunStatus).toHaveBeenCalledTimes(3);
+      expect(fetchChatRunStatus.mock.calls.length).toBeGreaterThanOrEqual(3);
       expect(chatPaneSpy.mock.calls.at(-1)?.[0]?.streaming).toBe(false);
       expect(chatPaneSpy.mock.calls.at(-1)?.[0]?.sendDisabled).toBe(false);
     });
@@ -3334,11 +3338,12 @@ describe('ProjectView daemon cleanup', () => {
         options.handlers.onDone('recovered after the mark brought the pass back');
         return;
       }
-      // Partial replay, then the transport's inferred terminal and the error it
-      // minted: the row is left non-active with content, which is exactly the
-      // shape no other reattach trigger matches.
+      // Partial replay, then the error the transport minted out of its broken
+      // connection: the row is left non-active with content, which is exactly
+      // the shape no other reattach trigger matches. (The transport's own
+      // inferred `failed` is driven by the sibling case above; this one is
+      // about the trigger, so it keeps the seam narrow.)
       options.handlers.onDelta('partial replay before the connection broke');
-      options.onRunStatus?.('failed');
       await options.handlers.onError(genericDisconnect);
     });
 
@@ -3389,6 +3394,117 @@ describe('ProjectView daemon cleanup', () => {
         ),
       ),
     ).toBe(false);
+  }, 12_000);
+
+  // W1J.1, covering 1I.3's adjacent issue 2: an unresolved reattach no longer
+  // persists a replayed artifact on a guess, so the recovery has to happen after
+  // the run's own verdict. Nothing covered that on either side of 1I.3.
+  it('recovers a replayed artifact after the run reports its own terminal', async () => {
+    const runCreatedAt = Date.now();
+    const recoveredHtml =
+      '<!doctype html><html><body><h1>Recovered after the verdict</h1></body></html>';
+    const genericDisconnect = await createGenericDisconnectError();
+    const baseRow = {
+      id: 'msg-artifact-after-verdict',
+      role: 'assistant',
+      content: '',
+      createdAt: runCreatedAt,
+      startedAt: runCreatedAt,
+      runId: 'run-artifact-after-verdict',
+      runStatus: 'running',
+      producedFiles: [],
+      events: [],
+    };
+    // The daemon's own stored row, repaired with the full turn once the run
+    // ends — the shape the client reads back after the verdict.
+    let serverRow: Record<string, unknown> = { ...baseRow };
+
+    listConversations.mockResolvedValue([{ id: 'conv-1', title: 'Conversation' }]);
+    listMessages.mockImplementation(async () => [serverRow]);
+    fetchPreviewComments.mockResolvedValue([]);
+    loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
+    fetchProjectFiles.mockResolvedValue([]);
+    fetchProjectDesignSystemPackageAudit.mockResolvedValue(null);
+    fetchLiveArtifacts.mockResolvedValue([]);
+    fetchSkill.mockResolvedValue(null);
+    fetchDesignSystem.mockResolvedValue(null);
+    getTemplate.mockResolvedValue(null);
+    listActiveChatRuns.mockResolvedValue([]);
+    writeProjectTextFile.mockResolvedValue(
+      artifactProjectFile('recovered-after-the-verdict.html', runCreatedAt + 5),
+    );
+    let statusProbes = 0;
+    fetchChatRunStatus.mockImplementation(async () => {
+      statusProbes += 1;
+      if (statusProbes <= 1) {
+        return {
+          id: 'run-artifact-after-verdict',
+          status: 'running' as const,
+          createdAt: runCreatedAt,
+          updatedAt: runCreatedAt + 1,
+          exitCode: null,
+          signal: null,
+        };
+      }
+      serverRow = { ...serverRow, runStatus: 'succeeded', content: recoveredHtml };
+      return {
+        id: 'run-artifact-after-verdict',
+        status: 'succeeded' as const,
+        createdAt: runCreatedAt,
+        updatedAt: runCreatedAt + 4,
+        exitCode: 0,
+        signal: null,
+      };
+    });
+    let reattachAttempts = 0;
+    reattachDaemonRun.mockImplementation(async (options: {
+      onRunStatus?: (status: string) => void;
+      handlers: {
+        onDelta: (delta: string) => void;
+        onError: (error: Error) => Promise<void>;
+      };
+    }) => {
+      reattachAttempts += 1;
+      if (reattachAttempts > 1) return;
+      options.handlers.onDelta(recoveredHtml);
+      options.onRunStatus?.('failed');
+      await options.handlers.onError(genericDisconnect);
+    });
+
+    render(
+      <ProjectView
+        project={{ id: 'project-artifact-after-verdict', name: 'Project', skillId: null, designSystemId: null } as never}
+        routeFileName={null}
+        config={{ mode: 'daemon', agentId: 'agent-1', notifications: undefined, agentModels: {} } as never}
+        agents={[{ id: 'agent-1', name: 'OpenCode', models: [] } as never]}
+        skills={[]}
+        designTemplates={[]}
+        designSystems={[]}
+        daemonLive
+        onModeChange={() => {}}
+        onAgentChange={() => {}}
+        onAgentModelChange={() => {}}
+        onRefreshAgents={() => {}}
+        onOpenSettings={() => {}}
+        onBack={() => {}}
+        onClearPendingPrompt={() => {}}
+        onTouchProject={() => {}}
+        onProjectChange={() => {}}
+        onProjectsRefresh={() => {}}
+      />,
+    );
+
+    await waitFor(
+      () => {
+        expect(writeProjectTextFile).toHaveBeenCalledWith(
+          'project-artifact-after-verdict',
+          expect.any(String),
+          recoveredHtml,
+          expect.anything(),
+        );
+      },
+      { timeout: 8_000 },
+    );
   }, 12_000);
 
   it('replays a terminally-succeeded reattach run again when the previous retry only restored partial content', async () => {
@@ -4600,15 +4716,21 @@ describe('ProjectView daemon cleanup', () => {
         expect.objectContaining({ telemetryFinalized: true }),
       );
     });
-    const recoveredSave = saveMessage.mock.calls.find(
+    const recoveredSaves = saveMessage.mock.calls.filter(
       (call) =>
         call[0] === 'project-reattach-endedat-succeeded' &&
         call[2]?.id === 'msg-reattach-endedat-succeeded' &&
         call[2]?.runStatus === 'succeeded',
     );
-    // The daemon's authoritative terminal timestamp must win over the stale
-    // disconnect-time stamp recorded when the generic disconnect first fired.
-    expect(recoveredSave?.[2]?.endedAt).toBe(daemonTerminalUpdatedAt);
+    // W1J.1: the disconnect no longer stamps a time of its own, so the row
+    // reaches this terminal with nothing to overwrite. The invariant that
+    // mattered is stated directly instead: no succeeded row ever carries a
+    // timestamp that is not the daemon's, and the settled row carries it.
+    expect(
+      recoveredSaves.map((call) => call[2]?.endedAt ?? daemonTerminalUpdatedAt),
+      'no succeeded row may carry a timestamp the daemon did not declare',
+    ).toEqual(recoveredSaves.map(() => daemonTerminalUpdatedAt));
+    expect(recoveredSaves.at(-1)?.[2]?.endedAt).toBe(daemonTerminalUpdatedAt);
   });
 
   it('advances endedAt to the daemon terminal time when a reattach generic disconnect probe turns canceled', async () => {
@@ -4698,13 +4820,19 @@ describe('ProjectView daemon cleanup', () => {
       );
       expect(canceledSave).toBeTruthy();
     });
-    const canceledSave = saveMessage.mock.calls.find(
+    const canceledSaves = saveMessage.mock.calls.filter(
       (call) =>
         call[0] === 'project-reattach-endedat-canceled' &&
         call[2]?.id === 'msg-reattach-endedat-canceled' &&
         call[2]?.runStatus === 'canceled',
     );
-    expect(canceledSave?.[2]?.endedAt).toBe(daemonTerminalUpdatedAt);
+    // W1J.1, as above: the disconnect stamps no time of its own now, so the
+    // assertion is that every canceled row carries the daemon's.
+    expect(
+      canceledSaves.map((call) => call[2]?.endedAt ?? daemonTerminalUpdatedAt),
+      'no canceled row may carry a timestamp the daemon did not declare',
+    ).toEqual(canceledSaves.map(() => daemonTerminalUpdatedAt));
+    expect(canceledSaves.at(-1)?.[2]?.endedAt).toBe(daemonTerminalUpdatedAt);
   });
 
   it('advances endedAt to the daemon terminal time when a live generic disconnect probe turns succeeded', async () => {
