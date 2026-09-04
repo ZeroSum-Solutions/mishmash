@@ -13,6 +13,7 @@ import {
 
 import { assetBaseDirFor } from '../../src/components/file-viewer-preview-assets';
 import { projectRawUrl } from '../../src/providers/registry';
+import { buildSrcdoc } from '../../src/runtime/srcdoc';
 
 const CASES: Array<[projectId: string, fileName: string]> = [
   ['p1', 'index.html'],
@@ -281,4 +282,51 @@ describe('withProjectAssetBaseHref reads a script double-escape the way the pars
     expect(parsed.bases).toEqual([BASE]);
     expect(parsed.baseURI).toBe(`http://d${BASE}`);
   });
+});
+
+// W2H.3: the two preview paths must apply ONE base rule, not two that agree
+// most of the time. The live-artifact route sends
+// `withProjectAssetBaseHref(html, base)` verbatim
+// (apps/daemon/src/routes/live-artifact.ts), so that call IS the disk-written
+// document's expected bytes; the srcDoc path wraps the same rule in the
+// bridges a sandboxed preview frame needs. Strip those bridges — each one is a
+// `<script>`/`<style>` element the pipeline stamps with its own `data-od-*`
+// marker attribute, and nothing else in either document carries one — and what
+// remains has to be the live-artifact document byte for byte. A second copy of
+// the rule shows up here as a diff, whether it places the tag elsewhere or
+// leaves a base the shared rule drops.
+//
+// The corpus is full documents only, because that is the shape the comparison
+// is defined on: `buildSrcdoc` wraps a bare fragment in a document skeleton
+// before any base is injected, and the live-artifact route does not.
+describe('the srcDoc and live-artifact previews carry byte-identical base-rule output', () => {
+  const BASE = '/api/projects/p1/raw/zh/';
+  const BODY = '<body><img src="asset.png"></body>';
+
+  const CASES: Array<[name: string, html: string]> = [
+    ['a real base before <head>', `<!doctype html><base href="/elsewhere/"><html><head><title>t</title></head>${BODY}</html>`],
+    ['a base a --!> close makes real', `<!doctype html><!-- --!><base href="/elsewhere/"> --><html><head><title>t</title></head>${BODY}</html>`],
+    ['a base the parser reads past a stray `<`', `<!doctype html><<base href="/elsewhere/">base href="/x/"><html><head><title>t</title></head>${BODY}</html>`],
+    ['a base a script double-escape does not hide', `<!doctype html><script><!--<script>-->y</script><base href="/elsewhere/">--></script><html><head><title>t</title></head>${BODY}</html>`],
+    ['a base a --!-> keeps inside a comment', `<!doctype html><!-- x --!-><base href="/elsewhere/"> --><html><head><title>t</title></head>${BODY}</html>`],
+    ['a base inside a template', `<!doctype html><html><head><template><base href="/elsewhere/"></template><title>t</title></head>${BODY}</html>`],
+    ['a head inside an svg subtree', `<!doctype html><svg><head></head></svg><html><head><base href="/elsewhere/"><title>t</title></head>${BODY}</html>`],
+    ['no base of its own', `<!doctype html><html><head><title>t</title></head>${BODY}</html>`],
+    ['no head of its own', '<html><body><img src="asset.png"></body></html>'],
+  ];
+
+  /** The srcDoc pipeline's own injected bridges, each stamped `data-od-*`. */
+  function withoutSrcdocBridges(html: string): string {
+    return html
+      .replace(/<script data-od-[a-z0-9-]+>[\s\S]*?<\/script>/g, '')
+      .replace(/<style data-od-[a-z0-9-]+>[\s\S]*?<\/style>/g, '');
+  }
+
+  for (const [name, html] of CASES) {
+    it(name, () => {
+      expect(withoutSrcdocBridges(buildSrcdoc(html, { baseHref: BASE }))).toBe(
+        withProjectAssetBaseHref(html, BASE),
+      );
+    });
+  }
 });

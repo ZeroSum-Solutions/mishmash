@@ -175,6 +175,10 @@ async function emitRun(promptText) {
     await emitClaudeHeldArtifactWriteRun(promptText);
     return;
   }
+  if (promptText.includes('Hold the daemon run open without writing any file')) {
+    emitClaudeHeldNoWriteRun();
+    return;
+  }
   if (promptText.includes('Return an intentional daemon smoke failure')) {
     emitFailure();
     return;
@@ -342,6 +346,20 @@ async function emitClaudeHeldArtifactWriteRun(promptText) {
     },
   });
   writeJson({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu-held-html', content: 'ok' }] } });
+  setTimeout(() => process.exit(0), 60000);
+}
+
+// W1I.2: the same held shape as the fixture above with the write removed. The
+// turn opens a session, streams nothing to disk, and keeps the run in flight so
+// a test can kill the daemon under it. Its durable event log therefore exists
+// and records NO write, which is the shape whose file-change state a restart
+// can only decide from the pre-turn file list. The hold is a bounded timer so a
+// child orphaned by that kill exits on its own.
+function emitClaudeHeldNoWriteRun() {
+  if (agentId !== 'claude') {
+    throw new Error('the held no-write fixture requires the claude fake runtime, got ' + agentId);
+  }
+  writeJson({ type: 'system', subtype: 'init', model: 'fake-claude', session_id: 'fake-session' });
   setTimeout(() => process.exit(0), 60000);
 }
 

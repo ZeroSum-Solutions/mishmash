@@ -37,7 +37,12 @@ const RELATIVE_PAGE =
   '<!doctype html><html><head><link rel="stylesheet" href="styles/site.css"></head>' +
   '<body><main>Hello</main></body></html>';
 
-type PreviewRow = { id: string; url: string; port: number };
+type PreviewRow = {
+  id: string;
+  url: string;
+  port: number;
+  frontServesRootAbsoluteAssets?: boolean;
+};
 
 function stubDaemon(options: { html: string; previews?: PreviewRow[]; openFails?: boolean }) {
   const opened: string[] = [];
@@ -201,5 +206,59 @@ describe('Design Files panel preview server offer', () => {
     expect(container.querySelector<HTMLAnchorElement>('.df-preview-server-link')!.getAttribute('href'))
       .toBe('http://devins-macbook-pro.tail908c18.ts.net:8125/');
     expect(container.querySelector('.df-preview-server-chrome')).toBeNull();
+  });
+
+  /**
+   * Under `tools-dev` the front is the Next dev server, which forwards only
+   * `/api`, `/artifacts` and `/frames`, so the preview page's root-absolute
+   * `/_nuxt/entry.js` never reaches the daemon's fallback and the page
+   * half-renders. The daemon says so in the announcement; the panel must
+   * repeat it rather than present the link as unconditionally working.
+   */
+  it('says a development front cannot serve the preview root-absolute assets', async () => {
+    stubDaemon({
+      html: ROOT_ABSOLUTE_PAGE,
+      previews: [
+        {
+          id: 'pv1',
+          url: 'http://localhost:17622/api/projects/test-project/previews/pv1/proxy/',
+          port: 8125,
+          frontServesRootAbsoluteAssets: false,
+        },
+      ],
+    });
+    const { container } = renderPanel([htmlFile()]);
+    openPreviewOf(container);
+
+    await waitFor(() => {
+      expect(container.querySelector('.df-preview-server-link')).toBeTruthy();
+    });
+    const offer = container.querySelector('[data-testid="design-file-preview-server"]')!;
+    expect(container.querySelector('.df-preview-server-front-limit')?.textContent ?? '')
+      .toContain('cannot serve root-absolute assets');
+    expect(offer.textContent).not.toContain(en['designFiles.previewServer.sharedLink']);
+  });
+
+  it('keeps the unconditional claim when the front does serve root-absolute assets', async () => {
+    stubDaemon({
+      html: ROOT_ABSOLUTE_PAGE,
+      previews: [
+        {
+          id: 'pv1',
+          url: 'http://devins-macbook-pro.tail908c18.ts.net:7443/api/projects/test-project/previews/pv1/proxy/',
+          port: 8125,
+          frontServesRootAbsoluteAssets: true,
+        },
+      ],
+    });
+    const { container } = renderPanel([htmlFile()]);
+    openPreviewOf(container);
+
+    await waitFor(() => {
+      expect(container.querySelector('.df-preview-server-link')).toBeTruthy();
+    });
+    const offer = container.querySelector('[data-testid="design-file-preview-server"]')!;
+    expect(offer.textContent).toContain(en['designFiles.previewServer.sharedLink']);
+    expect(container.querySelector('.df-preview-server-front-limit')).toBeNull();
   });
 });

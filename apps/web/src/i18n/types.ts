@@ -2648,6 +2648,7 @@ export interface Dict {
   'chat.runError.filesUnchanged': string;
   'chat.runError.filesChangedOne': string;
   'chat.runError.filesChangedMany': string;
+  'chat.runError.filesUnknown': string;
   'chat.runError.title.generic': string;
   'chat.runError.title.artifactMissing': string;
   'chat.runError.signInMessage.amr': string;
@@ -3480,6 +3481,7 @@ export interface Dict {
   'designFiles.previewServer.openInChrome': string;
   'designFiles.previewServer.sharedLink': string;
   'designFiles.previewServer.openFailed': string;
+  'designFiles.previewServer.frontRootAssets': string;
   'designFiles.previewServer.rootAbsolute': string;
   'designFiles.previewServer.none': string;
   'designFiles.modified': string;
@@ -3779,8 +3781,6 @@ export interface Dict {
   'fileViewer.speakerNotesPlaceholder': string;
   'fileViewer.previewAssetBlockedTitle': string;
   'fileViewer.previewAssetBlockedDetail': string;
-  'fileViewer.previewRuntimeScriptBlockedTitle': string;
-  'fileViewer.previewRuntimeScriptBlockedDetail': string;
   'fileViewer.presenterReset': string;
   'fileViewer.present': string;
   'fileViewer.presentInTab': string;

@@ -150,38 +150,52 @@ honest fix — removing the option until it works — is a UX decision, not a ha
 
 ## CANVAS-6 — Dynamically-injected preview scripts can blank the canvas with no recovery — RESOLVED
 
-**Severity:** medium · **Area:** runtime-wiring · **Status:** fixed by surfacing the cause;
-this entry's stated workaround was wrong and is corrected below
+**Severity:** medium · **Area:** runtime-wiring · **Status:** resolved by the daemon, not by the
+viewer; the notice this entry once described has been removed as untrue
 
-**The stated workaround does not work.** This entry claimed "the only recovery is knowing to
-append `?forceInline=1`". Driven for real against a tools-dev runtime, it does not recover the
-artifact. The srcDoc path rescues a linked file by *inlining* it, and the inliner reads the same
-literal `<script src>` tags `htmlNeedsSandboxShim` does — so a runtime-attached `src` stays
-external there too, and the srcDoc iframe's opaque origin cannot fetch it
-(`net::ERR_BLOCKED_BY_ORB`). Observed: with the shim confirmed working in that same frame
-(`localStorage.setItem` succeeds), the document still renders empty because `boot.js` never
-loads. A control artifact identical except for a literal `<script src="./boot.js">` renders
-correctly, and its script is visibly inlined into the srcDoc. No host-side render-mode toggle
-fixes this shape.
+**What the entry described.** An artifact whose boot script is attached with
+`document.createElement('script')` rather than a literal `<script src>` ships no tag for
+`htmlNeedsSandboxShim` or the srcDoc asset inliner to read. The preview iframes are sandboxed
+without `allow-same-origin`, so the request for that linked file carried
+`Sec-Fetch-Site: cross-site` with no `Origin`, and the shared `/api` origin gate refused it
+(`net::ERR_BLOCKED_BY_ORB`). The canvas was blank in both transports with nothing saying why.
+W2.5 answered that by naming the shape (`htmlBuildsScriptAtRuntime`) and rendering a notice over
+the preview.
 
-**What changed.** The disqualifier set is unchanged — the detection cost this entry described is
-real. `htmlBuildsScriptAtRuntime` (`apps/web/src/components/file-viewer-render-mode.ts`) names
-the residue `htmlNeedsSandboxShim` cannot see (`document.createElement('script')` plus a `src`
-assignment), and `FileViewer.tsx` renders `PreviewRuntimeScriptNotice` over the preview when it
-matches. The notice states the cause and the remedy that does work: reference the script with a
-`<script src="...">` tag so the preview can inline it. It carries no action button, because
-every host-side action available here would be a false promise.
+**What changed.** Decision D-11, option B taught the origin gate to admit one extra shape: a GET
+for a project raw asset that the browser itself classified as a preview subresource. `script` is
+one of the accepted destinations, so the request the shape above produces is now served. Measured
+at `ee7d42eb4` on a tools-dev runtime through the real app, on both transports: the linked file
+loads and runs, and the notice was on screen saying it could not. See
+`e2e/ui/preview-runtime-script.test.ts`, which asserts the artifact's own DOM side effect and the
+notice's absence together.
 
-Because it drives copy rather than the render path, a false positive costs one line of text
-instead of a slower render for every artifact that merely mentions the pattern.
+The detector, the notice component, and its two i18n keys are therefore removed. Nothing replaced
+them, because after the daemon change this shape has no failure of its own left to explain. A
+runtime-attached script that names a project file loads like any other project asset. One that
+names a cross-origin URL is governed by the preview response's own
+`script-src 'self' 'unsafe-inline' 'unsafe-eval'`
+(`apps/daemon/src/routes/project/index.ts`, `projectPreviewCsp`) — the same policy that governs a
+literal `<script src="https://…">` tag, so it is a property of the URL, not of attaching the
+script at runtime, and a notice scoped to the runtime-attached shape would be arbitrary.
 
-**Repro.** Preview an HTML artifact whose only script tag attaches another script at runtime;
-the canvas is empty and the notice under it names why.
+**Repro (historical).** Preview an HTML artifact whose only script tag attaches another script at
+runtime. Before D-11 the canvas was empty; at `ee7d42eb4` and after, the artifact renders.
 
-**Still open, deliberately.** The powered preview (`htmlNeedsPoweredPreview`) gives an artifact
-a real same-origin document, where such a script would both load and read storage — so it is a
-real recovery. Offering it here would escalate an artifact's trust surface off a source-text
-heuristic, which is a product decision, not a hardening call. Left to the owner.
+**Still open — and newly fixable.** Loading the file and surviving a Web Storage read at eval are
+separate questions, and only the first one changed. The storage shim (`injectSandboxShim`,
+`apps/web/src/runtime/srcdoc.ts`) is injected by the srcDoc pipeline alone, so a runtime-attached
+script that reads `localStorage` at eval still throws on the URL-load path — the other half of what
+this entry originally described. Making that shape a render-mode disqualifier would now actually
+repair it; the removed detector's docblock refused exactly that on the ground that srcDoc could not
+run the script either, and D-11 removed the ground. It needs its own red spec (an artifact whose
+linked boot file reads Web Storage at eval) and its own PR, and it has to weigh the cost the
+original decision named: every artifact that merely mentions the pattern would pay for the slower
+srcDoc render. Left to the owner as an actionable follow-up, not as a limitation.
+
+**Also still open, deliberately.** The powered preview (`htmlNeedsPoweredPreview`) remains the only
+path that gives an artifact a real same-origin document. Escalating to it off a source-text
+heuristic is a product decision, not a hardening call. Left to the owner.
 
 ---
 

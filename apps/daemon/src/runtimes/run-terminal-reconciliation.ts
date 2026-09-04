@@ -4,9 +4,14 @@ import { randomUUID } from 'node:crypto';
 
 import type Database from 'better-sqlite3';
 
+import type { RunFileChangeState } from '@open-design/contracts';
 import type { TrackingRunFailureStage } from '@open-design/contracts/analytics';
 
 import { appendMessageStatusEvent } from '../db.js';
+import {
+  RUN_ARTIFACT_RECONCILE_MTIME_GRACE_MS,
+  isRunTouchedProjectFile,
+} from '../projects.js';
 import {
   classifyRunFailure,
   inferFailureStageFromEvents,
@@ -86,11 +91,26 @@ interface AnalyticsLike {
   }): void | Promise<void>;
 }
 
+/**
+ * The project-file facts this pass reads, a structural subset of `ProjectFile`
+ * (`packages/contracts`) so a caller hands over the listing it already has.
+ */
+interface ReconciliationProjectFile {
+  name: string;
+  type?: 'file' | 'dir';
+  mtime: number;
+}
+
 interface ReconciliationOptions {
   analytics: AnalyticsLike;
   appVersion: string;
   appVersionInfo?: unknown;
   db: Database.Database;
+  /** The project's files as they stand now, for the file-change measurement in
+   *  `measureRestartFileChange`. Optional: a caller that cannot list files
+   *  leaves every restart-interrupted run without a positive write count in the
+   *  `unknown` state rather than in silence. */
+  listProjectFiles?(projectId: string): Promise<readonly ReconciliationProjectFile[]>;
   reportLangfuse(args: Record<string, unknown>): unknown | Promise<unknown>;
   runsLogDir: string;
 }
@@ -687,56 +707,164 @@ function hydrateRun(state: DurableRunState, events: ReturnType<typeof readEvents
   };
 }
 
+/** The evidence a restart-interrupted run leaves for the file-change decision:
+ *  the run's durable state, its event log, the chat client's pre-turn file-name
+ *  snapshot, and a way to read the project's files now. */
+interface DaemonRestartFileEvidence {
+  events: ReturnType<typeof readEvents>;
+  lastDurableUpdateAt: number | null;
+  listProjectFiles: ReconciliationOptions['listProjectFiles'];
+  preTurnFileNames: readonly string[] | null;
+  state: DurableRunState;
+}
+
+/** The last timestamp the run's own event log carries, or null when it carries
+ *  none. `emit()` (`runtimes/runs.ts`) stamps every record it appends. */
+function lastEventTimestamp(events: ReturnType<typeof readEvents>): number | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const timestamp = events[index]?.timestamp;
+    if (typeof timestamp === 'number' && Number.isFinite(timestamp)) return timestamp;
+  }
+  return null;
+}
+
+/**
+ * How many project files a run a daemon restart interrupted wrote, measured
+ * against the baseline that survived the restart with it. Null when the
+ * surviving evidence cannot decide, which is the only case that may be reported
+ * as unknown.
+ *
+ * The baseline is `pre_turn_file_names_json`, the file-name snapshot the chat
+ * client stores on the assistant row at send time (`ProjectView.tsx`,
+ * `upsertMessage` in `db.ts`). It is durable, it predates the turn, and the
+ * sibling hold logic in this file already reads it. An EMPTY snapshot is a real
+ * baseline — "the project had no files" — and only a NULL column (an older row,
+ * or a client that sent none) is an absent one.
+ *
+ * A file counts as this run's write when it is bounded above by the run's own
+ * interval AND either its mtime falls inside that interval or its name is
+ * missing from the snapshot. The two clauses catch different writes: the mtime
+ * window is how the daemon already attributes files elsewhere
+ * (`isRunTouchedProjectFile`, `apps/daemon/src/projects.ts`, and 1H.4's
+ * `producedFilesForRun`), while the name diff also catches a file moved or
+ * copied in with an older mtime preserved. The upper bound is on BOTH, because
+ * a name absent from a snapshot taken before this turn is equally absent from
+ * every later turn's: without it, a file the NEXT turn wrote would be counted
+ * as this one's.
+ *
+ * The interval is the run's own, never "now": `createdAt` to the last durable
+ * timestamp the run left — its event log's last stamp, else the `updatedAt` its
+ * `state.json` carried BEFORE this pass restamped it. Reading the tree at boot
+ * with an open-ended interval would hand this run every write made while the
+ * daemon was down.
+ */
+async function measureRestartFileChange(evidence: DaemonRestartFileEvidence): Promise<number | null> {
+  const { listProjectFiles, preTurnFileNames, state } = evidence;
+  if (!listProjectFiles || !preTurnFileNames || !state.projectId) return null;
+  const startedAt = state.createdAt;
+  const endedAt = lastEventTimestamp(evidence.events) ?? evidence.lastDurableUpdateAt;
+  if (!Number.isFinite(startedAt)) return null;
+  if (endedAt === null || !Number.isFinite(endedAt) || endedAt < startedAt) return null;
+  let files: readonly ReconciliationProjectFile[];
+  try {
+    files = await listProjectFiles(state.projectId);
+  } catch (err) {
+    console.warn('[runs] restart file-change measurement failed', err);
+    return null;
+  }
+  const before = new Set(preTurnFileNames);
+  return files.filter((file) => (
+    file.type !== 'dir'
+    && file.mtime - RUN_ARTIFACT_RECONCILE_MTIME_GRACE_MS <= endedAt
+    && (isRunTouchedProjectFile(file.mtime, startedAt, endedAt) || !before.has(file.name))
+  )).length;
+}
+
 /**
  * What the durable record can say about a run a daemon restart interrupted,
- * beyond its cause: the step it reached, and the files it is proved to have
- * written.
+ * beyond its cause: the step it reached, and whether the user's files changed.
  *
- * Invariant: every fact this returns is read from the run's own `events.jsonl`
- * and is `null` when that log does not carry it. A restarted daemon has no run
- * object and no filesystem baseline left — both died with the process — so the
- * event log is the only witness, and a field it cannot support stays absent
- * rather than becoming a guess the alert would state as fact.
+ * Invariant: every restart-interrupted alert STATES the file-change fact. A
+ * restarted daemon has no run object and no live filesystem baseline left —
+ * both died with the process — but it is not therefore without evidence, and
+ * "say nothing" is not one of the answers B-04/F-07 allows. So the three
+ * outcomes are a count, a measured zero, and an explicit `unknown`; silence is
+ * not among them.
  *
- * Stage: `inferFailureStageFromEvents`, the live classifier's own reader, so a
- * restart names the step by the same rules every other failure does. With no
- * records there is no defensible step, and the alert renders none.
+ * Stage: `daemonRestartFailureStage` below, unchanged from W1H.2 — a stage
+ * cannot be measured from the project tree the way a write can.
  *
- * Artifact count: `countNewArtifacts`, the derivation the finalize hook falls
- * back to when its filesystem baseline is unusable. Only a POSITIVE count is
- * evidence. The log proves the writes it recorded; it cannot prove that none
- * happened — a runtime can put a file on disk through a path the log does not
- * pair — so a zero is reported as `null`, and the alert says nothing about
- * files instead of claiming they are unchanged. `state.json` is not consulted
- * for this at all: `durableRunState` (`runtimes/runs.ts`) journals
- * `artifactCount: 0` for every run that never finalized, so its zero is a
- * default rather than a measurement.
+ * Artifact count, in evidence order:
+ *   - A POSITIVE `countNewArtifacts` over the event log is exact — the log
+ *     proves the writes it recorded — so it wins outright.
+ *   - Otherwise the log has proved nothing about files (it recorded no write,
+ *     or it did not survive), and `measureRestartFileChange` decides from the
+ *     pre-turn snapshot instead. Its zero is a measurement, not `state.json`'s
+ *     default: `durableRunState` (`runtimes/runs.ts`) journals
+ *     `artifactCount: 0` for every run that never finalized, so that field is
+ *     still never consulted here.
+ *   - Only when that measurement has no baseline to stand on does the run carry
+ *     `unknown` and no count.
  */
-function daemonRestartEvidence(events: ReturnType<typeof readEvents>): {
+/**
+ * The step a run a daemon restart interrupted is proved to have reached.
+ *
+ * `inferFailureStageFromEvents` is the live classifier's own reader, so a
+ * restart names the step by the same rules every other failure does. With no
+ * records there is no defensible step: the message event then carries none and
+ * the alert renders no step line, while the analytics event — whose
+ * `failure_stage` is a required enum — keeps its historical `finalize`.
+ */
+function daemonRestartFailureStage(
+  events: ReturnType<typeof readEvents>,
+): TrackingRunFailureStage | null {
+  return events.length === 0 ? null : inferFailureStageFromEvents(events, 'first_token_wait');
+}
+
+async function daemonRestartEvidence(evidence: DaemonRestartFileEvidence): Promise<{
   failureStage: TrackingRunFailureStage | null;
   artifactCount: number | null;
-} {
-  if (events.length === 0) return { failureStage: null, artifactCount: null };
-  const artifactCount = countNewArtifacts(events);
+  fileChangeState: RunFileChangeState;
+}> {
+  const { events } = evidence;
+  const failureStage = daemonRestartFailureStage(events);
+  const recorded = events.length === 0 ? 0 : countNewArtifacts(events);
+  if (recorded > 0) {
+    return { failureStage, artifactCount: recorded, fileChangeState: 'changed' };
+  }
+  const measured = await measureRestartFileChange(evidence);
+  if (measured === null) {
+    return { failureStage, artifactCount: null, fileChangeState: 'unknown' };
+  }
   return {
-    failureStage: inferFailureStageFromEvents(events, 'first_token_wait'),
-    artifactCount: artifactCount > 0 ? artifactCount : null,
+    failureStage,
+    artifactCount: measured,
+    fileChangeState: measured > 0 ? 'changed' : 'unchanged',
   };
 }
 
-function reconcileMessages(
-  db: Database.Database,
+/** The pre-turn file-name snapshot a stored row carries, or null when it has
+ *  none to offer. An empty snapshot is a real baseline and stays one; only a
+ *  NULL, unreadable, or non-list column is an absent one. */
+function storedPreTurnFileNames(json: string | null): string[] | null {
+  const list = storedJsonArray(json);
+  return list === null ? null : list.filter((name): name is string => typeof name === 'string');
+}
+
+async function reconcileMessages(
   statesByRunId: Map<string, DurableRunState>,
-  runsLogDir: string,
+  lastDurableUpdateByRunId: Map<string, number>,
+  options: ReconciliationOptions,
   now: number,
-): number {
-  let rows: Array<{ id: string; runId: string | null }> = [];
+): Promise<number> {
+  const { db, runsLogDir } = options;
+  let rows: Array<{ id: string; runId: string | null; preTurnFileNamesJson: string | null }> = [];
   try {
     rows = db.prepare(
-      `SELECT id, run_id AS runId
+      `SELECT id, run_id AS runId, pre_turn_file_names_json AS preTurnFileNamesJson
          FROM messages
         WHERE run_status IN ('queued', 'running')`,
-    ).all() as Array<{ id: string; runId: string | null }>;
+    ).all() as Array<{ id: string; runId: string | null; preTurnFileNamesJson: string | null }>;
   } catch {
     return 0;
   }
@@ -777,7 +905,13 @@ function reconcileMessages(
         errorCode: RESTART_ERROR_CODE,
         failureCategory: RESTART_FAILURE_CAUSE.failure_category,
         failureDetail: RESTART_FAILURE_CAUSE.failure_detail,
-        ...daemonRestartEvidence(readEvents(runsLogDir, state.id)),
+        ...(await daemonRestartEvidence({
+          events: readEvents(runsLogDir, state.id),
+          lastDurableUpdateAt: lastDurableUpdateByRunId.get(state.id) ?? null,
+          listProjectFiles: options.listProjectFiles,
+          preTurnFileNames: storedPreTurnFileNames(row.preTurnFileNamesJson),
+          state,
+        })),
       });
     }
   }
@@ -812,6 +946,14 @@ export async function reconcileDurableRunTerminals(
   result.scanned = states.length;
   const now = Date.now();
 
+  // Captured BEFORE the loop below restamps `updatedAt` to this boot's clock:
+  // the last moment each run is known to have been alive is the upper bound
+  // `measureRestartFileChange` attributes its files by, and `now` would widen
+  // that bound to include every write made while the daemon was down.
+  const lastDurableUpdateByRunId = new Map(
+    states.map((entry) => [entry.state.id, entry.state.updatedAt] as const),
+  );
+
   for (const entry of states) {
     if (TERMINAL_STATUSES.has(entry.state.status)) continue;
     entry.state.status = 'failed';
@@ -826,10 +968,10 @@ export async function reconcileDurableRunTerminals(
   }
 
   const statesByRunId = new Map(states.map((entry) => [entry.state.id, entry.state]));
-  result.messagesReconciled = reconcileMessages(
-    options.db,
+  result.messagesReconciled = await reconcileMessages(
     statesByRunId,
-    options.runsLogDir,
+    lastDurableUpdateByRunId,
+    options,
     now,
   );
   result.messagesFollowedTerminal = followRunTerminalOnStuckMessages(
@@ -865,7 +1007,7 @@ export async function reconcileDurableRunTerminals(
               // the durable evidence when there is any and keeps its historical
               // `finalize` only when the log is silent.
               failure_stage:
-                daemonRestartEvidence(events).failureStage ?? ('finalize' as const),
+                daemonRestartFailureStage(events) ?? ('finalize' as const),
             }
           : classifyRunFailure({
               result: runResult,
