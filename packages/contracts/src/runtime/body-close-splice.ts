@@ -1,6 +1,14 @@
 /**
- * Where a daemon-injected preview script may be spliced into a served HTML
- * document, and when the document already carries one.
+ * Where an injected preview script may be spliced into an HTML document, and
+ * when the document already carries one.
+ *
+ * ONE rule for every preview transport. The daemon splices the paint producer
+ * into the responses it serves (`live-artifacts/http-helpers.ts`,
+ * `routes/project/index.ts`) and `apps/web` splices it into the srcDoc it
+ * builds (`runtime/srcdoc.ts`). A document watched by the same watchdog must be
+ * spliced by the same rule whichever frame it lands in, so the scan lives here,
+ * in the pure contract package both sides may import, rather than in either of
+ * them.
  *
  * The invariant: an injection lands at the last body close the HTML parser
  * will actually reach — never inside a comment, a `<script>` body, a `<style>`

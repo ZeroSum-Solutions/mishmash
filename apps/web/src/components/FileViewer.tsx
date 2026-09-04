@@ -1699,8 +1699,8 @@ export function LiveArtifactViewer({
   const previewScale = zoom / 100;
   // The host's half of the watchdog's two-phase epoch: whether this frame is
   // already holding the document the watchdog is about to be installed for.
-  // Declared here, above that effect, so a changed `previewUrl` has cleared it
-  // before the effect reads it.
+  // `.committed` is a live read, taken inside the effect below rather than at
+  // render, so it also answers for a document that loaded in between.
   const previewDocument = useCommittedDocument(previewUrl);
 
   // Instrument the live-artifact iframe so failed loads — usually a
@@ -8076,7 +8076,10 @@ function HtmlViewer({
   // What the srcDoc transport has actually loaded. `trackPreviewPaint` tells the
   // frame nothing until a `load` proves the incoming document is in it, so a
   // warm transport — this frame stays materialised while hidden behind URL-load
-  // — needs the host to say "the document you want is already here".
+  // — needs the host to say "the document you want is already here". A cached
+  // srcDoc needs the same answer for the opposite reason: it commits before the
+  // watchdog effect runs, and `.committed` is read inside that effect so it
+  // still hears about it.
   const srcDocDocument = useCommittedDocument(srcDocTransportContent);
   // A preview that never paints has to become a record, not just a blank
   // canvas. Instrument the srcDoc frame only while it is the visible transport
