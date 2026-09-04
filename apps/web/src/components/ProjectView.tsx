@@ -4869,6 +4869,13 @@ export function ProjectView({
             );
             if (retractsFailure) clearPaneErrorForRun(runId);
             latestReattachRunStatus = runStatus;
+            // A `failed` from the stream is never recorded as the daemon's
+            // word, and it cannot cost a real verdict: `consumeDaemonRun`
+            // surfaces an UNADJUDICATED error only while its own `endStatus` is
+            // still null (`providers/daemon.ts:1105`, `:1281`), and its other
+            // `failed` (`:1250`) returns with a daemon error frame, which is a
+            // verdict. So a daemon-declared terminal never reaches the branch
+            // that reads this value.
             if (runStatus !== 'failed') daemonDeclaredRunStatus = runStatus;
             if (runStatus === 'canceled') {
               textBuffer.cancel();

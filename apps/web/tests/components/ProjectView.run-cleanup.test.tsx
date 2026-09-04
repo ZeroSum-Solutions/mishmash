@@ -2868,6 +2868,18 @@ describe('ProjectView daemon cleanup', () => {
     });
   }, 12_000);
 
+  // SUPERSEDED IN PART (W1J.1). This is the case the W1J.1 spec names at
+  // ~:2867-2973 on 29a2a7703. What it pins is unchanged and still true: a
+  // reattach generic disconnect that later proves succeeded finalizes the row
+  // succeeded and carries no disconnect error event. What changed underneath it
+  // is the RECOVERY TRIGGER. The `failed` row it starts from is fixture state —
+  // a row a previous session persisted — not something this handler writes any
+  // more, so the re-query it exercises is now driven by
+  // `unresolvedReattachRunsRef` (and by the row staying active) rather than by a
+  // `failed` row the daemon never declared. The new trigger has its own case:
+  // 're-queries an unresolved reattach from the run-scoped mark, not a failed
+  // row'. This one is kept as-is because a persisted `failed` row from an older
+  // build still has to recover.
   it('finalizes a reattach generic disconnect as succeeded when the next status poll turns terminal', async () => {
     const runCreatedAt = Date.now();
     const { GENERIC_DAEMON_DISCONNECT_MESSAGE } = await import('../../src/providers/daemon');
