@@ -1266,6 +1266,20 @@ test('[P0] a Side Chat reconnect-budget disconnect keeps the row active and its 
   await expect(failureAlert, 'an unresolved stream failure must not paint the failure card')
     .toHaveCount(0);
 
+  // W1J.4 disclosure, on this pane's own composer. A side chat renders its own
+  // `useConversationChat`, so nothing outside it can hold its Send.
+  const sideComposer = await composerInside(page, sideChat);
+  const sideSendButton = sideComposer.getByTestId('chat-send').first();
+  await sideComposer.getByTestId('chat-composer-input').first().fill(PAUSED_DRAFT);
+  await expect(sideSendButton, 'an unresolved run must hold Send even with a draft ready')
+    .toBeDisabled();
+  await expect(checkingNotice, 'the checking notice must say sending is paused')
+    .toContainText(SEND_PAUSED_TEXT);
+  await expect(
+    sideComposer.getByText(SEND_PAUSED_TEXT).first(),
+    'the composer must explain why its Send is disabled',
+  ).toBeVisible();
+
   await waitForDaemonRunStatus(page, runId, 'succeeded');
   expect(
     await runCheckingNoticeDisappearances(page),
@@ -1273,6 +1287,8 @@ test('[P0] a Side Chat reconnect-budget disconnect keeps the row active and its 
   ).toBe(0);
   await expect(checkingNotice, 'the checking notice must still be up at the verdict')
     .toBeVisible();
+  await expect(sideSendButton, 'sending must not resume before the verdict reaches the client')
+    .toBeDisabled();
 
   outage.release();
 
@@ -1286,6 +1302,12 @@ test('[P0] a Side Chat reconnect-budget disconnect keeps the row active and its 
     sideChat.getByText(RUN_ANSWER).first(),
     'the resolved turn must show the answer the run delivered',
   ).toBeVisible({ timeout: T.long });
+  await expect(sideSendButton, 'sending must resume once the run answers')
+    .toBeEnabled({ timeout: T.long });
+  await expect(
+    sideComposer.getByText(SEND_PAUSED_TEXT),
+    'the paused sentence must not outlive the pause',
+  ).toHaveCount(0, { timeout: T.long });
   expect(
     await runFailureCardSightings(page),
     'the failure card must never have appeared at any point during a run that succeeded',

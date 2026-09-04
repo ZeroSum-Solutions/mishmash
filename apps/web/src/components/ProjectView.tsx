@@ -3944,19 +3944,27 @@ export function ProjectView({
    * of the ACTIVE state its checking notice is keyed to and releases the
    * composer while the run may still be running.
    *
-   * So nothing is written. The read is retried on the recovery tick, and after
-   * `MAX_TRANSIENT_RETRIES` the run is sealed so this pass cannot spin — sealed
-   * WITHOUT a status, so the row keeps whatever the daemon last declared for it
-   * and only the run's own terminal moves it. A reload re-arms the pass. A run
-   * the daemon never accepted is a different question, and the `!runId` branch
-   * inside the pass answers it.
+   * So nothing is written. The read is retried on the recovery tick, and the
+   * bound is not a verdict either: at `MAX_TRANSIENT_RETRIES` this pass stops
+   * asking the RUN and asks the CONVERSATION instead — one refresh, which
+   * carries the daemon's own stored row and moves the message if the daemon
+   * settled it. That is the `'reconcile'` fallback the pane-side follow already
+   * ends on (`nextInferredRunFailureStep`), and it is what keeps a row whose run
+   * the daemon has genuinely lost from holding the composer forever: the
+   * daemon's row answers even when the run record cannot. Only when that read
+   * says nothing either does the row stay where the daemon last put it, which is
+   * the honest state for a run nobody can describe. A reload re-arms the pass.
+   *
+   * A run the daemon never accepted is a different question, and the `!runId`
+   * branch inside the pass answers it.
    */
-  const retryUnreadableRunStatus = useCallback((runId: string) => {
+  const retryUnreadableRunStatus = useCallback((runId: string, conversationId: string) => {
     const attempts = transientFailedRetriesRef.current.get(runId) ?? 0;
     if (attempts >= MAX_TRANSIENT_RETRIES) {
       transientFailedRetriesRef.current.delete(runId);
       genericDisconnectRetriesRef.current.delete(runId);
       completedReattachRunsRef.current.add(runId);
+      scheduleConversationMessageRefresh(conversationId);
       return;
     }
     transientFailedRetriesRef.current.set(runId, attempts + 1);
@@ -3965,7 +3973,7 @@ export function ProjectView({
       setRecoveryTick((t) => t + 1);
     }, 3000);
     transientRetryTimersRef.current.add(handle);
-  }, []);
+  }, [scheduleConversationMessageRefresh]);
 
   // Reset transient retry counts when the conversation or daemon connection
   // changes so stale counts from a previous session do not bleed in.  This
@@ -4110,7 +4118,7 @@ export function ProjectView({
         const status = fallbackRun ?? await fetchChatRunStatus(runId);
         if (cancelled) return;
         if (!status) {
-          retryUnreadableRunStatus(runId);
+          retryUnreadableRunStatus(runId, reattachConversationId);
           continue;
         }
         // When the daemon authoritative status is 'failed', the run ended in a
