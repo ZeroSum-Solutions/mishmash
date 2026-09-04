@@ -11,43 +11,48 @@
 // callback so the caller can remove instrumentation if the iframe is
 // reused for a different artifact.
 
+import {
+  PREVIEW_PAINT_REPORT,
+  PREVIEW_PAINT_REPORT_REQUEST,
+  mintPreviewNavigationToken,
+} from '@open-design/contracts/runtime/preview-paint-report';
+import type { PreviewPaintReport } from '@open-design/contracts/runtime/preview-paint-report';
+
 import { reportSafetyEvent } from '../analytics/error-tracking';
 
 const LOAD_TIMEOUT_MS = 15000;
 
 /**
- * Message the srcdoc preview bridge posts from inside the artifact document
- * once it has measured its own rendered box. Only the real artifact carries
- * that bridge — the lazy transport shell does not — so receiving it from a
- * frame is proof the artifact document is the one running in it.
+ * Second ask, after the committed document has had a moment to lay out,
+ * decode its images and load its fonts. The first ask is answered at commit,
+ * when a document that paints late honestly has nothing to show yet.
  */
-const ARTIFACT_DOCUMENT_REPORT = 'od:preview-content-size';
+const COMMIT_RETRY_MS = 1500;
 
-/** The bridge's on-demand half: asks a live artifact document to report now. */
-const ARTIFACT_DOCUMENT_REPORT_REQUEST = 'od:preview-content-size-request';
+/** Why a preview frame was never able to prove it rendered. */
+export type PreviewPaintFailureReason =
+  /** The document never answered the watchdog at all. */
+  | 'no_document_report'
+  /** The document answered, and reported no visible output. */
+  | 'no_render_evidence'
+  /** The frame raised an `error` event. */
+  | 'error_event';
 
 /**
- * What counts as proof a frame is not stuck.
- *
- * - `'load'` — the frame's own `load` event. Weak evidence, kept for a frame
- *   with no producer to ask, or one whose producer cannot be confirmed to
- *   answer: `load` fires for an empty shell, for a 200 that rendered nothing,
- *   and for a document whose subresources were all refused.
- * - `'document-report'` — a report posted by the artifact document itself.
- *   Proof the artifact document RAN in the frame, which `load` is not.
- *
- * The report carries a measurement, but settling does not require a
- * particular one: a report of any width settles the watchdog. That is track
- * 2.1's protocol and it is deliberately unchanged here. It draws the line
- * between "the artifact document is the one running in this frame" and "some
- * document loaded"; it does not, and cannot from outside the frame, decide
- * whether that document put pixels on screen. A document that runs and then
- * renders nothing visible is a different defect from a frame that never
- * received its artifact, and it needs a different detector.
+ * What the watchdog currently knows about the document in the frame. Reported
+ * to the caller so the surface can name a failure and, just as importantly,
+ * stop naming one: a frame that fails and then reloads into a document that
+ * paints must not keep showing "did not render" over rendered content.
  */
-export type IframeSettleEvidence = 'load' | 'document-report';
+export type PreviewPaintState =
+  /** A document is being watched and nothing is known about it yet. */
+  | { status: 'watching' }
+  /** The document reported positive render evidence. */
+  | { status: 'painted' }
+  /** The document never proved it rendered. */
+  | { status: 'unproven'; reason: PreviewPaintFailureReason };
 
-interface TrackIframeOptions {
+interface TrackPreviewPaintOptions {
   iframe: HTMLIFrameElement;
   artifactId?: string;
   projectId?: string;
@@ -55,54 +60,138 @@ interface TrackIframeOptions {
   // Surface label so dashboards can split file-viewer iframes from
   // deck-viewer iframes, comment-mode iframes, etc.
   surface: string;
-  /** Defaults to `'load'`; see `IframeSettleEvidence`. */
-  settlesOn?: IframeSettleEvidence;
+  /**
+   * True when the host knows the document it wants watched has ALREADY
+   * committed into this frame — a warm transport, materialised while hidden
+   * and only now becoming visible, whose `load` fired before this watchdog
+   * existed. Only the caller can know that: it is the one that put the
+   * document there and saw the frame load it.
+   *
+   * Left false (the default) the watchdog says nothing to the frame until a
+   * `load` proves the incoming document is in it. That is the point of the
+   * two-phase epoch, so pass true only for a document the host has actually
+   * seen commit — never as a convenience.
+   */
+  documentCommitted?: boolean;
+  /**
+   * Called on every transition: a new document is being watched, the document
+   * proved it rendered, or it failed to. The caller owns what the user sees;
+   * the watchdog only says what it knows.
+   */
+  onPaintState?: (state: PreviewPaintState) => void;
 }
 
 /**
- * Watch a VISIBLE preview frame, which settles only on proof its document ran.
+ * Watch a VISIBLE preview frame. It settles only on proof its document painted,
+ * and only from the document it is currently watching.
  *
- * The invariant: no preview transport the user is looking at settles on its
- * outer `load` event while a producer is there to ask. `buildSrcdoc` injects an
- * `od:preview-content-size` producer into the srcDoc transport, and the daemon
- * injects one into the project raw response, so both of those transports can
- * prove their own document ran. A transport that settles on `load` reports a
- * frame that never received its artifact as a healthy preview, which is how
- * `client_iframe_timeout` came to fire on nothing.
+ * Three rules, and every visible preview transport is held to all three:
  *
- * The caller owns two halves of this. Install it only while the frame is the
- * visible transport AND carries a real artifact document — a watchdog over a
+ *  1. **The frame's own `load` event is not evidence.** It fires for an empty
+ *     shell, for a 200 that rendered nothing, and for a document whose
+ *     subresources were all refused. Only `od:preview-content-size`, posted
+ *     from inside the document by the producer each transport carries, says the
+ *     artifact document is the one running in this frame.
+ *  2. **A report settles only with positive VISIBLE-output evidence.** A
+ *     document that runs and lays out to nothing answers too, and so does one
+ *     laid out behind `visibility: hidden` or off the side of the viewport;
+ *     `PreviewPaintReport.painted` is what separates "it ran" from "a user
+ *     would see it". The detector's honest false-positive and false-negative
+ *     profile is documented on `PREVIEW_PAINT_REPORT_PRODUCER_SOURCE` in
+ *     `packages/contracts`. One class of evidence carries a caveat the report
+ *     states outright — an image whose pixels the document was not allowed to
+ *     read — and a settle on that is recorded rather than passed off as proof;
+ *     see `recordUnverifiedEvidence`.
+ *  3. **A report settles only the document the host asked.** This is a
+ *     two-phase epoch, because `iframe.contentWindow` is the same WindowProxy
+ *     across a navigation and neither event-source matching nor a token the
+ *     outgoing document has been handed can tell the two apart:
+ *
+ *       - *Arming* mints a navigation token, clears what the previous document
+ *         proved, and starts the 15 s deadline. It sends the frame NOTHING, so
+ *         the document still occupying the frame cannot learn the token minted
+ *         for its replacement and answer in its place.
+ *       - *Commit* is the incoming `load`. That, and only that, discloses the
+ *         token to the frame. It does not mint a second token and it does not
+ *         restart the deadline: the budget covers the whole navigation, not
+ *         just the part after the document arrives.
+ *
+ *     A report is accepted only while the epoch is unsettled, after disclosure,
+ *     from `iframe.contentWindow`, carrying the current token. Everything else
+ *     is counted and reported once with the eventual failure — a stuck
+ *     navigation answered by its predecessor is one failure, not one anomaly
+ *     per stale answer.
+ *
+ * The caller owns one half of this: install it only while the frame is the
+ * visible transport AND carries a real artifact document. A watchdog over a
  * lazy shell, a redirect-blocked placeholder, or a frame parked at
  * `about:blank` waits for a report no document exists to make, and manufactures
- * a false timeout. And use it only where the producer is confirmed to reach
- * the frame; a transport whose producer is not confirmed takes
- * `trackIframeLoad`'s weaker `load` evidence with a stated reason instead of
- * pretending, because a report that never arrives is indistinguishable from a
- * preview that never ran. Two transports are on `load` for that reason today:
- * the live-artifact preview, whose response is served under `script-src 'none'`
- * so no producer can run in it, and the powered cross-origin copy, whose report
- * has not been confirmed to cross back. Both say so at their call sites.
+ * a false timeout. The caller also owns `documentCommitted`, which is how a
+ * warm transport says its document is already in the frame.
  */
-export function trackPreviewPaint(options: Omit<TrackIframeOptions, 'settlesOn'>): () => void {
-  return trackIframeLoad({ ...options, settlesOn: 'document-report' });
-}
-
-export function trackIframeLoad(options: TrackIframeOptions): () => void {
-  const { iframe, surface, settlesOn = 'load' } = options;
-  const startedAt = performance.now();
+export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void {
+  const { iframe, surface } = options;
+  let armedAt = performance.now();
   let settled = false;
+  let disclosed = false;
+  let reported = false;
+  let staleTokenReports = 0;
+  let undisclosedReports = 0;
+  let latestReport: Partial<PreviewPaintReport> | null = null;
+  let navigationToken = '';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const settle = (event: string, extras: Record<string, unknown> = {}): void => {
+  const fail = (event: string, reason: PreviewPaintFailureReason, extras: Record<string, unknown> = {}): void => {
     if (settled) return;
     settled = true;
     clearTimeout(timer);
+    clearTimeout(retryTimer);
     reportSafetyEvent(event, {
       surface,
-      duration_ms: Math.round(performance.now() - startedAt),
+      reason,
+      duration_ms: Math.round(performance.now() - armedAt),
       artifact_id: options.artifactId,
       project_id: options.projectId,
       conversation_id: options.conversationId,
+      document_committed: disclosed,
+      stale_token_reports: staleTokenReports,
+      undisclosed_reports: undisclosedReports,
+      report_reason: latestReport?.reason ?? null,
+      report_candidates: latestReport?.counters?.seen ?? null,
+      report_scan_truncated: latestReport?.scanTruncated ?? null,
       ...extras,
+    });
+    options.onPaintState?.({ status: 'unproven', reason });
+  };
+
+  /**
+   * The invariant: a preview never settles on evidence with a caveat WITHOUT
+   * that caveat being recorded.
+   *
+   * `evidence: 'image-unverified'` means the producer found nothing visible it
+   * could decide, and one candidate it could not: a raster image that decoded
+   * with intrinsic size whose pixels no canvas in that document may read (in
+   * the sandboxed opaque-origin preview frame, every http(s) image). Reporting
+   * it as paint is the honest call — an unread image is not evidence of a
+   * blank document either — but left silent it is indistinguishable from proof
+   * downstream, and a class of genuinely blank previews would settle unseen.
+   *
+   * This is the one exception to the watchdog's no-success-event rule, and it
+   * is bounded by the same reasoning: it fires only for the caveat, never for
+   * the common case.
+   */
+  const recordUnverifiedEvidence = (report: Partial<PreviewPaintReport>): void => {
+    if (report.evidence == null) return;
+    reportSafetyEvent('client_iframe_paint_unverified', {
+      surface,
+      report_evidence: report.evidence,
+      report_image_unverified: report.counters?.imageUnverified ?? null,
+      report_candidates: report.counters?.seen ?? null,
+      duration_ms: Math.round(performance.now() - armedAt),
+      artifact_id: options.artifactId,
+      project_id: options.projectId,
+      conversation_id: options.conversationId,
     });
   };
 
@@ -112,52 +201,101 @@ export function trackIframeLoad(options: TrackIframeOptions): () => void {
     if (settled) return;
     settled = true;
     clearTimeout(timer);
+    clearTimeout(retryTimer);
+    options.onPaintState?.({ status: 'painted' });
   };
 
-  // Ask the frame to report itself. A live artifact document answers within a
-  // frame or two; a frame that never received one cannot answer at all, which
-  // is the distinction this watchdog draws. Needed because instrumentation can
-  // start AFTER the document already reported — entering a mode that flips the
-  // srcDoc frame from hidden to active does exactly that, and without the ask
-  // the watchdog would wait for a report that has already been made.
+  const onTimeout = (): void => {
+    fail('client_iframe_timeout', reported ? 'no_render_evidence' : 'no_document_report', {
+      timeout_ms: LOAD_TIMEOUT_MS,
+    });
+  };
+
+  // Ask the frame to report itself, for THIS epoch. Sent only after the
+  // document committed, so the token never reaches the document being
+  // replaced. Needed at all because instrumentation can start AFTER the
+  // document already reported — entering a mode that flips the srcDoc frame
+  // from hidden to active does exactly that, and without the ask the watchdog
+  // would wait for a report that has already been made.
   const requestDocumentReport = (): void => {
-    if (settlesOn !== 'document-report') return;
     try {
-      iframe.contentWindow?.postMessage({ type: ARTIFACT_DOCUMENT_REPORT_REQUEST }, '*');
+      iframe.contentWindow?.postMessage(
+        { type: PREVIEW_PAINT_REPORT_REQUEST, token: navigationToken },
+        '*',
+      );
     } catch {
       // A torn-down frame cannot be asked; the timeout stands.
     }
   };
 
+  /** Phase one: watch a navigation, and tell the frame nothing about it. */
+  const armNavigation = (): void => {
+    clearTimeout(timer);
+    clearTimeout(retryTimer);
+    settled = false;
+    disclosed = false;
+    reported = false;
+    staleTokenReports = 0;
+    undisclosedReports = 0;
+    latestReport = null;
+    armedAt = performance.now();
+    navigationToken = mintPreviewNavigationToken();
+    timer = setTimeout(onTimeout, LOAD_TIMEOUT_MS);
+    options.onPaintState?.({ status: 'watching' });
+  };
+
+  /** Phase two: the document is in the frame, so it may be asked. */
+  const discloseToCommittedDocument = (): void => {
+    if (disclosed) return;
+    disclosed = true;
+    requestDocumentReport();
+    // A document that paints late answers the first ask honestly with nothing.
+    retryTimer = setTimeout(requestDocumentReport, COMMIT_RETRY_MS);
+  };
+
+  // A `load` event is the commit boundary. For the epoch the host armed it is
+  // the moment the document arrived; for an epoch already disclosed it means a
+  // DIFFERENT document now occupies the frame, so start over — this is what
+  // stops a stuck replacement from inheriting its predecessor's evidence.
   const onLoad = (): void => {
-    if (settlesOn === 'load') settleQuietly();
-    else requestDocumentReport();
+    if (disclosed) armNavigation();
+    discloseToCommittedDocument();
   };
 
   const onDocumentReport = (event: MessageEvent): void => {
-    if (settlesOn !== 'document-report') return;
+    if (settled) return;
     if (event.source !== iframe.contentWindow) return;
-    const data = event.data as { type?: string } | null;
-    if (data?.type !== ARTIFACT_DOCUMENT_REPORT) return;
+    const data = event.data as Partial<PreviewPaintReport> | null;
+    if (data?.type !== PREVIEW_PAINT_REPORT) return;
+    if (!disclosed) {
+      undisclosedReports += 1;
+      return;
+    }
+    if (data.token !== navigationToken) {
+      staleTokenReports += 1;
+      return;
+    }
+    reported = true;
+    latestReport = data;
+    if (data.painted !== true) return;
+    recordUnverifiedEvidence(data);
     settleQuietly();
   };
 
   const onError = (): void => {
-    settle('client_iframe_error', { reason: 'error_event' });
+    fail('client_iframe_error', 'error_event');
   };
 
   iframe.addEventListener('load', onLoad);
   iframe.addEventListener('error', onError);
   window.addEventListener('message', onDocumentReport);
 
-  const timer = setTimeout(() => {
-    settle('client_iframe_timeout', { timeout_ms: LOAD_TIMEOUT_MS, settles_on: settlesOn });
-  }, LOAD_TIMEOUT_MS);
-
-  requestDocumentReport();
+  armNavigation();
+  if (options.documentCommitted) discloseToCommittedDocument();
 
   return () => {
     clearTimeout(timer);
+    clearTimeout(retryTimer);
     iframe.removeEventListener('load', onLoad);
     iframe.removeEventListener('error', onError);
     window.removeEventListener('message', onDocumentReport);

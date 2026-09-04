@@ -410,7 +410,12 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('document-isolation-policy')).toBe('isolate-and-credentialless');
     expect(res.headers.get('access-control-allow-origin')).toBeNull();
-    expect(await res.text()).toBe('<html/>');
+    // Every powered HTML response carries the paint producer, whatever it
+    // weighs (W2H.1b): the host watches this frame, so the document must be
+    // able to say it rendered. The bytes are otherwise the file's own.
+    const poweredBody = await res.text();
+    expect(poweredBody.startsWith('<html/>')).toBe(true);
+    expect(poweredBody).toContain('data-od-preview-paint-producer');
 
     const foreign = await fetch(poweredUrl('page.html'), {
       headers: { Origin: 'https://foreign.example' },
@@ -450,7 +455,7 @@ describe('GET /api/projects/:id/raw/* range request route', () => {
       },
     });
     expect(poweredFile.status).toBe(200);
-    expect(await poweredFile.text()).toBe('<html/>');
+    expect((await poweredFile.text()).startsWith('<html/>')).toBe(true);
 
     const api = await fetch(`${origin}/api/projects`, {
       headers: {

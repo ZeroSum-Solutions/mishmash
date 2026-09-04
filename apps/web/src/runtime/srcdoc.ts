@@ -18,6 +18,10 @@ import {
   DECK_SLIDE_SELECTOR,
   injectDeckStageFallback,
 } from '@open-design/contracts/runtime/deck-stage-fallback';
+import {
+  PREVIEW_PAINT_REPORT_PRODUCER_SOURCE,
+  PREVIEW_PAINT_REPORT_REQUEST,
+} from '@open-design/contracts/runtime/preview-paint-report';
 import { withProjectAssetBaseHref } from '@open-design/contracts/runtime/project-asset-base';
 
 import {
@@ -790,32 +794,13 @@ function injectSnapshotBridge(doc: string): string {
 }
 
 function injectPreviewContentSizeBridge(doc: string): string {
-  const script = `<script data-od-preview-content-size-bridge>(function(){
+  const script = `<script data-od-preview-content-size-bridge>${PREVIEW_PAINT_REPORT_PRODUCER_SOURCE}
+(function(){
   if (window.__odPreviewContentSizeBridge) return;
   window.__odPreviewContentSizeBridge = true;
   var pending = false;
-  function measure(){
-    var root = document.documentElement;
-    var body = document.body || root;
-    if (!root) return null;
-    var values = [
-      root.scrollWidth,
-      body && body.scrollWidth,
-      root.offsetWidth,
-      body && body.offsetWidth,
-      root.clientWidth,
-      body && body.clientWidth
-    ];
-    var width = 0;
-    for (var i = 0; i < values.length; i += 1) {
-      var next = Number(values[i] || 0);
-      if (Number.isFinite(next) && next > width) width = next;
-    }
-    return width > 0 ? Math.ceil(width) : null;
-  }
-  function post(){
-    try { window.parent.postMessage({ type: 'od:preview-content-size', width: measure() }, '*'); } catch (_) {}
-  }
+  var report = window.__odPreviewPaintReport;
+  function post(){ report.post(); }
   function schedule(){
     if (pending) return;
     pending = true;
@@ -826,12 +811,14 @@ function injectPreviewContentSizeBridge(doc: string): string {
   }
   window.addEventListener('message', function(ev){
     var data = ev && ev.data;
-    if (!data || data.type !== 'od:preview-content-size-request') return;
+    if (!data || data.type !== '${PREVIEW_PAINT_REPORT_REQUEST}') return;
+    report.rememberToken(data.token);
     // Answered synchronously, never through schedule(): animation frames are
     // paused in a hidden tab while the host watchdog's timeout keeps running,
     // so a scheduled answer turns a healthy backgrounded preview into a
     // client_iframe_timeout. Every other report path stays on schedule() --
-    // those are unsolicited and nothing is waiting on them.
+    // those are unsolicited and nothing is waiting on them, and they carry the
+    // token this request left behind so a late paint still settles.
     post();
   });
   window.addEventListener('resize', schedule);

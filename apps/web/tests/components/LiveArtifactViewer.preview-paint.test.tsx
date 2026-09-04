@@ -1,26 +1,24 @@
 // @vitest-environment jsdom
-// W2G.1 / F2 — what evidence the live-artifact transport is allowed to settle on.
+// W2H.1 (was W2G.1 / F2) — what evidence the live-artifact transport settles on.
 //
-// Every other visible preview transport settles only on
-// `od:preview-content-size` posted from inside its document, because the
-// frame's own `load` event fires for a 200 that painted nothing. This one
-// cannot: the daemon serves the live-artifact preview under
-// `script-src 'none'` and a CSP sandbox without `allow-scripts`
-// (`setLiveArtifactPreviewHeaders`, apps/daemon/src/live-artifacts/http-helpers.ts,
-// pinned by apps/daemon/tests/routes/live-artifacts.test.ts), so no producer
-// placed in that response could run, and the iframe's own sandbox attribute
-// cannot re-grant what the CSP sandbox removed.
+// It used to settle on the frame's own `load` event, and that was a property of
+// the response: the daemon served this preview under `script-src 'none'` and a
+// CSP sandbox without `allow-scripts`, so no producer placed in it could run
+// and asking for a report would have filed a `preview-error` on every healthy
+// preview. D-17 option A changed the response — one nonce'd producer,
+// `allow-scripts` in the CSP sandbox, `allow-same-origin` still absent from the
+// effective sandbox — so the exemption is gone.
 //
-// So this frame takes the weaker `load` evidence, deliberately. These specs
-// pin that decision from the side the daemon test cannot see: the watchdog must
-// not ask a document that can never answer, because a report that never arrives
-// would file a `preview-error` on every healthy live-artifact preview 15
-// seconds after it loaded. The watchdog itself stays — a frame that never loads
-// at all is still reported.
+// These specs pin what survived that change from the side the daemon test
+// cannot see: the watchdog still reports a frame that never loads at all, and
+// it does not file anything for a frame whose document reports that it painted.
+// The new failure cases (a 200 that renders nothing, the named notice) are in
+// LiveArtifactViewer.preview-no-paint.test.tsx.
 //
-// The paired daemon assertion (this response carries no producer, and refuses
-// the scripts that would run one) is in
-// apps/daemon/tests/preview-paint-report-bridge.test.ts.
+// The paired daemon assertion (this response carries one producer, under a
+// nonce, in a sandbox that runs it) is in
+// apps/daemon/tests/preview-paint-report-bridge.test.ts and
+// apps/daemon/tests/live-artifact-preview-paint-producer.test.ts.
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -109,8 +107,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('the live-artifact preview transport settles on load, because it cannot report', () => {
-  it('never asks a script-free response to report, and files nothing when it loads', async () => {
+describe('the live-artifact preview watchdog', () => {
+  it('files nothing when the document reports that it painted', async () => {
     const calls = stubFetch();
 
     render(<LiveArtifactViewer projectId="project-1" liveArtifact={liveArtifactEntry()} />);
@@ -123,15 +121,21 @@ describe('the live-artifact preview transport settles on load, because it cannot
     await act(async () => {
       fireEvent.load(frame);
     });
+    const asks = posted.filter(
+      (message) => (message as { type?: string } | null)?.type === DOCUMENT_REPORT_REQUEST,
+    );
+    const token = (asks[asks.length - 1] as { token?: string } | undefined)?.token;
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'od:preview-content-size', width: 1280, painted: true, token },
+          source: frame.contentWindow,
+        }),
+      );
+    });
 
     await advance(16_000);
 
-    expect(
-      posted.filter(
-        (message) => (message as { type?: string } | null)?.type === DOCUMENT_REPORT_REQUEST,
-      ),
-      'this response is served under script-src none, so asking it for a report would file a preview-error on every healthy preview',
-    ).toHaveLength(0);
     expect(previewErrorAnomalies(calls)).toHaveLength(0);
   });
 
@@ -143,8 +147,8 @@ describe('the live-artifact preview transport settles on load, because it cannot
     await screen.findByTestId('live-artifact-preview-frame');
 
     // No load event: the artifact file is missing, or the `od://` resolver is
-    // stuck. Weak evidence still catches this one, and it is the case the
-    // watchdog was written for.
+    // stuck. This is the case the watchdog was written for, and it survives
+    // every change to what counts as proof.
     await advance(16_000);
 
     const filed = previewErrorAnomalies(calls);
