@@ -16,16 +16,19 @@ import {
   PREVIEW_PAINT_REPORT_REQUEST,
   mintPreviewNavigationToken,
 } from '@open-design/contracts/runtime/preview-paint-report';
-import type { PreviewPaintReport } from '@open-design/contracts/runtime/preview-paint-report';
+import type {
+  PreviewPaintEvidence,
+  PreviewPaintReport,
+} from '@open-design/contracts/runtime/preview-paint-report';
 
 import { reportSafetyEvent } from '../analytics/error-tracking';
 
 const LOAD_TIMEOUT_MS = 15000;
 
 /**
- * Second ask, after the committed document has had a moment to lay out,
- * decode its images and load its fonts. The first ask is answered at commit,
- * when a document that paints late honestly has nothing to show yet.
+ * How often the host asks again while a navigation is unsettled. The first ask
+ * is answered at commit, when a document that paints late honestly has nothing
+ * to show yet; every later one covers the paint that landed since.
  */
 const COMMIT_RETRY_MS = 1500;
 
@@ -49,6 +52,16 @@ export type PreviewPaintState =
   | { status: 'watching' }
   /** The document reported positive render evidence. */
   | { status: 'painted' }
+  /**
+   * The document reported render evidence nothing could corroborate: a
+   * contentful paint the producer's scan did not back up, or pixels the frame
+   * was not allowed to read. The preview stays as rendered — this is a caveat,
+   * not a failure — and the surface owes the viewer a soft notice saying the
+   * render could not be verified. `recheck` asks the document that is in the
+   * frame right now to report itself again; a report that does corroborate
+   * moves the state to `painted`.
+   */
+  | { status: 'painted-unverified'; evidence: PreviewPaintEvidence; recheck: () => void }
   /** The document never proved it rendered. */
   | { status: 'unproven'; reason: PreviewPaintFailureReason };
 
@@ -100,8 +113,10 @@ interface TrackPreviewPaintOptions {
  *     profile is documented on `PREVIEW_PAINT_REPORT_PRODUCER_SOURCE` in
  *     `packages/contracts`. One class of evidence carries a caveat the report
  *     states outright — an image whose pixels the document was not allowed to
- *     read — and a settle on that is recorded rather than passed off as proof;
- *     see `recordUnverifiedEvidence`.
+ *     read, a CSS paint source it does not classify, or a contentful paint the
+ *     scan corroborated with nothing — and a settle on that is its own outcome
+ *     (`painted-unverified`), recorded and shown rather than passed off as
+ *     proof; see `settleOnUncorroboratedEvidence` and `recordUnverifiedEvidence`.
  *  3. **A report settles only the document the host asked.** This is a
  *     two-phase epoch, because `iframe.contentWindow` is the same WindowProxy
  *     across a navigation and neither event-source matching nor a token the
@@ -133,6 +148,10 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
   const { iframe, surface } = options;
   let armedAt = performance.now();
   let settled = false;
+  // Settled on a caveat rather than on proof. The watchdog stops asking and can
+  // no longer fail, but it keeps listening: a re-check that comes back
+  // corroborated must be allowed to clear the notice.
+  let caveated = false;
   let disclosed = false;
   let reported = false;
   let staleTokenReports = 0;
@@ -145,6 +164,7 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
   const fail = (event: string, reason: PreviewPaintFailureReason, extras: Record<string, unknown> = {}): void => {
     if (settled) return;
     settled = true;
+    caveated = false;
     clearTimeout(timer);
     clearTimeout(retryTimer);
     reportSafetyEvent(event, {
@@ -169,17 +189,20 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
    * The invariant: a preview never settles on evidence with a caveat WITHOUT
    * that caveat being recorded.
    *
-   * `evidence: 'image-unverified'` means the producer found nothing visible it
-   * could decide, and one candidate it could not: a raster image that decoded
-   * with intrinsic size whose pixels no canvas in that document may read (in
-   * the sandboxed opaque-origin preview frame, every http(s) image). Reporting
-   * it as paint is the honest call — an unread image is not evidence of a
-   * blank document either — but left silent it is indistinguishable from proof
-   * downstream, and a class of genuinely blank previews would settle unseen.
+   * A non-null `evidence` means the producer settled on something it could not
+   * corroborate: a raster image whose pixels no canvas in that document may
+   * read (in the sandboxed opaque-origin preview frame, every http(s) image), a
+   * CSS paint source the scan does not classify, or a contentful paint the scan
+   * backed up with nothing at all. Reporting those as paint is the honest call
+   * — none of them is evidence of a blank document either — but left silent
+   * they are indistinguishable from proof downstream, and a class of genuinely
+   * blank previews would settle unseen.
    *
    * This is the one exception to the watchdog's no-success-event rule, and it
    * is bounded by the same reasoning: it fires only for the caveat, never for
-   * the common case.
+   * the common case. `anomaly-report.ts` maps it onto a `preview-error` record
+   * of `warn` severity, so it reaches the log a maintainer actually reads
+   * rather than a PostHog transport that is a no-op without a build-time key.
    */
   const recordUnverifiedEvidence = (report: Partial<PreviewPaintReport>): void => {
     if (report.evidence == null) return;
@@ -198,11 +221,37 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
   // We don't emit a success event — it would multiply ingest cost for the
   // most common case. Settling only stops the watchdog.
   const settleQuietly = (): void => {
-    if (settled) return;
+    if (settled && !caveated) return;
     settled = true;
+    caveated = false;
     clearTimeout(timer);
     clearTimeout(retryTimer);
     options.onPaintState?.({ status: 'painted' });
+  };
+
+  /**
+   * The invariant: a preview never settles on evidence with a caveat WITHOUT
+   * the person looking at it being told, and without the anomaly log carrying
+   * it.
+   *
+   * This is the third outcome, and it is neither of the other two. The document
+   * is left exactly as it rendered — a contentful paint is the user agent's own
+   * word that content reached the screen, and tearing a preview down over a
+   * caveat would be a worse error than the caveat — while the surface shows a
+   * soft "could not verify this rendered" notice with a way to ask again. The
+   * watchdog stops asking on its own here (the deadline is done) but keeps
+   * listening, so a re-check that comes back corroborated clears the notice.
+   */
+  const settleOnUncorroboratedEvidence = (evidence: PreviewPaintEvidence): void => {
+    settled = true;
+    caveated = true;
+    clearTimeout(timer);
+    clearTimeout(retryTimer);
+    options.onPaintState?.({
+      status: 'painted-unverified',
+      evidence,
+      recheck: requestDocumentReport,
+    });
   };
 
   const onTimeout = (): void => {
@@ -233,6 +282,7 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
     clearTimeout(timer);
     clearTimeout(retryTimer);
     settled = false;
+    caveated = false;
     disclosed = false;
     reported = false;
     staleTokenReports = 0;
@@ -244,13 +294,34 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
     options.onPaintState?.({ status: 'watching' });
   };
 
+  /**
+   * The invariant: while a navigation is unsettled the host keeps asking, and
+   * it stops for exactly two reasons — the document settled, or the deadline
+   * this arming started ran out. No third deadline exists.
+   *
+   * One ask at commit and one at `COMMIT_RETRY_MS` covered the first 1.5 s
+   * only. The producers post unsolicited reports on their own initial timers,
+   * on `fonts.ready`, on `resize` and through a `ResizeObserver`, so a document
+   * whose LAYOUT never changes and whose paint lands later triggers none of
+   * them: a stable-size canvas drawn at 3 s was filed as a timeout at 15 s
+   * while the user watched it render. The producer already answers a request
+   * with a fresh scan, so asking again is the whole of the fix.
+   */
+  const askUntilSettledOrDeadline = (): void => {
+    if (settled) return;
+    requestDocumentReport();
+    if (settled) return;
+    // Don't schedule an ask that would land at or after the deadline: the
+    // timeout owns the end of the navigation.
+    if (performance.now() - armedAt + COMMIT_RETRY_MS >= LOAD_TIMEOUT_MS) return;
+    retryTimer = setTimeout(askUntilSettledOrDeadline, COMMIT_RETRY_MS);
+  };
+
   /** Phase two: the document is in the frame, so it may be asked. */
   const discloseToCommittedDocument = (): void => {
     if (disclosed) return;
     disclosed = true;
-    requestDocumentReport();
-    // A document that paints late answers the first ask honestly with nothing.
-    retryTimer = setTimeout(requestDocumentReport, COMMIT_RETRY_MS);
+    askUntilSettledOrDeadline();
   };
 
   // A `load` event is the commit boundary. For the epoch the host armed it is
@@ -263,7 +334,8 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
   };
 
   const onDocumentReport = (event: MessageEvent): void => {
-    if (settled) return;
+    // A caveated settle still listens, so a re-check can upgrade it.
+    if (settled && !caveated) return;
     if (event.source !== iframe.contentWindow) return;
     const data = event.data as Partial<PreviewPaintReport> | null;
     if (data?.type !== PREVIEW_PAINT_REPORT) return;
@@ -278,7 +350,13 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
     reported = true;
     latestReport = data;
     if (data.painted !== true) return;
-    recordUnverifiedEvidence(data);
+    if (data.evidence != null) {
+      // Recorded once per settle, not once per re-check: a person pressing
+      // "Re-check" must not multiply the record.
+      if (!caveated) recordUnverifiedEvidence(data);
+      settleOnUncorroboratedEvidence(data.evidence);
+      return;
+    }
     settleQuietly();
   };
 

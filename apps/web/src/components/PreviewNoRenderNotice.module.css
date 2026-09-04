@@ -1,4 +1,5 @@
-/* Owner: PreviewNoRenderNotice, the preview's "nothing rendered here" banner
+/* Owner: PreviewNoRenderNotice and PreviewUnverifiedRenderNotice, the preview's
+   "nothing rendered here" and "could not verify this rendered" banners
    in FileViewer and LiveArtifactViewer (W2H.1). Sits over the preview iframe
    like `.preview-asset-warning` does, and borrows the same panel/shadow tokens
    so every preview banner reads as one family. */
@@ -31,4 +32,21 @@
 .detail {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* The uncorroborated-render caveat reads quieter than the failure above: the
+   document probably did render, and the notice says only that nothing could
+   confirm it. Same family, neutral border instead of the warning one. */
+.unverified {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--bg-panel) 96%, var(--text) 4%);
+}
+
+.unverified .title {
+  color: var(--text-muted, var(--text));
+}
+
+.action {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
