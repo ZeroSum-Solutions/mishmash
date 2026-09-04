@@ -121,6 +121,7 @@ import {
   RUN_FAILURE_RECHECK_DELAY_MS,
   RUN_FAILURE_RECHECK_INTERVAL_MS,
   nextInferredRunFailureStep,
+  retractRunFailureFromStatus,
   retractsRunFailure,
   retractsStaleRunFailure,
 } from '../runtime/run-failure-reconcile';
@@ -3198,11 +3199,14 @@ export function ProjectView({
   // stamps the stored assistant row with its real terminal when it ends.
   //
   // So follow the run until it reports one. `nextInferredRunFailureStep` owns
-  // when to retract, when to keep following and when to stop; the conversation
-  // is read only on a non-failed terminal, and applied only when it retracts
-  // the failure this pane is painting.
+  // when to retract, when to keep following and when to stop.
+  //
+  // `alreadyRetracted` says the run's own terminal has already cleared the
+  // alert and moved the row (`retractRunFailureFromStatus`). This read is then
+  // only there to improve the row's content, and cannot judge the failure a
+  // second time: the rows it is compared against no longer carry one.
   const reconcileInferredRunFailure = useCallback(
-    async (conversationId: string) => {
+    async (conversationId: string, alreadyRetracted: boolean) => {
       if (messagesConversationIdRef.current !== conversationId) return;
       let serverMessages: ChatMessage[];
       try {
@@ -3212,7 +3216,7 @@ export function ProjectView({
         return;
       }
       if (messagesConversationIdRef.current !== conversationId) return;
-      if (!retractsStaleRunFailure(messagesRef.current, serverMessages)) return;
+      if (!alreadyRetracted && !retractsStaleRunFailure(messagesRef.current, serverMessages)) return;
       setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
       setError(null);
     },
@@ -3227,14 +3231,22 @@ export function ProjectView({
         void (async () => {
           const latest = await fetchChatRunStatus(runId).catch(() => null);
           if (messagesConversationIdRef.current !== conversationId) return;
-          if (!latest) misses += 1;
+          misses = latest ? 0 : misses + 1;
           const step = nextInferredRunFailureStep(latest?.status, misses);
           if (step === 'stop') return;
           if (step === 'retry') {
             scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_INTERVAL_MS);
             return;
           }
-          await reconcileInferredRunFailure(conversationId);
+          // 'retract' carries the run's own terminal; 'reconcile' is the
+          // exhausted-probe fallback and carries none, so it retracts nothing
+          // here and falls through to the conversation read alone.
+          const retracted = retractRunFailureFromStatus(messagesRef.current, runId, latest) !== null;
+          if (retracted) {
+            setMessages((current) => retractRunFailureFromStatus(current, runId, latest) ?? current);
+            setError(null);
+          }
+          await reconcileInferredRunFailure(conversationId, retracted);
         })();
       };
       scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_DELAY_MS);

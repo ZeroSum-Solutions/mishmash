@@ -22,10 +22,26 @@ export const RUN_FAILURE_RECHECK_DELAY_MS = 150;
 /** Spacing between later re-checks; matches the generic-disconnect backoff. */
 export const RUN_FAILURE_RECHECK_INTERVAL_MS = 3000;
 
-/** How many status probes may return nothing before the pane gives up. */
-export const RUN_FAILURE_RECHECK_MAX_MISSES = 3;
+/**
+ * How many CONSECUTIVE status probes may answer nothing before a pane stops
+ * following the run.
+ *
+ * A probe that answers nothing is a network error or a non-OK response —
+ * `fetchChatRunStatus` returns `null` for both — and neither is a verdict on
+ * the run. The outage class that makes a pane infer a failure at all is exactly
+ * the one that produces these, so a small bound abandons the recovery for the
+ * same reason it was needed: at `RUN_FAILURE_RECHECK_INTERVAL_MS` spacing,
+ * three misses are a nine-second daemon hiccup.
+ *
+ * This bound is therefore long — about five minutes of a daemon that never
+ * answers, well past the point at which a daemon that came back would already
+ * have been seen. An answered probe resets the count, so only an unbroken
+ * outage reaches it, and reaching it ends in one conversation read
+ * (`'reconcile'`), never in a silent stop.
+ */
+export const RUN_FAILURE_RECHECK_MAX_MISSES = 100;
 
-export type InferredRunFailureStep = 'retract' | 'retry' | 'stop';
+export type InferredRunFailureStep = 'retract' | 'retry' | 'reconcile' | 'stop';
 
 /**
  * What a pane does next with a failure it inferred, given the run's own status.
@@ -37,14 +53,17 @@ export type InferredRunFailureStep = 'retract' | 'retry' | 'stop';
  * look decides nothing. The pane follows the run instead, and the run is what
  * bounds it:
  *
- *  - a non-failed terminal is the retraction: read the conversation and let
- *    `retractsStaleRunFailure` judge the rows the daemon settled on;
+ *  - a non-failed terminal IS the retraction, and it is applied from the
+ *    status alone (`retractRunFailureFromStatus`); the conversation is read
+ *    afterwards only to improve the row's content;
  *  - `failed` agrees with the row on screen, so the pane stops at once and the
  *    alert stays. A genuinely failed run is never re-queried;
  *  - `queued` / `running` means the answer has not arrived yet — keep following;
- *  - a probe that returns nothing is a miss, not an answer. A few are tolerated
- *    (`RUN_FAILURE_RECHECK_MAX_MISSES`) so a hiccup does not end the recovery,
- *    and then the pane stops rather than polling a daemon that cannot answer.
+ *  - a probe that returns nothing is a miss, not an answer, so it decides
+ *    nothing either. Misses are counted consecutively and the pane keeps
+ *    following; only an unbroken outage of `RUN_FAILURE_RECHECK_MAX_MISSES`
+ *    probes ends the following, and it ends in `'reconcile'` — one conversation
+ *    read — so an unresolved inferred failure is never abandoned in silence.
  */
 export function nextInferredRunFailureStep(
   status: ChatRunStatus | null | undefined,
@@ -53,7 +72,7 @@ export function nextInferredRunFailureStep(
   if (status === 'succeeded' || status === 'canceled') return 'retract';
   if (status === 'failed') return 'stop';
   if (status === 'queued' || status === 'running') return 'retry';
-  return misses < RUN_FAILURE_RECHECK_MAX_MISSES ? 'retry' : 'stop';
+  return misses < RUN_FAILURE_RECHECK_MAX_MISSES ? 'retry' : 'reconcile';
 }
 
 /**
@@ -87,9 +106,10 @@ export function nextInferredRunFailureStep(
  * event ever arrives and no handler above can fire. The live send loop then
  * seals the run without a refresh, and Side Chat has no refresh at all. Both
  * follow the run itself instead — see `nextInferredRunFailureStep` below for
- * the rule and what bounds it — and read the conversation only once the run
- * reports a non-failed terminal, applying it when `retractsStaleRunFailure`
- * says it retracts the failure on screen. The call sites are
+ * the rule and what bounds it. A non-failed terminal retracts the failure from
+ * the status alone (`retractRunFailureFromStatus`); the conversation is read
+ * afterwards only to improve the row's content, so a read that fails cannot
+ * leave the alert standing. The call sites are
  * `reconcileInferredRunFailure` in `ProjectView.tsx` and
  * `scheduleRunFailureRecheck` in `workspace/useConversationChat.ts`.
  *
@@ -128,4 +148,45 @@ export function retractsStaleRunFailure(
       message.runStatus !== undefined &&
       !isFailedAssistantRow(message),
   );
+}
+
+/** A run's own status snapshot, as `fetchChatRunStatus` reports it. */
+export interface InferredRunTerminal {
+  status: ChatRunStatus;
+  /** Daemon clock for the status; the authoritative `endedAt` for the row. */
+  updatedAt?: number;
+}
+
+/**
+ * The status-first half of the invariant: the run's OWN terminal retracts the
+ * failure, before anything is read from the conversation.
+ *
+ * A pane following an inferred failure learns the truth in two steps — the
+ * run's status, then the conversation the daemon repaired. Only the first is
+ * authoritative about whether the failure was real, and only the first is
+ * distinguishable from silence: `listMessages` reports a non-OK response and a
+ * thrown fetch alike as an empty array (`state/projects.ts`), so a merge that
+ * FAILED reads the same as a conversation with nothing to say. Applying the
+ * status first leaves the merge only able to IMPROVE the row's content; a merge
+ * that fails can no longer leave "Task failed" painted over a turn the run
+ * itself reports as succeeded.
+ *
+ * Returns the rows to show, or `null` when no row on screen retracts — and the
+ * pane's error carrier moves with that same answer, so both carriers `ChatPane`
+ * paints from keep moving together (see `retractsRunFailure`).
+ */
+export function retractRunFailureFromStatus(
+  shown: readonly ChatMessage[],
+  runId: string,
+  run: InferredRunTerminal | null | undefined,
+): ChatMessage[] | null {
+  if (!run) return null;
+  if (run.status !== 'succeeded' && run.status !== 'canceled') return null;
+  let retracted = false;
+  const next = shown.map((message) => {
+    if (message.runId !== runId || !retractsRunFailure(message, run.status)) return message;
+    retracted = true;
+    return { ...message, runStatus: run.status, endedAt: run.updatedAt ?? message.endedAt };
+  });
+  return retracted ? next : null;
 }
