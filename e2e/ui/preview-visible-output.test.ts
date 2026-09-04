@@ -22,6 +22,19 @@
 // predicate would be tested against a fiction. The cases below run the SHIPPED
 // producer source — the same string every transport embeds — in Chromium,
 // against real layout.
+//
+// W2H.1d — D-17 dialogue round 4 added the transparent-output blocker: a
+// visible box whose only paint source was `linear-gradient(transparent,
+// transparent)` reported `painted: true`, and so did a fully transparent
+// image. The gradient half is decided here, against Chromium's computed
+// values. The image half cannot be: Chromium fires a contentful paint for any
+// decoded image, transparent or not, so Paint Timing — asked first, and
+// deliberately so — answers before the scan's image rules are reached. What
+// this file pins for the image half is therefore the two BROWSER facts those
+// rules rest on (which images a canvas may read, and that a transparent image
+// still fires a contentful paint); the decision itself is pinned where Paint
+// Timing is silent, in `packages/contracts/tests/preview-paint-transparent.
+// test.ts`.
 
 import { PREVIEW_PAINT_REPORT_PRODUCER_SOURCE } from '@open-design/contracts/runtime/preview-paint-report';
 import type { Page } from '@playwright/test';
@@ -75,6 +88,19 @@ async function reportFor(page: Page, body: string, head = ''): Promise<PaintRepo
 /** A 2x2 opaque red PNG, so `img` cases have real decoded intrinsic size. */
 const RED_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4z8AARAwQCgAf7gP9i18U1AAAAABJRU5ErkJggg==';
+
+/** A 2x2 PNG whose every pixel has zero alpha: decoded, intrinsically sized, invisible. */
+const TRANSPARENT_PNG =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAC0lEQVR4nGNgQAcAABIAAXfx+gAAAAAASUVORK5CYII=';
+
+/**
+ * A host no DNS resolves (`.test` is reserved by RFC 2606) that the test
+ * fulfils itself, so an image can be genuinely cross-origin to the document
+ * without a second server. A response with no `Access-Control-Allow-Origin`
+ * taints the canvas it is drawn into, which is what makes its pixels
+ * unreadable.
+ */
+const CROSS_ORIGIN_IMAGE = 'https://cross-origin.mishmash.test/pixel.png';
 
 test('[P1] a document whose only content is invisible does not report itself painted', async ({ page }) => {
   const hidden = await reportFor(page, '<div style="visibility:hidden"><h1>Hidden</h1></div>');
@@ -180,6 +206,93 @@ test('[P1] real paint sources are visible output', async ({ page }) => {
   expect(outline.painted, 'an outline is ink the border properties do not carry').toBe(true);
 });
 
+test('[P1] a paint source with no pixels is not visible output', async ({ page }) => {
+  // D-17 round 4, executed against the shipped producer: "a visible box whose
+  // sole paint source was `linear-gradient(transparent, transparent)` returned
+  // `painted:true`". Chromium fires no contentful paint for a gradient — it is
+  // not an image resource — so the scan is what answers, and the scan has to
+  // read the stops.
+  const transparentGradient = await reportFor(
+    page,
+    '<div style="width:200px;height:120px;background-image:linear-gradient(transparent, transparent)"></div>',
+  );
+  expect(
+    transparentGradient.painted,
+    'a gradient every stop of which is transparent paints nothing a user can see',
+  ).toBe(false);
+  expect(transparentGradient.reason).toBe('no-visible-output');
+
+  const fadedGradient = await reportFor(
+    page,
+    '<div style="width:200px;height:120px;background-image:linear-gradient(#2563eb, transparent)"></div>',
+  );
+  expect(
+    fadedGradient.painted,
+    'a gradient that fades to nothing still inks the end it starts from',
+  ).toBe(true);
+  expect(fadedGradient.reason).toBe('painted');
+});
+
+test('[P1] which image pixels a preview document may read', async ({ page }) => {
+  // The two browser facts the image half of the rule rests on, kept in the
+  // repo rather than in a run log, in the same spirit as the contentful-paint
+  // measurement below: a same-origin image's alpha channel is readable, and a
+  // cross-origin one's is not. The producer samples the first and reports the
+  // second as `evidence: 'image-unverified'` rather than guessing.
+  await page.route(CROSS_ORIGIN_IMAGE, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: Buffer.from(RED_PNG.split(',')[1]!, 'base64'),
+    }),
+  );
+
+  const alphaOf = async (src: string): Promise<{ readable: boolean; maxAlpha: number; error: string }> => {
+    await page.goto('about:blank');
+    await page.setContent(
+      `<!doctype html><html><head><meta charset="utf-8"></head><body><img id="probe" src="${src}"></body></html>`,
+    );
+    await page.waitForFunction(() => {
+      const img = document.getElementById('probe') as HTMLImageElement | null;
+      return img !== null && img.complete && img.naturalWidth > 0;
+    });
+    return page.evaluate(() => {
+      const img = document.getElementById('probe') as HTMLImageElement;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 16;
+        canvas.height = 16;
+        const context = canvas.getContext('2d')!;
+        context.drawImage(img, 0, 0, 16, 16);
+        const pixels = context.getImageData(0, 0, 16, 16).data;
+        let maxAlpha = 0;
+        for (let index = 3; index < pixels.length; index += 4) {
+          if (pixels[index]! > maxAlpha) maxAlpha = pixels[index]!;
+        }
+        return { readable: true, maxAlpha, error: '' };
+      } catch (error) {
+        return { readable: false, maxAlpha: -1, error: (error as Error).name };
+      }
+    });
+  };
+
+  const transparent = await alphaOf(TRANSPARENT_PNG);
+  expect(transparent.readable, 'a same-origin image does not taint the canvas').toBe(true);
+  expect(transparent.maxAlpha, 'every pixel of this PNG is fully transparent').toBe(0);
+
+  const opaque = await alphaOf(RED_PNG);
+  expect(opaque.readable).toBe(true);
+  expect(opaque.maxAlpha, 'an opaque image reads back opaque').toBeGreaterThan(0);
+
+  const crossOrigin = await alphaOf(CROSS_ORIGIN_IMAGE);
+  expect(
+    crossOrigin.readable,
+    'a cross-origin image taints the canvas, so its pixels are not decidable — in the ' +
+      'sandboxed preview frame that is every http(s) image',
+  ).toBe(false);
+  expect(crossOrigin.error).toBe('SecurityError');
+});
+
 test('[P1] Paint Timing answers for content the scan cannot enumerate', async ({ page }) => {
   // The preferred signal, and why it is preferred: generated content is painted
   // by the user agent and has no element of its own for a scan to inspect. The
@@ -239,6 +352,26 @@ test('[P1] no contentful paint fires for content nobody can see', async ({ page 
   // rather than lean on Paint Timing for them.
   expect(await fcpFor('<div style="width:120px;height:80px;box-shadow:0 0 12px 6px #111"></div>')).toBe(false);
   expect(await fcpFor('<div style="width:120px;height:80px;outline:3px solid #111"></div>')).toBe(false);
+
+  // W2H.1d, and the reason the gradient half and the image half of the
+  // transparency rule are pinned in different files. A gradient is not an image
+  // resource, so no contentful paint fires for one however it is coloured, and
+  // the scan decides it. An image IS a resource, and Chromium reports a
+  // contentful paint for one whose every pixel is transparent — so for an image
+  // Paint Timing, asked first, answers before the scan's image rules are
+  // reached. Those rules decide where a user agent reports no paint timing,
+  // which the contract allows for a nested browsing context.
+  expect(
+    await fcpFor(
+      '<div style="width:200px;height:120px;background-image:linear-gradient(transparent, transparent)"></div>',
+    ),
+    'a gradient is not an image resource; no contentful paint fires for one',
+  ).toBe(false);
+  expect(
+    await fcpFor(`<img src="${TRANSPARENT_PNG}" style="width:60px;height:60px">`),
+    'Chromium reports a contentful paint for a fully transparent image, which is why the ' +
+      'image rules cannot be judged through this path',
+  ).toBe(true);
 
   // What Paint Timing does answer for.
   expect(await fcpFor('<h1>Visible</h1>')).toBe(true);

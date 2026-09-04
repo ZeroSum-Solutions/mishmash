@@ -17,6 +17,24 @@
 // The rule these cases pin: the producer is present when a `<script>` element
 // carrying the marker attribute is present as markup — nowhere else — so a
 // decoy cannot suppress it and a real one is never duplicated.
+//
+// W2H.1d red spec — D-17 dialogue round 4, the blocking finding "producer
+// duplication through adjacent G". The scan ended a comment at `-->` only. The
+// tokenizer also ends one at `--!>` (comment-end-bang state) and treats
+// `<!-->` and `<!--->` as complete, empty comments
+// (abrupt-closing-of-empty-comment). A document that closes a comment one of
+// those three ways, carries its own marked producer right after that close,
+// and writes a `-->` later on, hid the producer from the scan: the producer
+// was read as comment text, `markerDeclared` stayed false, and the route
+// injected a SECOND one.
+//
+// GPT-5.6 round 4: "For each of `--!>`, `<!-->`, and `<!--->`, I placed a
+// genuine marked producer immediately after the browser's comment close and a
+// later `-->`. The scan skipped the existing producer, and
+// `injectMarkedScriptBeforeBodyClose` produced output containing two marked
+// elements and two copies of the producer source. The runtime guard limits
+// duplicate installation, but the explicitly blocking exactly-one-producer
+// invariant is violated."
 import type http from 'node:http';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -26,6 +44,18 @@ import { startServer } from '../src/server.js';
 
 const MARKER = 'data-od-preview-paint-producer';
 const PRODUCER_ELEMENT = `<script ${MARKER}>`;
+
+/**
+ * Comment closes the HTML tokenizer accepts that are not `-->`, each with the
+ * fixture name of a document that carries its own producer immediately after
+ * one of them. Every fixture writes a `-->` further on, so a scan that knows
+ * only `-->` reads the producer as comment text.
+ */
+const TOKENIZER_COMMENT_CLOSES: ReadonlyArray<{ close: string; file: string; state: string }> = [
+  { close: '<!-- hidden --!>', file: 'close-comment-end-bang.html', state: 'comment-end-bang' },
+  { close: '<!-->', file: 'close-empty-comment.html', state: 'abrupt-closing-of-empty-comment' },
+  { close: '<!--->', file: 'close-empty-comment-dash.html', state: 'abrupt-closing-of-empty-comment' },
+];
 
 /** How many producer script elements the served document carries. */
 function producerElementCount(html: string): number {
@@ -71,6 +101,16 @@ describe('a marker decoy cannot suppress the preview paint producer', () => {
           '<main>Preview</main></body></html>',
       ),
     );
+
+    for (const { close, file } of TOKENIZER_COMMENT_CLOSES) {
+      await writeFile(
+        path.join(dir, file),
+        Buffer.from(
+          `<!doctype html><html><body>${close}<script ${MARKER}></script>` +
+            '<main>Preview</main><!-- trailing --></body></html>',
+        ),
+      );
+    }
   });
 
   afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
@@ -110,4 +150,18 @@ describe('a marker decoy cannot suppress the preview paint producer', () => {
       'a document that already carries the producer element keeps exactly one',
     ).toBe(1);
   });
+
+  for (const { close, file, state } of TOKENIZER_COMMENT_CLOSES) {
+    it(`sees the producer a document carries after a \`${close}\` close (${state})`, async () => {
+      const res = await fetch(poweredUrl(file));
+      expect(res.status).toBe(200);
+      const html = await res.text();
+
+      expect(
+        producerElementCount(html),
+        `the parser ends the comment at \`${close}\`, so the producer after it is markup; ` +
+          'a scan that reads it as comment text injects a second producer',
+      ).toBe(1);
+    });
+  }
 });

@@ -201,3 +201,79 @@ describe('the splice steps over bogus comments and markup declarations', () => {
     expect(producerIndex(out)).toBeLessThan(out.indexOf('</body>'));
   });
 });
+
+// W2H.1d red spec — D-17 dialogue round 4, blocking finding "producer
+// duplication through adjacent G", body-close half. The scan ended a comment
+// at `-->` alone, so a comment the tokenizer had already closed kept running
+// in the scan and swallowed the document's genuine body close with it.
+//
+// The three closes the tokenizer accepts and the scan did not:
+//   - `--!>` — comment-end-bang state
+//     (https://html.spec.whatwg.org/multipage/parsing.html#comment-end-bang-state);
+//   - `<!-->` and `<!--->` — abrupt-closing-of-empty-comment, complete comments
+//     of their own (#comment-start-state, #comment-start-dash-state).
+//
+// Every case below writes the genuine close after one of those, and a decoy
+// `</body>` inside a later real comment. Reading only `-->` runs the first
+// comment to the END of the later one, loses the genuine close, and appends
+// the producer at EOF — a document that never gets to report itself.
+describe('a comment ends where the tokenizer ends it', () => {
+  const CLOSES: ReadonlyArray<{ close: string; state: string }> = [
+    { close: '<!-- note --!>', state: 'comment-end-bang' },
+    { close: '<!-->', state: 'abrupt-closing-of-empty-comment' },
+    { close: '<!--->', state: 'abrupt-closing-of-empty-comment, one dash in' },
+  ];
+
+  for (const { close, state } of CLOSES) {
+    it(`finds the body close after a \`${close}\` comment (${state})`, () => {
+      const html =
+        `<!doctype html><html><body>${close}<h1>Artifact</h1></body>` +
+        '<!-- </body> --></html>';
+      const out = injectLiveArtifactPaintReporter(html, NONCE);
+
+      expect(
+        producerIndex(out),
+        'the comment ended before the artifact, so the body close after it is the genuine one',
+      ).toBeGreaterThan(out.indexOf('<h1>Artifact</h1>'));
+      expect(
+        producerIndex(out),
+        'a comment read as running past its close swallows the genuine body close',
+      ).toBeLessThan(out.indexOf('</body>'));
+    });
+  }
+
+  it('still runs an ordinary comment to its `-->`', () => {
+    // The other side of the same rule: ending a comment early would select a
+    // decoy, which is the failure this whole file exists to prevent.
+    const html =
+      '<!doctype html><html><body><!-- a - b -- c </body> --><h1>Artifact</h1></body></html>';
+    const out = injectLiveArtifactPaintReporter(html, NONCE);
+
+    expect(producerIndex(out)).toBeGreaterThan(out.indexOf('<h1>Artifact</h1>'));
+    expect(producerIndex(out)).toBeLessThan(out.lastIndexOf('</body>'));
+  });
+});
+
+// W2H.1d red spec — D-17 dialogue round 4, adjacent B. The raw-text opener was
+// not quote-aware, so a `</script>` written inside the START tag's attribute
+// value ended the raw-text region there.
+//
+// GPT-5.6 round 4: "`<script src=\"a</script>b\">const x=\"</body>\"</script>`
+// makes `rawTextElementEnd` stop inside the quoted start tag; with this after
+// the genuine body close, the scanner selects the script-data decoy."
+//
+// The marker attribute parser already steps over quoted values; the raw-text
+// opener has to read the same tag the same way.
+describe('the raw-text region starts after the start tag, quotes included', () => {
+  it('ignores a decoy </body> in script text under a start tag whose attribute holds `</script>`', () => {
+    const html =
+      '<!doctype html><html><body><h1>Artifact</h1></body>' +
+      '<script src="a</script>b">const x="</body>"</script></html>';
+    const out = injectLiveArtifactPaintReporter(html, NONCE);
+
+    expect(
+      producerIndex(out),
+      'the `</script>` inside the attribute value is character data; the script text after it is still script text',
+    ).toBeLessThan(out.indexOf('<script src='));
+  });
+});
