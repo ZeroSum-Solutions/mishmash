@@ -12,6 +12,7 @@ import { PROJECT_COVER_PLACEHOLDER_HEADER } from '@open-design/contracts';
 import { generateProjectCover } from '../covers/service.js';
 import { isTypedCoverError } from '../covers/errors.js';
 import { COVER_PLACEHOLDER_PNG } from '../covers/placeholder.js';
+import { isIntactPng } from '../covers/png.js';
 import { hasAdvertisedCover, readCoverImageBytes } from '../covers/store.js';
 import { isSafeId } from '../projects.js';
 import type { RouteDeps } from '../server-context.js';
@@ -27,33 +28,23 @@ interface ServedCoverImage {
   placeholder: boolean;
 }
 
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-/** PNG signature (8) + the shortest possible IEND chunk (12). */
-const SMALLEST_POSSIBLE_PNG_BYTES = PNG_SIGNATURE.length + 12;
-
 /**
- * Whether `bytes` are a COMPLETE PNG file, rather than merely a non-empty
- * read.
+ * Projects whose stored cover has already been reported as unusable.
  *
- * The route's promise is that what it serves renders. An `<img>` fires the
- * same `client_resource_error` -> `resource-failed` anomaly for bytes it
- * cannot decode as it does for a 404, so "the read returned something" is the
- * wrong line to draw: a zero-length file, a foreign file left at the path, and
- * a write cut short after the header all pass that test and still break the
- * image.
- *
- * The two checks are the file's own frame. Every PNG opens with the 8-byte
- * signature and closes with an IEND chunk, whose 4-byte type sits at
- * `bytes[-8..-4]`, so a file that has both is whole at its edges. This is
- * deliberately a frame check and not a decode: the store only ever writes what
- * the renderer produced, so anything failing it is damage, and decoding every
- * cover on every request to catch that would cost far more than serving the
- * placeholder.
+ * The route answers `no-store`, so a card left on screen re-asks for a damaged
+ * cover on every render. One line per project per damage episode is the
+ * difference between a signal an operator can act on and a log flood; the id
+ * is dropped again as soon as the project serves an intact cover, so a
+ * re-damaged cover is reported afresh.
  */
-function isCompleteCoverImage(bytes: Buffer): boolean {
-  if (bytes.length < SMALLEST_POSSIBLE_PNG_BYTES) return false;
-  if (!bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return false;
-  return bytes.subarray(bytes.length - 8, bytes.length - 4).toString('ascii') === 'IEND';
+const reportedUnusableCovers = new Set<string>();
+
+function reportUnusableCoverOnce(projectId: string): void {
+  if (reportedUnusableCovers.has(projectId)) return;
+  reportedUnusableCovers.add(projectId);
+  console.warn(
+    `[covers] stored cover for project ${projectId} is not an intact PNG; serving the placeholder instead`,
+  );
 }
 
 /**
@@ -74,10 +65,12 @@ function isCompleteCoverImage(bytes: Buffer): boolean {
  * So an advertised cover whose stored bytes cannot be served serves the
  * neutral placeholder instead, flagged with
  * `PROJECT_COVER_PLACEHOLDER_HEADER` so a caller that wants the real answer
- * can still tell. "Cannot be served" is `isCompleteCoverImage`, not merely a
- * failed read: `readCoverImageBytes` returns a zero-length Buffer for a
- * truncated file, which is truthy, and damaged bytes break the `<img>` exactly
- * as a 404 does.
+ * can still tell. "Cannot be served" is `isIntactPng`, not merely a failed
+ * read: `readCoverImageBytes` returns a zero-length Buffer for a truncated
+ * file, which is truthy, and damaged bytes break the `<img>` exactly as a 404
+ * does. Damage that leaves the file's outer frame in place — a byte flipped
+ * inside a chunk, a chunk header rewritten — breaks it just the same, which is
+ * why the check walks the whole container rather than inspecting its edges.
  *
  * This says nothing about the two guards at the call site. An unsafe id and an
  * unknown project are a path-traversal defence, not an answer about cover
@@ -85,7 +78,11 @@ function isCompleteCoverImage(bytes: Buffer): boolean {
  */
 async function servedCoverImage(runtimeDataDir: string, projectId: string): Promise<ServedCoverImage | null> {
   const bytes = await readCoverImageBytes(runtimeDataDir, projectId);
-  if (bytes && isCompleteCoverImage(bytes)) return { bytes, placeholder: false };
+  if (bytes && isIntactPng(bytes)) {
+    reportedUnusableCovers.delete(projectId);
+    return { bytes, placeholder: false };
+  }
+  if (bytes) reportUnusableCoverOnce(projectId);
   if (await hasAdvertisedCover(runtimeDataDir, projectId)) {
     return { bytes: COVER_PLACEHOLDER_PNG, placeholder: true };
   }

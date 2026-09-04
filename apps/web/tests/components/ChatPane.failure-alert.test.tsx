@@ -466,3 +466,97 @@ describe('a stream failure with no run verdict is a checking state, never a fail
     expect(checkingNotice(container)).toBeNull();
   });
 });
+
+// W1I.2 red spec — the consumer half.
+//
+// B-04/F-07 asks every failed run to state whether files changed. W1H.2 left
+// the restart path silent for two shapes it could not prove a POSITIVE write
+// for: a run whose event log recorded no write, and a run with no event log at
+// all. The daemon now decides both from the durable pre-turn file list
+// (`apps/daemon/src/runtimes/run-terminal-reconciliation.ts`) and, when even
+// that cannot decide, persists an explicit `fileChangeState: 'unknown'`.
+//
+// This block owns the rendering half of that contract: a measured zero reads
+// exactly as the live failed path's zero already reads, and an unknown gets its
+// own sentence instead of no sentence.
+
+interface FileChangeStateFixture {
+  id: string;
+  artifactCount?: number;
+  fileChangeState?: string;
+}
+
+function fileChangeStateMessage(fixture: FileChangeStateFixture): ChatMessage {
+  return {
+    id: `msg-${fixture.id}`,
+    role: 'assistant',
+    content: '',
+    createdAt: 1,
+    runId: `run-${fixture.id}`,
+    runStatus: 'failed',
+    agentId: 'claude',
+    events: [
+      {
+        kind: 'status',
+        label: 'error',
+        detail: 'Run interrupted because the daemon restarted.',
+        code: 'DAEMON_RESTARTED',
+        failureCategory: 'process_exit',
+        failureDetail: 'interrupted',
+        ...(fixture.artifactCount === undefined ? {} : { artifactCount: fixture.artifactCount }),
+        ...(fixture.fileChangeState ? { fileChangeState: fixture.fileChangeState } : {}),
+      },
+    ],
+  } as unknown as ChatMessage;
+}
+
+function renderFileChangeState(fixture: FileChangeStateFixture) {
+  return render(
+    <ChatPane
+      messages={[fileChangeStateMessage(fixture)]}
+      streaming={false}
+      error={null}
+      projectId="project-1"
+      projectFiles={[]}
+      onEnsureProject={async () => 'project-1'}
+      onSend={vi.fn()}
+      onStop={vi.fn()}
+      onRetry={vi.fn()}
+      onResumeRun={vi.fn()}
+      conversations={[
+        { projectId: 'project-1', id: 'conv-1', title: 'Current', createdAt: 1, updatedAt: 1 },
+      ]}
+      activeConversationId="conv-1"
+      onSelectConversation={vi.fn()}
+      onDeleteConversation={vi.fn()}
+      config={{ agentId: 'claude', agentCliEnv: {} } as unknown as AppConfig}
+    />,
+  );
+}
+
+describe('a restart-interrupted alert states the file-change state on every shape', () => {
+  it('reads a measured zero exactly as the live failed path\'s zero reads', () => {
+    const { container } = renderFileChangeState({
+      id: 'restart-measured-zero',
+      artifactCount: 0,
+      fileChangeState: 'unchanged',
+    });
+
+    const files = container.querySelector('[data-run-failure-files]');
+    expect(files, 'a measured zero is stated, not left silent').toBeTruthy();
+    expect(files?.getAttribute('data-run-failure-files')).toBe('0');
+    expect(files?.textContent).toBe('chat.runError.filesUnchanged');
+  });
+
+  it('gives the undecidable case its own sentence instead of no sentence', () => {
+    const { container } = renderFileChangeState({
+      id: 'restart-unknown',
+      fileChangeState: 'unknown',
+    });
+
+    const files = container.querySelector('[data-run-failure-files]');
+    expect(files, 'an unknown file-change state still produces a file line').toBeTruthy();
+    expect(files?.getAttribute('data-run-failure-files')).toBe('unknown');
+    expect(files?.textContent).toBe('chat.runError.filesUnknown');
+  });
+});

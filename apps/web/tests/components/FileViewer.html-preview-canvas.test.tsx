@@ -411,20 +411,16 @@ describe('HtmlViewer ?forceInline=1 wiring', () => {
   });
 });
 
-// CANVAS-6 (docs/KNOWN-ISSUES-CANVAS.md). `htmlNeedsSandboxShim` only sees a
-// LITERAL `<script src=...>` tag, so an artifact that attaches its boot script
-// with `document.createElement('script')` URL-loads. The preview iframe runs at
-// an opaque origin, so that linked file cannot be fetched at all, the app never
-// mounts, and the canvas is blank with nothing on screen saying why.
-//
-// The srcDoc path does not rescue it either: srcDoc recovers a linked file by
-// INLINING it, and the inliner reads the same literal tags, so a runtime-built
-// `src` stays external there too. Verified in a real browser against the
-// tools-dev runtime — see the proof file. That is why the notice states the
-// cause and the artifact-side remedy instead of offering a host-side toggle
-// that would not work.
-describe('HtmlViewer runtime-attached preview script (CANVAS-6)', () => {
-  const DYNAMIC_SCRIPT_HTML = [
+// W2H.4 red spec, consumer half. The browser spec
+// `e2e/ui/preview-runtime-script.test.ts` establishes the fact these cases
+// depend on: after W2G.4b (decision D-11, option B) the daemon serves a
+// project raw asset requested by a sandboxed preview as a browser-classified
+// `script`, so a runtime-attached project script now loads and runs in BOTH
+// preview transports. jsdom cannot fetch it, so what is asserted here is the
+// consumer's contract rather than the load: whichever transport the artifact
+// takes, the viewer must not tell the user the sandbox blocked the script.
+describe('HtmlViewer runtime-attached preview script (CANVAS-6 after D-11)', () => {
+  const RUNTIME_ATTACHED_HTML = [
     '<html><body><div id="root"></div>',
     '<script>',
     "  var s = document.createElement('script');",
@@ -434,7 +430,7 @@ describe('HtmlViewer runtime-attached preview script (CANVAS-6)', () => {
     '</body></html>',
   ].join('\n');
 
-  it('tells the user why the canvas can be blank when the artifact attaches its script at runtime', async () => {
+  it('says nothing about a blocked script on the URL-load transport', async () => {
     stubPreviewFetch();
 
     render(
@@ -442,41 +438,19 @@ describe('HtmlViewer runtime-attached preview script (CANVAS-6)', () => {
         projectId="project-1"
         projectKind="prototype"
         file={htmlFile()}
-        liveHtml={DYNAMIC_SCRIPT_HTML}
+        liveHtml={RUNTIME_ATTACHED_HTML}
       />,
     );
 
     // The literal-tag scan cannot see this script, so the artifact takes the
-    // URL-load path — the one path this file's other specs treat as default.
+    // URL-load path — the transport the daemon exception was written for.
     expect(
       (screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement).getAttribute('data-od-render-mode'),
     ).toBe('url-load');
-
-    // ...and the viewer must say so instead of leaving a silent blank canvas.
-    const notice = await screen.findByTestId('preview-runtime-script-notice');
-    expect(notice.textContent).toMatch(/blank/i);
+    await waitFor(() => expect(screen.queryByTestId('preview-runtime-script-notice')).toBeNull());
   });
 
-  it('names the artifact-side remedy rather than a host toggle that cannot help', async () => {
-    stubPreviewFetch();
-
-    render(
-      <FileViewer
-        projectId="project-1"
-        projectKind="prototype"
-        file={htmlFile()}
-        liveHtml={DYNAMIC_SCRIPT_HTML}
-      />,
-    );
-
-    const notice = await screen.findByTestId('preview-runtime-script-notice');
-    expect(notice.textContent).toMatch(/<script src/i);
-    // No action button: switching render mode does not make the script load,
-    // so offering one would be a false promise.
-    expect(notice.querySelector('button')).toBeNull();
-  });
-
-  it('keeps saying so on the srcDoc path, where the inliner cannot see the script either', async () => {
+  it('says nothing about a blocked script on the srcDoc transport either', async () => {
     stubPreviewFetch();
     // `?forceInline=1` is read once at mount, so it must be set before render.
     window.history.replaceState(null, '', '/?forceInline=1');
@@ -486,59 +460,13 @@ describe('HtmlViewer runtime-attached preview script (CANVAS-6)', () => {
         projectId="project-1"
         projectKind="prototype"
         file={htmlFile()}
-        liveHtml={DYNAMIC_SCRIPT_HTML}
+        liveHtml={RUNTIME_ATTACHED_HTML}
       />,
     );
 
     expect(
       (screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement).getAttribute('data-od-render-mode'),
     ).toBe('srcdoc');
-    expect(await screen.findByTestId('preview-runtime-script-notice')).toBeTruthy();
-  });
-
-  it('yields the shared banner slot to the blocked-asset warning when both conditions hold', async () => {
-    // Both banners are absolutely positioned in the same slot, so at most one
-    // may render. The asset warning wins because it names a specific file the
-    // daemon refused — actionable now — and is the likelier cause of the blank
-    // canvas when both are true.
-    stubPreviewFetch([
-      [
-        '/raw/blocked.png',
-        () => new Response(
-          JSON.stringify({ error: { code: 'BAD_REQUEST', message: 'Error: path escapes project dir via symlink /x' } }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } },
-        ),
-      ],
-    ]);
-
-    render(
-      <FileViewer
-        projectId="project-1"
-        projectKind="prototype"
-        file={htmlFile()}
-        liveHtml={DYNAMIC_SCRIPT_HTML.replace('<div id="root"></div>', '<img src="blocked.png" alt="">')}
-      />,
-    );
-
-    expect(await screen.findByTestId('preview-asset-warning')).toBeTruthy();
-    expect(screen.queryByTestId('preview-runtime-script-notice')).toBeNull();
-  });
-
-  it('stays quiet for a plain artifact that attaches no script at runtime', async () => {
-    stubPreviewFetch();
-
-    render(
-      <FileViewer
-        projectId="project-1"
-        projectKind="prototype"
-        file={htmlFile()}
-        liveHtml="<html><body><h1>Hello</h1></body></html>"
-      />,
-    );
-
-    expect(
-      (screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement).getAttribute('data-od-render-mode'),
-    ).toBe('url-load');
-    expect(screen.queryByTestId('preview-runtime-script-notice')).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('preview-runtime-script-notice')).toBeNull());
   });
 });
