@@ -123,25 +123,68 @@ export function isAuthorizedPreviewProxyRequest(req: { socket?: { remoteAddress?
   return Boolean(presented && isMatchingApiToken(presented[1]!, apiTokenFromEnv()));
 }
 
-/** A browser-initiated request whose `Origin` names a different site. */
+/**
+ * Every host that names THIS daemon front from the caller's side: the `Host`
+ * it arrived with, and — for a front that rewrites `Host` to its own upstream
+ * address, which is what `tailscale serve` does — the first
+ * `X-Forwarded-Host` entry, the original client's.
+ */
+function frontHosts(headers: IncomingHttpHeaders): string[] {
+  const hosts: string[] = [];
+  const host = headerText(headers.host).trim();
+  if (host) hosts.push(host);
+  const forwarded = (headerText(headers['x-forwarded-host']).split(',')[0] ?? '').trim();
+  if (forwarded) hosts.push(forwarded);
+  return hosts;
+}
+
+function headerText(value: unknown): string {
+  if (Array.isArray(value)) return String(value[0] ?? '');
+  return value === undefined || value === null ? '' : String(value);
+}
+
+/**
+ * A browser-initiated request whose `Origin` names a different site.
+ *
+ * Compared against every host that names this front, not against `Host`
+ * alone: behind a front that rewrites `Host` to its own upstream address the
+ * browser still sends the tailnet `Origin`, and a `Host`-only comparison would
+ * refuse the very collaborator this route exists for.
+ */
 function isCrossSiteOrigin(headers: IncomingHttpHeaders): boolean {
-  const origin = Array.isArray(headers.origin) ? headers.origin[0] : headers.origin;
-  if (typeof origin !== 'string' || !origin || origin === 'null') return false;
+  const origin = headerText(headers.origin).trim();
+  if (!origin || origin === 'null') return false;
   try {
-    return new URL(origin).host !== String(headers.host ?? '');
+    return !frontHosts(headers).includes(new URL(origin).host);
   } catch {
     return true;
   }
 }
 
-function upstreamRequestHeaders(headers: IncomingHttpHeaders, port: number, keepUpgrade: boolean): IncomingHttpHeaders {
+/**
+ * The headers the child sees. `body` is the request body as the daemon holds
+ * it: the raw parser in front of the mount decodes a compressed body, so when
+ * one was read the framing headers must describe THOSE bytes — a forwarded
+ * `Content-Encoding` would tell the child to decode plaintext, and a forwarded
+ * `Content-Length` would name the compressed size. Passing `null` (the
+ * streamed path, and every bodyless request) leaves the caller's framing
+ * alone.
+ */
+function upstreamRequestHeaders(
+  headers: IncomingHttpHeaders,
+  port: number,
+  keepUpgrade: boolean,
+  body: Buffer | null,
+): IncomingHttpHeaders {
   const forwarded: IncomingHttpHeaders = {};
   for (const [name, value] of Object.entries(headers)) {
     if (value === undefined) continue;
     if (NEVER_FORWARDED_HEADERS.has(name)) continue;
     if (HOP_BY_HOP_HEADERS.has(name) && !(keepUpgrade && (name === 'connection' || name === 'upgrade'))) continue;
+    if (body && (name === 'content-encoding' || name === 'content-length')) continue;
     forwarded[name] = value;
   }
+  if (body) forwarded['content-length'] = String(body.length);
   forwarded.host = `${LOOPBACK_HOST}:${port}`;
   return forwarded;
 }
@@ -200,12 +243,16 @@ function sendPreviewGone(req: Request, res: Response): void {
  */
 function proxyToPreview(req: Request, res: Response, session: PreviewInfo, upstreamPath: string): void {
   const basePath = previewProxyPath(session.projectId, session.id);
+  // The raw body parser in front of this mount has already read the request,
+  // so it arrives as bytes; the stream form is kept for callers mounted
+  // without it, and for the bodyless asset fallback.
+  const body = Buffer.isBuffer(req.body) ? req.body : null;
   const upstream = http.request({
     host: LOOPBACK_HOST,
     port: session.port,
     method: req.method,
     path: upstreamPath,
-    headers: upstreamRequestHeaders(req.headers, session.port, false),
+    headers: upstreamRequestHeaders(req.headers, session.port, false, body),
   });
 
   upstream.setTimeout(PREVIEW_PROXY_IDLE_TIMEOUT_MS, () => {
@@ -247,10 +294,7 @@ function proxyToPreview(req: Request, res: Response, session: PreviewInfo, upstr
     if (!res.writableEnded) upstream.destroy();
   });
 
-  // The raw body parser in front of this mount has already read the request,
-  // so it arrives as bytes; the stream form is kept for callers mounted
-  // without it.
-  if (Buffer.isBuffer(req.body)) upstream.end(req.body.length ? req.body : undefined);
+  if (body) upstream.end(body.length ? body : undefined);
   else req.pipe(upstream);
 }
 
@@ -301,6 +345,25 @@ export function createPreviewRootAssetFallback(deps: PreviewProxyDeps): RequestH
 }
 
 /**
+ * Close an upgrade the child would not carry, saying so on the wire. A socket
+ * destroyed in silence reaches the browser as a bare network error, which
+ * names nothing the reader can act on.
+ */
+function refusePreviewUpgrade(socket: Duplex, reason: string): void {
+  if (socket.writable) {
+    const body = `preview upgrade refused: ${reason}`;
+    socket.write(
+      'HTTP/1.1 502 Bad Gateway\r\n'
+      + 'Content-Type: text/plain\r\n'
+      + `Content-Length: ${Buffer.byteLength(body)}\r\n`
+      + 'Connection: close\r\n\r\n'
+      + body,
+    );
+  }
+  socket.destroy();
+}
+
+/**
  * The WebSocket half of the same route: a dev server's HMR channel. An
  * upgrade never enters the Express router, so the membership rule and the
  * same-site check are applied here, and a request that names no live preview
@@ -330,7 +393,13 @@ export function createPreviewProxyUpgradeHandler(
       port: session.port,
       method: req.method,
       path: parsed.upstreamPath,
-      headers: upstreamRequestHeaders(req.headers, session.port, true),
+      headers: upstreamRequestHeaders(req.headers, session.port, true, null),
+    });
+
+    // A child that accepts the connection and then says nothing must not hold
+    // the caller's socket open forever; the HTTP path is bounded the same way.
+    upstream.setTimeout(PREVIEW_PROXY_IDLE_TIMEOUT_MS, () => {
+      upstream.destroy(new Error('preview server stopped responding'));
     });
 
     upstream.on('upgrade', (upstreamRes, upstreamSocket, upstreamHead) => {
@@ -350,8 +419,11 @@ export function createPreviewProxyUpgradeHandler(
       socket.pipe(upstreamSocket);
     });
 
-    upstream.on('response', () => socket.destroy());
-    upstream.on('error', () => socket.destroy());
+    // The child answered an upgrade with an ordinary response: it does not
+    // speak this protocol. Say so on the wire rather than closing silently,
+    // which a browser can only report as a network error.
+    upstream.on('response', (upstreamRes) => refusePreviewUpgrade(socket, `preview answered ${upstreamRes.statusCode}`));
+    upstream.on('error', (error) => refusePreviewUpgrade(socket, error.message));
     if (head?.length) socket.unshift(head);
     upstream.end();
   };

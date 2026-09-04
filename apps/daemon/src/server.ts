@@ -2211,12 +2211,14 @@ export async function startServer({
   // registered before the global parser so it claims the body first (same
   // pattern as the routes above).
   app.use('/api/routing/decision/preview', express.json({ limit: '256kb' }));
-  // The preview proxy forwards a request body to the project's dev server
-  // verbatim, and a body the JSON parser has already consumed cannot be
-  // re-streamed. Capture it as bytes first (registered before the global
-  // parser, same pattern as the dedicated limits above); body-parser marks the
-  // request read, so the parser below leaves it alone. The API's own 4mb limit
-  // applies, which bounds what a preview can be POSTed through the daemon.
+  // The preview proxy forwards a request body to the project's dev server, and
+  // a body the JSON parser has already consumed cannot be re-streamed. Capture
+  // it as bytes first (registered before the global parser, same pattern as the
+  // dedicated limits above); body-parser marks the request read, so the parser
+  // below leaves it alone. It also decodes a compressed body, which is why the
+  // proxy re-states `Content-Length` and drops `Content-Encoding` before
+  // forwarding (see `preview-proxy.ts`). The API's own 4mb limit applies, which
+  // bounds what a preview can be POSTed through the daemon.
   app.use(PREVIEW_PROXY_MOUNT, express.raw({ type: () => true, limit: '4mb' }));
   app.use(express.json({ limit: '4mb' }));
   const projectPreviewScopes = createProjectPreviewScopeRegistry();

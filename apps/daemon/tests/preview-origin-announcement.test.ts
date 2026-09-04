@@ -5,6 +5,7 @@ import net from 'node:net';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { gzipSync } from 'node:zlib';
 import type { AddressInfo } from 'node:net';
 
 import {
@@ -49,6 +50,21 @@ const server = http.createServer((req, res) => {
     res.end('body{color:red}');
     return;
   }
+  if (req.method === 'POST' && req.url === '/echo-framing') {
+    const chunks = [];
+    req.on('data', (chunk) => { chunks.push(chunk); });
+    req.on('end', () => {
+      const received = Buffer.concat(chunks);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        echo: received.toString(),
+        received: received.length,
+        contentLength: req.headers['content-length'] ?? null,
+        contentEncoding: req.headers['content-encoding'] ?? null,
+      }));
+    });
+    return;
+  }
   if (req.method === 'POST') {
     let body = '';
     req.on('data', (chunk) => { body += chunk; });
@@ -87,10 +103,10 @@ function request(
   apiPort: number,
   method: string,
   pathname: string,
-  options: { host: string; body?: unknown; headers?: Record<string, string> },
+  options: { host: string; body?: unknown; rawBody?: Buffer; headers?: Record<string, string> },
 ): Promise<Reply> {
   return new Promise((resolve, reject) => {
-    const payload = options.body === undefined ? null : JSON.stringify(options.body);
+    const payload = options.rawBody ?? (options.body === undefined ? null : JSON.stringify(options.body));
     const req = http.request(
       {
         host: '127.0.0.1',
@@ -100,7 +116,12 @@ function request(
         headers: {
           Host: options.host,
           ...(options.headers ?? {}),
-          ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
+          ...(payload
+            ? {
+                ...(options.rawBody ? {} : { 'Content-Type': 'application/json' }),
+                'Content-Length': Buffer.byteLength(payload),
+              }
+            : {}),
         },
       },
       (res) => {
@@ -238,6 +259,36 @@ describe('preview URL announcement', () => {
     );
     expect(posted.status).toBe(200);
     expect(posted.body).toEqual({ echo: '{"hello":"preview"}' });
+  }, 30_000);
+
+  it('re-states the framing headers of a body the daemon decoded', async () => {
+    const { apiPort } = await boot();
+    const created = await startPreview(apiPort, TAILNET_HOST);
+    const session = created.body as { id: string };
+    const plain = 'compressed preview payload';
+    const compressed = gzipSync(Buffer.from(plain));
+
+    const posted = await request(
+      apiPort,
+      'POST',
+      `/api/projects/p1/previews/${session.id}/proxy/echo-framing`,
+      {
+        host: TAILNET_HOST,
+        rawBody: compressed,
+        headers: { 'Content-Type': 'application/octet-stream', 'Content-Encoding': 'gzip' },
+      },
+    );
+    // The parser in front of the mount decodes the body, so the child must be
+    // told about the bytes it is actually getting: no Content-Encoding, and a
+    // Content-Length that names the decoded size, not the compressed one.
+    expect(posted.status).toBe(200);
+    expect(posted.body).toEqual({
+      echo: plain,
+      received: plain.length,
+      contentLength: String(plain.length),
+      contentEncoding: null,
+    });
+    expect(compressed.length).not.toBe(plain.length);
   }, 30_000);
 
   it('forwards the caller headers a preview needs, and never the daemon bearer', async () => {
