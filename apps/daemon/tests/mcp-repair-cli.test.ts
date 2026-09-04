@@ -392,3 +392,86 @@ describe('od mcp repair honours --json on every refusal', () => {
     expect(result.stdout.trim()).toBe('');
   }, 40_000);
 });
+
+// ── W1H.3: the --json contract survives a flag-parse failure ─────────────
+//
+// Red spec for W1H.3 (MEDIUM/REFUTATION against W1G.4). W1G.4 routed every
+// refusal `od mcp repair` reaches *after* parsing through `refuseMcpRepair`,
+// but `parseFlags` runs first: when it throws — an undeclared option, or a
+// declared option with no value after it — the catch printed the parser's
+// message as prose and exited before `flags` existed. `AGENTS.md` ->
+// "Capability exposure (UI/CLI dual-track)" states the CLI form supports
+// `--json` for machine-readable output and names no exception for a bad
+// argument list, which is precisely the failure a script has to read back.
+//
+// The requested output mode is still on the raw command line when the parse
+// fails, so these cases assert the same envelope every other refusal emits,
+// with the offending token named in `data`, the exit code unchanged at 2, and
+// the repair endpoint never reached. The last case pins the other half of the
+// contract: without `--json` the output stays the bare parser message.
+
+describe('od mcp repair honours --json when the flags do not parse', () => {
+  it('reports an undeclared flag as a JSON envelope naming the token', async () => {
+    stub = await startStub();
+
+    const result = await runCli([
+      'mcp',
+      'repair',
+      'mermaid',
+      '--json',
+      '--bogus',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(2);
+    const envelope = stderrEnvelope(result.stderr);
+    expect(
+      envelope,
+      `expected a JSON envelope on stderr, got stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+    ).not.toBeNull();
+    expect(envelope.error.code).toBe('mcp-repair-invalid-arguments');
+    expect(envelope.error.message).toContain('unknown flag: --bogus');
+    expect(envelope.error.data.flag).toBe('--bogus');
+    expect(result.stdout.trim()).toBe('');
+    expect(stub.requests.some((request) => request.url === '/api/mcp/repair')).toBe(false);
+  }, 40_000);
+
+  it('reports a declared flag with no value as a JSON envelope naming the token', async () => {
+    stub = await startStub();
+
+    const result = await runCli(['mcp', 'repair', 'mermaid', '--json', '--daemon-url']);
+
+    expect(result.code).toBe(2);
+    const envelope = stderrEnvelope(result.stderr);
+    expect(
+      envelope,
+      `expected a JSON envelope on stderr, got stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+    ).not.toBeNull();
+    expect(envelope.error.code).toBe('mcp-repair-invalid-arguments');
+    expect(envelope.error.message).toContain('flag --daemon-url requires a value');
+    expect(envelope.error.data.flag).toBe('--daemon-url');
+    expect(result.stdout.trim()).toBe('');
+    expect(stub.requests.some((request) => request.url === '/api/mcp/repair')).toBe(false);
+  }, 40_000);
+
+  it('still prints the bare parser message when --json is absent', async () => {
+    stub = await startStub();
+
+    const result = await runCli([
+      'mcp',
+      'repair',
+      'mermaid',
+      '--bogus',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(2);
+    expect(result.stderr.trim()).toBe(
+      'unknown flag: --bogus. Run with --help for the list of accepted flags.',
+    );
+    expect(result.stdout.trim()).toBe('');
+    expect(stub.requests.some((request) => request.url === '/api/mcp/repair')).toBe(false);
+  }, 40_000);
+});
