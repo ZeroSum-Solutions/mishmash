@@ -78,7 +78,10 @@ import {
   resolveRunFailureUi,
 } from '../runtime/amr-guidance';
 import { describeRunFailureFacts } from '../runtime/run-failure-facts';
-import type { RunCheckState } from '../runtime/run-failure-reconcile';
+import {
+  SEND_PAUSED_UNRESOLVED_RUN_KEY,
+  type RunCheckState,
+} from '../runtime/run-failure-reconcile';
 import {
   fetchVelaLoginStatus,
   type VelaLoginStatus,
@@ -494,6 +497,10 @@ interface Props {
   hasActiveDesignSystem?: boolean;
   activeDesignSystem?: DesignSystemSummary | null;
   sendDisabled?: boolean;
+  // Why `sendDisabled` holds, in the words the user reads, when the owner of
+  // the flag can name one. Shown beside the composer's Send button; see
+  // `SEND_PAUSED_UNRESOLVED_RUN_KEY`.
+  sendDisabledReason?: string;
   queuedItems?: QueuedSendItem[];
   onRemoveQueuedSend?: (id: string) => void;
   onUpdateQueuedSend?: (id: string, update: QueuedSendUpdate) => void;
@@ -806,6 +813,7 @@ export function ChatPane({
   streaming,
   loading = false,
   sendDisabled = false,
+  sendDisabledReason,
   queuedItems = [],
   error,
   runCheck = null,
@@ -2089,6 +2097,7 @@ export function ChatPane({
       skills={skills}
       streaming={streaming}
       sendDisabled={sendDisabled}
+      sendDisabledReason={sendDisabledReason}
       initialDraft={initialDraft}
       composerPlaceholder={composerPlaceholder}
       placeholderScenarios={composerPlaceholderScenarios}
@@ -2483,13 +2492,21 @@ export function ChatPane({
                       : 'chat.runChecking.title',
                   )}
                   status={
-                    <p>
-                      {t(
-                        activeRunCheck.unreachable
-                          ? 'chat.runChecking.unreachableMessage'
-                          : 'chat.runChecking.message',
-                      )}
-                    </p>
+                    <>
+                      <p>
+                        {t(
+                          activeRunCheck.unreachable
+                            ? 'chat.runChecking.unreachableMessage'
+                            : 'chat.runChecking.message',
+                        )}
+                      </p>
+                      {/* The notice is the only thing on screen for as long as
+                          the run stays unresolved, so it carries the pause it
+                          causes. Gated on this pane's own Send state, because a
+                          pane whose composer still sends must not claim
+                          otherwise. */}
+                      {sendDisabled ? <p>{t(SEND_PAUSED_UNRESOLVED_RUN_KEY)}</p> : null}
+                    </>
                   }
                   footerActions={
                     activeRunCheck.unreachable && onRunCheckAgain ? (
