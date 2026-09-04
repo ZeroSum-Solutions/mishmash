@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchChatRunStatus, listActiveChatRuns, streamViaDaemon } from '../../providers/daemon';
-import { listMessages, saveMessage } from '../../state/projects';
+import {
+  fetchActiveChatRuns,
+  fetchChatRunStatus,
+  streamViaDaemon,
+} from '../../providers/daemon';
+import { fetchMessages, listMessages, saveMessage } from '../../state/projects';
 import { appendErrorStatusEvent, runFailureFieldsFromError } from '../../runtime/chat-events';
 import { agentModelDisplayName } from '../../utils/agentLabels';
 import { randomUUID } from '../../utils/uuid';
@@ -374,61 +378,74 @@ export function useConversationChat(
       const attempt = () => {
         lostRunCreateTimerRef.current = null;
         void (async () => {
-          if (superseded()) return;
-          probes += 1;
-          const active = await listActiveChatRuns(projectId, boundConversationId);
-          let runId = matchLostRunCreate(active, identity);
-          if (!runId) {
-            const stored = await listMessages(projectId, boundConversationId).catch(() => null);
-            runId = stored ? pinnedRunIdForAssistantRow(stored, identity.assistantMessageId) : null;
-          }
-          if (superseded()) return;
-          const step = nextLostRunCreateStep(runId, probes);
-          if (step === 'probe') {
+          try {
+            if (superseded()) return;
+            probes += 1;
+            const active = await fetchActiveChatRuns(projectId, boundConversationId);
+            let runId = active ? matchLostRunCreate(active, identity) : null;
+            const stored = runId ? [] : await fetchMessages(projectId, boundConversationId);
+            if (!runId && stored) {
+              runId = pinnedRunIdForAssistantRow(stored, identity.assistantMessageId);
+            }
+            if (superseded()) return;
+            // Only a probe that READ both surfaces may spend the bound; see
+            // `nextLostRunCreateStep`.
+            const step = nextLostRunCreateStep(runId, probes, active !== null && stored !== null);
+            if (step === 'probe') {
+              lostRunCreateTimerRef.current = window.setTimeout(
+                attempt,
+                LOST_RUN_CREATE_PROBE_INTERVAL_MS,
+              );
+              return;
+            }
+            if (step === 'adopt' && runId) {
+              const adoptedRunId = runId;
+              setMessages((current) =>
+                current.map((message) =>
+                  message.id === identity.assistantMessageId
+                    ? { ...message, runId: adoptedRunId }
+                    : message,
+                ),
+              );
+              setRunCheck({
+                runId: adoptedRunId,
+                assistantMessageId: identity.assistantMessageId,
+                unreachable: false,
+                message: streamMessage,
+              });
+              scheduleRunFailureRecheck(adoptedRunId, {
+                unresolved: true,
+                message: streamMessage,
+              });
+              return;
+            }
+            const notStarted = t('chat.runError.notStartedMessage');
+            errorCarrierRef.current = null;
+            setError(notStarted);
+            setMessages((current) => {
+              const next = current.map((message) =>
+                message.id === identity.assistantMessageId
+                  ? {
+                      ...appendErrorStatusEvent(message, notStarted, RUN_NOT_STARTED_ERROR_CODE),
+                      endedAt: message.endedAt ?? Date.now(),
+                      runStatus: 'failed' as const,
+                    }
+                  : message,
+              );
+              const finalized = next.find((message) => message.id === identity.assistantMessageId);
+              if (finalized) persist(finalized);
+              return next;
+            });
+          } catch (err) {
+            // This lookup is the only thing that can resolve the row, so it must
+            // never end without an outcome. Anything unexpected is one more
+            // inconclusive probe.
+            console.warn('Failed to look up a run whose create response was lost', err);
             lostRunCreateTimerRef.current = window.setTimeout(
               attempt,
               LOST_RUN_CREATE_PROBE_INTERVAL_MS,
             );
-            return;
           }
-          if (step === 'adopt' && runId) {
-            const adoptedRunId = runId;
-            setMessages((current) =>
-              current.map((message) =>
-                message.id === identity.assistantMessageId
-                  ? { ...message, runId: adoptedRunId }
-                  : message,
-              ),
-            );
-            setRunCheck({
-              runId: adoptedRunId,
-              assistantMessageId: identity.assistantMessageId,
-              unreachable: false,
-              message: streamMessage,
-            });
-            scheduleRunFailureRecheck(adoptedRunId, {
-              unresolved: true,
-              message: streamMessage,
-            });
-            return;
-          }
-          const notStarted = t('chat.runError.notStartedMessage');
-          errorCarrierRef.current = null;
-          setError(notStarted);
-          setMessages((current) => {
-            const next = current.map((message) =>
-              message.id === identity.assistantMessageId
-                ? {
-                    ...appendErrorStatusEvent(message, notStarted, RUN_NOT_STARTED_ERROR_CODE),
-                    endedAt: message.endedAt ?? Date.now(),
-                    runStatus: 'failed' as const,
-                  }
-                : message,
-            );
-            const finalized = next.find((message) => message.id === identity.assistantMessageId);
-            if (finalized) persist(finalized);
-            return next;
-          });
         })();
       };
       clearLostRunCreateLookup();

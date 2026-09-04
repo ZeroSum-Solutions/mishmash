@@ -87,12 +87,24 @@ export type LostRunCreateStep = 'adopt' | 'probe' | 'abandon';
  * A run found under either id is adopted, however late. Nothing found means
  * only that this probe found nothing — the client keeps looking until the bound
  * above, and only then may it say the run was never started.
+ *
+ * `answered` is what makes the bound safe to spend. Both reads report a failed
+ * request as "nothing here" unless asked through their answering forms
+ * (`fetchActiveChatRuns`, `fetchMessages`), and the outage that loses a create
+ * response is exactly the one that fails the reads after it. A probe that could
+ * not read has ruled NOTHING out, so it never counts: it keeps the client
+ * looking rather than letting it offer Retry for a run that may be running,
+ * which is the B-02 double-send hazard. That means an unbroken outage keeps the
+ * neutral checking state indefinitely — the honest state, because the client
+ * cannot tell whether the turn is running.
  */
 export function nextLostRunCreateStep(
   runId: string | null,
   probes: number,
+  answered: boolean,
 ): LostRunCreateStep {
   if (runId) return 'adopt';
+  if (!answered) return 'probe';
   return probes < LOST_RUN_CREATE_MAX_PROBES ? 'probe' : 'abandon';
 }
 

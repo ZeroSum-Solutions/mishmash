@@ -494,20 +494,37 @@ export async function deleteConversation(
 
 // ---------- messages ----------
 
-export async function listMessages(
+/**
+ * A conversation read that says whether the daemon ANSWERED it.
+ *
+ * `listMessages` reports a non-OK response and a thrown fetch alike as an empty
+ * array, which reads the same as a conversation with nothing in it. A caller
+ * that must not mistake "I could not read" for "there is nothing there" — the
+ * lost-create-response lookup, which would otherwise spend its bound on reads
+ * that never happened and offer Retry for a run that may exist — asks through
+ * this instead. `null` means the read did not answer.
+ */
+export async function fetchMessages(
   projectId: string,
   conversationId: string,
-): Promise<ChatMessage[]> {
+): Promise<ChatMessage[] | null> {
   try {
     const resp = await fetch(
       `/api/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/messages`,
     );
-    if (!resp.ok) return [];
+    if (!resp.ok) return null;
     const json = (await resp.json()) as { messages: ChatMessage[] };
     return json.messages ?? [];
   } catch {
-    return [];
+    return null;
   }
+}
+
+export async function listMessages(
+  projectId: string,
+  conversationId: string,
+): Promise<ChatMessage[]> {
+  return (await fetchMessages(projectId, conversationId)) ?? [];
 }
 
 export interface SaveMessageOptions {

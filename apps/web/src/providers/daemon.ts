@@ -1016,19 +1016,35 @@ export async function reportChatRunFeedback(req: {
   }
 }
 
+/**
+ * The conversation's active runs, or `null` when the daemon did not ANSWER.
+ *
+ * `listActiveChatRuns` reports a non-OK response and a thrown fetch alike as an
+ * empty list, which reads the same as a conversation with no active run. A
+ * caller that must not mistake "I could not read" for "there is no such run" —
+ * the lost-create-response lookup, whose whole job is to rule a live run out
+ * before it offers Retry — asks through this instead.
+ */
+export async function fetchActiveChatRuns(
+  projectId: string,
+  conversationId: string,
+): Promise<ChatRunStatusResponse[] | null> {
+  try {
+    const qs = new URLSearchParams({ projectId, conversationId, status: 'active' });
+    const resp = await fetch(`/api/runs?${qs.toString()}`);
+    if (!resp.ok) return null;
+    const body = (await resp.json()) as ChatRunListResponse;
+    return body.runs ?? [];
+  } catch {
+    return null;
+  }
+}
+
 export async function listActiveChatRuns(
   projectId: string,
   conversationId: string,
 ): Promise<ChatRunStatusResponse[]> {
-  try {
-    const qs = new URLSearchParams({ projectId, conversationId, status: 'active' });
-    const resp = await fetch(`/api/runs?${qs.toString()}`);
-    if (!resp.ok) return [];
-    const body = (await resp.json()) as ChatRunListResponse;
-    return body.runs ?? [];
-  } catch {
-    return [];
-  }
+  return (await fetchActiveChatRuns(projectId, conversationId)) ?? [];
 }
 
 export async function listProjectRuns(): Promise<ChatRunStatusResponse[]> {

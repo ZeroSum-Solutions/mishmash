@@ -22,6 +22,7 @@ import {
   fetchChatRunStatus,
   GENERIC_DAEMON_DISCONNECT_CODE,
   GENERIC_DAEMON_DISCONNECT_MESSAGE,
+  fetchActiveChatRuns,
   fetchVelaLoginStatus,
   listActiveChatRuns,
   listProjectRuns,
@@ -183,6 +184,7 @@ import {
   duplicatePluginAsProject,
   fetchAppliedPluginSnapshot,
   installGeneratedPluginFolder,
+  fetchMessages,
   listConversations,
   listMessages,
   loadTabs,
@@ -3475,67 +3477,77 @@ export function ProjectView({
           return;
         }
         void (async () => {
-          // Anything else that adopted this run first — a reattach pass over the
-          // still-active row — has already answered the question.
-          const localRunId = pinnedRunIdForAssistantRow(
-            messagesRef.current,
-            identity.assistantMessageId,
-          );
-          if (localRunId) {
+          try {
+            // Anything else that adopted this run first — a reattach pass over the
+            // still-active row — has already answered the question.
+            const localRunId = pinnedRunIdForAssistantRow(
+              messagesRef.current,
+              identity.assistantMessageId,
+            );
+            if (localRunId) {
+              release();
+              return;
+            }
+            probes += 1;
+            const active = await fetchActiveChatRuns(project.id, conversationId);
+            let runId = active ? matchLostRunCreate(active, identity) : null;
+            const stored = runId ? [] : await fetchMessages(project.id, conversationId);
+            if (!runId && stored) {
+              runId = pinnedRunIdForAssistantRow(stored, identity.assistantMessageId);
+            }
+            if (messagesConversationIdRef.current !== conversationId) {
+              release();
+              return;
+            }
+            // Only a probe that READ both surfaces may spend the bound; see
+            // `nextLostRunCreateStep`.
+            const step = nextLostRunCreateStep(runId, probes, active !== null && stored !== null);
+            if (step === 'probe') {
+              scheduleProjectTimeout(attempt, LOST_RUN_CREATE_PROBE_INTERVAL_MS);
+              return;
+            }
             release();
-            return;
-          }
-          probes += 1;
-          const active = await listActiveChatRuns(project.id, conversationId);
-          let runId = matchLostRunCreate(active, identity);
-          if (!runId) {
-            const stored = await listMessages(project.id, conversationId).catch(() => null);
-            runId = stored ? pinnedRunIdForAssistantRow(stored, identity.assistantMessageId) : null;
-          }
-          if (messagesConversationIdRef.current !== conversationId) {
-            release();
-            return;
-          }
-          const step = nextLostRunCreateStep(runId, probes);
-          if (step === 'probe') {
-            scheduleProjectTimeout(attempt, LOST_RUN_CREATE_PROBE_INTERVAL_MS);
-            return;
-          }
-          release();
-          if (step === 'adopt' && runId) {
-            // Pin the run onto the row. `attachRecoverableRuns` reattaches the
-            // event stream from there, so the user sees the turn's output and
-            // not only its verdict; the follow is the net under that.
-            const adoptedRunId = runId;
+            if (step === 'adopt' && runId) {
+              // Pin the run onto the row. `attachRecoverableRuns` reattaches the
+              // event stream from there, so the user sees the turn's output and
+              // not only its verdict; the follow is the net under that.
+              const adoptedRunId = runId;
+              updateMessageById(
+                identity.assistantMessageId,
+                (prev) => ({ ...prev, runId: adoptedRunId }),
+                true,
+              );
+              setRunCheck({
+                runId: adoptedRunId,
+                assistantMessageId: identity.assistantMessageId,
+                unreachable: false,
+                message: streamMessage,
+              });
+              scheduleInferredRunFailureRecheck(conversationId, adoptedRunId, {
+                unresolved: true,
+                message: streamMessage,
+              });
+              return;
+            }
+            const notStarted = t('chat.runError.notStartedMessage');
             updateMessageById(
               identity.assistantMessageId,
-              (prev) => ({ ...prev, runId: adoptedRunId }),
+              (prev) => ({
+                ...appendErrorStatusEvent(prev, notStarted, RUN_NOT_STARTED_ERROR_CODE),
+                endedAt: prev.endedAt ?? Date.now(),
+                runStatus: 'failed',
+              }),
               true,
             );
-            setRunCheck({
-              runId: adoptedRunId,
-              assistantMessageId: identity.assistantMessageId,
-              unreachable: false,
-              message: streamMessage,
-            });
-            scheduleInferredRunFailureRecheck(conversationId, adoptedRunId, {
-              unresolved: true,
-              message: streamMessage,
-            });
-            return;
+            setPaneError(null, notStarted);
+            settleConversationLatestRun(conversationId, 'failed', Date.now());
+          } catch (err) {
+            // This lookup is the only thing that can resolve the row, so it must
+            // never end without an outcome. Anything unexpected is one more
+            // inconclusive probe.
+            console.warn('Failed to look up a run whose create response was lost', err);
+            scheduleProjectTimeout(attempt, LOST_RUN_CREATE_PROBE_INTERVAL_MS);
           }
-          const notStarted = t('chat.runError.notStartedMessage');
-          updateMessageById(
-            identity.assistantMessageId,
-            (prev) => ({
-              ...appendErrorStatusEvent(prev, notStarted, RUN_NOT_STARTED_ERROR_CODE),
-              endedAt: prev.endedAt ?? Date.now(),
-              runStatus: 'failed',
-            }),
-            true,
-          );
-          setPaneError(null, notStarted);
-          settleConversationLatestRun(conversationId, 'failed', Date.now());
         })();
       };
       scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_DELAY_MS);
