@@ -152,10 +152,12 @@ export function useConversationChat(
           );
           return;
         }
-        // 'retract' carries the run's own terminal; 'reconcile' is the
-        // exhausted-probe fallback and carries none, so it retracts nothing
-        // here and falls through to the conversation read alone.
-        const retracted = retractRunFailureFromStatus(messagesRef.current, runId, latest) !== null;
+        // 'retract' is the run's own non-failed terminal, and it settles the
+        // question on its own: clear this hook's error carrier and move the row
+        // it belongs to before reading anything. 'reconcile' is the
+        // exhausted-probe fallback and carries no status, so it can only fall
+        // through to the read.
+        const retracted = step === 'retract';
         if (retracted) {
           setMessages((current) => retractRunFailureFromStatus(current, runId, latest) ?? current);
           setError(null);

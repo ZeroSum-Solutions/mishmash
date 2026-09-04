@@ -171,9 +171,13 @@ export interface InferredRunTerminal {
  * that fails can no longer leave "Task failed" painted over a turn the run
  * itself reports as succeeded.
  *
- * Returns the rows to show, or `null` when no row on screen retracts — and the
- * pane's error carrier moves with that same answer, so both carriers `ChatPane`
- * paints from keep moving together (see `retractsRunFailure`).
+ * Returns the rows to show, or `null` when no row on screen still carries the
+ * failure. The pane's error carrier is NOT keyed on that answer: it is cleared
+ * on the run's terminal either way, because the two carriers `ChatPane` paints
+ * from can come apart. Anything that reloads the conversation replaces the local
+ * row with the daemon's already-repaired one while the error string stays, and a
+ * carrier with no row left to name it would otherwise paint "Task failed"
+ * forever (see `retractsRunFailure`).
  */
 export function retractRunFailureFromStatus(
   shown: readonly ChatMessage[],
