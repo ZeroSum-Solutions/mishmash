@@ -2,8 +2,10 @@ import {
   CHECKING_NOTICE_TEXT,
   SEND_PAUSED_TEXT,
   runCheckingNotice,
+  runCheckingNoticeDisappearances,
   runErrorCard,
   runFailureCardSightings,
+  watchRunCheckingNotice,
   watchRunFailureCard,
 } from '@/playwright/chat';
 import { createFakeAgentRuntimes } from '@/playwright/fake-agents';
@@ -39,6 +41,11 @@ const RECHECK_MISSES_UNDER_TEST = 3;
 // outage covers its probes at ~0.15 s, ~3.15 s and ~6.15 s and ends before its
 // fourth at ~9.15 s.
 const STATUS_OUTAGE_WINDOW_MS = 7_500;
+// How many reconnects `consumeDaemonRun` spends before it gives up on a stream
+// that keeps answering with nothing (`reconnects < 5` in
+// `apps/web/src/providers/daemon.ts`). Each empty 200 the W1K.3 cases serve
+// spends one, so the budget is gone after this many.
+const RECONNECT_BUDGET = 5;
 // The prompt the fake runtime answers with a real, daemon-classified failure
 // (`e2e/lib/fake-agents.ts`, REPORTED_AGENT_FAILURE_OUTPUT.sleep). Used by the
 // verdict cases: a run the daemon adjudicated keeps the failure card.
@@ -47,15 +54,6 @@ const FAILING_RUN_PROMPT = 'Return the reported sleep-drop failure';
 // (`chat.runError.title.notStarted`). Distinct from the generic "Task failed",
 // which is what a client paints when it declares a turn dead without looking.
 const RUN_NOT_STARTED_TITLE = 'The run could not be started';
-// W1K.2: what the checking notice says once the client has stopped being able
-// to read the daemon at all (`chat.runChecking.unreachableTitle`), and the
-// action it then offers (`chat.runChecking.checkAgainCta`). Neither is a
-// verdict on the run — the wording changes, the neutral outcome does not.
-const NOT_ANSWERING_TEXT = 'MishMash is not answering';
-const CHECK_AGAIN_LABEL = /check again/i;
-// How many consecutive unanswered probes the lost-create lookup makes before it
-// says the daemon is not answering (`LOST_RUN_CREATE_MAX_UNANSWERED_PROBES`).
-const LOOKUP_UNANSWERED_BOUND = 3;
 
 let fakeRuntimes: Awaited<ReturnType<typeof createFakeAgentRuntimes>>;
 
@@ -1118,6 +1116,298 @@ test('[P0] a Side Chat create the daemon never received reads as a run that coul
   ).toBe(0);
 });
 
+// W1K.3 — the last outage shape in this class: the client's own RECONNECT
+// BUDGET ran out.
+//
+// Every case above holds a stream that never opens (503) or one that speaks
+// once and closes (the provisional error frame). One shape is left, and it is
+// the only one in the transport that used to emit a run status the daemon never
+// declared: the run's event stream keeps ANSWERING — 200, with nothing in it —
+// so `consumeDaemonRun` reconnects, five times, and then gives up
+// (`providers/daemon.ts`). Its post-stream status read answers nothing either,
+// so the client has learned nothing at all about the run.
+//
+// The reattach path was taught that in W1J.1: the row keeps the last status the
+// DAEMON declared and the pane says so in neutral words. The live path was not.
+// It received the transport's inferred `failed` first, which is an inactive row
+// — and an inactive row is the second thing a failure card is painted from, the
+// reason the checking notice will not show at all (`answersRunCheck`), and the
+// reason `currentConversationAwaitingActiveRunAttach` releases the composer
+// while the original run is still running.
+//
+// Forced at the transport, in the wire shape a dropped connection really
+// produces:
+//   1. the run's event stream is answered 200 with an EMPTY body, from the very
+//      first request, so every round is a connection that opened and closed
+//      with no progress and each one spends a reconnect;
+//   2. that answer, and every status probe for the same run, are held until the
+//      spec releases them, so the client cannot learn the run's verdict from a
+//      later reattach while the assertions run;
+//   3. the run itself goes on to succeed, on the same fake runtime the cases
+//      above use. The spec reads its real status through `page.request`, which
+//      does not pass through `page.route` at all.
+// The continuous watchers then judge both carriers over the whole window: the
+// failure card must never be sighted, and the checking notice must never leave
+// once it is up.
+
+test('[P0] a live reconnect-budget disconnect keeps the row active and its checking notice up until the run answers', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live reconnect budget checking smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const outage = holdRunOutage(page);
+  await watchRunFailureCard(page);
+  await watchRunCheckingNotice(page);
+
+  outage.arm();
+  const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
+  const { runId } = (await runResponse.json()) as { runId: string };
+
+  const failureAlert = runErrorCard(page);
+  const checkingNotice = runCheckingNotice(page);
+
+  await expect
+    .poll(() => outage.served, { intervals: [100], timeout: T.long })
+    .toBeGreaterThanOrEqual(RECONNECT_BUDGET);
+  await expect(
+    checkingNotice,
+    'a reconnect-budget disconnect the daemon never adjudicated must read as a neutral checking state',
+  ).toBeVisible({ timeout: T.long });
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+  await expect(failureAlert, 'an unresolved stream failure must not paint the failure card')
+    .toHaveCount(0);
+
+  // W1J.4: the unresolved window pauses sending, and the user must be able to
+  // read that. A draft is required to see the pause at all — Send is disabled
+  // on an empty composer too.
+  const composer = page.getByTestId('chat-composer').first();
+  const sendButton = composer.getByTestId('chat-send').first();
+  await composer.getByTestId('chat-composer-input').first().fill(PAUSED_DRAFT);
+  await expect(sendButton, 'an unresolved run must hold Send even with a draft ready')
+    .toBeDisabled();
+  await expect(checkingNotice, 'the checking notice must say sending is paused')
+    .toContainText(SEND_PAUSED_TEXT);
+  await expect(
+    composer.getByText(SEND_PAUSED_TEXT).first(),
+    'the composer must explain why its Send is disabled',
+  ).toBeVisible();
+
+  // The run's own verdict, read out of band. The client still cannot see it:
+  // its stream and its status probes are held until the release below.
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+  expect(
+    await runCheckingNoticeDisappearances(page),
+    'the checking notice must not vanish before the run reports its own verdict',
+  ).toBe(0);
+  await expect(checkingNotice, 'the checking notice must still be up at the verdict')
+    .toBeVisible();
+  await expect(sendButton, 'sending must not resume before the verdict reaches the client')
+    .toBeDisabled();
+
+  outage.release();
+
+  await expect(checkingNotice, 'the checking notice must leave once the run answers')
+    .toHaveCount(0, { timeout: T.long });
+  await expect(
+    page.getByText(RUN_ANSWER).first(),
+    'the resolved turn must show the answer the run delivered',
+  ).toBeVisible({ timeout: T.long });
+  expect(
+    await storedAssistantRunStatus(page, projectId, conversationId),
+    'the row must read succeeded once the run answers',
+  ).toBe('succeeded');
+  await expect(sendButton, 'sending must resume once the run answers')
+    .toBeEnabled({ timeout: T.long });
+  await expect(
+    composer.getByText(SEND_PAUSED_TEXT),
+    'the paused sentence must not outlive the pause',
+  ).toHaveCount(0, { timeout: T.long });
+  expect(
+    await runFailureCardSightings(page),
+    'the failure card must never have appeared at any point during a run that succeeded',
+  ).toEqual([]);
+  await expect(failureAlert).toHaveCount(0);
+});
+
+test('[P0] a Side Chat reconnect-budget disconnect keeps the row active and its checking notice up until the run answers', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Side chat reconnect budget checking smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const sideConversationId = await createConversation(page, projectId, 'Side chat');
+  await openSideChatTab(page, projectId, conversationId, sideConversationId);
+
+  const sideChat = page.getByTestId('side-chat-tab');
+  await expect(sideChat, 'the persisted side chat tab must mount').toBeVisible({ timeout: T.long });
+
+  const outage = holdRunOutage(page);
+  // Installed after the last navigation, so both watchers live in the document
+  // that receives the run.
+  await watchRunFailureCard(page);
+  await watchRunCheckingNotice(page);
+
+  outage.arm();
+  const runResponse = await sendPrompt(page, await composerInside(page, sideChat), RUN_PROMPT);
+  const { runId } = (await runResponse.json()) as { runId: string };
+
+  const failureAlert = runErrorCard(sideChat);
+  const checkingNotice = runCheckingNotice(sideChat);
+
+  await expect
+    .poll(() => outage.served, { intervals: [100], timeout: T.long })
+    .toBeGreaterThanOrEqual(RECONNECT_BUDGET);
+  await expect(
+    checkingNotice,
+    'a reconnect-budget disconnect the daemon never adjudicated must read as a neutral checking state',
+  ).toBeVisible({ timeout: T.long });
+  await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
+  await expect(failureAlert, 'an unresolved stream failure must not paint the failure card')
+    .toHaveCount(0);
+
+  // W1J.4 disclosure, on this pane's own composer. A side chat renders its own
+  // `useConversationChat`, so nothing outside it can hold its Send.
+  const sideComposer = await composerInside(page, sideChat);
+  const sideSendButton = sideComposer.getByTestId('chat-send').first();
+  await sideComposer.getByTestId('chat-composer-input').first().fill(PAUSED_DRAFT);
+  await expect(sideSendButton, 'an unresolved run must hold Send even with a draft ready')
+    .toBeDisabled();
+  await expect(checkingNotice, 'the checking notice must say sending is paused')
+    .toContainText(SEND_PAUSED_TEXT);
+  await expect(
+    sideComposer.getByText(SEND_PAUSED_TEXT).first(),
+    'the composer must explain why its Send is disabled',
+  ).toBeVisible();
+
+  await waitForDaemonRunStatus(page, runId, 'succeeded');
+  expect(
+    await runCheckingNoticeDisappearances(page),
+    'the checking notice must not vanish before the run reports its own verdict',
+  ).toBe(0);
+  await expect(checkingNotice, 'the checking notice must still be up at the verdict')
+    .toBeVisible();
+  await expect(sideSendButton, 'sending must not resume before the verdict reaches the client')
+    .toBeDisabled();
+
+  outage.release();
+
+  await expect(checkingNotice, 'the checking notice must leave once the run answers')
+    .toHaveCount(0, { timeout: T.long });
+  expect(
+    await storedAssistantRunStatus(page, projectId, sideConversationId),
+    'the row must read succeeded once the run answers',
+  ).toBe('succeeded');
+  await expect(
+    sideChat.getByText(RUN_ANSWER).first(),
+    'the resolved turn must show the answer the run delivered',
+  ).toBeVisible({ timeout: T.long });
+  await expect(sideSendButton, 'sending must resume once the run answers')
+    .toBeEnabled({ timeout: T.long });
+  await expect(
+    sideComposer.getByText(SEND_PAUSED_TEXT),
+    'the paused sentence must not outlive the pause',
+  ).toHaveCount(0, { timeout: T.long });
+  expect(
+    await runFailureCardSightings(page),
+    'the failure card must never have appeared at any point during a run that succeeded',
+  ).toEqual([]);
+  await expect(failureAlert).toHaveCount(0);
+});
+
+interface RunOutageHold {
+  /** Start holding the next run event stream this page opens. */
+  arm: () => void;
+  /** Let the real event stream and the real status probes through again. */
+  release: () => void;
+  /** How many empty event-stream responses have been served. */
+  readonly served: number;
+  /** How many status probes for the held run have been answered 503. */
+  readonly probesRefused: number;
+  /** The run whose stream is held, known from the first held request. */
+  readonly runId: string | null;
+}
+
+/**
+ * The wire shape of an exhausted reconnect budget, held open until released.
+ *
+ * The run's event stream is answered 200 with an EMPTY body rather than refused.
+ * `consumeDaemonRun` reads that as a connection that opened and closed with no
+ * progress, so it reconnects — `RECONNECT_BUDGET` times — and only then asks the
+ * run's status and reports the generic disconnect. A 503 would short-circuit at
+ * the non-OK branch instead and never reach the budget at all, which is why the
+ * sibling cases above cannot see this path.
+ *
+ * The same outage covers `GET /api/runs/:id` for that run, because one network
+ * fault takes both: a connection that cannot carry the event stream cannot carry
+ * a status read either, and `fetchChatRunStatus` reports a non-OK response and a
+ * thrown fetch alike as `null` — the shape both clients meet in the wild. Both
+ * holds are scoped to the held run: the page has another reader of that endpoint
+ * (`AssistantMessage`'s `useRunStatusForRun`), and the spec itself reads run
+ * status through `page.request`, which does not pass through `page.route` at all.
+ *
+ * The run is untouched and reaches its own terminal on the daemon throughout, so
+ * the client cannot learn the verdict until `release()` opens both endpoints —
+ * which is what makes the assertions on the standing notice deterministic rather
+ * than a race with the recovery.
+ *
+ * Armed BEFORE the send, not after the create-run response, because the client
+ * opens the stream the moment that response lands.
+ */
+function holdRunOutage(page: Page): RunOutageHold {
+  let armed = false;
+  let released = false;
+  let heldRunId: string | null = null;
+  let served = 0;
+  let probesRefused = 0;
+  void page.route(
+    (url) => /^\/api\/runs\/[^/]+\/events$/.test(url.pathname),
+    async (route) => {
+      const requestedRunId = new URL(route.request().url()).pathname.split('/')[3] ?? '';
+      if (!armed || released || (heldRunId !== null && requestedRunId !== heldRunId)) {
+        await route.continue();
+        return;
+      }
+      heldRunId = heldRunId ?? requestedRunId;
+      served += 1;
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },
+        body: '',
+      });
+    },
+  );
+  void page.route(
+    (url) => /^\/api\/runs\/[^/]+$/.test(url.pathname),
+    async (route) => {
+      const requestedRunId = new URL(route.request().url()).pathname.split('/')[3] ?? '';
+      if (heldRunId === null || released || requestedRunId !== heldRunId) {
+        await route.continue();
+        return;
+      }
+      probesRefused += 1;
+      await route.fulfill({ status: 503, body: '' });
+    },
+  );
+  return {
+    arm: () => {
+      armed = true;
+    },
+    release: () => {
+      released = true;
+    },
+    get served() {
+      return served;
+    },
+    get probesRefused() {
+      return probesRefused;
+    },
+    get runId() {
+      return heldRunId;
+    },
+  };
+}
+
 // W1K.2 — the lookup that cannot READ the daemon.
 //
 // The two lost-response cases above give the lookup a daemon that answers. Take
@@ -1988,3 +2278,13 @@ async function conversationRunCount(page: Page, conversationId: string): Promise
   const { runs } = (await response.json()) as { runs: unknown[] };
   return runs.length;
 }
+
+// W1K.2: what the checking notice says once the client has stopped being able
+// to read the daemon at all (`chat.runChecking.unreachableTitle`), and the
+// action it then offers (`chat.runChecking.checkAgainCta`). Neither is a
+// verdict on the run — the wording changes, the neutral outcome does not.
+const NOT_ANSWERING_TEXT = 'MishMash is not answering';
+const CHECK_AGAIN_LABEL = /check again/i;
+// How many consecutive unanswered probes the lost-create lookup makes before it
+// says the daemon is not answering (`LOST_RUN_CREATE_MAX_UNANSWERED_PROBES`).
+const LOOKUP_UNANSWERED_BOUND = 3;

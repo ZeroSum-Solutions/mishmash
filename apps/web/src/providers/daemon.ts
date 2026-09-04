@@ -406,6 +406,34 @@ function provisionalDaemonErrorFrame(frameError: Error): Error {
   return markStreamUnadjudicated(frameError);
 }
 
+/**
+ * The invariant an exhausted reconnect budget is held to: A BUDGET THIS CLIENT
+ * RAN OUT OF IS NOT A TERMINAL FOR THE RUN.
+ *
+ * This is reached when the stream closed with no `end` frame AND the
+ * post-stream status read did not answer with a terminal — the daemon either
+ * said nothing at all or said the run was still queued or running. Either way
+ * the client has no verdict, and a turn whose connection drops normally runs on
+ * for seconds or minutes and succeeds.
+ *
+ * So the disconnect is reported as what it is — this client's report about its
+ * own connection, stamped unadjudicated by
+ * `createGenericDaemonDisconnectError` — and NO run status goes with it. An
+ * inferred `failed` would be the second carrier a pane paints a failure from,
+ * and an inactive row also hides the neutral checking notice that replaces it
+ * (`answersRunCheck`) and releases the composer the unresolved run is meant to
+ * hold. The row stays on the last status the DAEMON declared, and only the
+ * run's own terminal — through the pane's re-query — moves it.
+ *
+ * The omission is structural, not a convention: this takes the error handler
+ * alone, never `onRunStatus`, so it cannot emit one. It is the live half of the
+ * rule W1J.1 gave the reattach path, so both paths now infer the same nothing
+ * from the same silence.
+ */
+function reportUnadjudicatedDisconnect(onError: DaemonStreamHandlers['onError']): void {
+  onError(createGenericDaemonDisconnectError());
+}
+
 function notifyRunsChanged() {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new Event(RUNS_CHANGED_EVENT));
@@ -1336,8 +1364,7 @@ async function consumeDaemonRun({
         reportArtifactCount(status.artifactCount);
         onRunStatus?.(endStatus);
       } else {
-        onRunStatus?.('failed');
-        handlers.onError(createGenericDaemonDisconnectError());
+        reportUnadjudicatedDisconnect(handlers.onError);
         return;
       }
     }
