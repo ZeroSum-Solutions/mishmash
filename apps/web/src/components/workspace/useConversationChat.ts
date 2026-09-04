@@ -16,6 +16,7 @@ import {
   RUN_FAILURE_RECHECK_DELAY_MS,
   RUN_FAILURE_RECHECK_INTERVAL_MS,
   nextInferredRunFailureStep,
+  retractRunFailureFromStatus,
   retractsStaleRunFailure,
 } from '../../runtime/run-failure-reconcile';
 import type {
@@ -125,10 +126,10 @@ export function useConversationChat(
    * assistant row with its real terminal, but nothing here would ever read it.
    *
    * So follow the run until it reports one — `nextInferredRunFailureStep` owns
-   * that rule and what bounds it — then read the conversation and apply it only
-   * when it retracts the failure on screen. `ChatPane` paints "Task failed"
-   * from either carrier, the failed row or this hook's error slot, so both move
-   * together. See `retractsStaleRunFailure`.
+   * that rule and what bounds it — and let that status retract the failure on
+   * its own (`retractRunFailureFromStatus`) before the conversation is read.
+   * `ChatPane` paints "Task failed" from either carrier, the failed row or this
+   * hook's error slot, so both move together. See `retractsStaleRunFailure`.
    */
   const scheduleRunFailureRecheck = useCallback((runId: string | undefined) => {
     if (!runId) return;
@@ -141,7 +142,7 @@ export function useConversationChat(
         // The read is async, so the tab may have moved to another conversation
         // while it was in flight. A cleared timer cannot catch that one.
         if (conversationRef.current !== boundConversationId) return;
-        if (!latest) misses += 1;
+        misses = latest ? 0 : misses + 1;
         const step = nextInferredRunFailureStep(latest?.status, misses);
         if (step === 'stop') return;
         if (step === 'retry') {
@@ -151,13 +152,36 @@ export function useConversationChat(
           );
           return;
         }
+        // 'retract' is the run's own non-failed terminal, and it settles the
+        // question on its own: clear this hook's error carrier and move the row
+        // it belongs to before reading anything. 'reconcile' is the
+        // exhausted-probe fallback and carries no status, so it can only fall
+        // through to the read.
+        const retracted = step === 'retract';
+        if (retracted) {
+          setMessages((current) => retractRunFailureFromStatus(current, runId, latest) ?? current);
+          setError(null);
+        }
         const serverMessages = await listMessages(projectId, boundConversationId)
           .catch(() => null);
-        if (!serverMessages) return;
         if (conversationRef.current !== boundConversationId) return;
-        if (!retractsStaleRunFailure(messagesRef.current, serverMessages)) return;
-        setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
-        setError(null);
+        if (
+          serverMessages
+          && (retracted || retractsStaleRunFailure(messagesRef.current, serverMessages))
+        ) {
+          setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
+          setError(null);
+          return;
+        }
+        if (retracted) return;
+        // The 'reconcile' fallback read answered nothing, so the outage that
+        // exhausted the probes is still running and the failure on screen is
+        // still unresolved. Keep following.
+        misses = 0;
+        failureRecheckTimerRef.current = window.setTimeout(
+          attempt,
+          RUN_FAILURE_RECHECK_INTERVAL_MS,
+        );
       })();
     };
     clearFailureRecheck();

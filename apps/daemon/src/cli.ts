@@ -2743,6 +2743,20 @@ function refuseMcpRepair(flags, { code, message, data, prose, stream = 'stderr' 
   process.exit(MCP_REPAIR_REFUSAL_EXIT);
 }
 
+/**
+ * INVARIANT: `od mcp repair` reads the requested output mode even when the
+ * argument list never parsed.
+ *
+ * `parseFlags` throws before `flags` exists, so the parsed `--json` is not
+ * available on that one path — and a rejected argument list is exactly the
+ * failure a script has to branch on. The request is still on the command line,
+ * and `--json` is documented as a bare token, so the raw list answers it with
+ * an exact match: nothing here re-parses a list the parser already rejected.
+ */
+function mcpRepairJsonRequested(args) {
+  return args.includes('--json');
+}
+
 async function runMcpRepair(args) {
   if (args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
     console.log(`Usage: od mcp repair <server-id> [--yes] [--json] [--daemon-url <url>]
@@ -2769,8 +2783,14 @@ without touching anything.
       boolean: MCP_REPAIR_BOOLEAN_FLAGS,
     });
   } catch (err) {
-    console.error(err.message);
-    process.exit(2);
+    return refuseMcpRepair(
+      { json: mcpRepairJsonRequested(args) },
+      {
+        code:    'mcp-repair-invalid-arguments',
+        message: err.message,
+        data:    { flag: err.flag },
+      },
+    );
   }
   const serverId = positionalArgs(args, MCP_STRING_FLAGS)[0];
   if (!serverId) {

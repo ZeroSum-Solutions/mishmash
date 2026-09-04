@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  RUN_FAILURE_RECHECK_INTERVAL_MS,
   RUN_FAILURE_RECHECK_MAX_MISSES,
   nextInferredRunFailureStep,
+  retractRunFailureFromStatus,
   retractsRunFailure,
   retractsStaleRunFailure,
 } from '../../src/runtime/run-failure-reconcile';
@@ -109,10 +111,73 @@ describe('nextInferredRunFailureStep — following a run the pane never saw fini
     expect(nextInferredRunFailureStep('running', RUN_FAILURE_RECHECK_MAX_MISSES + 10)).toBe('retry');
   });
 
-  it('tolerates a few probes that answer nothing, then stops', () => {
+  // Supersedes "tolerates a few probes that answer nothing, then stops", which
+  // asserted `'stop'` at a cap of three. Three misses is a nine-second daemon
+  // hiccup — the outage class that produces an inferred failure in the first
+  // place — so ending the recovery there abandoned it for the very reason it
+  // existed.
+  it('keeps following through an outage that would have ended the recovery', () => {
     expect(nextInferredRunFailureStep(null, 0)).toBe('retry');
+    expect(nextInferredRunFailureStep(null, 3)).toBe('retry');
     expect(nextInferredRunFailureStep(null, RUN_FAILURE_RECHECK_MAX_MISSES - 1)).toBe('retry');
-    expect(nextInferredRunFailureStep(null, RUN_FAILURE_RECHECK_MAX_MISSES)).toBe('stop');
-    expect(nextInferredRunFailureStep(undefined, RUN_FAILURE_RECHECK_MAX_MISSES)).toBe('stop');
+  });
+
+  it('falls back to a conversation read when an unbroken outage exhausts the bound', () => {
+    expect(nextInferredRunFailureStep(null, RUN_FAILURE_RECHECK_MAX_MISSES)).toBe('reconcile');
+    expect(nextInferredRunFailureStep(undefined, RUN_FAILURE_RECHECK_MAX_MISSES)).toBe('reconcile');
+  });
+
+  // The bound is a duration, not a count: it must outlast the hiccup class the
+  // recovery exists for. Five minutes of a daemon that never answers.
+  it('bounds the outage at five minutes of unanswered probes', () => {
+    expect(RUN_FAILURE_RECHECK_MAX_MISSES * RUN_FAILURE_RECHECK_INTERVAL_MS)
+      .toBeGreaterThanOrEqual(5 * 60_000);
+  });
+});
+
+describe('retractRunFailureFromStatus — the run own terminal, before any read', () => {
+  const shown = [assistant({ id: 'msg-1', runId: 'run-1', runStatus: 'failed', endedAt: 10 })];
+  const succeeded = { status: 'succeeded' as const, updatedAt: 42 };
+
+  it('moves the failed row onto the terminal the run reports', () => {
+    const next = retractRunFailureFromStatus(shown, 'run-1', succeeded);
+    expect(next?.[0]?.runStatus).toBe('succeeded');
+    expect(next?.[0]?.endedAt).toBe(42);
+  });
+
+  it('does not mutate the rows it was given', () => {
+    retractRunFailureFromStatus(shown, 'run-1', succeeded);
+    expect(shown[0]?.runStatus).toBe('failed');
+    expect(shown[0]?.endedAt).toBe(10);
+  });
+
+  it('keeps the row own endedAt when the status carries no clock', () => {
+    expect(retractRunFailureFromStatus(shown, 'run-1', { status: 'canceled' })?.[0]?.endedAt).toBe(10);
+  });
+
+  it('retracts nothing while the run is still going, or when it really failed', () => {
+    expect(retractRunFailureFromStatus(shown, 'run-1', { status: 'running', updatedAt: 42 })).toBeNull();
+    expect(retractRunFailureFromStatus(shown, 'run-1', { status: 'failed', updatedAt: 42 })).toBeNull();
+  });
+
+  it('retracts nothing when the probe answered nothing at all', () => {
+    expect(retractRunFailureFromStatus(shown, 'run-1', null)).toBeNull();
+    expect(retractRunFailureFromStatus(shown, 'run-1', undefined)).toBeNull();
+  });
+
+  it('leaves rows belonging to another run alone', () => {
+    expect(retractRunFailureFromStatus(shown, 'run-2', succeeded)).toBeNull();
+  });
+
+  it('keeps a row that fails on delivery rather than on run status', () => {
+    const delivery = [
+      assistant({
+        id: 'msg-1',
+        runId: 'run-1',
+        runStatus: 'succeeded',
+        resultDeliveryState: 'no_result',
+      }),
+    ];
+    expect(retractRunFailureFromStatus(delivery, 'run-1', succeeded)).toBeNull();
   });
 });

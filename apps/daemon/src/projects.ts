@@ -54,9 +54,30 @@ export const projectFileWriteTestHooks = {
   afterCommit: null as null | ((write: { safeName: string; target: string; body: Buffer | string }) => Promise<void> | void),
 };
 
-export function isRunTouchedProjectFile(fileMtimeMs, runStartTimeMs) {
+/**
+ * A project file belongs to a run when its mtime falls inside the run's own
+ * interval, widened at both ends by `RUN_ARTIFACT_RECONCILE_MTIME_GRACE_MS`.
+ *
+ * Both bounds carry weight. The lower one keeps a project's pre-existing files
+ * out of a run's output. The upper one keeps a LATER turn's files out of an
+ * EARLIER run's output — the distinction a caller deciding an old run long
+ * after it ended cannot otherwise make, because by then the tree holds every
+ * write since that run began (`replayUnattendedDeliveryClassifications`,
+ * `runtimes/run-delivery-classification.ts`).
+ *
+ * One grace covers both directions. A file's mtime and the daemon's own run
+ * clock are different clocks, and a write issued just inside a boundary can
+ * land just outside it, at either end.
+ *
+ * `runEndTimeMs` defaults to now for a caller whose interval genuinely ends at
+ * the moment it looks: the run-end artifact-manifest reconciliation
+ * (`server.ts`) reads the project tree from inside the run's terminal handler.
+ */
+export function isRunTouchedProjectFile(fileMtimeMs, runStartTimeMs, runEndTimeMs = Date.now()) {
   if (!Number.isFinite(fileMtimeMs) || !Number.isFinite(runStartTimeMs)) return false;
-  return fileMtimeMs + RUN_ARTIFACT_RECONCILE_MTIME_GRACE_MS >= runStartTimeMs;
+  if (!Number.isFinite(runEndTimeMs)) return false;
+  return fileMtimeMs + RUN_ARTIFACT_RECONCILE_MTIME_GRACE_MS >= runStartTimeMs
+    && fileMtimeMs - RUN_ARTIFACT_RECONCILE_MTIME_GRACE_MS <= runEndTimeMs;
 }
 
 function containsIgnoredProjectDirSegment(name: string): boolean {

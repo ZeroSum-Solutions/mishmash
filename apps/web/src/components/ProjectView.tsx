@@ -121,6 +121,7 @@ import {
   RUN_FAILURE_RECHECK_DELAY_MS,
   RUN_FAILURE_RECHECK_INTERVAL_MS,
   nextInferredRunFailureStep,
+  retractRunFailureFromStatus,
   retractsRunFailure,
   retractsStaleRunFailure,
 } from '../runtime/run-failure-reconcile';
@@ -3198,23 +3199,32 @@ export function ProjectView({
   // stamps the stored assistant row with its real terminal when it ends.
   //
   // So follow the run until it reports one. `nextInferredRunFailureStep` owns
-  // when to retract, when to keep following and when to stop; the conversation
-  // is read only on a non-failed terminal, and applied only when it retracts
-  // the failure this pane is painting.
+  // when to retract, when to keep following and when to stop.
+  //
+  // `alreadyRetracted` says the run's own terminal has already cleared the
+  // alert and moved the row (`retractRunFailureFromStatus`). This read is then
+  // only there to improve the row's content, and cannot judge the failure a
+  // second time: the rows it is compared against no longer carry one.
+  //
+  // Returns whether the pane is SETTLED — the read applied, or this pane has
+  // moved to another conversation and no longer owns the question. `false` means
+  // the read answered nothing and an unresolved failure is still on screen, so
+  // the caller must keep following rather than stop here.
   const reconcileInferredRunFailure = useCallback(
-    async (conversationId: string) => {
-      if (messagesConversationIdRef.current !== conversationId) return;
+    async (conversationId: string, alreadyRetracted: boolean): Promise<boolean> => {
+      if (messagesConversationIdRef.current !== conversationId) return true;
       let serverMessages: ChatMessage[];
       try {
         serverMessages = await listMessages(project.id, conversationId);
       } catch (err) {
         console.warn('Failed to re-check a run failure the client inferred', err);
-        return;
+        return false;
       }
-      if (messagesConversationIdRef.current !== conversationId) return;
-      if (!retractsStaleRunFailure(messagesRef.current, serverMessages)) return;
+      if (messagesConversationIdRef.current !== conversationId) return true;
+      if (!alreadyRetracted && !retractsStaleRunFailure(messagesRef.current, serverMessages)) return false;
       setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
       setError(null);
+      return true;
     },
     [project.id],
   );
@@ -3227,14 +3237,30 @@ export function ProjectView({
         void (async () => {
           const latest = await fetchChatRunStatus(runId).catch(() => null);
           if (messagesConversationIdRef.current !== conversationId) return;
-          if (!latest) misses += 1;
+          misses = latest ? 0 : misses + 1;
           const step = nextInferredRunFailureStep(latest?.status, misses);
           if (step === 'stop') return;
           if (step === 'retry') {
             scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_INTERVAL_MS);
             return;
           }
-          await reconcileInferredRunFailure(conversationId);
+          // 'retract' is the run's own non-failed terminal, and it settles the
+          // question on its own: clear the pane's error carrier and move the row
+          // it belongs to before reading anything. 'reconcile' is the
+          // exhausted-probe fallback and carries no status, so it can only fall
+          // through to the read.
+          const retracted = step === 'retract';
+          if (retracted) {
+            setMessages((current) => retractRunFailureFromStatus(current, runId, latest) ?? current);
+            setError(null);
+          }
+          const settled = await reconcileInferredRunFailure(conversationId, retracted);
+          if (retracted || settled) return;
+          // The 'reconcile' fallback read answered nothing, so the outage that
+          // exhausted the probes is still running and the failure on screen is
+          // still unresolved. Keep following.
+          misses = 0;
+          scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_INTERVAL_MS);
         })();
       };
       scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_DELAY_MS);
