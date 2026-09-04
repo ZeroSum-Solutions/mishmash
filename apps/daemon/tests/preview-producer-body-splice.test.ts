@@ -90,3 +90,20 @@ describe('the paint producer is spliced at a genuine body close', () => {
     ).toBe(true);
   });
 });
+
+describe('the splice reads a tag as a tag', () => {
+  it('ignores a decoy </body> written inside a quoted attribute value', () => {
+    // Raised by the round-1 track audit: a body close written inside an
+    // attribute is character data to the parser, and a producer spliced there
+    // is an attribute value rather than a script.
+    const html =
+      '<!doctype html><html><body><h1>Artifact</h1></body><div title="</body>">tail</div></html>';
+    const out = injectLiveArtifactPaintReporter(html, NONCE);
+
+    const genuineClose = out.indexOf('</body>');
+    expect(
+      producerIndex(out),
+      'the only body close the parser reaches is the real one, before the decoy attribute',
+    ).toBeLessThan(genuineClose);
+  });
+});

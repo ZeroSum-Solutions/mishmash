@@ -264,7 +264,11 @@ describe('a navigation epoch is bound to the document that commits into the fram
     // The host now points the frame at a different artifact and installs a
     // fresh watchdog. The browser has not swapped documents yet, so the OLD
     // document is still the one listening — and it still paints, so it answers
-    // with the newest token this frame has been given.
+    // with the newest token this frame has been given. On the base that IS the
+    // new epoch's token, because arming posted it; on the branch nothing was
+    // posted and the epoch is still undisclosed, so the echo is rejected as
+    // having arrived before this navigation's document did. The stale-token
+    // half of the rejection is exercised by the counters case below.
     const dispose = trackPreviewPaint({ iframe: frame.iframe, surface: 'live_artifact_preview' });
     answerFrom(frame, {
       type: REPORT,

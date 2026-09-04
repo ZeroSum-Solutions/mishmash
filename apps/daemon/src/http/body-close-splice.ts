@@ -10,9 +10,10 @@
  * "Preview did not render" however well it rendered.
  *
  * It is a small state-aware scan, not a parser and not a regex over the whole
- * text. Only two tokenizer states can hide a `</body>` from the parser —
- * comments and raw-text/RCDATA element contents — so those are the only two
- * this tracks, and everything else is ordinary markup.
+ * text. Three tokenizer states can hide a `</body>` from the parser — comment
+ * text, raw-text/RCDATA element contents, and a quoted attribute value inside a
+ * tag — so those are the three this tracks, and everything else is ordinary
+ * markup.
  *
  * When no genuine close exists the injection is appended at EOF. That is the
  * honest placement, not a guarantee of execution: a document that left the
@@ -29,8 +30,31 @@
  */
 const RAW_TEXT_ELEMENTS = 'script|style|textarea|title|xmp|iframe|noembed|noframes|noscript';
 
-/** Comment opener, a body close, or a raw-text element opener. */
-const SCANNER = new RegExp(`<!--|</body(?=[\\s>])|<(${RAW_TEXT_ELEMENTS})(?=[\\s/>])`, 'gi');
+/** Comment opener, a body close, a raw-text element opener, or any other tag. */
+const SCANNER = new RegExp(
+  `<!--|</body(?=[\\s>])|<(${RAW_TEXT_ELEMENTS})(?=[\\s/>])|</?[a-z][^\\s/>]*`,
+  'gi',
+);
+
+/**
+ * Index just past a tag's `>`, skipping quoted attribute values so a `</body>`
+ * written inside one is not mistaken for markup. -1 when the tag never closes.
+ */
+function tagEnd(html: string, from: number): number {
+  let index = from;
+  while (index < html.length) {
+    const char = html[index];
+    if (char === '>') return index + 1;
+    if (char === '"' || char === "'") {
+      const close = html.indexOf(char, index + 1);
+      if (close < 0) return -1;
+      index = close + 1;
+      continue;
+    }
+    index += 1;
+  }
+  return -1;
+}
 
 /** Index just past the close tag of a raw-text element, or -1 if it never closes. */
 function rawTextElementEnd(html: string, name: string, from: number): number {
@@ -61,8 +85,16 @@ export function lastGenuineBodyCloseIndex(html: string): number {
       // An unterminated raw-text element swallows everything after it.
       if (end < 0) return last;
       scanner.lastIndex = end;
-    } else {
+    } else if (match[0].toLowerCase() === '</body') {
       last = match.index;
+      const end = tagEnd(html, scanner.lastIndex);
+      scanner.lastIndex = end < 0 ? html.length : end;
+    } else {
+      // Any other tag: step over it, attribute values included, so a body
+      // close written inside `title="</body>"` is read as the text it is.
+      const end = tagEnd(html, scanner.lastIndex);
+      if (end < 0) return last;
+      scanner.lastIndex = end;
     }
     match = scanner.exec(html);
   }

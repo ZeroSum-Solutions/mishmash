@@ -214,6 +214,41 @@ describe('a powered preview over the bridge cap can still prove it painted', () 
     await response.text();
   });
 
+  it('transforms a 2.5 MiB powered response in bounded time and memory', async () => {
+    // D-17 condition 3: "Measure transform latency and peak memory on the large
+    // fixture and record them." The numbers are logged for the proof file; the
+    // assertions are ceilings a regression would cross, not the measurement.
+    const url = `${baseUrl}/api/projects/${encodeURIComponent(PROJECT_ID)}/powered/${LARGE_PAGE}`;
+    const rawUrl = `${baseUrl}/api/projects/${encodeURIComponent(PROJECT_ID)}/raw/${LARGE_PAGE}`;
+
+    // Warm the file cache so the comparison is transform cost, not first read.
+    await (await fetch(rawUrl)).text();
+
+    const streamedStart = performance.now();
+    const streamed = await (await fetch(rawUrl)).text();
+    const streamedMs = performance.now() - streamedStart;
+
+    const before = process.memoryUsage();
+    const transformedStart = performance.now();
+    const transformed = await (await fetch(url)).text();
+    const transformedMs = performance.now() - transformedStart;
+    const after = process.memoryUsage();
+
+    expect(transformed.length).toBeGreaterThan(streamed.length);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[W2H.1b] powered 2.5 MiB transform: ${transformedMs.toFixed(1)} ms ` +
+        `(untransformed /raw baseline ${streamedMs.toFixed(1)} ms); ` +
+        `heapUsed delta ${((after.heapUsed - before.heapUsed) / (1024 * 1024)).toFixed(1)} MiB, ` +
+        `rss delta ${((after.rss - before.rss) / (1024 * 1024)).toFixed(1)} MiB`,
+    );
+    expect(transformedMs, 'the transform is one decode, one scan and one splice').toBeLessThan(2000);
+    expect(
+      after.rss - before.rss,
+      'buffering the response holds about two copies of it, not the whole file cache',
+    ).toBeLessThan(64 * 1024 * 1024);
+  });
+
   it('leaves the optional bridge rewrites capped over the cap', async () => {
     const html = await poweredHtml(LARGE_PAGE, '?odPreviewBridge=scroll,selection');
     expect(

@@ -23,10 +23,13 @@ export const PREVIEW_PAINT_REPORT_REQUEST = 'od:preview-content-size-request';
 /**
  * Why a document reported what it did about its own rendering.
  *
- *  - `painted` — the scan found an element that puts visible output on screen.
- *  - `paint-timing` — the scan stopped at its bound before finding one, and the
- *    user agent's own Paint Timing said the document painted content. The scan
- *    is authoritative when it completes; this only rescues a truncated one.
+ *  - `paint-timing` — the user agent's own Paint Timing reported a contentful
+ *    paint for this document. It is the preferred signal, and it is checked
+ *    before the scan: the UA sees paint sources no enumeration can keep up with
+ *    (`::before` content, for one). It is never the only signal, because Paint
+ *    Timing in a nested browsing context is optional per user agent.
+ *  - `painted` — Paint Timing said nothing, and the scan found an element that
+ *    puts visible output on screen.
  *  - `no-elements` — there is nothing under `<body>` to look at.
  *  - `no-visible-output` — the scan completed and every candidate was hidden,
  *    fully transparent, clipped away, or painted nothing.
@@ -87,9 +90,12 @@ export const PREVIEW_PAINT_SCAN_BUDGET_MS = 50;
  *     watchdog set.
  *   - `post()` — posts a `PreviewPaintReport` to the host.
  *
- * **What `painted` means: visible output, not geometry.** An element counts
- * only when ALL of these hold, and it therefore puts something a user could
- * see on the screen:
+ * **What `painted` means: visible output, not geometry.** The user agent's own
+ * Paint Timing answers first when it has an answer — a `first-contentful-paint`
+ * entry for this document is the UA saying it painted content, and it sees
+ * sources no enumeration can match. It is optional in a nested browsing
+ * context, so when there is no entry the producer decides for itself, and an
+ * element counts only when ALL of these hold:
  *
  *   - no ancestor is `display:none`, `visibility:hidden|collapse`, or clipped
  *     to nothing by `clip-path`;
@@ -100,22 +106,23 @@ export const PREVIEW_PAINT_SCAN_BUDGET_MS = 50;
  *     `scroll`;
  *   - and it paints something: a direct non-whitespace text node under a
  *     non-transparent `color`, a non-transparent `background-color`, a
- *     `background-image`, a visible border on some side, an SVG `fill` or
- *     `stroke`, a decoded `img` with intrinsic size, or a `video` with a poster
- *     or a decoded frame.
+ *     `background-image`, a visible border on some side, a `box-shadow`, a
+ *     visible `outline`, an SVG `fill` or `stroke`, a decoded `img` with
+ *     intrinsic size, or a `video` with a poster or a decoded frame.
  *
- * Blank replaced geometry never counts. An empty `canvas`, an `svg` with no
- * painted children and an `iframe` are rectangles of nothing; a `canvas`
- * counts only when the user agent's Paint Timing says the document painted
- * content, which for a canvas means it was drawn on.
+ * Blank replaced geometry never counts, and the scan cannot see inside one that
+ * is not blank. An empty `canvas`, an `svg` with no painted children and an
+ * `iframe` are rectangles of nothing; a canvas that WAS drawn on settles
+ * through Paint Timing, which is what a contentful paint means for a canvas.
+ * Nothing here calls `getContext`, so the scan can never take a canvas away
+ * from the artifact's own renderer.
  *
  * **Bounded by construction.** Viewport hit-test targets are tried first
  * (`elementsFromPoint` over a small grid), then a lazy `TreeWalker`, at most
  * `PREVIEW_PAINT_SCAN_CANDIDATE_LIMIT` candidates and never longer than
  * `PREVIEW_PAINT_SCAN_BUDGET_MS`. Computed styles, ancestor state and each
  * candidate's rect are read once and cached in `WeakMap`s. A scan that stops
- * early says so in `scanTruncated`, and only then may Paint Timing stand in
- * for it.
+ * early says so in `scanTruncated`.
  *
  * **False negatives** (says not painted while something is visible): a
  * document that paints later than the host's watchdog window — the producer
@@ -128,7 +135,10 @@ export const PREVIEW_PAINT_SCAN_BUDGET_MS = 50;
  * **False positives** (says painted while the user sees nothing): content
  * hidden by a mechanism the scan does not model — an opaque element stacked
  * over everything, a `clip-path` shape that is empty but not written in one of
- * the forms recognised here, or a filter that erases the pixels.
+ * the forms recognised here, or a filter that erases the pixels. A document
+ * that painted and then blanked itself also keeps its Paint Timing entry, and
+ * is reported as painted; it did render, and the entry is the UA's word for
+ * that.
  */
 export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
   if (window.__odPreviewPaintReport) return;
@@ -294,13 +304,21 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     }
     return false;
   }
-  function paintsSomething(el, style, scan){
+  function hasVisibleOutline(style){
+    var lineStyle = style.outlineStyle;
+    if (!lineStyle || lineStyle === 'none' || lineStyle === 'hidden') return false;
+    if (px(style.outlineWidth) <= 0) return false;
+    return alphaOf(style.outlineColor) > 0;
+  }
+  function paintsSomething(el, style){
     var tag = el.tagName ? String(el.tagName).toLowerCase() : '';
     if (style) {
       if (hasDirectText(el) && alphaOf(style.color) > 0) return true;
       if (alphaOf(style.backgroundColor) > 0) return true;
       if (style.backgroundImage && style.backgroundImage !== 'none') return true;
       if (hasVisibleBorder(style)) return true;
+      if (style.boxShadow && style.boxShadow !== 'none') return true;
+      if (hasVisibleOutline(style)) return true;
       if (SVG_PAINTED_SHAPES.test(tag)) {
         if (alphaOf(style.fill) > 0) return true;
         if (alphaOf(style.stroke) > 0 && px(style.strokeWidth) > 0) return true;
@@ -314,8 +332,8 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
       return (typeof poster === 'string' && poster !== '') || num(el.readyState) >= 2;
     }
     // A canvas, an svg root and an iframe are blank rectangles until something
-    // paints in them, and only the user agent can say whether that happened.
-    if (tag === 'canvas') return scan.paintTiming && num(el.width) > 0 && num(el.height) > 0;
+    // paints in them, and the scan cannot see in. A drawn canvas settles
+    // through Paint Timing above, never through its geometry here.
     return false;
   }
   function candidateIsVisibleOutput(el, scan){
@@ -324,7 +342,7 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     var rect = rectOf(el, scan);
     if (!rect || rect.right - rect.left <= 0 || rect.bottom - rect.top <= 0) { scan.clipped += 1; return false; }
     if (!intersect(rect, state.clipSelf)) { scan.clipped += 1; return false; }
-    if (!paintsSomething(el, styleOf(el, scan), scan)) { scan.blank += 1; return false; }
+    if (!paintsSomething(el, styleOf(el, scan))) { scan.blank += 1; return false; }
     return true;
   }
   function hitTestTargets(viewport){
@@ -353,7 +371,6 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
       styles: new WeakMap(),
       rects: new WeakMap(),
       states: new WeakMap(),
-      paintTiming: paintTimingSawContent(),
       root: { visible: true, opacity: 1, clipSelf: viewport, clipChildren: viewport },
       seen: 0,
       hidden: 0,
@@ -361,6 +378,13 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
       blank: 0,
       truncated: false
     };
+    // Preferred signal, asked first: the user agent reports a contentful paint
+    // for sources no enumeration can keep up with. Never the only signal --
+    // Paint Timing is optional in a nested browsing context, and the scan below
+    // is what answers when the UA says nothing.
+    if (paintTimingSawContent()) {
+      return { painted: true, reason: 'paint-timing', scan: scan };
+    }
     var body = document.body;
     if (!body) {
       return { painted: false, reason: 'no-elements', scan: scan };
@@ -387,9 +411,6 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
       if (candidateIsVisibleOutput(el, scan)) {
         return { painted: true, reason: 'painted', scan: scan };
       }
-    }
-    if (scan.truncated && scan.paintTiming) {
-      return { painted: true, reason: 'paint-timing', scan: scan };
     }
     return {
       painted: false,

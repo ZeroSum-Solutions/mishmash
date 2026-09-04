@@ -139,6 +139,36 @@ test('[P1] real paint sources are visible output', async ({ page }) => {
     '<svg width="80" height="80"><circle cx="40" cy="40" r="30" fill="#16a34a"></circle></svg>',
   );
   expect(svg.painted, 'an svg shape with a fill paints').toBe(true);
+
+  const shadow = await reportFor(
+    page,
+    '<div style="width:120px;height:80px;box-shadow:0 0 12px 6px #111"></div>',
+  );
+  expect(shadow.painted, 'a box-shadow is ink outside an otherwise empty box').toBe(true);
+
+  const outline = await reportFor(
+    page,
+    '<div style="width:120px;height:80px;outline:3px solid #111"></div>',
+  );
+  expect(outline.painted, 'an outline is ink the border properties do not carry').toBe(true);
+});
+
+test('[P1] Paint Timing answers for content the scan cannot enumerate', async ({ page }) => {
+  // The preferred signal, and why it is preferred: generated content is painted
+  // by the user agent and has no element of its own for a scan to inspect. The
+  // scan would reject this document; Paint Timing does not, and it is asked
+  // first. Raised by the round-1 track audit.
+  const generated = await reportFor(
+    page,
+    '<style>#p::before { content: "Generated"; color: #111 }</style><div id="p"></div>',
+  );
+  expect(generated.painted, 'the user agent says this document painted content').toBe(true);
+  expect(generated.reason).toBe('paint-timing');
+
+  // And the other half of "preferred, never the only one": a document the user
+  // agent reports no contentful paint for still gets a verdict from the scan.
+  const scanned = await reportFor(page, '<div style="width:120px;height:80px;background:#ef4444"></div>');
+  expect(scanned.reason, 'no contentful paint for a background-only document; the scan answers').toBe('painted');
 });
 
 test('[P2] the scan is bounded, and says so when it stops early', async ({ page }) => {
