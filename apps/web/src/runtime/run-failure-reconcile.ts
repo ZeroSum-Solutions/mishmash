@@ -78,6 +78,28 @@ export interface RunCheckState {
 }
 
 /**
+ * The one sentence a user is owed while an unresolved run holds their next turn.
+ *
+ * INVARIANT: an unresolved run pauses sending, and a paused composer says so.
+ * `ProjectView`'s `currentConversationAwaitingActiveRunAttach` — this
+ * conversation's own assistant row still active while no stream is attached —
+ * disables the composer's Send, and the probe allowance lets that stand for
+ * about five minutes during an outage. Wherever that state disables Send, this
+ * key must be readable: the checking notice states it, and the composer repeats
+ * it beside the control it explains. A disabled Send with nothing to read is
+ * the silent lock this exists to prevent.
+ *
+ * It is deliberately NOT shown for the other two causes `ProjectView` folds
+ * into the same boolean — a conversation still loading, and a failed message
+ * read. Each lasts one fetch, and this sentence would misdescribe them.
+ *
+ * Disclosure only. WHEN sending is disabled is unchanged, and no turn is
+ * queued: a queued-send path is a feature with its own hazards, not a fix for
+ * an undisclosed pause.
+ */
+export const SEND_PAUSED_UNRESOLVED_RUN_KEY = 'chat.sendPaused.unresolvedRun' as const;
+
+/**
  * What the checking notice says next, given what the daemon just did.
  *
  * The wording follows the DAEMON's answers, not the run's. `unreachable` turns
