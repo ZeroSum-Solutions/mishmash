@@ -95,17 +95,21 @@ export function isUnadjudicatedStreamFailure(err: unknown): boolean {
  * The row a run keeps while a stream failure leaves it UNRESOLVED.
  *
  * A pane that only stops PAINTING the failure has closed one carrier and left
- * the other open. `consumeDaemonRun` reports `failed` through `onRunStatus`
- * before it surfaces an error it minted out of a connection IT could not keep
- * (`providers/daemon.ts`), so the row itself still carries a terminal the daemon
- * never declared — and that terminal is both the second thing `ChatPane` paints
- * a failure from and the reason its checking notice would not show, because the
+ * the other open. The row itself can still carry a terminal the daemon never
+ * declared — and that terminal is both the second thing `ChatPane` paints a
+ * failure from and the reason its checking notice would not show, because the
  * notice is keyed to an ACTIVE row.
  *
  * So an unadjudicated stream failure takes that terminal back. The row returns
  * to `daemonDeclared` — the last status the DAEMON itself declared for the run —
  * and drops the disconnect-time `endedAt` when that status is active, because
  * nothing has ended. Only the run's own terminal moves it again.
+ *
+ * W1K.3 closed the source those inferred terminals came from: `consumeDaemonRun`
+ * no longer reports `failed` through `onRunStatus` when its own reconnect budget
+ * runs out (`reportUnadjudicatedDisconnect` in `providers/daemon.ts`), so no pane
+ * is handed one to take back. This remains the pane-side statement of the same
+ * rule, and still restores a row that reached a terminal by any other route.
  */
 export function withUnresolvedRunStatus<T extends ChatMessage>(
   message: T,

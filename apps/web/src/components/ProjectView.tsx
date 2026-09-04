@@ -136,6 +136,7 @@ import type { RunCheckState } from '../runtime/run-failure-reconcile';
 import {
   LOST_RUN_CREATE_PROBE_INTERVAL_MS,
   RUN_NOT_STARTED_ERROR_CODE,
+  lostRunCreateCheckWithDaemonReachability,
   matchLostRunCreate,
   nextLostRunCreateStep,
   pinnedRunIdForAssistantRow,
@@ -1579,6 +1580,15 @@ export function ProjectView({
   // no run id is normally a send that never landed, but one of these has a
   // lookup still deciding that question and must not be failed under it.
   const lostRunCreateRowsRef = useRef(new Set<string>());
+  // What a running lookup is looking UNDER, kept while it runs so the notice's
+  // manual re-check can run it again. Keyed by the client's own assistant row,
+  // which is the only handle its check has before a run id exists.
+  const lostRunCreateLookupsRef = useRef(
+    new Map<string, { conversationId: string; identity: LostRunCreateIdentity; message: string }>(),
+  );
+  // Retires the lookup a re-check replaces, so "Check again" cannot leave two
+  // loops probing under the same ids.
+  const lostRunCreateGenerationsRef = useRef(new Map<string, number>());
   const [artifact, setArtifact] = useState<Artifact | null>(null);
   const [filesRefresh, setFilesRefresh] = useState(0);
   // Progress hint for the preview canvas: true from the first `file-changed`
@@ -3488,10 +3498,25 @@ export function ProjectView({
    */
   const scheduleLostRunCreateLookup = useCallback(
     (conversationId: string, identity: LostRunCreateIdentity, streamMessage: string) => {
+      const generation =
+        (lostRunCreateGenerationsRef.current.get(identity.assistantMessageId) ?? 0) + 1;
+      lostRunCreateGenerationsRef.current.set(identity.assistantMessageId, generation);
+      const superseded = () =>
+        lostRunCreateGenerationsRef.current.get(identity.assistantMessageId) !== generation;
       lostRunCreateRowsRef.current.add(identity.assistantMessageId);
-      const release = () => lostRunCreateRowsRef.current.delete(identity.assistantMessageId);
+      lostRunCreateLookupsRef.current.set(identity.assistantMessageId, {
+        conversationId,
+        identity,
+        message: streamMessage,
+      });
+      const release = () => {
+        lostRunCreateRowsRef.current.delete(identity.assistantMessageId);
+        lostRunCreateLookupsRef.current.delete(identity.assistantMessageId);
+      };
       let probes = 0;
+      let unanswered = 0;
       const attempt = () => {
+        if (superseded()) return;
         if (messagesConversationIdRef.current !== conversationId) {
           release();
           return;
@@ -3515,14 +3540,31 @@ export function ProjectView({
             if (!runId && stored) {
               runId = pinnedRunIdForAssistantRow(stored, identity.assistantMessageId);
             }
+            if (superseded()) return;
             if (messagesConversationIdRef.current !== conversationId) {
               release();
               return;
             }
-            // Only a probe that READ both surfaces may spend the bound; see
-            // `nextLostRunCreateStep`.
-            const step = nextLostRunCreateStep(runId, probes, active !== null && stored !== null);
-            if (step === 'probe') {
+            // Only a probe that READ both surfaces may spend the bound, and a
+            // run of probes that read NOTHING is what turns the notice's
+            // wording over; see `nextLostRunCreateStep`.
+            const answered = active !== null && stored !== null;
+            // Two different tests, deliberately. Spending the abandon bound
+            // needs BOTH reads; describing the daemon as silent needs neither
+            // to have landed, so one read that answered retires that wording
+            // even while the other did not. Both reads report a rejected fetch
+            // as `null` too (`fetchActiveChatRuns`, `fetchMessages`), so a
+            // daemon that is down counts here rather than falling to the catch.
+            unanswered = active !== null || stored !== null ? 0 : unanswered + 1;
+            const step = nextLostRunCreateStep(runId, probes, answered, unanswered);
+            if (step === 'probe' || step === 'unreachable') {
+              setRunCheck((current) =>
+                lostRunCreateCheckWithDaemonReachability(
+                  current,
+                  identity.assistantMessageId,
+                  step === 'probe',
+                ),
+              );
               scheduleProjectTimeout(attempt, LOST_RUN_CREATE_PROBE_INTERVAL_MS);
               return;
             }
@@ -3566,6 +3608,7 @@ export function ProjectView({
             // never end without an outcome. Anything unexpected is one more
             // inconclusive probe.
             console.warn('Failed to look up a run whose create response was lost', err);
+            if (superseded()) return;
             scheduleProjectTimeout(attempt, LOST_RUN_CREATE_PROBE_INTERVAL_MS);
           }
         })();
@@ -3583,21 +3626,33 @@ export function ProjectView({
     ],
   );
 
-  // The manual re-check behind the "MishMash is not answering" notice: follow the
-  // run again now instead of waiting out the interval.
+  // The manual re-check behind the "MishMash is not answering" notice: look
+  // again now instead of waiting out the interval.
+  //
+  // Both states the notice can be in have something to re-check, and they are
+  // not the same thing. A check WITH a run id follows that run; a check with
+  // none is still LOOKING for the run its lost create response never named, so
+  // what it runs again is the lookup, under the two ids it stored. Either way
+  // the neutral state stands and the re-check only takes the wording back —
+  // the run may still be running, and nothing here sends anything.
   const recheckUnresolvedRun = useCallback(() => {
     const pending = runCheck;
     const conversationId = messagesConversationIdRef.current;
-    // A check with no run id is still LOOKING for one; its lookup is already
-    // running and the notice offers no manual re-check in that state.
-    if (!pending || !pending.runId || !conversationId) return;
+    if (!pending || !conversationId) return;
+    if (!pending.runId) {
+      const lookup = lostRunCreateLookupsRef.current.get(pending.assistantMessageId);
+      if (!lookup || lookup.conversationId !== conversationId) return;
+      setRunCheck({ ...pending, unreachable: false });
+      scheduleLostRunCreateLookup(lookup.conversationId, lookup.identity, lookup.message);
+      return;
+    }
     const pendingRunId = pending.runId;
     setRunCheck({ ...pending, unreachable: false });
     scheduleInferredRunFailureRecheck(conversationId, pendingRunId, {
       unresolved: true,
       message: pending.message,
     });
-  }, [runCheck, scheduleInferredRunFailureRecheck]);
+  }, [runCheck, scheduleInferredRunFailureRecheck, scheduleLostRunCreateLookup]);
 
   // The programmatic brand-extraction transcript is a synthetic row the daemon
   // reconciles to a terminal state out of band (finalize success, the 30s
@@ -3925,11 +3980,55 @@ export function ProjectView({
     [project.id, activeConversationId, refreshPreviewComments],
   );
 
-  // Maximum number of times we will retry fetching a null status for a
-  // spuriouslyFailedPending run before treating the absence as authoritative
-  // completion.  Transient null-status retries are bounded; after
-  // MAX_TRANSIENT_RETRIES we add to completedReattachRunsRef to avoid spinning.
+  // Maximum number of times we will retry a run-status read that answered
+  // nothing before we stop asking. Bounded so the reattach pass cannot spin;
+  // see `retryUnreadableRunStatus` for what the bound does and does not decide.
   const MAX_TRANSIENT_RETRIES = 2;
+
+  /**
+   * The invariant an unreadable run status is held to: A READ THAT ANSWERED
+   * NOTHING IS NOT A VERDICT.
+   *
+   * `fetchChatRunStatus` reports a non-OK response and a thrown fetch alike as
+   * `null` (`providers/daemon.ts`), so a daemon hiccup, a dropped network, and a
+   * run the daemon has genuinely forgotten all arrive here identically — and the
+   * outage that sends a row into this pass is the very one that produces them.
+   * Moving the row on that is the same claim the transport stopped making when
+   * its own reconnect budget ran out (`reportUnadjudicatedDisconnect` in
+   * `providers/daemon.ts`): a terminal nobody declared, which takes the row out
+   * of the ACTIVE state its checking notice is keyed to and releases the
+   * composer while the run may still be running.
+   *
+   * So nothing is written. The read is retried on the recovery tick, and the
+   * bound is not a verdict either: at `MAX_TRANSIENT_RETRIES` this pass stops
+   * asking the RUN and asks the CONVERSATION instead — one refresh, which
+   * carries the daemon's own stored row and moves the message if the daemon
+   * settled it. That is the `'reconcile'` fallback the pane-side follow already
+   * ends on (`nextInferredRunFailureStep`), and it is what keeps a row whose run
+   * the daemon has genuinely lost from holding the composer forever: the
+   * daemon's row answers even when the run record cannot. Only when that read
+   * says nothing either does the row stay where the daemon last put it, which is
+   * the honest state for a run nobody can describe. A reload re-arms the pass.
+   *
+   * A run the daemon never accepted is a different question, and the `!runId`
+   * branch inside the pass answers it.
+   */
+  const retryUnreadableRunStatus = useCallback((runId: string, conversationId: string) => {
+    const attempts = transientFailedRetriesRef.current.get(runId) ?? 0;
+    if (attempts >= MAX_TRANSIENT_RETRIES) {
+      transientFailedRetriesRef.current.delete(runId);
+      genericDisconnectRetriesRef.current.delete(runId);
+      completedReattachRunsRef.current.add(runId);
+      scheduleConversationMessageRefresh(conversationId);
+      return;
+    }
+    transientFailedRetriesRef.current.set(runId, attempts + 1);
+    const handle = setTimeout(() => {
+      transientRetryTimersRef.current.delete(handle);
+      setRecoveryTick((t) => t + 1);
+    }, 3000);
+    transientRetryTimersRef.current.add(handle);
+  }, [scheduleConversationMessageRefresh]);
 
   // Reset transient retry counts when the conversation or daemon connection
   // changes so stale counts from a previous session do not bleed in.  This
@@ -4074,44 +4173,7 @@ export function ProjectView({
         const status = fallbackRun ?? await fetchChatRunStatus(runId);
         if (cancelled) return;
         if (!status) {
-          // `fetchChatRunStatus` returns null on ANY non-OK response or fetch
-          // exception (providers/daemon.ts:686), not only when the daemon has
-          // permanently forgotten the run.  For a spuriously-failed pending
-          // message we must keep this path retryable: a transient network or
-          // daemon hiccup during reload must not permanently suppress the
-          // reattach attempt for the rest of the session.
-          //
-          // Transient null-status retries are bounded; after MAX_TRANSIENT_RETRIES
-          // we treat the absence as authoritative completion to avoid spinning.
-          // Timers are tracked in transientRetryTimersRef and cleared on cleanup.
-          //
-          // For other message states (phantom running rows with no runId),
-          // fall through to the original mark-failed behaviour and seal the
-          // runId so we don't loop indefinitely.
-          if (spuriouslyFailedPending) {
-            const attempts = transientFailedRetriesRef.current.get(runId) ?? 0;
-            if (attempts >= MAX_TRANSIENT_RETRIES) {
-              // Cap reached — treat as authoritative completion so we stop retrying.
-              // Clear the Map entry so it doesn't accumulate stale entries.
-              transientFailedRetriesRef.current.delete(runId);
-              genericDisconnectRetriesRef.current.delete(runId);
-              completedReattachRunsRef.current.add(runId);
-            } else {
-              transientFailedRetriesRef.current.set(runId, attempts + 1);
-              const handle = setTimeout(() => {
-                transientRetryTimersRef.current.delete(handle);
-                setRecoveryTick((t) => t + 1);
-              }, 3000);
-              transientRetryTimersRef.current.add(handle);
-            }
-          } else {
-            updateMessageById(
-              message.id,
-              (prev) => ({ ...prev, runStatus: 'failed', endedAt: prev.endedAt ?? Date.now() }),
-              true,
-            );
-            completedReattachRunsRef.current.add(runId);
-          }
+          retryUnreadableRunStatus(runId, reattachConversationId);
           continue;
         }
         // When the daemon authoritative status is 'failed', the run ended in a
@@ -5017,12 +5079,14 @@ export function ProjectView({
             if (retractsFailure) clearPaneErrorForRun(runId);
             latestReattachRunStatus = runStatus;
             // A `failed` from the stream is never recorded as the daemon's
-            // word, and it cannot cost a real verdict: `consumeDaemonRun`
-            // surfaces an UNADJUDICATED error only while its own `endStatus` is
-            // still null (`providers/daemon.ts:1105`, `:1281`), and its other
-            // `failed` (`:1250`) returns with a daemon error frame, which is a
-            // verdict. So a daemon-declared terminal never reaches the branch
-            // that reads this value.
+            // word, and it cannot cost a real verdict. Every `failed`
+            // `consumeDaemonRun` reports comes off a terminal the daemon
+            // declared, in the `end` frame or in a status read the client could
+            // make, and those set `endStatus`. The one status it used to INFER
+            // — from its own exhausted reconnect budget — it no longer emits at
+            // all (`reportUnadjudicatedDisconnect`, W1K.3). An error frame alone
+            // is NOT such a terminal: it is provisional until one pairs with it
+            // (`provisionalDaemonErrorFrame`).
             if (runStatus !== 'failed') daemonDeclaredRunStatus = runStatus;
             if (runStatus === 'canceled') {
               textBuffer.cancel();
