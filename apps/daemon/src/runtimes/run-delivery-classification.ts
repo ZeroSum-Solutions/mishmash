@@ -343,3 +343,117 @@ export async function classifyUnattendedRunDelivery(
     return false;
   }
 }
+
+/**
+ * How many still-unclassified turns one startup replay will consider, newest
+ * first. Each candidate costs one event-log read and one project-file listing,
+ * so the pass is bounded rather than proportional to the whole message history;
+ * newest first because those are the turns a user can still have on screen.
+ */
+const DELIVERY_REPLAY_SCAN_LIMIT = 500;
+
+/** A succeeded design turn the daemon has no delivery verdict for. */
+interface UnclassifiedDeliveryRow {
+  assistantMessageId: string;
+  conversationId: string | null;
+  createdAt: number;
+  projectId: string | null;
+  runId: string;
+  sessionMode: string | null;
+  startedAt: number | null;
+}
+
+export interface DeliveryClassificationReplayResult {
+  candidates: number;
+  classified: number;
+}
+
+/**
+ * Invariant: a succeeded design turn ends with a recorded delivery verdict even
+ * when the daemon that ran it exited before it could write one.
+ *
+ * `scheduleUnattendedDeliveryClassification` (`apps/daemon/src/server.ts`) holds
+ * the daemon's verdict in an unref'd timer for one client-finalize settle
+ * window, so an attached client always writes first and a pending timer never
+ * holds the daemon open. Both are deliberate, and together they leave a window
+ * after every successful turn in which the verdict exists nowhere but in
+ * memory. A daemon exit inside it used to lose the verdict permanently: the row
+ * kept a NULL `result_delivery_state` and NULL file lists, which the chat reads
+ * as still verifying (`designDeliveryVerificationPending`,
+ * `apps/web/src/runtime/design-delivery.ts`).
+ *
+ * Nothing extra has to be persisted at the run's terminal to make that
+ * replayable. `classifyUnattendedRunDelivery` already decides from durable
+ * state alone -- the run's own `events.jsonl`, the assistant row, and the
+ * project's files -- so startup simply asks it again for every row that still
+ * carries no verdict. Asking the same function is what keeps the decision in
+ * one place: a replay cannot reach an answer the timer would not have reached.
+ * Its claim guard is what makes the replay safe: it writes only a row with a
+ * NULL delivery state and NULL file lists, so the pass is idempotent and can
+ * never overwrite a verdict a client already wrote.
+ *
+ * Run this AFTER `reconcileDurableRunTerminals`: that pass repairs an assistant
+ * row still stamped `running` by the process that died, using the durable run
+ * state, and this pass reads the repaired status to find succeeded turns.
+ *
+ * A row whose `session_mode` is not `design` is skipped in SQL rather than
+ * handed to the classifier, which would decline it anyway. The run's own
+ * session mode is not a fallback here the way it is for the timer: the timer
+ * holds the live run object, while a replay has only the durable record, and
+ * `state.json` does not carry the session mode.
+ */
+export async function replayUnattendedDeliveryClassifications(
+  db: Database.Database,
+  deps: UnattendedDeliveryDeps,
+  isRunTouched: (fileMtimeMs: number, runStartTimeMs: number) => boolean,
+): Promise<DeliveryClassificationReplayResult> {
+  const result: DeliveryClassificationReplayResult = { candidates: 0, classified: 0 };
+  let rows: UnclassifiedDeliveryRow[];
+  try {
+    rows = db.prepare(
+      `SELECT m.id AS assistantMessageId,
+              m.run_id AS runId,
+              m.conversation_id AS conversationId,
+              c.project_id AS projectId,
+              m.session_mode AS sessionMode,
+              m.started_at AS startedAt,
+              m.created_at AS createdAt
+         FROM messages m
+         JOIN conversations c ON c.id = m.conversation_id
+        WHERE m.role = 'assistant'
+          AND m.run_id IS NOT NULL
+          AND m.run_status = 'succeeded'
+          AND m.session_mode = 'design'
+          AND m.result_delivery_state IS NULL
+          AND m.produced_files_json IS NULL
+          AND m.trace_object_files_json IS NULL
+        ORDER BY m.created_at DESC
+        LIMIT ?`,
+    ).all(DELIVERY_REPLAY_SCAN_LIMIT) as UnclassifiedDeliveryRow[];
+  } catch (err) {
+    console.warn('[runs] unattended delivery classification replay failed', err);
+    return result;
+  }
+  result.candidates = rows.length;
+  for (const row of rows) {
+    const classified = await classifyUnattendedRunDelivery(
+      db,
+      {
+        assistantMessageId: row.assistantMessageId,
+        conversationId: row.conversationId,
+        id: row.runId,
+        projectId: row.projectId,
+        sessionMode: row.sessionMode as ChatSessionMode | null,
+        // The run's own start, as `pinAssistantMessageOnRunCreate` stamped it
+        // (`apps/daemon/src/runtimes/chat-run-messages.ts`), which is the same
+        // `run.createdAt` the timer passes. The row's creation time is the
+        // fallback for a row written before that stamp existed.
+        startedAt: typeof row.startedAt === 'number' ? row.startedAt : row.createdAt,
+      },
+      deps,
+      isRunTouched,
+    );
+    if (classified) result.classified += 1;
+  }
+  return result;
+}

@@ -536,6 +536,43 @@ export function hasRelativeAssetRefs(html: string): boolean {
 export const PREVIEW_INLINE_PROGRESS_AFTER_MS = 1_000;
 export const PREVIEW_INLINE_TIMEOUT_MS = 15_000;
 
+/**
+ * One finished asset-inlining pass, kept under the file that produced it.
+ * `forSource` records which `source` string produced `value`, so a reader can
+ * tell a retained-but-stale render from a current one.
+ */
+export interface InlinedPreviewRender {
+  key: string;
+  forSource: string;
+  value: string;
+}
+
+/**
+ * What the canvas shows when an inlining pass runs past
+ * `PREVIEW_INLINE_TIMEOUT_MS`.
+ *
+ * The invariant: an expired budget never downgrades a render the reader can
+ * already see. When a previous pass produced a render for the SAME file, that
+ * render stays on screen and the timeout adds only its warning — a slow
+ * revalidation after an agent write must not replace a styled page with its raw
+ * source. Raw source is substituted solely when this file has no usable render:
+ * a first open, or a file switch, where the alternative is a canvas that never
+ * paints.
+ *
+ * The key is load-bearing. Holding a render across a file switch would show the
+ * reader the wrong document, which is a worse fault than an unstyled one.
+ */
+export function inlineBudgetExpiryRender(
+  retained: InlinedPreviewRender | null,
+  pending: { key: string; source: string },
+): { render: InlinedPreviewRender; retained: boolean } {
+  if (retained && retained.key === pending.key) return { render: retained, retained: true };
+  return {
+    render: { key: pending.key, forSource: pending.source, value: pending.source },
+    retained: false,
+  };
+}
+
 /** How many referenced assets have settled, out of how many are known. */
 export interface PreviewAssetProgress {
   completed: number;

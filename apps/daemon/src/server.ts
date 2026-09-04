@@ -414,6 +414,8 @@ import { reportRunCompletedFromDaemon } from './langfuse-bridge.js';
 import { followRunTerminalOnMessage, reconcileDurableRunTerminals } from './runtimes/run-terminal-reconciliation.js';
 import {
   classifyUnattendedRunDelivery,
+  replayUnattendedDeliveryClassifications,
+  type UnattendedDeliveryDeps,
   type UnattendedDeliveryRun,
 } from './runtimes/run-delivery-classification.js';
 import { buildPromptStackTelemetry } from './prompt-telemetry.js';
@@ -2351,8 +2353,33 @@ export async function startServer({
     /^\/projects\/[^/]+\/(?:raw|preview)\/|^\/codex-pets\/[^/]+\/spritesheet$|^\/asset-cache$/;
   const _POWERED_PREVIEW_SAFE_RE = /^\/projects\/[^/]+\/powered\/.+$/u;
 
+  // The containment claim a sandboxed preview subresource has to satisfy: the
+  // path names ONE skill's asset tree, ONE design-library entry's preview
+  // assets, or ONE project's raw-file tree — never an API route, never a
+  // prefix that covers more than the previewed document's own files. A path
+  // outside those three families has no scope and stays behind the gate.
   function sandboxedPreviewAssetScope(pathname: string): string | null {
     const apiRelativePath = pathname.startsWith('/api/') ? pathname.slice(4) : pathname;
+    // A previewed project HTML page resolves every relative `src`/`href`
+    // against its project's raw-file route, whichever way the page arrived —
+    // an agent wrote it to disk, or the daemon rendered it from a live
+    // artifact and stated the base in the document (see
+    // packages/contracts/src/runtime/project-asset-base.ts). Both preview
+    // iframes are sandboxed WITHOUT `allow-same-origin`, so those subresource
+    // requests are cross-site and were refused, leaving every relative image
+    // on a previewed page broken (B-10 / decision D-11, option B). The
+    // document itself is a navigation the gate already admits; this entry
+    // covers its assets. A trailing `/raw/` with no file below it is not a
+    // scope, so the exception can never be used to walk the tree, and the
+    // sibling `/powered/`, `/preview/` and JSON project routes are untouched.
+    const project = /^\/projects\/([^/]+)\/raw\/.+$/u.exec(apiRelativePath);
+    if (project?.[1]) {
+      try {
+        return `project:${decodeURIComponent(project[1])}`;
+      } catch {
+        return null;
+      }
+    }
     const skill = /^\/skills\/([^/]+)\/(?:assets|fonts)\//u.exec(apiRelativePath);
     if (skill?.[1]) {
       try {
@@ -2387,10 +2414,15 @@ export async function startServer({
   // A sandboxed document has an opaque origin. Its passive CSS/image/font
   // requests commonly omit Origin entirely, while CORS-enabled resources can
   // send the literal value "null". Permit only browser-classified resource
-  // destinations under the two contained preview prefixes. A scripted
+  // destinations under the contained preview scopes above. A scripted
   // fetch() has Sec-Fetch-Dest: empty and remains denied, so template code
   // cannot use this exception to read daemon API responses or another
-  // collection's source bytes.
+  // collection's source bytes. Sec-Fetch-* are forbidden header names: a page
+  // cannot set them from JavaScript, so the classification is the user
+  // agent's, not the document's. The exception is GET-only, so a mutating
+  // request to the same path stays refused; and it only lets the request
+  // REACH the route, whose own project/artifact resolution still decides
+  // whether any bytes exist to send.
   function isSandboxedPreviewResourceRequest(req: express.Request): boolean {
     if (req.method !== 'GET' || req.headers['sec-fetch-site'] !== 'cross-site') return false;
     const origin = req.headers.origin;
@@ -2926,7 +2958,7 @@ export async function startServer({
   // fresh daemon boot, repair stale message rows and replay any PostHog or
   // Langfuse terminal work whose checkpoint was not committed. Network work
   // stays off the startup critical path.
-  void reconcileDurableRunTerminals({
+  const durableRunTerminalsReconciled = reconcileDurableRunTerminals({
     analytics: analyticsService,
     appVersion: telemetry.getCachedAppVersion()?.version ?? '0.0.0',
     appVersionInfo: telemetry.getCachedAppVersion(),
@@ -2955,12 +2987,32 @@ export async function startServer({
   const previewService = createPreviewService();
 
   /**
+   * What the delivery classification reads the world through, shared by the
+   * settle-window timer below and the startup replay that covers the turns the
+   * timer never got to fire for. One object so the two paths cannot drift into
+   * judging the same turn against different project state.
+   */
+  const unattendedDeliveryDeps: UnattendedDeliveryDeps = {
+    listProjectFiles: async (projectId: string) => {
+      const project = getProject(db, projectId);
+      return await listFiles(PROJECTS_DIR, projectId, { metadata: project?.metadata });
+    },
+    previewStartedDuringRun: (projectId: string, startedAt: number) =>
+      previewService.list(projectId).some((session) => session.startedAt >= startedAt),
+    runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),
+  };
+
+  /**
    * Record the daemon's own delivery verdict for a run whose turn no web client
    * finalized. Fires one settle window after the run's terminal event so an
    * attached client -- which knows the pre-turn file names and the outcome of
    * its own artifact save -- always writes first and wins;
    * `classifyUnattendedRunDelivery` then finds the row already claimed and does
    * nothing. Unref'd so a pending timer never holds the daemon open.
+   *
+   * The window and the unref together mean this verdict is in memory only until
+   * it fires. A daemon exit inside the window is covered by the startup replay
+   * wired below, not by holding the process open.
    */
   const scheduleUnattendedDeliveryClassification = (
     run: Partial<UnattendedDeliveryRun> & { createdAt?: unknown },
@@ -2980,15 +3032,7 @@ export async function startServer({
       void classifyUnattendedRunDelivery(
         db,
         classified,
-        {
-          listProjectFiles: async (projectId: string) => {
-            const project = getProject(db, projectId);
-            return await listFiles(PROJECTS_DIR, projectId, { metadata: project?.metadata });
-          },
-          previewStartedDuringRun: (projectId: string, startedAt: number) =>
-            previewService.list(projectId).some((session) => session.startedAt >= startedAt),
-          runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),
-        },
+        unattendedDeliveryDeps,
         isRunTouchedProjectFile,
       ).catch((error) => {
         console.warn('[runs] unattended delivery classification failed', error);
@@ -2996,6 +3040,25 @@ export async function startServer({
     }, CLIENT_FINALIZE_SETTLE_MS);
     timer.unref?.();
   };
+
+  // The daemon's second durable startup obligation, kept separate from the
+  // first: a succeeded design turn whose verdict was still sitting in the
+  // settle-window timer when the daemon exited is decided now, from the run's
+  // own durable record. Ordered after the reconciliation above because that
+  // pass repairs the assistant row's run status from the durable run state,
+  // and this pass reads that status to find the succeeded turns.
+  void durableRunTerminalsReconciled.then(async () => {
+    const replayed = await replayUnattendedDeliveryClassifications(
+      db,
+      unattendedDeliveryDeps,
+      isRunTouchedProjectFile,
+    );
+    if (replayed.classified > 0) {
+      console.warn('[runs] replayed unattended delivery classifications', replayed);
+    }
+  }).catch((error) => {
+    console.warn('[runs] unattended delivery classification replay failed', error);
+  });
 
   // Tracks runs whose finalized assistant message has already been forwarded
   // to Langfuse so repeated message updates only emit one final trace per run.
@@ -3390,6 +3453,7 @@ export async function startServer({
     http: httpDeps,
     paths: pathDeps,
     mcp: { pendingAuth: mcpPendingAuth, daemonUrlRef },
+    filesystem: { create: createRouteFilesystemWriteGateway },
   });
   registerXaiRoutes(app, {
     http: httpDeps,

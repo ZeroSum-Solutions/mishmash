@@ -27,7 +27,11 @@ describe('durable run terminal reconciliation', () => {
         run_status TEXT,
         started_at INTEGER,
         ended_at INTEGER,
-        events_json TEXT
+        events_json TEXT,
+        result_delivery_state TEXT,
+        produced_files_json TEXT,
+        trace_object_files_json TEXT,
+        pre_turn_file_names_json TEXT
       )
     `);
   });
@@ -749,11 +753,140 @@ describe('durable run terminal reconciliation', () => {
         })).toMatchObject({ endedAt: 9_000, runStatus: 'succeeded' });
       });
 
-      it('lets a write from a different run own the row', () => {
-        insertRow('m-held-other-run', 'succeeded', 9_000);
+      // Supersedes 'lets a write from a different run own the row', which read
+      // a different run id as a new turn taking the row. It is not: the daemon
+      // establishes new-run ownership itself in
+      // `pinAssistantMessageOnRunCreate` (`runtimes/chat-run-messages.ts`),
+      // which rewrites `run_id` before the run id is ever handed to a client.
+      // So a write naming another run is a copy of an EARLIER turn on this row,
+      // flushed after a retry already took it, and honouring it drags a
+      // succeeded retry back to failed with no answer in it.
+      it('holds a delayed write naming an older run instead of letting it take the row', () => {
+        db.prepare(
+          `INSERT INTO messages (id, role, content, run_id, run_status, ended_at, events_json)
+           VALUES ('m-held-other-run', 'assistant', ?, 'run-retry', 'succeeded', 9000, NULL)`,
+        ).run('The retried turn answered.');
 
-        const write = { id: 'm-held-other-run', runId: 'run-other', runStatus: 'running' };
-        expect(holdTerminalRunStatusOnMessageWrite(db, write)).toEqual(write);
+        expect(holdTerminalRunStatusOnMessageWrite(db, {
+          content: '',
+          endedAt: 1_000,
+          id: 'm-held-other-run',
+          runId: 'run-older',
+          runStatus: 'failed',
+        })).toMatchObject({
+          content: 'The retried turn answered.',
+          endedAt: 9_000,
+          runId: 'run-retry',
+          runStatus: 'succeeded',
+        });
+      });
+
+      // The row's delivery record is rewritten by `upsertMessage` from whatever
+      // the write carries, NULL included, so the hold has to cover it on the
+      // same terms as the status: a client copy made before the daemon
+      // classified the turn (`runtimes/run-delivery-classification.ts`) carries
+      // a `no_result` and no file lists, and `no_result` is what
+      // `isRetryableAssistantTerminalFailure` (`apps/web/src/runtime/
+      // design-delivery.ts`) reads to show the turn as a retryable failure.
+      it('keeps the daemon delivery verdict and file lists against a stale same-run write', () => {
+        db.prepare(
+          `INSERT INTO messages (
+             id, role, content, run_id, run_status, ended_at, events_json,
+             result_delivery_state, produced_files_json, trace_object_files_json
+           ) VALUES ('m-held-delivery', 'assistant', 'the answer', 'run-hold', 'succeeded', 9000, NULL,
+                     'delivered', ?, ?)`,
+        ).run(JSON.stringify([{ name: 'index.html' }]), JSON.stringify([{ name: 'index.html' }]));
+
+        expect(holdTerminalRunStatusOnMessageWrite(db, {
+          content: '',
+          endedAt: 9_000,
+          id: 'm-held-delivery',
+          resultDeliveryState: 'no_result',
+          runId: 'run-hold',
+          runStatus: 'succeeded',
+        })).toMatchObject({
+          producedFiles: [{ name: 'index.html' }],
+          resultDeliveryState: 'delivered',
+          traceObjectFiles: [{ name: 'index.html' }],
+        });
+      });
+
+      // The other half of the same rule: a field the write does not carry is
+      // not a field it is clearing.
+      it('keeps a delivery record the delayed write omits entirely', () => {
+        db.prepare(
+          `INSERT INTO messages (
+             id, role, content, run_id, run_status, ended_at, events_json,
+             result_delivery_state, produced_files_json, pre_turn_file_names_json
+           ) VALUES ('m-held-delivery-absent', 'assistant', 'the answer', 'run-hold', 'succeeded', 9000, NULL,
+                     'delivered', ?, ?)`,
+        ).run(JSON.stringify([{ name: 'index.html' }]), JSON.stringify(['plan.md']));
+
+        expect(holdTerminalRunStatusOnMessageWrite(db, {
+          content: 'a late flush of the answer',
+          endedAt: 9_000,
+          id: 'm-held-delivery-absent',
+          runId: 'run-hold',
+          runStatus: 'succeeded',
+        })).toMatchObject({
+          preTurnFileNames: ['plan.md'],
+          producedFiles: [{ name: 'index.html' }],
+          resultDeliveryState: 'delivered',
+        });
+      });
+
+      // The shape a real dropped client actually sends. The chat computes
+      // `producedFiles: computeProducedFiles(...) ?? []` and ships the list
+      // beside the verdict it reached, so the stale copy carries EMPTY lists,
+      // not absent ones. An empty list is a claim, and it counts on the same
+      // terms the verdict it came with does.
+      it('keeps the daemon file lists when the held write carries empty ones', () => {
+        db.prepare(
+          `INSERT INTO messages (
+             id, role, content, run_id, run_status, ended_at, events_json,
+             result_delivery_state, produced_files_json, trace_object_files_json
+           ) VALUES ('m-held-delivery-empty', 'assistant', 'the answer', 'run-hold', 'succeeded', 9000, NULL,
+                     'delivered', ?, ?)`,
+        ).run(JSON.stringify([{ name: 'index.html' }]), JSON.stringify([{ name: 'index.html' }]));
+
+        expect(holdTerminalRunStatusOnMessageWrite(db, {
+          content: '',
+          endedAt: 9_000,
+          id: 'm-held-delivery-empty',
+          producedFiles: [],
+          resultDeliveryState: 'no_result',
+          runId: 'run-hold',
+          runStatus: 'succeeded',
+          traceObjectFiles: [],
+        })).toMatchObject({
+          producedFiles: [{ name: 'index.html' }],
+          resultDeliveryState: 'delivered',
+          traceObjectFiles: [{ name: 'index.html' }],
+        });
+      });
+
+      // And a write that found the delivery the daemon could not still wins:
+      // the hold only ever stops a recorded delivery from being taken back.
+      it('lets a later write upgrade a stored failure verdict to delivered', () => {
+        db.prepare(
+          `INSERT INTO messages (
+             id, role, content, run_id, run_status, ended_at, events_json, result_delivery_state
+           ) VALUES ('m-held-delivery-upgrade', 'assistant', 'the answer', 'run-hold', 'succeeded', 9000, NULL,
+                     'no_result')`,
+        ).run();
+
+        expect(holdTerminalRunStatusOnMessageWrite(db, {
+          content: 'the answer',
+          endedAt: 9_000,
+          id: 'm-held-delivery-upgrade',
+          producedFiles: [{ name: 'index.html' }],
+          resultDeliveryState: 'delivered',
+          runId: 'run-hold',
+          runStatus: 'succeeded',
+        })).toMatchObject({
+          producedFiles: [{ name: 'index.html' }],
+          resultDeliveryState: 'delivered',
+        });
       });
 
       it('leaves a write alone when the row is not already on a non-failed terminal', () => {
