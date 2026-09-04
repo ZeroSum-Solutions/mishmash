@@ -12,13 +12,12 @@
 //     (F12: its answer to an explicit request used to go through
 //     `requestAnimationFrame`, and animation frames are paused in a hidden tab
 //     while the host timeout keeps running);
-//   - the live-artifact preview route serves its response under
-//     `script-src 'none'` and a CSP sandbox without `allow-scripts`
-//     (`setLiveArtifactPreviewHeaders`), so no producer it carried could ever
-//     run. That route therefore carries none, and the host settles its frame on
-//     the outer load event instead. The last case pins header and payload
-//     together: a producer may only be added to that response by relaxing the
-//     header that refuses it.
+//   - the live-artifact preview route (W2H.1 / D-17 option A) serves its
+//     response under `script-src 'nonce-<per response>'` with `allow-scripts`
+//     in the CSP sandbox, so exactly one producer runs in it. That pairing —
+//     header and payload together — is pinned in
+//     `live-artifact-preview-paint-producer.test.ts`; the case here checks only
+//     that the two daemon-served transports report the same shape.
 //
 // Route-level Vitest against a real express app + http.Server, with the
 // live-artifact store rooted in a temp PROJECTS_DIR — the daemon never writes
@@ -90,8 +89,33 @@ function extractPaintReportProducer(html: string): string | null {
   return bodies.length === 0 ? null : bodies.join('\n');
 }
 
+/**
+ * A computed style that hides nothing. The producer reads visibility, opacity,
+ * clipping and paint sources off `getComputedStyle`, so a stub document needs
+ * one for its elements to count as visible output.
+ */
+const VISIBLE_STYLE = {
+  display: 'block',
+  visibility: 'visible',
+  opacity: '1',
+  color: 'rgb(0, 0, 0)',
+  backgroundColor: 'rgba(0, 0, 0, 0)',
+  backgroundImage: 'none',
+  overflow: 'visible',
+  overflowX: 'visible',
+  overflowY: 'visible',
+  clipPath: 'none',
+  borderTopStyle: 'none',
+  borderRightStyle: 'none',
+  borderBottomStyle: 'none',
+  borderLeftStyle: 'none',
+  fill: 'none',
+  stroke: 'none',
+  strokeWidth: '0',
+};
+
 interface HiddenTabRun {
-  parentMessages: Array<{ type?: string; width?: number | null }>;
+  parentMessages: Array<Record<string, unknown>>;
   send: (data: unknown) => void;
 }
 
@@ -101,10 +125,10 @@ interface HiddenTabRun {
  * arrive if the producer posts synchronously.
  */
 function runProducerInHiddenTab(script: string, measures = 1280): HiddenTabRun {
-  const parentMessages: Array<{ type?: string; width?: number | null }> = [];
+  const parentMessages: Array<Record<string, unknown>> = [];
   const listeners: Record<string, Array<(ev: unknown) => void>> = {};
   const win: Record<string, unknown> = {
-    parent: { postMessage: (data: unknown) => parentMessages.push(data as never) },
+    parent: { postMessage: (data: unknown) => parentMessages.push(data as Record<string, unknown>) },
     addEventListener(type: string, listener: (ev: unknown) => void) {
       (listeners[type] ??= []).push(listener);
     },
@@ -112,13 +136,30 @@ function runProducerInHiddenTab(script: string, measures = 1280): HiddenTabRun {
       // Queued and never invoked: the tab is hidden.
       return 1;
     },
+    innerWidth: 1280,
+    innerHeight: 720,
+    getComputedStyle: () => VISIBLE_STYLE,
+  };
+  const laidOut = {
+    tagName: 'BODY',
+    scrollWidth: measures,
+    offsetWidth: measures,
+    clientWidth: measures,
+    parentElement: null,
+    childNodes: measures > 0 ? [{ nodeType: 3, nodeValue: 'Preview' }] : [],
+    getBoundingClientRect: () => ({
+      left: 0,
+      top: 0,
+      width: measures,
+      height: measures > 0 ? 720 : 0,
+    }),
   };
   const documentStub = {
     readyState: 'complete',
     visibilityState: 'hidden',
     hidden: true,
-    documentElement: { scrollWidth: measures, offsetWidth: measures, clientWidth: measures },
-    body: { scrollWidth: measures, offsetWidth: measures, clientWidth: measures },
+    documentElement: laidOut,
+    body: laidOut,
     addEventListener: () => {},
     querySelector: () => null,
     scrollingElement: null,
@@ -302,53 +343,60 @@ describe('daemon-served previews can prove they painted, hidden tab included', (
     const producer = extractPaintReportProducer(await response.text());
     expect(producer, 'the served document must carry an od:preview-content-size producer').not.toBeNull();
     const run = runProducerInHiddenTab(producer as string);
-    run.send({ type: REPORT_REQUEST });
+    run.send({ type: REPORT_REQUEST, token: 'nav-1' });
 
     const report = run.parentMessages.find((message) => message?.type === REPORT);
     expect(report).toBeDefined();
     expect(report?.width).toBe(1280);
+    expect(report?.painted).toBe(true);
+    expect(report?.token).toBe('nav-1');
   });
 
-  it('answers for a document that measured nothing, because a report means the document ran', async () => {
-    // The report says "this document is the one running in the frame", which
-    // the frame's own load event does not. It is not a claim about pixels: a
-    // document that runs and lays out to nothing still answers, carrying a null
-    // measurement. Pinned so the semantics are on the record — the host's
-    // matching case is in
-    // apps/web/tests/observability/iframe-preview-watchdog.test.ts.
+  it('reports a document that laid out to nothing as not painted', async () => {
+    // W2H.1 flipped what this case pins. A report used to settle the host
+    // watchdog on any measurement, which meant a document that ran and laid
+    // out to nothing read as a healthy preview. The report now carries the
+    // paint evidence separately: `painted` is false when no element in the
+    // document has a box with area, and the host refuses to settle on it. The
+    // matching host case is in
+    // apps/web/tests/observability/iframe-preview-paint-evidence.test.ts.
     const url = `${baseUrl}/api/projects/${encodeURIComponent(PROJECT_ID)}/raw/${DISK_PAGE}?odPreviewBridge=scroll`;
     const producer = extractPaintReportProducer(await (await fetch(url)).text());
     expect(producer, 'the served document must carry an od:preview-content-size producer').not.toBeNull();
 
     const run = runProducerInHiddenTab(producer as string, 0);
-    run.send({ type: REPORT_REQUEST });
+    run.send({ type: REPORT_REQUEST, token: 'nav-2' });
 
     const report = run.parentMessages.find((message) => message?.type === REPORT);
     expect(report).toBeDefined();
     expect(report?.width).toBeNull();
+    expect(report?.painted).toBe(false);
   });
 
-  it('serves the live-artifact preview with neither a producer nor a policy that would run one', async () => {
-    // Header and payload pinned together, in one assertion pair, because they
-    // only make sense as a pair. The response refuses scripts, so it carries no
-    // producer, so the host watchdog settles that frame on `load`
-    // (LiveArtifactViewer in apps/web/src/components/FileViewer.tsx, and
-    // apps/web/tests/components/LiveArtifactViewer.preview-paint.test.tsx).
-    // Injecting a producer here without first relaxing the policy would give
-    // the host a report that can never arrive, and every healthy live-artifact
-    // preview would file a false `preview-error` 15 seconds after it loaded.
+  it('serves the live-artifact preview with one producer, admitted by nonce', async () => {
+    // Header and payload pinned together, because they only make sense as a
+    // pair: the response authorizes exactly one script by nonce and allows
+    // scripts in its CSP sandbox, and the script it carries is that producer.
+    // Removing either half without the other gives the host a report that can
+    // never arrive, and every healthy live-artifact preview would file a false
+    // `preview-error` 15 seconds after it loaded. The full CSP shape is pinned
+    // in apps/daemon/tests/live-artifact-preview-paint-producer.test.ts.
     const url = `${baseUrl}/api/live-artifacts/${encodeURIComponent(artifactId)}/preview?projectId=${encodeURIComponent(PROJECT_ID)}`;
     const response = await fetch(url);
     expect(response.status).toBe(200);
 
     const csp = response.headers.get('content-security-policy') ?? '';
-    const refusesScripts = csp.includes("script-src 'none'") && !/sandbox[^;]*allow-scripts/.test(csp);
-    expect(refusesScripts, 'this route is expected to refuse scripts; see the assertion below').toBe(true);
+    const nonce = csp.match(/'nonce-([^']+)'/)?.[1] ?? null;
+    expect(nonce, 'the producer is authorized by nonce, not by unsafe-inline').not.toBeNull();
+    expect(/sandbox[^;]*allow-scripts/.test(csp)).toBe(true);
+    expect(/sandbox[^;]*allow-same-origin/.test(csp)).toBe(false);
 
-    const producer = extractPaintReportProducer(await response.text());
+    const html = await response.text();
+    expect(html).toContain(`nonce="${nonce}"`);
+    const producer = extractPaintReportProducer(html);
     expect(
       producer,
-      'a response served under script-src none must not carry an od:preview-content-size producer: it could never run, and the host would time out every healthy preview waiting for it',
-    ).toBeNull();
+      'this response admits one producer; without it the host has no evidence the preview rendered',
+    ).not.toBeNull();
   });
 });
