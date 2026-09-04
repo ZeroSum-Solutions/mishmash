@@ -85,25 +85,25 @@ describe('pinnedRunIdForAssistantRow — the durable half of the lookup', () => 
 
 describe('nextLostRunCreateStep — what the client does with what it found', () => {
   it('adopts a run the moment either id names one, however late', () => {
-    expect(nextLostRunCreateStep('run-mine', 1, true)).toBe('adopt');
-    expect(nextLostRunCreateStep('run-mine', LOST_RUN_CREATE_MAX_PROBES, true)).toBe('adopt');
-    expect(nextLostRunCreateStep('run-mine', LOST_RUN_CREATE_MAX_PROBES + 5, true)).toBe('adopt');
+    expect(nextLostRunCreateStep('run-mine', 1, true, 0)).toBe('adopt');
+    expect(nextLostRunCreateStep('run-mine', LOST_RUN_CREATE_MAX_PROBES, true, 0)).toBe('adopt');
+    expect(nextLostRunCreateStep('run-mine', LOST_RUN_CREATE_MAX_PROBES + 5, true, 0)).toBe('adopt');
     // A read that did not answer can still have found the run in the surface
     // that did.
-    expect(nextLostRunCreateStep('run-mine', 1, false)).toBe('adopt');
+    expect(nextLostRunCreateStep('run-mine', 1, false, 1)).toBe('adopt');
   });
 
   // One probe finding nothing is not evidence that nothing ran; the client
   // keeps looking rather than naming a failure it has not established.
   it('keeps looking while the bound has room', () => {
     for (let probes = 1; probes < LOST_RUN_CREATE_MAX_PROBES; probes += 1) {
-      expect(nextLostRunCreateStep(null, probes, true)).toBe('probe');
+      expect(nextLostRunCreateStep(null, probes, true, 0)).toBe('probe');
     }
   });
 
   it('gives up only once the bound is spent, which is what rules a live run out', () => {
-    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES, true)).toBe('abandon');
-    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES + 1, true)).toBe('abandon');
+    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES, true, 0)).toBe('abandon');
+    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES + 1, true, 0)).toBe('abandon');
   });
 
   // The B-02 hazard in miniature: the outage that loses a create response is
@@ -111,8 +111,8 @@ describe('nextLostRunCreateStep — what the client does with what it found', ()
   // failed request as "nothing here". A probe that could not read has ruled
   // nothing out, so it must never buy the right to offer Retry.
   it('never spends the bound on a probe that could not read', () => {
-    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES, false)).toBe('probe');
-    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES * 10, false)).toBe('probe');
+    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES, false, 1)).toBe('probe');
+    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES * 10, false, 2)).toBe('probe');
   });
 });
 

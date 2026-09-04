@@ -136,6 +136,7 @@ import type { RunCheckState } from '../runtime/run-failure-reconcile';
 import {
   LOST_RUN_CREATE_PROBE_INTERVAL_MS,
   RUN_NOT_STARTED_ERROR_CODE,
+  lostRunCreateCheckWithDaemonReachability,
   matchLostRunCreate,
   nextLostRunCreateStep,
   pinnedRunIdForAssistantRow,
@@ -1579,6 +1580,15 @@ export function ProjectView({
   // no run id is normally a send that never landed, but one of these has a
   // lookup still deciding that question and must not be failed under it.
   const lostRunCreateRowsRef = useRef(new Set<string>());
+  // What a running lookup is looking UNDER, kept while it runs so the notice's
+  // manual re-check can run it again. Keyed by the client's own assistant row,
+  // which is the only handle its check has before a run id exists.
+  const lostRunCreateLookupsRef = useRef(
+    new Map<string, { conversationId: string; identity: LostRunCreateIdentity; message: string }>(),
+  );
+  // Retires the lookup a re-check replaces, so "Check again" cannot leave two
+  // loops probing under the same ids.
+  const lostRunCreateGenerationsRef = useRef(new Map<string, number>());
   const [artifact, setArtifact] = useState<Artifact | null>(null);
   const [filesRefresh, setFilesRefresh] = useState(0);
   // Progress hint for the preview canvas: true from the first `file-changed`
@@ -3488,10 +3498,25 @@ export function ProjectView({
    */
   const scheduleLostRunCreateLookup = useCallback(
     (conversationId: string, identity: LostRunCreateIdentity, streamMessage: string) => {
+      const generation =
+        (lostRunCreateGenerationsRef.current.get(identity.assistantMessageId) ?? 0) + 1;
+      lostRunCreateGenerationsRef.current.set(identity.assistantMessageId, generation);
+      const superseded = () =>
+        lostRunCreateGenerationsRef.current.get(identity.assistantMessageId) !== generation;
       lostRunCreateRowsRef.current.add(identity.assistantMessageId);
-      const release = () => lostRunCreateRowsRef.current.delete(identity.assistantMessageId);
+      lostRunCreateLookupsRef.current.set(identity.assistantMessageId, {
+        conversationId,
+        identity,
+        message: streamMessage,
+      });
+      const release = () => {
+        lostRunCreateRowsRef.current.delete(identity.assistantMessageId);
+        lostRunCreateLookupsRef.current.delete(identity.assistantMessageId);
+      };
       let probes = 0;
+      let unanswered = 0;
       const attempt = () => {
+        if (superseded()) return;
         if (messagesConversationIdRef.current !== conversationId) {
           release();
           return;
@@ -3515,14 +3540,25 @@ export function ProjectView({
             if (!runId && stored) {
               runId = pinnedRunIdForAssistantRow(stored, identity.assistantMessageId);
             }
+            if (superseded()) return;
             if (messagesConversationIdRef.current !== conversationId) {
               release();
               return;
             }
-            // Only a probe that READ both surfaces may spend the bound; see
-            // `nextLostRunCreateStep`.
-            const step = nextLostRunCreateStep(runId, probes, active !== null && stored !== null);
-            if (step === 'probe') {
+            // Only a probe that READ both surfaces may spend the bound, and a
+            // run of probes that read NOTHING is what turns the notice's
+            // wording over; see `nextLostRunCreateStep`.
+            const answered = active !== null && stored !== null;
+            unanswered = answered ? 0 : unanswered + 1;
+            const step = nextLostRunCreateStep(runId, probes, answered, unanswered);
+            if (step === 'probe' || step === 'unreachable') {
+              setRunCheck((current) =>
+                lostRunCreateCheckWithDaemonReachability(
+                  current,
+                  identity.assistantMessageId,
+                  step === 'probe',
+                ),
+              );
               scheduleProjectTimeout(attempt, LOST_RUN_CREATE_PROBE_INTERVAL_MS);
               return;
             }
@@ -3566,6 +3602,7 @@ export function ProjectView({
             // never end without an outcome. Anything unexpected is one more
             // inconclusive probe.
             console.warn('Failed to look up a run whose create response was lost', err);
+            if (superseded()) return;
             scheduleProjectTimeout(attempt, LOST_RUN_CREATE_PROBE_INTERVAL_MS);
           }
         })();
@@ -3583,21 +3620,33 @@ export function ProjectView({
     ],
   );
 
-  // The manual re-check behind the "MishMash is not answering" notice: follow the
-  // run again now instead of waiting out the interval.
+  // The manual re-check behind the "MishMash is not answering" notice: look
+  // again now instead of waiting out the interval.
+  //
+  // Both states the notice can be in have something to re-check, and they are
+  // not the same thing. A check WITH a run id follows that run; a check with
+  // none is still LOOKING for the run its lost create response never named, so
+  // what it runs again is the lookup, under the two ids it stored. Either way
+  // the neutral state stands and the re-check only takes the wording back —
+  // the run may still be running, and nothing here sends anything.
   const recheckUnresolvedRun = useCallback(() => {
     const pending = runCheck;
     const conversationId = messagesConversationIdRef.current;
-    // A check with no run id is still LOOKING for one; its lookup is already
-    // running and the notice offers no manual re-check in that state.
-    if (!pending || !pending.runId || !conversationId) return;
+    if (!pending || !conversationId) return;
+    if (!pending.runId) {
+      const lookup = lostRunCreateLookupsRef.current.get(pending.assistantMessageId);
+      if (!lookup || lookup.conversationId !== conversationId) return;
+      setRunCheck({ ...pending, unreachable: false });
+      scheduleLostRunCreateLookup(lookup.conversationId, lookup.identity, lookup.message);
+      return;
+    }
     const pendingRunId = pending.runId;
     setRunCheck({ ...pending, unreachable: false });
     scheduleInferredRunFailureRecheck(conversationId, pendingRunId, {
       unresolved: true,
       message: pending.message,
     });
-  }, [runCheck, scheduleInferredRunFailureRecheck]);
+  }, [runCheck, scheduleInferredRunFailureRecheck, scheduleLostRunCreateLookup]);
 
   // The programmatic brand-extraction transcript is a synthetic row the daemon
   // reconciles to a terminal state out of band (finalize success, the 30s
