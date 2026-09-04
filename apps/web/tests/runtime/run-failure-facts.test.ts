@@ -71,6 +71,16 @@ describe('describeRunFailureFacts', () => {
     expect(describeRunFailureFacts({ fileChangeState: 'not_a_state' }).filesKey).toBeNull();
   });
 
+  it('will not invent a count for a countless changed verdict', () => {
+    // Pinning a deliberate hole rather than leaving it implicit. 'changed' is
+    // the one verdict whose sentence needs a number, and its producer always
+    // sends `artifactCount` beside it — a positive count is what makes the
+    // verdict 'changed' (`daemonRestartEvidence`, `apps/daemon/src/runtimes/
+    // run-terminal-reconciliation.ts`). Arriving alone it is unrenderable, and
+    // guessing a number would be worse than the silence.
+    expect(describeRunFailureFacts({ fileChangeState: 'changed' }).filesKey).toBeNull();
+  });
+
   it('rejects a stage or count it cannot trust', () => {
     expect(describeRunFailureFacts({ failureStage: 'not_a_stage' }).stepKey).toBeNull();
     expect(describeRunFailureFacts({ artifactCount: -1 }).filesKey).toBeNull();

@@ -61,11 +61,18 @@ const HELD_PROMPT = 'Write the deterministic artifact then hold the daemon run o
 // log records no write at all.
 const HELD_NO_WRITE_PROMPT = 'Hold the daemon run open without writing any file';
 
-// Project creation writes the project's own starting files. Waiting past the
-// mtime grace `isRunTouchedProjectFile` allows (`apps/daemon/src/projects.ts`)
-// before the run starts keeps those writes outside the run's interval, so a
-// measured zero is measuring the run and not the project's birth.
-const PRE_RUN_SETTLE_MS = 3_000;
+// Let project creation finish before the pre-turn snapshot is read, so the
+// snapshot is the project's settled state rather than a half-written one.
+//
+// The settle is NOT what makes the measured zero trustworthy — the precondition
+// below is. A prototype project starts with no files at all, so there is
+// nothing on disk that any mtime window could attribute to the run, whatever
+// width the daemon's grace has. Asserting that emptiness keeps this spec
+// independent of `RUN_ARTIFACT_RECONCILE_MTIME_GRACE_MS`, which e2e must not
+// import (it is daemon-private), and makes a future project template that DOES
+// ship starting files fail here with a named cause instead of as a confusing
+// "1 file changed".
+const PRE_RUN_SETTLE_MS = 1_000;
 
 const WRITE_OBSERVED_TIMEOUT_MS = 90_000;
 const RECONCILED_TIMEOUT_MS = 60_000;
@@ -309,6 +316,10 @@ describe('a restart-interrupted turn that wrote nothing still states its file-ch
         `/api/projects/${encodeURIComponent(projectId)}/files`,
       );
       const preTurnFileNames = preTurn.files.map((file) => file.name);
+      expect(
+        preTurnFileNames,
+        'precondition: a prototype project starts empty, so no file on disk can be this run\'s',
+      ).toEqual([]);
 
       const startedAt = Date.now();
       const userMessageId = `user-restart-zero-${startedAt}`;
