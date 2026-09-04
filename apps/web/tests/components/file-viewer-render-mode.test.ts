@@ -361,6 +361,41 @@ describe('htmlBuildsScriptAtRuntime (CANVAS-6)', () => {
   });
 });
 
+// W2H.4: the transport half of the CANVAS-6 story, pinned next to the browser
+// spec that owns the behaviour (`e2e/ui/preview-runtime-script.test.ts`). An
+// artifact that attaches its script at runtime ships no literal `<script src>`,
+// so nothing about the script routes it anywhere: it takes the URL-load
+// transport like any other plain page, and reaches srcDoc only when some
+// unrelated property of the page asks for a srcDoc-only bridge. Both transports
+// resolve the script against the project's raw-asset route, which the daemon
+// serves (decision D-11, option B), so neither one is the blocked case the
+// removed notice described.
+describe('a runtime-attached script does not choose a preview transport (CANVAS-6)', () => {
+  const base = { mode: 'preview' as const, isDeck: false, commentMode: false, forceInline: false };
+  const RUNTIME_ATTACHED = [
+    '<!doctype html><div id="marker">not-run</div>',
+    '<script>',
+    "var s = document.createElement('script');",
+    "s.src = 'boot.js';",
+    'document.head.appendChild(s);',
+    '</script>',
+  ].join('\n');
+
+  it('leaves the artifact on the URL-load transport', () => {
+    // The literal-tag scans are what force srcDoc for a linked script; a
+    // runtime-attached one is invisible to both, by construction.
+    expect(htmlNeedsSandboxShim(RUNTIME_ATTACHED)).toBe(false);
+    expect(htmlNeedsFocusGuard(RUNTIME_ATTACHED)).toBe(false);
+    expect(shouldUrlLoadHtmlPreview(base)).toBe(true);
+  });
+
+  it('reaches srcDoc only through a disqualifier about the page, not about the script', () => {
+    const manySections = RUNTIME_ATTACHED + '<section></section>'.repeat(COMPOSITION_METRICS_SECTION_THRESHOLD);
+    expect(htmlLooksMeasurableForCompositionMetrics(manySections)).toBe(true);
+    expect(shouldUrlLoadHtmlPreview({ ...base, compositionMetricsBridge: true })).toBe(false);
+  });
+});
+
 describe('htmlNeedsFocusGuard', () => {
   it('returns false for plain static HTML', () => {
     expect(htmlNeedsFocusGuard('<!doctype html><h1>hello</h1>')).toBe(false);
