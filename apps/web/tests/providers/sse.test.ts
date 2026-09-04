@@ -2047,6 +2047,7 @@ describe('streamViaDaemon', () => {
 
   it('reports an error when reconnects are exhausted before an end event', async () => {
     const handlers = createDaemonHandlers();
+    const onRunStatus = vi.fn();
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === '/api/runs') return jsonResponse({ runId: 'run-1' });
@@ -2061,6 +2062,7 @@ describe('streamViaDaemon', () => {
       systemPrompt: '',
       signal: new AbortController().signal,
       handlers,
+      onRunStatus,
     });
 
     expect(fetchMock).not.toHaveBeenCalledWith('/api/runs/run-1/cancel', { method: 'POST' });
@@ -2070,10 +2072,25 @@ describe('streamViaDaemon', () => {
         code: 'DAEMON_STREAM_DISCONNECTED',
       }),
     );
+    // W1K.3: the status read threw too, so nothing was learned about the run.
+    expect(
+      onRunStatus.mock.calls.map(([status]) => status),
+      'an unreadable status is not a terminal either',
+    ).not.toContain('failed');
     expect(handlers.onDone).not.toHaveBeenCalled();
   });
 
-  it('marks a daemon run failed when the SSE stream closes silently and status is still active', async () => {
+  // W1K.3 SUPERSESSION. This case used to be named "marks a daemon run failed
+  // when the SSE stream closes silently and status is still active" and asserted
+  // `onRunStatus` was called with 'failed'. That inferred terminal is the defect
+  // round-6 residual 2 names: the daemon reported the run RUNNING one line
+  // earlier, so the client has no verdict, and stamping one leaves an inactive
+  // row — which is the second carrier a failure card is painted from, hides the
+  // checking notice that replaces it (`answersRunCheck`), and releases the
+  // composer the unresolved run is meant to hold. The reattach path was given
+  // this rule in W1J.1; the assertion is inverted here so both paths infer the
+  // same nothing from the same silence.
+  it('emits no run status when the SSE stream closes silently and the run is still active', async () => {
     const handlers = createDaemonHandlers();
     const onRunStatus = vi.fn();
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -2107,7 +2124,10 @@ describe('streamViaDaemon', () => {
     });
 
     expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/runs/run-1')).toBe(true);
-    expect(onRunStatus).toHaveBeenCalledWith('failed');
+    expect(
+      onRunStatus.mock.calls.map(([status]) => status),
+      'an exhausted reconnect budget is this client\u2019s report about itself, never a terminal for the run',
+    ).not.toContain('failed');
     expect(handlers.onError).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'daemon stream disconnected before run completed',

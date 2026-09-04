@@ -26,6 +26,7 @@ import {
   nextInferredRunFailureStep,
   runCheckWithDaemonReachability,
   retractsStaleRunFailure,
+  SEND_PAUSED_UNRESOLVED_RUN_KEY,
 } from '../../runtime/run-failure-reconcile';
 import type { RunCheckState } from '../../runtime/run-failure-reconcile';
 import {
@@ -92,6 +93,16 @@ export interface UseConversationChatResult {
   runCheck: RunCheckState | null;
   /** Re-runs the follow behind that notice. */
   onRunCheckAgain: () => void;
+  /**
+   * True while this pane's own run is unresolved: its assistant row is still
+   * ACTIVE and no stream is attached to it. The same state
+   * `ProjectView.currentConversationAwaitingActiveRunAttach` names for the
+   * primary chat, and it holds Send for the same reason — a turn sent now would
+   * race a run whose verdict has not arrived.
+   */
+  sendDisabled: boolean;
+  /** The sentence the composer shows beside the Send it disabled. */
+  sendDisabledReason: string | undefined;
   /** True until the initial message load resolves. */
   loading: boolean;
   onSend: (
@@ -785,5 +796,30 @@ export function useConversationChat(
     });
   }, [persist]);
 
-  return { messages, streaming, error, runCheck, loading, onSend, onRetry, onStop, onRunCheckAgain };
+  // INVARIANT: an unresolved run pauses sending, and a paused composer says so
+  // (`SEND_PAUSED_UNRESOLVED_RUN_KEY`). A side chat that renders its own
+  // `useConversationChat` gets no `sendDisabled` from a parent, so without this
+  // its Send stayed live for the whole unresolved window while its checking
+  // notice was on screen — the notice and the composer disagreeing about the
+  // same run.
+  const awaitingActiveRunAttach =
+    !streaming
+    && messages.some((message) => message.role === 'assistant' && isActiveRunStatus(message.runStatus));
+  const sendDisabledReason = awaitingActiveRunAttach
+    ? t(SEND_PAUSED_UNRESOLVED_RUN_KEY)
+    : undefined;
+
+  return {
+    messages,
+    streaming,
+    error,
+    runCheck,
+    loading,
+    onSend,
+    onRetry,
+    onStop,
+    onRunCheckAgain,
+    sendDisabled: awaitingActiveRunAttach,
+    sendDisabledReason,
+  };
 }
