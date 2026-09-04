@@ -122,7 +122,6 @@ import {
   RUN_FAILURE_RECHECK_INTERVAL_MS,
   applyRunTerminalFromStatus,
   conversationAnswersRunCheck,
-  isGenericDaemonDisconnect,
   isUnadjudicatedStreamFailure,
   nextInferredRunFailureStep,
   retractsRunFailure,
@@ -513,13 +512,26 @@ const DESIGN_SYSTEM_AUDIT_AUTO_REPAIR_ATTEMPTS = 2;
 // Embedded-browser navigation bursts settle well within this; the local cache
 // is written immediately so nothing is lost if the daemon write is coalesced.
 const TAB_PERSIST_DEBOUNCE_MS = 400;
+// The generic browser-side SSE reconnect-budget exhaustion message emitted by
+// consumeDaemonRun when the daemon status fetch still shows the run as
+// queued/running (providers/daemon.ts).  Both the live-stream onError and the
+// reattach-stream onError share this message; neither constitutes an
+// authoritative terminal failure.  Use isGenericDaemonDisconnect() at both
+// sites so generic disconnects stay eligible for attachRecoverableRuns to
+// re-query daemon authoritative status on the next tick.
+function isGenericDaemonDisconnect(err: unknown): boolean {
+  return err instanceof Error && (
+    (err as Error & { code?: string }).code === GENERIC_DAEMON_DISCONNECT_CODE ||
+    err.message === GENERIC_DAEMON_DISCONNECT_MESSAGE
+  );
+}
+
 // A persisted status/error event represents a generic daemon disconnect when
 // either its structured `code` matches GENERIC_DAEMON_DISCONNECT_CODE, OR
 // (legacy rows persisted before this code was introduced) its `detail`
 // equals the canonical GENERIC_DAEMON_DISCONNECT_MESSAGE with no code set.
-// Mirrors isGenericDaemonDisconnect() in runtime/run-failure-reconcile.ts,
-// which checks the equivalent code-or-message pair on live Error objects for
-// the same reason.
+// Mirrors isGenericDaemonDisconnect() above, which checks the equivalent
+// code-or-message pair on live Error objects for the same reason.
 function hasGenericDisconnectFailureEvent(message: ChatMessage): boolean {
   return (message.events ?? []).some(
     (event) =>

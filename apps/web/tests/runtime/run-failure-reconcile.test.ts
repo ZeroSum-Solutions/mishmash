@@ -6,6 +6,7 @@ import {
   RUN_FAILURE_RECHECK_MAX_MISSES,
   applyRunTerminalFromStatus,
   isUnadjudicatedStreamFailure,
+  markStreamUnadjudicated,
   nextInferredRunFailureStep,
   retractsRunFailure,
   retractsStaleRunFailure,
@@ -218,18 +219,27 @@ describe('applyRunTerminalFromStatus — the run own terminal, before any read',
 // this client only inferred from a broken transport.
 describe('isUnadjudicatedStreamFailure — a verdict is still a verdict', () => {
   it('reads a non-OK event-stream response as unresolved', () => {
-    // `consumeDaemonRun` surfaces exactly this for a stream answered non-OK.
-    expect(isUnadjudicatedStreamFailure(new Error('daemon 503: no body'))).toBe(true);
+    // `consumeDaemonRun` surfaces exactly this text for a stream answered
+    // non-OK, and marks it because it minted the error itself.
+    expect(isUnadjudicatedStreamFailure(markStreamUnadjudicated(new Error('daemon 503: no body'))))
+      .toBe(true);
   });
 
   it('reads a transport failure as unresolved', () => {
-    expect(isUnadjudicatedStreamFailure(new TypeError('Failed to fetch'))).toBe(true);
+    expect(isUnadjudicatedStreamFailure(markStreamUnadjudicated(new TypeError('Failed to fetch'))))
+      .toBe(true);
   });
 
   it('reads a stream that closed without a terminal as unresolved', () => {
     // The generic disconnect carries a code, but it is minted by this client
     // after its own reconnect budget ran out — the daemon said nothing.
     expect(isUnadjudicatedStreamFailure(createGenericDaemonDisconnectError())).toBe(true);
+  });
+
+  it('keeps the mark off the enumerable shape of the error', () => {
+    const marked = markStreamUnadjudicated(new Error('daemon 503: no body'));
+    expect(Object.keys(marked)).toEqual([]);
+    expect(JSON.parse(JSON.stringify({ ...marked }))).toEqual({});
   });
 
   it('reads a daemon-classified failure as a verdict', () => {
@@ -241,7 +251,10 @@ describe('isUnadjudicatedStreamFailure — a verdict is still a verdict', () => 
     expect(isUnadjudicatedStreamFailure(classified)).toBe(false);
   });
 
-  it('reads a daemon error frame with its own code as a verdict', () => {
+  // The distinction the mark exists for: a daemon `error` frame with no code
+  // reads exactly like a transport failure, and is the daemon's verdict.
+  it('reads an unmarked daemon error frame as a verdict, code or no code', () => {
+    expect(isUnadjudicatedStreamFailure(new Error('daemon error'))).toBe(false);
     const coded = Object.assign(new Error('daemon error'), { code: 'AGENT_EXECUTION_FAILED' });
     expect(isUnadjudicatedStreamFailure(coded)).toBe(false);
   });
@@ -251,5 +264,11 @@ describe('isUnadjudicatedStreamFailure — a verdict is still a verdict', () => 
       code: 'DAEMON_RESTARTED',
     });
     expect(isUnadjudicatedStreamFailure(restarted)).toBe(false);
+  });
+
+  it('says nothing about a value that is not an error at all', () => {
+    expect(isUnadjudicatedStreamFailure(null)).toBe(false);
+    expect(isUnadjudicatedStreamFailure(undefined)).toBe(false);
+    expect(isUnadjudicatedStreamFailure('daemon 503')).toBe(false);
   });
 });

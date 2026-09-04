@@ -1,9 +1,5 @@
 import type { ChatRunStatus } from '@open-design/contracts';
 import type { ChatMessage } from '../types';
-import {
-  GENERIC_DAEMON_DISCONNECT_CODE,
-  GENERIC_DAEMON_DISCONNECT_MESSAGE,
-} from '../providers/daemon';
 import { isRetryableAssistantTerminalFailure } from './design-delivery';
 
 function isFailedAssistantRow(message: ChatMessage): boolean {
@@ -15,20 +11,26 @@ function isActiveRunStatus(status: ChatMessage['runStatus']): boolean {
 }
 
 /**
- * The generic browser-side SSE reconnect-budget exhaustion `consumeDaemonRun`
- * emits when its own budget ran out while the daemon still reported the run
- * queued or running (`providers/daemon.ts`).
+ * The mark the transport puts on an error it minted ITSELF, out of a broken
+ * connection rather than out of anything the daemon said about the run.
  *
- * Both the live-stream and the reattach-stream `onError` reach it, and neither
- * is an authoritative terminal failure: the run stays eligible for
- * `attachRecoverableRuns` to re-query on the next tick. Rows persisted before
- * the code existed carry the message alone, so both are matched.
+ * The distinction cannot be recovered downstream. A daemon `error` frame with
+ * no `code` and a non-OK event-stream response both arrive as a plain `Error`
+ * with a message, yet one is the daemon's verdict on the turn and the other is
+ * this client's report of its own connection. Only `providers/daemon.ts` knows
+ * which it just built, so it says so here and every pane reads the answer
+ * through `isUnadjudicatedStreamFailure`.
  */
-export function isGenericDaemonDisconnect(err: unknown): boolean {
-  return err instanceof Error && (
-    (err as Error & { code?: string }).code === GENERIC_DAEMON_DISCONNECT_CODE
-    || err.message === GENERIC_DAEMON_DISCONNECT_MESSAGE
-  );
+const UNADJUDICATED_STREAM_FAILURE = 'unadjudicatedStreamFailure';
+
+/** Stamp an error the transport minted for itself. See the constant above. */
+export function markStreamUnadjudicated<E extends Error>(error: E): E {
+  Object.defineProperty(error, UNADJUDICATED_STREAM_FAILURE, {
+    value: true,
+    enumerable: false,
+    configurable: true,
+  });
+  return error;
 }
 
 /**
@@ -36,33 +38,20 @@ export function isGenericDaemonDisconnect(err: unknown): boolean {
  * Every other stream error leaves the run UNRESOLVED, and it stays unresolved
  * until the run itself answers.
  *
- * The daemon's verdict reaches a client on the error handed to `onError`: an
- * `error` frame the daemon sent carries its own `code`, and a terminal the
- * client read carries the classification `markErrorRunFailure` stamps
- * (`failureCategory` / `failureDetail` / `failureStage`). An error carrying
- * none of those was minted by this client out of a broken transport — the
- * event stream answered non-OK, the run-create call answered non-OK, the fetch
- * threw — and says nothing about the run, which is usually still going: a
- * stream that fails when it OPENS fails at the start of a turn that then runs
- * for seconds or minutes.
+ * An unadjudicated error says nothing about the run, which is usually still
+ * going: a stream that fails when it OPENS fails at the start of a turn that
+ * then runs for seconds or minutes and normally succeeds. The generic
+ * disconnect belongs to this class too, even though it carries a code — that
+ * code is this client's own word for "my reconnect budget ran out", not the
+ * daemon's word for what happened to the run.
  *
- * The generic disconnect is the one error that carries a code and is still
- * unresolved, because that code is this client's own word for "my reconnect
- * budget ran out", not the daemon's word for what happened to the run.
+ * Everything else is a verdict and keeps the failure card: the daemon's own
+ * `error` frame, with or without a code, and the classification
+ * `markErrorRunFailure` stamps from a terminal the client read.
  */
 export function isUnadjudicatedStreamFailure(err: unknown): boolean {
-  if (isGenericDaemonDisconnect(err)) return true;
-  const carried = err as {
-    code?: unknown;
-    failureCategory?: unknown;
-    failureDetail?: unknown;
-    failureStage?: unknown;
-  } | null | undefined;
-  if (!carried) return true;
-  return !carried.code
-    && !carried.failureCategory
-    && !carried.failureDetail
-    && !carried.failureStage;
+  if (!err || typeof err !== 'object') return false;
+  return (err as Record<string, unknown>)[UNADJUDICATED_STREAM_FAILURE] === true;
 }
 
 /**
