@@ -128,6 +128,7 @@ import {
   retractsRunFailure,
   retractsStaleRunFailure,
   withUnresolvedRunStatus,
+  SEND_PAUSED_UNRESOLVED_RUN_KEY,
 } from '../runtime/run-failure-reconcile';
 import type { RunCheckState } from '../runtime/run-failure-reconcile';
 import { RESUME_CONTINUE_PROMPT } from '../runtime/resume';
@@ -1923,6 +1924,12 @@ export function ProjectView({
     || failedMessagesConversationId === activeConversationId
     || currentConversationAwaitingActiveRunAttach;
   const currentConversationActionDisabled = currentConversationBusy || currentConversationSendDisabled;
+  // The unresolved run is the only one of the three holds above the user cannot
+  // account for: the other two last one fetch, while this one stands until the
+  // run answers. Naming it here is what lets the composer stop being silent.
+  const currentConversationSendDisabledReason = currentConversationAwaitingActiveRunAttach
+    ? t(SEND_PAUSED_UNRESOLVED_RUN_KEY)
+    : undefined;
   const currentConversationQueueDisabled = currentConversationLoading
     || failedMessagesConversationId === activeConversationId;
 
@@ -7716,6 +7723,7 @@ export function ProjectView({
 	            streaming: currentConversationControlStreaming,
 	            loading: currentConversationLoading,
 	            sendDisabled: currentConversationSendDisabled,
+	            sendDisabledReason: currentConversationSendDisabledReason,
             queuedItems: currentConversationQueuedItems,
             error: conversationLoadError ?? error,
             runCheck,
@@ -7736,6 +7744,7 @@ export function ProjectView({
       currentConversationActionDisabled,
 	      currentConversationQueuedItems,
 	      currentConversationSendDisabled,
+	      currentConversationSendDisabledReason,
 	      currentConversationLoading,
 	      currentConversationControlStreaming,
       error,
@@ -9037,6 +9046,7 @@ export function ProjectView({
               liveToolInput={liveToolInput}
               loading={currentConversationLoading}
               sendDisabled={currentConversationSendDisabled}
+              sendDisabledReason={currentConversationSendDisabledReason}
               queuedItems={currentConversationQueuedItems}
               error={conversationLoadError ?? error}
               runCheck={runCheck}

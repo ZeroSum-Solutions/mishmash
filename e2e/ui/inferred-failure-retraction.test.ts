@@ -1,5 +1,6 @@
 import {
   CHECKING_NOTICE_TEXT,
+  SEND_PAUSED_TEXT,
   runCheckingNotice,
   runErrorCard,
   runFailureCardSightings,
@@ -24,6 +25,10 @@ const RUN_PROMPT = 'Create a delayed deterministic smoke artifact';
 // a permanently running, content-less row — cannot pass as a build that
 // retracted the failure.
 const RUN_ANSWER = 'I recovered the delayed reasoning path';
+// W1J.4: what the user types while the run is unresolved. A draft is required
+// to see the pause at all — the Send button is also disabled on an empty
+// composer, so an empty one cannot tell "paused" from "nothing to send".
+const PAUSED_DRAFT = 'A follow-up turn typed while the run is unresolved';
 // How many consecutive unanswered status probes the W1H.1 cases force before
 // letting the run's real terminal through. Three is what the pre-fix rule
 // treated as the end of the recovery, and at `RUN_FAILURE_RECHECK_INTERVAL_MS`
@@ -270,6 +275,21 @@ test('[P0] a live inferred failure is retracted after three status probes answer
   await expect(failureAlert, 'an unresolved stream failure must not paint the failure card')
     .toHaveCount(0);
 
+  // W1J.4: the unresolved window pauses sending, and the user must be able to
+  // read that. The probe allowance lets this window last minutes, so a Send
+  // that is merely disabled is a silent lock.
+  const composer = page.getByTestId('chat-composer').first();
+  const sendButton = composer.getByTestId('chat-send').first();
+  await composer.getByTestId('chat-composer-input').first().fill(PAUSED_DRAFT);
+  await expect(sendButton, 'an unresolved run must hold Send even with a draft ready')
+    .toBeDisabled();
+  await expect(checkingNotice, 'the checking notice must say sending is paused')
+    .toContainText(SEND_PAUSED_TEXT);
+  await expect(
+    composer.getByText(SEND_PAUSED_TEXT).first(),
+    'the composer must explain why its Send is disabled',
+  ).toBeVisible();
+
   await waitForDaemonRunStatus(page, runId, 'succeeded');
   // A coarse gate, not the mechanism: `refused` also counts the unrelated
   // per-message status read described on `holdRunStatusProbes`. What makes the
@@ -301,6 +321,13 @@ test('[P0] a live inferred failure is retracted after three status probes answer
     page.getByText(RUN_ANSWER).first(),
     'the retracted turn must show the answer the run delivered',
   ).toBeVisible({ timeout: T.long });
+  // W1J.4: the pause ends with the run, and its explanation leaves with it.
+  await expect(sendButton, 'sending must resume once the run answers')
+    .toBeEnabled({ timeout: T.long });
+  await expect(
+    composer.getByText(SEND_PAUSED_TEXT),
+    'the paused sentence must not outlive the pause',
+  ).toHaveCount(0, { timeout: T.long });
   expect(await documentLoadCount(page), 'the alert must clear without a page reload').toBe(documentLoads);
 });
 

@@ -7,6 +7,10 @@ const CARD_SIGHTINGS_KEY = 'od-e2e-failure-card-sightings';
  *  run verdict, in the shipped English copy (`chat.runChecking.message`). */
 export const CHECKING_NOTICE_TEXT = 'Checking its result';
 
+/** Part of the sentence the checking notice and the disabled composer both show
+ *  while an unresolved run holds sending (`chat.sendPaused.unresolvedRun`). */
+export const SEND_PAUSED_TEXT = 'Sending is paused';
+
 /** The alert a pane paints for a run failure ("Task failed"). */
 export function runErrorCard(scope: Page | Locator): Locator {
   return scope.locator('[data-user-action-card="run-recovery"]').last();

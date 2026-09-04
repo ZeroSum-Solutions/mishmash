@@ -4,6 +4,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useId,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -217,6 +218,11 @@ interface Props {
   sessionMode?: ChatSessionMode;
   onSessionModeChange?: (mode: ChatSessionMode) => void;
   sendDisabled?: boolean;
+  // Why Send is disabled, in the words the user reads. The caller supplies it
+  // only for a hold the user cannot otherwise account for — today the
+  // unresolved-run pause, which can stand for minutes. Omitted, the composer
+  // shows no hint, so a hold that lasts one fetch grows no permanent sentence.
+  sendDisabledReason?: string;
   initialDraft?: string;
   composerPlaceholder?: string;
   placeholderScenarios?: ReadonlyArray<PlaceholderScenario>;
@@ -401,6 +407,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       sessionMode = 'design',
       onSessionModeChange,
       sendDisabled = false,
+      sendDisabledReason,
       initialDraft,
       composerPlaceholder,
       placeholderScenarios = [],
@@ -450,6 +457,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         ? activeProjectFileName
         : null;
     const activeFileDisplayName = activeFileContext ? lastPathSegment(activeFileContext) : null;
+    // Stable target for the Send button's `aria-describedby`, so a screen
+    // reader announcing the disabled control also reads why it is disabled.
+    const sendDisabledReasonId = useId();
     const [draft, setDraft] = useState(() => initialDraft ?? loadComposerDraft(draftStorageKey) ?? "");
     const [placeholderScenario, setPlaceholderScenario] = useState<PlaceholderScenario | null>(null);
     const composerRootRef = useRef<HTMLDivElement | null>(null);
@@ -3130,6 +3140,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                   void submit();
                 }}
                 disabled={sendDisabled || !hasComposerPayload}
+                aria-describedby={sendDisabledReason ? sendDisabledReasonId : undefined}
                 aria-label={t('chat.send')}
                 title={t('chat.send')}
                 data-tooltip={t('chat.send')}
@@ -3165,6 +3176,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
               }}
             />
           </div>
+        ) : null}
+        {sendDisabledReason ? (
+          <span
+            id={sendDisabledReasonId}
+            className="composer-hint"
+            data-send-disabled-reason=""
+          >
+            {sendDisabledReason}
+          </span>
         ) : null}
         {uploadError ? <span className="composer-hint">{uploadError}</span> : null}
         {detailsRecord ? (

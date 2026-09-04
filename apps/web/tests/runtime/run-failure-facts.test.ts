@@ -86,4 +86,25 @@ describe('describeRunFailureFacts', () => {
     expect(describeRunFailureFacts({ artifactCount: -1 }).filesKey).toBeNull();
     expect(describeRunFailureFacts({ artifactCount: 1.5 }).filesKey).toBeNull();
   });
+
+  // W1J.5 — a name every plain object inherits is not a stage or a verdict.
+  // Membership has to be OWN membership: an inherited name would carry an
+  // `Object.prototype` member out as `stepKey`/`filesKey`, and the alert renders
+  // that key through i18n. Rejection is the only reading of a name the maps
+  // never declared.
+  const INHERITED_NAMES = ['constructor', 'toString', '__proto__', 'valueOf', 'hasOwnProperty'];
+
+  it('rejects a failure stage that is only an inherited object member', () => {
+    for (const name of INHERITED_NAMES) {
+      const facts = describeRunFailureFacts({ failureStage: name });
+      expect(facts.stage, name).toBeNull();
+      expect(facts.stepKey, name).toBeNull();
+    }
+  });
+
+  it('rejects a file-change state that is only an inherited object member', () => {
+    for (const name of INHERITED_NAMES) {
+      expect(describeRunFailureFacts({ fileChangeState: name }).filesKey, name).toBeNull();
+    }
+  });
 });

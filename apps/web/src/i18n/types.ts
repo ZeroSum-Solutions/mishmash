@@ -2680,6 +2680,10 @@ export interface Dict {
   'chat.runChecking.unreachableTitle': string;
   'chat.runChecking.unreachableMessage': string;
   'chat.runChecking.checkAgainCta': string;
+  // Why the composer will not send while that state stands. Rendered by the
+  // checking notice and repeated beside the disabled Send button; see
+  // `SEND_PAUSED_UNRESOLVED_RUN_KEY` in `runtime/run-failure-reconcile.ts`.
+  'chat.sendPaused.unresolvedRun': string;
   'chat.tabComments': string;
   'chat.commentsSoon': string;
   'chat.comments.attached': string;
