@@ -276,9 +276,14 @@ describe('design-system agent file writes and the user viewport (B-09)', () => {
     renderDetailView();
     await screen.findByText('Acme Design System');
 
-    // The user opens a file for themselves and lands on the Files tab, so the
-    // workspace they are looking at is `index.html`.
-    fireEvent.click(await screen.findByTestId('chat-open-file'));
+    // The workspace only mounts once `ensureDesignSystemWorkspace` resolves,
+    // so wait for it before driving it.
+    fireEvent.click(screen.getByRole('button', { name: 'Design Files' }));
+    await screen.findByTestId('design-system-files');
+
+    // The user opens a file for themselves, so the file they are looking at
+    // is `index.html`.
+    fireEvent.click(screen.getByTestId('chat-open-file'));
     await waitFor(() =>
       expect(screen.getByTestId('workspace-active-tab').textContent).toBe('index.html'),
     );
@@ -295,7 +300,10 @@ describe('design-system agent file writes and the user viewport (B-09)', () => {
     await waitFor(() => expect(mocks.saveMessage).toHaveBeenCalled());
 
     expect(screen.getByTestId('workspace-active-tab').textContent).toBe('index.html');
-    expect(screen.getByTestId('workspace-open-request').textContent).not.toBe('brand-spec.md');
+    // The last open request the workspace saw is still the user's own. Naming
+    // the file it must be — rather than only the file it must not be — keeps
+    // this from passing when the agent redirects the user to some third file.
+    expect(screen.getByTestId('workspace-open-request').textContent).toBe('index.html');
   });
 
   it('still opens an agent-written file when the user has no view of their own', async () => {
@@ -327,9 +335,8 @@ describe('design-system agent file writes and the user viewport (B-09)', () => {
     // Files tab, but nothing opened: the state a fresh design system sits in
     // before its first generation, where the agent's file has no view to steal.
     fireEvent.click(screen.getByRole('button', { name: 'Design Files' }));
-    await waitFor(() =>
-      expect(screen.getByTestId('workspace-active-tab').textContent).toBe(''),
-    );
+    await screen.findByTestId('design-system-files');
+    expect(screen.getByTestId('workspace-active-tab').textContent).toBe('');
 
     fireEvent.click(screen.getByTestId('design-system-chat-send'));
 
