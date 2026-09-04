@@ -40,6 +40,22 @@ export type PreviewPaintReason =
   | 'no-elements'
   | 'no-visible-output';
 
+/**
+ * What a `painted: true` rests on, when that is worth saying.
+ *
+ *  - `'image-unverified'` — the only paint source found was a raster image
+ *    that decoded with a nonzero intrinsic size and whose pixels could not be
+ *    read. Pixel transparency is decidable only through an untainted canvas,
+ *    which needs an image the document is allowed to read; in the sandboxed
+ *    opaque-origin preview frame every http(s) image is cross-origin, so
+ *    `getImageData` throws there. A fully transparent image and an opaque one
+ *    are then indistinguishable, and the report says `painted: true` AND says
+ *    it could not check — rather than guessing either way.
+ *
+ * `null` on every other report: the evidence was decidable in the document.
+ */
+export type PreviewPaintEvidence = 'image-unverified';
+
 /** How many candidates the scan rejected, and for what. */
 export interface PreviewPaintCounters {
   /** Candidates inspected before the scan stopped. */
@@ -50,6 +66,8 @@ export interface PreviewPaintCounters {
   clipped: number;
   /** Visible geometry that paints nothing: no text, background, border or content. */
   blank: number;
+  /** Candidates whose only paint source was an image whose pixels could not be read. */
+  imageUnverified: number;
 }
 
 /** What a previewed document posts about its own rendering. */
@@ -61,6 +79,8 @@ export interface PreviewPaintReport {
   painted: boolean;
   /** Why `painted` is what it is. */
   reason: PreviewPaintReason;
+  /** What a `painted: true` rests on when that is not decidable; `null` otherwise. */
+  evidence: PreviewPaintEvidence | null;
   /** What the scan looked at and what it threw away. */
   counters: PreviewPaintCounters;
   /** True when the scan stopped at its candidate cap or time budget. */
@@ -108,9 +128,29 @@ export const PREVIEW_PAINT_SCAN_BUDGET_MS = 50;
  *     or given no area, is hidden by it rather than released from it;
  *   - and it paints something: a direct non-whitespace text node under a
  *     non-transparent `color`, a non-transparent `background-color`, a
- *     `background-image`, a visible border on some side, a `box-shadow`, a
- *     visible `outline`, an SVG `fill` or `stroke`, a decoded `img` with
- *     intrinsic size, or a `video` with a poster or a decoded frame.
+ *     `background-image` that inks, a visible border on some side, a
+ *     `box-shadow`, a visible `outline`, an SVG `fill` or `stroke`, a decoded
+ *     `img` with intrinsic size and visible pixels, or a `video` with a poster
+ *     or a decoded frame.
+ *
+ * **A paint source is not the same as paint.** Two of those sources can be
+ * present and still put nothing on screen, and they are not equally decidable:
+ *
+ *   - A GRADIENT states its colour stops in the computed value, so one whose
+ *     every stop is transparent (`transparent`, a zero alpha in any functional
+ *     colour, `#rrggbb00`) is decidably not paint, and one with any
+ *     non-transparent stop decidably is.
+ *   - A RASTER IMAGE (`img`, `background-image: url(...)`, a `video` frame or
+ *     poster) states nothing. Its pixels are readable only through an
+ *     untainted canvas, and in the sandboxed opaque-origin preview frame every
+ *     http(s) image is cross-origin, so `getImageData` throws `SecurityError`.
+ *     Where the pixels CAN be read (a same-origin image) a 16x16 alpha sample
+ *     decides, and an all-zero alpha is not paint. Where they cannot, the
+ *     answer is unknown and is reported as unknown: the candidate counts as
+ *     paint, `evidence` is `'image-unverified'`, and `counters.imageUnverified`
+ *     says how many candidates were in that position. A scan that found
+ *     decidable evidence anywhere in the document reports that instead — an
+ *     unverified candidate does not stop the walk.
  *
  * Blank replaced geometry never counts, and the scan cannot see inside one that
  * is not blank. An empty `canvas`, an `svg` with no painted children and an
@@ -140,7 +180,14 @@ export const PREVIEW_PAINT_SCAN_BUDGET_MS = 50;
  * the forms recognised here, or a filter that erases the pixels. A document
  * that painted and then blanked itself also keeps its Paint Timing entry, and
  * is reported as painted; it did render, and the entry is the UA's word for
- * that.
+ * that. An image whose pixels could not be read is the one false positive the
+ * report NAMES rather than merely admits to, through `evidence`.
+ *
+ * Paint Timing is asked before any of this, and a user agent that reports a
+ * contentful paint for a decoded image reports one whether or not the image
+ * has visible pixels — Chromium does. So the image rules above decide in the
+ * user agents that expose no paint timing for a nested browsing context, which
+ * the spec allows and which is why the scan exists at all.
  */
 export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
   if (window.__odPreviewPaintReport) return;
@@ -150,6 +197,21 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
   var CLIPPING_OVERFLOW = /^(hidden|clip|auto|scroll)/;
   var SVG_PAINTED_SHAPES = /^(path|rect|circle|ellipse|line|polyline|polygon|text|tspan|textpath|use|image)$/;
   var EMPTY_CLIP_PATH = /(circle|ellipse)\\(\\s*0[a-z%]*[\\s)]|inset\\(\\s*(100%|50%\\s+50%\\s+50%\\s+50%)|polygon\\(\\s*\\)/;
+  // What one candidate's paint sources amount to. The middle value is the
+  // whole point: "this would paint IF the image has visible pixels, and this
+  // document is not allowed to look".
+  var PAINTS = 'paint';
+  var PAINTS_NOT = 'none';
+  var PAINTS_UNVERIFIED = 'image-unverified';
+  // Alpha is sampled on a 16x16 grid rather than read whole: enough to catch a
+  // fully transparent image, cheap enough to run inside the scan's budget. It
+  // is a SAMPLE, so an image whose only ink is a speck too small to survive
+  // the downscale reads as blank -- which is what such an image looks like.
+  var IMAGE_ALPHA_SAMPLE = 16;
+  var GRADIENT_FUNCTION = /^(?:repeating-)?(?:linear|radial|conic)-gradient\\(/i;
+  // Colour stops as they can be written: hex with or without alpha, any
+  // functional colour, and the two keywords.
+  var COLOUR_TOKEN = /#[0-9a-f]{3,8}|(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\\([^()]*\\)|\\b(?:transparent|currentcolor)\\b/gi;
   var token = null;
 
   function num(value){
@@ -189,14 +251,37 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     }
     return width > 0 ? Math.ceil(width) : null;
   }
+  // One alpha component: a number, a percentage, or the 'none' keyword. A
+  // component this cannot read is OPAQUE, never transparent -- see alphaOf.
+  function alphaComponent(text){
+    var value = String(text == null ? '' : text).trim();
+    if (value === '') return 1;
+    if (value === 'none') return 0;
+    var number = parseFloat(value);
+    if (!Number.isFinite(number)) return 1;
+    return value.charAt(value.length - 1) === '%' ? number / 100 : number;
+  }
+  // Alpha of one CSS colour. Every functional colour puts alpha after a '/',
+  // the legacy comma forms put it fourth, and '#rgba' / '#rrggbbaa' put it in
+  // the trailing digits. A value in none of those shapes reads as OPAQUE: a
+  // colour this cannot parse must never be mistaken for an invisible one, or
+  // the scan calls a healthy preview blank.
   function alphaOf(color){
     if (!color) return 0;
-    if (color === 'transparent' || color === 'none') return 0;
-    var match = /^rgba?\\(([^)]*)\\)/i.exec(color);
+    var value = String(color).trim().toLowerCase();
+    if (value === '' || value === 'transparent' || value === 'none') return 0;
+    if (value.charAt(0) === '#') {
+      if (value.length === 5) return parseInt(value.charAt(4) + value.charAt(4), 16) / 255;
+      if (value.length === 9) return parseInt(value.slice(7), 16) / 255;
+      return 1;
+    }
+    var match = /^[a-z]+\\(([^()]*)\\)$/.exec(value);
     if (!match) return 1;
-    var parts = String(match[1]).split(/[,\\/]/);
+    var slash = match[1].indexOf('/');
+    if (slash >= 0) return alphaComponent(match[1].slice(slash + 1));
+    var parts = match[1].split(',');
     if (parts.length < 4) return 1;
-    return num(parts[3]);
+    return alphaComponent(parts[3]);
   }
   function paintTimingSawContent(){
     try {
@@ -331,40 +416,120 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     if (px(style.outlineWidth) <= 0) return false;
     return alphaOf(style.outlineColor) > 0;
   }
+  // Split a comma-separated CSS list at TOP-LEVEL commas only: the commas
+  // inside 'rgba(...)' and inside a gradient's own argument list are its.
+  function splitLayers(value){
+    var parts = [];
+    var depth = 0;
+    var start = 0;
+    for (var i = 0; i < value.length; i += 1) {
+      var char = value.charAt(i);
+      if (char === '(') depth += 1;
+      else if (char === ')') { if (depth > 0) depth -= 1; }
+      else if (char === ',' && depth === 0) { parts.push(value.slice(start, i)); start = i + 1; }
+    }
+    parts.push(value.slice(start));
+    return parts;
+  }
+  // Does a gradient layer ink anything? Only a layer whose EVERY stated colour
+  // stop is transparent does not. A layer whose stops cannot be read at all is
+  // assumed to ink -- the same direction as alphaOf, and for the same reason.
+  function gradientPaints(layer){
+    var stops = layer.match(COLOUR_TOKEN);
+    if (!stops) return true;
+    for (var i = 0; i < stops.length; i += 1) {
+      if (alphaOf(stops[i]) > 0) return true;
+    }
+    return false;
+  }
+  // What a 'background-image' value puts on screen: PAINTS when some layer
+  // states a non-transparent stop, PAINTS_NOT when every layer is a gradient
+  // with nothing but transparent stops, PAINTS_UNVERIFIED when the only inking
+  // layer is a raster this cannot read ('url(...)', 'image-set(...)').
+  function backgroundImagePaints(value){
+    if (!value || value === 'none') return PAINTS_NOT;
+    var layers = splitLayers(String(value));
+    var unverified = false;
+    for (var i = 0; i < layers.length; i += 1) {
+      var layer = layers[i].trim();
+      if (layer === '' || layer.toLowerCase() === 'none') continue;
+      if (GRADIENT_FUNCTION.test(layer)) {
+        if (gradientPaints(layer)) return PAINTS;
+        continue;
+      }
+      unverified = true;
+    }
+    return unverified ? PAINTS_UNVERIFIED : PAINTS_NOT;
+  }
+  // Whether a decoded image's pixels are visible. Reading them needs an
+  // untainted canvas, which needs an image this document is allowed to read;
+  // a cross-origin one taints it and 'getImageData' throws SecurityError. In
+  // the sandboxed opaque-origin preview frame that is every http(s) image, so
+  // the unreadable answer is the common one and must stay honest: neither
+  // "blank" nor plain "painted", but PAINTS_UNVERIFIED.
+  function imagePixelsPaint(source){
+    try {
+      var canvas = document.createElement('canvas');
+      canvas.width = IMAGE_ALPHA_SAMPLE;
+      canvas.height = IMAGE_ALPHA_SAMPLE;
+      var context = typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
+      if (!context) return PAINTS_UNVERIFIED;
+      context.drawImage(source, 0, 0, IMAGE_ALPHA_SAMPLE, IMAGE_ALPHA_SAMPLE);
+      var pixels = context.getImageData(0, 0, IMAGE_ALPHA_SAMPLE, IMAGE_ALPHA_SAMPLE).data;
+      for (var i = 3; i < pixels.length; i += 4) {
+        if (pixels[i] > 0) return PAINTS;
+      }
+      return PAINTS_NOT;
+    } catch (_) {
+      return PAINTS_UNVERIFIED;
+    }
+  }
   function paintsSomething(el, style){
     var tag = el.tagName ? String(el.tagName).toLowerCase() : '';
+    var unverified = false;
     if (style) {
-      if (hasDirectText(el) && alphaOf(style.color) > 0) return true;
-      if (alphaOf(style.backgroundColor) > 0) return true;
-      if (style.backgroundImage && style.backgroundImage !== 'none') return true;
-      if (hasVisibleBorder(style)) return true;
-      if (style.boxShadow && style.boxShadow !== 'none') return true;
-      if (hasVisibleOutline(style)) return true;
+      if (hasDirectText(el) && alphaOf(style.color) > 0) return PAINTS;
+      if (alphaOf(style.backgroundColor) > 0) return PAINTS;
+      var background = backgroundImagePaints(style.backgroundImage);
+      if (background === PAINTS) return PAINTS;
+      if (background === PAINTS_UNVERIFIED) unverified = true;
+      if (hasVisibleBorder(style)) return PAINTS;
+      if (style.boxShadow && style.boxShadow !== 'none') return PAINTS;
+      if (hasVisibleOutline(style)) return PAINTS;
       if (SVG_PAINTED_SHAPES.test(tag)) {
-        if (alphaOf(style.fill) > 0) return true;
-        if (alphaOf(style.stroke) > 0 && px(style.strokeWidth) > 0) return true;
+        if (alphaOf(style.fill) > 0) return PAINTS;
+        if (alphaOf(style.stroke) > 0 && px(style.strokeWidth) > 0) return PAINTS;
       }
     }
     if (tag === 'img') {
-      return el.complete === true && num(el.naturalWidth) > 0 && num(el.naturalHeight) > 0;
-    }
-    if (tag === 'video') {
+      if (el.complete === true && num(el.naturalWidth) > 0 && num(el.naturalHeight) > 0) {
+        var pixels = imagePixelsPaint(el);
+        if (pixels !== PAINTS_NOT) return pixels;
+      }
+    } else if (tag === 'video') {
+      // A poster and a decoded frame are rasters like any other, and there is
+      // no cheaper read of them than the image case above -- which drawImage
+      // cannot do for a video that has not reached a frame. Unverified.
       var poster = typeof el.getAttribute === 'function' ? el.getAttribute('poster') : null;
-      return (typeof poster === 'string' && poster !== '') || num(el.readyState) >= 2;
+      if ((typeof poster === 'string' && poster !== '') || num(el.readyState) >= 2) {
+        return PAINTS_UNVERIFIED;
+      }
     }
     // A canvas, an svg root and an iframe are blank rectangles until something
     // paints in them, and the scan cannot see in. A drawn canvas settles
     // through Paint Timing above, never through its geometry here.
-    return false;
+    return unverified ? PAINTS_UNVERIFIED : PAINTS_NOT;
   }
   function candidateIsVisibleOutput(el, scan){
     var state = stateOf(el, scan);
-    if (!state.visible || !(state.opacity > 0)) { scan.hidden += 1; return false; }
+    if (!state.visible || !(state.opacity > 0)) { scan.hidden += 1; return PAINTS_NOT; }
     var rect = rectOf(el, scan);
-    if (!rect || rect.right - rect.left <= 0 || rect.bottom - rect.top <= 0) { scan.clipped += 1; return false; }
-    if (!clipAdmits(rect, state.clipSelf)) { scan.clipped += 1; return false; }
-    if (!paintsSomething(el, styleOf(el, scan))) { scan.blank += 1; return false; }
-    return true;
+    if (!rect || rect.right - rect.left <= 0 || rect.bottom - rect.top <= 0) { scan.clipped += 1; return PAINTS_NOT; }
+    if (!clipAdmits(rect, state.clipSelf)) { scan.clipped += 1; return PAINTS_NOT; }
+    var paints = paintsSomething(el, styleOf(el, scan));
+    if (paints === PAINTS_NOT) { scan.blank += 1; return PAINTS_NOT; }
+    if (paints === PAINTS_UNVERIFIED) scan.imageUnverified += 1;
+    return paints;
   }
   function hitTestTargets(viewport){
     var found = [];
@@ -397,6 +562,7 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
       hidden: 0,
       clipped: 0,
       blank: 0,
+      imageUnverified: 0,
       truncated: false
     };
     // Preferred signal, asked first: the user agent reports a contentful paint
@@ -404,11 +570,11 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     // Paint Timing is optional in a nested browsing context, and the scan below
     // is what answers when the UA says nothing.
     if (paintTimingSawContent()) {
-      return { painted: true, reason: 'paint-timing', scan: scan };
+      return { painted: true, reason: 'paint-timing', evidence: null, scan: scan };
     }
     var body = document.body;
     if (!body) {
-      return { painted: false, reason: 'no-elements', scan: scan };
+      return { painted: false, reason: 'no-elements', evidence: null, scan: scan };
     }
     var queue = hitTestTargets(viewport);
     queue.push(body);
@@ -418,6 +584,7 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     } catch (_) { walker = null; }
     var visited = new WeakSet();
     var index = 0;
+    var unverified = false;
     var deadline = nowMs() + BUDGET_MS;
     while (true) {
       if (scan.seen >= CANDIDATE_LIMIT) { scan.truncated = true; break; }
@@ -429,13 +596,22 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
       if (visited.has(el)) continue;
       visited.add(el);
       scan.seen += 1;
-      if (candidateIsVisibleOutput(el, scan)) {
-        return { painted: true, reason: 'painted', scan: scan };
+      var paints = candidateIsVisibleOutput(el, scan);
+      // Evidence the scan can stand behind ends the walk. An unverified
+      // candidate does not: a document that also holds something decidably
+      // visible deserves to be reported on THAT, without the caveat.
+      if (paints === PAINTS) {
+        return { painted: true, reason: 'painted', evidence: null, scan: scan };
       }
+      if (paints === PAINTS_UNVERIFIED) unverified = true;
+    }
+    if (unverified) {
+      return { painted: true, reason: 'painted', evidence: PAINTS_UNVERIFIED, scan: scan };
     }
     return {
       painted: false,
       reason: scan.seen === 0 ? 'no-elements' : 'no-visible-output',
+      evidence: null,
       scan: scan
     };
   }
@@ -451,11 +627,13 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
           width: measureWidth(),
           painted: result.painted,
           reason: result.reason,
+          evidence: result.evidence,
           counters: {
             seen: result.scan.seen,
             hidden: result.scan.hidden,
             clipped: result.scan.clipped,
-            blank: result.scan.blank
+            blank: result.scan.blank,
+            imageUnverified: result.scan.imageUnverified
           },
           scanTruncated: result.scan.truncated,
           token: token

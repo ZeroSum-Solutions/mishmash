@@ -11,9 +11,9 @@
  *
  * It is a small state-aware scan, not a parser and not a regex over the whole
  * text. What can hide a `</body>` from the parser is what this tracks, with the
- * two deliberate imprecisions named after the list:
+ * one deliberate imprecision named after the list:
  *
- *  - comment text;
+ *  - comment text, ended at every spelling the tokenizer accepts;
  *  - raw-text / RCDATA element contents (the tokenizer's RAWTEXT, RCDATA and
  *    script-data switches);
  *  - a quoted attribute value inside a tag;
@@ -35,12 +35,6 @@
  * while this scan reads it as a section; the effect is to skip more text than
  * the parser would, which can only cost a genuine body close and fall back to
  * the EOF append below. It cannot select a decoy.
- *
- * A comment ends here at `-->` only. The tokenizer also closes one at `--!>`
- * (comment-end-bang state) and treats `<!-->` and `<!--->` as complete comments
- * (abrupt-closing-of-empty-comment). Same failure direction as the paragraph
- * above, and the same reason it is stated rather than fixed here: skipping more
- * than the parser would costs a genuine close, never selects a decoy.
  *
  * When no genuine close exists the injection is appended at EOF. That is the
  * honest placement, not a guarantee of execution: a document that left the
@@ -125,7 +119,40 @@ function tagEnd(html: string, from: number): number {
   return -1;
 }
 
-/** Index just past the close tag of a raw-text element, or -1 if it never closes. */
+/**
+ * Index just past the end of the comment whose `<!--` opener ends at `from`,
+ * or -1 when the comment never closes.
+ *
+ * Every spelling the tokenizer accepts, because a comment that is read as
+ * running past its close swallows real markup:
+ *
+ *  - `<!-->` and `<!--->` are complete, EMPTY comments — a `>` (or a `-` then
+ *    a `>`) straight after the opener closes them abruptly
+ *    (https://html.spec.whatwg.org/multipage/parsing.html#comment-start-state,
+ *    #comment-start-dash-state);
+ *  - otherwise the comment ends at `-->` (#comment-end-state) or at `--!>`
+ *    (#comment-end-bang-state).
+ *
+ * Recognising `-->` alone reads everything up to a LATER `-->` as comment
+ * text. That loses the document's genuine body close, and — worse — hides a
+ * marked producer the document already carries, after which a second one is
+ * injected and the exactly-one-producer invariant is broken.
+ */
+function commentEnd(html: string, from: number): number {
+  if (html.charAt(from) === '>') return from + 1;
+  if (html.charAt(from) === '-' && html.charAt(from + 1) === '>') return from + 2;
+  const close = /--!?>/g;
+  close.lastIndex = from;
+  const match = close.exec(html);
+  return match === null ? -1 : match.index + match[0].length;
+}
+
+/**
+ * Index just past the close tag of a raw-text element, or -1 if it never
+ * closes. `from` must be past the element's START TAG: the raw-text region
+ * begins where the tag ends, so a `</script>` written inside an attribute
+ * value belongs to the value, not to the region.
+ */
 function rawTextElementEnd(html: string, name: string, from: number): number {
   const close = new RegExp(`</${name}(?=[\\s/>])`, 'gi');
   close.lastIndex = from;
@@ -220,10 +247,10 @@ function scanBodyClose(html: string, marker: string | null): BodyCloseScan {
   while (match !== null) {
     const token = match[0].toLowerCase();
     if (token === '<!--') {
-      const end = html.indexOf('-->', match.index + 4);
+      const end = commentEnd(html, match.index + 4);
       // An unterminated comment swallows everything after it.
       if (end < 0) return stopHere();
-      scanner.lastIndex = end + 3;
+      scanner.lastIndex = end;
     } else if (token === '<![cdata[') {
       // A CDATA section only in foreign content; a bogus comment anywhere else.
       const end = foreignDepth > 0
@@ -236,13 +263,21 @@ function scanBodyClose(html: string, marker: string | null): BodyCloseScan {
       if (end < 0) return stopHere();
       scanner.lastIndex = end;
     } else if (match[1]) {
-      if (marker !== null && !markerDeclared && match[1].toLowerCase() === 'script') {
-        const tagClose = tagEnd(html, scanner.lastIndex);
-        if (tagClose > 0 && declaresAttribute(html, scanner.lastIndex, tagClose - 1, marker)) {
-          markerDeclared = true;
-        }
+      // The start tag is read first, quoted values and all: the raw-text
+      // region begins where the tag ends, and one attribute value holding
+      // `</script>` must not end it inside the tag.
+      const tagClose = tagEnd(html, scanner.lastIndex);
+      // An unterminated start tag swallows everything after it.
+      if (tagClose < 0) return stopHere();
+      if (
+        marker !== null &&
+        !markerDeclared &&
+        match[1].toLowerCase() === 'script' &&
+        declaresAttribute(html, scanner.lastIndex, tagClose - 1, marker)
+      ) {
+        markerDeclared = true;
       }
-      const end = rawTextElementEnd(html, match[1], scanner.lastIndex);
+      const end = rawTextElementEnd(html, match[1], tagClose);
       // An unterminated raw-text element swallows everything after it.
       if (end < 0) return stopHere();
       scanner.lastIndex = end;

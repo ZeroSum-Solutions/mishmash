@@ -98,7 +98,10 @@ interface TrackPreviewPaintOptions {
  *     `PreviewPaintReport.painted` is what separates "it ran" from "a user
  *     would see it". The detector's honest false-positive and false-negative
  *     profile is documented on `PREVIEW_PAINT_REPORT_PRODUCER_SOURCE` in
- *     `packages/contracts`.
+ *     `packages/contracts`. One class of evidence carries a caveat the report
+ *     states outright — an image whose pixels the document was not allowed to
+ *     read — and a settle on that is recorded rather than passed off as proof;
+ *     see `recordUnverifiedEvidence`.
  *  3. **A report settles only the document the host asked.** This is a
  *     two-phase epoch, because `iframe.contentWindow` is the same WindowProxy
  *     across a navigation and neither event-source matching nor a token the
@@ -160,6 +163,36 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
       ...extras,
     });
     options.onPaintState?.({ status: 'unproven', reason });
+  };
+
+  /**
+   * The invariant: a preview never settles on evidence with a caveat WITHOUT
+   * that caveat being recorded.
+   *
+   * `evidence: 'image-unverified'` means the producer found nothing visible it
+   * could decide, and one candidate it could not: a raster image that decoded
+   * with intrinsic size whose pixels no canvas in that document may read (in
+   * the sandboxed opaque-origin preview frame, every http(s) image). Reporting
+   * it as paint is the honest call — an unread image is not evidence of a
+   * blank document either — but left silent it is indistinguishable from proof
+   * downstream, and a class of genuinely blank previews would settle unseen.
+   *
+   * This is the one exception to the watchdog's no-success-event rule, and it
+   * is bounded by the same reasoning: it fires only for the caveat, never for
+   * the common case.
+   */
+  const recordUnverifiedEvidence = (report: Partial<PreviewPaintReport>): void => {
+    if (report.evidence == null) return;
+    reportSafetyEvent('client_iframe_paint_unverified', {
+      surface,
+      report_evidence: report.evidence,
+      report_image_unverified: report.counters?.imageUnverified ?? null,
+      report_candidates: report.counters?.seen ?? null,
+      duration_ms: Math.round(performance.now() - armedAt),
+      artifact_id: options.artifactId,
+      project_id: options.projectId,
+      conversation_id: options.conversationId,
+    });
   };
 
   // We don't emit a success event — it would multiply ingest cost for the
@@ -245,6 +278,7 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
     reported = true;
     latestReport = data;
     if (data.painted !== true) return;
+    recordUnverifiedEvidence(data);
     settleQuietly();
   };
 
