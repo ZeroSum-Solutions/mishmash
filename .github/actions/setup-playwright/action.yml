@@ -65,7 +65,7 @@ runs:
     # served next to the runner instead of from GitHub's cache backend); everything else keeps actions/cache.
     - name: Cache Playwright browser binaries (Blacksmith)
       if: ${{ steps.persistent-playwright-cache.outputs.enabled != 'true' && steps.blacksmith.outputs.enabled == 'true' }}
-      uses: useblacksmith/cache@v6
+      uses: useblacksmith/cache@v5
       with:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
