@@ -149,9 +149,16 @@ test('[P1] the powered preview reports its paint back across the isolated origin
   // And because it arrived, the watchdog settled: no preview-error was filed.
   const anomalies = await page.request.get('/api/anomalies?kind=preview-error', { timeout: 15_000 });
   expect(anomalies.ok()).toBeTruthy();
-  const body = (await anomalies.json()) as { anomalies?: Array<{ detail?: { surface?: string } }> };
+  const body = (await anomalies.json()) as {
+    anomalies?: Array<{ projectId?: string; detail?: { surface?: string } }>;
+  };
+  // Scoped to this project: the anomaly log is daemon state and a Playwright
+  // worker's daemon is shared by every file it runs, so a sibling file's
+  // deliberately-blank powered preview must not read as this one's failure
+  // (e2e/AGENTS.md, "Order independence is the contract").
   const poweredErrors = (body.anomalies ?? []).filter(
-    (record) => record.detail?.surface === 'file_viewer_preview_powered',
+    (record) =>
+      record.detail?.surface === 'file_viewer_preview_powered' && record.projectId === projectId,
   );
   expect(poweredErrors).toHaveLength(0);
 });

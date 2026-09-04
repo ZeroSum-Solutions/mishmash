@@ -74,7 +74,7 @@ async function reportFor(page: Page, body: string, head = ''): Promise<PaintRepo
 
 /** A 2x2 opaque red PNG, so `img` cases have real decoded intrinsic size. */
 const RED_PNG =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAACddGYaAAAAFUlEQVR4nGP8z8DAwMDAwMTAwMAAAA8AAtQBhZ0AAAAASUVORK5CYII=';
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4z8AARAwQCgAf7gP9i18U1AAAAABJRU5ErkJggg==';
 
 test('[P1] a document whose only content is invisible does not report itself painted', async ({ page }) => {
   const hidden = await reportFor(page, '<div style="visibility:hidden"><h1>Hidden</h1></div>');

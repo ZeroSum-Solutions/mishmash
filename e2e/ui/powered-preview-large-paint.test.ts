@@ -23,9 +23,15 @@ const BRIDGE_CAP_BYTES = 2 * 1024 * 1024;
 
 test.describe.configure({ timeout: T.xlong });
 
-/** Padding that pushes the response past the bridge cap without nesting. */
-function padding(): string {
-  const chunk = `<p data-filler>${'x'.repeat(1024)}</p>\n`;
+/**
+ * Padding that pushes the response past the bridge cap. Visible padding is
+ * markup; blank padding is comments, so the blank document really does paint
+ * nothing rather than painting 2.5 MiB of filler text.
+ */
+function padding(visible: boolean): string {
+  const chunk = visible
+    ? `<p data-filler>${'x'.repeat(1024)}</p>\n`
+    : `<!-- ${'x'.repeat(1024)} -->\n`;
   return chunk.repeat(Math.ceil((2.5 * 1024 * 1024) / chunk.length));
 }
 
@@ -41,7 +47,7 @@ function largePoweredHtml(visible: boolean): string {
 </head>
 <body>
   ${content}
-  ${padding()}
+  ${padding(visible)}
   <script>
     try { new SharedArrayBuffer(8); } catch (_) {}
   </script>
@@ -82,12 +88,20 @@ async function seedHtmlArtifact(page: Page, projectId: string, fileName: string,
   expect(response.ok()).toBeTruthy();
 }
 
-async function previewErrorCount(page: Page): Promise<number> {
+/**
+ * Powered preview-errors filed for THIS project. Scoped by project because the
+ * anomaly log is daemon state and a Playwright worker's daemon is shared by
+ * every file it runs (e2e/AGENTS.md, "Order independence is the contract").
+ */
+async function previewErrorCount(page: Page, projectId: string): Promise<number> {
   const anomalies = await page.request.get('/api/anomalies?kind=preview-error', { timeout: 30_000 });
   expect(anomalies.ok()).toBeTruthy();
-  const body = (await anomalies.json()) as { anomalies?: Array<{ detail?: { surface?: string } }> };
+  const body = (await anomalies.json()) as {
+    anomalies?: Array<{ projectId?: string; detail?: { surface?: string } }>;
+  };
   return (body.anomalies ?? []).filter(
-    (record) => record.detail?.surface === 'file_viewer_preview_powered',
+    (record) =>
+      record.detail?.surface === 'file_viewer_preview_powered' && record.projectId === projectId,
   ).length;
 }
 
@@ -114,7 +128,7 @@ test('[P1] a 2.5 MiB powered preview that paints settles without a preview-error
   await page.waitForTimeout(18_000);
   await expect(page.locator(NO_RENDER_NOTICE)).toHaveCount(0);
   expect(
-    await previewErrorCount(page),
+    await previewErrorCount(page, projectId),
     'a large powered preview that paints must not be reported as never rendered',
   ).toBe(0);
 });
@@ -130,7 +144,7 @@ test('[P1] a 2.5 MiB powered preview that paints nothing reaches the named failu
 
   await expect(page.locator(NO_RENDER_NOTICE)).toBeVisible({ timeout: T.long });
   expect(
-    await previewErrorCount(page),
+    await previewErrorCount(page, projectId),
     'one failure is one record, however many reports the epoch rejected on the way',
   ).toBe(1);
 });

@@ -144,6 +144,12 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     var next = Number(value || 0);
     return Number.isFinite(next) ? next : 0;
   }
+  // Computed lengths come back as CSS strings ('2px'), which Number() reads as
+  // NaN; a border width parsed to zero would make every bordered box invisible.
+  function px(value){
+    var next = parseFloat(value);
+    return Number.isFinite(next) ? next : 0;
+  }
   function nowMs(){
     try {
       if (typeof performance !== 'undefined' && performance && typeof performance.now === 'function') {
@@ -283,7 +289,7 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
       var side = sides[i];
       var lineStyle = style['border' + side + 'Style'];
       if (!lineStyle || lineStyle === 'none' || lineStyle === 'hidden') continue;
-      if (num(style['border' + side + 'Width']) <= 0) continue;
+      if (px(style['border' + side + 'Width']) <= 0) continue;
       if (alphaOf(style['border' + side + 'Color']) > 0) return true;
     }
     return false;
@@ -297,7 +303,7 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
       if (hasVisibleBorder(style)) return true;
       if (SVG_PAINTED_SHAPES.test(tag)) {
         if (alphaOf(style.fill) > 0) return true;
-        if (alphaOf(style.stroke) > 0 && num(style.strokeWidth) > 0) return true;
+        if (alphaOf(style.stroke) > 0 && px(style.strokeWidth) > 0) return true;
       }
     }
     if (tag === 'img') {
