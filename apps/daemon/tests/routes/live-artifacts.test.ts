@@ -690,9 +690,16 @@ describe('live artifact tool routes', () => {
     expect(preview.headers.get('vary')).toContain('Origin');
     const csp = preview.headers.get('content-security-policy') || '';
     expect(csp).toContain("default-src 'none'");
-    expect(csp).toContain("script-src 'none'");
+    // W2H.1 / D-17 option A: exactly one script may run in this document, the
+    // paint-report producer the response carries, and the CSP sandbox has to
+    // allow scripts for it to. `allow-same-origin` stays out, so the document
+    // keeps an opaque origin. Full pairing:
+    // apps/daemon/tests/live-artifact-preview-paint-producer.test.ts.
+    expect(csp).toMatch(/script-src 'nonce-[^']+'/);
+    expect(csp).not.toContain("script-src 'none'");
     expect(csp).toContain("frame-ancestors 'self'");
-    expect(csp).toContain('sandbox allow-same-origin');
+    expect(csp).toContain('sandbox allow-scripts');
+    expect(csp).not.toContain('allow-same-origin');
     expect(preview.body).toContain('<h1>Preview Route Artifact</h1>');
     expect(preview.body).toContain('<p>Agent</p>');
 

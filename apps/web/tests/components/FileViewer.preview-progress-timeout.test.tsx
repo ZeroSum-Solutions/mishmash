@@ -58,6 +58,25 @@ vi.mock('../../src/components/file-viewer-preview-assets', async (importOriginal
 
 import { FileViewer } from '../../src/components/FileViewer';
 
+/**
+ * The navigation token the watchdog last asked this frame with. W2H.1: a
+ * report settles only the arming it answers, so a healthy answer has to carry
+ * it — see apps/web/src/observability/iframe-error.ts.
+ */
+function watchdogToken(frame: HTMLIFrameElement): string | undefined {
+  const posted: Array<Record<string, unknown>> = [];
+  Object.defineProperty(frame.contentWindow, 'postMessage', {
+    configurable: true,
+    value: (data: unknown) => posted.push(data as Record<string, unknown>),
+  });
+  frame.dispatchEvent(new Event('load'));
+  const asks = posted.filter(
+    (message) => message?.type === 'od:preview-content-size-request' && typeof message?.token === 'string',
+  );
+  return asks.length === 0 ? undefined : (asks[asks.length - 1]?.token as string);
+}
+
+
 const RAW_URL_PREFIX = '/api/projects/project-1/raw/';
 const ANOMALY_ENDPOINT = '/api/anomalies';
 const INLINE_MARKER = 'data-od-inline-asset';
@@ -312,11 +331,12 @@ describe('a preview that never paints becomes a preview-error record', () => {
     await waitFor(() => expect(previewFrame()).not.toBeNull());
 
     const frame = previewFrame() as HTMLIFrameElement;
+    let token: string | undefined;
     await act(async () => {
-      fireEvent.load(frame);
+      token = watchdogToken(frame);
       window.dispatchEvent(
         new MessageEvent('message', {
-          data: { type: 'od:preview-content-size', width: 1280 },
+          data: { type: 'od:preview-content-size', width: 1280, painted: true, token },
           source: frame.contentWindow,
         }),
       );

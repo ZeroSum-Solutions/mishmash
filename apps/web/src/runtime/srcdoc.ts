@@ -18,6 +18,10 @@ import {
   DECK_SLIDE_SELECTOR,
   injectDeckStageFallback,
 } from '@open-design/contracts/runtime/deck-stage-fallback';
+import {
+  PREVIEW_PAINT_REPORT_PRODUCER_SOURCE,
+  PREVIEW_PAINT_REPORT_REQUEST,
+} from '@open-design/contracts/runtime/preview-paint-report';
 
 import {
   buildManualEditBridge,
@@ -783,32 +787,13 @@ function injectSnapshotBridge(doc: string): string {
 }
 
 function injectPreviewContentSizeBridge(doc: string): string {
-  const script = `<script data-od-preview-content-size-bridge>(function(){
+  const script = `<script data-od-preview-content-size-bridge>${PREVIEW_PAINT_REPORT_PRODUCER_SOURCE}
+(function(){
   if (window.__odPreviewContentSizeBridge) return;
   window.__odPreviewContentSizeBridge = true;
   var pending = false;
-  function measure(){
-    var root = document.documentElement;
-    var body = document.body || root;
-    if (!root) return null;
-    var values = [
-      root.scrollWidth,
-      body && body.scrollWidth,
-      root.offsetWidth,
-      body && body.offsetWidth,
-      root.clientWidth,
-      body && body.clientWidth
-    ];
-    var width = 0;
-    for (var i = 0; i < values.length; i += 1) {
-      var next = Number(values[i] || 0);
-      if (Number.isFinite(next) && next > width) width = next;
-    }
-    return width > 0 ? Math.ceil(width) : null;
-  }
-  function post(){
-    try { window.parent.postMessage({ type: 'od:preview-content-size', width: measure() }, '*'); } catch (_) {}
-  }
+  var report = window.__odPreviewPaintReport;
+  function post(){ report.post(); }
   function schedule(){
     if (pending) return;
     pending = true;
@@ -819,12 +804,14 @@ function injectPreviewContentSizeBridge(doc: string): string {
   }
   window.addEventListener('message', function(ev){
     var data = ev && ev.data;
-    if (!data || data.type !== 'od:preview-content-size-request') return;
+    if (!data || data.type !== '${PREVIEW_PAINT_REPORT_REQUEST}') return;
+    report.rememberToken(data.token);
     // Answered synchronously, never through schedule(): animation frames are
     // paused in a hidden tab while the host watchdog's timeout keeps running,
     // so a scheduled answer turns a healthy backgrounded preview into a
     // client_iframe_timeout. Every other report path stays on schedule() --
-    // those are unsolicited and nothing is waiting on them.
+    // those are unsolicited and nothing is waiting on them, and they carry the
+    // token this request left behind so a late paint still settles.
     post();
   });
   window.addEventListener('resize', schedule);
@@ -849,36 +836,6 @@ function injectPreviewContentSizeBridge(doc: string): string {
   return injectBeforeBodyEnd(doc, script);
 }
 
-// Rendered layout-risk measurement bridge. See `CompositionMetrics` in
-// `@open-design/contracts` for the full field-by-field rationale; this
-// comment covers only why the measurement has to happen HERE.
-//
-// `craft/composition.md`'s `layout-risk-flat` lint
-// (`apps/daemon/src/lint-artifact.ts`) greps source HTML for the CSS
-// primitives a grid-breaking move needs — it cannot see whether one
-// actually rendered. Four rounds of blind comparison against professionally
-// sold templates scored MishMash output 0/1 on layout risk every time, and
-// a page carrying a single `position: sticky` nav satisfies the source scan
-// while never once breaking its grid. The only place that failure is
-// visible is the rendered box tree, so this bridge measures it there and
-// reports the numbers to the host — the daemon has no browser in its
-// runtime dependencies to take this measurement itself (and must not grow
-// one; see AGENTS.md's daemon data directory / design authority
-// boundaries), so "measured in the browser, reported to the daemon" is the
-// only honest shape this can take.
-//
-// Always injected (like the tweaks and content-size bridges above) — it's a
-// passive listener, cheap until asked to measure, and tying it to a
-// `SrcdocOptions` flag would force an iframe reload every time some other
-// part of the host flips a bridge on. Auto-measures on the same cadence as
-// `injectPreviewContentSizeBridge` (DOMContentLoaded, a couple of settle
-// timers, fonts-ready, resize) so the host gets a fresh reading without
-// having to ask, and answers `od:composition-metrics-request` on demand for
-// an explicit re-measure (e.g. after the user finishes an edit).
-//
-// Protocol:
-//   in:  { type: 'od:composition-metrics-request' }
-//   out: { type: 'od:composition-metrics', metrics: CompositionMetrics }
 function injectCompositionMetricsBridge(doc: string): string {
   const script = `<script data-od-composition-metrics-bridge>(function(){
   if (window.__odCompositionMetricsBridge) return;

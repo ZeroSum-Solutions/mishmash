@@ -18,6 +18,10 @@ import {
   type ProjectReferenceResponse,
   type WorkspaceContextItem,
 } from '@open-design/contracts';
+import {
+  PREVIEW_PAINT_REPORT_PRODUCER_SOURCE,
+  PREVIEW_PAINT_REPORT_REQUEST,
+} from '@open-design/contracts/runtime/preview-paint-report';
 import { readMeta as readBrandMeta } from '../../brands/store.js';
 import { hasCoverImage } from '../../covers/store.js';
 import { createProjectArtifactFile } from '../../artifacts/create.js';
@@ -228,6 +232,7 @@ export async function ensureReferencedProjectDir(
 }
 
 const URL_PREVIEW_SCROLL_BRIDGE = `<script data-od-url-scroll-bridge>
+${PREVIEW_PAINT_REPORT_PRODUCER_SOURCE}
 (function(){
   if (window.__odUrlScrollBridge) return;
   window.__odUrlScrollBridge = true;
@@ -240,27 +245,8 @@ const URL_PREVIEW_SCROLL_BRIDGE = `<script data-od-url-scroll-bridge>
     var next = Number(value || 0);
     return Number.isFinite(next) ? next : 0;
   }
-  function measureContentWidth(){
-    var root = document.documentElement;
-    var body = document.body || root;
-    if (!root) return null;
-    var values = [
-      root.scrollWidth,
-      body && body.scrollWidth,
-      root.offsetWidth,
-      body && body.offsetWidth,
-      root.clientWidth,
-      body && body.clientWidth
-    ];
-    var width = 0;
-    for (var i = 0; i < values.length; i += 1) {
-      var next = num(values[i]);
-      if (next > width) width = next;
-    }
-    return width > 0 ? Math.ceil(width) : null;
-  }
   function postContentSize(){
-    window.parent.postMessage({ type: 'od:preview-content-size', width: measureContentWidth() }, '*');
+    window.__odPreviewPaintReport.post();
   }
   function scheduleContentSize(){
     if (contentSizePending) return;
@@ -327,12 +313,15 @@ const URL_PREVIEW_SCROLL_BRIDGE = `<script data-od-url-scroll-bridge>
       scheduleContentSize();
       return;
     }
-    if (data.type === 'od:preview-content-size-request') {
+    if (data.type === '${PREVIEW_PAINT_REPORT_REQUEST}') {
+      window.__odPreviewPaintReport.rememberToken(data.token);
       // Answered synchronously, never through scheduleContentSize():
       // animation frames are paused in a hidden tab while the host watchdog's
       // timeout keeps running, so a scheduled answer turns a healthy
       // backgrounded preview into a client_iframe_timeout. Every other report
-      // path stays scheduled -- those are unsolicited and nothing waits on them.
+      // path stays scheduled -- those are unsolicited and nothing waits on
+      // them, and they carry the token this request left behind so a late
+      // paint still settles.
       postContentSize();
     }
   });
