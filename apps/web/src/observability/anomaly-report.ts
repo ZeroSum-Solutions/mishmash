@@ -86,7 +86,14 @@ const SAFETY_EVENT_ANOMALIES: Record<string, SafetyEventMapping> = {
   client_iframe_timeout: {
     kind: 'preview-error',
     severity: 'warn',
-    summarise: (p) => `Preview iframe never finished loading within ${num(p, 'timeout_ms') ?? '?'}ms`,
+    // Two different failures share this event, and a maintainer reading the log
+    // needs them apart: a frame that never answered at all is usually a
+    // transport problem, while one that answered and reported no laid-out box
+    // is a document that ran and rendered nothing.
+    summarise: (p) =>
+      str(p, 'reason') === 'no_render_evidence'
+        ? `Preview iframe reported nothing rendered within ${num(p, 'timeout_ms') ?? '?'}ms`
+        : `Preview iframe never proved it rendered within ${num(p, 'timeout_ms') ?? '?'}ms`,
   },
   client_run_stuck: {
     kind: 'run-stuck',

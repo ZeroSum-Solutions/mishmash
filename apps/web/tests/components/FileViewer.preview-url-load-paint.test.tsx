@@ -20,6 +20,25 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FileViewer } from '../../src/components/FileViewer';
+
+/**
+ * The navigation token the watchdog last asked this frame with. W2H.1: a
+ * report settles only the arming it answers, so a healthy answer has to carry
+ * it — see apps/web/src/observability/iframe-error.ts.
+ */
+function watchdogToken(frame: HTMLIFrameElement): string | undefined {
+  const posted: Array<Record<string, unknown>> = [];
+  Object.defineProperty(frame.contentWindow, 'postMessage', {
+    configurable: true,
+    value: (data: unknown) => posted.push(data as Record<string, unknown>),
+  });
+  frame.dispatchEvent(new Event('load'));
+  const asks = posted.filter(
+    (message) => message?.type === 'od:preview-content-size-request' && typeof message?.token === 'string',
+  );
+  return asks.length === 0 ? undefined : (asks[asks.length - 1]?.token as string);
+}
+
 import type { ProjectFile } from '../../src/types';
 
 const RAW_URL_PREFIX = '/api/projects/project-1/raw/';
@@ -119,11 +138,12 @@ describe('the URL-load preview transport reports its own paint', () => {
 
     const frame = (await screen.findByTestId('artifact-preview-frame')) as HTMLIFrameElement;
 
+    let token: string | undefined;
     await act(async () => {
-      fireEvent.load(frame);
+      token = watchdogToken(frame);
       window.dispatchEvent(
         new MessageEvent('message', {
-          data: { type: DOCUMENT_REPORT, width: 1280 },
+          data: { type: DOCUMENT_REPORT, width: 1280, painted: true, token },
           source: frame.contentWindow,
         }),
       );

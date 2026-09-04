@@ -18,6 +18,11 @@ import {
   type ProjectReferenceResponse,
   type WorkspaceContextItem,
 } from '@open-design/contracts';
+import {
+  PREVIEW_PAINT_REPORT_PRODUCER_SOURCE,
+  PREVIEW_PAINT_REPORT_REQUEST,
+} from '@open-design/contracts/runtime/preview-paint-report';
+import { injectMarkedScriptBeforeBodyClose } from '../../http/body-close-splice.js';
 import { readMeta as readBrandMeta } from '../../brands/store.js';
 import { hasCoverImage } from '../../covers/store.js';
 import { createProjectArtifactFile } from '../../artifacts/create.js';
@@ -227,6 +232,68 @@ export async function ensureReferencedProjectDir(
   await ensureProject(projectsRoot, project.id, project.metadata);
 }
 
+/** Marker attribute that makes the producer injection idempotent. */
+const PREVIEW_PAINT_PRODUCER_MARKER = 'data-od-preview-paint-producer';
+
+/**
+ * The dedicated paint-report producer for a daemon-served URL preview.
+ *
+ * Deliberately separate from the scroll / selection / snapshot bridges. Those
+ * are optional rewrites that make a preview nicer to work in, and they are
+ * capped by response size because rewriting a very large document is real
+ * work. This is what lets a preview say it rendered AT ALL — without it the
+ * host watchdog waits 15 seconds for a report the document was never given the
+ * means to make, and then tells the user a preview that rendered perfectly did
+ * not render. So it carries no rewriting, and no size cap applies to it.
+ */
+const URL_PREVIEW_PAINT_PRODUCER = `<script ${PREVIEW_PAINT_PRODUCER_MARKER}>
+${PREVIEW_PAINT_REPORT_PRODUCER_SOURCE}
+(function(){
+  if (window.__odUrlPaintProducerBridge) return;
+  window.__odUrlPaintProducerBridge = true;
+  var pending = false;
+  var report = window.__odPreviewPaintReport;
+  function schedule(){
+    if (pending) return;
+    pending = true;
+    window.requestAnimationFrame(function(){
+      pending = false;
+      report.post();
+    });
+  }
+  window.addEventListener('message', function(ev){
+    var data = ev && ev.data;
+    if (!data || data.type !== '${PREVIEW_PAINT_REPORT_REQUEST}') return;
+    report.rememberToken(data.token);
+    // Answered synchronously, never through schedule(): animation frames are
+    // paused in a hidden tab while the host watchdog's timeout keeps running,
+    // so a scheduled answer turns a healthy backgrounded preview into a
+    // client_iframe_timeout. Every other report path stays scheduled -- those
+    // are unsolicited and nothing waits on them, and they carry the token this
+    // request left behind so a late paint still settles.
+    report.post();
+  });
+  window.addEventListener('resize', schedule);
+  if (typeof ResizeObserver !== 'undefined') {
+    try {
+      var observer = new ResizeObserver(schedule);
+      observer.observe(document.documentElement);
+      if (document.body) observer.observe(document.body);
+    } catch (_) {}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', schedule);
+  } else {
+    setTimeout(schedule, 0);
+  }
+  setTimeout(schedule, 80);
+  setTimeout(schedule, 260);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(schedule).catch(function(){});
+  }
+})();
+</script>`;
+
 const URL_PREVIEW_SCROLL_BRIDGE = `<script data-od-url-scroll-bridge>
 (function(){
   if (window.__odUrlScrollBridge) return;
@@ -240,27 +307,9 @@ const URL_PREVIEW_SCROLL_BRIDGE = `<script data-od-url-scroll-bridge>
     var next = Number(value || 0);
     return Number.isFinite(next) ? next : 0;
   }
-  function measureContentWidth(){
-    var root = document.documentElement;
-    var body = document.body || root;
-    if (!root) return null;
-    var values = [
-      root.scrollWidth,
-      body && body.scrollWidth,
-      root.offsetWidth,
-      body && body.offsetWidth,
-      root.clientWidth,
-      body && body.clientWidth
-    ];
-    var width = 0;
-    for (var i = 0; i < values.length; i += 1) {
-      var next = num(values[i]);
-      if (next > width) width = next;
-    }
-    return width > 0 ? Math.ceil(width) : null;
-  }
   function postContentSize(){
-    window.parent.postMessage({ type: 'od:preview-content-size', width: measureContentWidth() }, '*');
+    var report = window.__odPreviewPaintReport;
+    if (report) report.post();
   }
   function scheduleContentSize(){
     if (contentSizePending) return;
@@ -326,14 +375,6 @@ const URL_PREVIEW_SCROLL_BRIDGE = `<script data-od-url-scroll-bridge>
       schedule();
       scheduleContentSize();
       return;
-    }
-    if (data.type === 'od:preview-content-size-request') {
-      // Answered synchronously, never through scheduleContentSize():
-      // animation frames are paused in a hidden tab while the host watchdog's
-      // timeout keeps running, so a scheduled answer turns a healthy
-      // backgrounded preview into a client_iframe_timeout. Every other report
-      // path stays scheduled -- those are unsolicited and nothing waits on them.
-      postContentSize();
     }
   });
   window.addEventListener('scroll', schedule, true);
@@ -969,23 +1010,38 @@ function wantsUrlPreviewSnapshotBridge(value: unknown): boolean {
   return previewBridgeTokens(value).some((token) => token === 'snapshot' || token === 'image' || token === 'capture');
 }
 
-function injectBeforeBodyClose(html: string, marker: string, injection: string): string {
-  if (html.includes(marker)) return html;
-  const bodyCloseIndex = html.search(/<\/body\s*>/i);
-  if (bodyCloseIndex >= 0) {
-    return `${html.slice(0, bodyCloseIndex)}${injection}${html.slice(bodyCloseIndex)}`;
-  }
-  return `${html}${injection}`;
+/**
+ * Attach the paint-report producer to a preview HTML response.
+ *
+ * The invariant: every HTML response the host watches as a visible preview
+ * carries exactly one producer, whatever the response weighs. Idempotence is
+ * decided by the producer ELEMENT, not by the marker's characters, so a bridge
+ * injected alongside it cannot produce a second one and a document that merely
+ * mentions the attribute name still gets its producer.
+ */
+function injectPreviewPaintProducer(transformed: string | Buffer, mime: string): string | Buffer {
+  if (!/^text\/html(?:;|$)/i.test(mime)) return transformed;
+  const html = Buffer.isBuffer(transformed) ? transformed.toString('utf8') : transformed;
+  return injectMarkedScriptBeforeBodyClose(html, PREVIEW_PAINT_PRODUCER_MARKER, URL_PREVIEW_PAINT_PRODUCER);
+}
+
+/** True when the request is a preview load rather than a plain file read. */
+function wantsAnyUrlPreviewBridge(value: unknown): boolean {
+  return (
+    wantsUrlPreviewScrollBridge(value) ||
+    wantsUrlPreviewSelectionBridge(value) ||
+    wantsUrlPreviewSnapshotBridge(value)
+  );
 }
 
 function injectUrlPreviewBridge(html: string, bridge: 'scroll' | 'selection' | 'snapshot'): string {
   if (bridge === 'scroll') {
-    return injectBeforeBodyClose(html, 'data-od-url-scroll-bridge', URL_PREVIEW_SCROLL_BRIDGE);
+    return injectMarkedScriptBeforeBodyClose(html, 'data-od-url-scroll-bridge', URL_PREVIEW_SCROLL_BRIDGE);
   }
   if (bridge === 'selection') {
-    return injectBeforeBodyClose(html, 'data-od-url-selection-bridge', URL_PREVIEW_SELECTION_BRIDGE);
+    return injectMarkedScriptBeforeBodyClose(html, 'data-od-url-selection-bridge', URL_PREVIEW_SELECTION_BRIDGE);
   }
-  return injectBeforeBodyClose(html, 'data-od-url-snapshot-bridge', URL_PREVIEW_SNAPSHOT_BRIDGE);
+  return injectMarkedScriptBeforeBodyClose(html, 'data-od-url-snapshot-bridge', URL_PREVIEW_SNAPSHOT_BRIDGE);
 }
 
 function applyUrlPreviewBridgesToHtml(
@@ -3753,6 +3809,10 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
         relPath,
         project?.metadata,
       );
+      // The cap stays on this route: a >2 MiB /raw HTML preview keeps its
+      // Range-streamed first paint, and its producer with it. Only the powered
+      // route lifts the cap for the producer (see below) — recorded as an
+      // adjacent gap rather than traded against streaming here.
       const skipHtmlPreviewBridge =
         /^text\/html(?:;|$)/i.test(meta.mime) && meta.size > HTML_PREVIEW_BRIDGE_MAX_BYTES;
 
@@ -3772,7 +3832,10 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
             projectsRoot: PROJECTS_DIR,
             readProjectFile,
           });
-          return applyUrlPreviewBridgesToHtml(transformed, file.mime, req.query.odPreviewBridge);
+          const withProducer = wantsAnyUrlPreviewBridge(req.query.odPreviewBridge)
+            ? injectPreviewPaintProducer(transformed, file.mime)
+            : transformed;
+          return applyUrlPreviewBridgesToHtml(withProducer, file.mime, req.query.odPreviewBridge);
         },
         true, // revalidate: emit ETag/Last-Modified so covers/preview/export reuse cached assets
       );
@@ -3813,7 +3876,9 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
         relPath,
         project?.metadata,
       );
-      const skipPoweredTransform =
+      // Every powered response is a preview the host watches, so every HTML one
+      // carries the producer. Only the optional rewrites stay capped.
+      const skipPoweredRewrites =
         /^text\/html(?:;|$)/i.test(meta.mime) && meta.size > HTML_PREVIEW_BRIDGE_MAX_BYTES;
       await sendProjectFile(
         req,
@@ -3822,7 +3887,10 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
         relPath,
         project?.metadata,
         () => setPoweredPreviewHeaders(res),
-        skipPoweredTransform ? undefined : async (file) => {
+        // Only HTML is rewritten. Handing `sendProjectFile` a transform for a
+        // wasm or texture asset would buffer it whole instead of streaming it.
+        !/^text\/html(?:;|$)/i.test(meta.mime) ? undefined : async (file) => {
+          if (skipPoweredRewrites) return injectPreviewPaintProducer(file.buffer, file.mime);
           const transformed = await maybeResolveVitePreviewHtml({
             file,
             projectId,
@@ -3831,7 +3899,11 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
             projectsRoot: PROJECTS_DIR,
             readProjectFile,
           });
-          return applyUrlPreviewBridgesToHtml(transformed, file.mime, req.query.odPreviewBridge);
+          return applyUrlPreviewBridgesToHtml(
+            injectPreviewPaintProducer(transformed, file.mime),
+            file.mime,
+            req.query.odPreviewBridge,
+          );
         },
       );
     } catch (err: any) {

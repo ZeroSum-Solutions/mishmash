@@ -3,6 +3,7 @@ import {
   projectRawAssetBaseHref,
   withProjectAssetBaseHref,
 } from '@open-design/contracts/runtime/project-asset-base';
+import { injectLiveArtifactPaintReporter } from '../live-artifacts/http-helpers.js';
 import type { RouteDeps } from '../server-context.js';
 
 export interface RegisterLiveArtifactRoutesDeps extends RouteDeps<'db' | 'http' | 'paths' | 'auth' | 'liveArtifacts' | 'projectStore'> {}
@@ -62,22 +63,24 @@ export function registerLiveArtifactRoutes(app: Express, ctx: RegisterLiveArtifa
         projectId,
         artifactId: req.params.artifactId,
       });
-      setLiveArtifactPreviewHeaders(res);
+      const previewNonce = setLiveArtifactPreviewHeaders(res);
       // This route's URL names no project file, so the preview document has to
       // carry the resolution root itself -- see projectRawAssetBaseHref.
       //
-      // No od:preview-content-size producer is injected here, and none can be:
-      // setLiveArtifactPreviewHeaders serves this response under
-      // "script-src 'none'" and a CSP sandbox without allow-scripts, so any
-      // script in the body is refused before it runs. The viewer's watchdog
-      // therefore settles this frame on its outer load event
-      // (LiveArtifactViewer in apps/web/src/components/FileViewer.tsx), which is
-      // weaker evidence, rather than waiting for a report that cannot arrive.
-      // The pairing is pinned in apps/daemon/tests/preview-paint-report-bridge.test.ts:
-      // relaxing the CSP to admit a producer is what would let the watchdog ask
-      // for one.
+      // The paint-report producer runs under that response's nonce and nothing
+      // else does: setLiveArtifactPreviewHeaders serves this document under
+      // "script-src 'nonce-<per response>'" and a CSP sandbox that allows
+      // scripts but not allow-same-origin. That pairing is what lets the
+      // viewer's watchdog ask this frame to prove it rendered instead of
+      // settling on its outer load event, which fires for a 200 that painted
+      // nothing (LiveArtifactViewer in apps/web/src/components/FileViewer.tsx).
+      // Header and payload are pinned together in
+      // apps/daemon/tests/live-artifact-preview-paint-producer.test.ts.
       res.status(200).send(
-        withProjectAssetBaseHref(record.html, projectRawAssetBaseHref(projectId, '')),
+        injectLiveArtifactPaintReporter(
+          withProjectAssetBaseHref(record.html, projectRawAssetBaseHref(projectId, '')),
+          previewNonce,
+        ),
       );
     } catch (err: any) {
       sendLiveArtifactRouteError(res, err);
