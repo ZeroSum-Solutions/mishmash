@@ -181,8 +181,10 @@ function reportFor(body: FakeElementSpec): PaintReport {
   run(fakeWindow, fakeDocument, fakePerformance);
   (fakeWindow.__odPreviewPaintReport as { post: () => void }).post();
 
-  expect(posted, 'the producer posts exactly one report per call').toHaveLength(1);
-  return posted[0];
+  const report = posted[0];
+  expect(report, 'the producer posts exactly one report per call').toBeDefined();
+  expect(posted).toHaveLength(1);
+  return report!;
 }
 
 /** A body box that fills the viewport and paints nothing of its own. */

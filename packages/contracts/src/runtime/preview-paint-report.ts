@@ -103,7 +103,9 @@ export const PREVIEW_PAINT_SCAN_BUDGET_MS = 50;
  *     zero, not above some floor, because faint is still visible;
  *   - its border box survives clipping against the viewport and against every
  *     ancestor scrollport whose axis overflow is `hidden`, `clip`, `auto` or
- *     `scroll`;
+ *     `scroll`. An intersection that collapses to nothing is an EMPTY clip, not
+ *     an absent one: everything inside a scrollport laid out fully offscreen,
+ *     or given no area, is hidden by it rather than released from it;
  *   - and it paints something: a direct non-whitespace text node under a
  *     non-transparent `color`, a non-transparent `background-color`, a
  *     `background-image`, a visible border on some side, a `box-shadow`, a
@@ -205,15 +207,33 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     } catch (_) {}
     return false;
   }
+  // A clip is one of three things, and keeping the middle one distinct is the
+  // whole point of these two helpers:
+  //   NO_CLIP     -- no ancestor constrains this box; everything is admitted.
+  //   EMPTY_CLIP  -- the constraint collapsed; nothing inside it reaches the
+  //                  screen, whatever geometry the descendant has.
+  //   a rect      -- the box is constrained to that area.
+  // Spelling an empty intersection as NO_CLIP made those first two the same
+  // value, so an overflow:hidden ancestor laid out fully offscreen stopped
+  // clipping instead of hiding everything inside it.
+  var NO_CLIP = null;
+  var EMPTY_CLIP = { empty: true };
   function intersect(a, b){
-    if (!a) return b || null;
+    if (a === EMPTY_CLIP || b === EMPTY_CLIP) return EMPTY_CLIP;
+    if (!a) return b || NO_CLIP;
     if (!b) return a;
     var left = Math.max(a.left, b.left);
     var top = Math.max(a.top, b.top);
     var right = Math.min(a.right, b.right);
     var bottom = Math.min(a.bottom, b.bottom);
-    if (right - left <= 0 || bottom - top <= 0) return null;
+    if (right - left <= 0 || bottom - top <= 0) return EMPTY_CLIP;
     return { left: left, top: top, right: right, bottom: bottom };
+  }
+  // Does any part of the rect survive the clip? EMPTY_CLIP admits nothing, NO_CLIP
+  // admits everything, and a rect admits whatever overlaps it.
+  function clipAdmits(rect, clip){
+    var kept = intersect(rect, clip);
+    return !!kept && kept !== EMPTY_CLIP;
   }
   function viewportRect(){
     var width = num(window.innerWidth);
@@ -221,9 +241,10 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     var root = document.documentElement;
     if (!width && root) width = num(root.clientWidth);
     if (!height && root) height = num(root.clientHeight);
-    // A context that reports no viewport is not clipping anything; do not
-    // invent a zero-sized one and reject every candidate.
-    if (!(width > 0 && height > 0)) return null;
+    // A context that reports no viewport is not clipping anything -- NO_CLIP,
+    // not an empty clip. Do not invent a zero-sized viewport and reject every
+    // candidate in the document.
+    if (!(width > 0 && height > 0)) return NO_CLIP;
     return { left: 0, top: 0, right: width, bottom: height };
   }
   function styleOf(el, scan){
@@ -341,7 +362,7 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     if (!state.visible || !(state.opacity > 0)) { scan.hidden += 1; return false; }
     var rect = rectOf(el, scan);
     if (!rect || rect.right - rect.left <= 0 || rect.bottom - rect.top <= 0) { scan.clipped += 1; return false; }
-    if (!intersect(rect, state.clipSelf)) { scan.clipped += 1; return false; }
+    if (!clipAdmits(rect, state.clipSelf)) { scan.clipped += 1; return false; }
     if (!paintsSomething(el, styleOf(el, scan))) { scan.blank += 1; return false; }
     return true;
   }

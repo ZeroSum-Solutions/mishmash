@@ -22,7 +22,7 @@ import {
   PREVIEW_PAINT_REPORT_PRODUCER_SOURCE,
   PREVIEW_PAINT_REPORT_REQUEST,
 } from '@open-design/contracts/runtime/preview-paint-report';
-import { injectBeforeGenuineBodyClose } from '../../http/body-close-splice.js';
+import { injectMarkedScriptBeforeBodyClose } from '../../http/body-close-splice.js';
 import { readMeta as readBrandMeta } from '../../brands/store.js';
 import { hasCoverImage } from '../../covers/store.js';
 import { createProjectArtifactFile } from '../../artifacts/create.js';
@@ -1010,22 +1010,19 @@ function wantsUrlPreviewSnapshotBridge(value: unknown): boolean {
   return previewBridgeTokens(value).some((token) => token === 'snapshot' || token === 'image' || token === 'capture');
 }
 
-function injectBeforeBodyClose(html: string, marker: string, injection: string): string {
-  if (html.includes(marker)) return html;
-  return injectBeforeGenuineBodyClose(html, injection);
-}
-
 /**
  * Attach the paint-report producer to a preview HTML response.
  *
  * The invariant: every HTML response the host watches as a visible preview
- * carries exactly one producer, whatever the response weighs. Marker-based, so
- * a bridge injected alongside it cannot produce a second one.
+ * carries exactly one producer, whatever the response weighs. Idempotence is
+ * decided by the producer ELEMENT, not by the marker's characters, so a bridge
+ * injected alongside it cannot produce a second one and a document that merely
+ * mentions the attribute name still gets its producer.
  */
 function injectPreviewPaintProducer(transformed: string | Buffer, mime: string): string | Buffer {
   if (!/^text\/html(?:;|$)/i.test(mime)) return transformed;
   const html = Buffer.isBuffer(transformed) ? transformed.toString('utf8') : transformed;
-  return injectBeforeBodyClose(html, PREVIEW_PAINT_PRODUCER_MARKER, URL_PREVIEW_PAINT_PRODUCER);
+  return injectMarkedScriptBeforeBodyClose(html, PREVIEW_PAINT_PRODUCER_MARKER, URL_PREVIEW_PAINT_PRODUCER);
 }
 
 /** True when the request is a preview load rather than a plain file read. */
@@ -1039,12 +1036,12 @@ function wantsAnyUrlPreviewBridge(value: unknown): boolean {
 
 function injectUrlPreviewBridge(html: string, bridge: 'scroll' | 'selection' | 'snapshot'): string {
   if (bridge === 'scroll') {
-    return injectBeforeBodyClose(html, 'data-od-url-scroll-bridge', URL_PREVIEW_SCROLL_BRIDGE);
+    return injectMarkedScriptBeforeBodyClose(html, 'data-od-url-scroll-bridge', URL_PREVIEW_SCROLL_BRIDGE);
   }
   if (bridge === 'selection') {
-    return injectBeforeBodyClose(html, 'data-od-url-selection-bridge', URL_PREVIEW_SELECTION_BRIDGE);
+    return injectMarkedScriptBeforeBodyClose(html, 'data-od-url-selection-bridge', URL_PREVIEW_SELECTION_BRIDGE);
   }
-  return injectBeforeBodyClose(html, 'data-od-url-snapshot-bridge', URL_PREVIEW_SNAPSHOT_BRIDGE);
+  return injectMarkedScriptBeforeBodyClose(html, 'data-od-url-snapshot-bridge', URL_PREVIEW_SNAPSHOT_BRIDGE);
 }
 
 function applyUrlPreviewBridgesToHtml(
