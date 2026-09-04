@@ -2822,6 +2822,8 @@ export const en: Dict = {
   'fileViewer.previewAssetsIncompleteTitle': 'Preview assets did not finish',
   'fileViewer.previewAssetsIncompleteDetail':
     'Showing the raw document. Images, stylesheets, and scripts stored in this project may be missing.',
+  'fileViewer.previewAssetsIncompleteRetainedDetail':
+    'Showing the last preview that finished. Recent changes to this file may not appear yet.',
   'fileViewer.exportPptx': 'Export as PPTX',
   'fileViewer.openInNewTab': 'Open in new tab',
   'fileViewer.copyPath': 'Copy path',

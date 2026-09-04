@@ -3592,6 +3592,7 @@ export interface Dict {
   'fileViewer.preparingPreviewAssetsProgress': string;
   'fileViewer.previewAssetsIncompleteTitle': string;
   'fileViewer.previewAssetsIncompleteDetail': string;
+  'fileViewer.previewAssetsIncompleteRetainedDetail': string;
   'fileViewer.exportPptx': string;
   'fileViewer.openInNewTab': string;
   'fileViewer.copyPath': string;
