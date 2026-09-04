@@ -2648,6 +2648,7 @@ export interface Dict {
   'chat.runError.filesUnchanged': string;
   'chat.runError.filesChangedOne': string;
   'chat.runError.filesChangedMany': string;
+  'chat.runError.filesUnknown': string;
   'chat.runError.title.generic': string;
   'chat.runError.title.artifactMissing': string;
   'chat.runError.signInMessage.amr': string;

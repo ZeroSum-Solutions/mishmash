@@ -1,4 +1,4 @@
-import type { RunFailureStage } from '@open-design/contracts';
+import type { RunFailureStage, RunFileChangeState } from '@open-design/contracts';
 
 // The two facts a failure alert owes the user besides the cause: which step
 // stopped, and whether their files changed. Kept next to `amr-guidance.ts` (the
@@ -19,7 +19,25 @@ export type RunFailureStepKey =
 export type RunFailureFilesKey =
   | 'chat.runError.filesUnchanged'
   | 'chat.runError.filesChangedOne'
-  | 'chat.runError.filesChangedMany';
+  | 'chat.runError.filesChangedMany'
+  | 'chat.runError.filesUnknown';
+
+/**
+ * The sentence a file-change verdict becomes when it arrives WITHOUT a count.
+ *
+ * A TOTAL `Record` over the closed union, so a verdict added upstream cannot
+ * reach the alert unnamed. `'changed'` maps to nothing on purpose: it is the
+ * one verdict whose sentence needs a number, and its producer always sends
+ * `artifactCount` beside it — a positive count is what makes the verdict
+ * `'changed'` (`daemonRestartEvidence`, `apps/daemon/src/runtimes/
+ * run-terminal-reconciliation.ts`). Rendering it alone would mean inventing a
+ * count, which is the guess this whole module refuses to make.
+ */
+const RUN_FAILURE_FILES_BY_COUNTLESS_STATE: Record<RunFileChangeState, RunFailureFilesKey | null> = {
+  changed: null,
+  unchanged: 'chat.runError.filesUnchanged',
+  unknown: 'chat.runError.filesUnknown',
+};
 
 /**
  * Every lifecycle step the daemon can stop in has a sentence naming it.
@@ -48,8 +66,8 @@ export interface RunFailureFacts {
   stage: RunFailureStage | null;
   stepKey: RunFailureStepKey | null;
   /** Files this run created or modified before it failed. Null when the daemon
-   *  never resolved a count, in which case the alert stays silent rather than
-   *  claiming nothing changed. */
+   *  sent no count — either because it sent a countless verdict instead, or
+   *  because it said nothing about files at all. */
   artifactCount: number | null;
   filesKey: RunFailureFilesKey | null;
 }
@@ -60,10 +78,19 @@ export interface RunFailureFacts {
  * A missing field yields `null` rather than a guess: an alert that stated "no
  * files were changed" on a daemon that never told us would be worse than an
  * alert that says nothing about files at all.
+ *
+ * Two fields can answer the file question, and a count always wins: it is a
+ * measurement, and it is the only one that can say HOW MANY. `fileChangeState`
+ * is what a daemon sends when its evidence reached a verdict but no number —
+ * only the restart reconciliation
+ * (`apps/daemon/src/runtimes/run-terminal-reconciliation.ts`) ever needs it, and
+ * its `'unknown'` is a statement in its own right, not the absence of one. A
+ * live failure sends a count alone and reads exactly as it always did.
  */
 export function describeRunFailureFacts(input: {
   failureStage?: string | null;
   artifactCount?: number | null;
+  fileChangeState?: string | null;
 }): RunFailureFacts {
   const stage =
     typeof input.failureStage === 'string'
@@ -76,13 +103,20 @@ export function describeRunFailureFacts(input: {
     && input.artifactCount >= 0
       ? input.artifactCount
       : null;
+  const fileChangeState =
+    typeof input.fileChangeState === 'string'
+    && input.fileChangeState in RUN_FAILURE_FILES_BY_COUNTLESS_STATE
+      ? input.fileChangeState as RunFileChangeState
+      : null;
   return {
     stage,
     stepKey: stage ? RUN_FAILURE_STEP_BY_STAGE[stage] : null,
     artifactCount,
     filesKey:
       artifactCount === null
-        ? null
+        ? fileChangeState === null
+          ? null
+          : RUN_FAILURE_FILES_BY_COUNTLESS_STATE[fileChangeState]
         : artifactCount === 0
           ? 'chat.runError.filesUnchanged'
           : artifactCount === 1

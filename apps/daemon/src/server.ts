@@ -2958,11 +2958,23 @@ export async function startServer({
   // fresh daemon boot, repair stale message rows and replay any PostHog or
   // Langfuse terminal work whose checkpoint was not committed. Network work
   // stays off the startup critical path.
+  /**
+   * One reader for the project's files, shared by every durable startup pass
+   * that has to judge a past run against the tree as it stands now. One
+   * function so the restart reconciliation and the delivery classification
+   * cannot drift into reading different project state for the same turn.
+   */
+  const listProjectFilesForRun = async (projectId: string) => {
+    const project = getProject(db, projectId);
+    return await listFiles(PROJECTS_DIR, projectId, { metadata: project?.metadata });
+  };
+
   const durableRunTerminalsReconciled = reconcileDurableRunTerminals({
     analytics: analyticsService,
     appVersion: telemetry.getCachedAppVersion()?.version ?? '0.0.0',
     appVersionInfo: telemetry.getCachedAppVersion(),
     db,
+    listProjectFiles: listProjectFilesForRun,
     reportLangfuse: reportRunCompletedFromDaemon,
     runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),
   }).then((reconciled) => {
@@ -2993,10 +3005,7 @@ export async function startServer({
    * judging the same turn against different project state.
    */
   const unattendedDeliveryDeps: UnattendedDeliveryDeps = {
-    listProjectFiles: async (projectId: string) => {
-      const project = getProject(db, projectId);
-      return await listFiles(PROJECTS_DIR, projectId, { metadata: project?.metadata });
-    },
+    listProjectFiles: listProjectFilesForRun,
     previewStartedDuringRun: (projectId: string, startedAt: number) =>
       previewService.list(projectId).some((session) => session.startedAt >= startedAt),
     runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),

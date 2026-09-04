@@ -1204,6 +1204,7 @@ export function ChatPane({
     ? describeRunFailureFacts({
         failureStage: failedRunErrorEvent?.failureStage,
         artifactCount: failedRunErrorEvent?.artifactCount,
+        fileChangeState: failedRunErrorEvent?.fileChangeState,
       })
     : null;
   const hasInlineAmrAuthorizeFailure = Boolean(
@@ -2469,7 +2470,13 @@ export function ChatPane({
                           </span>
                         ) : null}
                         {runFailureFacts.filesKey ? (
-                          <span data-run-failure-files={String(runFailureFacts.artifactCount)}>
+                          <span
+                            data-run-failure-files={
+                              runFailureFacts.artifactCount === null
+                                ? 'unknown'
+                                : String(runFailureFacts.artifactCount)
+                            }
+                          >
                             {runFailureFacts.filesKey === 'chat.runError.filesChangedMany'
                               ? t(runFailureFacts.filesKey, {
                                   count: runFailureFacts.artifactCount ?? 0,

@@ -78,6 +78,7 @@ export const en: Dict = {
   'chat.runError.filesUnchanged': 'No files were changed.',
   'chat.runError.filesChangedOne': '1 file was changed and kept.',
   'chat.runError.filesChangedMany': '{count} files were changed and kept.',
+  'chat.runError.filesUnknown': 'Could not tell whether files changed after the restart.',
   'chat.runError.title.artifactMissing': 'No deliverable produced',
   'chat.runError.signInMessage.amr': 'The MishMash Cloud agent isn\'t signed in yet — sign in to start using it.',
   'chat.runError.signInMessage.other': '{agent} isn\'t signed in. Check its sign-in status locally. We recommend the MishMash Cloud agent — steadier and better value.',
