@@ -5,6 +5,26 @@ export interface CliFlagOptions {
 
 export type ParsedCliFlags = Record<string, string | boolean>;
 
+/**
+ * INVARIANT: a rejected argument list names the option it rejected.
+ *
+ * `parseFlags` refuses an undeclared option and a declared string option with
+ * no value after it. A caller that reports the refusal to a machine needs the
+ * offending option itself, and re-reading it out of the message would make the
+ * prose a parsing surface. Carrying it on the error keeps the message the only
+ * thing a human path prints: this class overrides nothing else, so `message`,
+ * `name`, and `String(err)` are what a plain `Error` produced before.
+ */
+export class CliFlagParseError extends Error {
+  /** The offending option in `--key` form; a `--key=value` spelling reports `--key`. */
+  readonly flag: string;
+
+  constructor(message: string, flag: string) {
+    super(message);
+    this.flag = flag;
+  }
+}
+
 export function parseFlags(
   argv: readonly string[],
   opts: CliFlagOptions = {},
@@ -23,8 +43,9 @@ export function parseFlags(
     const equalsAt = arg.indexOf('=');
     const key = equalsAt >= 0 ? arg.slice(2, equalsAt) : arg.slice(2);
     if (knownFlags.size > 0 && !knownFlags.has(key)) {
-      throw new Error(
+      throw new CliFlagParseError(
         `unknown flag: --${key}. Run with --help for the list of accepted flags.`,
+        `--${key}`,
       );
     }
     if (equalsAt >= 0) {
@@ -38,7 +59,7 @@ export function parseFlags(
     if (stringFlags.has(key)) {
       const next = argv[i + 1];
       if (next == null || next.startsWith('--')) {
-        throw new Error(`flag --${key} requires a value`);
+        throw new CliFlagParseError(`flag --${key} requires a value`, `--${key}`);
       }
       out[key] = next;
       i += 1;
