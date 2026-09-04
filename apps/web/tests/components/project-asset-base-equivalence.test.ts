@@ -226,3 +226,59 @@ describe('withProjectAssetBaseHref stays first in tree order across foreign cont
     expect(parse(withProjectAssetBaseHref(input, BASE)).baseURI).toBe(`http://d${BASE}`);
   });
 });
+
+// Round-7 track audit (proof/w2fix/2G.4-glm-r7.json). Its HIGH says `-->` does
+// not leave a script's double-escaped region, so the round-4 pin for this input
+// asserts the wrong bytes; its MEDIUM says the jsdom run behind that pin was
+// referenced and never shown. The run is now in the proof file, and these are
+// the parse assertions the byte pins could not make: the byte-exact cases below
+// cannot see whether the injected tag lands inside raw text, and these can.
+describe('withProjectAssetBaseHref reads a script double-escape the way the parser does', () => {
+  const BASE = '/api/projects/p1/raw/';
+  const PREVIEW_URL = 'http://d/preview';
+
+  function parse(html: string) {
+    const { document } = new JSDOM(html, { url: PREVIEW_URL }).window;
+    return {
+      scriptTexts: Array.from(document.querySelectorAll('script'), (s) => s.textContent),
+      bases: Array.from(document.querySelectorAll('base'), (b) => b.getAttribute('href')),
+      baseURI: document.baseURI,
+    };
+  }
+
+  it('ends the script at the first </script> after a --> and injects a real base', () => {
+    const input =
+      '<script><!--<script>-->y</script><head></head>--></script><html><head><title>t</title></head>';
+    expect(parse(input).scriptTexts).toEqual(['<!--<script>-->y']);
+
+    const parsed = parse(withProjectAssetBaseHref(input, BASE));
+    expect(parsed.scriptTexts).toEqual(['<!--<script>-->y']);
+    expect(parsed.bases).toEqual([BASE]);
+    expect(parsed.baseURI).toBe(`http://d${BASE}`);
+  });
+
+  it('drops a base that follows a --> because the parser makes it a real element', () => {
+    const input =
+      '<script><!--<script>-->y</script><base href="/evil/">--></script><head><title>t</title></head>';
+    expect(parse(input).bases).toEqual(['/evil/']);
+    expect(parse(input).baseURI).toBe('http://d/evil/');
+
+    const parsed = parse(withProjectAssetBaseHref(input, BASE));
+    expect(parsed.scriptTexts).toEqual(['<!--<script>-->y']);
+    expect(parsed.bases).toEqual([BASE]);
+    expect(parsed.baseURI).toBe(`http://d${BASE}`);
+  });
+
+  it('leaves a base alone inside a double-escaped region no --> closes', () => {
+    const input =
+      '<script><!--<script>y</script><base href="/evil/"></script><head><title>t</title></head>';
+    const scriptText = '<!--<script>y</script><base href="/evil/">';
+    expect(parse(input).scriptTexts).toEqual([scriptText]);
+    expect(parse(input).bases).toEqual([]);
+
+    const parsed = parse(withProjectAssetBaseHref(input, BASE));
+    expect(parsed.scriptTexts).toEqual([scriptText]);
+    expect(parsed.bases).toEqual([BASE]);
+    expect(parsed.baseURI).toBe(`http://d${BASE}`);
+  });
+});
