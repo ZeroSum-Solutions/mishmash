@@ -10,7 +10,8 @@
  * to the user as "Preview did not render" however well it rendered.
  *
  * It is a small state-aware scan, not a parser and not a regex over the whole
- * text. What can hide a `</body>` from the parser is what this tracks:
+ * text. What can hide a `</body>` from the parser is what this tracks, with the
+ * two deliberate imprecisions named after the list:
  *
  *  - comment text;
  *  - raw-text / RCDATA element contents (the tokenizer's RAWTEXT, RCDATA and
@@ -34,6 +35,12 @@
  * while this scan reads it as a section; the effect is to skip more text than
  * the parser would, which can only cost a genuine body close and fall back to
  * the EOF append below. It cannot select a decoy.
+ *
+ * A comment ends here at `-->` only. The tokenizer also closes one at `--!>`
+ * (comment-end-bang state) and treats `<!-->` and `<!--->` as complete comments
+ * (abrupt-closing-of-empty-comment). Same failure direction as the paragraph
+ * above, and the same reason it is stated rather than fixed here: skipping more
+ * than the parser would costs a genuine close, never selects a decoy.
  *
  * When no genuine close exists the injection is appended at EOF. That is the
  * honest placement, not a guarantee of execution: a document that left the
