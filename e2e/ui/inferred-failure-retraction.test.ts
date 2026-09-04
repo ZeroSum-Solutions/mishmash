@@ -47,6 +47,15 @@ const FAILING_RUN_PROMPT = 'Return the reported sleep-drop failure';
 // (`chat.runError.title.notStarted`). Distinct from the generic "Task failed",
 // which is what a client paints when it declares a turn dead without looking.
 const RUN_NOT_STARTED_TITLE = 'The run could not be started';
+// W1K.2: what the checking notice says once the client has stopped being able
+// to read the daemon at all (`chat.runChecking.unreachableTitle`), and the
+// action it then offers (`chat.runChecking.checkAgainCta`). Neither is a
+// verdict on the run — the wording changes, the neutral outcome does not.
+const NOT_ANSWERING_TEXT = 'MishMash is not answering';
+const CHECK_AGAIN_LABEL = /check again/i;
+// How many consecutive unanswered probes the lost-create lookup makes before it
+// says the daemon is not answering (`LOST_RUN_CREATE_MAX_UNANSWERED_PROBES`).
+const LOOKUP_UNANSWERED_BOUND = 3;
 
 let fakeRuntimes: Awaited<ReturnType<typeof createFakeAgentRuntimes>>;
 
@@ -939,6 +948,257 @@ test('[P0] a Side Chat create the daemon never received reads as a run that coul
     'precondition: the daemon must never have accepted the refused request',
   ).toBe(0);
 });
+
+// W1K.2 — the lookup that cannot READ the daemon.
+//
+// The two lost-response cases above give the lookup a daemon that answers. Take
+// that away and the client is left with the honest state it must never leave:
+// an unanswered read rules nothing out, so the lookup keeps looking and never
+// names a failure — while the row it is looking for keeps Send disabled
+// (W1J.4). Before this track the notice said only "Checking its result…" for as
+// long as that lasted and offered no action, because `unreachable` was reachable
+// only from the follow, which this lookup has not reached yet.
+//
+// The outage is forced at the transport on BOTH reads the lookup makes — the
+// conversation's active runs and the stored messages — because either one
+// answering would resolve the lookup and end the state under test. It is
+// released only when this case is ready to use the manual re-check.
+
+test('[P0] a live lost create whose lookup cannot read the daemon says so and its Check again adopts the run', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live unreadable lookup smoke');
+  await expectWorkspaceReady(page);
+
+  const { conversationId, projectId } = await currentProjectContext(page);
+  const createHold = dropCreateRunResponseBody(page);
+  const lookupOutage = refuseLostRunCreateReads(page);
+  await watchRunFailureCard(page);
+
+  createHold.arm();
+  lookupOutage.arm();
+  await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
+  await expect
+    .poll(() => createHold.acceptedRunId, { intervals: [100], timeout: T.medium })
+    .not.toBeNull();
+  const runId = createHold.acceptedRunId as string;
+
+  const checkingNotice = runCheckingNotice(page);
+  const composer = page.getByTestId('chat-composer').first();
+  const sendButton = composer.getByTestId('chat-send').first();
+
+  await expect(checkingNotice, 'the lost create response must read as a neutral checking state')
+    .toBeVisible({ timeout: T.long });
+
+  // The bound is LOST_RUN_CREATE_MAX_UNANSWERED_PROBES consecutive unanswered
+  // probes at LOST_RUN_CREATE_PROBE_INTERVAL_MS spacing — about six seconds of
+  // a daemon that answers nothing.
+  await expect(
+    checkingNotice,
+    'a lookup that has stopped being able to read the daemon must say the daemon is not answering',
+  ).toContainText(NOT_ANSWERING_TEXT, { timeout: T.long });
+  const checkAgain = checkingNotice.getByRole('button', { name: CHECK_AGAIN_LABEL });
+  await expect(
+    checkAgain,
+    'a notice with no action leaves a paused composer with no way out',
+  ).toHaveCount(1);
+  await expect(
+    checkingNotice.getByRole('button', { name: /retry/i }),
+    'the run may still be running, so Retry stays absent (the B-02 double-send hazard)',
+  ).toHaveCount(0);
+  expect(
+    await runFailureCardSightings(page),
+    'a daemon that answers nothing is not a run that failed',
+  ).toEqual([]);
+  expect(
+    lookupOutage.refusedRunLists,
+    'precondition: the lookup reads must really have gone unanswered past the bound',
+  ).toBeGreaterThanOrEqual(LOOKUP_UNANSWERED_BOUND);
+
+  // B-02: the pause stands until an authoritative lookup answers, and it still
+  // says why.
+  await composer.getByTestId('chat-composer-input').first().fill(PAUSED_DRAFT);
+  await expect(sendButton, 'a run that may be running must still hold Send').toBeDisabled();
+  await expect(checkingNotice, 'the notice must still say sending is paused')
+    .toContainText(SEND_PAUSED_TEXT);
+  await expect(
+    composer.getByText(SEND_PAUSED_TEXT).first(),
+    'the composer must still explain why its Send is disabled',
+  ).toBeVisible();
+
+  // The daemon comes back, and the user takes the action the notice offered.
+  lookupOutage.release();
+  await checkAgain.click();
+
+  await expect(checkingNotice, 'the checking notice must leave once the looked-up run answers')
+    .toHaveCount(0, { timeout: T.long });
+  await expect(
+    page.getByText(RUN_ANSWER).first(),
+    'the adopted turn must show the answer the run delivered',
+  ).toBeVisible({ timeout: T.long });
+  expect(
+    await storedAssistantRunStatus(page, projectId, conversationId),
+    'the row must read succeeded once the looked-up run answers',
+  ).toBe('succeeded');
+  expect(
+    await runFailureCardSightings(page),
+    'the failure card must never have appeared at any point during a run that succeeded',
+  ).toEqual([]);
+  await expect(runErrorCard(page)).toHaveCount(0);
+  expect(
+    await conversationRunCount(page, conversationId),
+    'the manual re-check must adopt the run the daemon already had, never send a second one',
+  ).toBe(1);
+  expect(runId, 'precondition: the daemon really accepted the create it never answered').toBeTruthy();
+});
+
+// W1K.2 — the other side of the same bound. "The daemon is not answering" is a
+// claim about the daemon, so one read that lands refutes it even while the
+// other stays down. The lookup keeps the ordinary checking wording there: it
+// still cannot rule a run out (that needs BOTH reads), so nothing about the
+// outcome changes — only the sentence the user reads.
+//
+// The active list answers with nothing to say — what the daemon really returns
+// once the turn has finished — while the stored messages, the read that would
+// name the run, stay down. The recoverable list is held for the reason the case
+// above holds it.
+
+test('[P0] a lost create whose lookup still reads one surface is never told the daemon is silent', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live partial outage lookup smoke');
+  await expectWorkspaceReady(page);
+
+  const createHold = dropCreateRunResponseBody(page);
+  const lookupOutage = refuseLostRunCreateReads(page, { answerActiveRuns: true });
+  await watchRunFailureCard(page);
+
+  createHold.arm();
+  lookupOutage.arm();
+  await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
+  await expect
+    .poll(() => createHold.acceptedRunId, { intervals: [100], timeout: T.medium })
+    .not.toBeNull();
+
+  const checkingNotice = runCheckingNotice(page);
+  await expect(checkingNotice, 'the lost create response must read as a neutral checking state')
+    .toBeVisible({ timeout: T.long });
+
+  // Wait for the daemon to have answered the active list more times than the
+  // unanswered bound allows, so the assertions below run past the point where a
+  // rule that counted a partial read as silence would have turned the wording
+  // over. A coarse gate, not the mechanism: `attachRecoverableRuns` reads the
+  // same list, so the count is at least the lookup's own probes.
+  await expect
+    .poll(() => lookupOutage.answeredRunLists, { intervals: [250], timeout: 60_000 })
+    .toBeGreaterThan(LOOKUP_UNANSWERED_BOUND);
+  await expect(checkingNotice, 'the neutral checking state must still be on screen')
+    .toContainText(CHECKING_NOTICE_TEXT);
+  await expect(
+    checkingNotice,
+    'a daemon that is answering one of the two reads must never be called silent',
+  ).not.toContainText(NOT_ANSWERING_TEXT);
+  await expect(
+    checkingNotice.getByRole('button', { name: CHECK_AGAIN_LABEL }),
+    'the automatic lookup is still reading the daemon, so there is nothing to re-check by hand',
+  ).toHaveCount(0);
+  expect(
+    await runFailureCardSightings(page),
+    'a partial outage rules nothing out, so it is still not a failed run',
+  ).toEqual([]);
+});
+
+interface LostRunCreateReadOutage {
+  /** Start refusing every read that could resolve a lost create. */
+  arm: () => void;
+  /** Let those reads through again. */
+  release: () => void;
+  /** How many active-run reads have been answered 503 — one per lookup probe. */
+  readonly refusedRunLists: number;
+  /** How many active-run reads were answered instead of refused. */
+  readonly answeredRunLists: number;
+}
+
+/**
+ * Answer every read that can resolve a lost create with 503 until released.
+ *
+ * `fetchActiveChatRuns` and `fetchMessages` each report a non-OK response as
+ * `null` (`providers/daemon.ts`, `state/projects.ts`), which is what the lookup
+ * counts as a probe that could not read — so a 503 here is indistinguishable
+ * from the daemon outage this reproduces. Both are held because either one
+ * answering resolves the lookup on the spot: the run really exists, so a
+ * readable daemon names it immediately.
+ *
+ * The bare `GET /api/runs` list is held for the same reason and not as extra
+ * strictness. `attachRecoverableRuns` reads it through `listProjectRuns`
+ * (`ProjectView.tsx`) and adopts the run onto the row by its
+ * `assistantMessageId`, which releases the lookup before it has probed at all —
+ * a first draft of this case that let that list through never reached the state
+ * it names. A daemon that is not answering answers neither list.
+ *
+ * `route.fallback()` rather than `route.continue()` for everything it does not
+ * refuse: the create hold is registered on the same `/api/runs` path, and
+ * `continue()` would send the create straight to the network instead of letting
+ * that earlier handler lose its response.
+ */
+function refuseLostRunCreateReads(
+  page: Page,
+  options: { answerActiveRuns?: boolean } = {},
+): LostRunCreateReadOutage {
+  let armed = false;
+  let refusedRunLists = 0;
+  let answeredRunLists = 0;
+  void page.route(
+    (url) => url.pathname === '/api/runs',
+    async (route) => {
+      const requested = new URL(route.request().url());
+      const activeRunList = requested.searchParams.get('status') === 'active';
+      if (!armed || route.request().method() !== 'GET') {
+        await route.fallback();
+        return;
+      }
+      // `answerActiveRuns` is the partial outage: the active list ANSWERS,
+      // with nothing to say, while the read that would name the run stays
+      // down. Answered here rather than forwarded, because a forwarded read
+      // names the run for as long as it is still active and resolves the
+      // lookup on its first probe — an empty list is what the same daemon
+      // returns a beat later, once the turn has finished.
+      if (activeRunList && options.answerActiveRuns) {
+        answeredRunLists += 1;
+        await route.fulfill({
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ runs: [] }),
+        });
+        return;
+      }
+      if (activeRunList) refusedRunLists += 1;
+      await route.fulfill({ status: 503, body: '' });
+    },
+  );
+  void page.route(
+    (url) => /^\/api\/projects\/[^/]+\/conversations\/[^/]+\/messages$/.test(url.pathname),
+    async (route) => {
+      if (!armed || route.request().method() !== 'GET') {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({ status: 503, body: '' });
+    },
+  );
+  return {
+    arm: () => {
+      armed = true;
+    },
+    release: () => {
+      armed = false;
+    },
+    get refusedRunLists() {
+      return refusedRunLists;
+    },
+    get answeredRunLists() {
+      return answeredRunLists;
+    },
+  };
+}
 
 interface RunEventStreamHold {
   /** Start refusing the next run event stream this page opens. */

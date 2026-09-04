@@ -85,25 +85,25 @@ describe('pinnedRunIdForAssistantRow — the durable half of the lookup', () => 
 
 describe('nextLostRunCreateStep — what the client does with what it found', () => {
   it('adopts a run the moment either id names one, however late', () => {
-    expect(nextLostRunCreateStep('run-mine', 1, true)).toBe('adopt');
-    expect(nextLostRunCreateStep('run-mine', LOST_RUN_CREATE_MAX_PROBES, true)).toBe('adopt');
-    expect(nextLostRunCreateStep('run-mine', LOST_RUN_CREATE_MAX_PROBES + 5, true)).toBe('adopt');
+    expect(nextLostRunCreateStep('run-mine', 1, true, 0)).toBe('adopt');
+    expect(nextLostRunCreateStep('run-mine', LOST_RUN_CREATE_MAX_PROBES, true, 0)).toBe('adopt');
+    expect(nextLostRunCreateStep('run-mine', LOST_RUN_CREATE_MAX_PROBES + 5, true, 0)).toBe('adopt');
     // A read that did not answer can still have found the run in the surface
     // that did.
-    expect(nextLostRunCreateStep('run-mine', 1, false)).toBe('adopt');
+    expect(nextLostRunCreateStep('run-mine', 1, false, 1)).toBe('adopt');
   });
 
   // One probe finding nothing is not evidence that nothing ran; the client
   // keeps looking rather than naming a failure it has not established.
   it('keeps looking while the bound has room', () => {
     for (let probes = 1; probes < LOST_RUN_CREATE_MAX_PROBES; probes += 1) {
-      expect(nextLostRunCreateStep(null, probes, true)).toBe('probe');
+      expect(nextLostRunCreateStep(null, probes, true, 0)).toBe('probe');
     }
   });
 
   it('gives up only once the bound is spent, which is what rules a live run out', () => {
-    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES, true)).toBe('abandon');
-    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES + 1, true)).toBe('abandon');
+    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES, true, 0)).toBe('abandon');
+    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES + 1, true, 0)).toBe('abandon');
   });
 
   // The B-02 hazard in miniature: the outage that loses a create response is
@@ -111,7 +111,60 @@ describe('nextLostRunCreateStep — what the client does with what it found', ()
   // failed request as "nothing here". A probe that could not read has ruled
   // nothing out, so it must never buy the right to offer Retry.
   it('never spends the bound on a probe that could not read', () => {
-    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES, false)).toBe('probe');
-    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES * 10, false)).toBe('probe');
+    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES, false, 1)).toBe('probe');
+    expect(nextLostRunCreateStep(null, LOST_RUN_CREATE_MAX_PROBES * 10, false, 2)).toBe('probe');
+  });
+});
+
+// W1K.2 red spec — a lookup that cannot READ the daemon must eventually SAY so.
+//
+// An unanswered probe rules nothing out, so it never spends the abandon bound
+// and the lookup keeps looking (the case above). That is the right thing to do
+// and the wrong thing to show: the row it is looking for keeps the composer's
+// Send disabled, so an unbroken read outage leaves a paused conversation behind
+// a notice that says only "Checking its result…" and offers no action at all.
+//
+// So the lookup carries a SECOND bound, counted on the consecutive probes that
+// could not read. Reaching it changes nothing about the outcome — never a
+// failure, never Retry, still probing — and only changes what the notice says:
+// the daemon is not answering, and here is a manual re-check.
+//
+// The counts below are literals rather than the exported bound so this file
+// imports nothing the fix has to add first; the red run must fail on the
+// assertion, not on a missing export. Three is the bound
+// (`LOST_RUN_CREATE_MAX_UNANSWERED_PROBES`), and asserting on both sides of it
+// is what pins it.
+const UNANSWERED_UNDER_BOUND = 2;
+const UNANSWERED_AT_BOUND = 3;
+
+describe('nextLostRunCreateStep — a daemon that answers nothing at all', () => {
+  it('keeps the ordinary checking wording while the unanswered bound has room', () => {
+    for (let unanswered = 1; unanswered <= UNANSWERED_UNDER_BOUND; unanswered += 1) {
+      expect(nextLostRunCreateStep(null, unanswered, false, unanswered)).toBe('probe');
+    }
+  });
+
+  it('says the daemon is not answering once the unanswered probes reach the bound', () => {
+    expect(nextLostRunCreateStep(null, UNANSWERED_AT_BOUND, false, UNANSWERED_AT_BOUND)).toBe(
+      'unreachable',
+    );
+    expect(nextLostRunCreateStep(null, 40, false, 40)).toBe('unreachable');
+  });
+
+  // The B-02 hazard again: the outage that loses a create response is the one
+  // that fails the lookup's reads, so a daemon nobody can read must never be
+  // read as a run nobody started. Saying so is a WORDING change, not a verdict.
+  it('never abandons a lookup that could not read, however long the outage runs', () => {
+    for (const unanswered of [UNANSWERED_AT_BOUND, 40, LOST_RUN_CREATE_MAX_PROBES * 100]) {
+      expect(nextLostRunCreateStep(null, unanswered, false, unanswered)).not.toBe('abandon');
+    }
+  });
+
+  // A daemon that is replying to every probe must never be described as silent,
+  // so any answer at all retires the wording — the count that reaches the bound
+  // is CONSECUTIVE.
+  it('takes the wording back the moment a probe answers', () => {
+    expect(nextLostRunCreateStep(null, 1, true, 0)).toBe('probe');
+    expect(nextLostRunCreateStep('run-mine', 40, false, 40)).toBe('adopt');
   });
 });
