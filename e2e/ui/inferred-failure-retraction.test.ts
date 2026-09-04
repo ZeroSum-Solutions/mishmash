@@ -604,6 +604,29 @@ test('[P0] a Side Chat stream failure with no run verdict never paints the failu
 // recorded, the daemon classifies it, and the card must appear with the
 // daemon's own facts rather than a neutral notice.
 
+test('[P0] a stream failure whose run then really fails adopts the daemon verdict', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live unresolved then failed smoke');
+  await expectWorkspaceReady(page);
+
+  const streamHold = holdRunEventStream(page);
+
+  streamHold.arm();
+  // The stream is refused for the life of the run, so the client never receives
+  // the daemon's error frame. The card below can only come from the follow
+  // reading the daemon's own stored row after the run reported `failed`.
+  await sendPrompt(page, page.getByTestId('chat-composer').first(), FAILING_RUN_PROMPT);
+
+  const failureAlert = runRecoveryCard(page);
+  await expect(failureAlert, 'the run own failed verdict must still reach the user')
+    .toBeVisible({ timeout: 120_000 });
+  await expect(
+    failureAlert.locator('[data-run-failure-step]'),
+    'the adopted card must carry the daemon facts, not a client-invented one',
+  ).toHaveCount(1);
+  await expect(runCheckingNotice(page), 'the verdict ends the checking state').toHaveCount(0);
+});
+
 test('[P1] a run the daemon reported failed still shows the failure card with its facts', async ({ page }) => {
   await page.goto('/');
   await createProject(page, 'Live adjudicated failure smoke');
