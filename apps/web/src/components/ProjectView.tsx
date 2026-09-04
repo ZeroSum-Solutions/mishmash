@@ -3925,11 +3925,47 @@ export function ProjectView({
     [project.id, activeConversationId, refreshPreviewComments],
   );
 
-  // Maximum number of times we will retry fetching a null status for a
-  // spuriouslyFailedPending run before treating the absence as authoritative
-  // completion.  Transient null-status retries are bounded; after
-  // MAX_TRANSIENT_RETRIES we add to completedReattachRunsRef to avoid spinning.
+  // Maximum number of times we will retry a run-status read that answered
+  // nothing before we stop asking. Bounded so the reattach pass cannot spin;
+  // see `retryUnreadableRunStatus` for what the bound does and does not decide.
   const MAX_TRANSIENT_RETRIES = 2;
+
+  /**
+   * The invariant an unreadable run status is held to: A READ THAT ANSWERED
+   * NOTHING IS NOT A VERDICT.
+   *
+   * `fetchChatRunStatus` reports a non-OK response and a thrown fetch alike as
+   * `null` (`providers/daemon.ts`), so a daemon hiccup, a dropped network, and a
+   * run the daemon has genuinely forgotten all arrive here identically — and the
+   * outage that sends a row into this pass is the very one that produces them.
+   * Moving the row on that is the same claim the transport stopped making when
+   * its own reconnect budget ran out (`reportUnadjudicatedDisconnect` in
+   * `providers/daemon.ts`): a terminal nobody declared, which takes the row out
+   * of the ACTIVE state its checking notice is keyed to and releases the
+   * composer while the run may still be running.
+   *
+   * So nothing is written. The read is retried on the recovery tick, and after
+   * `MAX_TRANSIENT_RETRIES` the run is sealed so this pass cannot spin — sealed
+   * WITHOUT a status, so the row keeps whatever the daemon last declared for it
+   * and only the run's own terminal moves it. A reload re-arms the pass. A run
+   * the daemon never accepted is a different question, and the `!runId` branch
+   * inside the pass answers it.
+   */
+  const retryUnreadableRunStatus = useCallback((runId: string) => {
+    const attempts = transientFailedRetriesRef.current.get(runId) ?? 0;
+    if (attempts >= MAX_TRANSIENT_RETRIES) {
+      transientFailedRetriesRef.current.delete(runId);
+      genericDisconnectRetriesRef.current.delete(runId);
+      completedReattachRunsRef.current.add(runId);
+      return;
+    }
+    transientFailedRetriesRef.current.set(runId, attempts + 1);
+    const handle = setTimeout(() => {
+      transientRetryTimersRef.current.delete(handle);
+      setRecoveryTick((t) => t + 1);
+    }, 3000);
+    transientRetryTimersRef.current.add(handle);
+  }, []);
 
   // Reset transient retry counts when the conversation or daemon connection
   // changes so stale counts from a previous session do not bleed in.  This
@@ -4074,44 +4110,7 @@ export function ProjectView({
         const status = fallbackRun ?? await fetchChatRunStatus(runId);
         if (cancelled) return;
         if (!status) {
-          // `fetchChatRunStatus` returns null on ANY non-OK response or fetch
-          // exception (providers/daemon.ts:686), not only when the daemon has
-          // permanently forgotten the run.  For a spuriously-failed pending
-          // message we must keep this path retryable: a transient network or
-          // daemon hiccup during reload must not permanently suppress the
-          // reattach attempt for the rest of the session.
-          //
-          // Transient null-status retries are bounded; after MAX_TRANSIENT_RETRIES
-          // we treat the absence as authoritative completion to avoid spinning.
-          // Timers are tracked in transientRetryTimersRef and cleared on cleanup.
-          //
-          // For other message states (phantom running rows with no runId),
-          // fall through to the original mark-failed behaviour and seal the
-          // runId so we don't loop indefinitely.
-          if (spuriouslyFailedPending) {
-            const attempts = transientFailedRetriesRef.current.get(runId) ?? 0;
-            if (attempts >= MAX_TRANSIENT_RETRIES) {
-              // Cap reached — treat as authoritative completion so we stop retrying.
-              // Clear the Map entry so it doesn't accumulate stale entries.
-              transientFailedRetriesRef.current.delete(runId);
-              genericDisconnectRetriesRef.current.delete(runId);
-              completedReattachRunsRef.current.add(runId);
-            } else {
-              transientFailedRetriesRef.current.set(runId, attempts + 1);
-              const handle = setTimeout(() => {
-                transientRetryTimersRef.current.delete(handle);
-                setRecoveryTick((t) => t + 1);
-              }, 3000);
-              transientRetryTimersRef.current.add(handle);
-            }
-          } else {
-            updateMessageById(
-              message.id,
-              (prev) => ({ ...prev, runStatus: 'failed', endedAt: prev.endedAt ?? Date.now() }),
-              true,
-            );
-            completedReattachRunsRef.current.add(runId);
-          }
+          retryUnreadableRunStatus(runId);
           continue;
         }
         // When the daemon authoritative status is 'failed', the run ended in a
@@ -5017,15 +5016,14 @@ export function ProjectView({
             if (retractsFailure) clearPaneErrorForRun(runId);
             latestReattachRunStatus = runStatus;
             // A `failed` from the stream is never recorded as the daemon's
-            // word, and it cannot cost a real verdict. `consumeDaemonRun` emits
-            // a `failed` IT inferred only when its reconnect budget runs out,
-            // and the error it then surfaces is unadjudicated
-            // (`createGenericDaemonDisconnectError`). Every other `failed` it
-            // reports comes off a terminal the daemon declared, in the `end`
-            // frame or in a status read the client could make, and those set
-            // `endStatus` so the inference branch is never reached. An error
-            // frame alone is NOT one of them: it is provisional until such a
-            // terminal pairs with it (`provisionalDaemonErrorFrame`).
+            // word, and it cannot cost a real verdict. Every `failed`
+            // `consumeDaemonRun` reports comes off a terminal the daemon
+            // declared, in the `end` frame or in a status read the client could
+            // make, and those set `endStatus`. The one status it used to INFER
+            // — from its own exhausted reconnect budget — it no longer emits at
+            // all (`reportUnadjudicatedDisconnect`, W1K.3). An error frame alone
+            // is NOT such a terminal: it is provisional until one pairs with it
+            // (`provisionalDaemonErrorFrame`).
             if (runStatus !== 'failed') daemonDeclaredRunStatus = runStatus;
             if (runStatus === 'canceled') {
               textBuffer.cancel();
