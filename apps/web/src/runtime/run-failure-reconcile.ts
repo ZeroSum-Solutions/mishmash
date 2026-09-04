@@ -23,6 +23,20 @@ function isActiveRunStatus(status: ChatMessage['runStatus']): boolean {
  */
 const UNADJUDICATED_STREAM_FAILURE = 'unadjudicatedStreamFailure';
 
+/**
+ * The narrower mark for the one unadjudicated failure that also leaves the
+ * client with NO RUN ID: the create request whose response it never read.
+ *
+ * `providers/daemon.ts` is again the only place that can tell. A create that
+ * answered non-OK is the daemon refusing the request, so no run exists and the
+ * pane may say so. A create whose response was never read — the connection
+ * dropped after the commit, or the body did not parse — says nothing at all:
+ * the daemon creates and pins the run BEFORE it answers. Only the second is
+ * stamped here, and only that one sends a pane to the lookup in
+ * `runtime/lost-run-create.ts`.
+ */
+const LOST_RUN_CREATE_FAILURE = 'lostRunCreateFailure';
+
 /** Stamp an error the transport minted for itself. See the constant above. */
 export function markStreamUnadjudicated<E extends Error>(error: E): E {
   Object.defineProperty(error, UNADJUDICATED_STREAM_FAILURE, {
@@ -31,6 +45,29 @@ export function markStreamUnadjudicated<E extends Error>(error: E): E {
     configurable: true,
   });
   return error;
+}
+
+/**
+ * Stamp a create call whose response this client never read. Implies
+ * `markStreamUnadjudicated`: a run that may exist is never adjudicated.
+ */
+export function markLostRunCreate<E extends Error>(error: E): E {
+  Object.defineProperty(error, LOST_RUN_CREATE_FAILURE, {
+    value: true,
+    enumerable: false,
+    configurable: true,
+  });
+  return markStreamUnadjudicated(error);
+}
+
+/**
+ * True for a create failure that left the run's existence open. A pane reading
+ * this must neither paint a failure nor stamp a run status: it owns two ids for
+ * the run the daemon may have accepted and must look it up under them first.
+ */
+export function isLostRunCreateFailure(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  return (err as Record<string, unknown>)[LOST_RUN_CREATE_FAILURE] === true;
 }
 
 /**
@@ -98,8 +135,37 @@ export function withUnresolvedRunStatus<T extends ChatMessage>(
  * here.
  */
 export interface RunCheckState {
-  runId: string;
+  /**
+   * The run being followed, or null while the client is still LOOKING FOR the
+   * run its lost create response never named. A checking notice is honest in
+   * both states: neither says anything about the turn.
+   */
+  runId: string | null;
+  /**
+   * The client's own assistant row for this check. Before a run id exists it is
+   * the only handle on the row the notice belongs to, so it is what
+   * `answersRunCheck` matches on.
+   */
+  assistantMessageId: string;
   unreachable: boolean;
+}
+
+/**
+ * The row a checking notice is asking about, and therefore whether the notice
+ * still has a question to ask.
+ *
+ * The run's row once the client knows the run id; its own assistant row before
+ * that. Either way the row must still be ACTIVE: once it reaches any terminal —
+ * from the follow, from a reattach, from a conversation refresh — the question
+ * has been answered and the notice leaves without anyone clearing it.
+ */
+export function answersRunCheck(message: ChatMessage, check: RunCheckState): boolean {
+  if (message.role !== 'assistant') return false;
+  const belongsToCheck =
+    check.runId !== null
+      ? message.runId === check.runId
+      : message.id === check.assistantMessageId;
+  return belongsToCheck && isActiveRunStatus(message.runStatus);
 }
 
 /**

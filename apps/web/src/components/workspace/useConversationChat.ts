@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchChatRunStatus, streamViaDaemon } from '../../providers/daemon';
-import { listMessages, saveMessage } from '../../state/projects';
+import {
+  fetchActiveChatRuns,
+  fetchChatRunStatus,
+  streamViaDaemon,
+} from '../../providers/daemon';
+import { fetchMessages, listMessages, saveMessage } from '../../state/projects';
 import { appendErrorStatusEvent, runFailureFieldsFromError } from '../../runtime/chat-events';
 import { agentModelDisplayName } from '../../utils/agentLabels';
 import { randomUUID } from '../../utils/uuid';
@@ -17,12 +21,22 @@ import {
   RUN_FAILURE_RECHECK_INTERVAL_MS,
   applyRunTerminalFromStatus,
   conversationAnswersRunCheck,
+  isLostRunCreateFailure,
   isUnadjudicatedStreamFailure,
   nextInferredRunFailureStep,
   runCheckWithDaemonReachability,
   retractsStaleRunFailure,
 } from '../../runtime/run-failure-reconcile';
 import type { RunCheckState } from '../../runtime/run-failure-reconcile';
+import {
+  LOST_RUN_CREATE_PROBE_INTERVAL_MS,
+  RUN_NOT_STARTED_ERROR_CODE,
+  matchLostRunCreate,
+  nextLostRunCreateStep,
+  pinnedRunIdForAssistantRow,
+} from '../../runtime/lost-run-create';
+import type { LostRunCreateIdentity } from '../../runtime/lost-run-create';
+import { useT } from '../../i18n';
 import type {
   AgentEvent,
   AgentInfo,
@@ -94,6 +108,7 @@ export function useConversationChat(
   ctx: ConversationChatContext,
 ): UseConversationChatResult {
   const { config, agentsById, locale } = ctx;
+  const t = useT();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,11 +144,20 @@ export function useConversationChat(
   // the whole messages array on every SSE token.
   const textBufferRef = useRef<ReturnType<typeof createBufferedTextUpdates> | null>(null);
   const failureRecheckTimerRef = useRef<number | null>(null);
+  // The lookup that runs when a create response is lost. Its own timer, so the
+  // follow's `clearFailureRecheck` cannot cancel it and vice versa.
+  const lostRunCreateTimerRef = useRef<number | null>(null);
 
   const clearFailureRecheck = useCallback(() => {
     if (failureRecheckTimerRef.current === null) return;
     window.clearTimeout(failureRecheckTimerRef.current);
     failureRecheckTimerRef.current = null;
+  }, []);
+
+  const clearLostRunCreateLookup = useCallback(() => {
+    if (lostRunCreateTimerRef.current === null) return;
+    window.clearTimeout(lostRunCreateTimerRef.current);
+    lostRunCreateTimerRef.current = null;
   }, []);
 
   // Residual 8: `error` is a single slot the run shares with errors no run
@@ -280,7 +304,9 @@ export function useConversationChat(
   // run again now instead of waiting out the interval.
   const onRunCheckAgain = useCallback(() => {
     const pending = runCheck;
-    if (!pending) return;
+    // A check with no run id is still LOOKING for one; its lookup is already
+    // running and the notice offers no manual re-check in that state.
+    if (!pending || !pending.runId) return;
     setRunCheck({ ...pending, unreachable: false });
     scheduleRunFailureRecheck(pending.runId, { unresolved: true, message: pending.message });
   }, [runCheck, scheduleRunFailureRecheck]);
@@ -300,8 +326,9 @@ export function useConversationChat(
     return () => {
       cancelled = true;
       clearFailureRecheck();
+      clearLostRunCreateLookup();
     };
-  }, [projectId, conversationId, clearFailureRecheck]);
+  }, [projectId, conversationId, clearFailureRecheck, clearLostRunCreateLookup]);
 
   // Tear down the live subscription when the tab unmounts. The daemon run
   // keeps going; we only stop the browser-side SSE.
@@ -327,6 +354,111 @@ export function useConversationChat(
       setMessages((curr) => curr.map((m) => (m.id === assistantId ? updater(m) : m)));
     },
     [],
+  );
+
+  /**
+   * Side Chat's half of the lost-create-response lookup.
+   *
+   * The daemon creates and pins the run BEFORE it answers the create request, so
+   * a response this pane never read leaves it with a running turn and no run id.
+   * It still owns two ids for that run — the `clientRequestId` it minted and the
+   * `assistantMessageId` the daemon pinned — and the daemon answers under both.
+   * Until one of them does, the row keeps its active status behind the neutral
+   * checking notice; once it does, the ordinary follow takes over and its
+   * conversation read brings the turn's own output in.
+   *
+   * The bound running out is the ONE honest failure here: neither read names a
+   * run, so nothing is running, and Retry carries no double-send hazard.
+   */
+  const scheduleLostRunCreateLookup = useCallback(
+    (identity: LostRunCreateIdentity, streamMessage: string) => {
+      const boundConversationId = conversationId;
+      const superseded = () => conversationRef.current !== boundConversationId;
+      let probes = 0;
+      const attempt = () => {
+        lostRunCreateTimerRef.current = null;
+        void (async () => {
+          try {
+            if (superseded()) return;
+            probes += 1;
+            const active = await fetchActiveChatRuns(projectId, boundConversationId);
+            let runId = active ? matchLostRunCreate(active, identity) : null;
+            const stored = runId ? [] : await fetchMessages(projectId, boundConversationId);
+            if (!runId && stored) {
+              runId = pinnedRunIdForAssistantRow(stored, identity.assistantMessageId);
+            }
+            if (superseded()) return;
+            // Only a probe that READ both surfaces may spend the bound; see
+            // `nextLostRunCreateStep`.
+            const step = nextLostRunCreateStep(runId, probes, active !== null && stored !== null);
+            if (step === 'probe') {
+              lostRunCreateTimerRef.current = window.setTimeout(
+                attempt,
+                LOST_RUN_CREATE_PROBE_INTERVAL_MS,
+              );
+              return;
+            }
+            if (step === 'adopt' && runId) {
+              const adoptedRunId = runId;
+              setMessages((current) =>
+                current.map((message) =>
+                  message.id === identity.assistantMessageId
+                    ? { ...message, runId: adoptedRunId }
+                    : message,
+                ),
+              );
+              setRunCheck({
+                runId: adoptedRunId,
+                assistantMessageId: identity.assistantMessageId,
+                unreachable: false,
+                message: streamMessage,
+              });
+              scheduleRunFailureRecheck(adoptedRunId, {
+                unresolved: true,
+                message: streamMessage,
+              });
+              return;
+            }
+            const notStarted = t('chat.runError.notStartedMessage');
+            errorCarrierRef.current = null;
+            setError(notStarted);
+            setMessages((current) => {
+              const next = current.map((message) =>
+                message.id === identity.assistantMessageId
+                  ? {
+                      ...appendErrorStatusEvent(message, notStarted, RUN_NOT_STARTED_ERROR_CODE),
+                      endedAt: message.endedAt ?? Date.now(),
+                      runStatus: 'failed' as const,
+                    }
+                  : message,
+              );
+              const finalized = next.find((message) => message.id === identity.assistantMessageId);
+              if (finalized) persist(finalized);
+              return next;
+            });
+          } catch (err) {
+            // This lookup is the only thing that can resolve the row, so it must
+            // never end without an outcome. Anything unexpected is one more
+            // inconclusive probe.
+            console.warn('Failed to look up a run whose create response was lost', err);
+            lostRunCreateTimerRef.current = window.setTimeout(
+              attempt,
+              LOST_RUN_CREATE_PROBE_INTERVAL_MS,
+            );
+          }
+        })();
+      };
+      clearLostRunCreateLookup();
+      lostRunCreateTimerRef.current = window.setTimeout(attempt, RUN_FAILURE_RECHECK_DELAY_MS);
+    },
+    [
+      clearLostRunCreateLookup,
+      conversationId,
+      persist,
+      projectId,
+      scheduleRunFailureRecheck,
+      t,
+    ],
   );
 
   const runSend = useCallback(
@@ -416,6 +548,9 @@ export function useConversationChat(
       // pane only inferred is re-checked against this run, so a send that never
       // reached `onRunCreated` has nothing to follow.
       let currentRunId: string | undefined;
+      // The id this send is known by on the daemon side even when the create
+      // response never comes back, so `onError` can look the run up under it.
+      const runClientRequestId = randomUUID();
 
       const clearRefs = () => {
         if (abortRef.current === controller) abortRef.current = null;
@@ -461,8 +596,25 @@ export function useConversationChat(
           // qualifies — an error raised before the daemon named a run has
           // nothing to check.
           const unresolvedRunId = isUnadjudicatedStreamFailure(err) ? currentRunId : undefined;
+          // The same claim one step earlier: the create response was lost, so
+          // this pane has no run id for a run the daemon may already be running.
+          // It owns two ids for it, so look the run up rather than paint
+          // anything.
+          const lostRunCreate = isLostRunCreateFailure(err) && currentRunId === undefined;
           if (unresolvedRunId !== undefined) {
-            setRunCheck({ runId: unresolvedRunId, unreachable: false, message: err.message });
+            setRunCheck({
+              runId: unresolvedRunId,
+              assistantMessageId: assistantId,
+              unreachable: false,
+              message: err.message,
+            });
+          } else if (lostRunCreate) {
+            setRunCheck({
+              runId: null,
+              assistantMessageId: assistantId,
+              unreachable: false,
+              message: err.message,
+            });
           } else {
             errorCarrierRef.current = currentRunId
               ? { runId: currentRunId, message: err.message }
@@ -485,6 +637,13 @@ export function useConversationChat(
             });
           }
           clearRefs();
+          if (lostRunCreate) {
+            scheduleLostRunCreateLookup(
+              { clientRequestId: runClientRequestId, assistantMessageId: assistantId },
+              err.message,
+            );
+            return;
+          }
           scheduleRunFailureRecheck(currentRunId, {
             unresolved: unresolvedRunId !== undefined,
             message: err.message,
@@ -501,7 +660,7 @@ export function useConversationChat(
         projectId,
         conversationId,
         assistantMessageId: assistantId,
-        clientRequestId: randomUUID(),
+        clientRequestId: runClientRequestId,
         skillId: null,
         skillIds: [],
         designSystemId: cfg.designSystemId ?? null,
@@ -537,7 +696,14 @@ export function useConversationChat(
         },
       });
     },
-    [projectId, conversationId, persist, scheduleRunFailureRecheck, updateAssistant],
+    [
+      projectId,
+      conversationId,
+      persist,
+      scheduleLostRunCreateLookup,
+      scheduleRunFailureRecheck,
+      updateAssistant,
+    ],
   );
 
   const onSend = useCallback(
