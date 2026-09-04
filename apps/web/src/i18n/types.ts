@@ -3772,8 +3772,6 @@ export interface Dict {
   'fileViewer.speakerNotesPlaceholder': string;
   'fileViewer.previewAssetBlockedTitle': string;
   'fileViewer.previewAssetBlockedDetail': string;
-  'fileViewer.previewRuntimeScriptBlockedTitle': string;
-  'fileViewer.previewRuntimeScriptBlockedDetail': string;
   'fileViewer.presenterReset': string;
   'fileViewer.present': string;
   'fileViewer.presentInTab': string;
