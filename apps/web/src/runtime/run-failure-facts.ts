@@ -60,6 +60,20 @@ const RUN_FAILURE_STEP_BY_STAGE: Record<RunFailureStage, RunFailureStepKey> = {
   finalize: 'chat.runError.step.finalize',
 };
 
+/**
+ * Whether a map DECLARES `value` as a key, rather than merely inheriting it.
+ *
+ * The two maps in this file are plain object literals, so a prototype-walking
+ * `in` test also answers for every `Object.prototype` name — `'constructor'`,
+ * `'toString'`, `'__proto__'`. A persisted stage or verdict carrying one of
+ * those would then read as known and hand the alert an `Object.prototype`
+ * member where an i18n key belongs. Only the OWN keys were ever declared, so
+ * own membership is the whole test for belonging to a closed union.
+ */
+function isDeclaredKey<T extends object>(map: T, value: string): value is Extract<keyof T, string> {
+  return Object.hasOwn(map, value);
+}
+
 export interface RunFailureFacts {
   /** Raw stage id, for the alert's `data-run-failure-step` marker. Null when
    *  the daemon reported no stage (an older daemon, or a non-run failure). */
@@ -94,8 +108,8 @@ export function describeRunFailureFacts(input: {
 }): RunFailureFacts {
   const stage =
     typeof input.failureStage === 'string'
-    && input.failureStage in RUN_FAILURE_STEP_BY_STAGE
-      ? input.failureStage as RunFailureStage
+    && isDeclaredKey(RUN_FAILURE_STEP_BY_STAGE, input.failureStage)
+      ? input.failureStage
       : null;
   const artifactCount =
     typeof input.artifactCount === 'number'
@@ -105,8 +119,8 @@ export function describeRunFailureFacts(input: {
       : null;
   const fileChangeState =
     typeof input.fileChangeState === 'string'
-    && input.fileChangeState in RUN_FAILURE_FILES_BY_COUNTLESS_STATE
-      ? input.fileChangeState as RunFileChangeState
+    && isDeclaredKey(RUN_FAILURE_FILES_BY_COUNTLESS_STATE, input.fileChangeState)
+      ? input.fileChangeState
       : null;
   return {
     stage,
