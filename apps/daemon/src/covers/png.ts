@@ -39,9 +39,16 @@ const MAX_CHUNK_DATA_BYTES = 0x7fffffff;
  * landing exactly on the end of the buffer. The CRC-32 of every chunk is
  * recomputed, which is what catches damage inside a chunk that is the right
  * size. This is arithmetic over a few kilobytes -- microseconds per cover, and
- * no image library -- not a decode: it proves the container is undamaged, and
- * a container that has survived intact carries the pixels the renderer put in
- * it.
+ * no image library.
+ *
+ * What it establishes is exactly that: an INTACT CONTAINER, not a decoded
+ * image. It does not inflate the compressed stream inside `IDAT`, so bytes
+ * whose payload was corrupted AND whose CRC was recomputed to match would pass
+ * here and still fail to decode. What closes the gap is the store: the only
+ * writer of `cover.png` is `writeCover`, which renames renderer output into
+ * place, so the pixels were valid when they landed and every later way they go
+ * wrong -- a partial write, a truncation, a flipped byte, a foreign file --
+ * damages the container this walk inspects.
  */
 export function isIntactPng(bytes: Buffer): boolean {
   if (bytes.length < PNG_SIGNATURE.length + CHUNK_HEADER_BYTES + CHUNK_CRC_BYTES) return false;

@@ -151,72 +151,94 @@ function hasIntactFrame(bytes: Buffer): boolean {
   );
 }
 
+/** How one damage shape rewrites a rendered cover's bytes. */
+type Damage = (original: Buffer, chunkOf: (type: string) => PngChunk) => Buffer;
+
+/**
+ * Renders a real cover for its own project, replaces the stored bytes with
+ * `damage(original)`, and requires the route to answer something decodable.
+ *
+ * One project and one render per damage shape, driven from a separate `it`, so
+ * no shape can hide behind an earlier one: a loop over the three would abort at
+ * the first failing assertion and leave the other two unproven on base.
+ */
+async function expectDamagedCoverIsNotServed(idPrefix: string, damage: Damage): Promise<void> {
+  const id = `${idPrefix}-${Date.now()}`;
+  await createProject(id);
+  await uploadIndexHtml(id);
+  const imagePath = await generateCover(id);
+
+  const original = await readFile(imagePath);
+  expect(await decodesToPixels(original), 'the rendered cover must decode before it is damaged').toBe(true);
+
+  const chunks = pngChunks(original);
+  const chunkOf = (type: string): PngChunk => {
+    const chunk = chunks.find((candidate) => candidate.type === type);
+    expect(chunk, `a rendered cover must carry a ${type} chunk`).toBeTruthy();
+    return chunk as PngChunk;
+  };
+
+  const damaged = damage(original, chunkOf);
+  expect(hasIntactFrame(damaged), 'the PNG frame must survive the damage').toBe(true);
+  expect(await decodesToPixels(damaged), 'the damaged bytes must not decode').toBe(false);
+
+  await writeFile(imagePath, damaged);
+
+  const resp = await fetch(`${baseUrl}/api/projects/${id}/cover`);
+  expect(resp.status, 'an advertised cover still answers 200').toBe(200);
+  expect(resp.headers.get('content-type')).toBe('image/png');
+
+  const served = Buffer.from(await resp.arrayBuffer());
+  // The bar: what the route answered decodes. Serving the damaged bytes is
+  // exactly the `resource-failed` row W2G.6 promised was impossible.
+  expect(await decodesToPixels(served), 'the bytes GET /api/projects/:id/cover answered must decode').toBe(true);
+  expect(served.equals(damaged), 'the damaged bytes must not be served').toBe(false);
+  expect(resp.headers.get(PLACEHOLDER_HEADER), 'the answer is flagged as the placeholder').toBe('1');
+}
+
 describe('W2H.5 — a cover with a valid frame but corrupt interior is never served as image/png', () => {
   it(
-    'serves the placeholder for stored bytes that keep the PNG signature and IEND tail but no decoder can read',
+    'serves the placeholder when a byte inside the IDAT payload is flipped',
     async () => {
-      const id = `cover-corrupt-${Date.now()}`;
-      await createProject(id);
-      await uploadIndexHtml(id);
-      const imagePath = await generateCover(id);
+      await expectDamagedCoverIsNotServed('cover-idat-byte', (original, chunkOf) => {
+        const damaged = Buffer.from(original);
+        flipByte(damaged, chunkOf('IDAT').offset + 8 + 3);
+        return damaged;
+      });
+    },
+    240_000,
+  );
 
-      const original = await readFile(imagePath);
-      expect(await decodesToPixels(original), 'the rendered cover must decode before it is damaged').toBe(true);
+  it(
+    'serves the placeholder when the IHDR chunk declares a length other than 13',
+    async () => {
+      await expectDamagedCoverIsNotServed('cover-ihdr-length', (original, chunkOf) => {
+        const damaged = Buffer.from(original);
+        damaged.writeUInt32BE(12, chunkOf('IHDR').offset);
+        return damaged;
+      });
+    },
+    240_000,
+  );
 
-      const chunks = pngChunks(original);
-      const ihdr = chunks.find((chunk) => chunk.type === 'IHDR');
-      const idat = chunks.find((chunk) => chunk.type === 'IDAT');
-      expect(ihdr, 'a rendered cover must open with an IHDR chunk').toBeTruthy();
-      expect(idat, 'a rendered cover must carry at least one IDAT chunk').toBeTruthy();
-
-      // Three shapes of interior damage, each one leaving the frame the W2G.6
-      // predicate inspects exactly as it found it.
-      const flippedIdatByte = Buffer.from(original);
-      flipByte(flippedIdatByte, idat!.offset + 8 + 3);
-
-      const wrongIhdrLength = Buffer.from(original);
-      wrongIhdrLength.writeUInt32BE(12, ihdr!.offset);
-
-      const halfIdat = Math.floor(idat!.length / 2);
-      const idatHeader = Buffer.alloc(8);
-      idatHeader.writeUInt32BE(halfIdat, 0);
-      idatHeader.write('IDAT', 4, 'ascii');
-      const truncatedIdat = Buffer.concat([
-        original.subarray(0, idat!.offset),
-        idatHeader,
-        original.subarray(idat!.offset + 8, idat!.offset + 8 + halfIdat),
-        original.subarray(idat!.offset + 8 + idat!.length, idat!.offset + 12 + idat!.length),
-        original.subarray(idat!.offset + 12 + idat!.length),
-      ]);
-
-      const damageCases: Array<{ label: string; bytes: Buffer }> = [
-        { label: 'a byte flipped inside the IDAT payload', bytes: flippedIdatByte },
-        { label: 'an IHDR chunk whose declared length is not 13', bytes: wrongIhdrLength },
-        { label: 'an IDAT payload truncated in place', bytes: truncatedIdat },
-      ];
-
-      for (const damage of damageCases) {
-        expect(hasIntactFrame(damage.bytes), `${damage.label}: the PNG frame must survive the damage`).toBe(true);
-        expect(await decodesToPixels(damage.bytes), `${damage.label}: the damaged bytes must not decode`).toBe(false);
-
-        await writeFile(imagePath, damage.bytes);
-
-        const resp = await fetch(`${baseUrl}/api/projects/${id}/cover`);
-        expect(resp.status, `${damage.label}: an advertised cover still answers 200`).toBe(200);
-        expect(resp.headers.get('content-type')).toBe('image/png');
-
-        const served = Buffer.from(await resp.arrayBuffer());
-        // The bar: what the route answered decodes. Serving the damaged bytes
-        // is exactly the `resource-failed` row W2G.6 promised was impossible.
-        expect(
-          await decodesToPixels(served),
-          `${damage.label}: the bytes GET /api/projects/:id/cover answered must decode`,
-        ).toBe(true);
-        expect(served.equals(damage.bytes), `${damage.label}: the damaged bytes must not be served`).toBe(false);
-        expect(resp.headers.get(PLACEHOLDER_HEADER), `${damage.label}: the answer is flagged as the placeholder`).toBe(
-          '1',
-        );
-      }
+  it(
+    'serves the placeholder when the IDAT payload is truncated in place',
+    async () => {
+      await expectDamagedCoverIsNotServed('cover-idat-truncated', (original, chunkOf) => {
+        const idat = chunkOf('IDAT');
+        const kept = Math.floor(idat.length / 2);
+        const header = Buffer.alloc(8);
+        header.writeUInt32BE(kept, 0);
+        header.write('IDAT', 4, 'ascii');
+        return Buffer.concat([
+          original.subarray(0, idat.offset),
+          header,
+          original.subarray(idat.offset + 8, idat.offset + 8 + kept),
+          // The original CRC, kept over a payload that is now shorter.
+          original.subarray(idat.offset + 8 + idat.length, idat.offset + 12 + idat.length),
+          original.subarray(idat.offset + 12 + idat.length),
+        ]);
+      });
     },
     240_000,
   );
