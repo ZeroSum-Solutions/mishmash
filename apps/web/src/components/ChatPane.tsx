@@ -78,6 +78,7 @@ import {
   resolveRunFailureUi,
 } from '../runtime/amr-guidance';
 import { describeRunFailureFacts } from '../runtime/run-failure-facts';
+import type { RunCheckState } from '../runtime/run-failure-reconcile';
 import {
   fetchVelaLoginStatus,
   type VelaLoginStatus,
@@ -472,6 +473,14 @@ interface Props {
   streaming: boolean;
   loading?: boolean;
   error: string | null;
+  // Set by the pane that owns a run whose event stream failed without the
+  // daemon adjudicating it. The run is UNRESOLVED, not failed, so this is
+  // rendered as a neutral notice and never as the failure card.
+  runCheck?: RunCheckState | null;
+  // Re-runs the follow behind that notice. Only offered once the daemon has
+  // stopped answering; a run that may still be running gets no action at all,
+  // because re-sending it is the double-send hazard (B-02).
+  onRunCheckAgain?: () => void;
   projectId: string | null;
   sessionMode?: ChatSessionMode;
   onSessionModeChange?: (mode: ChatSessionMode) => void;
@@ -799,6 +808,8 @@ export function ChatPane({
   sendDisabled = false,
   queuedItems = [],
   error,
+  runCheck = null,
+  onRunCheckAgain,
   projectId,
   sessionMode = 'design',
   onSessionModeChange,
@@ -1206,6 +1217,18 @@ export function ChatPane({
         artifactCount: failedRunErrorEvent?.artifactCount,
       })
     : null;
+  // The checking notice is keyed to a run, and that run's ROW answers it: once
+  // the row reaches any terminal — from the follow, from a reattach, from a
+  // conversation refresh — the question the notice asks has been answered and
+  // it leaves without anyone clearing it. A pane showing another conversation
+  // has no such row and shows nothing.
+  const activeRunCheck =
+    runCheck
+    && displayMessages.some(
+      (m) => m.role === 'assistant' && m.runId === runCheck.runId && isActiveRunStatus(m.runStatus),
+    )
+      ? runCheck
+      : null;
   const hasInlineAmrAuthorizeFailure = Boolean(
     retryAssistant && onRetry && runFailureUi?.primaryAction === 'authorize',
   );
@@ -2448,6 +2471,38 @@ export function ChatPane({
                 questionFormSubmitDisabled={questionFormSubmitDisabled}
                 scrollContainerRef={logRef}
               />
+              {activeRunCheck ? (
+                <UserActionCard
+                  dataKind="run-checking"
+                  icon="refresh"
+                  tone="neutral"
+                  title={t(
+                    activeRunCheck.unreachable
+                      ? 'chat.runChecking.unreachableTitle'
+                      : 'chat.runChecking.title',
+                  )}
+                  status={
+                    <p>
+                      {t(
+                        activeRunCheck.unreachable
+                          ? 'chat.runChecking.unreachableMessage'
+                          : 'chat.runChecking.message',
+                      )}
+                    </p>
+                  }
+                  footerActions={
+                    activeRunCheck.unreachable && onRunCheckAgain ? (
+                      <button
+                        type="button"
+                        className="chat-error-action"
+                        onClick={onRunCheckAgain}
+                      >
+                        {t('chat.runChecking.checkAgainCta')}
+                      </button>
+                    ) : null
+                  }
+                />
+              ) : null}
               {displayError ? (
                 <UserActionCard
                   dataKind="run-recovery"

@@ -2672,6 +2672,13 @@ export interface Dict {
   'chat.runError.sourceLabel': string;
   'chat.runError.sourceExpandAria': string;
   'chat.runError.sourceCollapseAria': string;
+  // The neutral state a pane shows while a stream failure carries no run
+  // verdict. Not a failure: the run is unresolved until it answers for itself.
+  'chat.runChecking.title': string;
+  'chat.runChecking.message': string;
+  'chat.runChecking.unreachableTitle': string;
+  'chat.runChecking.unreachableMessage': string;
+  'chat.runChecking.checkAgainCta': string;
   'chat.tabComments': string;
   'chat.commentsSoon': string;
   'chat.comments.attached': string;
