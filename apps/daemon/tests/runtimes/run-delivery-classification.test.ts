@@ -18,6 +18,9 @@ const MESSAGE_ID = 'assistant-unattended';
 const CONVERSATION_ID = 'conversation-1';
 const PROJECT_ID = 'project-1';
 const RUN_STARTED_AT = 100_000;
+// The run's own terminal clock, as `emit('end', ...)` (`apps/daemon/src/
+// runtimes/runs.ts`) stamps it onto the `end` record in `events.jsonl`.
+const RUN_ENDED_AT = RUN_STARTED_AT + 5_000;
 
 function projectFile(name: string, mtime: number, extra: Partial<ProjectFile> = {}): ProjectFile {
   return {
@@ -79,11 +82,12 @@ describe('unattended run delivery classification', () => {
     endData: Record<string, unknown> = {},
   ): void {
     writeRunLog([
-      { event: 'start', data: {} },
+      { event: 'start', data: {}, timestamp: RUN_STARTED_AT },
       ...extraRecords,
       {
         event: 'end',
         data: { status: 'succeeded', endedWithUnfinishedWork: false, ...endData },
+        timestamp: RUN_ENDED_AT,
       },
     ]);
   }
@@ -303,6 +307,47 @@ describe('unattended run delivery classification', () => {
     expect(storedRow().resultDeliveryState).toBeNull();
   });
 
+  // A project file written after the run's own terminal belongs to whatever
+  // wrote it next, not to this run. A lower bound alone cannot tell the two
+  // apart, and `produced_files_json` is a stored contract rather than a display
+  // hint, so the interval's end has to bound attribution too.
+  describe('run interval attribution', () => {
+    it('keeps a file written between the run start and its terminal', async () => {
+      insertRow();
+      succeededRunLog();
+
+      await expect(classify([projectFile('index.html', RUN_ENDED_AT - 100)])).resolves.toBe(true);
+      expect(JSON.parse(storedRow().producedFilesJson ?? 'null')).toEqual([
+        expect.objectContaining({ name: 'index.html' }),
+      ]);
+    });
+
+    it('never attributes a file written after the run terminal to that run', async () => {
+      insertRow();
+      succeededRunLog();
+
+      await expect(classify([projectFile('index.html', RUN_ENDED_AT + 60_000)]))
+        .resolves.toBe(true);
+
+      const row = storedRow();
+      expect(JSON.parse(row.producedFilesJson ?? 'null')).toEqual([]);
+      expect(row.resultDeliveryState).not.toBe('delivered');
+    });
+
+    it('declines a row whose terminal record carries no clock to bound the interval', async () => {
+      insertRow();
+      writeRunLog([
+        { event: 'start', data: {} },
+        { event: 'end', data: { status: 'succeeded', endedWithUnfinishedWork: false } },
+      ]);
+
+      await expect(classify([projectFile('index.html', RUN_STARTED_AT + 500)]))
+        .resolves.toBe(false);
+      expect(storedRow().resultDeliveryState).toBeNull();
+      expect(storedRow().producedFilesJson).toBeNull();
+    });
+  });
+
   // The daemon exits inside the settle window and the timer never fires. The
   // replay is the daemon's next boot asking the same question from durable
   // state only.
@@ -378,6 +423,20 @@ describe('unattended run delivery classification', () => {
       await expect(replay([projectFile('index.html', RUN_STARTED_AT + 500)]))
         .resolves.toEqual({ candidates: 0, classified: 0 });
       expect(storedRow().resultDeliveryState).toBeNull();
+    });
+
+    // The backlog case the replay exists for: a row decided days later, with
+    // every later turn's file still sitting in the project.
+    it('never attributes a later turn\'s file to an older backlog row', async () => {
+      insertRow();
+      succeededRunLog();
+
+      await expect(replay([projectFile('index.html', RUN_ENDED_AT + 86_400_000)]))
+        .resolves.toEqual({ candidates: 1, classified: 1 });
+
+      const row = storedRow();
+      expect(JSON.parse(row.producedFilesJson ?? 'null')).toEqual([]);
+      expect(row.resultDeliveryState).not.toBe('delivered');
     });
 
     it('declines a candidate whose run log did not survive the exit', async () => {
