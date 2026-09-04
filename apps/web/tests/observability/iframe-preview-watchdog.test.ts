@@ -14,7 +14,7 @@ import vm from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildSrcdoc } from '../../src/runtime/srcdoc';
-import { trackIframeLoad } from '../../src/observability/iframe-error';
+import { trackIframeLoad, trackPreviewPaint } from '../../src/observability/iframe-error';
 
 const REPORT = 'od:preview-content-size';
 const REPORT_REQUEST = 'od:preview-content-size-request';
@@ -128,11 +128,7 @@ describe('the host half of the preview watchdog protocol', () => {
     vi.stubGlobal('fetch', fetchMock);
     const { iframe, posted } = mountFrame();
 
-    const dispose = trackIframeLoad({
-      iframe,
-      surface: 'file_viewer_preview',
-      settlesOn: 'document-report',
-    });
+    const dispose = trackPreviewPaint({ iframe, surface: 'file_viewer_preview' });
 
     expect(posted).toContainEqual({ type: REPORT_REQUEST });
 
@@ -153,11 +149,7 @@ describe('the host half of the preview watchdog protocol', () => {
     vi.stubGlobal('fetch', fetchMock);
     const { iframe } = mountFrame();
 
-    const dispose = trackIframeLoad({
-      iframe,
-      surface: 'file_viewer_preview',
-      settlesOn: 'document-report',
-    });
+    const dispose = trackPreviewPaint({ iframe, surface: 'file_viewer_preview' });
 
     iframe.dispatchEvent(new Event('load'));
     vi.advanceTimersByTime(30_000);
@@ -168,14 +160,48 @@ describe('the host half of the preview watchdog protocol', () => {
     expect(filed[0]?.kind).toBe('preview-error');
   });
 
-  it('still settles a plain url-loaded frame on its own load event', () => {
+  it('settles a report of any measurement, including one that measured nothing', () => {
+    // What a report proves is that the artifact document RAN in this frame, not
+    // that it painted. The measurement it carries is for the host's zoom
+    // fitting; the watchdog does not read it, and a document that runs and
+    // renders nothing still settles. That is track 2.1's protocol, pinned here
+    // so it is a decision on the record rather than an accident of the
+    // handler's shape.
+    const fetchMock = vi.fn(async () => new Response('{"ok":true}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { iframe } = mountFrame();
+
+    const dispose = trackPreviewPaint({ iframe, surface: 'file_viewer_preview' });
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: REPORT, width: null },
+        source: iframe.contentWindow,
+      }),
+    );
+    vi.advanceTimersByTime(30_000);
+    dispose();
+
+    expect(anomalyPosts(fetchMock)).toHaveLength(0);
+  });
+
+  it('keeps the frame-load default for the powered preview transport', () => {
+    // The powered copy is deliberately cross-origin. The daemon injects the
+    // same producer into that response, but nothing has confirmed the report
+    // crosses back under this sandbox, and a report that never arrives looks
+    // exactly like a preview that never ran. Until a staged run shows
+    // otherwise, that frame takes `load` rather than a watchdog that would file
+    // a false timeout on every healthy powered preview.
     const fetchMock = vi.fn(async () => new Response('{"ok":true}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const { iframe, posted } = mountFrame();
 
-    const dispose = trackIframeLoad({ iframe, surface: 'live_artifact_preview' });
+    const dispose = trackIframeLoad({
+      iframe,
+      surface: 'file_viewer_preview_powered',
+      settlesOn: 'load',
+    });
 
-    // The default evidence is unchanged: no ask, and `load` is enough.
     expect(posted).toHaveLength(0);
     iframe.dispatchEvent(new Event('load'));
     vi.advanceTimersByTime(30_000);

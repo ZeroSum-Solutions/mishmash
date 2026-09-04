@@ -3469,6 +3469,7 @@ export interface Dict {
   'designFiles.previewClose': string;
   'designFiles.previewServer.title': string;
   'designFiles.previewServer.openInChrome': string;
+  'designFiles.previewServer.sharedLink': string;
   'designFiles.previewServer.openFailed': string;
   'designFiles.previewServer.rootAbsolute': string;
   'designFiles.previewServer.none': string;
@@ -3592,6 +3593,7 @@ export interface Dict {
   'fileViewer.preparingPreviewAssetsProgress': string;
   'fileViewer.previewAssetsIncompleteTitle': string;
   'fileViewer.previewAssetsIncompleteDetail': string;
+  'fileViewer.previewAssetsIncompleteRetainedDetail': string;
   'fileViewer.exportPptx': string;
   'fileViewer.openInNewTab': string;
   'fileViewer.copyPath': string;

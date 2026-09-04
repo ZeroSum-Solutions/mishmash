@@ -820,7 +820,12 @@ function injectPreviewContentSizeBridge(doc: string): string {
   window.addEventListener('message', function(ev){
     var data = ev && ev.data;
     if (!data || data.type !== 'od:preview-content-size-request') return;
-    schedule();
+    // Answered synchronously, never through schedule(): animation frames are
+    // paused in a hidden tab while the host watchdog's timeout keeps running,
+    // so a scheduled answer turns a healthy backgrounded preview into a
+    // client_iframe_timeout. Every other report path stays on schedule() --
+    // those are unsolicited and nothing is waiting on them.
+    post();
   });
   window.addEventListener('resize', schedule);
   if (typeof ResizeObserver !== 'undefined') {

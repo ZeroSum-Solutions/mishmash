@@ -30,6 +30,7 @@ import express from 'express';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { diagnoseClaudeCliFailure } from '../src/claude-diagnostics.js';
+import { createFilesystemWriteGateway } from '../src/filesystem/write-gateway.js';
 import { registerMcpRoutes } from '../src/mcp-routes.js';
 import { isLocalSameOrigin } from '../src/origin-validation.js';
 
@@ -181,6 +182,7 @@ async function start(): Promise<void> {
       pendingAuth: new Map(),
       daemonUrlRef: { current: 'http://127.0.0.1:0' },
     } as any,
+    filesystem: { create: createFilesystemWriteGateway },
   });
   await new Promise<void>((resolve, reject) => {
     server = app.listen(0, '127.0.0.1', () => {
