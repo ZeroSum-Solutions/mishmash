@@ -836,6 +836,36 @@ function injectPreviewContentSizeBridge(doc: string): string {
   return injectBeforeBodyEnd(doc, script);
 }
 
+// Rendered layout-risk measurement bridge. See `CompositionMetrics` in
+// `@open-design/contracts` for the full field-by-field rationale; this
+// comment covers only why the measurement has to happen HERE.
+//
+// `craft/composition.md`'s `layout-risk-flat` lint
+// (`apps/daemon/src/lint-artifact.ts`) greps source HTML for the CSS
+// primitives a grid-breaking move needs — it cannot see whether one
+// actually rendered. Four rounds of blind comparison against professionally
+// sold templates scored MishMash output 0/1 on layout risk every time, and
+// a page carrying a single `position: sticky` nav satisfies the source scan
+// while never once breaking its grid. The only place that failure is
+// visible is the rendered box tree, so this bridge measures it there and
+// reports the numbers to the host — the daemon has no browser in its
+// runtime dependencies to take this measurement itself (and must not grow
+// one; see AGENTS.md's daemon data directory / design authority
+// boundaries), so "measured in the browser, reported to the daemon" is the
+// only honest shape this can take.
+//
+// Always injected (like the tweaks and content-size bridges above) — it's a
+// passive listener, cheap until asked to measure, and tying it to a
+// `SrcdocOptions` flag would force an iframe reload every time some other
+// part of the host flips a bridge on. Auto-measures on the same cadence as
+// `injectPreviewContentSizeBridge` (DOMContentLoaded, a couple of settle
+// timers, fonts-ready, resize) so the host gets a fresh reading without
+// having to ask, and answers `od:composition-metrics-request` on demand for
+// an explicit re-measure (e.g. after the user finishes an edit).
+//
+// Protocol:
+//   in:  { type: 'od:composition-metrics-request' }
+//   out: { type: 'od:composition-metrics', metrics: CompositionMetrics }
 function injectCompositionMetricsBridge(doc: string): string {
   const script = `<script data-od-composition-metrics-bridge>(function(){
   if (window.__odCompositionMetricsBridge) return;

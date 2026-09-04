@@ -30,6 +30,20 @@ export type PreviewPaintFailureReason =
   /** The frame raised an `error` event. */
   | 'error_event';
 
+/**
+ * What the watchdog currently knows about the document in the frame. Reported
+ * to the caller so the surface can name a failure and, just as importantly,
+ * stop naming one: a frame that fails and then reloads into a document that
+ * paints must not keep showing "did not render" over rendered content.
+ */
+export type PreviewPaintState =
+  /** A document is being watched and nothing is known about it yet. */
+  | { status: 'watching' }
+  /** The document reported positive render evidence. */
+  | { status: 'painted' }
+  /** The document never proved it rendered. */
+  | { status: 'unproven'; reason: PreviewPaintFailureReason };
+
 interface TrackPreviewPaintOptions {
   iframe: HTMLIFrameElement;
   artifactId?: string;
@@ -39,11 +53,11 @@ interface TrackPreviewPaintOptions {
   // deck-viewer iframes, comment-mode iframes, etc.
   surface: string;
   /**
-   * Called once when this frame's current document failed to prove it
-   * rendered, so the caller can name the failure where the user is looking.
-   * The watchdog itself only records; the notice is the caller's.
+   * Called on every transition: a new document is being watched, the document
+   * proved it rendered, or it failed to. The caller owns what the user sees;
+   * the watchdog only says what it knows.
    */
-  onPaintFailure?: (reason: PreviewPaintFailureReason) => void;
+  onPaintState?: (state: PreviewPaintState) => void;
 }
 
 /**
@@ -80,8 +94,8 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
   let startedAt = performance.now();
   let settled = false;
   let reported = false;
-  let navigationToken = mintPreviewNavigationToken();
-  let timer: ReturnType<typeof setTimeout>;
+  let navigationToken = '';
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   const fail = (event: string, reason: PreviewPaintFailureReason, extras: Record<string, unknown> = {}): void => {
     if (settled) return;
@@ -96,7 +110,7 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
       conversation_id: options.conversationId,
       ...extras,
     });
-    options.onPaintFailure?.(reason);
+    options.onPaintState?.({ status: 'unproven', reason });
   };
 
   // We don't emit a success event — it would multiply ingest cost for the
@@ -105,6 +119,7 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
     if (settled) return;
     settled = true;
     clearTimeout(timer);
+    options.onPaintState?.({ status: 'painted' });
   };
 
   const onTimeout = (): void => {
@@ -138,6 +153,7 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
     startedAt = performance.now();
     navigationToken = mintPreviewNavigationToken();
     timer = setTimeout(onTimeout, LOAD_TIMEOUT_MS);
+    options.onPaintState?.({ status: 'watching' });
     requestDocumentReport();
   };
 
@@ -166,8 +182,7 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
   iframe.addEventListener('error', onError);
   window.addEventListener('message', onDocumentReport);
 
-  timer = setTimeout(onTimeout, LOAD_TIMEOUT_MS);
-  requestDocumentReport();
+  arm();
 
   return () => {
     clearTimeout(timer);

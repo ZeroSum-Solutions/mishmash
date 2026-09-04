@@ -164,6 +164,34 @@ describe('a watchdog is bound to the document it was installed for', () => {
     expect(previewErrors(fetchMock)).toHaveLength(1);
   });
 
+  it('takes the failure back when a document that failed reloads into one that paints', () => {
+    // The notice the caller draws is keyed on this callback, so a stale
+    // "did not render" must not survive the document it described.
+    const states: string[] = [];
+    const frame = mountFrame();
+    const dispose = trackPreviewPaint({
+      iframe: frame.iframe,
+      surface: 'file_viewer_preview',
+      onPaintState: (state) => states.push(state.status),
+    });
+
+    frame.iframe.dispatchEvent(new Event('load'));
+    vi.advanceTimersByTime(30_000);
+    expect(states.at(-1)).toBe('unproven');
+
+    frame.iframe.dispatchEvent(new Event('load'));
+    expect(states.at(-1), 'a new document is watched, and nothing is known about it yet').toBe('watching');
+    answerFrom(frame, {
+      type: REPORT,
+      width: 1280,
+      painted: true,
+      token: latestRequestToken(frame.posted),
+    });
+    dispose();
+
+    expect(states.at(-1)).toBe('painted');
+  });
+
   it('still settles when the replacement itself paints', () => {
     const frame = mountFrame();
     const dispose = trackPreviewPaint({ iframe: frame.iframe, surface: 'file_viewer_preview' });

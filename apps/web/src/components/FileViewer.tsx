@@ -1541,8 +1541,10 @@ export function LiveArtifactViewer({
   }, [liveArtifactViewportKey]);
   const [previewBodyRef, previewBodySize] = usePreviewCanvasSize<HTMLDivElement>();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  // Set by the preview watchdog when this frame's document never proved it
-  // rendered; cleared whenever a new document is watched.
+  // Driven by the preview watchdog: true only while the document currently in
+  // the frame has failed to prove it rendered. Cleared when a new document
+  // starts being watched and when one proves it painted, so a late paint or a
+  // reload into a working document takes the notice away.
   const [previewDidNotRender, setPreviewDidNotRender] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
@@ -1715,13 +1717,12 @@ export function LiveArtifactViewer({
     if (mode !== 'preview') return undefined;
     const node = iframeRef.current;
     if (!node) return undefined;
-    setPreviewDidNotRender(false);
     return trackPreviewPaint({
       iframe: node,
       surface: 'live_artifact_preview',
       artifactId: liveArtifact.artifactId,
       projectId,
-      onPaintFailure: () => setPreviewDidNotRender(true),
+      onPaintState: (state) => setPreviewDidNotRender(state.status === 'unproven'),
     });
   }, [mode, previewUrl, liveArtifact.artifactId, projectId]);
 
@@ -6346,8 +6347,9 @@ function HtmlViewer({
   const [routingSource, setRoutingSource] = useState<string | null>(liveHtml ?? null);
   const [serverPoweredPreviewRequired, setServerPoweredPreviewRequired] = useState(false);
   const [previewAssetWarning, setPreviewAssetWarning] = useState<PreviewAssetWarning | null>(null);
-  // Set by the preview watchdog when the visible transport's document never
-  // proved it rendered; cleared whenever a new document is watched.
+  // Driven by the preview watchdog: true only while the document currently in
+  // the visible transport has failed to prove it rendered. Cleared when a new
+  // document starts being watched and when one proves it painted.
   const [previewDidNotRender, setPreviewDidNotRender] = useState(false);
   const [previewInlineStatus, setPreviewInlineStatus] = useState<PreviewInlineStatus>(
     IDLE_PREVIEW_INLINE_STATUS,
@@ -8087,12 +8089,11 @@ function HtmlViewer({
     if (useUrlLoadPreview || !srcDoc || srcDocTransportContent !== srcDoc) return undefined;
     const node = srcDocPreviewIframeRef.current;
     if (!node) return undefined;
-    setPreviewDidNotRender(false);
     return trackPreviewPaint({
       iframe: node,
       surface: 'file_viewer_preview',
       projectId,
-      onPaintFailure: () => setPreviewDidNotRender(true),
+      onPaintState: (state) => setPreviewDidNotRender(state.status === 'unproven'),
     });
   }, [mode, useUrlLoadPreview, srcDoc, srcDocTransportContent, projectId, srcDocTransportResetKey]);
   // Materialize the srcDoc iframe the first time it actually becomes the active
@@ -8156,12 +8157,11 @@ function HtmlViewer({
     if (mode !== 'preview') return undefined;
     if (!useUrlLoadPreview || urlFrameSrc === 'about:blank') return undefined;
     if (!urlPreviewFrameNode) return undefined;
-    setPreviewDidNotRender(false);
     return trackPreviewPaint({
       iframe: urlPreviewFrameNode,
       surface: usePoweredPreview ? 'file_viewer_preview_powered' : 'file_viewer_preview_url_load',
       projectId,
-      onPaintFailure: () => setPreviewDidNotRender(true),
+      onPaintState: (state) => setPreviewDidNotRender(state.status === 'unproven'),
     });
   }, [mode, useUrlLoadPreview, usePoweredPreview, urlFrameSrc, urlPreviewFrameNode, projectId]);
   const activateSrcDocTransport = useCallback((target: HTMLIFrameElement | null = srcDocPreviewIframeRef.current) => {
