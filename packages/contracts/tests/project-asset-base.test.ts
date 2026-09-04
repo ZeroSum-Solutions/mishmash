@@ -282,3 +282,47 @@ describe('withProjectAssetBaseHref agrees with the tokenizer on two shapes the a
     ).toBe('b"><html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>');
   });
 });
+
+// Round-5 track audit (proof/w2fix/2G.4-glm-r5.json), finding 1, refuted against
+// jsdom (see proof/w2fix/2G.4-glm-r5-response.md) and kept as cases so the
+// property stays pinned. The auditor reads comment-end-DASH as closing on `>`;
+// only comment-START-dash does (13.2.5.44), which is what makes `<!--->` close.
+// After `--!` the tokenizer sits in comment-end-dash, so the `>` of `--!->` is
+// comment content and a `<base>` written past it is inside the comment -- the
+// one place such a tag must be left alone rather than dropped.
+describe('withProjectAssetBaseHref treats a --!-> as comment content, not a close', () => {
+  const BASE = '/api/projects/p1/raw/';
+
+  it('keeps a base written after a --!-> inside the comment that holds it', () => {
+    expect(
+      withProjectAssetBaseHref(
+        '<!-- x --!-><base href="/evil/"> --><html><head><title>t</title></head></html>',
+        BASE,
+      ),
+    ).toBe(
+      '<!-- x --!-><base href="/evil/"> --><html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>',
+    );
+  });
+
+  it('reads a comment a --!-> never closes to the end of the input', () => {
+    expect(
+      withProjectAssetBaseHref(
+        '<!-- x --!-><base href="/evil/"><html><head><title>t</title></head></html>',
+        BASE,
+      ),
+    ).toBe(
+      '<base href="/api/projects/p1/raw/"><!-- x --!-><base href="/evil/"><html><head><title>t</title></head></html>',
+    );
+  });
+
+  it('drops a base written after a --!--> , which does close the comment', () => {
+    expect(
+      withProjectAssetBaseHref(
+        '<!-- x --!--><base href="/evil/"> --><html><head><title>t</title></head></html>',
+        BASE,
+      ),
+    ).toBe(
+      '<!-- x --!--> --><html><head><base href="/api/projects/p1/raw/"><title>t</title></head></html>',
+    );
+  });
+});
