@@ -70,6 +70,11 @@ function FastLoadingPreview({ target }: { target: string }): JSX.Element {
     node.dispatchEvent(new Event('load'));
   }, [target]);
 
+  // `FileViewer`'s three watchdog effects read the latch here, inside the
+  // effect body, and depend only on the document they are watching. Both halves
+  // are copied deliberately: the read happens at INSTALLATION, which is the
+  // last moment before the watchdog can miss anything, and the effect does not
+  // re-run on the latch, so a document that already answered is never re-armed.
   useEffect(() => {
     const node = iframeRef.current;
     if (!node) return undefined;
@@ -78,7 +83,7 @@ function FastLoadingPreview({ target }: { target: string }): JSX.Element {
       surface: 'file_viewer_preview',
       documentCommitted: previewDocument.committed,
     });
-  }, [target, previewDocument.committed]);
+  }, [target]);
 
   return <iframe ref={iframeRef} onLoad={previewDocument.noteLoaded} />;
 }
