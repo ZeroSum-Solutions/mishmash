@@ -22,6 +22,7 @@ import express from 'express';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { applyMcpServerRepair, mcpNpxCacheRepair } from '../src/mcp-health.js';
+import { createFilesystemWriteGateway } from '../src/filesystem/write-gateway.js';
 import { registerMcpRoutes } from '../src/mcp-routes.js';
 import { isLocalSameOrigin } from '../src/origin-validation.js';
 
@@ -57,6 +58,7 @@ async function start(): Promise<void> {
       pendingAuth: new Map(),
       daemonUrlRef: { current: 'http://127.0.0.1:0' },
     } as any,
+    filesystem: { create: createFilesystemWriteGateway },
   });
   await new Promise<void>((resolve, reject) => {
     server = app.listen(0, '127.0.0.1', () => {
@@ -338,7 +340,7 @@ describe('the removal verifies the directory itself, not only the path', () => {
     await expect(
       applyMcpServerRepair(
         { kind: 'npx-cache', target: cacheEntry },
-        { runtimeDataRoot: dataDir },
+        { runtimeDataRoot: dataDir, createWriteGateway: createFilesystemWriteGateway },
       ),
     ).resolves.toBe(false);
   });
@@ -349,7 +351,7 @@ describe('the removal verifies the directory itself, not only the path', () => {
     await expect(
       applyMcpServerRepair(
         { kind: 'npx-cache', target: cacheEntry },
-        { runtimeDataRoot: dataDir },
+        { runtimeDataRoot: dataDir, createWriteGateway: createFilesystemWriteGateway },
       ),
     ).resolves.toBe(false);
     expect(await exists(cacheEntry)).toBe(true);
@@ -362,7 +364,7 @@ describe('the removal verifies the directory itself, not only the path', () => {
     await expect(
       applyMcpServerRepair(
         { kind: 'npx-cache', target: outside },
-        { runtimeDataRoot: dataDir },
+        { runtimeDataRoot: dataDir, createWriteGateway: createFilesystemWriteGateway },
       ),
     ).resolves.toBe(false);
     expect(await exists(outside)).toBe(true);
@@ -372,7 +374,7 @@ describe('the removal verifies the directory itself, not only the path', () => {
     await expect(
       applyMcpServerRepair(
         { kind: 'npx-cache', target: cacheEntry },
-        { runtimeDataRoot: dataDir },
+        { runtimeDataRoot: dataDir, createWriteGateway: createFilesystemWriteGateway },
       ),
     ).resolves.toBe(true);
     expect(await exists(cacheEntry)).toBe(false);
