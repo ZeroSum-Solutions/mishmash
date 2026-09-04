@@ -20,6 +20,12 @@
  * jsdom harness.
  */
 
+/**
+ * Every field below must have a producer: `FileViewer.tsx` builds this object
+ * from real viewer state, so a field it never sets is a disqualifier that can
+ * never fire and a capability the product does not have. Add a field here only
+ * together with the call site that supplies it.
+ */
 export interface UrlLoadDecision {
   /** Whether the viewer is showing the rendered preview vs. the raw source. */
   mode: 'preview' | 'source';
@@ -37,8 +43,6 @@ export interface UrlLoadDecision {
   urlCommentBridge?: boolean;
   /** The URL-loaded artifact response includes the screenshot snapshot bridge. */
   urlSnapshotBridge?: boolean;
-  /** Tweaks palette popover open or palette committed — needs the palette bridge. */
-  paletteActive?: boolean;
   /** Draw annotations need a snapshot bridge for screenshot export. */
   drawMode?: boolean;
   /**
@@ -132,9 +136,6 @@ export function shouldUrlLoadHtmlPreview(d: UrlLoadDecision): boolean {
   // URL-loaded iframe has no listener to apply per-element overrides.
   if (d.inspectMode) return false;
   if (d.editMode) return false;
-  // Palette tweaks need the srcDoc-side bridge — `<iframe src=URL>` has
-  // no parent-injected listener to recolor against.
-  if (d.paletteActive) return false;
   // Draw can stay on the URL-loaded iframe once the raw preview route has
   // injected its snapshot bridge; otherwise fall back to srcDoc so capture
   // still has a bridge to talk to.
