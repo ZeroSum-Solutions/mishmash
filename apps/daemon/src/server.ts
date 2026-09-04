@@ -2222,11 +2222,19 @@ export async function startServer({
   // forwarding (see `preview-proxy.ts`). The API's own 4mb limit applies, which
   // bounds what a preview can be POSTed through the daemon.
   // Behind the same membership rule the route applies, so an unauthorized
-  // peer is refused before the daemon buffers its body rather than after.
+  // peer is refused before the daemon buffers its body rather than after — and
+  // refused HERE, not passed on. The bearer middleware below answers such a
+  // request 401 anyway, but only after the global JSON parser has read it, and
+  // a request another parser has consumed cannot be re-streamed: the proxy
+  // would hand the child an empty body under the caller's own Content-Length.
+  // Answering with that middleware's own 401 keeps the two in step whatever
+  // either one grows into.
   const previewProxyRawBody = express.raw({ type: () => true, limit: '4mb' });
   app.use(PREVIEW_PROXY_MOUNT, (req, res, next) => {
-    if (!isAuthorizedPreviewProxyRequest(req)) return next();
-    return previewProxyRawBody(req, res, next);
+    if (isAuthorizedPreviewProxyRequest(req)) return previewProxyRawBody(req, res, next);
+    return res.status(401).json({
+      error: { code: 'API_TOKEN_REQUIRED', message: 'Authorization: Bearer <OD_API_TOKEN> required' },
+    });
   });
   app.use(express.json({ limit: '4mb' }));
   const projectPreviewScopes = createProjectPreviewScopeRegistry();
