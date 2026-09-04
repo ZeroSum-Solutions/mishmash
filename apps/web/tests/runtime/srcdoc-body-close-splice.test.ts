@@ -7,17 +7,23 @@
 // body close the HTML parser will actually reach, so a `</body>` written inside
 // a comment, a raw-text element, a `<template>` or a quoted attribute cannot
 // capture the injection
-// (`apps/daemon/tests/preview-producer-body-splice.test.ts`).
+// (`apps/daemon/tests/preview-producer-body-splice.test.ts`, and the shared
+// scanner's own cases in `packages/contracts/tests/body-close-splice.test.ts`).
 //
-// `buildSrcdoc` places it with a plain `lastIndexOf('</body>')`. A tail as
+// `buildSrcdoc` placed it with a plain `lastIndexOf('</body>')`. A tail as
 // ordinary as `</body><!-- </body> --></html>` — a commented-out close left
-// behind by an editor — makes it splice the producer INSIDE the comment. The
-// document renders exactly as its author wrote it, the producer never runs,
-// and the watchdog reports the healthy preview as "Preview did not render".
+// behind by an editor — made it splice EVERY preview bridge, the producer
+// included, inside the comment. The document renders exactly as its author
+// wrote it, the producer never runs, and the watchdog reports the healthy
+// preview as "Preview did not render".
 //
-// These cases are the daemon's, restated for the srcDoc transport: one splice
-// rule, or a document is watched differently depending on which frame it
-// happens to land in.
+// A trailing comment is the shape that reaches this splice intact: the HTML
+// parser's "after body" insertion mode appends a comment to the `html` element
+// and folds everything else back into the body, so an earlier normalisation
+// pass in `buildSrcdoc` has already resolved a trailing script, template or
+// attribute decoy. The scanner handles those too — that is what makes it the
+// same rule as the daemon's, rather than a rule tuned to one transport — and
+// they are exercised against the shared module directly.
 
 import { describe, expect, it } from 'vitest';
 
@@ -33,7 +39,7 @@ function producerIndex(doc: string): number {
 describe('the srcDoc paint producer is spliced at a genuine body close', () => {
   it('ignores a decoy </body> written inside a trailing HTML comment', () => {
     const doc = buildSrcdoc(
-      '<!doctype html><html><body><h1>Artifact</h1></body><!-- </body> --></html>',
+      '<!doctype html><html><head></head><body><h1>Artifact</h1></body><!-- </body> --></html>',
     );
 
     expect(
@@ -42,36 +48,17 @@ describe('the srcDoc paint producer is spliced at a genuine body close', () => {
     ).toBeLessThan(doc.indexOf('<!-- '));
   });
 
-  it('ignores a decoy </body> written inside a trailing script literal', () => {
+  it('ignores a decoy </body> in a trailing comment closed with --!>', () => {
+    // `--!>` closes a comment as surely as `-->` does
+    // (https://html.spec.whatwg.org/multipage/parsing.html#comment-end-bang-state),
+    // so the bytes between are text either way.
     const doc = buildSrcdoc(
-      '<!doctype html><html><body><h1>Artifact</h1></body><script>var s = "</body>";</script></html>',
+      '<!doctype html><html><head></head><body><h1>Artifact</h1></body><!-- </body> --!></html>',
     );
 
     expect(
       producerIndex(doc),
-      'a producer spliced inside a script string literal is part of that string',
-    ).toBeLessThan(doc.indexOf('var s = '));
-  });
-
-  it('ignores a decoy </body> written inside a trailing template', () => {
-    const doc = buildSrcdoc(
-      '<!doctype html><html><body><h1>Artifact</h1></body><template></body></template></html>',
-    );
-
-    expect(
-      producerIndex(doc),
-      "template content is a separate fragment; a producer parked in there never runs in this document",
-    ).toBeLessThan(doc.indexOf('<template>'));
-  });
-
-  it('ignores a decoy </body> written inside a quoted attribute value', () => {
-    const doc = buildSrcdoc(
-      '<!doctype html><html><body><h1>Artifact</h1></body><p title="</body>"></p></html>',
-    );
-
-    expect(
-      producerIndex(doc),
-      'a body close inside an attribute value is the value it is, not markup',
-    ).toBeLessThan(doc.indexOf('<p title='));
+      'the spelling of the comment close does not change what is inside it',
+    ).toBeLessThan(doc.indexOf('<!-- '));
   });
 });
