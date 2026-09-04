@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { trackPreviewRunStatusSurfaceView } from '../analytics/events';
 import { useAnalytics } from '../analytics/provider';
 import { useI18n } from '../i18n';
+import { Icon } from './Icon';
 import {
   formatPreviewRunElapsed,
   latestPreviewRunStatus,
@@ -20,6 +21,11 @@ interface Props {
   projectId: string;
   conversationId?: string | null;
   messages: readonly ChatMessage[];
+  /** True while an agent write is landing and the refreshed file list is being
+   *  fetched. The run status wins when both apply — it is the more specific
+   *  account of the same work — so this only surfaces when no run is live,
+   *  which is when the canvas would otherwise change with no explanation. */
+  previewUpdating?: boolean;
 }
 
 function statusLabelKey(status: PreviewRunStatus):
@@ -47,6 +53,7 @@ export function PreviewRunStatusBar({
   projectId,
   conversationId,
   messages,
+  previewUpdating = false,
 }: Props) {
   const { t } = useI18n();
   const analytics = useAnalytics();
@@ -131,7 +138,19 @@ export function PreviewRunStatusBar({
   }, [analytics.track, conversationId, current, currentKey, leaving, projectId]);
 
   const displayed = current ?? lastVisible;
-  if (!displayed) return null;
+  if (!displayed) {
+    if (!previewUpdating) return null;
+    return (
+      <div className={styles.root} data-testid="preview-update-status">
+        <div className={styles.card}>
+          <Icon name="spinner" size={12} className={styles.updatingIcon} />
+          <span className={styles.label} role="status" aria-live="polite" aria-atomic="true">
+            {t('previewRunStatus.updating')}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   const elapsed = formatPreviewRunElapsed(displayed.elapsedMs);
   const isFailure = displayed.phase === 'failed';

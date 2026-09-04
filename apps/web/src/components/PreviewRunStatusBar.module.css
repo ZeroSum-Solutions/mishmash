@@ -116,3 +116,10 @@
     animation: none;
   }
 }
+
+/* The preview-update hint reuses the run pill's surface; the spinner needs to
+   sit on the text's optical centre rather than the card's shared baseline. */
+.updatingIcon {
+  align-self: center;
+  color: var(--text-muted);
+}
