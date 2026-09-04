@@ -200,6 +200,10 @@ export function useConversationChat(
             );
             if (adopted && daemonRow) {
               setMessages((current) => mergeServerMessagesIntoConversation(current, adopted));
+              // The daemon's words supersede any generic card this run painted
+              // while its row was unreadable, so the stream error must not stay
+              // in the slot and be shown under the daemon's title.
+              clearErrorForRun(runId);
               return;
             }
             // A failed run is not a succeeded run, so naming it costs the bar

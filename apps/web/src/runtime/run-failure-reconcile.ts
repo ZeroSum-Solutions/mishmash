@@ -61,6 +61,16 @@ export function isUnadjudicatedStreamFailure(err: unknown): boolean {
  * its fallback conversation read — the daemon is answering nothing at all —
  * which changes the notice's wording and offers a manual re-check. It never
  * becomes a failure: only the run's own `failed` does that.
+ *
+ * ONE UNRESOLVED CLASS NEVER ESCALATES: the generic disconnect. No pane follows
+ * it — `isGenericDaemonDisconnect` keeps its own recovery, the reconnect budget
+ * plus `attachRecoverableRuns` re-querying on the next tick — and `unreachable`
+ * only ever turns over inside the follow. Its notice therefore keeps the
+ * ordinary wording for as long as the run is unresolved, and offers no manual
+ * re-check, because the thing that would answer one is already running. Moving
+ * that class onto this follow would change the semantics 1F.1/1G.1 rely on, so
+ * it is a decision for whoever revisits the reattach path, not a gap to patch
+ * here.
  */
 export interface RunCheckState {
   runId: string;

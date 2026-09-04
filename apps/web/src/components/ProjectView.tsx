@@ -3208,6 +3208,40 @@ export function ProjectView({
     [refreshConversationMessagesFromServer, scheduleProjectTimeout],
   );
 
+  // The sidebar's latest-run status is the same claim as the row's. An
+  // unresolved stream failure leaves it on the status the send set, so the run's
+  // own terminal has to move it too — nothing else will until the conversation
+  // list is reloaded.
+  const settleConversationLatestRun = useCallback(
+    (
+      conversationId: string,
+      status: NonNullable<ChatMessage['runStatus']>,
+      endedAt: number | undefined,
+    ) => {
+      setConversations((current) =>
+        current.map((conversation) => {
+          if (conversation.id !== conversationId || !conversation.latestRun) return conversation;
+          const startedAt = conversation.latestRun.startedAt;
+          const duration =
+            endedAt === undefined || startedAt === undefined
+              ? {}
+              : { durationMs: Math.max(0, endedAt - startedAt) };
+          return {
+            ...conversation,
+            updatedAt: endedAt ?? conversation.updatedAt,
+            latestRun: {
+              ...conversation.latestRun,
+              status,
+              ...(endedAt === undefined ? {} : { endedAt, ...duration }),
+            },
+          };
+        }),
+      );
+    },
+    [],
+  );
+
+
   // Residual 8: `error` is a single slot the run shares with errors no run
   // raised. Take back only what this run put there — a carrier holding another
   // source's message is left standing.
@@ -3254,9 +3288,18 @@ export function ProjectView({
       if (!answered) return false;
       setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
       clearPaneErrorForRun(runId);
+      // The read can be the ONLY answer this run gets — the exhausted-probe
+      // fallback carries no status of its own — so the sidebar takes its
+      // terminal from the row that arrived, not only from a status probe.
+      const settledRow = serverMessages.find(
+        (message) => message.role === 'assistant' && message.runId === runId,
+      );
+      if (settledRow?.runStatus && !isActiveRunStatus(settledRow.runStatus)) {
+        settleConversationLatestRun(conversationId, settledRow.runStatus, settledRow.endedAt);
+      }
       return true;
     },
-    [clearPaneErrorForRun, project.id],
+    [clearPaneErrorForRun, project.id, settleConversationLatestRun],
   );
 
   // The daemon's verdict, taken from its own stored row: a failed run owes the
@@ -3279,9 +3322,13 @@ export function ProjectView({
       );
       if (!daemonRow) return false;
       setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
+      // The daemon's words supersede any generic card this run painted while its
+      // row was unreadable, so the stream error must not stay in the slot and be
+      // shown under the daemon's title.
+      clearPaneErrorForRun(runId);
       return true;
     },
-    [project.id],
+    [clearPaneErrorForRun, project.id],
   );
 
   // A run the daemon reports failed whose stored row this pane cannot read. The
@@ -3307,39 +3354,6 @@ export function ProjectView({
       setError(message);
     },
     [updateMessageById],
-  );
-
-  // The sidebar's latest-run status is the same claim as the row's. An
-  // unresolved stream failure leaves it on the status the send set, so the run's
-  // own terminal has to move it too — nothing else will until the conversation
-  // list is reloaded.
-  const settleConversationLatestRun = useCallback(
-    (
-      conversationId: string,
-      status: NonNullable<ChatMessage['runStatus']>,
-      endedAt: number | undefined,
-    ) => {
-      setConversations((current) =>
-        current.map((conversation) => {
-          if (conversation.id !== conversationId || !conversation.latestRun) return conversation;
-          const startedAt = conversation.latestRun.startedAt;
-          const duration =
-            endedAt === undefined || startedAt === undefined
-              ? {}
-              : { durationMs: Math.max(0, endedAt - startedAt) };
-          return {
-            ...conversation,
-            updatedAt: endedAt ?? conversation.updatedAt,
-            latestRun: {
-              ...conversation.latestRun,
-              status,
-              ...(endedAt === undefined ? {} : { endedAt, ...duration }),
-            },
-          };
-        }),
-      );
-    },
-    [],
   );
 
   const scheduleInferredRunFailureRecheck = useCallback(

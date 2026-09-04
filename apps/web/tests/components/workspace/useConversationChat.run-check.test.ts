@@ -221,6 +221,48 @@ describe('the follow behind the checking state', () => {
       row.events?.[0],
       'the card must be built from the daemon facts, not from the stream error',
     ).toMatchObject({ failureStage: 'tool_execution' });
+    expect(
+      hook.result.current.error,
+      'the stream error must not be left under the daemon own title',
+    ).toBeNull();
+  });
+
+  it('takes back the generic card once the daemon row can finally be read', async () => {
+    const hook = await mountWithUnresolvedRun();
+    const rowId = hook.result.current.messages.at(-1)!.id;
+
+    // First the daemon reports failed but its row cannot be read, so the pane
+    // owes the user the generic card.
+    fetchChatRunStatus.mockResolvedValue({ status: 'failed', updatedAt: 42 });
+    listMessages.mockResolvedValue([]);
+    await runProbes(1);
+    expect(hook.result.current.error).toBe(STREAM_ERROR);
+
+    // Then the read answers, and the daemon's own words replace it.
+    listMessages.mockResolvedValue([
+      {
+        id: rowId,
+        role: 'assistant',
+        content: '',
+        createdAt: 1,
+        runId: RUN_ID,
+        runStatus: 'failed',
+        events: [
+          {
+            kind: 'status',
+            label: 'error',
+            detail: 'Agent stalled without emitting any new output for 600s.',
+            failureStage: 'tool_execution',
+          },
+        ],
+      },
+    ]);
+    await runMoreProbes(1);
+
+    expect(hook.result.current.error, 'the superseded stream error must leave the slot').toBeNull();
+    expect(hook.result.current.messages.at(-1)!.events?.[0]).toMatchObject({
+      failureStage: 'tool_execution',
+    });
   });
 
   it('falls back to the generic card when the daemon failed row cannot be read', async () => {
