@@ -241,6 +241,15 @@ export function trackPreviewPaint(options: TrackPreviewPaintOptions): () => void
    * soft "could not verify this rendered" notice with a way to ask again. The
    * watchdog stops asking on its own here (the deadline is done) but keeps
    * listening, so a re-check that comes back corroborated clears the notice.
+   *
+   * The caveat is the CEILING for this document, deliberately. A later report
+   * may clear it, and nothing may make it worse: a re-check that comes back
+   * `painted: false` leaves the soft notice standing rather than escalating to
+   * the named failure. The document already reported render evidence once, and
+   * a watchdog that had settled and then failed the same epoch would be
+   * claiming a certainty it never had. The named failure belongs to a document
+   * that never reported render evidence at all — a fresh `load` re-arms the
+   * epoch and that path is open again.
    */
   const settleOnUncorroboratedEvidence = (evidence: PreviewPaintEvidence): void => {
     settled = true;
