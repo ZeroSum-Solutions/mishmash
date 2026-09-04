@@ -212,6 +212,7 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
   // Colour stops as they can be written: hex with or without alpha, any
   // functional colour, and the two keywords.
   var COLOUR_TOKEN = /#[0-9a-f]{3,8}|(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\\([^()]*\\)|\\b(?:transparent|currentcolor)\\b/gi;
+  var HEX_DIGITS = /^[0-9a-f]+$/;
   var token = null;
 
   function num(value){
@@ -271,8 +272,15 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     var value = String(color).trim().toLowerCase();
     if (value === '' || value === 'transparent' || value === 'none') return 0;
     if (value.charAt(0) === '#') {
-      if (value.length === 5) return parseInt(value.charAt(4) + value.charAt(4), 16) / 255;
-      if (value.length === 9) return parseInt(value.slice(7), 16) / 255;
+      // Only the alpha digits are read, and only when they ARE digits: a
+      // malformed hex colour must fall to the opaque default below like any
+      // other value this cannot parse, not to NaN and thence to zero.
+      if (value.length === 5 && HEX_DIGITS.test(value.charAt(4))) {
+        return parseInt(value.charAt(4) + value.charAt(4), 16) / 255;
+      }
+      if (value.length === 9 && HEX_DIGITS.test(value.slice(7))) {
+        return parseInt(value.slice(7), 16) / 255;
+      }
       return 1;
     }
     var match = /^[a-z]+\\(([^()]*)\\)$/.exec(value);
@@ -431,16 +439,27 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     parts.push(value.slice(start));
     return parts;
   }
-  // Does a gradient layer ink anything? Only a layer whose EVERY stated colour
-  // stop is transparent does not. A layer whose stops cannot be read at all is
-  // assumed to ink -- the same direction as alphaOf, and for the same reason.
+  // Does a gradient layer ink anything? Only a layer whose every colour stop is
+  // READ and transparent does not. Anything the scrape could not read is
+  // assumed to ink -- the same direction as alphaOf, and for the same reason:
+  // calling a healthy preview blank is the failure this whole detector exists
+  // to remove.
+  //
+  // Two ways a layer can be unreadable, and both fail toward ink: no colour
+  // token at all, and a token list that leaves a parenthesised construct behind
+  // once the stops and the gradient's own opener are struck out. The second is
+  // what a nested or unrecognised colour function looks like -- 'color-mix(in
+  // srgb, red, white)' beside a 'transparent' stop would otherwise read as a
+  // layer whose only stop is transparent, and a painted box would be called
+  // blank.
   function gradientPaints(layer){
     var stops = layer.match(COLOUR_TOKEN);
     if (!stops) return true;
     for (var i = 0; i < stops.length; i += 1) {
       if (alphaOf(stops[i]) > 0) return true;
     }
-    return false;
+    var residue = layer.replace(COLOUR_TOKEN, ' ').replace(GRADIENT_FUNCTION, ' ');
+    return residue.indexOf('(') >= 0;
   }
   // What a 'background-image' value puts on screen: PAINTS when some layer
   // states a non-transparent stop, PAINTS_NOT when every layer is a gradient

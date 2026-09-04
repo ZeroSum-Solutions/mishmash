@@ -242,6 +242,46 @@ describe('a comment ends where the tokenizer ends it', () => {
     });
   }
 
+  it('reads `--!` followed by dashes the way the tokenizer does', () => {
+    // Round-1 track audit, finding 1, which claimed `--!->` closes a comment
+    // and that leaving it out re-opens the duplication hole. It does not close
+    // one. From comment-end-bang a `-` goes to comment-end-DASH, and a `>`
+    // there is appended as data rather than ending the token
+    // (https://html.spec.whatwg.org/multipage/parsing.html#comment-end-bang-state,
+    // #comment-end-dash-state). Measured in the repo's Chromium: parsing
+    // `<!--a--!-><h1>X</h1>` leaves NO `h1` in the DOM and one comment whose
+    // data is the whole rest of the document.
+    //
+    // What DOES close after a `--!` is another `--` or another `--!`, and both
+    // spellings are pinned here beside the one that does not.
+    const closing =
+      '<!doctype html><html><body><!-- note --!--><h1>Artifact</h1></body><!-- </body> --></html>';
+    const closingOut = injectLiveArtifactPaintReporter(closing, NONCE);
+    expect(
+      producerIndex(closingOut),
+      '`--!-->` reaches comment-end through comment-end-dash and closes there',
+    ).toBeGreaterThan(closingOut.indexOf('<h1>Artifact</h1>'));
+    expect(producerIndex(closingOut)).toBeLessThan(closingOut.indexOf('</body>'));
+
+    const bangAgain =
+      '<!doctype html><html><body><!-- note --!--!><h1>Artifact</h1></body><!-- </body> --></html>';
+    const bangAgainOut = injectLiveArtifactPaintReporter(bangAgain, NONCE);
+    expect(producerIndex(bangAgainOut)).toBeGreaterThan(bangAgainOut.indexOf('<h1>Artifact</h1>'));
+    expect(producerIndex(bangAgainOut)).toBeLessThan(bangAgainOut.indexOf('</body>'));
+
+    // And the one that does not close. The comment swallows the rest of the
+    // document for the parser too, so no body close is reachable and the EOF
+    // append is the honest placement — the response is not corrupted, and the
+    // preview reaches the watchdog's named failure.
+    const unclosed = '<!doctype html><html><body><!-- note --!-><h1>Artifact</h1></body></html>';
+    const unclosedOut = injectLiveArtifactPaintReporter(unclosed, NONCE);
+    expect(
+      unclosedOut.startsWith(unclosed),
+      'nothing was spliced into a comment the parser never leaves',
+    ).toBe(true);
+    expect(producerIndex(unclosedOut)).toBeGreaterThan(unclosed.length - 1);
+  });
+
   it('still runs an ordinary comment to its `-->`', () => {
     // The other side of the same rule: ending a comment early would select a
     // decoy, which is the failure this whole file exists to prevent.

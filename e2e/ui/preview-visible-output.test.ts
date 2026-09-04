@@ -47,6 +47,7 @@ const REPORT = 'od:preview-content-size';
 interface PaintReport {
   painted?: unknown;
   reason?: unknown;
+  evidence?: unknown;
   scanTruncated?: unknown;
   counters?: { seen?: unknown; hidden?: unknown; clipped?: unknown; blank?: unknown };
   width?: unknown;
@@ -236,9 +237,12 @@ test('[P1] a paint source with no pixels is not visible output', async ({ page }
 test('[P1] which image pixels a preview document may read', async ({ page }) => {
   // The two browser facts the image half of the rule rests on, kept in the
   // repo rather than in a run log, in the same spirit as the contentful-paint
-  // measurement below: a same-origin image's alpha channel is readable, and a
-  // cross-origin one's is not. The producer samples the first and reports the
-  // second as `evidence: 'image-unverified'` rather than guessing.
+  // measurement below. An image the document is allowed to read leaves the
+  // canvas untainted and its alpha channel readable — a `data:` URL is such an
+  // image, which is why an artifact that inlines its images can be decided at
+  // all; a cross-origin one taints the canvas and cannot be read. The producer
+  // samples the first and reports the second as `evidence: 'image-unverified'`
+  // rather than guessing.
   await page.route(CROSS_ORIGIN_IMAGE, (route) =>
     route.fulfill({
       status: 200,
@@ -277,7 +281,7 @@ test('[P1] which image pixels a preview document may read', async ({ page }) => 
   };
 
   const transparent = await alphaOf(TRANSPARENT_PNG);
-  expect(transparent.readable, 'a same-origin image does not taint the canvas').toBe(true);
+  expect(transparent.readable, 'a `data:` URL image does not taint the canvas').toBe(true);
   expect(transparent.maxAlpha, 'every pixel of this PNG is fully transparent').toBe(0);
 
   const opaque = await alphaOf(RED_PNG);
@@ -288,9 +292,38 @@ test('[P1] which image pixels a preview document may read', async ({ page }) => 
   expect(
     crossOrigin.readable,
     'a cross-origin image taints the canvas, so its pixels are not decidable — in the ' +
-      'sandboxed preview frame that is every http(s) image',
+      'sandboxed opaque-origin preview frame that is every http(s) image',
   ).toBe(false);
   expect(crossOrigin.error).toBe('SecurityError');
+
+  // And what the SHIPPED producer reports for the same two documents in this
+  // browser, so the end of the chain is stated rather than inferred. Both come
+  // back painted through Paint Timing, not through the image rules: Chromium
+  // reports a contentful paint for a decoded image whether or not it has
+  // visible pixels (measured in the case below), and Paint Timing is asked
+  // first by design. The image rules — sample the alpha where a canvas may read
+  // it, report `evidence: 'image-unverified'` where it may not — therefore
+  // decide only where a user agent exposes no paint timing for a nested
+  // browsing context, and they are judged there, in
+  // `packages/contracts/tests/preview-paint-transparent.test.ts`. This case
+  // exists so a future Chromium that stops reporting a contentful paint for a
+  // transparent image is noticed HERE rather than in a user's blank preview.
+  const transparentReport = await reportFor(
+    page,
+    `<img src="${TRANSPARENT_PNG}" style="width:60px;height:60px">`,
+  );
+  expect(transparentReport.painted).toBe(true);
+  expect(
+    transparentReport.reason,
+    'the user agent answered for this document; the scan never reached the image',
+  ).toBe('paint-timing');
+
+  const crossOriginReport = await reportFor(
+    page,
+    `<img src="${CROSS_ORIGIN_IMAGE}" style="width:60px;height:60px">`,
+  );
+  expect(crossOriginReport.painted).toBe(true);
+  expect(crossOriginReport.reason).toBe('paint-timing');
 });
 
 test('[P1] Paint Timing answers for content the scan cannot enumerate', async ({ page }) => {

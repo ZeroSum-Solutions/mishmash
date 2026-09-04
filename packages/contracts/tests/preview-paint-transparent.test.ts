@@ -301,6 +301,37 @@ describe('a gradient with nothing but transparent stops is not visible output', 
     ).toBe(false);
   });
 
+  it('treats a stop it cannot read as ink, not as nothing', () => {
+    // Round-1 track audit, finding 2. The rule is "every stop READ and
+    // transparent", not "every stop this happened to match": a layer holding a
+    // colour construct the scrape does not recognise — a nested function such
+    // as `color-mix()` — beside a `transparent` stop would otherwise read as
+    // all-transparent, and a painted box would be called blank. Chromium
+    // resolves `color-mix()` to `color(srgb ...)` in the computed value, so no
+    // live path in this browser reaches it; the rule has to hold anyway,
+    // because failing toward blank is the one direction this detector must
+    // never take.
+    const report = documentWithBox({
+      tag: 'div',
+      style: { backgroundImage: 'linear-gradient(color-mix(in srgb, red, white), transparent)' },
+    });
+
+    expect(report.painted, 'an unreadable stop is assumed to ink').toBe(true);
+    expect(report.evidence).toBe(null);
+  });
+
+  it('reads a malformed hex colour as opaque, not as transparent', () => {
+    // Round-1 track audit, finding 4, and the same direction as the case above:
+    // `parseInt` on non-hex digits is NaN, and NaN read as an alpha of zero
+    // would have called this box blank.
+    const report = documentWithBox({
+      tag: 'div',
+      style: { backgroundImage: 'linear-gradient(#zzzzz, #zzzzz)' },
+    });
+
+    expect(report.painted, 'a colour this cannot parse is opaque, never invisible').toBe(true);
+  });
+
   it('still reports painted for a gradient with one non-transparent stop', () => {
     // The other side of the rule: a gradient that fades to nothing still inks
     // the end it starts from, and calling it blank would report a healthy
