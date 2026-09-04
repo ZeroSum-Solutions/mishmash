@@ -301,12 +301,16 @@ describe('a navigation epoch is bound to the document that commits into the fram
   it('files one preview-error for a failure, however many stale reports arrived', () => {
     const frame = mountFrame();
 
+    // A first document commits and is asked; keep the token it was given.
     const first = trackPreviewPaint({ iframe: frame.iframe, surface: 'file_viewer_preview' });
     frame.iframe.dispatchEvent(new Event('load'));
     const staleToken = latestRequestToken(frame.posted);
     first();
 
+    // A second navigation is armed and its document commits, so the epoch is
+    // disclosed — and then the PREVIOUS document's queued answers arrive.
     const dispose = trackPreviewPaint({ iframe: frame.iframe, surface: 'file_viewer_preview' });
+    frame.iframe.dispatchEvent(new Event('load'));
     for (let i = 0; i < 5; i += 1) {
       answerFrom(frame, { type: REPORT, width: 1280, painted: true, token: staleToken });
     }

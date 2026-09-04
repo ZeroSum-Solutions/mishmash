@@ -35,6 +35,31 @@ function extractContentSizeBridge(doc: string): string {
   return match[1];
 }
 
+/**
+ * A computed style that hides nothing. The producer reads visibility, opacity,
+ * clipping and paint sources off `getComputedStyle`, so a stub document needs
+ * one for its elements to count as visible output.
+ */
+const VISIBLE_STYLE = {
+  display: 'block',
+  visibility: 'visible',
+  opacity: '1',
+  color: 'rgb(0, 0, 0)',
+  backgroundColor: 'rgba(0, 0, 0, 0)',
+  backgroundImage: 'none',
+  overflow: 'visible',
+  overflowX: 'visible',
+  overflowY: 'visible',
+  clipPath: 'none',
+  borderTopStyle: 'none',
+  borderRightStyle: 'none',
+  borderBottomStyle: 'none',
+  borderLeftStyle: 'none',
+  fill: 'none',
+  stroke: 'none',
+  strokeWidth: '0',
+};
+
 interface BridgeRun {
   parentMessages: Array<Record<string, unknown>>;
   send: (data: unknown) => void;
@@ -55,15 +80,21 @@ function runContentSizeBridge(doc: string): BridgeRun {
       frameCallbacks.push(callback);
       return frameCallbacks.length;
     },
+    innerWidth: 1280,
+    innerHeight: 720,
+    getComputedStyle: () => VISIBLE_STYLE,
   };
-  // A laid-out document: the body has a box with area, which is the positive
-  // render evidence the watchdog settles on.
+  // A laid-out document that paints: the body has a box with area inside the
+  // viewport and a direct text node under an opaque colour, which is the
+  // visible-output evidence the watchdog settles on.
   const laidOut = {
+    tagName: 'BODY',
     scrollWidth: 1280,
     offsetWidth: 1280,
     clientWidth: 1280,
-    getBoundingClientRect: () => ({ width: 1280, height: 720 }),
-    querySelectorAll: () => [],
+    parentElement: null,
+    childNodes: [{ nodeType: 3, nodeValue: 'Artifact' }],
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }),
   };
   const sandbox: Record<string, unknown> = {
     window: win,
@@ -171,6 +202,13 @@ describe('the host half of the preview watchdog protocol', () => {
 
     const dispose = trackPreviewPaint({ iframe, surface: 'file_viewer_preview' });
 
+    // Two-phase epoch: arming tells the frame nothing, so the document being
+    // replaced cannot answer for its replacement. The `load` commit is what
+    // discloses the token. Superseded the install-time ask this case used to
+    // assert; the epoch's own cases are in
+    // tests/observability/iframe-preview-paint-evidence.test.ts.
+    expect(posted.filter((message) => message?.type === REPORT_REQUEST)).toHaveLength(0);
+    iframe.dispatchEvent(new Event('load'));
     const asks = posted.filter((message) => message?.type === REPORT_REQUEST);
     expect(asks).toHaveLength(1);
     expect(typeof asks[0]?.token).toBe('string');
@@ -215,13 +253,42 @@ describe('the host half of the preview watchdog protocol', () => {
 
     const dispose = trackPreviewPaint({ iframe, surface: 'file_viewer_preview_powered' });
 
-    expect(posted.filter((message) => message?.type === REPORT_REQUEST)).toHaveLength(1);
+    expect(posted.filter((message) => message?.type === REPORT_REQUEST)).toHaveLength(0);
     iframe.dispatchEvent(new Event('load'));
+    expect(posted.filter((message) => message?.type === REPORT_REQUEST)).toHaveLength(1);
     vi.advanceTimersByTime(30_000);
     dispose();
 
     const filed = anomalyPosts(fetchMock);
     expect(filed).toHaveLength(1);
     expect(filed[0]?.kind).toBe('preview-error');
+  });
+
+  it('watches a warm transport whose document the host saw commit', () => {
+    // `FileViewer` keeps the srcDoc frame materialised while it is hidden
+    // behind URL-load, so entering Draw or Comment installs a watchdog over a
+    // document that loaded long ago. No `load` is coming, so the host says the
+    // document is already there and the epoch discloses at install.
+    const fetchMock = vi.fn(async () => new Response('{"ok":true}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { iframe, posted } = mountFrame();
+
+    const dispose = trackPreviewPaint({
+      iframe,
+      surface: 'file_viewer_preview',
+      documentCommitted: true,
+    });
+
+    expect(posted.filter((message) => message?.type === REPORT_REQUEST)).toHaveLength(1);
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: REPORT, width: 1280, painted: true, token: requestToken(posted) },
+        source: iframe.contentWindow,
+      }),
+    );
+    vi.advanceTimersByTime(30_000);
+    dispose();
+
+    expect(anomalyPosts(fetchMock)).toHaveLength(0);
   });
 });

@@ -75,6 +75,31 @@ function cspDirective(csp: string, name: string): string | null {
   return null;
 }
 
+/**
+ * A computed style that hides nothing. The producer reads visibility, opacity,
+ * clipping and paint sources off `getComputedStyle`, so a stub document needs
+ * one for its elements to count as visible output.
+ */
+const VISIBLE_STYLE = {
+  display: 'block',
+  visibility: 'visible',
+  opacity: '1',
+  color: 'rgb(0, 0, 0)',
+  backgroundColor: 'rgba(0, 0, 0, 0)',
+  backgroundImage: 'none',
+  overflow: 'visible',
+  overflowX: 'visible',
+  overflowY: 'visible',
+  clipPath: 'none',
+  borderTopStyle: 'none',
+  borderRightStyle: 'none',
+  borderBottomStyle: 'none',
+  borderLeftStyle: 'none',
+  fill: 'none',
+  stroke: 'none',
+  strokeWidth: '0',
+};
+
 interface ProducerRun {
   parentMessages: Array<Record<string, unknown>>;
   send: (data: unknown) => void;
@@ -89,15 +114,16 @@ function runProducer(script: string, opts: { area: boolean }): ProducerRun {
   const parentMessages: Array<Record<string, unknown>> = [];
   const listeners: Record<string, Array<(ev: unknown) => void>> = {};
   const box = opts.area
-    ? { width: 1280, height: 720 }
-    : { width: 0, height: 0 };
+    ? { left: 0, top: 0, width: 1280, height: 720 }
+    : { left: 0, top: 0, width: 0, height: 0 };
   const element = {
-    tagName: 'DIV',
+    tagName: 'BODY',
     scrollWidth: opts.area ? 1280 : 0,
     offsetWidth: opts.area ? 1280 : 0,
     clientWidth: opts.area ? 1280 : 0,
+    parentElement: null,
+    childNodes: opts.area ? [{ nodeType: 3, nodeValue: 'Preview' }] : [],
     getBoundingClientRect: () => box,
-    querySelectorAll: () => [],
   };
   const win: Record<string, unknown> = {
     parent: { postMessage: (data: unknown) => parentMessages.push(data as Record<string, unknown>) },
@@ -105,11 +131,14 @@ function runProducer(script: string, opts: { area: boolean }): ProducerRun {
       (listeners[type] ??= []).push(listener);
     },
     requestAnimationFrame: () => 1,
+    innerWidth: 1280,
+    innerHeight: 720,
+    getComputedStyle: () => VISIBLE_STYLE,
   };
   const documentStub = {
     readyState: 'complete',
-    documentElement: { ...element, querySelectorAll: () => [] },
-    body: { ...element, querySelectorAll: () => [] },
+    documentElement: { ...element },
+    body: { ...element },
     addEventListener: () => {},
     querySelector: () => null,
     scrollingElement: null,

@@ -20,13 +20,48 @@ export const PREVIEW_PAINT_REPORT = 'od:preview-content-size';
 /** Host's ask: "report yourself now, for this navigation". */
 export const PREVIEW_PAINT_REPORT_REQUEST = 'od:preview-content-size-request';
 
+/**
+ * Why a document reported what it did about its own rendering.
+ *
+ *  - `painted` — the scan found an element that puts visible output on screen.
+ *  - `paint-timing` — the scan stopped at its bound before finding one, and the
+ *    user agent's own Paint Timing said the document painted content. The scan
+ *    is authoritative when it completes; this only rescues a truncated one.
+ *  - `no-elements` — there is nothing under `<body>` to look at.
+ *  - `no-visible-output` — the scan completed and every candidate was hidden,
+ *    fully transparent, clipped away, or painted nothing.
+ */
+export type PreviewPaintReason =
+  | 'painted'
+  | 'paint-timing'
+  | 'no-elements'
+  | 'no-visible-output';
+
+/** How many candidates the scan rejected, and for what. */
+export interface PreviewPaintCounters {
+  /** Candidates inspected before the scan stopped. */
+  seen: number;
+  /** Rejected for `display:none`, `visibility:hidden|collapse`, or opacity 0. */
+  hidden: number;
+  /** Rejected for having no box, or for one clipped entirely away. */
+  clipped: number;
+  /** Visible geometry that paints nothing: no text, background, border or content. */
+  blank: number;
+}
+
 /** What a previewed document posts about its own rendering. */
 export interface PreviewPaintReport {
   type: typeof PREVIEW_PAINT_REPORT;
   /** Widest laid-out box, for the host's zoom fitting. `null` when nothing measured. */
   width: number | null;
-  /** Positive render evidence — see `previewPaintReportProducerSource`. */
+  /** Positive VISIBLE-output evidence — see `PREVIEW_PAINT_REPORT_PRODUCER_SOURCE`. */
   painted: boolean;
+  /** Why `painted` is what it is. */
+  reason: PreviewPaintReason;
+  /** What the scan looked at and what it threw away. */
+  counters: PreviewPaintCounters;
+  /** True when the scan stopped at its candidate cap or time budget. */
+  scanTruncated: boolean;
   /**
    * The navigation token the host last asked with, echoed back. `null` before
    * the host has asked. A report whose token is not the host's current one
@@ -34,6 +69,12 @@ export interface PreviewPaintReport {
    */
   token: string | null;
 }
+
+/** Most candidates one scan will inspect. */
+export const PREVIEW_PAINT_SCAN_CANDIDATE_LIMIT = 400;
+
+/** Wall-clock budget for one scan, in milliseconds. */
+export const PREVIEW_PAINT_SCAN_BUDGET_MS = 50;
 
 /**
  * Source of the shared producer half, as JavaScript text.
@@ -46,14 +87,37 @@ export interface PreviewPaintReport {
  *     watchdog set.
  *   - `post()` — posts a `PreviewPaintReport` to the host.
  *
- * **What `painted` means.** True when the document has at least one laid-out
- * box with area: the `<body>` border box, or failing that any element under it
- * (bounded scan, `PAINT_SCAN_LIMIT` elements). It is positive evidence that
- * the document produced geometry, which the frame's `load` event and a bare
- * measurement are not.
+ * **What `painted` means: visible output, not geometry.** An element counts
+ * only when ALL of these hold, and it therefore puts something a user could
+ * see on the screen:
  *
- * **False negatives** (says not painted while something is visible): a document
- * whose only visible mark is a root background with a zero-height body, and a
+ *   - no ancestor is `display:none`, `visibility:hidden|collapse`, or clipped
+ *     to nothing by `clip-path`;
+ *   - the product of every opacity on its ancestor chain is above zero — above
+ *     zero, not above some floor, because faint is still visible;
+ *   - its border box survives clipping against the viewport and against every
+ *     ancestor scrollport whose axis overflow is `hidden`, `clip`, `auto` or
+ *     `scroll`;
+ *   - and it paints something: a direct non-whitespace text node under a
+ *     non-transparent `color`, a non-transparent `background-color`, a
+ *     `background-image`, a visible border on some side, an SVG `fill` or
+ *     `stroke`, a decoded `img` with intrinsic size, or a `video` with a poster
+ *     or a decoded frame.
+ *
+ * Blank replaced geometry never counts. An empty `canvas`, an `svg` with no
+ * painted children and an `iframe` are rectangles of nothing; a `canvas`
+ * counts only when the user agent's Paint Timing says the document painted
+ * content, which for a canvas means it was drawn on.
+ *
+ * **Bounded by construction.** Viewport hit-test targets are tried first
+ * (`elementsFromPoint` over a small grid), then a lazy `TreeWalker`, at most
+ * `PREVIEW_PAINT_SCAN_CANDIDATE_LIMIT` candidates and never longer than
+ * `PREVIEW_PAINT_SCAN_BUDGET_MS`. Computed styles, ancestor state and each
+ * candidate's rect are read once and cached in `WeakMap`s. A scan that stops
+ * early says so in `scanTruncated`, and only then may Paint Timing stand in
+ * for it.
+ *
+ * **False negatives** (says not painted while something is visible): a
  * document that paints later than the host's watchdog window — the producer
  * re-reports on resize, fonts-ready and its own timers, so a late painter
  * settles when it paints, but one slower than the watchdog is filed. A
@@ -61,18 +125,32 @@ export interface PreviewPaintReport {
  * signal as a broken one; the host cannot tell those apart from outside the
  * frame and reports what it can see.
  *
- * **False positives** (says painted while the user sees nothing): geometry
- * without pixels — a laid-out box that is transparent, `visibility: hidden`,
- * `opacity: 0`, or scrolled out of view. `display: none` has no box and is not
- * counted.
+ * **False positives** (says painted while the user sees nothing): content
+ * hidden by a mechanism the scan does not model — an opaque element stacked
+ * over everything, a `clip-path` shape that is empty but not written in one of
+ * the forms recognised here, or a filter that erases the pixels.
  */
 export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
   if (window.__odPreviewPaintReport) return;
-  var PAINT_SCAN_LIMIT = 300;
+  var CANDIDATE_LIMIT = ${PREVIEW_PAINT_SCAN_CANDIDATE_LIMIT};
+  var BUDGET_MS = ${PREVIEW_PAINT_SCAN_BUDGET_MS};
+  var HIT_TEST_GRID = 5;
+  var CLIPPING_OVERFLOW = /^(hidden|clip|auto|scroll)/;
+  var SVG_PAINTED_SHAPES = /^(path|rect|circle|ellipse|line|polyline|polygon|text|tspan|textpath|use|image)$/;
+  var EMPTY_CLIP_PATH = /(circle|ellipse)\\(\\s*0[a-z%]*[\\s)]|inset\\(\\s*(100%|50%\\s+50%\\s+50%\\s+50%)|polygon\\(\\s*\\)/;
   var token = null;
+
   function num(value){
     var next = Number(value || 0);
     return Number.isFinite(next) ? next : 0;
+  }
+  function nowMs(){
+    try {
+      if (typeof performance !== 'undefined' && performance && typeof performance.now === 'function') {
+        return performance.now();
+      }
+    } catch (_) {}
+    return Date.now();
   }
   function measureWidth(){
     var root = document.documentElement;
@@ -93,23 +171,225 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     }
     return width > 0 ? Math.ceil(width) : null;
   }
-  function hasArea(el){
-    if (!el || typeof el.getBoundingClientRect !== 'function') return false;
-    var rect = el.getBoundingClientRect();
-    return !!rect && num(rect.width) > 0 && num(rect.height) > 0;
+  function alphaOf(color){
+    if (!color) return 0;
+    if (color === 'transparent' || color === 'none') return 0;
+    var match = /^rgba?\\(([^)]*)\\)/i.exec(color);
+    if (!match) return 1;
+    var parts = String(match[1]).split(/[,\\/]/);
+    if (parts.length < 4) return 1;
+    return num(parts[3]);
   }
-  function painted(){
-    var body = document.body;
-    if (!body) return false;
-    if (hasArea(body)) return true;
-    var nodes;
-    try { nodes = body.querySelectorAll('*'); } catch (_) { return false; }
-    if (!nodes) return false;
-    var limit = Math.min(nodes.length, PAINT_SCAN_LIMIT);
+  function paintTimingSawContent(){
+    try {
+      var entries = performance.getEntriesByType('paint') || [];
+      for (var i = 0; i < entries.length; i += 1) {
+        if (entries[i] && entries[i].name === 'first-contentful-paint') return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+  function intersect(a, b){
+    if (!a) return b || null;
+    if (!b) return a;
+    var left = Math.max(a.left, b.left);
+    var top = Math.max(a.top, b.top);
+    var right = Math.min(a.right, b.right);
+    var bottom = Math.min(a.bottom, b.bottom);
+    if (right - left <= 0 || bottom - top <= 0) return null;
+    return { left: left, top: top, right: right, bottom: bottom };
+  }
+  function viewportRect(){
+    var width = num(window.innerWidth);
+    var height = num(window.innerHeight);
+    var root = document.documentElement;
+    if (!width && root) width = num(root.clientWidth);
+    if (!height && root) height = num(root.clientHeight);
+    // A context that reports no viewport is not clipping anything; do not
+    // invent a zero-sized one and reject every candidate.
+    if (!(width > 0 && height > 0)) return null;
+    return { left: 0, top: 0, right: width, bottom: height };
+  }
+  function styleOf(el, scan){
+    if (scan.styles.has(el)) return scan.styles.get(el);
+    var style = null;
+    try {
+      if (typeof window.getComputedStyle === 'function') style = window.getComputedStyle(el);
+    } catch (_) { style = null; }
+    scan.styles.set(el, style);
+    return style;
+  }
+  function rectOf(el, scan){
+    if (scan.rects.has(el)) return scan.rects.get(el);
+    var rect = null;
+    try {
+      if (typeof el.getBoundingClientRect === 'function') {
+        var raw = el.getBoundingClientRect();
+        if (raw) {
+          var left = num(raw.left);
+          var top = num(raw.top);
+          rect = { left: left, top: top, right: left + num(raw.width), bottom: top + num(raw.height) };
+        }
+      }
+    } catch (_) {}
+    scan.rects.set(el, rect);
+    return rect;
+  }
+  function clipsChildren(style){
+    if (!style) return false;
+    var x = style.overflowX || style.overflow || '';
+    var y = style.overflowY || style.overflow || '';
+    return CLIPPING_OVERFLOW.test(x) || CLIPPING_OVERFLOW.test(y);
+  }
+  function stateOf(el, scan){
+    if (!el) return scan.root;
+    if (scan.states.has(el)) return scan.states.get(el);
+    var parent = stateOf(el.parentElement || null, scan);
+    var style = styleOf(el, scan);
+    var ownOpacity = 1;
+    if (style && style.opacity !== '' && style.opacity != null) ownOpacity = num(style.opacity);
+    var visible = parent.visible;
+    if (style) {
+      if (style.display === 'none') visible = false;
+      if (style.visibility === 'hidden' || style.visibility === 'collapse') visible = false;
+      if (style.clipPath && style.clipPath !== 'none' && EMPTY_CLIP_PATH.test(style.clipPath)) visible = false;
+    }
+    var clipChildren = parent.clipChildren;
+    if (clipsChildren(style)) clipChildren = intersect(clipChildren, rectOf(el, scan));
+    var state = {
+      visible: visible,
+      opacity: parent.opacity * ownOpacity,
+      clipSelf: parent.clipChildren,
+      clipChildren: clipChildren
+    };
+    scan.states.set(el, state);
+    return state;
+  }
+  function hasDirectText(el){
+    var kids = el.childNodes;
+    if (!kids) return false;
+    var limit = Math.min(kids.length, 32);
     for (var i = 0; i < limit; i += 1) {
-      if (hasArea(nodes[i])) return true;
+      var node = kids[i];
+      if (node && node.nodeType === 3 && typeof node.nodeValue === 'string' && node.nodeValue.trim() !== '') {
+        return true;
+      }
     }
     return false;
+  }
+  function hasVisibleBorder(style){
+    var sides = ['Top', 'Right', 'Bottom', 'Left'];
+    for (var i = 0; i < sides.length; i += 1) {
+      var side = sides[i];
+      var lineStyle = style['border' + side + 'Style'];
+      if (!lineStyle || lineStyle === 'none' || lineStyle === 'hidden') continue;
+      if (num(style['border' + side + 'Width']) <= 0) continue;
+      if (alphaOf(style['border' + side + 'Color']) > 0) return true;
+    }
+    return false;
+  }
+  function paintsSomething(el, style, scan){
+    var tag = el.tagName ? String(el.tagName).toLowerCase() : '';
+    if (style) {
+      if (hasDirectText(el) && alphaOf(style.color) > 0) return true;
+      if (alphaOf(style.backgroundColor) > 0) return true;
+      if (style.backgroundImage && style.backgroundImage !== 'none') return true;
+      if (hasVisibleBorder(style)) return true;
+      if (SVG_PAINTED_SHAPES.test(tag)) {
+        if (alphaOf(style.fill) > 0) return true;
+        if (alphaOf(style.stroke) > 0 && num(style.strokeWidth) > 0) return true;
+      }
+    }
+    if (tag === 'img') {
+      return el.complete === true && num(el.naturalWidth) > 0 && num(el.naturalHeight) > 0;
+    }
+    if (tag === 'video') {
+      var poster = typeof el.getAttribute === 'function' ? el.getAttribute('poster') : null;
+      return (typeof poster === 'string' && poster !== '') || num(el.readyState) >= 2;
+    }
+    // A canvas, an svg root and an iframe are blank rectangles until something
+    // paints in them, and only the user agent can say whether that happened.
+    if (tag === 'canvas') return scan.paintTiming && num(el.width) > 0 && num(el.height) > 0;
+    return false;
+  }
+  function candidateIsVisibleOutput(el, scan){
+    var state = stateOf(el, scan);
+    if (!state.visible || !(state.opacity > 0)) { scan.hidden += 1; return false; }
+    var rect = rectOf(el, scan);
+    if (!rect || rect.right - rect.left <= 0 || rect.bottom - rect.top <= 0) { scan.clipped += 1; return false; }
+    if (!intersect(rect, state.clipSelf)) { scan.clipped += 1; return false; }
+    if (!paintsSomething(el, styleOf(el, scan), scan)) { scan.blank += 1; return false; }
+    return true;
+  }
+  function hitTestTargets(viewport){
+    var found = [];
+    if (!viewport) return found;
+    try {
+      if (typeof document.elementsFromPoint !== 'function') return found;
+      var width = viewport.right - viewport.left;
+      var height = viewport.bottom - viewport.top;
+      for (var gx = 1; gx <= HIT_TEST_GRID; gx += 1) {
+        for (var gy = 1; gy <= HIT_TEST_GRID; gy += 1) {
+          var at = document.elementsFromPoint(
+            (width * gx) / (HIT_TEST_GRID + 1),
+            (height * gy) / (HIT_TEST_GRID + 1)
+          );
+          if (!at) continue;
+          for (var i = 0; i < at.length; i += 1) found.push(at[i]);
+        }
+      }
+    } catch (_) {}
+    return found;
+  }
+  function scanForVisibleOutput(){
+    var viewport = viewportRect();
+    var scan = {
+      styles: new WeakMap(),
+      rects: new WeakMap(),
+      states: new WeakMap(),
+      paintTiming: paintTimingSawContent(),
+      root: { visible: true, opacity: 1, clipSelf: viewport, clipChildren: viewport },
+      seen: 0,
+      hidden: 0,
+      clipped: 0,
+      blank: 0,
+      truncated: false
+    };
+    var body = document.body;
+    if (!body) {
+      return { painted: false, reason: 'no-elements', scan: scan };
+    }
+    var queue = hitTestTargets(viewport);
+    queue.push(body);
+    var walker = null;
+    try {
+      if (typeof document.createTreeWalker === 'function') walker = document.createTreeWalker(body, 1);
+    } catch (_) { walker = null; }
+    var visited = new WeakSet();
+    var index = 0;
+    var deadline = nowMs() + BUDGET_MS;
+    while (true) {
+      if (scan.seen >= CANDIDATE_LIMIT) { scan.truncated = true; break; }
+      if (nowMs() > deadline) { scan.truncated = true; break; }
+      var el = null;
+      if (index < queue.length) { el = queue[index]; index += 1; }
+      else if (walker) { el = walker.nextNode(); }
+      if (!el) break;
+      if (visited.has(el)) continue;
+      visited.add(el);
+      scan.seen += 1;
+      if (candidateIsVisibleOutput(el, scan)) {
+        return { painted: true, reason: 'painted', scan: scan };
+      }
+    }
+    if (scan.truncated && scan.paintTiming) {
+      return { painted: true, reason: 'paint-timing', scan: scan };
+    }
+    return {
+      painted: false,
+      reason: scan.seen === 0 ? 'no-elements' : 'no-visible-output',
+      scan: scan
+    };
   }
   window.__odPreviewPaintReport = {
     rememberToken: function(next){
@@ -117,10 +397,19 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     },
     post: function(){
       try {
+        var result = scanForVisibleOutput();
         window.parent.postMessage({
           type: '${PREVIEW_PAINT_REPORT}',
           width: measureWidth(),
-          painted: painted(),
+          painted: result.painted,
+          reason: result.reason,
+          counters: {
+            seen: result.scan.seen,
+            hidden: result.scan.hidden,
+            clipped: result.scan.clipped,
+            blank: result.scan.blank
+          },
+          scanTruncated: result.scan.truncated,
           token: token
         }, '*');
       } catch (_) {}

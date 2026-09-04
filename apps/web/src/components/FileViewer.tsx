@@ -1541,6 +1541,11 @@ export function LiveArtifactViewer({
   }, [liveArtifactViewportKey]);
   const [previewBodyRef, previewBodySize] = usePreviewCanvasSize<HTMLDivElement>();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // Which preview URL this frame has actually loaded. The watchdog's two-phase
+  // epoch discloses its token only to a document it knows is in the frame, and
+  // the host is the only party that can know a re-installed watchdog is
+  // watching the document already there rather than one still on its way.
+  const committedPreviewUrlRef = useRef<string | null>(null);
   // Driven by the preview watchdog: true only while the document currently in
   // the frame has failed to prove it rendered. Cleared when a new document
   // starts being watched and when one proves it painted, so a late paint or a
@@ -1722,6 +1727,7 @@ export function LiveArtifactViewer({
       surface: 'live_artifact_preview',
       artifactId: liveArtifact.artifactId,
       projectId,
+      documentCommitted: committedPreviewUrlRef.current === previewUrl,
       onPaintState: (state) => setPreviewDidNotRender(state.status === 'unproven'),
     });
   }, [mode, previewUrl, liveArtifact.artifactId, projectId]);
@@ -2003,6 +2009,9 @@ export function LiveArtifactViewer({
                   title={liveArtifact.title}
                   sandbox="allow-scripts allow-popups allow-downloads"
                   src={previewUrl}
+                  onLoad={() => {
+                    committedPreviewUrlRef.current = previewUrl;
+                  }}
                 />
               </PreviewDrawOverlay>
             </div>
@@ -6517,6 +6526,14 @@ function HtmlViewer({
     setUrlPreviewFrameNode(node);
   }, []);
   const srcDocPreviewIframeRef = useRef<HTMLIFrameElement | null>(null);
+  // What each preview transport has actually loaded. `trackPreviewPaint` tells
+  // the frame nothing until a `load` proves the incoming document is in it, so
+  // a warm transport — a srcDoc frame materialised while hidden, a URL frame
+  // kept alive behind it — needs the host to say "the document you want is
+  // already here". These refs are that statement, and they are only ever
+  // written from the frame's own `load`.
+  const committedSrcDocRef = useRef<string | null>(null);
+  const committedUrlSrcRef = useRef<string | null>(null);
   const activatedSrcDocTransportHtmlRef = useRef<string | null>(null);
   // Tracks the iframe DOM node whose dedupe ref was last reset by the
   // srcDoc onLoad handler. We reset the dedupe exactly once per freshly
@@ -8093,6 +8110,7 @@ function HtmlViewer({
       iframe: node,
       surface: 'file_viewer_preview',
       projectId,
+      documentCommitted: committedSrcDocRef.current === srcDocTransportContent,
       onPaintState: (state) => setPreviewDidNotRender(state.status === 'unproven'),
     });
   }, [mode, useUrlLoadPreview, srcDoc, srcDocTransportContent, projectId, srcDocTransportResetKey]);
@@ -8161,6 +8179,7 @@ function HtmlViewer({
       iframe: urlPreviewFrameNode,
       surface: usePoweredPreview ? 'file_viewer_preview_powered' : 'file_viewer_preview_url_load',
       projectId,
+      documentCommitted: committedUrlSrcRef.current === urlFrameSrc,
       onPaintState: (state) => setPreviewDidNotRender(state.status === 'unproven'),
     });
   }, [mode, useUrlLoadPreview, usePoweredPreview, urlFrameSrc, urlPreviewFrameNode, projectId]);
@@ -13087,6 +13106,7 @@ function HtmlViewer({
                           onLoad={() => {
                             const frame = urlPreviewIframeRef.current;
                             if (useUrlLoadPreview) iframeRef.current = frame;
+                            committedUrlSrcRef.current = urlFrameSrc;
                             setUrlSelectionBridgeReady(false);
                             dcViewportRestoreAtRef.current = Date.now();
                             frame?.contentWindow?.postMessage({
@@ -13115,6 +13135,7 @@ function HtmlViewer({
                           onLoad={() => {
                             const frame = urlPreviewIframeRef.current;
                             if (useUrlLoadPreview) iframeRef.current = frame;
+                            committedUrlSrcRef.current = urlFrameSrc;
                             setUrlSelectionBridgeReady(false);
                             dcViewportRestoreAtRef.current = Date.now();
                             frame?.contentWindow?.postMessage({
@@ -13142,6 +13163,7 @@ function HtmlViewer({
                         onLoad={() => {
                           const frame = srcDocPreviewIframeRef.current;
                           if (!useUrlLoadPreview) iframeRef.current = frame;
+                          committedSrcDocRef.current = srcDocTransportContent;
                           // Reset the activation dedupe exactly ONCE per
                           // freshly mounted iframe DOM node, never on the
                           // subsequent load events that the same node

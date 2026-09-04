@@ -89,6 +89,31 @@ function extractPaintReportProducer(html: string): string | null {
   return bodies.length === 0 ? null : bodies.join('\n');
 }
 
+/**
+ * A computed style that hides nothing. The producer reads visibility, opacity,
+ * clipping and paint sources off `getComputedStyle`, so a stub document needs
+ * one for its elements to count as visible output.
+ */
+const VISIBLE_STYLE = {
+  display: 'block',
+  visibility: 'visible',
+  opacity: '1',
+  color: 'rgb(0, 0, 0)',
+  backgroundColor: 'rgba(0, 0, 0, 0)',
+  backgroundImage: 'none',
+  overflow: 'visible',
+  overflowX: 'visible',
+  overflowY: 'visible',
+  clipPath: 'none',
+  borderTopStyle: 'none',
+  borderRightStyle: 'none',
+  borderBottomStyle: 'none',
+  borderLeftStyle: 'none',
+  fill: 'none',
+  stroke: 'none',
+  strokeWidth: '0',
+};
+
 interface HiddenTabRun {
   parentMessages: Array<Record<string, unknown>>;
   send: (data: unknown) => void;
@@ -111,13 +136,23 @@ function runProducerInHiddenTab(script: string, measures = 1280): HiddenTabRun {
       // Queued and never invoked: the tab is hidden.
       return 1;
     },
+    innerWidth: 1280,
+    innerHeight: 720,
+    getComputedStyle: () => VISIBLE_STYLE,
   };
   const laidOut = {
+    tagName: 'BODY',
     scrollWidth: measures,
     offsetWidth: measures,
     clientWidth: measures,
-    getBoundingClientRect: () => ({ width: measures, height: measures > 0 ? 720 : 0 }),
-    querySelectorAll: () => [],
+    parentElement: null,
+    childNodes: measures > 0 ? [{ nodeType: 3, nodeValue: 'Preview' }] : [],
+    getBoundingClientRect: () => ({
+      left: 0,
+      top: 0,
+      width: measures,
+      height: measures > 0 ? 720 : 0,
+    }),
   };
   const documentStub = {
     readyState: 'complete',
