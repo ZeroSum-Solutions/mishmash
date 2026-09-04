@@ -30,7 +30,7 @@ import { describe, expect, test } from 'vitest';
 import { createFakeAgentRuntimes } from '@/fake-agents';
 import { requestJson } from '@/vitest/http';
 import { listMessages, saveMessage, type E2eChatMessage } from '@/vitest/messages';
-import { startRun } from '@/vitest/runs';
+import { startRun, waitForRunStatus } from '@/vitest/runs';
 import { createSmokeSuite } from '@/vitest/suite';
 
 type ProjectResponse = {
@@ -47,6 +47,7 @@ type StoredStatusEvent = {
   failureDetail?: string;
   failureStage?: string;
   artifactCount?: number;
+  fileChangeState?: string;
 };
 
 // The fake claude runtime writes `index.html` through a Write tool_use /
@@ -54,6 +55,17 @@ type StoredStatusEvent = {
 // `emitClaudeHeldArtifactWriteRun`), so the kill lands on a run that has
 // provably done work and has not finished.
 const HELD_PROMPT = 'Write the deterministic artifact then hold the daemon run open';
+
+// W1I.2: the same held shape with no write in it (`e2e/lib/fake-agents.ts`
+// `emitClaudeHeldNoWriteRun`), so the kill lands on a run whose durable event
+// log records no write at all.
+const HELD_NO_WRITE_PROMPT = 'Hold the daemon run open without writing any file';
+
+// Project creation writes the project's own starting files. Waiting past the
+// mtime grace `isRunTouchedProjectFile` allows (`apps/daemon/src/projects.ts`)
+// before the run starts keeps those writes outside the run's interval, so a
+// measured zero is measuring the run and not the project's birth.
+const PRE_RUN_SETTLE_MS = 3_000;
 
 const WRITE_OBSERVED_TIMEOUT_MS = 90_000;
 const RECONCILED_TIMEOUT_MS = 60_000;
@@ -231,6 +243,166 @@ describe('a daemon restart leaves the same structured failure the live path leav
     }, {
       // The daemon is killed on purpose, so its log carries the fatal-looking
       // lines a normal exit does not.
+      skipFatalLogCheck: true,
+    });
+  }, 300_000);
+});
+
+// W1I.2 red spec — the daemon half, at the HTTP boundary.
+//
+// The spec above proves the POSITIVE case: a turn that wrote one file carries
+// `artifactCount: 1`. The case below is the one W1H.2 left silent — a turn that
+// wrote NOTHING. `daemonRestartEvidence` reported a zero write count as
+// `artifactCount: null`, `describeRunFailureFacts` turned that null into no
+// `filesKey`, and `ChatPane` rendered no file line at all. B-04/F-07 asks the
+// alert to STATE whether files changed, and the live failed path already states
+// its own zero ("No files were changed"), so the restart path stating nothing
+// is the gap.
+//
+// The evidence that closes it survives a restart: `pre_turn_file_names_json`,
+// the file-name snapshot the chat client stores on the assistant row at send
+// time. This spec writes that snapshot the way a client does, drives a turn
+// that writes nothing, SIGKILLs the daemon under it, restarts, and reads the
+// row back through the messages API.
+describe('a restart-interrupted turn that wrote nothing still states its file-change state', () => {
+  test('a zero-write turn reads back as a measured zero, not as silence', async () => {
+    const suite = await createSmokeSuite('dialog-daemon-restart-zero-writes');
+
+    await suite.with.toolsDev(async (context) => {
+      const fakeAgents = await createFakeAgentRuntimes({
+        root: join(suite.scratchDir, 'fake-agents'),
+        runtimeIds: ['claude'],
+      });
+
+      await requestJson<{ config: Record<string, unknown> }>(context.webUrl, '/api/app-config', {
+        body: {
+          agentCliEnv: { claude: fakeAgents.claude.env },
+          agentId: 'claude',
+          agentModels: { claude: { model: 'default', reasoning: 'default' } },
+          designSystemId: null,
+          onboardingCompleted: true,
+          skillId: null,
+          telemetry: { artifactManifest: true, content: false, metrics: false },
+        },
+        method: 'PUT',
+      });
+
+      const project = await requestJson<ProjectResponse>(context.webUrl, '/api/projects', {
+        body: {
+          designSystemId: null,
+          id: randomUUID(),
+          metadata: { kind: 'prototype' },
+          name: 'Daemon restart zero-write project',
+          pendingPrompt: null,
+          skillId: null,
+        },
+      });
+      const projectId = project.project.id;
+      const conversationId = project.conversationId;
+
+      await delay(PRE_RUN_SETTLE_MS);
+
+      // The pre-turn snapshot, taken the way the chat client takes it: the
+      // project's file names at send time.
+      const preTurn = await requestJson<{ files: Array<{ name: string }> }>(
+        context.webUrl,
+        `/api/projects/${encodeURIComponent(projectId)}/files`,
+      );
+      const preTurnFileNames = preTurn.files.map((file) => file.name);
+
+      const startedAt = Date.now();
+      const userMessageId = `user-restart-zero-${startedAt}`;
+      const assistantMessageId = `assistant-restart-zero-${startedAt}`;
+      await saveMessage(context.webUrl, projectId, conversationId, {
+        content: HELD_NO_WRITE_PROMPT,
+        createdAt: startedAt,
+        id: userMessageId,
+        role: 'user',
+      });
+      await saveMessage(context.webUrl, projectId, conversationId, {
+        agentId: 'claude',
+        agentName: 'Claude',
+        content: '',
+        createdAt: startedAt,
+        events: [],
+        id: assistantMessageId,
+        preTurnFileNames,
+        role: 'assistant',
+        runStatus: 'running',
+        sessionMode: 'design',
+        startedAt,
+      });
+
+      const { runId } = await startRun(context.webUrl, {
+        agentId: 'claude',
+        assistantMessageId,
+        clientRequestId: `req-restart-zero-${startedAt}`,
+        conversationId,
+        designSystemId: null,
+        message: HELD_NO_WRITE_PROMPT,
+        model: 'default',
+        projectId,
+        reasoning: 'default',
+        sessionMode: 'design',
+        skillId: null,
+      });
+
+      // Precondition: the run really reached the agent, so it has a durable
+      // event log that records no write — the shape under test — rather than no
+      // log at all.
+      await waitForRunStatus(context.webUrl, runId, 'running', { timeoutMs: WRITE_OBSERVED_TIMEOUT_MS });
+
+      // Precondition: the turn wrote nothing, so a stated zero is the truth.
+      const duringRun = await requestJson<{ files: Array<{ name: string }> }>(
+        context.webUrl,
+        `/api/projects/${encodeURIComponent(projectId)}/files`,
+      );
+      expect(
+        duringRun.files.map((file) => file.name).sort(),
+        'precondition: the held turn wrote no file',
+      ).toEqual([...preTurnFileNames].sort());
+
+      const daemonPid = context.start.daemon?.pid;
+      expect(daemonPid, 'the suite exposes the daemon pid to kill').toBeTypeOf('number');
+      process.kill(-(daemonPid as number), 'SIGKILL');
+
+      const daemonUrl = `http://127.0.0.1:${context.runtime.daemonPort}/api/health`;
+      const goneDeadline = Date.now() + DAEMON_GONE_TIMEOUT_MS;
+      let daemonGone = false;
+      while (Date.now() < goneDeadline && !daemonGone) {
+        daemonGone = await fetch(daemonUrl).then(() => false, () => true);
+        if (!daemonGone) await delay(250);
+      }
+      expect(daemonGone, 'precondition: the killed daemon stopped answering').toBe(true);
+
+      const restart = await context.restart();
+
+      const deadline = Date.now() + RECONCILED_TIMEOUT_MS;
+      let assistant: E2eChatMessage | undefined;
+      let stored: StoredStatusEvent | null = null;
+      while (Date.now() < deadline) {
+        assistant = (await listMessages(restart.webUrl, projectId, conversationId))
+          .find((message) => message.id === assistantMessageId);
+        stored = lastErrorEvent(assistant);
+        if (assistant?.runStatus === 'failed' && stored) break;
+        await delay(1000);
+      }
+
+      expect(
+        assistant?.runStatus,
+        'startup reconciliation fails the run the restart interrupted',
+      ).toBe('failed');
+      expect(stored, 'the reconciled message carries an error event').toBeTruthy();
+      expect(stored?.code).toBe('DAEMON_RESTARTED');
+      expect(
+        stored?.fileChangeState,
+        'the alert is told the files are unchanged rather than left to say nothing',
+      ).toBe('unchanged');
+      expect(
+        stored?.artifactCount,
+        'a measured zero travels as the number it is, exactly as the live failed path sends its own zero',
+      ).toBe(0);
+    }, {
       skipFatalLogCheck: true,
     });
   }, 300_000);

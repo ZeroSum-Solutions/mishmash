@@ -11,6 +11,12 @@ import {
   reconcileDurableRunTerminals,
 } from '../../src/runtimes/run-terminal-reconciliation.js';
 
+// W1I.2: one run clock the file-change cases share. The interval a restart can
+// still defend is the run's own `createdAt` and the last durable timestamp it
+// left behind — not "now", which is when the NEXT daemon happened to boot.
+const RESTART_RUN_STARTED_AT = 1_700_000_000_000;
+const RESTART_RUN_LAST_DURABLE_AT = RESTART_RUN_STARTED_AT + 5_000;
+
 describe('durable run terminal reconciliation', () => {
   let tmpDir: string;
   let db: Database.Database;
@@ -236,12 +242,37 @@ describe('durable run terminal reconciliation', () => {
     ).toBe(1);
   });
 
-  // The same path with no durable event log behind it. There is then no
-  // evidence of a step or of a write, and the stored event must stay silent
-  // about both rather than repeat `state.json`'s `artifactCount: 0` — which is
-  // a default, not a measurement — as "no files were changed".
-  it('omits the step and the file count when no durable event log survives', async () => {
-    const runId = 'run-restart-no-log';
+  // W1I.2 red spec — the daemon half.
+  //
+  // SUPERSEDES the W1H.2 case "omits the step and the file count when no
+  // durable event log survives", which pinned the opposite behaviour: it
+  // asserted the stored event carries NO `artifactCount` whenever the event log
+  // records no write. That silence narrowed B-04/F-07 — "every failed run names
+  // its cause, its step, and whether files changed" — to positive-write cases,
+  // because `describeRunFailureFacts` (`apps/web/src/runtime/
+  // run-failure-facts.ts`) turns a missing count into no file line at all. The
+  // live failed path never did that: it persists a measured `artifactCount: 0`
+  // and the alert reads "No files were changed."
+  //
+  // The step half of that case is unchanged and still asserted below: with no
+  // event log there is no defensible stage, and the alert renders no step line.
+  //
+  // What replaces the file half is a decision from durable evidence the restart
+  // survives: `pre_turn_file_names_json`, the file-name snapshot the chat client
+  // takes at send time (`ProjectView.tsx`), compared against the project's files
+  // now, bounded by the run's own interval the way 1H.4 bounds delivery
+  // attribution. A measured zero is stated as a zero; only evidence that cannot
+  // decide is reported as an explicit unknown.
+
+  /** The pre-turn snapshot the chat client stores on the assistant row. */
+  function seedAssistantRow(id: string, runId: string, preTurnFileNames?: string[]): void {
+    db.prepare(
+      `INSERT INTO messages (id, run_id, run_status, events_json, pre_turn_file_names_json)
+       VALUES (?, ?, 'running', '[]', ?)`,
+    ).run(id, runId, preTurnFileNames ? JSON.stringify(preTurnFileNames) : null);
+  }
+
+  function seedInterruptedRun(runId: string, assistantMessageId: string, eventLines?: string[]): void {
     const runDir = path.join(tmpDir, runId);
     fs.mkdirSync(runDir, { recursive: true });
     fs.writeFileSync(path.join(runDir, 'state.json'), JSON.stringify({
@@ -249,30 +280,128 @@ describe('durable run terminal reconciliation', () => {
       id: runId,
       projectId: 'p1',
       conversationId: 'c1',
-      assistantMessageId: 'm-restart-bare',
+      assistantMessageId,
       agentId: 'claude',
       status: 'running',
-      createdAt: 1_000,
-      updatedAt: 2_000,
+      createdAt: RESTART_RUN_STARTED_AT,
+      updatedAt: RESTART_RUN_LAST_DURABLE_AT,
+      // `durableRunState` (runtimes/runs.ts) coerces a missing count to 0, so a
+      // run that never finalized always journals `artifactCount: 0`. The stored
+      // event must never repeat that guess as fact; every count below is
+      // measured from the project tree instead.
       artifactCount: 0,
     }));
-    db.prepare(
-      `INSERT INTO messages (id, run_id, run_status, events_json)
-       VALUES (?, ?, 'running', '[]')`,
-    ).run('m-restart-bare', runId);
+    if (eventLines) {
+      fs.writeFileSync(path.join(runDir, 'events.jsonl'), eventLines.join('\n') + '\n');
+    }
+  }
+
+  function storedErrorEvent(messageId: string): Record<string, unknown> | undefined {
+    const row = db.prepare(
+      `SELECT events_json AS eventsJson FROM messages WHERE id = ?`,
+    ).get(messageId) as { eventsJson: string };
+    return (JSON.parse(row.eventsJson) as Array<Record<string, unknown>>).at(-1);
+  }
+
+  it('states a measured zero when the pre-turn list proves the run wrote nothing', async () => {
+    const runId = 'run-restart-zero-writes';
+    seedInterruptedRun(runId, 'm-restart-zero', [
+      JSON.stringify({ id: 1, event: 'start', data: { runId }, timestamp: RESTART_RUN_STARTED_AT }),
+      JSON.stringify({
+        id: 2,
+        event: 'agent',
+        data: { type: 'text_delta', text: 'thinking' },
+        timestamp: RESTART_RUN_LAST_DURABLE_AT,
+      }),
+    ]);
+    seedAssistantRow('m-restart-zero', runId, ['index.html']);
 
     await reconcileDurableRunTerminals({
       analytics: { capture: vi.fn() },
       appVersion: '0.15.1',
       db,
+      // The project holds exactly the file the pre-turn snapshot recorded, and
+      // it was last written before this run began: nothing here is this run's.
+      listProjectFiles: async () => [
+        { name: 'index.html', type: 'file', mtime: RESTART_RUN_STARTED_AT - 60_000 },
+      ],
       reportLangfuse: vi.fn(),
       runsLogDir: tmpDir,
     });
 
-    const row = db.prepare(
-      `SELECT events_json AS eventsJson FROM messages WHERE id = 'm-restart-bare'`,
-    ).get() as { eventsJson: string };
-    const stored = (JSON.parse(row.eventsJson) as Array<Record<string, unknown>>).at(-1);
+    const stored = storedErrorEvent('m-restart-zero');
+    expect(stored, 'the cause is still named').toMatchObject({
+      kind: 'status',
+      label: 'error',
+      code: 'DAEMON_RESTARTED',
+      failureCategory: 'process_exit',
+      failureDetail: 'interrupted',
+    });
+    expect(
+      stored?.artifactCount,
+      'a measured zero is a measurement, and is stated as the live failed path states it',
+    ).toBe(0);
+    expect(
+      stored?.fileChangeState,
+      'the alert is told the files are unchanged, not left to say nothing',
+    ).toBe('unchanged');
+  });
+
+  it('counts a file the pre-turn list did not hold as the run own write', async () => {
+    const runId = 'run-restart-measured-write';
+    seedInterruptedRun(runId, 'm-restart-measured', [
+      JSON.stringify({ id: 1, event: 'start', data: { runId }, timestamp: RESTART_RUN_STARTED_AT }),
+      JSON.stringify({
+        id: 2,
+        event: 'agent',
+        data: { type: 'text_delta', text: 'thinking' },
+        timestamp: RESTART_RUN_LAST_DURABLE_AT,
+      }),
+    ]);
+    seedAssistantRow('m-restart-measured', runId, ['index.html']);
+
+    await reconcileDurableRunTerminals({
+      analytics: { capture: vi.fn() },
+      appVersion: '0.15.1',
+      db,
+      listProjectFiles: async () => [
+        { name: 'index.html', type: 'file', mtime: RESTART_RUN_STARTED_AT - 60_000 },
+        // Absent from the pre-turn snapshot and written inside the run's own
+        // interval: this run put it there.
+        { name: 'about.html', type: 'file', mtime: RESTART_RUN_STARTED_AT + 500 },
+        // A LATER turn's file. Outside the run's interval, so it is not this
+        // run's write however new it is.
+        { name: 'later.html', type: 'file', mtime: RESTART_RUN_LAST_DURABLE_AT + 600_000 },
+      ],
+      reportLangfuse: vi.fn(),
+      runsLogDir: tmpDir,
+    });
+
+    const stored = storedErrorEvent('m-restart-measured');
+    expect(
+      stored?.artifactCount,
+      'the count is the files the run interval and the pre-turn list agree it wrote',
+    ).toBe(1);
+    expect(stored?.fileChangeState).toBe('changed');
+  });
+
+  it('states an explicit unknown when neither the event log nor a pre-turn list survives', async () => {
+    const runId = 'run-restart-no-evidence';
+    seedInterruptedRun(runId, 'm-restart-bare');
+    seedAssistantRow('m-restart-bare', runId);
+
+    await reconcileDurableRunTerminals({
+      analytics: { capture: vi.fn() },
+      appVersion: '0.15.1',
+      db,
+      listProjectFiles: async () => [
+        { name: 'index.html', type: 'file', mtime: RESTART_RUN_STARTED_AT + 500 },
+      ],
+      reportLangfuse: vi.fn(),
+      runsLogDir: tmpDir,
+    });
+
+    const stored = storedErrorEvent('m-restart-bare');
     expect(stored, 'the cause is still named without an event log').toMatchObject({
       kind: 'status',
       label: 'error',
@@ -280,10 +409,14 @@ describe('durable run terminal reconciliation', () => {
       failureCategory: 'process_exit',
       failureDetail: 'interrupted',
     });
+    // Unchanged from W1H.2: no event log, no defensible step.
     expect(stored).not.toHaveProperty('failureStage');
+    // With no baseline to compare against, a count would be a guess. The state
+    // is stated as unknown instead, which the alert renders as its own sentence
+    // — silence is what B-04/F-07 forbids.
     expect(stored).not.toHaveProperty('artifactCount');
+    expect(stored?.fileChangeState).toBe('unknown');
   });
-
   // The guard on the enrichment, not the enrichment itself. A run can still be
   // carrying `errorCode: 'DAEMON_RESTARTED'` from an earlier boot while having
   // gone on to reach a NON-failed terminal. Enriching that row would append an

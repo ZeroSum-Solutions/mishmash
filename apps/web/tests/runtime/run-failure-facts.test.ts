@@ -47,6 +47,30 @@ describe('describeRunFailureFacts', () => {
     expect(facts.filesKey).toBeNull();
   });
 
+  // W1I.2 — the typed unknown. A restart-interrupted run whose surviving
+  // evidence cannot decide whether files changed carries an explicit
+  // `fileChangeState: 'unknown'` instead of an absent count, and the alert owes
+  // the user its own sentence rather than silence.
+  it('names the unknown state when the daemon could not tell whether files changed', () => {
+    const facts = describeRunFailureFacts({ fileChangeState: 'unknown' });
+    expect(facts.artifactCount).toBeNull();
+    expect(facts.filesKey).toBe('chat.runError.filesUnknown');
+  });
+
+  it('keeps a measured count over the state word that accompanies it', () => {
+    // A measurement is the richer fact: 'unchanged'/'changed' only says which
+    // way it fell. The count still picks the sentence, exactly as it does for a
+    // live failure that carries no state word at all.
+    expect(describeRunFailureFacts({ artifactCount: 0, fileChangeState: 'unchanged' }).filesKey)
+      .toBe('chat.runError.filesUnchanged');
+    expect(describeRunFailureFacts({ artifactCount: 3, fileChangeState: 'changed' }).filesKey)
+      .toBe('chat.runError.filesChangedMany');
+  });
+
+  it('rejects a file-change state it does not know', () => {
+    expect(describeRunFailureFacts({ fileChangeState: 'not_a_state' }).filesKey).toBeNull();
+  });
+
   it('rejects a stage or count it cannot trust', () => {
     expect(describeRunFailureFacts({ failureStage: 'not_a_stage' }).stepKey).toBeNull();
     expect(describeRunFailureFacts({ artifactCount: -1 }).filesKey).toBeNull();
