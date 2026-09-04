@@ -1,3 +1,9 @@
+import {
+  createApiError,
+  type ApiErrorCode,
+  type ChatSseEvent,
+  type SseEventPayload,
+} from '@open-design/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -160,7 +166,7 @@ describe('streamViaDaemon', () => {
       if (url === '/api/runs') return jsonResponse({ runId: 'run-1' });
       if (url === '/api/runs/run-1/events') {
         return sseResponse(
-          'event: error\ndata: {"code":"AGENT_EXECUTION_FAILED","message":"upstream drop","retryable":true}\n\n' +
+          daemonErrorFrame('AGENT_EXECUTION_FAILED', 'upstream drop', true) +
           'event: end\ndata: {"code":0,"status":"succeeded"}\n\n',
         );
       }
@@ -196,7 +202,7 @@ describe('streamViaDaemon', () => {
       if (url === '/api/runs') return jsonResponse({ runId: 'run-1' });
       if (url === '/api/runs/run-1/events') {
         return sseResponse(
-          'event: error\ndata: {"code":"AGENT_EXECUTION_FAILED","message":"Agent completed without producing any output.","retryable":true}\n\n' +
+          daemonErrorFrame('AGENT_EXECUTION_FAILED', 'Agent completed without producing any output.', true) +
           'event: agent\ndata: {"type":"tool_use","id":"call_1","name":"write","input":{"filePath":"index.html"}}\n\n' +
           'event: agent\ndata: {"type":"tool_result","toolUseId":"call_1","content":"Wrote file successfully.","isError":false}\n\n' +
           'event: agent\ndata: {"type":"text_delta","delta":"Landing page saved to `index.html`."}\n\n' +
@@ -230,15 +236,8 @@ describe('streamViaDaemon', () => {
       if (url === '/api/runs') return jsonResponse({ runId: 'run-1' });
       if (url === '/api/runs/run-1/events') {
         return sseResponse(
-          [
-            'event: error',
-            'data: {"code":"AGENT_EXECUTION_FAILED","message":"intentional fake codex failure","retryable":false}',
-            '',
-            'event: end',
-            'data: {"code":1,"status":"failed"}',
-            '',
-            '',
-          ].join('\n'),
+          daemonErrorFrame('AGENT_EXECUTION_FAILED', 'intentional fake codex failure', false) +
+          'event: end\ndata: {"code":1,"status":"failed"}\n\n',
         );
       }
       if (url === '/api/runs/run-1') {
@@ -269,9 +268,7 @@ describe('streamViaDaemon', () => {
       const url = String(input);
       if (url === '/api/runs') return jsonResponse({ runId: 'run-1' });
       if (url === '/api/runs/run-1/events') {
-        return sseResponse(
-          'event: error\ndata: {"code":"AGENT_EXECUTION_FAILED","message":"upstream drop","retryable":true}\n\n',
-        );
+        return sseResponse(daemonErrorFrame('AGENT_EXECUTION_FAILED', 'upstream drop', true));
       }
       if (url === '/api/runs/run-1') {
         return jsonResponse({ id: 'run-1', status: 'failed', resumable: true });
@@ -303,8 +300,17 @@ describe('streamViaDaemon', () => {
   // When that read answers nothing, the client has learned nothing — so the
   // frame stays provisional and the error is reported UNADJUDICATED, leaving the
   // row active for the run-scoped follow to resolve.
-  const PROVISIONAL_ERROR_FRAME =
-    'event: error\ndata: {"code":"AGENT_EXECUTION_FAILED","message":"upstream drop on the first attempt","retryable":true}\n\n';
+  //
+  // The frame is the daemon's own payload shape, and it reaches the client the
+  // only way it can: the daemon's bytes followed by a transport failure. The
+  // daemon always pairs `error` with a terminal `end` before it closes a client
+  // (`apps/daemon/src/runtimes/runs.ts`), so a completed response carrying one
+  // without the other is a wire it cannot write.
+  const PROVISIONAL_ERROR_FRAME = daemonErrorFrame(
+    'AGENT_EXECUTION_FAILED',
+    'upstream drop on the first attempt',
+    true,
+  );
 
   it('leaves an error frame provisional when the post-stream status read answers nothing', async () => {
     const handlers = createDaemonHandlers();
@@ -312,8 +318,11 @@ describe('streamViaDaemon', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === '/api/runs') return jsonResponse({ runId: 'run-1' });
-      // The stream closes after the error frame with no terminal `end`.
-      if (url === '/api/runs/run-1/events') return sseResponse(PROVISIONAL_ERROR_FRAME);
+      // The stream fails at the transport after the error frame, so no terminal
+      // `end` ever arrives.
+      if (url === '/api/runs/run-1/events') {
+        return sseTransportFailureResponse(PROVISIONAL_ERROR_FRAME);
+      }
       // The one read the fallback makes is answered by nothing at all.
       if (url === '/api/runs/run-1') return new Response('down', { status: 503 });
       throw new Error(`unexpected fetch ${url}`);
@@ -349,7 +358,9 @@ describe('streamViaDaemon', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === '/api/runs') return jsonResponse({ runId: 'run-1' });
-      if (url === '/api/runs/run-1/events') return sseResponse(PROVISIONAL_ERROR_FRAME);
+      if (url === '/api/runs/run-1/events') {
+        return sseTransportFailureResponse(PROVISIONAL_ERROR_FRAME);
+      }
       if (url === '/api/runs/run-1') {
         return jsonResponse({ id: 'run-1', status: 'failed', failureStage: 'agent' });
       }
@@ -385,7 +396,7 @@ describe('streamViaDaemon', () => {
       if (url === '/api/runs') return jsonResponse({ runId: 'run-1' });
       if (url.startsWith('/api/runs/run-1/events')) {
         streamRequests += 1;
-        if (streamRequests === 1) return sseResponse(PROVISIONAL_ERROR_FRAME);
+        if (streamRequests === 1) return sseTransportFailureResponse(PROVISIONAL_ERROR_FRAME);
         return sseResponse('event: end\ndata: {"code":0,"status":"succeeded"}\n\n');
       }
       if (url === '/api/runs/run-1') return jsonResponse({ id: 'run-1', status: 'running' });
@@ -2391,6 +2402,23 @@ function createDaemonHandlers() {
   };
 }
 
+/**
+ * A daemon `error` frame, built from the contract the daemon itself serializes.
+ *
+ * `SseEventPayload<ChatSseEvent, 'error'>` is `SseErrorPayload` — `{ message,
+ * error }` with the classified `ApiError` nested, which is exactly what
+ * `createSseErrorPayload` writes in `apps/daemon/src/server.ts`. Writing the
+ * frame from the typed payload means a fixture cannot drift into the flat
+ * `{ code, message, retryable }` body the daemon has never emitted.
+ */
+function daemonErrorFrame(code: ApiErrorCode, message: string, retryable: boolean): string {
+  const payload: SseEventPayload<ChatSseEvent, 'error'> = {
+    message,
+    error: createApiError(code, message, { retryable }),
+  };
+  return `event: error\ndata: ${JSON.stringify(payload)}\n\n`;
+}
+
 function sseResponse(text: string): Response {
   const encoder = new TextEncoder();
   return new Response(
@@ -2405,6 +2433,56 @@ function sseResponse(text: string): Response {
       headers: { 'content-type': 'text/event-stream' },
     },
   );
+}
+
+/**
+ * The daemon's bytes, and then the connection fails mid-body.
+ *
+ * The daemon pairs every `error` frame with a terminal `end` and closes the
+ * client at its single terminal choke point (`apps/daemon/src/runtimes/runs.ts`),
+ * so a COMPLETED response carrying an `error` and no `end` is a wire it cannot
+ * write. Only an intervening transport failure produces one, and that is what
+ * this models: the body's `ReadableStream` errors once the frame has been read,
+ * which is what `consumeDaemonRun`'s `reader.read()` catch meets on a dropped
+ * connection.
+ *
+ * `cancel()` is the one thing wrapped. `consumeDaemonRun` calls it inside a
+ * synchronous `try`/`catch` after a read failure, and `cancel()` on an ERRORED
+ * stream returns a rejected promise — so on any real transport failure that
+ * rejection escapes unhandled. That is a product wart this fixture surfaced, not
+ * one it should assert: catching it here keeps the run reporting this file's own
+ * assertions.
+ */
+function sseTransportFailureResponse(text: string): Response {
+  const encoder = new TextEncoder();
+  let delivered = false;
+  const response = new Response(
+    new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (!delivered) {
+          delivered = true;
+          controller.enqueue(encoder.encode(text));
+          return;
+        }
+        controller.error(new TypeError('network error'));
+      },
+    }),
+    {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    },
+  );
+  const body = response.body as ReadableStream<Uint8Array>;
+  const openReader = body.getReader.bind(body);
+  Object.defineProperty(body, 'getReader', {
+    value: () => {
+      const reader = openReader();
+      const cancel = reader.cancel.bind(reader);
+      reader.cancel = (reason?: unknown) => cancel(reason).catch(() => undefined);
+      return reader;
+    },
+  });
+  return response;
 }
 
 function jsonResponse(value: unknown): Response {

@@ -12,8 +12,11 @@ import { createFakeAgentRuntimes } from '@/playwright/fake-agents';
 import type { FakeAgentId } from '@/playwright/fake-agents';
 import { APP_LOADING_TEXT } from '@/playwright/loading';
 import { openNewProjectModal as openNewProjectModalFromProjects } from '@/playwright/rail';
+import { cutRunStreamAfterDaemonErrorFrame } from '@/playwright/sse-transport-cut';
+import type { RunStreamTransportCut } from '@/playwright/sse-transport-cut';
 import { expect, test } from '@/playwright/suite';
 import { T } from '@/timeouts';
+import type { ChatSseEvent, SseEventPayload } from '@open-design/contracts';
 import type { Locator, Page, Response } from '@playwright/test';
 
 const STORAGE_KEY = 'mishmash:config';
@@ -27,6 +30,13 @@ const RUN_PROMPT = 'Create a delayed deterministic smoke artifact';
 // a permanently running, content-less row — cannot pass as a build that
 // retracted the failure.
 const RUN_ANSWER = 'I recovered the delayed reasoning path';
+// W1L.1: the prompt whose FIRST ATTEMPT really fails on the daemon. The fake
+// runtime exits 0 with no output, so the daemon's empty-output guard emits its
+// own retryable `error` frame and `decideSafeRunRetry` restarts the SAME run
+// (`apps/daemon/src/run-retry-policy.ts`); the second attempt answers with
+// `RUN_ANSWER` after 1.2s, so the run reaches `succeeded` on its own. This is
+// what lets a spec observe a real daemon error frame on a run that succeeds.
+const RETRY_RUN_PROMPT = 'Spend one empty attempt then deliver the delayed artifact';
 // W1J.4: what the user types while the run is unresolved. A draft is required
 // to see the pause at all — the Send button is also disabled on an empty
 // composer, so an empty one cannot tell "paused" from "nothing to send".
@@ -649,30 +659,35 @@ test('[P0] a Side Chat stream failure with no run verdict never paints the failu
 // it was. When that read answers nothing, the client has learned nothing, and
 // the frame is still provisional.
 //
-// Forced at the transport, in the wire shape the daemon really produces:
-//   1. the run's event stream is answered with a `start` frame and an `error`
-//      frame and then closed, with no `end` — the connection dropping between a
-//      failed first attempt and its retry;
-//   2. every status probe for that run is answered 503 for a window that covers
+// Driven on the real wire, never written into a fixture:
+//   1. the run's FIRST ATTEMPT really fails, on the daemon's own fail-once/retry
+//      flow (`RETRY_RUN_PROMPT`), so the `error` frame the client receives is the
+//      daemon's own — code, message and classification included;
+//   2. the events connection is then cut mid-body, right after that frame, by a
+//      proxy that forwards the daemon's bytes and destroys the client socket
+//      (`@/playwright/sse-transport-cut`). The daemon always pairs `error` with a
+//      terminal `end` before it closes a client
+//      (`apps/daemon/src/runtimes/runs.ts`), so an intervening transport failure
+//      is the ONLY wire that can deliver one without the other;
+//   3. every status probe for that run is answered 503 for a window that covers
 //      the fallback's single read and the follow's first probes, so the client
 //      cannot pair the frame with a terminal;
-//   3. the run itself goes on to succeed, on the same fake runtime the cases
-//      above use.
+//   4. the run itself goes on to succeed, on its own retry.
 // The continuous card watcher then fails on the FIRST sighting rather than on a
 // count at the end, because a card painted and retracted still violates the bar.
 
-test('[P0] a live provisional error frame with no readable status never paints the failure card', async ({ page }) => {
+test('[P0] a live provisional error frame with no readable status never paints the failure card', async ({ page, toolsDev }) => {
   await page.goto('/');
   await createProject(page, 'Live provisional error frame checking smoke');
   await expectWorkspaceReady(page);
 
   const { conversationId, projectId } = await currentProjectContext(page);
-  const frameHold = serveProvisionalErrorFrame(page);
+  const frameHold = await cutRunStreamAfterDaemonErrorFrame(page, { daemonUrl: toolsDev.url.daemon() });
   const probeHold = holdRunStatusProbes(page, STATUS_OUTAGE_WINDOW_MS, () => frameHold.runId);
   await watchRunFailureCard(page);
 
   frameHold.arm();
-  const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
+  const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), RETRY_RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
   const failureAlert = runErrorCard(page);
@@ -696,7 +711,7 @@ test('[P0] a live provisional error frame with no readable status never paints t
   await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
 
   await waitForDaemonRunStatus(page, runId, 'succeeded');
-  expect(frameHold.served, 'the error frame must have reached the client').toBeGreaterThanOrEqual(1);
+  expectDaemonErrorFrameWasCut(frameHold);
   await expect
     .poll(() => probeHold.refused, { intervals: [250], timeout: 60_000 })
     .toBeGreaterThanOrEqual(1);
@@ -717,7 +732,7 @@ test('[P0] a live provisional error frame with no readable status never paints t
   await expect(failureAlert).toHaveCount(0);
 });
 
-test('[P0] a Side Chat provisional error frame with no readable status never paints the failure card', async ({ page }) => {
+test('[P0] a Side Chat provisional error frame with no readable status never paints the failure card', async ({ page, toolsDev }) => {
   await page.goto('/');
   await createProject(page, 'Side chat provisional error frame checking smoke');
   await expectWorkspaceReady(page);
@@ -729,14 +744,14 @@ test('[P0] a Side Chat provisional error frame with no readable status never pai
   const sideChat = page.getByTestId('side-chat-tab');
   await expect(sideChat, 'the persisted side chat tab must mount').toBeVisible({ timeout: T.long });
 
-  const frameHold = serveProvisionalErrorFrame(page);
+  const frameHold = await cutRunStreamAfterDaemonErrorFrame(page, { daemonUrl: toolsDev.url.daemon() });
   const probeHold = holdRunStatusProbes(page, STATUS_OUTAGE_WINDOW_MS, () => frameHold.runId);
   // Installed after the last navigation, so the watcher lives in the document
   // that receives the run.
   await watchRunFailureCard(page);
 
   frameHold.arm();
-  const runResponse = await sendPrompt(page, await composerInside(page, sideChat), RUN_PROMPT);
+  const runResponse = await sendPrompt(page, await composerInside(page, sideChat), RETRY_RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
   const failureAlert = runErrorCard(sideChat);
@@ -758,7 +773,7 @@ test('[P0] a Side Chat provisional error frame with no readable status never pai
   await expect(checkingNotice).toContainText(CHECKING_NOTICE_TEXT);
 
   await waitForDaemonRunStatus(page, runId, 'succeeded');
-  expect(frameHold.served, 'the error frame must have reached the client').toBeGreaterThanOrEqual(1);
+  expectDaemonErrorFrameWasCut(frameHold);
   await expect
     .poll(() => probeHold.refused, { intervals: [250], timeout: 60_000 })
     .toBeGreaterThanOrEqual(1);
@@ -786,12 +801,15 @@ test('[P0] a Side Chat provisional error frame with no readable status never pai
 // back until the daemon has adjudicated the run, so the read the fallback makes
 // is the terminal one rather than a race with the still-running turn.
 
-test('[P0] a provisional error frame paired with a readable failed status keeps the daemon card', async ({ page }) => {
+test('[P0] a provisional error frame paired with a readable failed status keeps the daemon card', async ({ page, toolsDev }) => {
   await page.goto('/');
   await createProject(page, 'Live adjudicated error frame smoke');
   await expectWorkspaceReady(page);
 
-  const frameHold = serveProvisionalErrorFrame(page, { untilRunIsTerminal: true });
+  const frameHold = await cutRunStreamAfterDaemonErrorFrame(page, {
+    daemonUrl: toolsDev.url.daemon(),
+    holdUntilRunIsTerminal: true,
+  });
   await watchRunFailureCard(page);
 
   frameHold.arm();
@@ -805,8 +823,32 @@ test('[P0] a provisional error frame paired with a readable failed status keeps 
     'the adjudicated card must carry the daemon facts, not a client-invented one',
   ).toHaveCount(1);
   await expect(runCheckingNotice(page), 'a verdict ends the checking state').toHaveCount(0);
-  expect(frameHold.served, 'the error frame must have reached the client').toBeGreaterThanOrEqual(1);
+  expectDaemonErrorFrameWasCut(frameHold);
 });
+
+/**
+ * The frame the client received really was the daemon's, and it really did
+ * arrive without its terminal.
+ *
+ * `apps/daemon/src/runtimes/runs.ts` pairs every `error` with an `end` before it
+ * closes a client, so this assertion is what separates a real transport cut from
+ * a fixture that fulfils a body the daemon cannot write. The payload shape is
+ * the daemon's own (`{ message, error: { code, … } }`), so a frame invented at
+ * the flat `{ code, message }` shape fails here rather than passing quietly.
+ */
+function expectDaemonErrorFrameWasCut(cut: RunStreamTransportCut): void {
+  expect(cut.cuts, 'the daemon error frame must have reached the client').toBeGreaterThanOrEqual(1);
+  const frame = cut.cutFrame ?? '';
+  expect(frame, 'the cut bytes must end at the daemon error frame').toContain('event: error');
+  expect(frame, 'the cut must land before any terminal frame').not.toContain('event: end');
+  const payload = JSON.parse(
+    frame.slice(frame.lastIndexOf('event: error')).split('\ndata: ')[1]?.split('\n')[0] ?? 'null',
+  ) as SseEventPayload<ChatSseEvent, 'error'> | null;
+  expect(
+    payload?.error?.code,
+    'the frame must carry the daemon own error code, not a hand-written body',
+  ).toBeTruthy();
+}
 
 // The other half of the rule: a verdict is still a verdict. Nothing is
 // intercepted in these two — the fake runtime fails the way the team daemon
@@ -1119,13 +1161,13 @@ test('[P0] a Side Chat create the daemon never received reads as a run that coul
 // W1K.3 — the last outage shape in this class: the client's own RECONNECT
 // BUDGET ran out.
 //
-// Every case above holds a stream that never opens (503) or one that speaks
-// once and closes (the provisional error frame). One shape is left, and it is
-// the only one in the transport that used to emit a run status the daemon never
-// declared: the run's event stream keeps ANSWERING — 200, with nothing in it —
-// so `consumeDaemonRun` reconnects, five times, and then gives up
-// (`providers/daemon.ts`). Its post-stream status read answers nothing either,
-// so the client has learned nothing at all about the run.
+// Every case above holds a stream that never opens (503) or one the transport
+// cuts after a daemon frame. One shape is left, and it is the only one in the
+// transport that used to emit a run status the daemon never declared: the run's
+// event stream keeps FAILING at the connection, so `consumeDaemonRun` reconnects,
+// five times, and then gives up (`providers/daemon.ts`). Its post-stream status
+// read answers nothing either, so the client has learned nothing at all about
+// the run.
 //
 // The reattach path was taught that in W1J.1: the row keeps the last status the
 // DAEMON declared and the pane says so in neutral words. The live path was not.
@@ -1137,9 +1179,9 @@ test('[P0] a Side Chat create the daemon never received reads as a run that coul
 //
 // Forced at the transport, in the wire shape a dropped connection really
 // produces:
-//   1. the run's event stream is answered 200 with an EMPTY body, from the very
-//      first request, so every round is a connection that opened and closed
-//      with no progress and each one spends a reconnect;
+//   1. every reattach the client makes for this run is met with a real
+//      connection reset, from the very first request, so each round is a
+//      connection that never carried anything and each one spends a reconnect;
 //   2. that answer, and every status probe for the same run, are held until the
 //      spec releases them, so the client cannot learn the run's verdict from a
 //      later reattach while the assertions run;
@@ -1168,7 +1210,7 @@ test('[P0] a live reconnect-budget disconnect keeps the row active and its check
   const checkingNotice = runCheckingNotice(page);
 
   await expect
-    .poll(() => outage.served, { intervals: [100], timeout: T.long })
+    .poll(() => outage.connectionResets, { intervals: [100], timeout: T.long })
     .toBeGreaterThanOrEqual(RECONNECT_BUDGET);
   await expect(
     checkingNotice,
@@ -1256,7 +1298,7 @@ test('[P0] a Side Chat reconnect-budget disconnect keeps the row active and its 
   const checkingNotice = runCheckingNotice(sideChat);
 
   await expect
-    .poll(() => outage.served, { intervals: [100], timeout: T.long })
+    .poll(() => outage.connectionResets, { intervals: [100], timeout: T.long })
     .toBeGreaterThanOrEqual(RECONNECT_BUDGET);
   await expect(
     checkingNotice,
@@ -1320,8 +1362,8 @@ interface RunOutageHold {
   arm: () => void;
   /** Let the real event stream and the real status probes through again. */
   release: () => void;
-  /** How many empty event-stream responses have been served. */
-  readonly served: number;
+  /** How many reattach attempts have been met with a connection reset. */
+  readonly connectionResets: number;
   /** How many status probes for the held run have been answered 503. */
   readonly probesRefused: number;
   /** The run whose stream is held, known from the first held request. */
@@ -1331,12 +1373,14 @@ interface RunOutageHold {
 /**
  * The wire shape of an exhausted reconnect budget, held open until released.
  *
- * The run's event stream is answered 200 with an EMPTY body rather than refused.
- * `consumeDaemonRun` reads that as a connection that opened and closed with no
- * progress, so it reconnects — `RECONNECT_BUDGET` times — and only then asks the
- * run's status and reports the generic disconnect. A 503 would short-circuit at
- * the non-OK branch instead and never reach the budget at all, which is why the
- * sibling cases above cannot see this path.
+ * Every reattach the client makes for this run is met with a real connection
+ * reset rather than a body the daemon would have to have written: `route.abort`
+ * fails the request at the transport, which is what a dropped connection does
+ * and what `consumeDaemonRun`'s own `catch` around `fetch` counts as one spent
+ * reconnect. After `RECONNECT_BUDGET` of them the loop is out of budget, so it
+ * asks the run's status and reports the generic disconnect. A 503 would
+ * short-circuit at the non-OK branch instead and never reach the budget at all,
+ * which is why the sibling cases above cannot see this path.
  *
  * The same outage covers `GET /api/runs/:id` for that run, because one network
  * fault takes both: a connection that cannot carry the event stream cannot carry
@@ -1358,7 +1402,7 @@ function holdRunOutage(page: Page): RunOutageHold {
   let armed = false;
   let released = false;
   let heldRunId: string | null = null;
-  let served = 0;
+  let connectionResets = 0;
   let probesRefused = 0;
   void page.route(
     (url) => /^\/api\/runs\/[^/]+\/events$/.test(url.pathname),
@@ -1369,12 +1413,8 @@ function holdRunOutage(page: Page): RunOutageHold {
         return;
       }
       heldRunId = heldRunId ?? requestedRunId;
-      served += 1;
-      await route.fulfill({
-        status: 200,
-        headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },
-        body: '',
-      });
+      connectionResets += 1;
+      await route.abort('connectionreset');
     },
   );
   void page.route(
@@ -1396,8 +1436,8 @@ function holdRunOutage(page: Page): RunOutageHold {
     release: () => {
       released = true;
     },
-    get served() {
-      return served;
+    get connectionResets() {
+      return connectionResets;
     },
     get probesRefused() {
       return probesRefused;
@@ -1729,96 +1769,6 @@ function holdConversationRead(page: Page, isArmed: () => boolean): { release: ()
     },
   );
   return { release: () => release() };
-}
-
-interface ProvisionalErrorFrameHold {
-  /** Start answering the next run event stream this page opens with the frame. */
-  arm: () => void;
-  /** How many times the frame has been served. */
-  readonly served: number;
-  /** The run whose stream is held, known from the first held request. */
-  readonly runId: string | null;
-}
-
-/**
- * The wire shape of a failed FIRST ATTEMPT whose retry is still in flight: the
- * daemon's own `error` frame, and then the connection ends with no terminal
- * `end` frame. `providers/daemon.ts` caches this frame rather than surfacing it
- * and asks the run's status which of the two it was.
- *
- * The body is written here rather than emitted by a failing fake agent, because
- * the fault this case pins is on the CLIENT side of the wire: the stream ends
- * with no `end` frame and the status read answers nothing. The payload shape is
- * the daemon's own — `SseErrorPayload` from `@open-design/contracts` — but the
- * daemon's exact error text for a first-attempt failure is NOT pinned by this
- * test. A stronger form would drive the fake-agent held-run/retry fixture in
- * `e2e/lib/fake-agents.ts` and intercept only the stream close; do that if a
- * later track needs the daemon's real frame payload covered here.
- */
-const PROVISIONAL_ERROR_FRAME =
-  'event: start\ndata: {"bin":"fake-agent"}\n\n'
-  + 'event: error\ndata: {"code":"AGENT_EXECUTION_FAILED",'
-  + '"message":"upstream drop on the first attempt","retryable":true}\n\n';
-
-/**
- * Answer the held run's event stream with that frame and close it.
- *
- * The daemon's real stream is replaced rather than refused, because the frame is
- * the point: this case is the one where the daemon SPOKE and the client still
- * has no terminal to pair the words with. The run itself is untouched and runs
- * to its own terminal on the daemon.
- *
- * With `untilRunIsTerminal`, the frame is withheld until the daemon has
- * adjudicated the run, so the fallback's status read lands on that terminal
- * instead of racing the still-running turn. The status is read through
- * `page.request`, which does not pass through `page.route`.
- *
- * Armed BEFORE the send, not after the create-run response, because the client
- * opens the stream the moment that response lands.
- */
-function serveProvisionalErrorFrame(
-  page: Page,
-  options: { untilRunIsTerminal?: boolean } = {},
-): ProvisionalErrorFrameHold {
-  let armed = false;
-  let heldRunId: string | null = null;
-  let served = 0;
-  void page.route(
-    (url) => /^\/api\/runs\/[^/]+\/events$/.test(url.pathname),
-    async (route) => {
-      const requestedRunId = new URL(route.request().url()).pathname.split('/')[3] ?? '';
-      if (!armed || (heldRunId !== null && requestedRunId !== heldRunId)) {
-        await route.continue();
-        return;
-      }
-      heldRunId = requestedRunId;
-      if (options.untilRunIsTerminal) {
-        await expect
-          .poll(async () => daemonRunStatus(page, requestedRunId), {
-            intervals: [250],
-            timeout: 120_000,
-          })
-          .not.toMatch(/^(queued|running)$/);
-      }
-      served += 1;
-      await route.fulfill({
-        status: 200,
-        headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },
-        body: PROVISIONAL_ERROR_FRAME,
-      });
-    },
-  );
-  return {
-    arm: () => {
-      armed = true;
-    },
-    get served() {
-      return served;
-    },
-    get runId() {
-      return heldRunId;
-    },
-  };
 }
 
 interface RunStatusProbeHold {

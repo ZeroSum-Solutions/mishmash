@@ -223,6 +223,10 @@ async function emitRun(promptText) {
     emitEmptySuccess();
     return;
   }
+  if (promptText.includes('Spend one empty attempt then deliver the delayed artifact')) {
+    await emitRetriedDelayedArtifactRun(promptText);
+    return;
+  }
   if (promptText.includes('Return a stderr-only daemon smoke failure')) {
     process.stderr.write('stderr-only daemon smoke failure from fake ' + agentId + '\\n');
     process.exitCode = 1;
@@ -919,6 +923,45 @@ function emitReportedFailure(kind) {
   process.stderr.write(message + '\\n');
   process.exitCode = 1;
   exitSoon(1);
+}
+
+// Drive the daemon's OWN fail-once/retry flow, so a spec can observe the frame
+// the daemon really emits for a failed first attempt of a run that then
+// succeeds.
+//
+// Attempt 1 reports the upstream 503 the shared service-failure fixture uses.
+// The daemon classifies that as \`upstream_unavailable\`/\`upstream_5xx\` at
+// \`first_token_wait\`, emits its own retryable \`error\` frame, and
+// \`decideSafeRunRetry\` (apps/daemon/src/run-retry-policy.ts) restarts the SAME
+// run because no output, tool call or artifact was committed. Attempt 2 finds
+// the marker attempt 1 left in the project directory and answers normally, so
+// the run reaches \`succeeded\` with a real daemon error frame already on its
+// event stream. Nothing here writes an SSE body: the frame, its code and its
+// classification are all the daemon's.
+//
+// The marker is a dotfile in the project directory — the one place both
+// attempts of a run share and no other run touches.
+async function emitRetriedDelayedArtifactRun(promptText) {
+  const dir = projectDir(promptText);
+  await mkdir(dir, { recursive: true });
+  let firstAttempt = false;
+  try {
+    await writeFileFs(join(dir, '.fake-agent-attempt-spent'), 'spent', { flag: 'wx' });
+    firstAttempt = true;
+  } catch {
+    firstAttempt = false;
+  }
+  if (firstAttempt) {
+    emitServiceFailure(503);
+    return;
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  const heading = 'Delayed Daemon Smoke';
+  const html = '<!doctype html><html><body><main><h1>' + heading + '</h1><p>Generated after a delayed daemon turn.</p></main></body></html>';
+  const artifact = '<artifact identifier="delayed-daemon-smoke" type="text/html" title="' + heading + '">' + html + '</artifact>';
+  emitSuccess('I recovered the delayed reasoning path and will persist the artifact now.\\n\\n' + artifact, false, true);
+  process.exitCode = 0;
+  exitSoon(0);
 }
 
 function emitEmptySuccess() {
