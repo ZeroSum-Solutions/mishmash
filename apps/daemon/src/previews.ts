@@ -184,7 +184,8 @@ export function createPreviewService() {
     if (pid) opts.onSpawn?.(pid);
 
     // The stored URL is the daemon machine's own address; the HTTP surface
-    // re-announces it on the host each request arrived on.
+    // re-announces it, and the front fact beside it, on the host each request
+    // arrived on.
     const url = loopbackPreviewUrl(port);
     const deadline = Date.now() + readyTimeoutMs;
     while (Date.now() < deadline) {
@@ -217,6 +218,11 @@ export function createPreviewService() {
           pid,
           port,
           url,
+          // True of the stored URL, which is the child's own address on this
+          // machine: nothing stands between that caller and the child, so the
+          // child serves its own root-absolute assets. Every announcement
+          // re-derives it for the front the request arrived on.
+          frontServesRootAbsoluteAssets: true,
           command,
           cwd,
           startedAt: Date.now(),

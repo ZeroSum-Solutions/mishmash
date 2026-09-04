@@ -1792,6 +1792,13 @@ that URL works for anyone who can reach Open Design rather than only on the
 daemon's own machine (issue #158). \`open\` launches the preview in Google
 Chrome on the DAEMON's machine, for a default browser that refuses loopback.
 
+Each announced preview carries \`frontServesRootAbsoluteAssets\`. It is false
+when a separate web front stands between the caller and the daemon — the Next
+dev server under \`tools-dev\`, which forwards only /api, /artifacts and
+/frames — because a preview page's root-absolute \`/_nuxt/entry.js\` then never
+reaches the daemon and the page half-renders. The web panel says the same in
+words.
+
 Flags:
   --project     Required project id.
   --port        start: the port the command will listen on (also passed as $PORT).

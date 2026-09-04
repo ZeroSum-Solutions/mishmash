@@ -1547,6 +1547,12 @@ function usePreviewServers(projectId: string, enabled: boolean): PreviewInfo[] {
  * itself (decision D-14), so the link works for anyone who can open this
  * workspace, not only for someone sitting at the daemon's machine.
  *
+ * With one thing the link cannot do on its own, which the announcement
+ * reports: a front that is not the daemon does not forward the preview page's
+ * root-absolute assets to it (`PreviewInfo.frontServesRootAbsoluteAssets`).
+ * That is the development front, and the panel names it there instead of
+ * repeating the claim that the link simply works.
+ *
  * "Open in Chrome" asks the daemon to launch the preview on its own machine,
  * for a host whose default browser refuses loopback. It is therefore offered
  * only when the announced URL is that machine's loopback address — the
@@ -1566,6 +1572,13 @@ function DfPreviewServerOffer({
   // nothing: `openPreviewInChrome` resolves null on a 502 or a transport
   // failure, and the reader still has the link right next to the button.
   const [failedFor, setFailedFor] = useState<string | null>(null);
+  // The daemon answers a preview page's root-absolute assets only when it is
+  // the front the browser is on, and it says which in every announcement. One
+  // response is read through one front, so the whole offer takes the answer
+  // from the previews it is showing rather than claiming a shared link works.
+  const frontServesRootAbsoluteAssets = previews.every(
+    (preview) => preview.frontServesRootAbsoluteAssets !== false,
+  );
   if (previews.length === 0) {
     if (!needsServerRoot) return null;
     return (
@@ -1581,7 +1594,13 @@ function DfPreviewServerOffer({
         <p className="df-preview-server-why">{t('designFiles.previewServer.rootAbsolute')}</p>
       ) : null}
       <div className="df-preview-server-title">{t('designFiles.previewServer.title')}</div>
-      <p className="df-preview-server-hint">{t('designFiles.previewServer.sharedLink')}</p>
+      {frontServesRootAbsoluteAssets ? (
+        <p className="df-preview-server-hint">{t('designFiles.previewServer.sharedLink')}</p>
+      ) : (
+        <p className="df-preview-server-front-limit" role="status">
+          {t('designFiles.previewServer.frontRootAssets')}
+        </p>
+      )}
       {previews.map((preview) => (
         <div className="df-preview-server-row" key={preview.id}>
           <a

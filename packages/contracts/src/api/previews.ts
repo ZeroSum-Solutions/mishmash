@@ -27,7 +27,9 @@ export type PreviewInfo = {
    * daemon serves the web app itself — but under `tools-dev` the front is the
    * Next dev server, which forwards only `/api`, `/artifacts` and `/frames`
    * (`apps/web/next.config.ts`), so a preview page's `/_nuxt/entry.js` stops
-   * at Next.
+   * at Next. Which of the two this announcement was read through is
+   * `frontServesRootAbsoluteAssets` below, so a surface offering the link does
+   * not have to guess.
    *
    * And one thing it means for who may see it. A preview runs somebody else's
    * program on the daemon's own origin, so the daemon confines it: a request a
@@ -39,6 +41,22 @@ export type PreviewInfo = {
    * the audience decision D-14 fixed: authenticated Open Design sessions.
    */
   url: string;
+  /**
+   * Whether the front THIS announcement was read through will hand the daemon
+   * a root-absolute request from the preview page — the third shape above,
+   * answered instead of left to the reader.
+   *
+   * The daemon answers `/_nuxt/entry.js` for the preview page that referred
+   * it, but only for requests that reach the daemon at all. It is the front
+   * when it serves the web app itself, which is the shipped runtime, and a
+   * reverse proxy that forwards the whole origin keeps it so. Under
+   * `tools-dev` the front is the Next dev server, which forwards `/api`,
+   * `/artifacts` and `/frames` and nothing else, so a root-absolute asset
+   * stops there and the page half-renders. `false` says exactly that, and a
+   * surface offering the link must say it too rather than present the link as
+   * unconditionally working.
+   */
+  frontServesRootAbsoluteAssets: boolean;
   command: string[];
   cwd: string;
   startedAt: number;

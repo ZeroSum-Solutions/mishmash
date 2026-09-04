@@ -3471,6 +3471,7 @@ export interface Dict {
   'designFiles.previewServer.openInChrome': string;
   'designFiles.previewServer.sharedLink': string;
   'designFiles.previewServer.openFailed': string;
+  'designFiles.previewServer.frontRootAssets': string;
   'designFiles.previewServer.rootAbsolute': string;
   'designFiles.previewServer.none': string;
   'designFiles.modified': string;
