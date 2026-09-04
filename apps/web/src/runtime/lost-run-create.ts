@@ -1,6 +1,7 @@
 import type { ChatRunStatusResponse } from '@open-design/contracts';
 import type { ChatMessage } from '../types';
 import { RUN_FAILURE_RECHECK_INTERVAL_MS } from './run-failure-reconcile';
+import type { RunCheckState } from './run-failure-reconcile';
 
 /**
  * The two ids a client owns for a run whose create response it never read.
@@ -78,7 +79,37 @@ export const LOST_RUN_CREATE_PROBE_INTERVAL_MS = RUN_FAILURE_RECHECK_INTERVAL_MS
  */
 export const LOST_RUN_CREATE_MAX_PROBES = 3;
 
-export type LostRunCreateStep = 'adopt' | 'probe' | 'abandon';
+/**
+ * How many CONSECUTIVE probes may fail to READ the daemon before the lookup
+ * says so.
+ *
+ * A different bound for a different question, and a LOOSER one. The bound above
+ * spends probes that read BOTH surfaces and ends in a verdict, so it can only be
+ * spent by a conclusive read. This one counts probes where NEITHER read
+ * answered, and ends in a WORDING. Reaching it changes no outcome at all: no
+ * failure, no Retry, the lookup keeps probing, and the row it holds keeps
+ * preventing a second send. It only lets the notice say what is true — the
+ * daemon is not answering — and offer the manual re-check that goes with that
+ * sentence.
+ *
+ * The looser test is what makes the sentence honest. A probe that read one
+ * surface and not the other has ruled nothing out, so it still may not spend
+ * the bound above — but the daemon plainly answered it, and a daemon that is
+ * answering must never be described as silent. So any read that lands resets
+ * this count, and only a probe that read nothing at all raises it. Three at
+ * `LOST_RUN_CREATE_PROBE_INTERVAL_MS` is about six seconds of a daemon
+ * answering nothing at all.
+ *
+ * Short, because this state has no other recovery. The row the lookup is
+ * holding disables the composer's Send (`SEND_PAUSED_UNRESOLVED_RUN_KEY`), and
+ * until the notice turns over there is no action on screen to take. The
+ * follow's much longer `RUN_FAILURE_RECHECK_MAX_MISSES` is not the comparison:
+ * it already knows its run id, and it has a fallback conversation read behind
+ * its probes.
+ */
+export const LOST_RUN_CREATE_MAX_UNANSWERED_PROBES = 3;
+
+export type LostRunCreateStep = 'adopt' | 'probe' | 'unreachable' | 'abandon';
 
 /**
  * What a client does next with a create response it lost, given what the lookup
@@ -97,15 +128,56 @@ export type LostRunCreateStep = 'adopt' | 'probe' | 'abandon';
  * which is the B-02 double-send hazard. That means an unbroken outage keeps the
  * neutral checking state indefinitely — the honest state, because the client
  * cannot tell whether the turn is running.
+ *
+ * Honest is not the same as usable, which is what `'unreachable'` is for. The
+ * state above holds the composer, so an outage that never breaks leaves a
+ * paused conversation behind a notice that claims to be checking and offers
+ * nothing. Past `LOST_RUN_CREATE_MAX_UNANSWERED_PROBES` consecutive probes that
+ * read NOTHING the client says the daemon is not answering instead — the same
+ * neutral outcome, kept probing, with the manual re-check the wording implies.
+ * `probes` still decides nothing while `answered` is false, so no run of
+ * unanswered probes can reach `'abandon'`.
+ *
+ * `unanswered` is therefore counted on a looser test than `answered`: the
+ * caller resets it whenever either read lands, because that is the question the
+ * wording asks. See `LOST_RUN_CREATE_MAX_UNANSWERED_PROBES`.
  */
 export function nextLostRunCreateStep(
   runId: string | null,
   probes: number,
   answered: boolean,
+  unanswered: number,
 ): LostRunCreateStep {
   if (runId) return 'adopt';
-  if (!answered) return 'probe';
+  if (!answered) {
+    return unanswered < LOST_RUN_CREATE_MAX_UNANSWERED_PROBES ? 'probe' : 'unreachable';
+  }
   return probes < LOST_RUN_CREATE_MAX_PROBES ? 'probe' : 'abandon';
+}
+
+/**
+ * The lookup's own checking notice, told whether the daemon is answering it.
+ *
+ * `runCheckWithDaemonReachability` cannot say this for a lookup: it matches a
+ * check by run id, and a lookup still LOOKING for one has none. The check that
+ * belongs to a lookup is the one with NO run id carrying this client's own
+ * assistant row — the same pair `answersRunCheck` picks the notice's row by.
+ *
+ * INVARIANT: this wording follows the DAEMON's answers and nothing else. It
+ * turns on only where `nextLostRunCreateStep` says `'unreachable'`, and off
+ * again on the first probe that reads ANYTHING at all, however long the lookup
+ * then takes. Returns `current` unchanged when it belongs to another row or
+ * already says the right thing, so a lookup can call it on every probe.
+ */
+export function lostRunCreateCheckWithDaemonReachability<T extends RunCheckState>(
+  current: T | null,
+  assistantMessageId: string,
+  reachable: boolean,
+): T | null {
+  if (!current || current.runId !== null) return current;
+  if (current.assistantMessageId !== assistantMessageId) return current;
+  if (current.unreachable !== reachable) return current;
+  return { ...current, unreachable: !reachable };
 }
 
 /**

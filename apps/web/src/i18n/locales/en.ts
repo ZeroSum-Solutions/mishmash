@@ -3013,6 +3013,8 @@ export const en: Dict = {
   'fileViewer.speakerNotesPlaceholder': 'Add speaker notes for this slide...',
   'fileViewer.previewAssetBlockedTitle': 'Preview asset blocked',
   'fileViewer.previewAssetBlockedDetail': '{filePath} could not be loaded. Replace external symlinks with files inside this project.',
+  'fileViewer.previewNoRenderTitle': 'Preview did not render',
+  'fileViewer.previewNoRenderDetail': 'This preview loaded but never reported anything laid out on screen. Open the file to check its markup, or refresh the preview.',
   'fileViewer.presenterReset': 'Reset',
   'fileViewer.present': 'Present',
   'fileViewer.presentInTab': 'In this tab',

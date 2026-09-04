@@ -23,7 +23,8 @@ import {
 import { useAnalytics } from '../analytics/provider';
 import { exportErrorCode } from '../analytics/export-error-code';
 import { deployErrorCode } from '../analytics/deploy-error-code';
-import { trackIframeLoad, trackPreviewPaint } from '../observability/iframe-error';
+import { trackPreviewPaint } from '../observability/iframe-error';
+import { useCommittedDocument } from './preview-committed-document';
 import {
   trackArtifactExportResult,
   trackArtifactDeployResult,
@@ -155,6 +156,7 @@ import {
   shouldUrlLoadHtmlPreview,
   type UrlLoadDecision,
 } from './file-viewer-render-mode';
+import { PreviewNoRenderNotice } from './PreviewNoRenderNotice';
 import {
   assetBaseDirFor,
   collectPreviewAssetPaths,
@@ -1538,6 +1540,11 @@ export function LiveArtifactViewer({
   }, [liveArtifactViewportKey]);
   const [previewBodyRef, previewBodySize] = usePreviewCanvasSize<HTMLDivElement>();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // Driven by the preview watchdog: true only while the document currently in
+  // the frame has failed to prove it rendered. Cleared when a new document
+  // starts being watched and when one proves it painted, so a late paint or a
+  // reload into a working document takes the notice away.
+  const [previewDidNotRender, setPreviewDidNotRender] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [refreshSuccess, setRefreshSuccess] = useState<string | null>(null);
@@ -1690,32 +1697,37 @@ export function LiveArtifactViewer({
     [projectId, liveArtifact.artifactId, reloadKey],
   );
   const previewScale = zoom / 100;
+  // The host's half of the watchdog's two-phase epoch: whether this frame is
+  // already holding the document the watchdog is about to be installed for.
+  // Declared here, above that effect, so a changed `previewUrl` has cleared it
+  // before the effect reads it.
+  const previewDocument = useCommittedDocument(previewUrl);
 
   // Instrument the live-artifact iframe so failed loads — usually a
   // missing artifact file or a stuck `od://` resolver — surface in
   // PostHog. iframe load errors don't propagate to window.error, so
   // observability/install.ts cannot catch them globally.
   //
-  // `load` is the strongest evidence this transport can give, and that is a
-  // property of the response, not an oversight: the daemon serves the
-  // live-artifact preview under "script-src 'none'" and a CSP sandbox without
-  // allow-scripts (`setLiveArtifactPreviewHeaders` in
-  // apps/daemon/src/live-artifacts/http-helpers.ts), so no
-  // `od:preview-content-size` producer can run inside it, and the iframe's own
-  // sandbox attribute cannot re-grant what the CSP sandbox removed. Asking for
-  // a report here would file a false `preview-error` on every healthy preview.
-  // Admitting a producer means relaxing that header first; the two are pinned
-  // together in apps/daemon/tests/preview-paint-report-bridge.test.ts.
+  // This transport proves it painted like every other visible preview. The
+  // daemon serves the live-artifact response under
+  // "script-src 'nonce-<per response>'" with `allow-scripts` in its CSP
+  // sandbox and `allow-same-origin` still withheld
+  // (`setLiveArtifactPreviewHeaders` in
+  // apps/daemon/src/live-artifacts/http-helpers.ts), and injects one producer
+  // under that nonce — so the watchdog can ask, and the frame's own `load`
+  // event, which fires for a 200 that rendered nothing, is no longer what
+  // settles it.
   useEffect(() => {
     if (mode !== 'preview') return undefined;
     const node = iframeRef.current;
     if (!node) return undefined;
-    return trackIframeLoad({
+    return trackPreviewPaint({
       iframe: node,
       surface: 'live_artifact_preview',
-      settlesOn: 'load',
       artifactId: liveArtifact.artifactId,
       projectId,
+      documentCommitted: previewDocument.committed,
+      onPaintState: (state) => setPreviewDidNotRender(state.status === 'unproven'),
     });
   }, [mode, previewUrl, liveArtifact.artifactId, projectId]);
 
@@ -1996,11 +2008,13 @@ export function LiveArtifactViewer({
                   title={liveArtifact.title}
                   sandbox="allow-scripts allow-popups allow-downloads"
                   src={previewUrl}
+                  onLoad={previewDocument.noteLoaded}
                 />
               </PreviewDrawOverlay>
             </div>
           </div>
         </div>
+        {mode === 'preview' && previewDidNotRender ? <PreviewNoRenderNotice /> : null}
         {mode !== 'preview' && loading ? (
           <div className="viewer-empty">{t('fileViewer.loading')}</div>
         ) : mode === 'code' ? (
@@ -6339,6 +6353,10 @@ function HtmlViewer({
   const [routingSource, setRoutingSource] = useState<string | null>(liveHtml ?? null);
   const [serverPoweredPreviewRequired, setServerPoweredPreviewRequired] = useState(false);
   const [previewAssetWarning, setPreviewAssetWarning] = useState<PreviewAssetWarning | null>(null);
+  // Driven by the preview watchdog: true only while the document currently in
+  // the visible transport has failed to prove it rendered. Cleared when a new
+  // document starts being watched and when one proves it painted.
+  const [previewDidNotRender, setPreviewDidNotRender] = useState(false);
   const [previewInlineStatus, setPreviewInlineStatus] = useState<PreviewInlineStatus>(
     IDLE_PREVIEW_INLINE_STATUS,
   );
@@ -8055,6 +8073,11 @@ function HtmlViewer({
     : useLazySrcDocTransport
       ? lazySrcDocTransport
       : srcDoc;
+  // What the srcDoc transport has actually loaded. `trackPreviewPaint` tells the
+  // frame nothing until a `load` proves the incoming document is in it, so a
+  // warm transport — this frame stays materialised while hidden behind URL-load
+  // — needs the host to say "the document you want is already here".
+  const srcDocDocument = useCommittedDocument(srcDocTransportContent);
   // A preview that never paints has to become a record, not just a blank
   // canvas. Instrument the srcDoc frame only while it is the visible transport
   // AND carries the real artifact — the lazy shell and the redirect-blocked
@@ -8071,6 +8094,8 @@ function HtmlViewer({
       iframe: node,
       surface: 'file_viewer_preview',
       projectId,
+      documentCommitted: srcDocDocument.committed,
+      onPaintState: (state) => setPreviewDidNotRender(state.status === 'unproven'),
     });
   }, [mode, useUrlLoadPreview, srcDoc, srcDocTransportContent, projectId, srcDocTransportResetKey]);
   // Materialize the srcDoc iframe the first time it actually becomes the active
@@ -8110,6 +8135,9 @@ function HtmlViewer({
     ? POWERED_PREVIEW_SANDBOX
     : 'allow-scripts allow-downloads';
   const urlFrameAllow = usePoweredPreview ? POWERED_PREVIEW_ALLOW : undefined;
+  // Same statement for the URL frame, which is kept alive behind srcDoc rather
+  // than parked, so it too can be warm when the watchdog is installed.
+  const urlDocument = useCommittedDocument(urlFrameSrc);
   // The URL-load transport is a visible preview too, and until now it was the
   // one nobody watched. Watched only while URL-load is the ACTIVE transport and
   // the frame holds a real preview URL: parked at `about:blank` (kept warm
@@ -8117,32 +8145,30 @@ function HtmlViewer({
   // report, and watching one would manufacture a timeout for a preview nobody
   // is looking at.
   //
-  // The two URLs this frame can carry get different evidence. The project raw
+  // Both URLs this frame can carry answer to the same evidence. The project raw
   // route is same-origin and requested with `PREVIEW_BRIDGE_QUERY`, so the
-  // daemon injects the `od:preview-content-size` producer and the document can
-  // prove it ran. The powered copy is deliberately cross-origin: the daemon
-  // injects the same producer into that response, but nothing here has
-  // confirmed the report crosses back from an isolated origin under this
-  // sandbox, and a report that never arrives is indistinguishable from a
-  // preview that never ran. Until a staged run shows otherwise, the powered
-  // frame takes the weaker `load` evidence rather than a watchdog that would
-  // file a false timeout on every healthy powered preview.
+  // daemon injects the paint-report producer. The powered copy is deliberately
+  // cross-origin, and the daemon injects the same producer into that response;
+  // e2e/ui/powered-preview-paint-report.test.ts proves in a real browser that
+  // the report crosses back from that isolated origin under this sandbox, which
+  // is what retired the `load` exemption this frame used to carry.
+  //
+  // One powered document still cannot report: HTML over
+  // HTML_PREVIEW_BRIDGE_MAX_BYTES, which the daemon serves without a producer
+  // (apps/daemon/src/routes/project/index.ts). That preview reaches the named
+  // failure rather than a quiet `load` — the host genuinely has no evidence it
+  // rendered, and saying so is honest where claiming health is not.
   useEffect(() => {
     if (mode !== 'preview') return undefined;
     if (!useUrlLoadPreview || urlFrameSrc === 'about:blank') return undefined;
     if (!urlPreviewFrameNode) return undefined;
-    return usePoweredPreview
-      ? trackIframeLoad({
-          iframe: urlPreviewFrameNode,
-          surface: 'file_viewer_preview_powered',
-          settlesOn: 'load',
-          projectId,
-        })
-      : trackPreviewPaint({
-          iframe: urlPreviewFrameNode,
-          surface: 'file_viewer_preview_url_load',
-          projectId,
-        });
+    return trackPreviewPaint({
+      iframe: urlPreviewFrameNode,
+      surface: usePoweredPreview ? 'file_viewer_preview_powered' : 'file_viewer_preview_url_load',
+      projectId,
+      documentCommitted: urlDocument.committed,
+      onPaintState: (state) => setPreviewDidNotRender(state.status === 'unproven'),
+    });
   }, [mode, useUrlLoadPreview, usePoweredPreview, urlFrameSrc, urlPreviewFrameNode, projectId]);
   const activateSrcDocTransport = useCallback((target: HTMLIFrameElement | null = srcDocPreviewIframeRef.current) => {
     if (!canActivateSrcDocTransport({
@@ -13067,6 +13093,7 @@ function HtmlViewer({
                           onLoad={() => {
                             const frame = urlPreviewIframeRef.current;
                             if (useUrlLoadPreview) iframeRef.current = frame;
+                            urlDocument.noteLoaded();
                             setUrlSelectionBridgeReady(false);
                             dcViewportRestoreAtRef.current = Date.now();
                             frame?.contentWindow?.postMessage({
@@ -13095,6 +13122,7 @@ function HtmlViewer({
                           onLoad={() => {
                             const frame = urlPreviewIframeRef.current;
                             if (useUrlLoadPreview) iframeRef.current = frame;
+                            urlDocument.noteLoaded();
                             setUrlSelectionBridgeReady(false);
                             dcViewportRestoreAtRef.current = Date.now();
                             frame?.contentWindow?.postMessage({
@@ -13122,6 +13150,7 @@ function HtmlViewer({
                         onLoad={() => {
                           const frame = srcDocPreviewIframeRef.current;
                           if (!useUrlLoadPreview) iframeRef.current = frame;
+                          srcDocDocument.noteLoaded();
                           // Reset the activation dedupe exactly ONCE per
                           // freshly mounted iframe DOM node, never on the
                           // subsequent load events that the same node
@@ -13193,6 +13222,20 @@ function HtmlViewer({
                           : t('fileViewer.previewAssetsIncompleteDetail')}
                       </span>
                     </div>
+                  ) : null}
+                  {/*
+                    Last in the yield order: every banner above names something
+                    specific about this render — a file the daemon refused, a pass
+                    that ran out of budget — and either is a better answer to "why
+                    is it blank" than this one, which only reports that nothing
+                    was laid out. It is the banner for a blank canvas nothing else
+                    explains. (The runtime-script notice that once shared this
+                    slot was removed by 2H.4: the daemon serves such scripts now.)
+                  */}
+                  {previewDidNotRender
+                    && !previewAssetWarning
+                    && !previewInlineStatus.timedOut ? (
+                    <PreviewNoRenderNotice />
                   ) : null}
                 </div>
               </div>
