@@ -3166,6 +3166,231 @@ describe('ProjectView daemon cleanup', () => {
     });
   });
 
+  // W1J.1: the generic disconnect on the REATTACH path is a checking state too.
+  // `consumeDaemonRun` reports `failed` to `onRunStatus` and only then mints the
+  // disconnect error (`providers/daemon.ts`), so both halves are driven here in
+  // that order — a pane that only stops painting the pane error would still hold
+  // a `failed` row the daemon never declared, and `ChatPane` keys the checking
+  // notice to an ACTIVE row.
+  it('treats a reattach generic disconnect as a checking state, never a pane failure', async () => {
+    const runCreatedAt = Date.now();
+    const { GENERIC_DAEMON_DISCONNECT_MESSAGE, GENERIC_DAEMON_DISCONNECT_CODE } = await import(
+      '../../src/providers/daemon'
+    );
+    const genericDisconnect = await createGenericDisconnectError();
+
+    listConversations.mockResolvedValue([{ id: 'conv-1', title: 'Conversation' }]);
+    listMessages.mockResolvedValue([
+      {
+        id: 'msg-reattach-checking',
+        role: 'assistant',
+        content: '',
+        createdAt: runCreatedAt,
+        startedAt: runCreatedAt,
+        runId: 'run-reattach-checking',
+        runStatus: 'running',
+        producedFiles: [],
+      },
+    ]);
+    fetchPreviewComments.mockResolvedValue([]);
+    loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
+    fetchProjectFiles.mockResolvedValue([]);
+    fetchProjectDesignSystemPackageAudit.mockResolvedValue(null);
+    fetchLiveArtifacts.mockResolvedValue([]);
+    fetchSkill.mockResolvedValue(null);
+    fetchDesignSystem.mockResolvedValue(null);
+    getTemplate.mockResolvedValue(null);
+    listActiveChatRuns.mockResolvedValue([]);
+    fetchChatRunStatus.mockResolvedValue({
+      id: 'run-reattach-checking',
+      status: 'running',
+      createdAt: runCreatedAt,
+      updatedAt: runCreatedAt + 1,
+      exitCode: null,
+      signal: null,
+    });
+    let reattachAttempts = 0;
+    reattachDaemonRun.mockImplementation(async (options: {
+      onRunStatus?: (status: string) => void;
+      handlers: { onError: (error: Error) => Promise<void> };
+    }) => {
+      reattachAttempts += 1;
+      if (reattachAttempts > 1) return;
+      // The transport's own order: its inferred terminal, then the error it
+      // minted out of its broken connection.
+      options.onRunStatus?.('failed');
+      await options.handlers.onError(genericDisconnect);
+    });
+
+    render(
+      <ProjectView
+        project={{ id: 'project-reattach-checking', name: 'Project', skillId: null, designSystemId: null } as never}
+        routeFileName={null}
+        config={{ mode: 'daemon', agentId: 'agent-1', notifications: undefined, agentModels: {} } as never}
+        agents={[{ id: 'agent-1', name: 'OpenCode', models: [] } as never]}
+        skills={[]}
+        designTemplates={[]}
+        designSystems={[]}
+        daemonLive
+        onModeChange={() => {}}
+        onAgentChange={() => {}}
+        onAgentModelChange={() => {}}
+        onRefreshAgents={() => {}}
+        onOpenSettings={() => {}}
+        onBack={() => {}}
+        onClearPendingPrompt={() => {}}
+        onTouchProject={() => {}}
+        onProjectChange={() => {}}
+        onProjectsRefresh={() => {}}
+      />,
+    );
+
+    await waitFor(() => {
+      const runCheck = chatPaneSpy.mock.calls.at(-1)?.[0]?.runCheck as
+        | { runId: string }
+        | null
+        | undefined;
+      expect(runCheck?.runId).toBe('run-reattach-checking');
+    });
+    expect(
+      chatPaneSpy.mock.calls.some((call) => call[0]?.error === GENERIC_DAEMON_DISCONNECT_MESSAGE),
+      'a reconnect-budget disconnect must never reach the pane as a run failure',
+    ).toBe(false);
+    expect(
+      saveMessage.mock.calls.some((call) =>
+        (call[2]?.events ?? []).some(
+          (event: { kind?: string; label?: string; code?: string; detail?: string }) =>
+            event.kind === 'status' &&
+            event.label === 'error' &&
+            (event.code === GENERIC_DAEMON_DISCONNECT_CODE ||
+              event.detail === GENERIC_DAEMON_DISCONNECT_MESSAGE),
+        ),
+      ),
+      'no error event may be written for a disconnect the daemon never adjudicated',
+    ).toBe(false);
+    // The row keeps the status the daemon last declared, so the notice has an
+    // active row to hang on and the turn still reads as working.
+    await waitFor(() => {
+      const lastSave = saveMessage.mock.calls
+        .filter((call) => call[2]?.id === 'msg-reattach-checking')
+        .at(-1);
+      expect(lastSave?.[2]?.runStatus).toBe('running');
+    });
+  });
+
+  // W1J.1: the neutral mark is the replacement recovery trigger. This row is
+  // NOT active when the disconnect lands — it is a terminal replay that already
+  // restored partial content — so neither `isActiveRunStatus` nor
+  // `shouldReplayTerminalRunMessage` can bring the next `attachRecoverableRuns`
+  // pass back to it. The `failed` row used to; the run-scoped mark does now.
+  it('re-queries an unresolved reattach from the run-scoped mark, not a failed row', async () => {
+    const runCreatedAt = Date.now();
+    const { GENERIC_DAEMON_DISCONNECT_MESSAGE, GENERIC_DAEMON_DISCONNECT_CODE } = await import(
+      '../../src/providers/daemon'
+    );
+    const genericDisconnect = await createGenericDisconnectError();
+
+    listConversations.mockResolvedValue([{ id: 'conv-1', title: 'Conversation' }]);
+    listMessages.mockResolvedValue([
+      {
+        id: 'msg-reattach-mark',
+        role: 'assistant',
+        content: '',
+        createdAt: runCreatedAt,
+        startedAt: runCreatedAt,
+        runId: 'run-reattach-mark',
+        runStatus: 'succeeded',
+        producedFiles: [],
+      },
+    ]);
+    fetchPreviewComments.mockResolvedValue([]);
+    loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
+    fetchProjectFiles.mockResolvedValue([]);
+    fetchProjectDesignSystemPackageAudit.mockResolvedValue(null);
+    fetchLiveArtifacts.mockResolvedValue([]);
+    fetchSkill.mockResolvedValue(null);
+    fetchDesignSystem.mockResolvedValue(null);
+    getTemplate.mockResolvedValue(null);
+    listActiveChatRuns.mockResolvedValue([]);
+    fetchChatRunStatus.mockResolvedValue({
+      id: 'run-reattach-mark',
+      status: 'succeeded',
+      createdAt: runCreatedAt,
+      updatedAt: runCreatedAt + 2,
+      exitCode: 0,
+      signal: null,
+    });
+    let reattachAttempts = 0;
+    reattachDaemonRun.mockImplementation(async (options: {
+      onRunStatus?: (status: string) => void;
+      handlers: {
+        onDelta: (delta: string) => void;
+        onError: (error: Error) => Promise<void>;
+        onDone: (text: string) => void;
+      };
+    }) => {
+      reattachAttempts += 1;
+      if (reattachAttempts > 1) {
+        options.handlers.onDone('recovered after the mark brought the pass back');
+        return;
+      }
+      // Partial replay, then the transport's inferred terminal and the error it
+      // minted: the row is left non-active with content, which is exactly the
+      // shape no other reattach trigger matches.
+      options.handlers.onDelta('partial replay before the connection broke');
+      options.onRunStatus?.('failed');
+      await options.handlers.onError(genericDisconnect);
+    });
+
+    render(
+      <ProjectView
+        project={{ id: 'project-reattach-mark', name: 'Project', skillId: null, designSystemId: null } as never}
+        routeFileName={null}
+        config={{ mode: 'daemon', agentId: 'agent-1', notifications: undefined, agentModels: {} } as never}
+        agents={[{ id: 'agent-1', name: 'OpenCode', models: [] } as never]}
+        skills={[]}
+        designTemplates={[]}
+        designSystems={[]}
+        daemonLive
+        onModeChange={() => {}}
+        onAgentChange={() => {}}
+        onAgentModelChange={() => {}}
+        onRefreshAgents={() => {}}
+        onOpenSettings={() => {}}
+        onBack={() => {}}
+        onClearPendingPrompt={() => {}}
+        onTouchProject={() => {}}
+        onProjectChange={() => {}}
+        onProjectsRefresh={() => {}}
+      />,
+    );
+
+    await waitFor(
+      () => {
+        expect(reattachAttempts).toBeGreaterThanOrEqual(2);
+      },
+      { timeout: 8_000 },
+    );
+    expect(
+      saveMessage.mock.calls.some((call) => call[2]?.runStatus === 'failed'),
+      'the re-query trigger must not be a failed row the daemon never declared',
+    ).toBe(false);
+    expect(
+      chatPaneSpy.mock.calls.some((call) => call[0]?.error === GENERIC_DAEMON_DISCONNECT_MESSAGE),
+      'the mark must replace the failure, not accompany it',
+    ).toBe(false);
+    expect(
+      saveMessage.mock.calls.some((call) =>
+        (call[2]?.events ?? []).some(
+          (event: { kind?: string; label?: string; code?: string }) =>
+            event.kind === 'status' &&
+            event.label === 'error' &&
+            event.code === GENERIC_DAEMON_DISCONNECT_CODE,
+        ),
+      ),
+    ).toBe(false);
+  }, 12_000);
+
   it('replays a terminally-succeeded reattach run again when the previous retry only restored partial content', async () => {
     const runCreatedAt = Date.now();
     const genericDisconnect = await createGenericDisconnectError();
