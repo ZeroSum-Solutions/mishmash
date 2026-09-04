@@ -42,9 +42,16 @@ function startRunFailureCardWatcher(key: string): void {
       sightings.push((node.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 160));
     });
   };
-  scan();
-  new MutationObserver(scan).observe(document.body, { childList: true, subtree: true });
-  window.setInterval(scan, 50);
+  // `document.body` does not exist yet when this runs as an init script, and
+  // `MutationObserver.observe(null)` throws — which would leave the tally
+  // installed but never written to, so a card could be painted and missed.
+  const observe = () => {
+    scan();
+    new MutationObserver(scan).observe(document.body, { childList: true, subtree: true });
+    window.setInterval(scan, 50);
+  };
+  if (document.body) observe();
+  else document.addEventListener('DOMContentLoaded', observe, { once: true });
 }
 
 /**

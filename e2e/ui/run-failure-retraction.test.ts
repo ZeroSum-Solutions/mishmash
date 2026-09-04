@@ -159,7 +159,9 @@ test('[P0] a dropped reattached stream shows the checking state and never the fa
   await expect
     .poll(
       async () =>
-        (await runFailureCardSightings(page)).length > 0 || (await checkingNotice.count()) > 0,
+        (await runFailureCardSightings(page)).length > 0
+        || (await failureAlert.count()) > 0
+        || (await checkingNotice.count()) > 0,
       { intervals: [250], timeout: 120_000 },
     )
     .toBe(true);
