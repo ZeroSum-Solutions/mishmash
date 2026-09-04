@@ -646,7 +646,7 @@ async function emitRelativeAssetLiveArtifactRun() {
         dataJson: { headline: 'Relative asset live artifact' },
       },
     },
-    templateHtml: '<!doctype html><html><body><main><h1>{{data.headline}}</h1><img id="relative-asset" src="assets/pic.png" alt="seeded relative asset"></main></body></html>',
+    templateHtml: '<!doctype html><html><body><main><h1>{{data.headline}}</h1><img id="relative-asset" src="assets/pic.png" alt="seeded relative asset" width="240" height="160"></main></body></html>',
     provenanceJson: {
       generatedAt: new Date().toISOString(),
       generatedBy: 'agent',

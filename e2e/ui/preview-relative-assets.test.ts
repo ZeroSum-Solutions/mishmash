@@ -42,7 +42,7 @@ const ASSET_NATURAL_WIDTH = 4;
 const DISK_PAGE_HTML =
   '<!doctype html><html><head><title>Agent written page</title></head><body><main>'
   + '<h1>Agent written page</h1>'
-  + `<img id="relative-asset" src="${RELATIVE_REF}" alt="seeded relative asset">`
+  + `<img id="relative-asset" src="${RELATIVE_REF}" alt="seeded relative asset" width="240" height="160">`
   + '</main></body></html>';
 const LIVE_ARTIFACT_PROMPT = 'Create a relative-asset Live Artifact.';
 
