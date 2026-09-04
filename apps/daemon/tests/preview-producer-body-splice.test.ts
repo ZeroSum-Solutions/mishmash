@@ -107,3 +107,28 @@ describe('the splice reads a tag as a tag', () => {
     ).toBeLessThan(genuineClose);
   });
 });
+
+describe('the splice leaves template content alone', () => {
+  it('ignores a decoy </body> written inside a template', () => {
+    // Template content is parsed into a fragment of its own, so a producer
+    // spliced there is inert markup rather than a script — and the artifact
+    // that carried the template reports as never rendered.
+    const html =
+      '<!doctype html><html><body><h1>Artifact</h1><template><section></body></section></template></body></html>';
+    const out = injectLiveArtifactPaintReporter(html, NONCE);
+
+    expect(
+      producerIndex(out),
+      'the only body close the parser reaches is the document one, after the template',
+    ).toBeGreaterThan(out.indexOf('</template>'));
+  });
+
+  it('ignores a decoy </body> inside a nested template', () => {
+    const html =
+      '<!doctype html><html><body><h1>Artifact</h1>' +
+      '<template><template></body></template></template></body></html>';
+    const out = injectLiveArtifactPaintReporter(html, NONCE);
+
+    expect(producerIndex(out)).toBeGreaterThan(out.lastIndexOf('</template>'));
+  });
+});

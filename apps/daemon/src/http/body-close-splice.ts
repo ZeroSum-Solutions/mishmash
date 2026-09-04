@@ -10,10 +10,11 @@
  * "Preview did not render" however well it rendered.
  *
  * It is a small state-aware scan, not a parser and not a regex over the whole
- * text. Three tokenizer states can hide a `</body>` from the parser — comment
- * text, raw-text/RCDATA element contents, and a quoted attribute value inside a
- * tag — so those are the three this tracks, and everything else is ordinary
- * markup.
+ * text. Four things can hide a `</body>` from the parser — comment text,
+ * raw-text/RCDATA element contents, a quoted attribute value inside a tag, and
+ * `<template>` content, which the parser puts in a separate fragment and never
+ * treats as markup for this document — so those are the four this tracks, and
+ * everything else is ordinary markup.
  *
  * When no genuine close exists the injection is appended at EOF. That is the
  * honest placement, not a guarantee of execution: a document that left the
@@ -30,11 +31,35 @@
  */
 const RAW_TEXT_ELEMENTS = 'script|style|textarea|title|xmp|iframe|noembed|noframes|noscript';
 
-/** Comment opener, a body close, a raw-text element opener, or any other tag. */
+/**
+ * Comment opener, a body close, a raw-text element opener, a template opener,
+ * or any other tag.
+ */
 const SCANNER = new RegExp(
-  `<!--|</body(?=[\\s>])|<(${RAW_TEXT_ELEMENTS})(?=[\\s/>])|</?[a-z][^\\s/>]*`,
+  `<!--|</body(?=[\\s>])|<(${RAW_TEXT_ELEMENTS})(?=[\\s/>])|<(template)(?=[\\s/>])|</?[a-z][^\\s/>]*`,
   'gi',
 );
+
+/**
+ * Index just past a `<template>`'s close tag, counting nested templates, or -1
+ * when it never closes. Its content is a separate fragment: a `</body>` in
+ * there is not this document's body close, and a script in there never runs.
+ */
+function templateEnd(html: string, from: number): number {
+  const tags = /<(\/?)template(?=[\s/>])/gi;
+  tags.lastIndex = from;
+  let depth = 1;
+  let match: RegExpExecArray | null = tags.exec(html);
+  while (match !== null) {
+    depth += match[1] === '/' ? -1 : 1;
+    if (depth === 0) {
+      const gt = html.indexOf('>', match.index);
+      return gt < 0 ? -1 : gt + 1;
+    }
+    match = tags.exec(html);
+  }
+  return -1;
+}
 
 /**
  * Index just past a tag's `>`, skipping quoted attribute values so a `</body>`
@@ -83,6 +108,12 @@ export function lastGenuineBodyCloseIndex(html: string): number {
     } else if (match[1]) {
       const end = rawTextElementEnd(html, match[1], scanner.lastIndex);
       // An unterminated raw-text element swallows everything after it.
+      if (end < 0) return last;
+      scanner.lastIndex = end;
+    } else if (match[2]) {
+      // Template content is inert markup in a fragment of its own. An
+      // unterminated one swallows the rest of the document with it.
+      const end = templateEnd(html, scanner.lastIndex);
       if (end < 0) return last;
       scanner.lastIndex = end;
     } else if (match[0].toLowerCase() === '</body') {
