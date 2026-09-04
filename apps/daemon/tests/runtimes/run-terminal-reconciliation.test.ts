@@ -146,6 +146,190 @@ describe('durable run terminal reconciliation', () => {
     expect(reportLangfuse).toHaveBeenCalledTimes(1);
   });
 
+  // W1H.2 red spec — the daemon half.
+  //
+  // A run the daemon restart interrupted is a failed run like any other, so its
+  // persisted `status:error` event owes the alert the same facts every live
+  // failure carries: the cause (`code` / `failureCategory` / `failureDetail`),
+  // the step the run reached (`failureStage`), and whether the user's files
+  // changed (`artifactCount`). Before the fix `reconcileMessages` wrote the
+  // event through `appendMessageStatusEvent`, which keeps only `label` and
+  // `detail`, so every one of those fields was dropped and `ChatPane` fell back
+  // to the generic "Task failed" with no step and no file line.
+  //
+  // The durable evidence used here is the run's own `events.jsonl`: a Write
+  // tool_use paired with a non-error tool_result, exactly the records a real
+  // Claude turn leaves, which is what `countNewArtifacts` and
+  // `inferFailureStageFromEvents` already read on the live path.
+  it('persists the cause, the step and the file-change state on an interrupted run\'s message', async () => {
+    const runId = 'run-restart-facts';
+    const runDir = path.join(tmpDir, runId);
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, 'state.json'), JSON.stringify({
+      schemaVersion: 1,
+      id: runId,
+      projectId: 'p1',
+      conversationId: 'c1',
+      assistantMessageId: 'm-restart',
+      agentId: 'claude',
+      status: 'running',
+      createdAt: 1_000,
+      updatedAt: 2_000,
+      // `durableRunState` (runtimes/runs.ts) coerces a missing count to 0, so a
+      // run that never finalized always journals `artifactCount: 0`. The stored
+      // event must not repeat that guess as fact.
+      artifactCount: 0,
+    }));
+    fs.writeFileSync(path.join(runDir, 'events.jsonl'), [
+      JSON.stringify({ id: 1, event: 'start', data: { runId } }),
+      JSON.stringify({
+        id: 2,
+        event: 'agent',
+        data: {
+          type: 'tool_use',
+          id: 'toolu-restart-1',
+          name: 'Write',
+          input: { file_path: '/projects/p1/index.html' },
+        },
+      }),
+      JSON.stringify({
+        id: 3,
+        event: 'agent',
+        data: { type: 'tool_result', toolUseId: 'toolu-restart-1', isError: false },
+      }),
+    ].join('\n') + '\n');
+    db.prepare(
+      `INSERT INTO messages (id, run_id, run_status, events_json)
+       VALUES (?, ?, 'running', '[]')`,
+    ).run('m-restart', runId);
+
+    await reconcileDurableRunTerminals({
+      analytics: { capture: vi.fn() },
+      appVersion: '0.15.1',
+      db,
+      reportLangfuse: vi.fn(),
+      runsLogDir: tmpDir,
+    });
+
+    const row = db.prepare(
+      `SELECT events_json AS eventsJson FROM messages WHERE id = 'm-restart'`,
+    ).get() as { eventsJson: string };
+    const events = JSON.parse(row.eventsJson) as Array<Record<string, unknown>>;
+    const stored = events.at(-1);
+    expect(stored, 'the reconciled message carries an error event').toMatchObject({
+      kind: 'status',
+      label: 'error',
+    });
+    expect(stored, 'the stored event names the cause the alert titles itself with')
+      .toMatchObject({
+        code: 'DAEMON_RESTARTED',
+        failureCategory: 'process_exit',
+        failureDetail: 'interrupted',
+      });
+    expect(
+      stored?.failureStage,
+      'the stored event names the step the durable event log says the run reached',
+    ).toBe('tool_execution');
+    expect(
+      stored?.artifactCount,
+      'the stored event states the files the durable event log proves the run wrote',
+    ).toBe(1);
+  });
+
+  // The same path with no durable event log behind it. There is then no
+  // evidence of a step or of a write, and the stored event must stay silent
+  // about both rather than repeat `state.json`'s `artifactCount: 0` — which is
+  // a default, not a measurement — as "no files were changed".
+  it('omits the step and the file count when no durable event log survives', async () => {
+    const runId = 'run-restart-no-log';
+    const runDir = path.join(tmpDir, runId);
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, 'state.json'), JSON.stringify({
+      schemaVersion: 1,
+      id: runId,
+      projectId: 'p1',
+      conversationId: 'c1',
+      assistantMessageId: 'm-restart-bare',
+      agentId: 'claude',
+      status: 'running',
+      createdAt: 1_000,
+      updatedAt: 2_000,
+      artifactCount: 0,
+    }));
+    db.prepare(
+      `INSERT INTO messages (id, run_id, run_status, events_json)
+       VALUES (?, ?, 'running', '[]')`,
+    ).run('m-restart-bare', runId);
+
+    await reconcileDurableRunTerminals({
+      analytics: { capture: vi.fn() },
+      appVersion: '0.15.1',
+      db,
+      reportLangfuse: vi.fn(),
+      runsLogDir: tmpDir,
+    });
+
+    const row = db.prepare(
+      `SELECT events_json AS eventsJson FROM messages WHERE id = 'm-restart-bare'`,
+    ).get() as { eventsJson: string };
+    const stored = (JSON.parse(row.eventsJson) as Array<Record<string, unknown>>).at(-1);
+    expect(stored, 'the cause is still named without an event log').toMatchObject({
+      kind: 'status',
+      label: 'error',
+      code: 'DAEMON_RESTARTED',
+      failureCategory: 'process_exit',
+      failureDetail: 'interrupted',
+    });
+    expect(stored).not.toHaveProperty('failureStage');
+    expect(stored).not.toHaveProperty('artifactCount');
+  });
+
+  // The guard on the enrichment, not the enrichment itself. A run can still be
+  // carrying `errorCode: 'DAEMON_RESTARTED'` from an earlier boot while having
+  // gone on to reach a NON-failed terminal. Enriching that row would append an
+  // error event to a turn that succeeded — the "Task failed for a turn that
+  // finished" regression the terminal-following invariants exist to prevent.
+  it('never turns a succeeded run into a failure because it once carried the restart code', async () => {
+    const runId = 'run-restart-then-succeeded';
+    const runDir = path.join(tmpDir, runId);
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, 'state.json'), JSON.stringify({
+      schemaVersion: 1,
+      id: runId,
+      projectId: 'p1',
+      conversationId: 'c1',
+      assistantMessageId: 'm-succeeded',
+      agentId: 'claude',
+      status: 'succeeded',
+      createdAt: 1_000,
+      updatedAt: 2_000,
+      errorCode: 'DAEMON_RESTARTED',
+    }));
+    db.prepare(
+      `INSERT INTO messages (id, run_id, run_status, events_json)
+       VALUES (?, ?, 'running', '[]')`,
+    ).run('m-succeeded', runId);
+
+    await reconcileDurableRunTerminals({
+      analytics: { capture: vi.fn() },
+      appVersion: '0.15.1',
+      db,
+      reportLangfuse: vi.fn(),
+      runsLogDir: tmpDir,
+    });
+
+    const row = db.prepare(
+      `SELECT run_status AS status, events_json AS eventsJson
+         FROM messages WHERE id = 'm-succeeded'`,
+    ).get() as { status: string; eventsJson: string };
+    expect(row.status, 'the row follows the run own terminal').toBe('succeeded');
+    const events = JSON.parse(row.eventsJson) as Array<Record<string, unknown>>;
+    expect(
+      events.filter((event) => event.kind === 'status' && event.label === 'error'),
+      'a succeeded run gains no error event from the restart classification',
+    ).toEqual([]);
+  });
+
   it('repairs legacy queued messages even when no state journal exists', async () => {
     db.prepare(
       `INSERT INTO messages (id, run_id, run_status, events_json)

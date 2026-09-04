@@ -62,12 +62,13 @@ that must come only from the *active* iframe additionally re-check
 `ev.source === iframeRef.current?.contentWindow`.
 
 This contract is also stated in `AGENTS.md` § "Chat UI conventions". All eight exported
-functions and all twelve disqualifier branches are covered by
-`apps/web/tests/components/file-viewer-render-mode.test.ts` (62 specs).
+functions and all eleven disqualifier branches are covered by
+`apps/web/tests/components/file-viewer-render-mode.test.ts` (71 specs).
 
-> **Two of those branches are dead.** `paletteActive` and `tweaksBridge` are declared and
-> checked but no caller ever sets them — see CANVAS-3 in `docs/KNOWN-ISSUES-CANVAS.md`. The
-> pure function is correct; nothing feeds it.
+> **Every branch now has a producer.** `tweaksBridge` is fed by `hasTweaksTemplate`, and the
+> `paletteActive` branch — which no caller ever set — was removed with the rest of the
+> palette hooks when CANVAS-3's palette half was descoped. See CANVAS-3 in
+> `docs/KNOWN-ISSUES-CANVAS.md`.
 
 ## Capturing pixels has three tiers, and only one of them works here
 

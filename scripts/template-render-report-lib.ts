@@ -126,7 +126,6 @@ export async function prepareCanvasRenderDocument(input: {
       baseHref,
       selectionBridge: true,
       editBridge: true,
-      paletteBridge: false,
       previewFocusGuard: true,
       reloadKey: 0,
     }),
