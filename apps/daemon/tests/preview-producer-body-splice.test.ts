@@ -243,14 +243,22 @@ describe('a comment ends where the tokenizer ends it', () => {
   }
 
   it('reads `--!` followed by dashes the way the tokenizer does', () => {
-    // Round-1 track audit, finding 1, which claimed `--!->` closes a comment
-    // and that leaving it out re-opens the duplication hole. It does not close
-    // one. From comment-end-bang a `-` goes to comment-end-DASH, and a `>`
-    // there is appended as data rather than ending the token
+    // Round-1 and round-2 track audits both claimed `--!->` closes a comment,
+    // round 2 on the basis that comment-end-DASH state has the same abrupt `>`
+    // close that comment-START-dash has. It does not: comment-end-dash takes
+    // `-` to comment-end state and sends EVERY OTHER character, `>` included,
+    // back into the comment state with a `-` appended
     // (https://html.spec.whatwg.org/multipage/parsing.html#comment-end-bang-state,
-    // #comment-end-dash-state). Measured in the repo's Chromium: parsing
-    // `<!--a--!-><h1>X</h1>` leaves NO `h1` in the DOM and one comment whose
-    // data is the whole rest of the document.
+    // #comment-end-dash-state — and contrast #comment-start-dash-state, which
+    // is where the abrupt close lives). The two states look alike and behave
+    // differently, which is why the browser's answer is measured rather than
+    // argued: `e2e/ui/preview-comment-close.test.ts` parses all ten spellings
+    // in Chromium and is the other half of this case.
+    //
+    // Ending a comment early is not the safe direction here. It hands the
+    // splice point to a `</body>` written inside comment text, where the
+    // producer is a comment and never runs — the failure this whole file
+    // exists to prevent.
     //
     // What DOES close after a `--!` is another `--` or another `--!`, and both
     // spellings are pinned here beside the one that does not.
@@ -269,10 +277,10 @@ describe('a comment ends where the tokenizer ends it', () => {
     expect(producerIndex(bangAgainOut)).toBeGreaterThan(bangAgainOut.indexOf('<h1>Artifact</h1>'));
     expect(producerIndex(bangAgainOut)).toBeLessThan(bangAgainOut.indexOf('</body>'));
 
-    // And the one that does not close. The comment swallows the rest of the
-    // document for the parser too, so no body close is reachable and the EOF
-    // append is the honest placement — the response is not corrupted, and the
-    // preview reaches the watchdog's named failure.
+    // And the two that do not close. The comment swallows the rest of the
+    // document for the parser too — measured, not assumed — so no body close is
+    // reachable and the EOF append is the honest placement: the response is not
+    // corrupted, and the preview reaches the watchdog's named failure.
     const unclosed = '<!doctype html><html><body><!-- note --!-><h1>Artifact</h1></body></html>';
     const unclosedOut = injectLiveArtifactPaintReporter(unclosed, NONCE);
     expect(
@@ -280,6 +288,14 @@ describe('a comment ends where the tokenizer ends it', () => {
       'nothing was spliced into a comment the parser never leaves',
     ).toBe(true);
     expect(producerIndex(unclosedOut)).toBeGreaterThan(unclosed.length - 1);
+
+    const oneDash = '<!doctype html><html><body><!-- note -><h1>Artifact</h1></body></html>';
+    const oneDashOut = injectLiveArtifactPaintReporter(oneDash, NONCE);
+    expect(
+      oneDashOut.startsWith(oneDash),
+      'a single `-` before the bracket is comment data, not a close; ending the comment there ' +
+        'would select the body close inside it',
+    ).toBe(true);
   });
 
   it('still runs an ordinary comment to its `-->`', () => {
