@@ -198,6 +198,60 @@ describe('a conversation mounted on its own active run', () => {
     ).toBeNull();
   });
 
+  it('follows the row the pause is counting, not merely the last message', async () => {
+    // The pause reads `messages.some(...)`, so a stale earlier row holds Send
+    // even when the latest turn already reached its terminal. Following only
+    // the last message would leave that composer paused for good.
+    listMessages.mockResolvedValue([
+      { id: 'user-1', role: 'user', content: 'Make me a page', createdAt: 1 },
+      {
+        id: ROW_ID,
+        role: 'assistant',
+        content: '',
+        createdAt: 2,
+        runId: RUN_ID,
+        runStatus: 'running',
+      },
+      { id: 'user-2', role: 'user', content: 'And a second one', createdAt: 3 },
+      {
+        id: 'assistant-settled',
+        role: 'assistant',
+        content: 'Here is the second page.',
+        createdAt: 4,
+        runId: 'run-already-settled',
+        runStatus: 'succeeded',
+        endedAt: 40,
+      },
+    ] as ChatMessage[]);
+    const hook = await mountConversation();
+
+    expect(
+      hook.result.current.sendDisabled,
+      'precondition: the stale active row must hold the composer',
+    ).toBe(true);
+
+    fetchChatRunStatus.mockResolvedValue({ status: 'succeeded', updatedAt: 42 });
+    listMessages.mockResolvedValue([
+      { id: 'user-1', role: 'user', content: 'Make me a page', createdAt: 1 },
+      {
+        id: ROW_ID,
+        role: 'assistant',
+        content: 'Here is the page.',
+        createdAt: 2,
+        runId: RUN_ID,
+        runStatus: 'succeeded',
+        endedAt: 42,
+      },
+    ] as ChatMessage[]);
+    await runProbes(1);
+
+    expect(
+      fetchChatRunStatus,
+      'the follow must ask about the row that is still active',
+    ).toHaveBeenCalledWith(RUN_ID);
+    expect(hook.result.current.sendDisabled).toBe(false);
+  });
+
   it('follows nothing when the conversation it mounts on has no active run', async () => {
     listMessages.mockResolvedValue([
       { id: 'user-1', role: 'user', content: 'Make me a page', createdAt: 1 },

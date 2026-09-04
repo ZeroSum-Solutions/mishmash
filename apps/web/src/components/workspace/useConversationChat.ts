@@ -84,14 +84,18 @@ function isActiveRunStatus(status: ChatMessage['runStatus']): boolean {
  * to that row, and `ProjectView`'s recoverable-run pass speaks for the primary
  * conversation alone. Left unfollowed, the pause outlives the run.
  *
- * Only the LATEST assistant row can be waiting — an earlier one the daemon has
- * already superseded — and it must carry the run id, which is the handle the
- * follow needs. Returns `undefined` when there is nothing to follow.
+ * The row is the newest one the pause is COUNTING — the pause reads
+ * `messages.some(...)`, so any active assistant row holds Send, not only the
+ * last message — and it must carry the run id, which is the handle the follow
+ * needs. Reading from the newest back therefore also picks up a stale earlier
+ * row that a later turn left behind, rather than leaving it holding the
+ * composer. Returns `undefined` when no row is waiting.
  */
 function activeRunAwaitingTerminal(messages: readonly ChatMessage[]): string | undefined {
-  const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
-  if (!latestAssistant || !isActiveRunStatus(latestAssistant.runStatus)) return undefined;
-  return latestAssistant.runId;
+  const waiting = [...messages]
+    .reverse()
+    .find((message) => message.role === 'assistant' && isActiveRunStatus(message.runStatus));
+  return waiting?.runId;
 }
 
 export interface ConversationChatContext {
