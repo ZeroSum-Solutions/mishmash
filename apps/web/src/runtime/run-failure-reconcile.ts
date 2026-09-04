@@ -55,6 +55,31 @@ export function isUnadjudicatedStreamFailure(err: unknown): boolean {
 }
 
 /**
+ * The row a run keeps while a stream failure leaves it UNRESOLVED.
+ *
+ * A pane that only stops PAINTING the failure has closed one carrier and left
+ * the other open. `consumeDaemonRun` reports `failed` through `onRunStatus`
+ * before it surfaces an error it minted out of a connection IT could not keep
+ * (`providers/daemon.ts`), so the row itself still carries a terminal the daemon
+ * never declared — and that terminal is both the second thing `ChatPane` paints
+ * a failure from and the reason its checking notice would not show, because the
+ * notice is keyed to an ACTIVE row.
+ *
+ * So an unadjudicated stream failure takes that terminal back. The row returns
+ * to `daemonDeclared` — the last status the DAEMON itself declared for the run —
+ * and drops the disconnect-time `endedAt` when that status is active, because
+ * nothing has ended. Only the run's own terminal moves it again.
+ */
+export function withUnresolvedRunStatus<T extends ChatMessage>(
+  message: T,
+  daemonDeclared: ChatMessage['runStatus'],
+): T {
+  const endedAt = isActiveRunStatus(daemonDeclared) ? undefined : message.endedAt;
+  if (message.runStatus === daemonDeclared && message.endedAt === endedAt) return message;
+  return { ...message, runStatus: daemonDeclared, endedAt };
+}
+
+/**
  * What a pane tells `ChatPane` while one of its runs is unresolved.
  *
  * `unreachable` turns true once the follow has exhausted its status probes AND
