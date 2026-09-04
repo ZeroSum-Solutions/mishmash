@@ -1051,6 +1051,61 @@ test('[P0] a live lost create whose lookup cannot read the daemon says so and it
   expect(runId, 'precondition: the daemon really accepted the create it never answered').toBeTruthy();
 });
 
+// W1K.2 — the other side of the same bound. "The daemon is not answering" is a
+// claim about the daemon, so one read that lands refutes it even while the
+// other stays down. The lookup keeps the ordinary checking wording there: it
+// still cannot rule a run out (that needs BOTH reads), so nothing about the
+// outcome changes — only the sentence the user reads.
+//
+// The active list answers with nothing to say — what the daemon really returns
+// once the turn has finished — while the stored messages, the read that would
+// name the run, stay down. The recoverable list is held for the reason the case
+// above holds it.
+
+test('[P0] a lost create whose lookup still reads one surface is never told the daemon is silent', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, 'Live partial outage lookup smoke');
+  await expectWorkspaceReady(page);
+
+  const createHold = dropCreateRunResponseBody(page);
+  const lookupOutage = refuseLostRunCreateReads(page, { answerActiveRuns: true });
+  await watchRunFailureCard(page);
+
+  createHold.arm();
+  lookupOutage.arm();
+  await sendPrompt(page, page.getByTestId('chat-composer').first(), RUN_PROMPT);
+  await expect
+    .poll(() => createHold.acceptedRunId, { intervals: [100], timeout: T.medium })
+    .not.toBeNull();
+
+  const checkingNotice = runCheckingNotice(page);
+  await expect(checkingNotice, 'the lost create response must read as a neutral checking state')
+    .toBeVisible({ timeout: T.long });
+
+  // Wait for the daemon to have answered the active list more times than the
+  // unanswered bound allows, so the assertions below run past the point where a
+  // rule that counted a partial read as silence would have turned the wording
+  // over. A coarse gate, not the mechanism: `attachRecoverableRuns` reads the
+  // same list, so the count is at least the lookup's own probes.
+  await expect
+    .poll(() => lookupOutage.answeredRunLists, { intervals: [250], timeout: 60_000 })
+    .toBeGreaterThan(LOOKUP_UNANSWERED_BOUND);
+  await expect(checkingNotice, 'the neutral checking state must still be on screen')
+    .toContainText(CHECKING_NOTICE_TEXT);
+  await expect(
+    checkingNotice,
+    'a daemon that is answering one of the two reads must never be called silent',
+  ).not.toContainText(NOT_ANSWERING_TEXT);
+  await expect(
+    checkingNotice.getByRole('button', { name: CHECK_AGAIN_LABEL }),
+    'the automatic lookup is still reading the daemon, so there is nothing to re-check by hand',
+  ).toHaveCount(0);
+  expect(
+    await runFailureCardSightings(page),
+    'a partial outage rules nothing out, so it is still not a failed run',
+  ).toEqual([]);
+});
+
 interface LostRunCreateReadOutage {
   /** Start refusing every read that could resolve a lost create. */
   arm: () => void;
@@ -1058,6 +1113,8 @@ interface LostRunCreateReadOutage {
   release: () => void;
   /** How many active-run reads have been answered 503 — one per lookup probe. */
   readonly refusedRunLists: number;
+  /** How many active-run reads were answered instead of refused. */
+  readonly answeredRunLists: number;
 }
 
 /**
@@ -1082,18 +1139,38 @@ interface LostRunCreateReadOutage {
  * `continue()` would send the create straight to the network instead of letting
  * that earlier handler lose its response.
  */
-function refuseLostRunCreateReads(page: Page): LostRunCreateReadOutage {
+function refuseLostRunCreateReads(
+  page: Page,
+  options: { answerActiveRuns?: boolean } = {},
+): LostRunCreateReadOutage {
   let armed = false;
   let refusedRunLists = 0;
+  let answeredRunLists = 0;
   void page.route(
     (url) => url.pathname === '/api/runs',
     async (route) => {
       const requested = new URL(route.request().url());
+      const activeRunList = requested.searchParams.get('status') === 'active';
       if (!armed || route.request().method() !== 'GET') {
         await route.fallback();
         return;
       }
-      if (requested.searchParams.get('status') === 'active') refusedRunLists += 1;
+      // `answerActiveRuns` is the partial outage: the active list ANSWERS,
+      // with nothing to say, while the read that would name the run stays
+      // down. Answered here rather than forwarded, because a forwarded read
+      // names the run for as long as it is still active and resolves the
+      // lookup on its first probe — an empty list is what the same daemon
+      // returns a beat later, once the turn has finished.
+      if (activeRunList && options.answerActiveRuns) {
+        answeredRunLists += 1;
+        await route.fulfill({
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ runs: [] }),
+        });
+        return;
+      }
+      if (activeRunList) refusedRunLists += 1;
       await route.fulfill({ status: 503, body: '' });
     },
   );
@@ -1116,6 +1193,9 @@ function refuseLostRunCreateReads(page: Page): LostRunCreateReadOutage {
     },
     get refusedRunLists() {
       return refusedRunLists;
+    },
+    get answeredRunLists() {
+      return answeredRunLists;
     },
   };
 }

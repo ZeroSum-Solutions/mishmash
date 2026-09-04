@@ -397,7 +397,13 @@ export function useConversationChat(
             // run of probes that read NOTHING is what turns the notice's
             // wording over; see `nextLostRunCreateStep`.
             const answered = active !== null && stored !== null;
-            unanswered = answered ? 0 : unanswered + 1;
+            // Two different tests, deliberately. Spending the abandon bound
+            // needs BOTH reads; describing the daemon as silent needs neither
+            // to have landed, so one read that answered retires that wording
+            // even while the other did not. Both reads report a rejected fetch
+            // as `null` too (`fetchActiveChatRuns`, `fetchMessages`), so a
+            // daemon that is down counts here rather than falling to the catch.
+            unanswered = active !== null || stored !== null ? 0 : unanswered + 1;
             const step = nextLostRunCreateStep(runId, probes, answered, unanswered);
             if (step === 'probe' || step === 'unreachable') {
               setRunCheck((current) =>
@@ -492,7 +498,7 @@ export function useConversationChat(
     if (!pending) return;
     if (!pending.runId) {
       const lookup = lostRunCreateLookupRef.current;
-      if (!lookup) return;
+      if (!lookup || lookup.identity.assistantMessageId !== pending.assistantMessageId) return;
       setRunCheck({ ...pending, unreachable: false });
       scheduleLostRunCreateLookup(lookup.identity, lookup.message);
       return;

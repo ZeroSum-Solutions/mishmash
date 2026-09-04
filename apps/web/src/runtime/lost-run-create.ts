@@ -83,16 +83,22 @@ export const LOST_RUN_CREATE_MAX_PROBES = 3;
  * How many CONSECUTIVE probes may fail to READ the daemon before the lookup
  * says so.
  *
- * A different bound for a different question. The one above spends probes that
- * answered and ends in a verdict; this one counts probes that answered nothing
- * and ends in a WORDING. Reaching it changes no outcome at all: no failure, no
- * Retry, the lookup keeps probing, and the row it holds keeps preventing a
- * second send. It only lets the notice say what is true — the daemon is not
- * answering — and offer the manual re-check that goes with that sentence.
+ * A different bound for a different question, and a LOOSER one. The bound above
+ * spends probes that read BOTH surfaces and ends in a verdict, so it can only be
+ * spent by a conclusive read. This one counts probes where NEITHER read
+ * answered, and ends in a WORDING. Reaching it changes no outcome at all: no
+ * failure, no Retry, the lookup keeps probing, and the row it holds keeps
+ * preventing a second send. It only lets the notice say what is true — the
+ * daemon is not answering — and offer the manual re-check that goes with that
+ * sentence.
  *
- * Any probe that reads either surface resets the count, so only an unbroken
- * outage reaches it. Three at `LOST_RUN_CREATE_PROBE_INTERVAL_MS` is about six
- * seconds of a daemon answering nothing at all.
+ * The looser test is what makes the sentence honest. A probe that read one
+ * surface and not the other has ruled nothing out, so it still may not spend
+ * the bound above — but the daemon plainly answered it, and a daemon that is
+ * answering must never be described as silent. So any read that lands resets
+ * this count, and only a probe that read nothing at all raises it. Three at
+ * `LOST_RUN_CREATE_PROBE_INTERVAL_MS` is about six seconds of a daemon
+ * answering nothing at all.
  *
  * Short, because this state has no other recovery. The row the lookup is
  * holding disables the composer's Send (`SEND_PAUSED_UNRESOLVED_RUN_KEY`), and
@@ -126,11 +132,15 @@ export type LostRunCreateStep = 'adopt' | 'probe' | 'unreachable' | 'abandon';
  * Honest is not the same as usable, which is what `'unreachable'` is for. The
  * state above holds the composer, so an outage that never breaks leaves a
  * paused conversation behind a notice that claims to be checking and offers
- * nothing. Past `LOST_RUN_CREATE_MAX_UNANSWERED_PROBES` consecutive unanswered
- * probes the client says the daemon is not answering instead — the same neutral
- * outcome, kept probing, with the manual re-check the wording implies. `probes`
- * still decides nothing while `answered` is false, so no count of unanswered
- * probes can reach `'abandon'`.
+ * nothing. Past `LOST_RUN_CREATE_MAX_UNANSWERED_PROBES` consecutive probes that
+ * read NOTHING the client says the daemon is not answering instead — the same
+ * neutral outcome, kept probing, with the manual re-check the wording implies.
+ * `probes` still decides nothing while `answered` is false, so no run of
+ * unanswered probes can reach `'abandon'`.
+ *
+ * `unanswered` is therefore counted on a looser test than `answered`: the
+ * caller resets it whenever either read lands, because that is the question the
+ * wording asks. See `LOST_RUN_CREATE_MAX_UNANSWERED_PROBES`.
  */
 export function nextLostRunCreateStep(
   runId: string | null,
@@ -155,7 +165,7 @@ export function nextLostRunCreateStep(
  *
  * INVARIANT: this wording follows the DAEMON's answers and nothing else. It
  * turns on only where `nextLostRunCreateStep` says `'unreachable'`, and off
- * again on the first probe that reads either surface, however long the lookup
+ * again on the first probe that reads ANYTHING at all, however long the lookup
  * then takes. Returns `current` unchanged when it belongs to another row or
  * already says the right thing, so a lookup can call it on every probe.
  */
