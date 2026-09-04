@@ -14,9 +14,18 @@
 // This spec runs the real app through the production middleware. It asserts
 // the positive half in a real browser context on BOTH creation paths — an
 // agent-written page on disk and a live artifact minted by an agent run — and
-// the negative half from inside the same sandboxed frame: a cross-site GET to
-// a JSON API route still answers 403, whether it is a scripted fetch or an
-// image load.
+// the negative half from inside the same sandboxed frame: an identically
+// shaped cross-site GET to a JSON API route is still refused.
+//
+// What the browser can and cannot see. A refused subresource never reaches the
+// page: Chrome blocks the daemon's 403 JSON body with `ERR_BLOCKED_BY_ORB`, and
+// neither Playwright's `response` event nor CDP `Network.responseReceived`
+// reports a status for it. So the STATUS CODE of the refusal is asserted where
+// it is observable — `apps/daemon/tests/preview-asset-origin-exception.test.ts`,
+// which boots the real daemon and sends the same `Sec-Fetch-*` metadata over
+// raw HTTP through the same production middleware. Here the assertion is the
+// user-visible half: the raw-asset GET returns bytes, and the JSON-route GET
+// with the identical destination returns nothing the page can read.
 import { expect, test } from '@/playwright/suite';
 import { APP_LOADING_TEXT } from '@/playwright/loading';
 import { createFakeAgentRuntimes } from '@/playwright/fake-agents';
@@ -37,7 +46,9 @@ const DISK_PAGE_HTML =
   + '</main></body></html>';
 const LIVE_ARTIFACT_PROMPT = 'Create a relative-asset Live Artifact.';
 
-const URL_LOAD_PREVIEW = '[data-testid="artifact-preview-frame"], [data-testid="artifact-preview-frame-url-load"]';
+// FileViewer keeps both preview transports mounted and moves this one testid
+// onto whichever is active, so it always names the frame the user is looking at.
+const ACTIVE_PREVIEW = '[data-testid="artifact-preview-frame"]';
 const LIVE_ARTIFACT_PREVIEW = '[data-testid="live-artifact-preview-frame"]';
 
 const CONFIG_STORAGE_KEY = 'mishmash:config';
@@ -87,7 +98,7 @@ test('[P0] a disk-written page loads its relative project asset inside the app p
 
   await openWorkspaceTab(page, projectId, DISK_PAGE);
 
-  const asset = page.frameLocator(URL_LOAD_PREVIEW).locator('#relative-asset');
+  const asset = page.frameLocator(ACTIVE_PREVIEW).locator('#relative-asset');
   await expect(asset).toBeAttached({ timeout: T.long });
   await expectAssetDecoded(asset);
 });
@@ -110,20 +121,22 @@ test('[P0] a cross-site request from the preview iframe to a JSON API route is s
   await seedDiskPage(page, projectId);
 
   await openWorkspaceTab(page, projectId, DISK_PAGE);
-  const body = page.frameLocator(URL_LOAD_PREVIEW).locator('body');
+  const body = page.frameLocator(ACTIVE_PREVIEW).locator('body');
   await expect(body).toBeAttached({ timeout: T.long });
 
-  // A scripted fetch carries `Sec-Fetch-Dest: empty`, which no asset
-  // destination covers. The frame cannot read the response across the opaque
-  // origin, so the status is observed at the network level instead.
-  const fetchStatus = await probeFromPreview(page, body, `/api/projects/${projectId}/files?probe=w2g4b-json-fetch`, 'fetch');
-  expect(fetchStatus, 'cross-site scripted GET to a JSON API route').toBe(403);
+  // Positive control, issued from the same document as the negative one: a
+  // project raw asset comes back with real bytes. Without it a green negative
+  // half would prove only that the probe never left the page.
+  const asset = await probeFromPreview(page, body, `/api/projects/${projectId}/raw/${RELATIVE_REF}`, 'w2g4b-raw');
+  expect(asset.status, `the raw-asset probe was refused: ${asset.failure}`).toBe(200);
 
-  // An image load carries a destination the exception admits, so only the path
-  // keeps it out: the exception covers project raw-asset paths, never a JSON
-  // route.
-  const imageStatus = await probeFromPreview(page, body, `/api/projects/${projectId}/files?probe=w2g4b-json-image`, 'image');
-  expect(imageStatus, 'cross-site image GET to a JSON API route').toBe(403);
+  // Same frame, same `Sec-Fetch-Dest: image`, JSON API route: only the path
+  // differs, and the path is what keeps it out. The daemon answers 403 (pinned
+  // in the daemon spec); the browser turns that into a blocked load, so what is
+  // assertable here is that no readable response reached the page.
+  const json = await probeFromPreview(page, body, `/api/projects/${projectId}/files`, 'w2g4b-json');
+  expect(json.status, 'a cross-site image GET to a JSON API route was served').toBeNull();
+  expect(json.failure, 'the JSON-route probe neither answered nor failed').not.toBeNull();
 });
 
 async function expectAssetDecoded(asset: Locator) {
@@ -141,27 +154,40 @@ async function expectAssetDecoded(asset: Locator) {
 }
 
 /**
- * Issue one cross-site GET from inside the sandboxed preview document and
- * return the status the daemon answered with. The document holds an opaque
- * origin and cannot read the response itself, so the status comes off the
- * network. The probe query string is unique to this spec, so the wait can
- * never latch onto a request the app made on its own.
+ * Load one cross-site subresource from inside the sandboxed preview document
+ * and report what came back.
+ *
+ * `<img>` is the shape under test: it is the destination a previewed page's
+ * relative asset ref actually produces, and the one the exception admits. A
+ * scripted `fetch` cannot stand in for it — the preview response's own CSP
+ * carries `connect-src 'none'`, so the request is blocked in the page and never
+ * reaches the daemon; the scripted-fetch shape (`Sec-Fetch-Dest: empty`) is
+ * pinned in the daemon spec instead.
+ *
+ * `status` is the daemon's status when the browser accepted the response, and
+ * `null` when it refused to hand one over; `failure` carries the network error
+ * in that case, so a blocked load is distinguishable from a probe that never
+ * left the page. The `probe` marker is unique per call, so the wait can never
+ * latch onto a request the app made on its own.
  */
-async function probeFromPreview(page: Page, body: Locator, url: string, as: 'fetch' | 'image') {
-  const probe = new URL(url, 'http://probe.invalid').search;
-  const [response] = await Promise.all([
-    page.waitForResponse((candidate) => candidate.url().includes(probe), { timeout: T.long }),
+async function probeFromPreview(page: Page, body: Locator, url: string, marker: string) {
+  const probed = `${url}${url.includes('?') ? '&' : '?'}probe=${marker}`;
+  const [request] = await Promise.all([
+    page.waitForRequest((candidate) => candidate.url().includes(`probe=${marker}`), { timeout: T.long }),
     body.evaluate((node, argument) => {
-      if (argument.as === 'fetch') {
-        void fetch(argument.url).catch(() => {});
-        return;
-      }
       const image = node.ownerDocument.createElement('img');
-      image.src = argument.url;
+      image.src = argument;
       node.appendChild(image);
-    }, { as, url }),
+    }, probed),
   ]);
-  return response.status();
+  await expect
+    .poll(async () => (await request.response()) !== null || request.failure() !== null, {
+      message: `the ${marker} probe never settled: the daemon neither answered it nor failed it`,
+      timeout: T.long,
+    })
+    .toBe(true);
+  const response = await request.response();
+  return { failure: request.failure()?.errorText ?? null, status: response?.status() ?? null };
 }
 
 async function seedProject(page: Page, slug: string) {
