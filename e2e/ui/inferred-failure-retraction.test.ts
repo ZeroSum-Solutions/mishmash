@@ -1052,23 +1052,30 @@ test('[P0] a live lost create whose lookup cannot read the daemon says so and it
 });
 
 interface LostRunCreateReadOutage {
-  /** Start refusing both reads the lost-create lookup makes. */
+  /** Start refusing every read that could resolve a lost create. */
   arm: () => void;
-  /** Let both reads through again. */
+  /** Let those reads through again. */
   release: () => void;
   /** How many active-run reads have been answered 503 — one per lookup probe. */
   readonly refusedRunLists: number;
 }
 
 /**
- * Answer BOTH reads the lost-create lookup makes with 503 until released.
+ * Answer every read that can resolve a lost create with 503 until released.
  *
  * `fetchActiveChatRuns` and `fetchMessages` each report a non-OK response as
  * `null` (`providers/daemon.ts`, `state/projects.ts`), which is what the lookup
  * counts as a probe that could not read — so a 503 here is indistinguishable
  * from the daemon outage this reproduces. Both are held because either one
- * answering would resolve the lookup: the run really exists, so a readable
- * daemon names it immediately.
+ * answering resolves the lookup on the spot: the run really exists, so a
+ * readable daemon names it immediately.
+ *
+ * The bare `GET /api/runs` list is held for the same reason and not as extra
+ * strictness. `attachRecoverableRuns` reads it through `listProjectRuns`
+ * (`ProjectView.tsx`) and adopts the run onto the row by its
+ * `assistantMessageId`, which releases the lookup before it has probed at all —
+ * a first draft of this case that let that list through never reached the state
+ * it names. A daemon that is not answering answers neither list.
  *
  * `route.fallback()` rather than `route.continue()` for everything it does not
  * refuse: the create hold is registered on the same `/api/runs` path, and
@@ -1082,15 +1089,11 @@ function refuseLostRunCreateReads(page: Page): LostRunCreateReadOutage {
     (url) => url.pathname === '/api/runs',
     async (route) => {
       const requested = new URL(route.request().url());
-      if (
-        !armed
-        || route.request().method() !== 'GET'
-        || requested.searchParams.get('status') !== 'active'
-      ) {
+      if (!armed || route.request().method() !== 'GET') {
         await route.fallback();
         return;
       }
-      refusedRunLists += 1;
+      if (requested.searchParams.get('status') === 'active') refusedRunLists += 1;
       await route.fulfill({ status: 503, body: '' });
     },
   );
