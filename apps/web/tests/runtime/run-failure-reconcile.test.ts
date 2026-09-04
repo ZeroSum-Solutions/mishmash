@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import { createGenericDaemonDisconnectError } from '../../src/providers/daemon';
 import {
   RUN_FAILURE_RECHECK_INTERVAL_MS,
   RUN_FAILURE_RECHECK_MAX_MISSES,
+  applyRunTerminalFromStatus,
+  isUnadjudicatedStreamFailure,
   nextInferredRunFailureStep,
-  retractRunFailureFromStatus,
   retractsRunFailure,
   retractsStaleRunFailure,
 } from '../../src/runtime/run-failure-reconcile';
@@ -93,13 +95,16 @@ describe('retractsStaleRunFailure — rows a conversation refresh brings in', ()
 });
 
 describe('nextInferredRunFailureStep — following a run the pane never saw finish', () => {
-  it('retracts on a non-failed terminal', () => {
-    expect(nextInferredRunFailureStep('succeeded', 0)).toBe('retract');
-    expect(nextInferredRunFailureStep('canceled', 0)).toBe('retract');
+  it('settles on a non-failed terminal', () => {
+    expect(nextInferredRunFailureStep('succeeded', 0)).toBe('settle');
+    expect(nextInferredRunFailureStep('canceled', 0)).toBe('settle');
   });
 
-  it('stops at once when the run really did fail, so a failed row is never re-queried', () => {
-    expect(nextInferredRunFailureStep('failed', 0)).toBe('stop');
+  // W1I.1 renames the old `'stop'`: an unresolved stream failure paints nothing,
+  // so the run's own `failed` is the step that ADOPTS the daemon verdict rather
+  // than the step that leaves an already-painted alert standing.
+  it('adopts the daemon verdict when the run really did fail', () => {
+    expect(nextInferredRunFailureStep('failed', 0)).toBe('fail');
   });
 
   // The realistic shape of this defect: the stream fails when it OPENS, at the
@@ -135,38 +140,65 @@ describe('nextInferredRunFailureStep — following a run the pane never saw fini
   });
 });
 
-describe('retractRunFailureFromStatus — the run own terminal, before any read', () => {
+describe('applyRunTerminalFromStatus — the run own terminal, before any read', () => {
   const shown = [assistant({ id: 'msg-1', runId: 'run-1', runStatus: 'failed', endedAt: 10 })];
   const succeeded = { status: 'succeeded' as const, updatedAt: 42 };
 
   it('moves the failed row onto the terminal the run reports', () => {
-    const next = retractRunFailureFromStatus(shown, 'run-1', succeeded);
+    const next = applyRunTerminalFromStatus(shown, 'run-1', succeeded);
     expect(next?.[0]?.runStatus).toBe('succeeded');
     expect(next?.[0]?.endedAt).toBe(42);
   });
 
   it('does not mutate the rows it was given', () => {
-    retractRunFailureFromStatus(shown, 'run-1', succeeded);
+    applyRunTerminalFromStatus(shown, 'run-1', succeeded);
     expect(shown[0]?.runStatus).toBe('failed');
     expect(shown[0]?.endedAt).toBe(10);
   });
 
   it('keeps the row own endedAt when the status carries no clock', () => {
-    expect(retractRunFailureFromStatus(shown, 'run-1', { status: 'canceled' })?.[0]?.endedAt).toBe(10);
+    expect(applyRunTerminalFromStatus(shown, 'run-1', { status: 'canceled' })?.[0]?.endedAt).toBe(10);
   });
 
   it('retracts nothing while the run is still going, or when it really failed', () => {
-    expect(retractRunFailureFromStatus(shown, 'run-1', { status: 'running', updatedAt: 42 })).toBeNull();
-    expect(retractRunFailureFromStatus(shown, 'run-1', { status: 'failed', updatedAt: 42 })).toBeNull();
+    expect(applyRunTerminalFromStatus(shown, 'run-1', { status: 'running', updatedAt: 42 })).toBeNull();
+    expect(applyRunTerminalFromStatus(shown, 'run-1', { status: 'failed', updatedAt: 42 })).toBeNull();
   });
 
   it('retracts nothing when the probe answered nothing at all', () => {
-    expect(retractRunFailureFromStatus(shown, 'run-1', null)).toBeNull();
-    expect(retractRunFailureFromStatus(shown, 'run-1', undefined)).toBeNull();
+    expect(applyRunTerminalFromStatus(shown, 'run-1', null)).toBeNull();
+    expect(applyRunTerminalFromStatus(shown, 'run-1', undefined)).toBeNull();
   });
 
   it('leaves rows belonging to another run alone', () => {
-    expect(retractRunFailureFromStatus(shown, 'run-2', succeeded)).toBeNull();
+    expect(applyRunTerminalFromStatus(shown, 'run-2', succeeded)).toBeNull();
+  });
+
+  // W1I.1: an unresolved stream failure leaves the row on its last ACTIVE
+  // status instead of stamping it `failed`, so the run's own terminal has to
+  // move a row that is still running rather than one that is already failing.
+  it('moves a row still shown as running onto the terminal the run reports', () => {
+    const running = [assistant({ id: 'msg-1', runId: 'run-1', runStatus: 'running' })];
+    const next = applyRunTerminalFromStatus(running, 'run-1', succeeded);
+    expect(next?.[0]?.runStatus).toBe('succeeded');
+    expect(next?.[0]?.endedAt).toBe(42);
+  });
+
+  it('moves a row still shown as queued onto the terminal the run reports', () => {
+    const queued = [assistant({ id: 'msg-1', runId: 'run-1', runStatus: 'queued' })];
+    expect(applyRunTerminalFromStatus(queued, 'run-1', succeeded)?.[0]?.runStatus).toBe('succeeded');
+  });
+
+  it('leaves a row that already settled on its own terminal alone', () => {
+    const settled = [assistant({ id: 'msg-1', runId: 'run-1', runStatus: 'succeeded', endedAt: 10 })];
+    expect(applyRunTerminalFromStatus(settled, 'run-1', succeeded)).toBeNull();
+  });
+
+  it('ignores a user row that happens to carry the run id', () => {
+    const userRow = [
+      { ...assistant({ id: 'msg-1', runId: 'run-1', runStatus: 'running' }), role: 'user' } as ChatMessage,
+    ];
+    expect(applyRunTerminalFromStatus(userRow, 'run-1', succeeded)).toBeNull();
   });
 
   it('keeps a row that fails on delivery rather than on run status', () => {
@@ -178,6 +210,46 @@ describe('retractRunFailureFromStatus — the run own terminal, before any read'
         resultDeliveryState: 'no_result',
       }),
     ];
-    expect(retractRunFailureFromStatus(delivery, 'run-1', succeeded)).toBeNull();
+    expect(applyRunTerminalFromStatus(delivery, 'run-1', succeeded)).toBeNull();
+  });
+});
+
+// W1I.1 — which stream errors are the daemon's verdict on the run, and which
+// this client only inferred from a broken transport.
+describe('isUnadjudicatedStreamFailure — a verdict is still a verdict', () => {
+  it('reads a non-OK event-stream response as unresolved', () => {
+    // `consumeDaemonRun` surfaces exactly this for a stream answered non-OK.
+    expect(isUnadjudicatedStreamFailure(new Error('daemon 503: no body'))).toBe(true);
+  });
+
+  it('reads a transport failure as unresolved', () => {
+    expect(isUnadjudicatedStreamFailure(new TypeError('Failed to fetch'))).toBe(true);
+  });
+
+  it('reads a stream that closed without a terminal as unresolved', () => {
+    // The generic disconnect carries a code, but it is minted by this client
+    // after its own reconnect budget ran out — the daemon said nothing.
+    expect(isUnadjudicatedStreamFailure(createGenericDaemonDisconnectError())).toBe(true);
+  });
+
+  it('reads a daemon-classified failure as a verdict', () => {
+    const classified = Object.assign(new Error('agent exited with code 1'), {
+      failureCategory: 'process_exit',
+      failureDetail: 'stream_error',
+      failureStage: 'child_close',
+    });
+    expect(isUnadjudicatedStreamFailure(classified)).toBe(false);
+  });
+
+  it('reads a daemon error frame with its own code as a verdict', () => {
+    const coded = Object.assign(new Error('daemon error'), { code: 'AGENT_EXECUTION_FAILED' });
+    expect(isUnadjudicatedStreamFailure(coded)).toBe(false);
+  });
+
+  it('reads the restart verdict as a verdict, so it keeps the card', () => {
+    const restarted = Object.assign(new Error('Run interrupted because the daemon restarted.'), {
+      code: 'DAEMON_RESTARTED',
+    });
+    expect(isUnadjudicatedStreamFailure(restarted)).toBe(false);
   });
 });
