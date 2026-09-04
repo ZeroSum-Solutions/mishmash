@@ -284,6 +284,52 @@ describe('durable run terminal reconciliation', () => {
     expect(stored).not.toHaveProperty('artifactCount');
   });
 
+  // The guard on the enrichment, not the enrichment itself. A run can still be
+  // carrying `errorCode: 'DAEMON_RESTARTED'` from an earlier boot while having
+  // gone on to reach a NON-failed terminal. Enriching that row would append an
+  // error event to a turn that succeeded — the "Task failed for a turn that
+  // finished" regression the terminal-following invariants exist to prevent.
+  it('never turns a succeeded run into a failure because it once carried the restart code', async () => {
+    const runId = 'run-restart-then-succeeded';
+    const runDir = path.join(tmpDir, runId);
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, 'state.json'), JSON.stringify({
+      schemaVersion: 1,
+      id: runId,
+      projectId: 'p1',
+      conversationId: 'c1',
+      assistantMessageId: 'm-succeeded',
+      agentId: 'claude',
+      status: 'succeeded',
+      createdAt: 1_000,
+      updatedAt: 2_000,
+      errorCode: 'DAEMON_RESTARTED',
+    }));
+    db.prepare(
+      `INSERT INTO messages (id, run_id, run_status, events_json)
+       VALUES (?, ?, 'running', '[]')`,
+    ).run('m-succeeded', runId);
+
+    await reconcileDurableRunTerminals({
+      analytics: { capture: vi.fn() },
+      appVersion: '0.15.1',
+      db,
+      reportLangfuse: vi.fn(),
+      runsLogDir: tmpDir,
+    });
+
+    const row = db.prepare(
+      `SELECT run_status AS status, events_json AS eventsJson
+         FROM messages WHERE id = 'm-succeeded'`,
+    ).get() as { status: string; eventsJson: string };
+    expect(row.status, 'the row follows the run own terminal').toBe('succeeded');
+    const events = JSON.parse(row.eventsJson) as Array<Record<string, unknown>>;
+    expect(
+      events.filter((event) => event.kind === 'status' && event.label === 'error'),
+      'a succeeded run gains no error event from the restart classification',
+    ).toEqual([]);
+  });
+
   it('repairs legacy queued messages even when no state journal exists', async () => {
     db.prepare(
       `INSERT INTO messages (id, run_id, run_status, events_json)

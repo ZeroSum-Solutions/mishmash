@@ -763,7 +763,14 @@ function reconcileMessages(
     // the live failure path uses, so a run the restart interrupted reaches the
     // chat alert with a named cause, its step, and its file-change state
     // instead of the generic "Task failed".
-    if (state && isDaemonRestart) {
+    //
+    // `status === 'failed'` is the load-bearing half of this guard, not a
+    // restatement of the branch above. `isDaemonRestart` reads a run's stored
+    // `errorCode`, which a run that went on to reach a NON-failed terminal can
+    // still be carrying; enriching that row would append an error event to a
+    // turn that succeeded, which is the exact regression the terminal-following
+    // invariants above exist to prevent.
+    if (status === 'failed' && state && isDaemonRestart) {
       persistRunFailureClassification(db, {
         id: state.id,
         assistantMessageId: row.id,
