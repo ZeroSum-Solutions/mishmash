@@ -3350,6 +3350,7 @@ export async function startServer({
     http: httpDeps,
     paths: pathDeps,
     mcp: { pendingAuth: mcpPendingAuth, daemonUrlRef },
+    filesystem: { create: createRouteFilesystemWriteGateway },
   });
   registerXaiRoutes(app, {
     http: httpDeps,
