@@ -124,6 +124,7 @@ import {
   conversationAnswersRunCheck,
   isUnadjudicatedStreamFailure,
   nextInferredRunFailureStep,
+  runCheckWithDaemonReachability,
   retractsRunFailure,
   retractsStaleRunFailure,
 } from '../runtime/run-failure-reconcile';
@@ -3308,6 +3309,39 @@ export function ProjectView({
     [updateMessageById],
   );
 
+  // The sidebar's latest-run status is the same claim as the row's. An
+  // unresolved stream failure leaves it on the status the send set, so the run's
+  // own terminal has to move it too — nothing else will until the conversation
+  // list is reloaded.
+  const settleConversationLatestRun = useCallback(
+    (
+      conversationId: string,
+      status: NonNullable<ChatMessage['runStatus']>,
+      endedAt: number | undefined,
+    ) => {
+      setConversations((current) =>
+        current.map((conversation) => {
+          if (conversation.id !== conversationId || !conversation.latestRun) return conversation;
+          const startedAt = conversation.latestRun.startedAt;
+          const duration =
+            endedAt === undefined || startedAt === undefined
+              ? {}
+              : { durationMs: Math.max(0, endedAt - startedAt) };
+          return {
+            ...conversation,
+            updatedAt: endedAt ?? conversation.updatedAt,
+            latestRun: {
+              ...conversation.latestRun,
+              status,
+              ...(endedAt === undefined ? {} : { endedAt, ...duration }),
+            },
+          };
+        }),
+      );
+    },
+    [],
+  );
+
   const scheduleInferredRunFailureRecheck = useCallback(
     (conversationId: string, runId: string, stream: { unresolved: boolean; message: string }) => {
       const generation = (inferredFollowGenerationsRef.current.get(runId) ?? 0) + 1;
@@ -3320,6 +3354,9 @@ export function ProjectView({
           const latest = await fetchChatRunStatus(runId).catch(() => null);
           if (messagesConversationIdRef.current !== conversationId || superseded()) return;
           misses = latest ? 0 : misses + 1;
+          // Any answer at all retires the "not answering" wording, however long
+          // the run then takes.
+          if (latest) setRunCheck((current) => runCheckWithDaemonReachability(current, runId, true));
           const step = nextInferredRunFailureStep(latest?.status, misses);
           if (step === 'fail') {
             // The run's own verdict, and the only thing that may produce a card
@@ -3327,6 +3364,7 @@ export function ProjectView({
             // still checking adopts the daemon's row for its facts, and keeps
             // reading for them if that read answers nothing.
             if (!stream.unresolved) return;
+            settleConversationLatestRun(conversationId, 'failed', latest?.updatedAt);
             if (await adoptRunFailureFromConversation(conversationId, runId)) return;
             if (superseded()) return;
             paintUnreadableRunFailure(runId, stream.message);
@@ -3343,8 +3381,9 @@ export function ProjectView({
           // exhausted-probe fallback and carries no status, so it can only fall
           // through to the read.
           const settled = step === 'settle';
-          if (settled) {
+          if (settled && latest) {
             setMessages((current) => applyRunTerminalFromStatus(current, runId, latest) ?? current);
+            settleConversationLatestRun(conversationId, latest.status, latest.updatedAt);
             clearPaneErrorForRun(runId);
           }
           const applied = await reconcileInferredRunFailure(conversationId, runId, settled);
@@ -3352,9 +3391,7 @@ export function ProjectView({
           // The 'reconcile' fallback read answered nothing either, so the outage
           // that exhausted the probes is still running and the run is still
           // unresolved. Say so in the notice, and keep following.
-          setRunCheck((current) =>
-            current?.runId === runId ? { ...current, unreachable: true } : current,
-          );
+          setRunCheck((current) => runCheckWithDaemonReachability(current, runId, false));
           misses = 0;
           scheduleProjectTimeout(attempt, RUN_FAILURE_RECHECK_INTERVAL_MS);
         })();
@@ -3367,6 +3404,7 @@ export function ProjectView({
       paintUnreadableRunFailure,
       reconcileInferredRunFailure,
       scheduleProjectTimeout,
+      settleConversationLatestRun,
     ],
   );
 

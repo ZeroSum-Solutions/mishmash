@@ -68,6 +68,30 @@ export interface RunCheckState {
 }
 
 /**
+ * What the checking notice says next, given what the daemon just did.
+ *
+ * The wording follows the DAEMON's answers, not the run's. `unreachable` turns
+ * on only where the follow has run out of answers — the status probes exhausted
+ * their bound AND the fallback conversation read said nothing either — and off
+ * again the moment anything answers at all, however long the run then takes. A
+ * daemon that is replying to every probe must never be described as silent, and
+ * the "Check again" action it offers must not stand once there is nothing left
+ * to check again.
+ *
+ * Returns `current` unchanged when it belongs to another run or already says
+ * the right thing, so a pane can call it on every probe.
+ */
+export function runCheckWithDaemonReachability<T extends RunCheckState>(
+  current: T | null,
+  runId: string,
+  reachable: boolean,
+): T | null {
+  if (!current || current.runId !== runId) return current;
+  if (current.unreachable !== reachable) return current;
+  return { ...current, unreachable: !reachable };
+}
+
+/**
  * How long a pane waits before its FIRST re-check of a failure it only
  * INFERRED from a dead stream.
  *

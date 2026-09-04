@@ -19,6 +19,7 @@ import {
   conversationAnswersRunCheck,
   isUnadjudicatedStreamFailure,
   nextInferredRunFailureStep,
+  runCheckWithDaemonReachability,
   retractsStaleRunFailure,
 } from '../../runtime/run-failure-reconcile';
 import type { RunCheckState } from '../../runtime/run-failure-reconcile';
@@ -179,6 +180,9 @@ export function useConversationChat(
           // while it was in flight. A cleared timer cannot catch that one.
           if (superseded()) return;
           misses = latest ? 0 : misses + 1;
+          // Any answer at all retires the "not answering" wording, however long
+          // the run then takes.
+          if (latest) setRunCheck((current) => runCheckWithDaemonReachability(current, runId, true));
           const step = nextInferredRunFailureStep(latest?.status, misses);
           if (step === 'fail') {
             // The run's own verdict, and the only thing that may produce a card
@@ -254,9 +258,7 @@ export function useConversationChat(
           // The 'reconcile' fallback read answered nothing either, so the outage
           // that exhausted the probes is still running and the run is still
           // unresolved. Say so in the notice, and keep following.
-          setRunCheck((current) =>
-            current?.runId === runId ? { ...current, unreachable: true } : current,
-          );
+          setRunCheck((current) => runCheckWithDaemonReachability(current, runId, false));
           misses = 0;
           failureRecheckTimerRef.current = window.setTimeout(
             attempt,

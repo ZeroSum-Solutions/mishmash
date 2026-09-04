@@ -9,6 +9,7 @@ import {
   markStreamUnadjudicated,
   nextInferredRunFailureStep,
   retractsRunFailure,
+  runCheckWithDaemonReachability,
   retractsStaleRunFailure,
 } from '../../src/runtime/run-failure-reconcile';
 import type { ChatMessage } from '../../src/types';
@@ -270,5 +271,38 @@ describe('isUnadjudicatedStreamFailure — a verdict is still a verdict', () => 
     expect(isUnadjudicatedStreamFailure(null)).toBe(false);
     expect(isUnadjudicatedStreamFailure(undefined)).toBe(false);
     expect(isUnadjudicatedStreamFailure('daemon 503')).toBe(false);
+  });
+});
+
+// W1I.1 — the notice's wording follows the DAEMON, not the run.
+describe('runCheckWithDaemonReachability — a daemon that answers is not silent', () => {
+  const checking = { runId: 'run-1', unreachable: false } as const;
+  const unreachable = { runId: 'run-1', unreachable: true } as const;
+
+  it('says the daemon is not answering once nothing has answered', () => {
+    expect(runCheckWithDaemonReachability(checking, 'run-1', false)).toEqual(unreachable);
+  });
+
+  // The bug this closes: after the probes were exhausted the wording stood even
+  // while the daemon answered every later probe, offering "Check again" for a
+  // daemon that was demonstrably reachable.
+  it('retires that wording the moment anything answers', () => {
+    expect(runCheckWithDaemonReachability(unreachable, 'run-1', true)).toEqual(checking);
+  });
+
+  it('is a no-op when the wording is already right, so a pane may call it on every probe', () => {
+    expect(runCheckWithDaemonReachability(checking, 'run-1', true)).toBe(checking);
+    expect(runCheckWithDaemonReachability(unreachable, 'run-1', false)).toBe(unreachable);
+  });
+
+  it('leaves another run notice alone, and has nothing to say with no notice', () => {
+    expect(runCheckWithDaemonReachability(checking, 'run-2', false)).toBe(checking);
+    expect(runCheckWithDaemonReachability(null, 'run-1', false)).toBeNull();
+  });
+
+  it('carries the rest of the pane own marker through', () => {
+    const carried = { runId: 'run-1', unreachable: false, message: 'daemon 503: no body' };
+    expect(runCheckWithDaemonReachability(carried, 'run-1', false))
+      .toEqual({ ...carried, unreachable: true });
   });
 });
