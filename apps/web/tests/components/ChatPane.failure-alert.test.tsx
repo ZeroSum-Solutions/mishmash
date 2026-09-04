@@ -491,6 +491,40 @@ describe('a stream failure with no run verdict is a checking state, never a fail
     expect(failureCard(container), 'a run that may exist must not paint the failure card').toBeNull();
   });
 
+  // W1K.2 — the lookup can also stop being able to READ the daemon, and it has
+  // no run id to name while that lasts. The notice must still be able to say
+  // the daemon is not answering and offer the manual re-check, or a read outage
+  // leaves a paused composer behind a notice with no action on it.
+  it('says the daemon is not answering for a lookup with no run id, and its Check again calls back', () => {
+    const onRunCheckAgain = vi.fn();
+    const { container } = renderPane({
+      messages: [{ ...unresolvedRow(), runId: undefined } as ChatMessage],
+      runCheck: {
+        runId: null,
+        assistantMessageId: UNRESOLVED_ROW_ID,
+        unreachable: true,
+      },
+      sendDisabled: true,
+      onRunCheckAgain,
+    });
+
+    const notice = checkingNotice(container);
+    expect(notice, 'a lookup that cannot read the daemon still shows the checking notice').toBeTruthy();
+    expect(screen.getByText('chat.runChecking.unreachableTitle')).toBeTruthy();
+    expect(screen.getByText('chat.runChecking.unreachableMessage')).toBeTruthy();
+    expect(
+      failureCard(container),
+      'a daemon that answers nothing is still not a run that failed',
+    ).toBeNull();
+    expect(
+      notice?.textContent,
+      'the composer is still paused, so the notice still says so',
+    ).toContain('chat.sendPaused.unresolvedRun');
+
+    fireEvent.click(screen.getByRole('button', { name: 'chat.runChecking.checkAgainCta' }));
+    expect(onRunCheckAgain).toHaveBeenCalledTimes(1);
+  });
+
   // W1J.2 — the one honest failure on this path: the lookup ruled every run
   // out, so nothing ran and Retry carries no double-send hazard.
   it('names a run the daemon never started, and offers Retry for it', () => {

@@ -26,11 +26,13 @@ import {
   nextInferredRunFailureStep,
   runCheckWithDaemonReachability,
   retractsStaleRunFailure,
+  SEND_PAUSED_UNRESOLVED_RUN_KEY,
 } from '../../runtime/run-failure-reconcile';
 import type { RunCheckState } from '../../runtime/run-failure-reconcile';
 import {
   LOST_RUN_CREATE_PROBE_INTERVAL_MS,
   RUN_NOT_STARTED_ERROR_CODE,
+  lostRunCreateCheckWithDaemonReachability,
   matchLostRunCreate,
   nextLostRunCreateStep,
   pinnedRunIdForAssistantRow,
@@ -91,6 +93,16 @@ export interface UseConversationChatResult {
   runCheck: RunCheckState | null;
   /** Re-runs the follow behind that notice. */
   onRunCheckAgain: () => void;
+  /**
+   * True while this pane's own run is unresolved: its assistant row is still
+   * ACTIVE and no stream is attached to it. The same state
+   * `ProjectView.currentConversationAwaitingActiveRunAttach` names for the
+   * primary chat, and it holds Send for the same reason — a turn sent now would
+   * race a run whose verdict has not arrived.
+   */
+  sendDisabled: boolean;
+  /** The sentence the composer shows beside the Send it disabled. */
+  sendDisabledReason: string | undefined;
   /** True until the initial message load resolves. */
   loading: boolean;
   onSend: (
@@ -147,6 +159,15 @@ export function useConversationChat(
   // The lookup that runs when a create response is lost. Its own timer, so the
   // follow's `clearFailureRecheck` cannot cancel it and vice versa.
   const lostRunCreateTimerRef = useRef<number | null>(null);
+  // What a running lookup is looking UNDER, kept while it runs so the notice's
+  // manual re-check can run it again: before the lookup answers there is no run
+  // id to follow, only these two ids.
+  const lostRunCreateLookupRef = useRef<
+    { identity: LostRunCreateIdentity; message: string } | null
+  >(null);
+  // Retires the lookup a re-check replaces, so "Check again" cannot leave two
+  // loops probing under the same ids.
+  const lostRunCreateGenerationRef = useRef(0);
 
   const clearFailureRecheck = useCallback(() => {
     if (failureRecheckTimerRef.current === null) return;
@@ -155,6 +176,7 @@ export function useConversationChat(
   }, []);
 
   const clearLostRunCreateLookup = useCallback(() => {
+    lostRunCreateLookupRef.current = null;
     if (lostRunCreateTimerRef.current === null) return;
     window.clearTimeout(lostRunCreateTimerRef.current);
     lostRunCreateTimerRef.current = null;
@@ -300,17 +322,6 @@ export function useConversationChat(
     [clearErrorForRun, clearFailureRecheck, conversationId, projectId],
   );
 
-  // The manual re-check behind the "MishMash is not answering" notice: follow the
-  // run again now instead of waiting out the interval.
-  const onRunCheckAgain = useCallback(() => {
-    const pending = runCheck;
-    // A check with no run id is still LOOKING for one; its lookup is already
-    // running and the notice offers no manual re-check in that state.
-    if (!pending || !pending.runId) return;
-    setRunCheck({ ...pending, unreachable: false });
-    scheduleRunFailureRecheck(pending.runId, { unresolved: true, message: pending.message });
-  }, [runCheck, scheduleRunFailureRecheck]);
-
   // Load the conversation's persisted messages on mount / conversation switch.
   useEffect(() => {
     let cancelled = false;
@@ -373,8 +384,13 @@ export function useConversationChat(
   const scheduleLostRunCreateLookup = useCallback(
     (identity: LostRunCreateIdentity, streamMessage: string) => {
       const boundConversationId = conversationId;
-      const superseded = () => conversationRef.current !== boundConversationId;
+      const generation = lostRunCreateGenerationRef.current + 1;
+      lostRunCreateGenerationRef.current = generation;
+      const superseded = () =>
+        conversationRef.current !== boundConversationId
+        || lostRunCreateGenerationRef.current !== generation;
       let probes = 0;
+      let unanswered = 0;
       const attempt = () => {
         lostRunCreateTimerRef.current = null;
         void (async () => {
@@ -388,16 +404,33 @@ export function useConversationChat(
               runId = pinnedRunIdForAssistantRow(stored, identity.assistantMessageId);
             }
             if (superseded()) return;
-            // Only a probe that READ both surfaces may spend the bound; see
-            // `nextLostRunCreateStep`.
-            const step = nextLostRunCreateStep(runId, probes, active !== null && stored !== null);
-            if (step === 'probe') {
+            // Only a probe that READ both surfaces may spend the bound, and a
+            // run of probes that read NOTHING is what turns the notice's
+            // wording over; see `nextLostRunCreateStep`.
+            const answered = active !== null && stored !== null;
+            // Two different tests, deliberately. Spending the abandon bound
+            // needs BOTH reads; describing the daemon as silent needs neither
+            // to have landed, so one read that answered retires that wording
+            // even while the other did not. Both reads report a rejected fetch
+            // as `null` too (`fetchActiveChatRuns`, `fetchMessages`), so a
+            // daemon that is down counts here rather than falling to the catch.
+            unanswered = active !== null || stored !== null ? 0 : unanswered + 1;
+            const step = nextLostRunCreateStep(runId, probes, answered, unanswered);
+            if (step === 'probe' || step === 'unreachable') {
+              setRunCheck((current) =>
+                lostRunCreateCheckWithDaemonReachability(
+                  current,
+                  identity.assistantMessageId,
+                  step === 'probe',
+                ),
+              );
               lostRunCreateTimerRef.current = window.setTimeout(
                 attempt,
                 LOST_RUN_CREATE_PROBE_INTERVAL_MS,
               );
               return;
             }
+            lostRunCreateLookupRef.current = null;
             if (step === 'adopt' && runId) {
               const adoptedRunId = runId;
               setMessages((current) =>
@@ -441,6 +474,7 @@ export function useConversationChat(
             // never end without an outcome. Anything unexpected is one more
             // inconclusive probe.
             console.warn('Failed to look up a run whose create response was lost', err);
+            if (superseded()) return;
             lostRunCreateTimerRef.current = window.setTimeout(
               attempt,
               LOST_RUN_CREATE_PROBE_INTERVAL_MS,
@@ -449,6 +483,7 @@ export function useConversationChat(
         })();
       };
       clearLostRunCreateLookup();
+      lostRunCreateLookupRef.current = { identity, message: streamMessage };
       lostRunCreateTimerRef.current = window.setTimeout(attempt, RUN_FAILURE_RECHECK_DELAY_MS);
     },
     [
@@ -460,6 +495,28 @@ export function useConversationChat(
       t,
     ],
   );
+
+  // The manual re-check behind the "MishMash is not answering" notice: look
+  // again now instead of waiting out the interval.
+  //
+  // Both states the notice can be in have something to re-check, and they are
+  // not the same thing. A check WITH a run id follows that run; a check with
+  // none is still LOOKING for the run its lost create response never named, so
+  // what it runs again is the lookup, under the two ids it stored. Either way
+  // the neutral state stands and the re-check only takes the wording back.
+  const onRunCheckAgain = useCallback(() => {
+    const pending = runCheck;
+    if (!pending) return;
+    if (!pending.runId) {
+      const lookup = lostRunCreateLookupRef.current;
+      if (!lookup || lookup.identity.assistantMessageId !== pending.assistantMessageId) return;
+      setRunCheck({ ...pending, unreachable: false });
+      scheduleLostRunCreateLookup(lookup.identity, lookup.message);
+      return;
+    }
+    setRunCheck({ ...pending, unreachable: false });
+    scheduleRunFailureRecheck(pending.runId, { unresolved: true, message: pending.message });
+  }, [runCheck, scheduleLostRunCreateLookup, scheduleRunFailureRecheck]);
 
   const runSend = useCallback(
     (
@@ -739,5 +796,30 @@ export function useConversationChat(
     });
   }, [persist]);
 
-  return { messages, streaming, error, runCheck, loading, onSend, onRetry, onStop, onRunCheckAgain };
+  // INVARIANT: an unresolved run pauses sending, and a paused composer says so
+  // (`SEND_PAUSED_UNRESOLVED_RUN_KEY`). A side chat that renders its own
+  // `useConversationChat` gets no `sendDisabled` from a parent, so without this
+  // its Send stayed live for the whole unresolved window while its checking
+  // notice was on screen — the notice and the composer disagreeing about the
+  // same run.
+  const awaitingActiveRunAttach =
+    !streaming
+    && messages.some((message) => message.role === 'assistant' && isActiveRunStatus(message.runStatus));
+  const sendDisabledReason = awaitingActiveRunAttach
+    ? t(SEND_PAUSED_UNRESOLVED_RUN_KEY)
+    : undefined;
+
+  return {
+    messages,
+    streaming,
+    error,
+    runCheck,
+    loading,
+    onSend,
+    onRetry,
+    onStop,
+    onRunCheckAgain,
+    sendDisabled: awaitingActiveRunAttach,
+    sendDisabledReason,
+  };
 }

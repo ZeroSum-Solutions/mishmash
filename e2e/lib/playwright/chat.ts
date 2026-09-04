@@ -86,3 +86,57 @@ export async function runFailureCardSightings(page: Page): Promise<string[]> {
     return [...new Set(seen)].slice(0, 5);
   }, CARD_SIGHTINGS_KEY);
 }
+
+/** Where the checking-notice watcher below records its timeline, in the page. */
+const NOTICE_TIMELINE_KEY = 'od-e2e-checking-notice-timeline';
+
+/**
+ * Record whether the neutral checking notice, once painted, ever LEAVES the
+ * screen again.
+ *
+ * A notice the pane paints and then drops while the run is still unresolved is
+ * the failure this watcher exists to catch, and neither `toBeVisible()` nor a
+ * final `toHaveCount(1)` can see it: both look only when the test process
+ * happens to look. The watcher lives in the page — a MutationObserver plus a
+ * 50 ms sweep — so it observes the DOM continuously, and counts every time the
+ * notice disappeared after its first appearance.
+ *
+ * Top-level documents only, for the same reason as the failure-card watcher.
+ */
+function startRunCheckingNoticeWatcher(key: string): void {
+  if (window.top !== window.self) return;
+  const scope = window as unknown as Record<string, unknown>;
+  if (scope[key]) return;
+  const timeline = { appeared: false, disappearances: 0 };
+  scope[key] = timeline;
+  let present = false;
+  const scan = () => {
+    const showing = document.querySelector('[data-user-action-card="run-checking"]') !== null;
+    if (showing) timeline.appeared = true;
+    else if (present && timeline.appeared) timeline.disappearances += 1;
+    present = showing;
+  };
+  const observe = () => {
+    scan();
+    new MutationObserver(scan).observe(document.body, { childList: true, subtree: true });
+    window.setInterval(scan, 50);
+  };
+  if (document.body) observe();
+  else document.addEventListener('DOMContentLoaded', observe, { once: true });
+}
+
+/**
+ * Start the checking-notice watcher in the CURRENT document. A document load
+ * drops it, so install it after the last navigation.
+ */
+export async function watchRunCheckingNotice(page: Page): Promise<void> {
+  await page.evaluate(startRunCheckingNoticeWatcher, NOTICE_TIMELINE_KEY);
+}
+
+/** How many times the checking notice left the DOM after first appearing. */
+export async function runCheckingNoticeDisappearances(page: Page): Promise<number> {
+  return page.evaluate((key) => {
+    const timeline = (window as unknown as Record<string, { disappearances?: number } | undefined>)[key];
+    return timeline?.disappearances ?? 0;
+  }, NOTICE_TIMELINE_KEY);
+}

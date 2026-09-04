@@ -12,7 +12,7 @@ import { PROJECT_COVER_PLACEHOLDER_HEADER } from '@open-design/contracts';
 import { generateProjectCover } from '../covers/service.js';
 import { isTypedCoverError } from '../covers/errors.js';
 import { COVER_PLACEHOLDER_PNG } from '../covers/placeholder.js';
-import { isIntactPng } from '../covers/png.js';
+import { isRenderableCoverPng } from '../covers/png.js';
 import { hasAdvertisedCover, readCoverImageBytes } from '../covers/store.js';
 import { isSafeId } from '../projects.js';
 import type { RouteDeps } from '../server-context.js';
@@ -43,7 +43,7 @@ function reportUnusableCoverOnce(projectId: string): void {
   if (reportedUnusableCovers.has(projectId)) return;
   reportedUnusableCovers.add(projectId);
   console.warn(
-    `[covers] stored cover for project ${projectId} is not an intact PNG; serving the placeholder instead`,
+    `[covers] stored cover for project ${projectId} is not a renderable PNG; serving the placeholder instead`,
   );
 }
 
@@ -65,12 +65,16 @@ function reportUnusableCoverOnce(projectId: string): void {
  * So an advertised cover whose stored bytes cannot be served serves the
  * neutral placeholder instead, flagged with
  * `PROJECT_COVER_PLACEHOLDER_HEADER` so a caller that wants the real answer
- * can still tell. "Cannot be served" is `isIntactPng`, not merely a failed
- * read: `readCoverImageBytes` returns a zero-length Buffer for a truncated
- * file, which is truthy, and damaged bytes break the `<img>` exactly as a 404
- * does. Damage that leaves the file's outer frame in place — a byte flipped
- * inside a chunk, a chunk header rewritten — breaks it just the same, which is
- * why the check walks the whole container rather than inspecting its edges.
+ * can still tell. "Cannot be served" is `isRenderableCoverPng`, not merely a
+ * failed read: `readCoverImageBytes` returns a zero-length Buffer for a
+ * truncated file, which is truthy, and damaged bytes break the `<img>` exactly
+ * as a 404 does. Damage that leaves the file's outer frame in place — a byte
+ * flipped inside a chunk, a chunk header rewritten — breaks it just the same,
+ * which is why the check walks the whole container rather than inspecting its
+ * edges; damage that also leaves the container coherent — a corrupt payload
+ * whose CRC was recomputed, a stream holding fewer scanlines than the header
+ * asks for — breaks it too, which is why the check inflates the pixels rather
+ * than trusting the chunk table.
  *
  * This says nothing about the two guards at the call site. An unsafe id and an
  * unknown project are a path-traversal defence, not an answer about cover
@@ -78,7 +82,7 @@ function reportUnusableCoverOnce(projectId: string): void {
  */
 async function servedCoverImage(runtimeDataDir: string, projectId: string): Promise<ServedCoverImage | null> {
   const bytes = await readCoverImageBytes(runtimeDataDir, projectId);
-  if (bytes && isIntactPng(bytes)) {
+  if (bytes && isRenderableCoverPng(bytes)) {
     reportedUnusableCovers.delete(projectId);
     return { bytes, placeholder: false };
   }
