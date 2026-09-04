@@ -75,6 +75,7 @@ import type {
   ProjectMetadata,
 } from '../types';
 import { takeDesignSystemAssetSeed } from '../state/libraryHandoff';
+import { agentWriteMayFocusFile } from './agent-write-viewport';
 import { decideAutoOpenAfterWrite } from './auto-open-file';
 import { ChatPane } from './ChatPane';
 import { DesignSystemAssetDropzone } from './DesignSystemAssetDropzone';
@@ -1673,6 +1674,11 @@ export function DesignSystemDetailView({
     active: null,
   });
   const [workspaceOpenRequest, setWorkspaceOpenRequest] = useState<{ name: string; nonce: number } | null>(null);
+  // The workspace tab the user is looking at right now, readable from the
+  // streaming handlers' closures. `agentWriteMayFocusFile` reads it to decide
+  // whether an agent-produced file may take the viewport.
+  const workspaceActiveTabRef = useRef(workspaceTabsState.active);
+  workspaceActiveTabRef.current = workspaceTabsState.active;
   const chatAbortRef = useRef<AbortController | null>(null);
   const chatCancelRef = useRef<AbortController | null>(null);
   const pendingWorkspaceFileWritesRef = useRef<Map<string, string>>(new Map());
@@ -2138,6 +2144,16 @@ export function DesignSystemDetailView({
     setWorkspaceOpenRequest({ name, nonce: Date.now() });
   }, []);
 
+  // Every open that originates from an agent write goes through here instead
+  // of `requestWorkspaceFileOpen`, so `agentWriteMayFocusFile` is the single
+  // place that decides whether the viewport may move — the same routing
+  // `ProjectView` uses for its own streaming handler. User-driven opens (a
+  // chat file link, a tab) keep calling `requestWorkspaceFileOpen`.
+  const requestAgentWriteWorkspaceFileOpen = useCallback((name: string) => {
+    if (!agentWriteMayFocusFile(workspaceActiveTabRef.current, name)) return;
+    requestWorkspaceFileOpen(name);
+  }, [requestWorkspaceFileOpen]);
+
   // Known-file set for the design-system chat's file-link routing — same
   // shape ProjectView feeds its primary ChatPane.
   const workspaceProjectFileNames = useMemo(
@@ -2342,7 +2358,7 @@ export function DesignSystemDetailView({
               void refreshWorkspaceProjectFiles(projectId).then((nextFiles) => {
                 const decision = decideAutoOpenAfterWrite(filePath, nextFiles);
                 if (decision.shouldOpen && decision.fileName) {
-                  requestWorkspaceFileOpen(decision.fileName);
+                  requestAgentWriteWorkspaceFileOpen(decision.fileName);
                 }
                 if (isDesignSystemSourcePath(filePath)) {
                   void syncDesignSystemBodyFromWorkspace(projectId);
@@ -2449,7 +2465,7 @@ export function DesignSystemDetailView({
       persistProjectMessage,
       projectChatMessages,
       refreshWorkspaceProjectFiles,
-      requestWorkspaceFileOpen,
+      requestAgentWriteWorkspaceFileOpen,
       syncDesignSystemBodyFromWorkspace,
       system,
       workspaceProjectId,
