@@ -119,6 +119,7 @@ export type RunFailureMessageKey =
   | 'chat.runError.cpuUnsupportedMessage'
   | 'chat.runError.stoppedBySystemMessage'
   | 'chat.runError.daemonRestartedMessage'
+  | 'chat.runError.notStartedMessage'
   | null;
 
 // i18n keys for the unified error card's TITLE (the "error type" line above the
@@ -157,6 +158,7 @@ export type RunFailureTitleKey =
   | 'chat.runError.title.permissionBlocked'
   | 'chat.runError.title.stopped'
   | 'chat.runError.title.daemonRestarted'
+  | 'chat.runError.title.notStarted'
   | 'chat.runError.title.generic';
 
 export interface RunFailureUi {
@@ -196,6 +198,15 @@ function retryWithGuidance(
 // of that taxonomy — a human-readable type name plus a one-line instruction,
 // with the raw upstream string preserved in the card's collapsible source area.
 const AGENT_AGNOSTIC_FAILURE_UI: Record<string, RunFailureUi> = {
+  // The create request never reached the daemon: the lookup that follows a lost
+  // create response found no run under either of the ids the client owns
+  // (`runtime/lost-run-create.ts`). Nothing ran, so this is the one failure a
+  // client may name by itself — and the only state in which Retry carries no
+  // double-send hazard, because the lookup is what ruled a live run out.
+  RUN_NOT_STARTED: retryWithGuidance(
+    'chat.runError.title.notStarted',
+    'chat.runError.notStartedMessage',
+  ),
   // The run completed but did not leave a deliverable file. Name the actual
   // missing outcome in the compact card and keep the raw reason in details.
   ARTIFACT_NOT_FOUND: retryWithGuidance(

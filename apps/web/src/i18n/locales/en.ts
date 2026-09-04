@@ -86,6 +86,8 @@ export const en: Dict = {
   'chat.runError.sourceLabel': 'Error details',
   'chat.runError.sourceExpandAria': 'Expand error source',
   'chat.runError.sourceCollapseAria': 'Collapse error source',
+  'chat.runError.title.notStarted': 'The run could not be started',
+  'chat.runError.notStartedMessage': 'MishMash never received this request, so nothing ran. Send it again.',
   'chat.runChecking.title': 'Checking this run',
   'chat.runChecking.message': 'Connection to the run was lost. Checking its result…',
   'chat.runChecking.unreachableTitle': 'MishMash is not answering',

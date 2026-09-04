@@ -9,6 +9,10 @@ import {
   streamViaDaemon,
   type DaemonRunFinishedEventDetail,
 } from '../../src/providers/daemon';
+import {
+  isLostRunCreateFailure,
+  isUnadjudicatedStreamFailure,
+} from '../../src/runtime/run-failure-reconcile';
 import { streamMessageOpenAI } from '../../src/providers/openai-compatible';
 import { parseSseFrame } from '../../src/providers/sse';
 
@@ -1764,7 +1768,14 @@ describe('streamViaDaemon', () => {
     expect(handlers.onDone).not.toHaveBeenCalled();
   });
 
-  it('marks invalid create-run JSON as failed', async () => {
+  // W1J.2 supersedes the earlier claim here, which was that a create body the
+  // client cannot parse marks the run `failed`. The daemon accepted the request,
+  // created the run, pinned it and started the turn all BEFORE it answered
+  // (`apps/daemon/src/routes/runs.ts`), so an unreadable answer says nothing
+  // about the run — and a `failed` status stamped on the row is the same
+  // unearned verdict as the failure card. The transport reports the ambiguity
+  // instead, and the caller looks the run up under the ids it owns.
+  it('reports invalid create-run JSON as a lost create response, with no run status', async () => {
     const handlers = createDaemonHandlers();
     const onRunStatus = vi.fn();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('not json', { status: 202 })));
@@ -1778,9 +1789,38 @@ describe('streamViaDaemon', () => {
       onRunStatus,
     });
 
-    expect(onRunStatus).toHaveBeenCalledWith('failed');
+    expect(onRunStatus).not.toHaveBeenCalled();
     expect(handlers.onError).toHaveBeenCalledWith(expect.any(Error));
+    const [reported] = handlers.onError.mock.calls[0] as [Error];
+    expect(isLostRunCreateFailure(reported)).toBe(true);
+    expect(isUnadjudicatedStreamFailure(reported)).toBe(true);
     expect(handlers.onDone).not.toHaveBeenCalled();
+  });
+
+  // The other half of the same rule: a non-OK create is the daemon REFUSING the
+  // request. It named no run because it made none, so that answer keeps its own
+  // wording and its `failed` status.
+  it('keeps a refused create a real failure, not a run to look up', async () => {
+    const handlers = createDaemonHandlers();
+    const onRunStatus = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(new Response('bad request', { status: 400 })),
+    );
+
+    await streamViaDaemon({
+      agentId: 'mock',
+      history: [{ id: '1', role: 'user', content: 'hello' }],
+      systemPrompt: '',
+      signal: new AbortController().signal,
+      handlers,
+      onRunStatus,
+    });
+
+    expect(onRunStatus).toHaveBeenCalledWith('failed');
+    const [reported] = handlers.onError.mock.calls[0] as [Error];
+    expect(isLostRunCreateFailure(reported)).toBe(false);
+    expect(reported.message).toContain('daemon 400');
   });
 
   it('reconnects to a daemon run after an incomplete stream closes', async () => {
