@@ -40,6 +40,13 @@ import { useRef } from 'react';
  * producer would settle the watchdog armed for A. That is the stuck-navigation
  * bug the epoch exists to catch, re-entered through the back door.
  *
+ * `noteLoaded` records WHICH document the frame loaded, not merely that it
+ * loaded one, and `committed` compares that against the document the host is
+ * asking about now. The two can differ: the frame's `load` for the outgoing
+ * document can fire in the window between the render that repointed the frame
+ * and React committing the new `onLoad`, and a bare boolean would let that
+ * `load` vouch for its successor. Comparing identities is what refuses it.
+ *
  * Both render-phase writes are idempotent, so a render React runs twice (Strict
  * Mode) or discards costs at worst a cleared latch — a missed disclosure, never
  * a false one.
@@ -55,19 +62,19 @@ export function useCommittedDocument(target: string): {
   noteLoaded: () => void;
 } {
   const watched = useRef(target);
-  const loaded = useRef(false);
+  const vouched = useRef<string | null>(null);
 
   if (watched.current !== target) {
     watched.current = target;
-    loaded.current = false;
+    vouched.current = null;
   }
 
   return {
     get committed() {
-      return loaded.current;
+      return vouched.current !== null && vouched.current === watched.current;
     },
     noteLoaded: () => {
-      loaded.current = true;
+      vouched.current = target;
     },
   };
 }
