@@ -10171,9 +10171,11 @@ export async function startServer({
     try {
       server = app.listen(port, host);
       // A WebSocket upgrade never enters the Express router, so the preview
-      // proxy's HMR channel is wired to the listener itself. Every other
-      // upgrade closes the socket, which is what Node already does when no
-      // handler is registered.
+      // proxy's HMR channel is wired to the listener itself. Registering a
+      // handler takes over what Node would otherwise do with an upgrade —
+      // including its own error handling — so the handler closes every socket
+      // that names no live preview, and owns the socket's failures from the
+      // moment it is called (`ownUpgradeSocket`, preview-proxy.ts).
       server.on('upgrade', createPreviewProxyUpgradeHandler({
         getPreview: (id) => previewService.get(id),
       }));
