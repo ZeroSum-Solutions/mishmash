@@ -35,7 +35,11 @@ import { useEffect, useRef, useState } from 'react';
 export const MEMORY_EVENTS_URL = '/api/memory/events';
 
 export interface SharedStreamHandlers {
-  /** SSE event name to handler, in the shape `EventSource.addEventListener` takes. */
+  /**
+   * SSE event name to handler, in the shape `EventSource.addEventListener`
+   * takes. The pool binds one listener per name and fans it out, so a name a
+   * subscriber adds later is bound on the next commit rather than missed.
+   */
   events: Record<string, (event: MessageEvent) => void>;
   /**
    * Called when this tab reopens the stream after releasing it. Subscribers
@@ -143,6 +147,16 @@ export function useSharedEventStream(url: string | null, handlers: SharedStreamH
       pools.delete(url);
     };
   }, [url]);
+
+  // Names are bound to the open connection, and a name bound to a connection
+  // that has since closed went with it. Re-binding on every commit is what
+  // keeps `events` free to gain a key after the pool opened; binding is a set
+  // lookup per name, so a no-op costs nothing.
+  useEffect(() => {
+    if (!url) return;
+    const pool = pools.get(url);
+    if (pool) bindEventNames(pool);
+  });
 }
 
 /**
