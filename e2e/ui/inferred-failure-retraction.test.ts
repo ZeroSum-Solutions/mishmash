@@ -30,20 +30,26 @@ const RUN_PROMPT = 'Create a delayed deterministic smoke artifact';
 // a permanently running, content-less row — cannot pass as a build that
 // retracted the failure.
 const RUN_ANSWER = 'I recovered the delayed reasoning path';
-// W1L.1: the prompt whose FIRST ATTEMPT really fails on the daemon. The fake
-// runtime reports the shared upstream 503 (`emitServiceFailure(503)` in
-// `e2e/lib/fake-agents.ts`), which the daemon classifies
+// W1L.1: the prompt whose FIRST ATTEMPT really fails on the daemon, with an
+// upstream 503. The fake runtime spends one attempt on `emitServiceFailure(503)`
+// and answers the next one (`emitRetriedDelayedArtifactRun` in
+// `e2e/lib/fake-agents.ts`, which marks the spent attempt with a dotfile in the
+// project directory). The daemon classifies that 503
 // `upstream_unavailable`/`upstream_5xx` at `first_token_wait`, emits its OWN
-// retryable `error` frame for, and retries as the SAME run
+// retryable `error` frame for it, and retries as the SAME run
 // (`decideSafeRunRetry`, `apps/daemon/src/run-retry-policy.ts`); the second
 // attempt answers with `RUN_ANSWER` after 1.2s, so the run reaches `succeeded`
 // on its own. That is what lets this spec observe a real daemon error frame on a
-// run that succeeds. An empty first attempt would be the more literal reading of
-// the prompt, but the daemon's empty-output message names quota
-// ("…checking quota, or switching models"), so `classifyRunFailure` calls it
-// `rate_limit`/`hard_quota` and SUPPRESSES the retry — see the proof file's
-// adjacent issue B. Do not "simplify" this fixture to that path.
-const RETRY_RUN_PROMPT = 'Spend one empty attempt then deliver the delayed artifact';
+// run that succeeds.
+//
+// The prompt STRING reads "empty attempt", but nothing empty happens: the
+// string is only the fixture key `e2e/lib/fake-agents.ts` matches on, and the
+// attempt it spends is the 503 above. Do not read the wording as a claim about
+// empty-output handling. That handling has since changed anyway — #215 (W1L.4)
+// made `classifyRunFailure` call an empty turn `empty_output` instead of
+// `rate_limit`/`hard_quota`, and `decideSafeRunRetry` allows the same-run retry
+// for `empty_output` at `first_token_wait`.
+const UPSTREAM_503_RETRY_RUN_PROMPT = 'Spend one empty attempt then deliver the delayed artifact';
 // W1J.4: what the user types while the run is unresolved. A draft is required
 // to see the pause at all — the Send button is also disabled on an empty
 // composer, so an empty one cannot tell "paused" from "nothing to send".
@@ -59,9 +65,11 @@ const RECHECK_MISSES_UNDER_TEST = 3;
 // fourth at ~9.15 s.
 const STATUS_OUTAGE_WINDOW_MS = 7_500;
 // How many reconnects `consumeDaemonRun` spends before it gives up on a stream
-// that keeps answering with nothing (`reconnects < 5` in
-// `apps/web/src/providers/daemon.ts`). Each empty 200 the W1K.3 cases serve
-// spends one, so the budget is gone after this many.
+// it can never open (`reconnects < 5` in `apps/web/src/providers/daemon.ts`,
+// counted in the `catch` around its `fetch`). The W1K.3 cases spend them with
+// connection resets, not bodies: `holdRunOutage` answers every reattach for the
+// held run with `route.abort('connectionreset')`, so each round is a fetch that
+// throws. The budget is gone after this many.
 const RECONNECT_BUDGET = 5;
 // The prompt the fake runtime answers with a real, daemon-classified failure
 // (`e2e/lib/fake-agents.ts`, REPORTED_AGENT_FAILURE_OUTPUT.sleep). Used by the
@@ -668,8 +676,9 @@ test('[P0] a Side Chat stream failure with no run verdict never paints the failu
 //
 // Driven on the real wire, never written into a fixture:
 //   1. the run's FIRST ATTEMPT really fails, on the daemon's own fail-once/retry
-//      flow (`RETRY_RUN_PROMPT`), so the `error` frame the client receives is the
-//      daemon's own — code, message and classification included;
+//      flow (`UPSTREAM_503_RETRY_RUN_PROMPT`), so the `error` frame the client
+//      receives is the daemon's own — code, message and classification
+//      included;
 //   2. the events connection is then cut mid-body, right after that frame, by a
 //      proxy that forwards the daemon's bytes and destroys the client socket
 //      (`@/playwright/sse-transport-cut`). The daemon always pairs `error` with a
@@ -694,7 +703,7 @@ test('[P0] a live provisional error frame with no readable status never paints t
   await watchRunFailureCard(page);
 
   frameHold.arm();
-  const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), RETRY_RUN_PROMPT);
+  const runResponse = await sendPrompt(page, page.getByTestId('chat-composer').first(), UPSTREAM_503_RETRY_RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
   const failureAlert = runErrorCard(page);
@@ -758,7 +767,7 @@ test('[P0] a Side Chat provisional error frame with no readable status never pai
   await watchRunFailureCard(page);
 
   frameHold.arm();
-  const runResponse = await sendPrompt(page, await composerInside(page, sideChat), RETRY_RUN_PROMPT);
+  const runResponse = await sendPrompt(page, await composerInside(page, sideChat), UPSTREAM_503_RETRY_RUN_PROMPT);
   const { runId } = (await runResponse.json()) as { runId: string };
 
   const failureAlert = runErrorCard(sideChat);
