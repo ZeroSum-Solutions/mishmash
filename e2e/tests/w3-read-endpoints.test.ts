@@ -451,13 +451,34 @@ describe('W3F read-route contracts, budget and containment', () => {
       );
 
       // A skill sub-resource path may not escape the entry's own root.
-      const escaped = await fetch(
+      //
+      // Both cases assert 400 exactly, not "400 or 404". 404 is also what the
+      // handler answers when the entry resolves and the file simply is not
+      // there, so accepting it would let a future edit that dropped the
+      // containment check pass this assertion unnoticed. 400 is reachable only
+      // from the containment branch.
+      //
+      // The `assets` route carries no extension allowlist
+      // (`static-resource.ts` registers it without one), so containment is the
+      // only thing that can reject this request.
+      const escapedAsset = await fetch(
         new URL(`/api/skills/${POSTER_TEMPLATE_ID}/assets/..%2F..%2F..%2Fpackage.json`, daemonUrl),
       );
       expect(
-        [400, 404].includes(escaped.status),
-        `skill sub-resource containment must still refuse a traversal (got ${escaped.status})`,
-      ).toBe(true);
+        escapedAsset.status,
+        'skill asset containment must refuse a traversal out of the entry root',
+      ).toBe(400);
+
+      // The `fonts` route does carry an allowlist, so this traversal uses an
+      // allowlisted extension (`.css`): the allowlist cannot be what rejects
+      // it, and containment must be.
+      const escapedFont = await fetch(
+        new URL(`/api/skills/${FONTS_TEMPLATE_ID}/fonts/..%2F..%2F..%2Fpackage.css`, daemonUrl),
+      );
+      expect(
+        escapedFont.status,
+        'skill font containment must refuse a traversal whose extension the allowlist permits',
+      ).toBe(400);
     });
   }, 600_000);
 });
