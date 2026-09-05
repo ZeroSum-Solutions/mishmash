@@ -11,6 +11,7 @@ import {
 } from "../analytics/events";
 import { useT } from "../i18n";
 import {
+	canListProjectFilesAsDelta,
 	deleteLiveArtifact,
 	fetchLiveArtifacts,
 	fetchProjectFiles,
@@ -93,21 +94,23 @@ type DesignListItem =
 
 const DESIGNS_VIEW_STORAGE_KEY = "od:designs:view";
 
-// One project's file tree as the cover scan last saw it, plus the project
-// revision that tree belongs to.
+// One project's file tree as the cover scan last saw it, the project revision
+// that tree belongs to, and how many deltas have been merged into it since the
+// last full walk.
 interface ScannedProjectFiles {
 	revision: number;
 	files: ProjectFile[];
+	deltaScans: number;
 }
 
 /**
  * List one project's files for the cover scan, re-walking only what changed.
  *
- * INVARIANT (INV-3.3): once a project's tree has been walked, a later scan of
- * the SAME project revision asks the daemon only for entries newer than the
- * newest mtime already seen and folds that delta into the held tree. A `since`
- * response cannot express a deletion, so a project whose `updatedAt` moved --
- * the only way a file can have been removed -- is re-walked in full instead.
+ * INVARIANT (INV-3.3): once a project's tree has been walked, a later scan the
+ * bound in `canListProjectFilesAsDelta` still allows asks the daemon only for
+ * entries newer than the newest mtime already seen, and folds that delta into
+ * the held tree. A `since` response cannot express a deletion, which is why
+ * that bound exists -- see its docblock.
  */
 async function listProjectFilesSince(
 	projectId: string,
@@ -274,10 +277,11 @@ export function DesignsTab({
 			if (project.metadata?.kind === "brand") return [project.id, null] as const;
 			if (project.metadata?.entryFile && !designSystemProject) return [project.id, null] as const;
 			const held = scanned.get(project.id);
+			const asDelta = canListProjectFilesAsDelta(held, project.updatedAt);
 			let files: ProjectFile[];
 			try {
 				files =
-					held && held.revision === project.updatedAt
+					asDelta && held
 						? await listProjectFilesSince(project.id, held.files)
 						: await fetchProjectFiles(project.id);
 			} catch {
@@ -285,7 +289,11 @@ export function DesignsTab({
 				// every other project's fetch keeps running via the shared pool.
 				return [project.id, null] as const;
 			}
-			scanned.set(project.id, { revision: project.updatedAt, files });
+			scanned.set(project.id, {
+				revision: project.updatedAt,
+				files,
+				deltaScans: asDelta && held ? held.deltaScans + 1 : 0,
+			});
 			if (designSystemProject) {
 				const logo = findDesignSystemLogoFile(files);
 				if (logo) {

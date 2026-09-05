@@ -1688,6 +1688,38 @@ export function mergeProjectFileDelta(
   );
 }
 
+/**
+ * How many consecutive delta listings one held file tree may serve before the
+ * caller must walk the project in full again.
+ *
+ * Twenty ticks of the home grid's 15 s poll is five minutes, so a file that
+ * disappeared behind the daemon's back is gone from the grid within that,
+ * while nineteen polls in twenty still pay only for the delta.
+ */
+export const MAX_CONSECUTIVE_DELTA_SCANS = 20;
+
+/**
+ * Decide whether the next listing of one project may be a delta.
+ *
+ * INVARIANT: a delta-merged tree is never served indefinitely. A `since`
+ * response cannot express a DELETION — an absent entry means "unchanged", not
+ * "removed" (INV-3.3) — so a tree built by merging deltas can only ever grow.
+ * Two things end a delta run: the project's revision moving, and the bound
+ * above. The revision alone is not enough, because deleting a project file
+ * does not touch the project row: `DELETE /api/projects/:id/files/:name`
+ * (`apps/daemon/src/routes/project/index.ts`) calls `deleteProjectFile` and
+ * never `updateProject`, so `updatedAt` does not move. Without the bound a
+ * deleted file could pin a stale cover forever.
+ */
+export function canListProjectFilesAsDelta(
+  held: { revision: number; deltaScans: number } | undefined,
+  revision: number,
+): boolean {
+  if (!held) return false;
+  if (held.revision !== revision) return false;
+  return held.deltaScans < MAX_CONSECUTIVE_DELTA_SCANS;
+}
+
 /** The cursor to send on the next poll: the newest mtime already observed. */
 export function latestProjectFileMtime(files: ProjectFile[]): number {
   let latest = 0;

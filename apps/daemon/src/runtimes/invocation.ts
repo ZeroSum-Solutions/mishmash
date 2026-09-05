@@ -64,10 +64,14 @@ function terminateProbeTree(pid: number | undefined): void {
   };
   const reached = targets.filter((target) => signal(target, 'SIGTERM'));
   if (reached.length === 0) return;
-  const escalation = setTimeout(() => {
+  // Deliberately NOT unref'd: a probe that ignored SIGTERM is only actually
+  // stopped by the SIGKILL below, so letting the event loop drain during the
+  // grace window would leave exactly the orphan this function exists to
+  // prevent. The window is a quarter of a second, so holding the loop open for
+  // it cannot meaningfully delay a daemon shutdown.
+  setTimeout(() => {
     for (const target of reached) signal(target, 'SIGKILL');
   }, PROBE_KILL_ESCALATION_MS);
-  escalation.unref();
 }
 
 // Agent probes (model-list / version / help / auth-status) are short read-only

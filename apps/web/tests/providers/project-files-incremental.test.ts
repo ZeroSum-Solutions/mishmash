@@ -34,6 +34,13 @@ const fetchProjectFiles = registry.fetchProjectFiles as (
   options?: { since?: number },
 ) => Promise<ProjectFile[]>;
 
+const canListProjectFilesAsDelta = registry.canListProjectFilesAsDelta as (
+  held: { revision: number; deltaScans: number } | undefined,
+  revision: number,
+) => boolean;
+
+const MAX_CONSECUTIVE_DELTA_SCANS = registry.MAX_CONSECUTIVE_DELTA_SCANS as number;
+
 function projectFile(name: string, mtime: number): ProjectFile {
   return {
     name,
@@ -176,5 +183,30 @@ describe('project list identity', () => {
 
     const touched = [project('a', 11)];
     expect(preserveProjectListIdentity(current, touched)).toBe(touched);
+  });
+});
+
+describe('delta listing bound', () => {
+  it('walks in full when nothing has been walked yet', () => {
+    expect(typeof canListProjectFilesAsDelta).toBe('function');
+    expect(canListProjectFilesAsDelta(undefined, 10)).toBe(false);
+  });
+
+  it('walks in full when the project revision moved', () => {
+    expect(canListProjectFilesAsDelta({ revision: 10, deltaScans: 0 }, 11)).toBe(false);
+  });
+
+  it('walks in full again once the delta run reaches its bound', () => {
+    expect(MAX_CONSECUTIVE_DELTA_SCANS).toBeGreaterThan(0);
+    // Deleting a project file does NOT move `project.updatedAt`: the daemon's
+    // DELETE /api/projects/:id/files/:name handler calls `deleteProjectFile`
+    // and never `updateProject`. A `since` response cannot express a deletion
+    // either, so without this bound a removed file would pin a stale cover for
+    // as long as the tab stayed open.
+    const last = MAX_CONSECUTIVE_DELTA_SCANS - 1;
+    expect(canListProjectFilesAsDelta({ revision: 10, deltaScans: last }, 10)).toBe(true);
+    expect(
+      canListProjectFilesAsDelta({ revision: 10, deltaScans: MAX_CONSECUTIVE_DELTA_SCANS }, 10),
+    ).toBe(false);
   });
 });
