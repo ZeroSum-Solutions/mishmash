@@ -485,10 +485,11 @@ export async function registerLibraryAsset(
  * `apps/daemon/tests/library-task-skip-reason.test.ts` reads memory-llm.ts and
  * pins the two sets equal, so they cannot drift apart silently.
  *
- * Every one of the 4,331 tasks on the live daemon reads `skipped` with the
- * literal line "ai: caption/ocr/embedding skipped (no model configured)" —
- * a claim the previous code never tested, because it wrote that line
- * unconditionally with no configuration check anywhere.
+ * Every task on the live daemon reads `skipped` with the literal line
+ * "ai: caption/ocr/embedding skipped (no model configured)" — a claim the
+ * previous code never tested, because it wrote that line unconditionally with
+ * no configuration check anywhere. (The row count is deliberately not quoted:
+ * it grows with ordinary use, so a number in a comment rots.)
  */
 export const ENRICHMENT_MODEL_CREDENTIAL_ENV_KEYS = [
   'AIHUBMIX_API_KEY',

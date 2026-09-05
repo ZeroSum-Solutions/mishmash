@@ -1,15 +1,15 @@
 // Red spec (W3G / PRD 3.7, item T-08): is the library ingest queue doing
 // nothing, and can a reader tell WHY?
 //
-// The live daemon's `library_tasks` table holds 4,331 rows and every single
-// one is `status = 'skipped'`. The reason lives only inside a hardcoded
+// Every row in the live daemon's `library_tasks` table is `status =
+// 'skipped'`, thousands of them. The reason lives only inside a hardcoded
 // English progress line -- `recordEnrichmentTask`
 // (apps/daemon/src/library.ts:474-492) pushes the literal
 // "ai: caption/ocr/embedding skipped (no model configured)" onto every task
 // unconditionally, with no model-configuration check anywhere and no other
 // outcome path. So the claim in that line is an assertion the code never
 // tests, and a reader querying the table has no machine-readable field to
-// group or filter 4,331 skips by.
+// group or filter those skips by.
 //
 // This spec drives the real `POST /api/library/ingest` route against a real
 // booted daemon (the harness apps/daemon/tests/

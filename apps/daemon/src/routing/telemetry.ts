@@ -114,19 +114,39 @@ export type RoutingEngagement = 'engaged' | 'runtime-default' | 'not-dispatched'
  * INVARIANT: every stored `routing_telemetry` row states whether the router
  * engaged for it. Nothing else in the row carries that: `routed_lane` alone
  * is a lane name, and a reader cannot know from a lane name whether it was
- * CHOSEN by the policy engine or merely INHERITED from the runtime. The 286
- * rows on the live daemon -- all `routed_lane = 'runtime-default'`, all
- * written after the dispatch wiring landed -- are exactly that ambiguity: they
- * read as "the router records nothing" when what they actually record is "the
- * router ran and had no identity to route against, 286 times".
+ * CHOSEN by the policy engine or merely INHERITED from the runtime. The rows
+ * on the live daemon -- all `routed_lane = 'runtime-default'`, all written
+ * after the dispatch wiring landed -- are exactly that ambiguity: they read as
+ * "the router records nothing" when what they actually record is "the router
+ * ran and had no identity to route against", once per dispatch. (No count is
+ * quoted here on purpose: it grows with ordinary use, so a number in a comment
+ * is stale the day after it is written.)
  *
  * The verdict is DERIVED here rather than passed in, because
- * `resolveDispatchRouting`'s own three-way `mode` is discarded before it
- * reaches storage (`recordDispatchIntent`, dispatch.ts:747, builds the row
- * from `RecordedDispatchIntent`'s other fields only). Deriving it from the two
- * reserved sentinels above is exact, not a heuristic: neither sentinel is a
- * `RoutingLaneId`, so neither can arrive from a routed or overridden
- * decision.
+ * `resolveDispatchRouting`'s own `mode` is discarded before it reaches storage
+ * (`recordDispatchIntent`, dispatch.ts:747, builds the row from
+ * `RecordedDispatchIntent`'s other fields only). Deriving it from the two
+ * reserved sentinels above is exact, not a heuristic, and the fall-through to
+ * `'engaged'` is safe for all four `DispatchMode` values:
+ *
+ *   - `'routed'` / `'override'`  take their lane from a vetted
+ *     `RoutingCandidate` whose `lane` is typed `RoutingLaneId`, so the lane is
+ *     never either sentinel -- these are the fall-through, and they ARE the
+ *     router engaging.
+ *   - `'runtime-default'`        carries the first sentinel.
+ *   - `'blocked'`                never reaches storage at all, so it can never
+ *     take the fall-through. Two independent guards: `RecordedDispatchIntent`
+ *     types its `mode` as `Exclude<DispatchMode, 'blocked'>` and every blocked
+ *     branch of `resolveDispatchRouting` sets `recordedIntent: null`
+ *     (dispatch.ts:167-185, :343-350, :621-624, :646-647, :696, :718-719), and
+ *     the one dispatch call site returns before recording
+ *     (`server.ts:5946`, `if (wrDispatchRouting.mode === 'blocked') return
+ *     design.runs.fail(...)`, ahead of `recordDispatchIntent` at
+ *     `server.ts:5979`). Recording a refusal as a routing decision is exactly
+ *     what `RecordedDispatchIntent`'s own doc comment forbids.
+ *
+ * The remaining writer is not a dispatch at all and carries the second
+ * sentinel; see `NON_DISPATCH_LANE_SENTINEL`.
  */
 export function routingEngagementForRow(row: StoredRoutingTelemetryRow): RoutingEngagement {
   if (row.routedLane === RUNTIME_DEFAULT_LANE_SENTINEL) return 'runtime-default';

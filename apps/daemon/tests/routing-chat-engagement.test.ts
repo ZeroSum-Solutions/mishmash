@@ -1,8 +1,8 @@
 // Red spec (W3G / PRD 3.7, item T-07): does the router ever engage on
 // `/api/chat`, and can a reader TELL from the stored row?
 //
-// The live daemon's `routing_telemetry` table holds 286 rows (all written
-// after the dispatch wiring landed), every one with `routed_lane =
+// Every row in the live daemon's `routing_telemetry` table was written after
+// the dispatch wiring landed, and every one of them has `routed_lane =
 // 'runtime-default'`, `observed_lane` empty, `gate_outcomes_json = '{}'` and
 // `escalated = 0`. That reads like "the router records nothing", but it is
 // ambiguous: `resolveDispatchRouting` (apps/daemon/src/routing/dispatch.ts)
