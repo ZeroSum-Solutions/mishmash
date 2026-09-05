@@ -299,7 +299,10 @@ describe('project file index', () => {
       resolveProjectDir: () => '/projects/project-1',
     });
 
-    for (const since of [undefined, 0, -1, Number.NaN]) {
+    await expect(
+      index.list({ projectsRoot: '/projects', projectId: 'project-1' }),
+    ).resolves.toEqual([INDEX_FILE]);
+    for (const since of [0, -1, Number.NaN]) {
       await expect(
         index.list({ projectsRoot: '/projects', projectId: 'project-1', since }),
       ).resolves.toEqual([INDEX_FILE]);
