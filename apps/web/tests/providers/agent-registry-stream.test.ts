@@ -142,6 +142,34 @@ describe('fetchAgentsStream contract frames', () => {
     expect(refreshPainted).toEqual(['codex', 'claude']);
   });
 
+  it('cancels the request when the last caller lets go, but not before', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let seenSignal: AbortSignal | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        seenSignal = init?.signal ?? undefined;
+        await gate;
+        return streamResponse(encodeFrames(frames));
+      }),
+    );
+
+    const boot = new AbortController();
+    const bootCall = fetchAgentsStream({ onAgent: vi.fn(), signal: boot.signal });
+    const refreshCall = fetchAgentsStream({ onAgent: vi.fn() });
+
+    boot.abort();
+    await expect(bootCall).rejects.toBeTruthy();
+    // The peer is still listening, so the shared request keeps running.
+    expect(seenSignal?.aborted).toBe(false);
+
+    release();
+    await expect(refreshCall).resolves.toHaveLength(2);
+  });
+
   it('does not let a forced refresh join an older in-flight stream', async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {

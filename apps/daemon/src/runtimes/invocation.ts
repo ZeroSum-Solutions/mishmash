@@ -111,7 +111,6 @@ export function execAgentFile(
     const child = spawn(invocation.command, invocation.args, {
       cwd: options.cwd ?? os.tmpdir(),
       ...(options.env ? { env: options.env } : {}),
-      windowsHide: true,
       windowsVerbatimArguments: invocation.windowsVerbatimArguments,
       // Own process group, so a timeout can reach grandchildren too.
       detached: process.platform !== 'win32',

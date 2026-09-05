@@ -128,6 +128,8 @@ interface SharedAgentStream {
   agents: AgentInfo[];
   listeners: Set<AgentStreamListener>;
   promise: Promise<AgentInfo[]>;
+  /** Cancels the underlying request once no caller is listening any more. */
+  abort: AbortController;
 }
 
 let inFlightAgentStream: SharedAgentStream | null = null;
@@ -141,6 +143,7 @@ function readAgentRegistryStream(
     const resp = await fetch(`/api/agents${query}`, {
       cache: 'no-store',
       headers: { Accept: 'text/event-stream' },
+      signal: shared.abort.signal,
     });
     if (!resp.ok || !resp.body) {
       throw new Error(`agents stream ${resp.status}`);
@@ -209,9 +212,10 @@ function readAgentRegistryStream(
  *
  * A caller that joins after some probes have already settled is replayed the
  * agents painted so far, so joining never loses a card. The caller's
- * AbortSignal detaches that caller only: the shared request keeps serving
- * everyone else, which is what makes the boot call's unmount abort safe to
- * share with a later `refreshAgents`.
+ * AbortSignal detaches that caller only; the underlying request is cancelled
+ * when the LAST caller lets go, so the boot call's unmount abort still stops
+ * the request when nothing else wants it but no longer cuts a concurrent
+ * `refreshAgents` off mid-stream.
  */
 function joinAgentRegistryStream(
   shared: SharedAgentStream,
@@ -226,6 +230,7 @@ function joinAgentRegistryStream(
   shared.listeners.add(listener);
   const detach = () => {
     shared.listeners.delete(listener);
+    if (shared.listeners.size === 0) shared.abort.abort();
   };
   if (!signal) {
     return shared.promise.then(
@@ -287,6 +292,7 @@ export async function fetchAgentsStream(args: {
     agents: [],
     listeners: new Set(),
     promise: Promise.resolve([]),
+    abort: new AbortController(),
   };
   shared.promise = readAgentRegistryStream(forceRefresh, shared).finally(() => {
     if (inFlightAgentStream === shared) inFlightAgentStream = null;
