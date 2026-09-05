@@ -74,6 +74,7 @@ function captureMetadata(): ProofModule.W3CaptureMetadata {
 /** The proof shape, typed only where the module under test is present. */
 type Proof = ProofModule.W3EndpointLatencyProof;
 type Sample = ProofModule.W3LatencySample;
+type W3CaptureMetadata = ProofModule.W3CaptureMetadata;
 
 /**
  * The validator's verdict, or a sentinel naming what is missing.
@@ -258,6 +259,33 @@ describe('W3 endpoint-latency proof — validator', () => {
     // that might have been over the bar; dropping it silently is censoring.
     expect(codes, why('an unmeasurable long task may not vanish from the count')).toContain(
       'unmeasurable-ui-lag',
+    );
+  });
+
+  it('rejects a capture that deleted its unmeasurable-long-task count', () => {
+    const candidate = healthyProof();
+    const { uiLagUnmeasurable: _dropped, ...withoutCount } = candidate;
+    const codes = violationCodes(withoutCount as Proof);
+
+    // Deleting the count is cheaper than deleting the records: an absent
+    // denominator reads as zero, which is the same hole `missing-route-attempts`
+    // closes for the endpoint half.
+    expect(codes, why('an absent unmeasurable count is not a count of zero')).toContain(
+      'unmeasurable-ui-lag',
+    );
+  });
+
+  it('rejects a cache policy outside the closed set', () => {
+    const codes = violationCodes(
+      healthyProof({
+        capture: { ...captureMetadata(), cachePolicy: 'hot' as W3CaptureMetadata['cachePolicy'] },
+      }),
+    );
+
+    // Cold and warm are different measurements of the same route, so a policy
+    // nobody defined leaves the reader unable to say which one they are reading.
+    expect(codes, why('a cache policy must be one the reader can interpret')).toContain(
+      'missing-capture-metadata',
     );
   });
 

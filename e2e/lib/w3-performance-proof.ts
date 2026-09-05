@@ -225,6 +225,15 @@ export interface W3RouteAttempts {
  * What the capture was, pinned so the numbers can be reproduced or disputed (A3).
  * The validator refuses a capture missing any of it.
  */
+/**
+ * How the capture treated caches. A closed set: cold and warm are different
+ * measurements of the same route, so a value nobody defined leaves a reader
+ * unable to say which of the two they are holding.
+ */
+export type W3CachePolicy = 'cold' | 'warm' | 'mixed';
+
+export const W3_CACHE_POLICIES: readonly W3CachePolicy[] = ['cold', 'warm', 'mixed'];
+
 export interface W3CaptureMetadata {
   /** Daemon commit the capture ran against. */
   daemonSha: string;
@@ -236,7 +245,7 @@ export interface W3CaptureMetadata {
   openTabCount: number;
   /** How long a tab was foreground-visible, which is when `longtask` fires at all. */
   foregroundTabExposure: string;
-  cachePolicy: 'cold' | 'warm' | 'mixed';
+  cachePolicy: W3CachePolicy;
   /** Expected to be `W3_ROUTE_NORMALIZATION_KEY`. */
   normalizationKey: string;
 }
@@ -357,6 +366,13 @@ function validateMetadata(capture: W3CaptureMetadata): W3Violation[] {
       detail: 'the pinned normalization key is not the rule this report grouped by',
     });
   }
+  if (!W3_CACHE_POLICIES.includes(capture?.cachePolicy)) {
+    violations.push({
+      code: 'missing-capture-metadata',
+      subject: 'cachePolicy',
+      detail: `cachePolicy ${JSON.stringify(capture?.cachePolicy)} is outside the closed set ${W3_CACHE_POLICIES.join('|')}`,
+    });
+  }
   if (!Number.isFinite(capture?.openTabCount) || (capture?.openTabCount ?? -1) < 0) {
     violations.push({
       code: 'missing-capture-metadata',
@@ -435,8 +451,11 @@ function validateUiLag(proof: W3EndpointLatencyProof): W3Violation[] {
       });
     }
   }
-  const unmeasurable = proof.uiLagUnmeasurable ?? 0;
-  if (!Number.isFinite(unmeasurable) || unmeasurable < 0) {
+  // Not `?? 0`. An absent count would read as "none", which makes deleting the
+  // field cheaper than deleting the records — the same absent-denominator hole
+  // `missing-route-attempts` closes on the endpoint half.
+  const unmeasurable = proof.uiLagUnmeasurable;
+  if (typeof unmeasurable !== 'number' || !Number.isFinite(unmeasurable) || unmeasurable < 0) {
     violations.push({
       code: 'unmeasurable-ui-lag',
       subject: 'uiLagUnmeasurable',

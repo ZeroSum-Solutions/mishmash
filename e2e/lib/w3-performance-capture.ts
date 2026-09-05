@@ -28,9 +28,11 @@ import { resolve } from 'node:path';
 import type { AnomalyRecord, ListAnomaliesResponse } from '@open-design/contracts';
 
 import {
+  W3_CACHE_POLICIES,
   W3_ROUTE_NORMALIZATION_KEY,
   W3_WINDOW_MS,
   normalizeRouteKey,
+  type W3CachePolicy,
   type W3CaptureMetadata,
   type W3EndpointLatencyProof,
   type W3Interval,
@@ -239,7 +241,13 @@ function required(argv: readonly string[], name: string): string {
 
 export async function runCapture(argv: readonly string[]): Promise<string> {
   const outPath = required(argv, 'out');
-  const cachePolicy = (flag(argv, 'cache-policy') ?? 'warm') as W3CaptureMetadata['cachePolicy'];
+  // Checked here as well as in the validator, so an operator learns about a typo
+  // now rather than after a 24 h window has already been spent on it.
+  const requestedCachePolicy = flag(argv, 'cache-policy') ?? 'warm';
+  if (!W3_CACHE_POLICIES.includes(requestedCachePolicy as W3CachePolicy)) {
+    throw new Error(`--cache-policy must be one of ${W3_CACHE_POLICIES.join('|')}; got ${requestedCachePolicy}`);
+  }
+  const cachePolicy = requestedCachePolicy as W3CachePolicy;
   const proof = buildProof({
     timingLog: await readFile(required(argv, 'timing-log'), 'utf8'),
     anomalies: JSON.parse(await readFile(required(argv, 'anomalies'), 'utf8')) as ListAnomaliesResponse,
