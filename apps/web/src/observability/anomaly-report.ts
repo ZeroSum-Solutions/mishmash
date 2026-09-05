@@ -55,6 +55,12 @@ function seconds(ms: number | null): string {
  *    are normal-operation measurements.
  *  - `client_run_unstuck` is a run RECOVERING, which is the good outcome; the
  *    `client_run_stuck` that preceded it is the record worth keeping.
+ *
+ * `client_iframe_paint_unverified` is here rather than in that list because it
+ * is not normal operation: it fires only when a preview settled on evidence
+ * nothing could corroborate, which is a preview that may be blank in front of a
+ * user. The watchdog emits no success event, so this never fires for a healthy
+ * settle and cannot flood the log.
  */
 const SAFETY_EVENT_ANOMALIES: Record<string, SafetyEventMapping> = {
   client_long_task: {
@@ -94,6 +100,16 @@ const SAFETY_EVENT_ANOMALIES: Record<string, SafetyEventMapping> = {
       str(p, 'reason') === 'no_render_evidence'
         ? `Preview iframe reported nothing rendered within ${num(p, 'timeout_ms') ?? '?'}ms`
         : `Preview iframe never proved it rendered within ${num(p, 'timeout_ms') ?? '?'}ms`,
+  },
+  client_iframe_paint_unverified: {
+    kind: 'preview-error',
+    severity: 'warn',
+    // A preview that settled on evidence nothing corroborated may be blank in
+    // front of a user right now. `warn` rather than `error` because it is a
+    // caveat, not a proven failure: the document reported render evidence, and
+    // what could not be established is whether anything reached the screen.
+    summarise: (p) =>
+      `Preview settled on evidence nothing corroborated (${str(p, 'report_evidence') ?? 'unknown'})`,
   },
   client_run_stuck: {
     kind: 'run-stuck',

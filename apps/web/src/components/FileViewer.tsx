@@ -24,6 +24,7 @@ import { useAnalytics } from '../analytics/provider';
 import { exportErrorCode } from '../analytics/export-error-code';
 import { deployErrorCode } from '../analytics/deploy-error-code';
 import { trackPreviewPaint } from '../observability/iframe-error';
+import type { PreviewPaintState } from '../observability/iframe-error';
 import { useCommittedDocument } from './preview-committed-document';
 import {
   trackArtifactExportResult,
@@ -156,7 +157,7 @@ import {
   shouldUrlLoadHtmlPreview,
   type UrlLoadDecision,
 } from './file-viewer-render-mode';
-import { PreviewNoRenderNotice } from './PreviewNoRenderNotice';
+import { PreviewNoRenderNotice, PreviewUnverifiedRenderNotice } from './PreviewNoRenderNotice';
 import {
   assetBaseDirFor,
   collectPreviewAssetPaths,
@@ -1540,11 +1541,12 @@ export function LiveArtifactViewer({
   }, [liveArtifactViewportKey]);
   const [previewBodyRef, previewBodySize] = usePreviewCanvasSize<HTMLDivElement>();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  // Driven by the preview watchdog: true only while the document currently in
-  // the frame has failed to prove it rendered. Cleared when a new document
-  // starts being watched and when one proves it painted, so a late paint or a
-  // reload into a working document takes the notice away.
-  const [previewDidNotRender, setPreviewDidNotRender] = useState(false);
+  // What the preview watchdog currently knows about the document in the frame.
+  // Reset to `watching` when a new document starts being watched, so a late
+  // paint or a reload into a working document takes any notice away.
+  const [previewPaint, setPreviewPaint] = useState<PreviewPaintState>({ status: 'watching' });
+  const previewDidNotRender = previewPaint.status === 'unproven';
+  const previewUnverified = previewPaint.status === 'painted-unverified' ? previewPaint : null;
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [refreshSuccess, setRefreshSuccess] = useState<string | null>(null);
@@ -1699,8 +1701,8 @@ export function LiveArtifactViewer({
   const previewScale = zoom / 100;
   // The host's half of the watchdog's two-phase epoch: whether this frame is
   // already holding the document the watchdog is about to be installed for.
-  // Declared here, above that effect, so a changed `previewUrl` has cleared it
-  // before the effect reads it.
+  // `.committed` is a live read, taken inside the effect below rather than at
+  // render, so it also answers for a document that loaded in between.
   const previewDocument = useCommittedDocument(previewUrl);
 
   // Instrument the live-artifact iframe so failed loads — usually a
@@ -1727,7 +1729,7 @@ export function LiveArtifactViewer({
       artifactId: liveArtifact.artifactId,
       projectId,
       documentCommitted: previewDocument.committed,
-      onPaintState: (state) => setPreviewDidNotRender(state.status === 'unproven'),
+      onPaintState: setPreviewPaint,
     });
   }, [mode, previewUrl, liveArtifact.artifactId, projectId]);
 
@@ -2015,6 +2017,9 @@ export function LiveArtifactViewer({
           </div>
         </div>
         {mode === 'preview' && previewDidNotRender ? <PreviewNoRenderNotice /> : null}
+        {mode === 'preview' && previewUnverified ? (
+          <PreviewUnverifiedRenderNotice onRecheck={previewUnverified.recheck} />
+        ) : null}
         {mode !== 'preview' && loading ? (
           <div className="viewer-empty">{t('fileViewer.loading')}</div>
         ) : mode === 'code' ? (
@@ -6353,10 +6358,11 @@ function HtmlViewer({
   const [routingSource, setRoutingSource] = useState<string | null>(liveHtml ?? null);
   const [serverPoweredPreviewRequired, setServerPoweredPreviewRequired] = useState(false);
   const [previewAssetWarning, setPreviewAssetWarning] = useState<PreviewAssetWarning | null>(null);
-  // Driven by the preview watchdog: true only while the document currently in
-  // the visible transport has failed to prove it rendered. Cleared when a new
-  // document starts being watched and when one proves it painted.
-  const [previewDidNotRender, setPreviewDidNotRender] = useState(false);
+  // What the preview watchdog currently knows about the document in the visible
+  // transport. Reset to `watching` when a new document starts being watched.
+  const [previewPaint, setPreviewPaint] = useState<PreviewPaintState>({ status: 'watching' });
+  const previewDidNotRender = previewPaint.status === 'unproven';
+  const previewUnverified = previewPaint.status === 'painted-unverified' ? previewPaint : null;
   const [previewInlineStatus, setPreviewInlineStatus] = useState<PreviewInlineStatus>(
     IDLE_PREVIEW_INLINE_STATUS,
   );
@@ -8076,7 +8082,10 @@ function HtmlViewer({
   // What the srcDoc transport has actually loaded. `trackPreviewPaint` tells the
   // frame nothing until a `load` proves the incoming document is in it, so a
   // warm transport — this frame stays materialised while hidden behind URL-load
-  // — needs the host to say "the document you want is already here".
+  // — needs the host to say "the document you want is already here". A cached
+  // srcDoc needs the same answer for the opposite reason: it commits before the
+  // watchdog effect runs, and `.committed` is read inside that effect so it
+  // still hears about it.
   const srcDocDocument = useCommittedDocument(srcDocTransportContent);
   // A preview that never paints has to become a record, not just a blank
   // canvas. Instrument the srcDoc frame only while it is the visible transport
@@ -8095,7 +8104,7 @@ function HtmlViewer({
       surface: 'file_viewer_preview',
       projectId,
       documentCommitted: srcDocDocument.committed,
-      onPaintState: (state) => setPreviewDidNotRender(state.status === 'unproven'),
+      onPaintState: setPreviewPaint,
     });
   }, [mode, useUrlLoadPreview, srcDoc, srcDocTransportContent, projectId, srcDocTransportResetKey]);
   // Materialize the srcDoc iframe the first time it actually becomes the active
@@ -8167,7 +8176,7 @@ function HtmlViewer({
       surface: usePoweredPreview ? 'file_viewer_preview_powered' : 'file_viewer_preview_url_load',
       projectId,
       documentCommitted: urlDocument.committed,
-      onPaintState: (state) => setPreviewDidNotRender(state.status === 'unproven'),
+      onPaintState: setPreviewPaint,
     });
   }, [mode, useUrlLoadPreview, usePoweredPreview, urlFrameSrc, urlPreviewFrameNode, projectId]);
   const activateSrcDocTransport = useCallback((target: HTMLIFrameElement | null = srcDocPreviewIframeRef.current) => {
@@ -13236,6 +13245,18 @@ function HtmlViewer({
                     && !previewAssetWarning
                     && !previewInlineStatus.timedOut ? (
                     <PreviewNoRenderNotice />
+                  ) : null}
+                  {/*
+                    Same slot, same yield order, for the caveat half: a preview
+                    that reported render evidence nothing could corroborate. It
+                    never shows beside the failure above — the watchdog is in
+                    one state at a time — and it defers to the same two banners,
+                    which explain a blank canvas better than "not verified" can.
+                  */}
+                  {previewUnverified
+                    && !previewAssetWarning
+                    && !previewInlineStatus.timedOut ? (
+                    <PreviewUnverifiedRenderNotice onRecheck={previewUnverified.recheck} />
                   ) : null}
                 </div>
               </div>
