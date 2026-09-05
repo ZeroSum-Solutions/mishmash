@@ -52,6 +52,15 @@ const DATA_LABEL = '14 stores loaded';
 // the daemon's `/api` origin gate has no preview scope to admit it under and
 // answers 403. Relative, exactly as an artifact would write it.
 const ESCAPING_REF = '../files';
+// The other refused shape the track names: an ABSOLUTE URL to a different
+// origin. Port 1 is on Chromium's blocked-port list, so this fails in the
+// browser, instantly and offline, without reaching any network — which is the
+// point. The document cannot tell a gate refusal from a browser block from an
+// unreachable host (all three arrive as "Failed to fetch"), so what this case
+// pins is the half only the document can answer: that a refused cross-origin
+// read is REPORTED. Which statuses the gate returns for a foreign origin is
+// pinned daemon-side, in `preview-sibling-fetch-origin.test.ts`.
+const CROSS_SITE_REF = 'http://127.0.0.1:1/blocked.json';
 
 const CONFIG_STORAGE_KEY = 'mishmash:config';
 
@@ -92,9 +101,13 @@ const READY_JS = `(function () {
 // sibling read leaves the page on its loading copy and tells the user nothing.
 const REFUSED_JS = `(function () {
   'use strict';
-  fetch('${ESCAPING_REF}').then(function (res) {
-    document.getElementById('screen').textContent = 'unexpectedly served: ' + res.status;
-  });
+  function attempt(url) {
+    fetch(url).then(function (res) {
+      document.getElementById('screen').textContent = 'unexpectedly served: ' + res.status;
+    });
+  }
+  attempt('${ESCAPING_REF}');
+  attempt('${CROSS_SITE_REF}');
 })();`;
 
 test.describe.configure({ timeout: T.xlong * 3 });
@@ -142,21 +155,45 @@ test('[P0] a refused sibling fetch raises a named preview-error anomaly within 1
   const screen = page.frameLocator(ACTIVE_PREVIEW).locator('#screen');
   await expect(screen).toBeAttached({ timeout: T.long });
 
+  // Both refused shapes have to produce their own named row: one path escape
+  // out of the project's raw tree, one absolute cross-origin URL.
   await expect
-    .poll(async () => (await previewErrors(page, projectId))
-      .filter((row) => row.detail?.cause === 'subresource-refused')
-      .map((row) => row.summary), {
+    .poll(async () => (await refusedFetchReports(page, projectId)).length, {
       message:
         'the preview refused a sibling fetch and filed no named preview-error: a silent failure is exactly'
         + ' what the wave-2 bar forbids',
       timeout: 10_000,
     })
-    .toEqual([expect.stringContaining('Preview of escape.html reported a refused request')]);
+    .toBe(2);
+
+  // Matched on the tail of each URL, not on the whole string: the anomaly log
+  // redacts what looks like personal data on write, so the host becomes
+  // `[REDACTED:ipv4]` and a project id carrying a millisecond timestamp becomes
+  // `[REDACTED:phone]`. The part that identifies WHICH read failed survives.
+  const refused = await refusedFetchReports(page, projectId);
+  const urls = refused.map((row) => row.detail?.url ?? '');
+  expect(urls.filter((url) => url.endsWith(':1/blocked.json')),
+    'the cross-origin read must be named by its own URL')
+    .toHaveLength(1);
+  expect(urls.filter((url) => url.endsWith('/files')),
+    'the path escape must be named by its own URL')
+    .toHaveLength(1);
+
+  // Every row names its cause in words, not just in the typed field -- the
+  // wave-2 bar is about what a person reads.
+  for (const row of refused) {
+    expect(row.summary).toContain('Preview of escape.html reported a refused request');
+  }
 
   // The refusal itself is unchanged: nothing outside the project's raw tree is
   // served to the preview, so the page never reports a served status.
   await expect(screen).not.toContainText('unexpectedly served');
 });
+
+/** The `subresource-refused` rows this project produced. */
+async function refusedFetchReports(page: Page, projectId: string) {
+  return (await previewErrors(page, projectId)).filter((row) => row.detail?.cause === 'subresource-refused');
+}
 
 /**
  * The `preview-error` rows this project produced.
@@ -169,7 +206,11 @@ async function previewErrors(page: Page, projectId: string) {
   const response = await page.request.get('/api/anomalies?kind=preview-error&limit=200');
   if (!response.ok()) return [];
   const { anomalies } = (await response.json()) as {
-    anomalies: Array<{ detail?: { cause?: string; filePath?: string }; projectId?: string; summary: string }>;
+    anomalies: Array<{
+      detail?: { cause?: string; filePath?: string; url?: string };
+      projectId?: string;
+      summary: string;
+    }>;
   };
   return anomalies.filter((row) => row.projectId === projectId);
 }
