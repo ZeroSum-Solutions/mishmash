@@ -50,13 +50,43 @@ runs:
         fi
         echo "version=$version" >> "$GITHUB_OUTPUT"
 
+    - name: Detect Blacksmith runner
+      id: blacksmith
+      shell: bash
+      env:
+        RUNNER_LABELS_JSON: ${{ inputs.runner-labels }}
+      run: |
+        case "$RUNNER_LABELS_JSON" in
+          *'"blacksmith-'*) echo "enabled=true" >> "$GITHUB_OUTPUT" ;;
+          *) echo "enabled=false" >> "$GITHUB_OUTPUT" ;;
+        esac
+
+    # Blacksmith jobs restore from Blacksmith's colocated cache (same key/path contract as actions/cache,
+    # served next to the runner instead of from GitHub's cache backend); everything else keeps actions/cache.
+    - name: Cache Playwright browser binaries (Blacksmith)
+      if: ${{ steps.persistent-playwright-cache.outputs.enabled != 'true' && steps.blacksmith.outputs.enabled == 'true' }}
+      uses: useblacksmith/cache@v5
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
     - name: Cache Playwright browser binaries
-      if: ${{ steps.persistent-playwright-cache.outputs.enabled != 'true' }}
+      if: ${{ steps.persistent-playwright-cache.outputs.enabled != 'true' && steps.blacksmith.outputs.enabled != 'true' }}
       uses: actions/cache@v5.0.5
       with:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
 
+    # `playwright install --with-deps` runs apt on every job; an apt mirror hiccup returns exit 100 and once
+    # failed three jobs of one PR outright (#192). Retry the install up to three times before failing the job.
     - name: Install Playwright browsers
       shell: bash
-      run: ${{ inputs.install-command }}
+      env:
+        INSTALL_COMMAND: ${{ inputs.install-command }}
+      run: |
+        for attempt in 1 2 3; do
+          if bash -c "$INSTALL_COMMAND"; then exit 0; fi
+          echo "playwright install attempt $attempt failed" >&2
+          sleep $((attempt * 15))
+        done
+        exit 1

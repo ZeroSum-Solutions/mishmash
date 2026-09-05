@@ -14,6 +14,7 @@ await build({
     "./src/api/providerModels.ts",
     "./src/api/reasoningExecution.ts",
     "./src/api/research.ts",
+    "./src/runtime/body-close-splice.ts",
     "./src/runtime/deck-stage-fallback.ts",
     "./src/runtime/preview-paint-report.ts",
     "./src/runtime/project-asset-base.ts",

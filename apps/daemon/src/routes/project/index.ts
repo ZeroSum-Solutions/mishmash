@@ -22,7 +22,7 @@ import {
   PREVIEW_PAINT_REPORT_PRODUCER_SOURCE,
   PREVIEW_PAINT_REPORT_REQUEST,
 } from '@open-design/contracts/runtime/preview-paint-report';
-import { injectMarkedScriptBeforeBodyClose } from '../../http/body-close-splice.js';
+import { injectMarkedScriptBeforeBodyClose } from '@open-design/contracts/runtime/body-close-splice';
 import { readMeta as readBrandMeta } from '../../brands/store.js';
 import { hasCoverImage } from '../../covers/store.js';
 import { createProjectArtifactFile } from '../../artifacts/create.js';

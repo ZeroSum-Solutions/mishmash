@@ -10213,7 +10213,10 @@ export async function startServer({
   // Root-absolute preview assets (`/_next/static/...`), attributed to the
   // preview page that asked for them. Registered here so it can only claim
   // paths no daemon route owns.
-  app.use(createPreviewRootAssetFallback({ getPreview: (id) => previewService.get(id) }));
+  app.use(createPreviewRootAssetFallback({
+    getPreview: (id) => previewService.get(id),
+    hasLivePreview: () => previewService.list().length > 0,
+  }));
   registerStaticSpaFallback(app, STATIC_DIR);
 
   // Wait for `listen` to bind so callers always see the resolved URL —

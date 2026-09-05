@@ -49,6 +49,27 @@ describe('the host only vouches for a document it saw the frame load', () => {
     ).toBe(false);
   });
 
+  it('refuses a load that belongs to the document being replaced', () => {
+    // The frame's `load` for the OUTGOING document can still fire after the
+    // host repointed the frame: React does not commit the new `onLoad` until
+    // the render that changed the target lands. A latch that recorded only
+    // THAT a load happened would let the old document vouch for its successor,
+    // and its producer would then settle the epoch armed for a document that
+    // never rendered.
+    const { result, rerender } = renderHook(({ target }) => useCommittedDocument(target), {
+      initialProps: { target: '/preview/a' },
+    });
+    const loadOfTheOutgoingDocument = result.current.noteLoaded;
+
+    rerender({ target: '/preview/b' });
+    act(() => loadOfTheOutgoingDocument());
+
+    expect(
+      result.current.committed,
+      'the frame holds A, the host is asking about B; A cannot answer for it',
+    ).toBe(false);
+  });
+
   it('does not vouch again when the host returns to a document the frame loaded before', () => {
     // A, then B, then A again, with B hanging before it commits. The frame
     // still holds the FIRST A document, and it paints, so if the host vouched

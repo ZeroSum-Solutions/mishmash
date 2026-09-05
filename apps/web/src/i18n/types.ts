@@ -3789,6 +3789,9 @@ export interface Dict {
   'fileViewer.previewAssetBlockedDetail': string;
   'fileViewer.previewNoRenderTitle': string;
   'fileViewer.previewNoRenderDetail': string;
+  'fileViewer.previewUnverifiedTitle': string;
+  'fileViewer.previewUnverifiedDetail': string;
+  'fileViewer.previewUnverifiedRecheck': string;
   'fileViewer.presenterReset': string;
   'fileViewer.present': string;
   'fileViewer.presentInTab': string;
