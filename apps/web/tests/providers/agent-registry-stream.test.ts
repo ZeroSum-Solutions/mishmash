@@ -147,7 +147,7 @@ describe('fetchAgentsStream contract frames', () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const fetchMock = vi.fn(async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
       await gate;
       return streamResponse(encodeFrames(frames));
     });
