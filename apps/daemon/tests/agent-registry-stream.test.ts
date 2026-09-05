@@ -50,13 +50,23 @@ interface RecordedFrame {
   data: unknown;
 }
 
-function readGoldenFrames(): RecordedFrame[] {
+function readGoldenRecords(): RecordedFrame[] {
   return fs
     .readFileSync(GOLDEN_PATH, 'utf8')
     .split('\n')
     .filter((line) => line.trim().length > 0)
-    .map((line) => JSON.parse(line) as RecordedFrame)
-    .filter((frame) => frame.event !== '_capture');
+    .map((line) => JSON.parse(line) as RecordedFrame);
+}
+
+function readGoldenFrames(): RecordedFrame[] {
+  return readGoldenRecords().filter((frame) => frame.event !== '_capture');
+}
+
+/** The `_capture` metadata record on line 1, which is not a frame. */
+function readGoldenCapture(): { frameCount: number; agentFrameCount: number } {
+  const capture = readGoldenRecords().find((record) => record.event === '_capture');
+  if (!capture) throw new Error('golden recording has no _capture header');
+  return capture.data as { frameCount: number; agentFrameCount: number };
 }
 
 /**
@@ -113,6 +123,16 @@ describe('agent registry stream frames', () => {
     const parse = decode as (event: string, data: string) => AgentRegistrySseEvent | null;
     expect(parse('agent', 'not json')).toBeNull();
     expect(parse('heartbeat', '{}')).toBeNull();
+  });
+
+  it('carries a header whose counts match the frames it describes', () => {
+    const capture = readGoldenCapture();
+    const frames = readGoldenFrames();
+
+    expect(capture.frameCount).toBe(frames.length);
+    expect(capture.agentFrameCount).toBe(
+      frames.filter((frame) => frame.event === 'agent').length,
+    );
   });
 
   it('closes the recorded stream with exactly one terminal done frame', () => {
