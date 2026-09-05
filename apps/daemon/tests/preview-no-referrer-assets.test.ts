@@ -179,6 +179,49 @@ describe('a root-absolute preview asset the daemon cannot attribute to a page', 
     expect(answered.body).toContain('PREVIEW_REFERRER_REQUIRED');
   }, 30_000);
 
+  /**
+   * Red spec for W2J.1 (finding W2-R3-F2 / W2-R4-F2 in
+   * `proof/w2/codex-wave-r4.json`).
+   *
+   * The classifier above reads only the headers, so while any preview is
+   * running EVERY unattributable same-site GET matched it — including one
+   * addressed to a namespace the daemon's own routes own. `/api/nope` is an
+   * unknown daemon endpoint, `/artifacts/...` and `/frames/...` are static
+   * mounts that call `next()` on a miss, and all three used to leave as
+   * `PREVIEW_REFERRER_REQUIRED`: an explanation about a preview to a caller
+   * who asked for a daemon resource and never mentioned one.
+   *
+   * The bar is that a daemon-owned path keeps the daemon's ordinary answer.
+   * The positive case above pins the other half — a root-absolute preview
+   * asset with no `Referer` is still named.
+   */
+  it('leaves an unknown daemon-owned path to the daemon instead of naming a preview', async () => {
+    const { apiPort } = await boot();
+
+    // The prefixes `server.ts` registers for the daemon's own routes, which
+    // `static-spa.ts` already excludes from the SPA fallback for the same
+    // reason. Each is asked for in the exact shape that used to be
+    // misclassified: no `Referer`, and a subresource `Accept`.
+    //
+    // The upper-case spellings are the same namespaces: Express matches routes
+    // case-insensitively by default, so `/API/nope` enters the `/api` router
+    // and misses exactly as `/api/nope` does, and the daemon owes it the same
+    // answer.
+    for (const pathname of [
+      '/api/nope',
+      '/artifacts/nope.css',
+      '/frames/nope.html',
+      '/API/nope',
+      '/Artifacts/nope.css',
+      '/FRAMES/nope.html',
+    ]) {
+      const answered = await get(apiPort, pathname, { headers: { Accept: SCRIPT_ACCEPT } });
+
+      expect(answered.body, pathname).not.toContain('PREVIEW_REFERRER_REQUIRED');
+      expect(answered.body, pathname).not.toMatch(/referrer/i);
+    }
+  }, 30_000);
+
   it('still serves the asset for a page that names itself', async () => {
     const { apiPort, base } = await boot();
 
