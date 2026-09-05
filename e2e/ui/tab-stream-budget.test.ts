@@ -123,10 +123,16 @@ test('[P0] a third app tab boots and persists a message while two tabs sit in th
       body: JSON.stringify(heldPerTab, null, 2),
       contentType: 'application/json',
     });
+    // A guard, not the trigger. A request queued inside the browser is never
+    // sent, so Playwright never sees it and this count reads the same on a tree
+    // without the budget as on one with it. What separates the two is the write
+    // below. This line catches a future regression that holds MORE streams than
+    // it should — a fourth surface subscribing app-wide, say — which the write
+    // alone would not name.
     const streamsHeld = heldPerTab.flat().filter((held) => isStreamRequest(new URL(held, 'http://tab').href));
     expect(
       streamsHeld.length,
-      `three tabs must leave a socket free inside the six-connection budget, held: ${JSON.stringify(heldPerTab)}`,
+      `the three tabs must not hold the whole six-connection budget between them; held: ${JSON.stringify(heldPerTab)}`,
     ).toBeLessThan(6);
 
     // The bar's second half: a message write issued from inside the third tab —
