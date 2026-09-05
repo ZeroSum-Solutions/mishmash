@@ -330,9 +330,23 @@ export function LibrarySection({ active, onOpenProject }: Props) {
 
   // Per-tab stream budget: the grid's live channel is one of the six HTTP/1.1
   // connections the browser allows per origin, so it is held only while the
-  // Library page is open AND the tab is visible. Remounting reloads the grid,
-  // which is also the resync for anything emitted while it was closed.
+  // Library page is open AND the tab is visible.
   const documentVisible = useDocumentVisible();
+
+  // Captures and deletes that happened while the tab held no stream are not
+  // replayed, so a tab coming back from hidden re-reads the grid once. The
+  // first visible render is not a return, so it does not double-load.
+  const releasedWhileHidden = useRef(false);
+  useEffect(() => {
+    if (!active) return;
+    if (!documentVisible) {
+      releasedWhileHidden.current = true;
+      return;
+    }
+    if (!releasedWhileHidden.current) return;
+    releasedWhileHidden.current = false;
+    void loadRef.current();
+  }, [active, documentVisible]);
 
   // Live updates: clipper captures and deletes patch the grid incrementally.
   // A burst of captures used to trigger one full refetch + full re-render PER
