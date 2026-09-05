@@ -18,6 +18,12 @@
 //      bytes than `IHDR` declares. Nothing about the container is wrong; the
 //      image is simply not all there.
 //
+// W2J.2 adds a third shape the pixel-stream length check cannot see at all:
+// an IHDR that lies about the layout its own stream is in. An interlace byte
+// flipped to 1, or a colour type paired with a bit depth the format does not
+// define, leaves a container whose CRCs all agree and a stream that inflates,
+// while no decoder can read a pixel of it.
+//
 // Real booted daemon, real HTTP, real Chromium render. The damage is PROVED
 // undecodable by running it through `sharp` -- the engine
 // apps/daemon/src/covers/crop.ts produced the cover with -- and PROVED
@@ -255,6 +261,45 @@ describe('W2I.4 — a cover whose IDAT stream does not inflate to its declared i
         // about the container is wrong, the image is simply not all there.
         const short = deflateSync(raw.subarray(0, Math.floor(raw.length / 2)));
         return withIdatStream(original, chunks, short);
+      });
+    },
+    240_000,
+  );
+});
+
+describe('W2J.2 — a cover whose IHDR lies about its layout is never served as image/png', () => {
+  it(
+    'serves the placeholder when IHDR claims Adam7 interlacing over single-pass rows',
+    async () => {
+      await expectUndecodableCoverIsNotServed('cover-ihdr-interlace-lie', (original, chunks) => {
+        const ihdr = chunks.find((chunk) => chunk.type === 'IHDR') as PngChunk;
+        const lied = Buffer.from(original);
+        // IHDR byte 12 is the interlace method: 0 is the single pass the cover
+        // renderer writes, 1 claims Adam7's seven reduced passes.
+        lied.writeUInt8(1, ihdr.offset + 8 + 12);
+        return withRepairedCrc(lied, ihdr);
+      });
+    },
+    240_000,
+  );
+
+  it(
+    'serves the placeholder when IHDR pairs colour type 3 with bit depth 16',
+    async () => {
+      await expectUndecodableCoverIsNotServed('cover-ihdr-illegal-pair', (original, chunks) => {
+        const ihdr = chunks.find((chunk) => chunk.type === 'IHDR') as PngChunk;
+        const width = original.readUInt32BE(ihdr.offset + 8);
+        const height = original.readUInt32BE(ihdr.offset + 12);
+        // The PNG format defines indexed colour at bit depths 1, 2, 4 and 8
+        // only. The IDAT is rebuilt to exactly the byte count this illegal
+        // pair predicts, so the pair itself -- not a length mismatch behind
+        // it -- is what the route must catch.
+        const rowBytes = Math.ceil((width * 1 * 16) / 8);
+        const rebuilt = withIdatStream(original, chunks, deflateSync(Buffer.alloc(height * (1 + rowBytes))));
+        const lied = Buffer.from(rebuilt);
+        lied.writeUInt8(16, ihdr.offset + 8 + 8);
+        lied.writeUInt8(3, ihdr.offset + 8 + 9);
+        return withRepairedCrc(lied, ihdr);
       });
     },
     240_000,
