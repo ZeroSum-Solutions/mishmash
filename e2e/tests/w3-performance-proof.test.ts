@@ -122,6 +122,7 @@ function healthyProof(overrides: Partial<Proof> = {}): Proof {
     })),
     samples,
     uiLag: [],
+    uiLagUnmeasurable: 0,
     ...overrides,
   } as Proof;
 }
@@ -221,6 +222,42 @@ describe('W3 endpoint-latency proof — validator', () => {
 
     expect(codes, why('a censored daemon row cannot be padded from the browser')).toContain(
       'dropped-failures',
+    );
+  });
+
+  it('rejects a judged route whose daemon rows declare no attempt count', () => {
+    const candidate = healthyProof();
+    const codes = violationCodes({
+      ...candidate,
+      // Deleting the attempts entry is the cheapest way to censor: with nothing
+      // to compare the written rows against, dropped rows leave no trace.
+      routeAttempts: candidate.routeAttempts.filter((entry) => entry.route !== '/api/projects'),
+    });
+
+    expect(codes, why('rows with no declared attempts cannot be checked for censoring')).toContain(
+      'missing-route-attempts',
+    );
+  });
+
+  it('rejects a long task recorded outside the pinned interval', () => {
+    const codes = violationCodes(
+      healthyProof({ uiLag: [{ atUtc: '2026-09-05T23:00:00.000Z', durationMs: 4_000 }] }),
+    );
+
+    // INV-3.10 is judged over the pinned interval, so an entry the window does
+    // not cover must be refused rather than counted against the bar.
+    expect(codes, why('the ui-lag interval is the pinned window, not the export')).toContain(
+      'sample-outside-window',
+    );
+  });
+
+  it('rejects a capture that could not measure a long task it recorded', () => {
+    const codes = violationCodes(healthyProof({ uiLagUnmeasurable: 2 } as Partial<Proof>));
+
+    // A ui-lag row whose duration the reader could not read is exactly the row
+    // that might have been over the bar; dropping it silently is censoring.
+    expect(codes, why('an unmeasurable long task may not vanish from the count')).toContain(
+      'unmeasurable-ui-lag',
     );
   });
 
@@ -463,18 +500,42 @@ describe('W3 endpoint-latency proof — report', () => {
       total: records.length,
       path: '/dev/null',
     };
-    const uiLag = capture?.readUiLag(records, { startUtc: WINDOW_START, endUtc: WINDOW_END }) ?? [];
+    const read = capture?.readUiLag(records, { startUtc: WINDOW_START, endUtc: WINDOW_END });
+    const uiLag = read?.samples ?? [];
     const report = proof?.reportProof(healthyProof({ uiLag }));
 
     expect(response.total).toBe(5);
     // Strictly over 1,000 ms: 999 and an exact 1,000 are not long tasks.
     expect(uiLag.length, why('ui-lag durations live in detail.duration_ms, not a column')).toBe(4);
+    expect(read?.unmeasurable, why('every record in this export carried a duration')).toBe(0);
     expect(report?.uiLagOverThreshold, why('INV-3.10 counts over the pinned interval')).toBe(2);
     expect(report?.uiLagByUtcDay).toEqual([
       { day: '2026-09-06', overThreshold: 1 },
       { day: '2026-09-07', overThreshold: 1 },
     ]);
     expect(report?.inv310).toBe('PASS');
+  });
+
+  it('counts a ui-lag record it cannot measure rather than dropping it', () => {
+    const stripped: AnomalyRecord = {
+      id: 'ui-lag-no-duration',
+      at: '2026-09-06T10:00:00.000Z',
+      kind: 'ui-lag',
+      severity: 'warn',
+      source: 'web',
+      summary: 'Main thread blocked for ?ms',
+      detail: { safetyEvent: 'client_long_task' },
+    };
+    const read = capture?.readUiLag([stripped, uiLagRecord('2026-09-06T11:00:00.000Z', 2_000)], {
+      startUtc: WINDOW_START,
+      endUtc: WINDOW_END,
+    });
+
+    // The web always writes duration_ms today, so a record without one is
+    // itself anomalous — and it is precisely the row that might have been over
+    // the bar. A reader that skips it censors the count it is reporting.
+    expect(read?.samples.length, why('a measured record still counts')).toBe(1);
+    expect(read?.unmeasurable, why('a ui-lag row with no duration must be surfaced')).toBe(1);
   });
 
   it('fails INV-3.10 at ten long tasks in the interval', () => {

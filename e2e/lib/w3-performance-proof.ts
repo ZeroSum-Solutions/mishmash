@@ -200,6 +200,17 @@ export interface W3UiLagSample {
  * looks identical to a capture that had none. Recording attempts at the source
  * makes the difference checkable — fewer rows than attempts means rows went
  * missing between observation and file (INV-3.11, A2).
+ *
+ * What this cross-check does and does not catch, stated plainly so nobody reads
+ * more into it than it carries. `readTimingLog` counts an attempt and writes the
+ * row from the SAME parsed line, so for a capture the shipped script produced the
+ * two agree by construction. The check therefore catches rows removed AFTER the
+ * capture — a hand-edited proof JSON, a filtered export — and not an observer
+ * that never saw the request at all. That is still the move worth blocking,
+ * because it is the one a reader of the finished file cannot otherwise detect.
+ * A route that declares no attempts at all is refused outright
+ * (`missing-route-attempts`): an absent denominator would make the check vacuous,
+ * which is the cheapest way around it.
  */
 export interface W3RouteAttempts {
   method: string;
@@ -236,6 +247,16 @@ export interface W3EndpointLatencyProof {
   routeAttempts: W3RouteAttempts[];
   samples: W3LatencySample[];
   uiLag: W3UiLagSample[];
+  /**
+   * `ui-lag` records in the window that carried no readable duration.
+   *
+   * Declared rather than dropped. The web always writes `detail.duration_ms`
+   * (`apps/web/src/observability/anomaly-report.ts`), so a record without one is
+   * itself anomalous — and it is exactly the record that might have been over the
+   * bar. A reader that skipped it silently would be censoring the count it
+   * reports, which is what this whole module exists to refuse.
+   */
+  uiLagUnmeasurable: number;
 }
 
 export type W3ViolationCode =
@@ -243,6 +264,8 @@ export type W3ViolationCode =
   | 'insufficient-samples'
   | 'unknown-outcome'
   | 'dropped-failures'
+  | 'missing-route-attempts'
+  | 'unmeasurable-ui-lag'
   | 'window-not-24h'
   | 'window-not-continuous'
   | 'sample-outside-window'
@@ -282,6 +305,7 @@ export function validateProof(proof: W3EndpointLatencyProof): W3Violation[] {
   violations.push(...validateWindow(proof.window));
   violations.push(...validateMetadata(proof.capture));
   violations.push(...validateSamples(proof));
+  violations.push(...validateUiLag(proof));
   violations.push(...validateRouteCoverage(proof));
   return violations;
 }
@@ -382,6 +406,52 @@ function validateSamples(proof: W3EndpointLatencyProof): W3Violation[] {
   return violations;
 }
 
+/**
+ * The long-task half of the capture, judged on the same terms as the endpoint half.
+ *
+ * INV-3.10 counts over the PINNED interval, so an entry the window does not cover
+ * is refused rather than counted: it would otherwise decide a bar it was never
+ * inside. And a record the capture could not measure is surfaced rather than
+ * dropped, for the reason `uiLagUnmeasurable` exists.
+ */
+function validateUiLag(proof: W3EndpointLatencyProof): W3Violation[] {
+  const violations: W3Violation[] = [];
+  const start = parseUtc(proof.window.startUtc);
+  const end = parseUtc(proof.window.endUtc);
+  for (const entry of proof.uiLag ?? []) {
+    if (!Number.isFinite(entry.durationMs) || entry.durationMs < 0) {
+      violations.push({
+        code: 'negative-duration',
+        subject: `ui-lag ${entry.atUtc}`,
+        detail: `durationMs ${entry.durationMs} is not a non-negative measurement`,
+      });
+    }
+    const at = parseUtc(entry.atUtc);
+    if (Number.isFinite(start) && Number.isFinite(end) && (!Number.isFinite(at) || at < start || at > end)) {
+      violations.push({
+        code: 'sample-outside-window',
+        subject: `ui-lag ${entry.atUtc}`,
+        detail: 'a long task outside the pinned interval cannot be judged against it',
+      });
+    }
+  }
+  const unmeasurable = proof.uiLagUnmeasurable ?? 0;
+  if (!Number.isFinite(unmeasurable) || unmeasurable < 0) {
+    violations.push({
+      code: 'unmeasurable-ui-lag',
+      subject: 'uiLagUnmeasurable',
+      detail: 'the capture does not say how many ui-lag records it could not measure',
+    });
+  } else if (unmeasurable > 0) {
+    violations.push({
+      code: 'unmeasurable-ui-lag',
+      subject: 'uiLagUnmeasurable',
+      detail: `${unmeasurable} ui-lag record(s) carried no readable duration; each may have been over the bar`,
+    });
+  }
+  return violations;
+}
+
 function validateRouteCoverage(proof: W3EndpointLatencyProof): W3Violation[] {
   const violations: W3Violation[] = [];
   const byRoute = groupSamplesByRoute(proof.samples);
@@ -401,6 +471,16 @@ function validateRouteCoverage(proof: W3EndpointLatencyProof): W3Violation[] {
     for (const source of ['daemon', 'web'] as const) {
       const attempts = attemptsByRoute.get(`${source} ${key}`);
       const written = samples.filter((sample) => sample.source === source).length;
+      if (attempts == null && written > 0) {
+        // Deleting the attempts entry is the cheapest way past `dropped-failures`:
+        // with no denominator the comparison cannot fire at all.
+        violations.push({
+          code: 'missing-route-attempts',
+          subject: key,
+          detail: `${written} ${source} row(s) with no declared attempt count; the capture cannot be checked for dropped rows`,
+        });
+        continue;
+      }
       if (attempts != null && written < attempts) {
         violations.push({
           code: 'dropped-failures',

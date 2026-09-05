@@ -150,27 +150,45 @@ function splitRouteKey(key: string): [string, string] {
   return [key.slice(0, index), key.slice(index + 1)];
 }
 
+export interface ReadUiLagResult {
+  samples: W3UiLagSample[];
+  /**
+   * In-window `ui-lag` records that carried no readable duration, reported so a
+   * damaged export is visible rather than quietly smaller — the same reason
+   * `ReadTimingLogResult` carries `unparseableLines`.
+   */
+  unmeasurable: number;
+}
+
 /**
  * Reads `ui-lag` records into long-task samples.
  *
  * The web writes the measured duration into the free-form `detail` object as
  * `duration_ms` (`apps/web/src/observability/anomaly-report.ts`), not as a
- * column, so a record without a numeric one carries no measurement and is not a
- * long task this proof can count.
+ * column, so a record without a numeric one carries no measurement.
+ *
+ * Such a record is COUNTED, not skipped. The web always writes `duration_ms`
+ * today, so its absence is itself anomalous, and the missing number might have
+ * been over the bar — dropping it silently would shrink exactly the count
+ * INV-3.10 is judged on. The validator refuses a capture that reports any.
  */
-export function readUiLag(records: readonly AnomalyRecord[], window: W3Interval): W3UiLagSample[] {
+export function readUiLag(records: readonly AnomalyRecord[], window: W3Interval): ReadUiLagResult {
   const start = Date.parse(window.startUtc);
   const end = Date.parse(window.endUtc);
   const samples: W3UiLagSample[] = [];
+  let unmeasurable = 0;
   for (const record of records) {
     if (record.kind !== 'ui-lag') continue;
     const at = Date.parse(record.at);
     if (!Number.isFinite(at) || at < start || at > end) continue;
     const duration = record.detail?.['duration_ms'];
-    if (typeof duration !== 'number' || !Number.isFinite(duration)) continue;
+    if (typeof duration !== 'number' || !Number.isFinite(duration)) {
+      unmeasurable += 1;
+      continue;
+    }
     samples.push({ atUtc: record.at, durationMs: duration });
   }
-  return samples;
+  return { samples, unmeasurable };
 }
 
 export interface BuildProofInput {
@@ -193,12 +211,14 @@ export function buildProof(input: BuildProofInput): W3EndpointLatencyProof {
     gaps: input.gaps ?? [],
   };
   const timing = readTimingLog(input.timingLog, { window, sourceRun: input.sourceRun });
+  const uiLag = readUiLag(input.anomalies.anomalies, window);
   return {
     window,
     capture: { ...input.capture, normalizationKey: W3_ROUTE_NORMALIZATION_KEY },
     routeAttempts: timing.routeAttempts,
     samples: timing.samples,
-    uiLag: readUiLag(input.anomalies.anomalies, window),
+    uiLag: uiLag.samples,
+    uiLagUnmeasurable: uiLag.unmeasurable,
   };
 }
 
