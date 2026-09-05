@@ -19,6 +19,7 @@ import {
   listRoutingTelemetry,
   listRoutingTelemetryAttempts,
   recordRoutingTelemetry,
+  routingEngagementForRow,
 } from '../src/routing/telemetry.js';
 
 let tempDir: string;
@@ -271,6 +272,56 @@ describe('ensureRoutingTelemetryTable', () => {
     const afterMigrationRow = getRoutingTelemetryByRunId(db, 'p1-shape-run', 1);
     expect(afterMigrationRow?.buildId).toBe('build-after-migration');
     expect(computeBuildSpendUsd(db, 'build-after-migration').rowCount).toBe(1);
+  });
+});
+
+describe('routing_engagement -- every stored row states whether the router engaged', () => {
+  // Covers the invariant `routingEngagementForRow`'s docblock states, and the
+  // claim `migrateMissingRoutingEngagementColumn`'s backfill CASE makes: the
+  // SQL and the TypeScript must agree on all three verdicts, or a
+  // pre-migration row and a freshly written one would disagree about the same
+  // dispatch.
+  const CASES: Array<{ label: string; row: Partial<StoredRoutingTelemetryRow>; expected: string }> = [
+    { label: 'a routed/override dispatch', row: { routedLane: 'claude-code-oauth', routedModel: 'claude-haiku-4-5' }, expected: 'engaged' },
+    { label: 'WR-routing.md Fallback B', row: { routedLane: 'runtime-default', routedModel: 'default' }, expected: 'runtime-default' },
+    { label: 'a standalone gates-run probe', row: { routedLane: 'none', routedModel: 'none' }, expected: 'not-dispatched' },
+  ];
+
+  it('writes the verdict on every new row', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    for (const [index, { label, row, expected }] of CASES.entries()) {
+      const runId = `run-engagement-${index}`;
+      recordRoutingTelemetry(db, completeRow({ runId, ...row }));
+      const stored = db
+        .prepare(`SELECT routing_engagement AS engagement FROM routing_telemetry WHERE run_id = ?`)
+        .get(runId) as { engagement: string };
+      expect(stored.engagement, label).toBe(expected);
+    }
+  });
+
+  it('backfills a pre-migration row with the SAME verdict routingEngagementForRow derives', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    for (const [index, { row }] of CASES.entries()) {
+      recordRoutingTelemetry(db, completeRow({ runId: `run-backfill-${index}`, ...row }));
+    }
+    // Simulate the pre-migration state: the column exists but holds nothing,
+    // exactly as it does for the rows a daemon wrote before this column landed.
+    db.exec(`UPDATE routing_telemetry SET routing_engagement = NULL`);
+
+    ensureRoutingTelemetryTable(db);
+
+    for (const [index, { label, row, expected }] of CASES.entries()) {
+      const runId = `run-backfill-${index}`;
+      const stored = db
+        .prepare(`SELECT routing_engagement AS engagement FROM routing_telemetry WHERE run_id = ?`)
+        .get(runId) as { engagement: string };
+      expect(stored.engagement, `backfill: ${label}`).toBe(expected);
+      expect(stored.engagement, `backfill agrees with the helper: ${label}`).toBe(
+        routingEngagementForRow(completeRow({ runId, ...row })),
+      );
+    }
   });
 });
 

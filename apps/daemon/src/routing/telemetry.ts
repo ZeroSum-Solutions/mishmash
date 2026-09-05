@@ -19,10 +19,21 @@
 // table keys on `(run_id, attempt)` so a retried run's first attempt
 // survives its own replacement rather than being silently overwritten.
 //
-// Scope discipline (WR t4): storage + query + reconciliation only. Nothing
-// here calls recordRoutingTelemetry from a real dispatch or run-finalize
-// path -- that wiring is t9's job -- and there is no admission-control
-// logic here (t6).
+// Scope discipline: storage + query + reconciliation only; no
+// admission-control logic here (t6). This module is not CALLED from itself
+// -- it is called BY the dispatch path. The t9 wiring an earlier revision of
+// this comment described as still pending has since landed; the real writers
+// today are:
+//
+//   - apps/daemon/src/routing/dispatch.ts:778 (`recordDispatchIntent`) --
+//     the pre-spawn row, reached from apps/daemon/src/server.ts:5979 on
+//     every POST /api/chat dispatch, right after `resolveDispatchRouting`
+//     (server.ts:5886) decides the lane.
+//   - apps/daemon/src/routing/dispatch.ts:904 (`reconcilePostRun`) -- fills
+//     the observed side, reached from server.ts:6042 (terminal) and
+//     server.ts:6688 (retry attempt boundary).
+//   - apps/daemon/src/routes/routing.ts:746 -- a synthetic, non-dispatch
+//     probe row for a standalone POST /api/routing/gates/run.
 import type Database from 'better-sqlite3';
 import {
   isStoredRoutingTelemetryRow,
@@ -58,9 +69,72 @@ const ROUTING_TELEMETRY_CURRENT_SHAPE_DDL = `
       policy_version INTEGER NOT NULL,
       created_at TEXT NOT NULL,
       recorded_at TEXT NOT NULL,
+      routing_engagement TEXT,
       PRIMARY KEY (run_id, attempt)
     )
 `;
+
+/**
+ * The lane string `apps/daemon/src/server.ts:5915` hands dispatch as
+ * `runtimeDefault.lane`. It is a RESERVED SENTINEL, not a lane: it is not a
+ * member of `RoutingLaneId` (packages/contracts/src/api/routing-policy.ts:83,
+ * a closed seven-value union), and `resolveDispatchRouting`'s `'routed'` and
+ * `'override'` branches both take their lane from a vetted `RoutingCandidate`
+ * whose `lane` is typed `RoutingLaneId`. So this exact string reaches a
+ * stored row only through WR-routing.md's Fallback B -- the branch where the
+ * router found no §2/§15 identity to route against and kept the runtime's own
+ * default (apps/daemon/src/routing/dispatch.ts:673-693).
+ */
+const RUNTIME_DEFAULT_LANE_SENTINEL = 'runtime-default';
+
+/** The `(routedModel, routedLane)` pair `apps/daemon/src/routes/routing.ts:746`
+ * writes for a STANDALONE `POST /api/routing/gates/run` probe -- a synthetic
+ * row that gate outcomes can be bound to when the caller supplied no `runId`.
+ * No dispatch happened, so asking whether the router engaged is not a
+ * question that row can answer either way. */
+const NON_DISPATCH_MODEL_SENTINEL = 'none';
+const NON_DISPATCH_LANE_SENTINEL = 'none';
+
+/**
+ * What a stored row says about the router, as a closed vocabulary:
+ *
+ *   - `'engaged'`         the routing decision engine ran and bound this
+ *                         dispatch to a policy lane (a `'routed'` decision,
+ *                         or an `'override'` vetted through the same §15 /
+ *                         allowlist / admission filters).
+ *   - `'runtime-default'` the router found nothing to route against and the
+ *                         runtime's own default was kept (Fallback B). The
+ *                         router did NOT engage.
+ *   - `'not-dispatched'`  the row is a synthetic gate-run probe, not a
+ *                         dispatch record.
+ */
+export type RoutingEngagement = 'engaged' | 'runtime-default' | 'not-dispatched';
+
+/**
+ * INVARIANT: every stored `routing_telemetry` row states whether the router
+ * engaged for it. Nothing else in the row carries that: `routed_lane` alone
+ * is a lane name, and a reader cannot know from a lane name whether it was
+ * CHOSEN by the policy engine or merely INHERITED from the runtime. The 286
+ * rows on the live daemon -- all `routed_lane = 'runtime-default'`, all
+ * written after the dispatch wiring landed -- are exactly that ambiguity: they
+ * read as "the router records nothing" when what they actually record is "the
+ * router ran and had no identity to route against, 286 times".
+ *
+ * The verdict is DERIVED here rather than passed in, because
+ * `resolveDispatchRouting`'s own three-way `mode` is discarded before it
+ * reaches storage (`recordDispatchIntent`, dispatch.ts:747, builds the row
+ * from `RecordedDispatchIntent`'s other fields only). Deriving it from the two
+ * reserved sentinels above is exact, not a heuristic: neither sentinel is a
+ * `RoutingLaneId`, so neither can arrive from a routed or overridden
+ * decision.
+ */
+export function routingEngagementForRow(row: StoredRoutingTelemetryRow): RoutingEngagement {
+  if (row.routedLane === RUNTIME_DEFAULT_LANE_SENTINEL) return 'runtime-default';
+  if (row.routedLane === NON_DISPATCH_LANE_SENTINEL && row.routedModel === NON_DISPATCH_MODEL_SENTINEL) {
+    return 'not-dispatched';
+  }
+  return 'engaged';
+}
 
 /** Sol review MED-4 (fix round 2): `CREATE TABLE IF NOT EXISTS` alone is a
  * no-op against a table that already exists in the OLD pre-attempt shape
@@ -130,9 +204,51 @@ function migrateMissingBuildIdColumn(db: Database.Database): void {
   db.exec(`ALTER TABLE routing_telemetry ADD COLUMN build_id TEXT`);
 }
 
+/** Adds `routing_engagement` and backfills every row that predates it, in the
+ * same narrow `PRAGMA table_info` + `ALTER TABLE ... ADD COLUMN` shape
+ * `migrateMissingBuildIdColumn` and `apps/daemon/src/library-store.ts:147-154`
+ * both use -- the column takes no part in the primary key, so no
+ * rebuild-and-copy is needed.
+ *
+ * The backfill is lossless rather than a default: engagement is derivable
+ * from the two reserved sentinels (see `routingEngagementForRow`), which
+ * every historical row already carries, so a pre-migration row gets the SAME
+ * verdict it would have been written with. The `IS NULL` predicate also
+ * repairs any row the old-shape rebuild above copied across before this
+ * column existed, so this migration is the single place the column is
+ * populated for history. */
+function migrateMissingRoutingEngagementColumn(db: Database.Database): void {
+  const tableExists = (
+    db
+      .prepare(`SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'routing_telemetry'`)
+      .get() as { n: number }
+  ).n;
+  if (tableExists === 0) return;
+  const columns = db.prepare(`PRAGMA table_info(routing_telemetry)`).all() as Array<{ name: string }>;
+  if (!columns.some((c) => c.name === 'routing_engagement')) {
+    db.exec(`ALTER TABLE routing_telemetry ADD COLUMN routing_engagement TEXT`);
+  }
+  // Kept in lockstep with `routingEngagementForRow` -- the storage test
+  // asserts the two agree on all three verdicts.
+  db.prepare(
+    `UPDATE routing_telemetry
+        SET routing_engagement = CASE
+              WHEN routed_lane = @runtimeDefaultLane THEN 'runtime-default'
+              WHEN routed_lane = @nonDispatchLane AND routed_model = @nonDispatchModel THEN 'not-dispatched'
+              ELSE 'engaged'
+            END
+      WHERE routing_engagement IS NULL`,
+  ).run({
+    runtimeDefaultLane: RUNTIME_DEFAULT_LANE_SENTINEL,
+    nonDispatchLane: NON_DISPATCH_LANE_SENTINEL,
+    nonDispatchModel: NON_DISPATCH_MODEL_SENTINEL,
+  });
+}
+
 export function ensureRoutingTelemetryTable(db: Database.Database): void {
   migrateOldShapeRoutingTelemetryTable(db);
   migrateMissingBuildIdColumn(db);
+  migrateMissingRoutingEngagementColumn(db);
   db.exec(ROUTING_TELEMETRY_CURRENT_SHAPE_DDL);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_routing_telemetry_project_id ON routing_telemetry(project_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_routing_telemetry_stage ON routing_telemetry(stage)`);
@@ -160,11 +276,11 @@ export function recordRoutingTelemetry(db: Database.Database, row: StoredRouting
        (run_id, attempt, project_id, build_id, stage, template_id, design_system, routed_model,
         observed_model, routed_lane, observed_lane, tokens_input, tokens_output,
         tokens_cache_read_input, cache_hits, latency_ms, cost_usd, cost_estimated,
-        gate_outcomes_json, escalated, policy_version, created_at, recorded_at)
+        gate_outcomes_json, escalated, policy_version, created_at, recorded_at, routing_engagement)
      VALUES (@runId, @attempt, @projectId, @buildId, @stage, @templateId, @designSystem, @routedModel,
              @observedModel, @routedLane, @observedLane, @tokensInput, @tokensOutput,
              @tokensCacheReadInput, @cacheHits, @latencyMs, @costUsd, @costEstimated,
-             @gateOutcomesJson, @escalated, @policyVersion, @createdAt, @recordedAt)
+             @gateOutcomesJson, @escalated, @policyVersion, @createdAt, @recordedAt, @routingEngagement)
      ON CONFLICT(run_id, attempt) DO UPDATE SET
        project_id = excluded.project_id,
        build_id = excluded.build_id,
@@ -186,7 +302,8 @@ export function recordRoutingTelemetry(db: Database.Database, row: StoredRouting
        escalated = excluded.escalated,
        policy_version = excluded.policy_version,
        created_at = excluded.created_at,
-       recorded_at = excluded.recorded_at`,
+       recorded_at = excluded.recorded_at,
+       routing_engagement = excluded.routing_engagement`,
   ).run(rowToParams(row));
 }
 
@@ -295,6 +412,7 @@ function rowToParams(row: StoredRoutingTelemetryRow) {
     policyVersion: row.policyVersion,
     createdAt: row.createdAt,
     recordedAt: row.recordedAt,
+    routingEngagement: routingEngagementForRow(row),
   };
 }
 
@@ -670,8 +788,11 @@ export function computeStageAggregates(db: Database.Database, windowMs?: number)
     // join could collide (stage "a-b" + templateId "c" vs stage "a" +
     // templateId "b-c"). The U+0000 separator never appears in either field
     // in practice (both come from closed policy vocabulary / slug-shaped
-    // ids) and is never itself ambiguous with real content.
-    const key = `${row.stage} ${row.templateId ?? ''}`;
+    // ids) and is never itself ambiguous with real content. Written as the
+    // `\u0000` ESCAPE, never as a raw NUL byte in the source: a literal NUL
+    // makes this file binary to `grep`, which then silently reports no
+    // matches for every export declared in it.
+    const key = `${row.stage}\u0000${row.templateId ?? ''}`;
     let acc = byKey.get(key);
     if (!acc) {
       acc = { stage: row.stage, templateId: row.templateId, runs: 0, escalated: 0, gated: 0, gatedPass: 0 };

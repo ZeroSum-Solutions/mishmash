@@ -23,26 +23,22 @@
 import type http from 'node:http';
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { ENRICHMENT_MODEL_CREDENTIAL_ENV_KEYS } from '../src/library.js';
 import { startServer } from '../src/server.js';
 
-/** The credentials `resolveEnrichmentSkipReason` reads (the same set
- * apps/daemon/src/memory-llm.ts:631,641 treats as "a model is reachable").
- * The test process inherits whatever the developer's shell exports, so both
- * cases below pin them explicitly -- otherwise which reason is recorded would
- * depend on the machine, not on the code. */
-const MODEL_CREDENTIAL_ENV_KEYS = [
-  'ANTHROPIC_API_KEY',
-  'OPENAI_API_KEY',
-  'GOOGLE_API_KEY',
-  'GEMINI_API_KEY',
-] as const;
+const HERE = dirname(fileURLToPath(import.meta.url));
 
+/** The test process inherits whatever the developer's shell exports, so every
+ * case below clears the whole credential set first -- otherwise which reason is
+ * recorded would depend on the machine, not on the code. */
 async function withModelCredentials<T>(present: Record<string, string>, run: () => Promise<T>): Promise<T> {
   const saved = new Map<string, string | undefined>();
-  for (const key of MODEL_CREDENTIAL_ENV_KEYS) {
+  for (const key of ENRICHMENT_MODEL_CREDENTIAL_ENV_KEYS) {
     saved.set(key, process.env[key]);
     delete process.env[key];
   }
@@ -50,7 +46,7 @@ async function withModelCredentials<T>(present: Record<string, string>, run: () 
   try {
     return await run();
   } finally {
-    for (const key of MODEL_CREDENTIAL_ENV_KEYS) {
+    for (const key of ENRICHMENT_MODEL_CREDENTIAL_ENV_KEYS) {
       const previous = saved.get(key);
       if (previous === undefined) delete process.env[key];
       else process.env[key] = previous;
@@ -164,5 +160,21 @@ describe('a skipped library enrichment task records a typed reason', () => {
         'is that this cut ships no enrichment pipeline',
     ).toBe('enrichment_not_implemented');
     expectProgressNamesTheReason(row);
+  });
+
+  // The claim resolveEnrichmentSkipReason's docblock makes is that its
+  // credential set IS memory-llm.ts's, not a shorter convenience list. A
+  // narrower list would report `no_model_configured` on a daemon that does have
+  // a reachable provider -- the same unchecked claim this invariant removes.
+  // Read memory-llm.ts rather than restating its keys here, so the guard fails
+  // when THAT file gains or loses a provider.
+  it('recognizes exactly the credential set memory-llm.ts already treats as a reachable provider', () => {
+    const memoryLlmSource = readFileSync(resolve(HERE, '../src/memory-llm.ts'), 'utf8');
+    const referenced = new Set(
+      [...memoryLlmSource.matchAll(/process\.env\.([A-Z0-9_]*API_KEY)\b/g)].map((m) => m[1]!),
+    );
+    expect(referenced.size, 'memory-llm.ts must still read credential env vars for this guard to mean anything').
+      toBeGreaterThan(0);
+    expect([...ENRICHMENT_MODEL_CREDENTIAL_ENV_KEYS].sort()).toEqual([...referenced].sort());
   });
 });
