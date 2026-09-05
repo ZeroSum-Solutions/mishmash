@@ -21,6 +21,13 @@ const TRANSPORT_ERROR_MESSAGE = 'network error: connection reset by peer';
  * daemon opens every run stream with this frame, so a transport failure that
  * happens mid-stream must be preceded by one for the fixture to be a real
  * failure rather than an empty response.
+ *
+ * The field set is the contract's, which is not byte-for-byte what one daemon
+ * build emits. A frame recorded off a live daemon carries runtime-only extras
+ * (`streamFormat`, `toolTokenExpiresAt`) and omits `protocolVersion`, all of
+ * them optional either way. `consumeDaemonRun` reads none of them on the path
+ * this file tests — the frame is here only to put the reader past its first
+ * successful `read()` before the stream errors.
  */
 function startFrame(runId: string): string {
   const payload: SseEventPayload<ChatSseEvent, 'start'> = {
