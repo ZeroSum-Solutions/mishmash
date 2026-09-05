@@ -193,6 +193,25 @@ function isTimeoutText(text: string): boolean {
     .test(text);
 }
 
+/**
+ * True when the run carries a structured error code that already names the
+ * service failure behind it.
+ *
+ * The invariant: a code the provider or its adapter set outranks any matcher
+ * that reads the failure text. `errorCode` reaches `classifyRunFailure` from
+ * the run status and the SSE error frame, so it is evidence about the failure;
+ * every text matcher in this file can also fire on remediation advice inside
+ * that same message. `classifyAgentServiceFailure` is deliberately NOT part of
+ * this set -- it is a regex over the same free text, and treating it as a code
+ * would reclassify the daemon's own empty-output guard message, whose advice
+ * ends "...checking quota, or switching models".
+ */
+function hasNamedServiceFailureCode(errorCode: string): boolean {
+  return errorCode === 'RATE_LIMITED' ||
+    errorCode === 'UPSTREAM_UNAVAILABLE' ||
+    errorCode === 'AGENT_CONNECTION_DROPPED';
+}
+
 function isEmptyOutputText(text: string): boolean {
   return /\b(empty response|empty output|without producing any output|no visible output|returned an empty response)\b/i
     .test(text);
@@ -854,7 +873,11 @@ export function classifyRunFailure(
   // `rate_limit`/`hard_quota`, and `decideSafeRunRetry` then suppressed with
   // `hard_quota` the same-run retry the policy allows for `empty_output` -- a
   // run the daemon could have retried to success ended failed instead.
-  if (isEmptyOutputText(text)) {
+  //
+  // That precedence holds over TEXT only. A structured code outranks it, so a
+  // named provider failure is not reduced to `empty_output` just because its
+  // message also mentions an empty response.
+  if (isEmptyOutputText(text) && !hasNamedServiceFailureCode(errorCode)) {
     return classification(
       'empty_output',
       'empty_output',
