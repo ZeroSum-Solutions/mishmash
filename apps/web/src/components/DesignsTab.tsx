@@ -277,13 +277,18 @@ export function DesignsTab({
 			if (project.metadata?.kind === "brand") return [project.id, null] as const;
 			if (project.metadata?.entryFile && !designSystemProject) return [project.id, null] as const;
 			const held = scanned.get(project.id);
-			const asDelta = canListProjectFilesAsDelta(held, project.updatedAt);
+			// The tree this scan may extend with a delta, or null to walk in
+			// full. The first scan of a project always walks in full, so the
+			// bound is only consulted once a tree is actually held.
+			const extend =
+				held !== undefined && canListProjectFilesAsDelta(held, project.updatedAt)
+					? held
+					: null;
 			let files: ProjectFile[];
 			try {
-				files =
-					asDelta && held
-						? await listProjectFilesSince(project.id, held.files)
-						: await fetchProjectFiles(project.id);
+				files = extend
+					? await listProjectFilesSince(project.id, extend.files)
+					: await fetchProjectFiles(project.id);
 			} catch {
 				// One project's failure must not blank the rest of the grid --
 				// every other project's fetch keeps running via the shared pool.
@@ -292,7 +297,7 @@ export function DesignsTab({
 			scanned.set(project.id, {
 				revision: project.updatedAt,
 				files,
-				deltaScans: asDelta && held ? held.deltaScans + 1 : 0,
+				deltaScans: extend ? extend.deltaScans + 1 : 0,
 			});
 			if (designSystemProject) {
 				const logo = findDesignSystemLogoFile(files);
