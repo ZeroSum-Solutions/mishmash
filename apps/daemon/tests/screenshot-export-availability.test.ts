@@ -15,6 +15,7 @@ import path from 'node:path';
 import { register } from 'prom-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ExportCapabilitiesResponse } from '@open-design/contracts';
 import {
   SCREENSHOT_EXPORT_UNAVAILABLE_MESSAGE,
   isImageScreenshotExportAvailable,
@@ -145,6 +146,58 @@ describe('isImageScreenshotExportAvailable', () => {
       started.server.closeAllConnections?.();
       await new Promise<void>((resolve) => started.server.close(() => resolve()));
       await rm(exporterDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }, 60_000);
+});
+
+// W2K.1 red spec (daemon half) -- the predicate answers the same question for a
+// CLIENT, over HTTP.
+//
+// Knowing the answer only inside the daemon is what let the web Studio probe
+// `POST /api/projects/:id/export/image` on every "Export as image" click in a
+// runtime that cannot serve it: the route 501s, the client falls through to its
+// visible-preview capture, and the user gets an image -- but the 501 is recorded
+// on both anomaly sources every single time (FU-33). A client that has its own
+// fallback must be able to ask first.
+//
+// RED on `ea2eee96d`: the route does not exist, so the plain-boot case gets a
+// 404 instead of `{ image: false }`.
+describe('GET /api/export/capabilities', () => {
+  it('reports image:false on a plain daemon boot, matching the 501 the export route answers', async () => {
+    const resp = await fetch(`${baseUrl}/api/export/capabilities`);
+    expect(resp.status).toBe(200);
+    const body = (await resp.json()) as ExportCapabilitiesResponse;
+    expect(body.image).toBe(false);
+    // Same daemon, same boot: what the capability claims is what the export
+    // route does. A capability that disagreed with the route would send the
+    // client back to probing (or, worse, stop it probing a daemon that works).
+    expect(isImageScreenshotExportAvailable({})).toBe(body.image);
+  }, 60_000);
+
+  it('reports image:true when a renderer is wired', async () => {
+    const renderers = { desktopSlideRenderer: async () => ({ ok: false, error: 'not called' }) };
+    expect(isImageScreenshotExportAvailable(renderers)).toBe(true);
+
+    const { startServer } = await import('../src/server.js');
+    const started = (await startServer({
+      port: 0,
+      host: '127.0.0.1',
+      returnServer: true,
+      ...renderers,
+    })) as { url: string; server: http.Server; shutdown?: () => Promise<void> | void };
+
+    try {
+      const resp = await fetch(`${started.url}/api/export/capabilities`);
+      expect(resp.status).toBe(200);
+      const body = (await resp.json()) as ExportCapabilitiesResponse;
+      expect(body.image).toBe(true);
+    } finally {
+      await Promise.race([
+        Promise.resolve(started.shutdown?.()),
+        new Promise((r) => setTimeout(r, 2000)),
+      ]);
+      started.server.closeAllConnections?.();
+      await new Promise<void>((resolve) => started.server.close(() => resolve()));
     }
   }, 60_000);
 });

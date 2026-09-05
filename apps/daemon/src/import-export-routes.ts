@@ -1,5 +1,6 @@
 import type { Express, Response } from 'express';
 import { PROJECT_EXPORT_MANIFEST_SCHEMA, isExportFormat } from '@open-design/contracts';
+import type { ExportCapabilitiesResponse } from '@open-design/contracts';
 import nodePath from 'node:path';
 import os from 'node:os';
 import { readFile, rm } from 'node:fs/promises';
@@ -24,7 +25,10 @@ import { resolveWrapperTargetFromFile } from './entry-file-wrapper.js';
 import { authorizeReasoningEgress, sendReasoningEgressDenial } from './reasoning-egress.js';
 import { sandboxImportedProjectRootUnavailableReason } from './sandbox-mode.js';
 import { parseOrchestratorWorkspace } from './workspace-contract.js';
-import { SCREENSHOT_EXPORT_UNAVAILABLE_MESSAGE } from './screenshot-export-availability.js';
+import {
+  SCREENSHOT_EXPORT_UNAVAILABLE_MESSAGE,
+  isImageScreenshotExportAvailable,
+} from './screenshot-export-availability.js';
 
 export interface RegisterImportRoutesDeps extends RouteDeps<'db' | 'http' | 'uploads' | 'node' | 'ids' | 'paths' | 'imports' | 'auth' | 'projectStore' | 'conversations' | 'projectFiles' | 'validation'> {}
 
@@ -1018,6 +1022,23 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
         String(err?.message || err),
       );
     }
+  });
+
+  // What this daemon can rasterize, so a client that carries its own fallback
+  // never sends a request the daemon has already decided it cannot serve.
+  //
+  // INVARIANT: this answers for the same renderers `handleScreenshotExport`
+  // rasterizes with, through the same predicate the agent charter reads
+  // (`isImageScreenshotExportAvailable`). A caller told `image: false` would get
+  // 501 UPSTREAM_UNAVAILABLE from `POST /api/projects/:id/export/image` on every
+  // attempt, in this daemon process, for as long as it lives -- the renderers are
+  // wired once at boot and never appear later. Not project-scoped for the same
+  // reason.
+  app.get('/api/export/capabilities', (_req, res) => {
+    const body: ExportCapabilitiesResponse = {
+      image: isImageScreenshotExportAvailable({ desktopSlideRenderer, desktopArtifactExporter }),
+    };
+    res.json(body);
   });
 
   // Programmatic screenshot-based PPTX: render each deck slide to a pixel-perfect

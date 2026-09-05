@@ -109,6 +109,7 @@ import {
   copyImageDataUrlToClipboard,
   exportReactComponentAsHtml,
   exportReactComponentAsZip,
+  canRequestOffscreenImageRender,
   captureHostIframeSnapshot,
   imageDataUrlToBlob,
   isOpenDesignHostAvailable,
@@ -11124,7 +11125,13 @@ function HtmlViewer({
     // same viewport size, same scroll offset — so PreviewDrawOverlay's marks
     // scale onto it correctly. A host, where it exists, keeps its compositor
     // snapshot: that is already a viewport-matched image and is untouched here.
-    if (options?.viewportClip === true && !isOpenDesignHostAvailable() && projectId && file.name) {
+    if (
+      options?.viewportClip === true
+      && !isOpenDesignHostAvailable()
+      && projectId
+      && file.name
+      && await canRequestOffscreenImageRender()
+    ) {
       const viewport = readPreviewViewportRect(iframeRef.current ?? srcDocPreviewIframeRef.current);
       if (viewport) {
         const rendered = await exportProjectImageDataUrl({
@@ -11143,7 +11150,12 @@ function HtmlViewer({
       }
     }
 
-    if ((isOpenDesignHostAvailable() || options?.allowOffscreenRender === true) && projectId && file.name) {
+    if (
+      (isOpenDesignHostAvailable() || options?.allowOffscreenRender === true)
+      && projectId
+      && file.name
+      && await canRequestOffscreenImageRender()
+    ) {
       // Deck-vs-page uses the same signal as PDF export — broader than the viewer's nav
       // signal — so runtime-managed decks (`<deck-stage>` / `data-screen-label`,
       // no literal `.slide`) export as a deck instead of a single page-mode shot
