@@ -407,6 +407,26 @@ function provisionalDaemonErrorFrame(frameError: Error): Error {
 }
 
 /**
+ * The invariant every abandoned run-event reader is held to: RELEASING A
+ * READER NEVER RAISES AN UNHANDLED REJECTION.
+ *
+ * A reader is released here only after its `read()` rejected, which means the
+ * stream is already in the errored state. `cancel()` on an errored stream
+ * returns an ALREADY REJECTED promise rather than throwing, so a synchronous
+ * `try`/`catch` around the call cannot take it. Every REAL transport failure
+ * reaches this path — connection reset, proxy idle timeout, tab backgrounded —
+ * so the rejection has to be adopted here or it escapes to
+ * `window.onunhandledrejection` once per reconnect attempt.
+ *
+ * Adopting it hides nothing about the run. The caller still leaves the read
+ * loop, and the loss is adjudicated exactly as before: by the post-stream
+ * run-status read and the reconnect budget (W1K.1 / W1K.3).
+ */
+function releaseFailedStreamReader(reader: ReadableStreamDefaultReader<Uint8Array>): void {
+  void reader.cancel().catch(() => {});
+}
+
+/**
  * The invariant an exhausted reconnect budget is held to: A BUDGET THIS CLIENT
  * RAN OUT OF IS NOT A TERMINAL FOR THE RUN.
  *
@@ -1208,7 +1228,7 @@ async function consumeDaemonRun({
           // and handler invocations stay OUTSIDE this catch so local
           // processing bugs surface through the existing outer error path.
           if ((err as Error).name === 'AbortError') throw err;
-          try { reader.cancel(); } catch {}
+          releaseFailedStreamReader(reader);
           break;
         }
         const { value, done } = readResult;
