@@ -66,11 +66,13 @@ function posterUrl(id: string): string {
 // frame.
 //
 // Rendering the example in an iframe per card does not scale. Each example is
-// a whole site — its own CSS, fonts, and images — and the asset route rescans
-// every registry root per request, so a screenful of frames means hundreds of
-// requests and the gallery paints blank while the daemon catches up. An entry
-// that ships an `assets/poster.jpg` is one request and one decode, so prefer
-// it and keep the frame as the fallback for entries without one.
+// a whole site — its own CSS, fonts, and images — so a screenful of frames
+// means hundreds of requests and the gallery paints blank while the daemon
+// catches up. An entry that ships an `assets/poster.jpg` is one request and one
+// decode, so prefer it and keep the frame as the fallback for entries without
+// one. (The asset route used to rescan every registry root per request too;
+// `sendSkillSubresource` now resolves through a short-lived listing cache, so
+// the remaining per-card cost is the frame itself.)
 //
 // `hasPoster` comes from the listing: asking for a poster the entry does not
 // have used to cost a 404 through the same slow sub-resource route for nearly
