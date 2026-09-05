@@ -538,6 +538,41 @@ describe('classifyRunFailure', () => {
     });
   });
 
+  // W1L.4 red spec: the daemon's empty-output guard emits its FULL message,
+  // whose remediation advice ends "...checking quota, or switching models".
+  // `isHardQuotaText` matches the bare word `quota`, and the quota branch was
+  // tested before `isEmptyOutputText`, so the guard's own message classified as
+  // `rate_limit`/`hard_quota` and `decideSafeRunRetry` suppressed the same-run
+  // retry the policy allows for `empty_output`. The case above passes even on
+  // the buggy order because it uses the first sentence alone, which carries no
+  // trigger word. Message copied verbatim from the guard in
+  // `apps/daemon/src/server.ts` (the `code === 0` with no substantive output
+  // branch).
+  //
+  // This layer sees only half the defect: the real `classifyAgentServiceFailure`
+  // (`src/runtimes/auth.ts`, AGENT_RATE_FAILURE_RE) matches `quota` too, so in
+  // production `serviceFailure === 'RATE_LIMITED'` was ALSO true. The mock at
+  // the top of this file does not, which is why the whole failure only shows up
+  // through the real runtime path -- see the matching case in
+  // `run-retry-runtime.test.ts`.
+  it('classifies the empty-output guard’s own full message as empty output, not hard quota', () => {
+    const guardMessage =
+      'Agent completed without producing any output. The model or provider may have returned an empty response. Check the agent logs for upstream errors, then try re-authenticating the agent, checking quota, or switching models.';
+    expect(
+      classify(
+        'AGENT_EXECUTION_FAILED',
+        guardMessage,
+        [errorEvent('AGENT_EXECUTION_FAILED', guardMessage, true)],
+      ),
+    ).toMatchObject({
+      failure_category: 'empty_output',
+      failure_detail: 'empty_output',
+      failure_stage: 'first_token_wait',
+      retryable: true,
+      user_action: 'retry',
+    });
+  });
+
   it('maps signal exits and stall text to timeout', () => {
     expect(
       classifyRunFailure({
