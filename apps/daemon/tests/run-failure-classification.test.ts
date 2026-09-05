@@ -43,6 +43,8 @@ vi.mock('../src/runtimes/auth.js', () => ({
   },
 }));
 
+import type { ApiErrorCode } from '@open-design/contracts';
+
 import {
   classifyRunFailure,
   isResumableFailure,
@@ -564,6 +566,128 @@ describe('classifyRunFailure', () => {
         guardMessage,
         [errorEvent('AGENT_EXECUTION_FAILED', guardMessage, true)],
       ),
+    ).toMatchObject({
+      failure_category: 'empty_output',
+      failure_detail: 'empty_output',
+      failure_stage: 'first_token_wait',
+      retryable: true,
+      user_action: 'retry',
+    });
+  });
+
+  // W1M.1 red spec. `isEmptyOutputText` reads free text; `errorCode` is a
+  // STRUCTURED code the provider (or the adapter that wrapped it) named for
+  // this failure. W1L.4 moved the empty-output return ahead of EVERY quota and
+  // upstream branch, so a structured `RATE_LIMITED` /`UPSTREAM_UNAVAILABLE` /
+  // `AGENT_CONNECTION_DROPPED` failure whose message also happens to mention an
+  // empty response was reported as `empty_output` and retried, hiding the real
+  // cause from the user and from `decideSafeRunRetry`. The three cases below
+  // pin the structured code; the three controls after them pin W1L.4's fix,
+  // which stays: empty-output text still outranks the TEXT-derived quota,
+  // rate-limit, and upstream matchers.
+  //
+  // The failure text carries no quota, rate-limit, or upstream wording, so the
+  // expected category can only come from the code. Codes are declared as the
+  // contracts `ApiErrorCode` union, so a renamed code fails typecheck here
+  // instead of silently passing a string the daemon never emits.
+  const EMPTY_OUTPUT_FLAVORED_TEXT = 'The provider returned an empty response.';
+
+  it('keeps a structured RATE_LIMITED code ahead of the empty-output text matcher', () => {
+    const code: ApiErrorCode = 'RATE_LIMITED';
+    expect(
+      classify(code, EMPTY_OUTPUT_FLAVORED_TEXT, [
+        errorEvent(code, EMPTY_OUTPUT_FLAVORED_TEXT, true),
+      ]),
+    ).toMatchObject({
+      failure_category: 'rate_limit',
+      failure_detail: 'rate_limit_429',
+      failure_stage: 'session_init',
+      retryable: true,
+      user_action: 'retry',
+    });
+  });
+
+  // `collectFailureText` appends the normalized code to the text it hands the
+  // detail matchers, so `upstreamDetail` reads the literal `UPSTREAM_UNAVAILABLE`
+  // and names the detail `upstream_5xx`. The category is what this case pins.
+  it('keeps a structured UPSTREAM_UNAVAILABLE code ahead of the empty-output text matcher', () => {
+    const code: ApiErrorCode = 'UPSTREAM_UNAVAILABLE';
+    expect(
+      classify(code, EMPTY_OUTPUT_FLAVORED_TEXT, [
+        errorEvent(code, EMPTY_OUTPUT_FLAVORED_TEXT, true),
+      ]),
+    ).toMatchObject({
+      failure_category: 'upstream_unavailable',
+      failure_detail: 'upstream_5xx',
+      failure_stage: 'first_token_wait',
+      retryable: true,
+      user_action: 'retry',
+    });
+  });
+
+  it('keeps a structured AGENT_CONNECTION_DROPPED code ahead of the empty-output text matcher', () => {
+    const code: ApiErrorCode = 'AGENT_CONNECTION_DROPPED';
+    expect(
+      classify(code, EMPTY_OUTPUT_FLAVORED_TEXT, [
+        errorEvent(code, EMPTY_OUTPUT_FLAVORED_TEXT, true),
+      ]),
+    ).toMatchObject({
+      failure_category: 'upstream_unavailable',
+      failure_detail: 'network_error',
+      failure_stage: 'first_token_wait',
+      retryable: true,
+      user_action: 'retry',
+    });
+  });
+
+  // Control (W1L.4, must stay green): the daemon's own empty-output guard exits
+  // with the generic `AGENT_EXECUTION_FAILED`, which names no service failure.
+  // Its message ends "...checking quota, or switching models", so the bare word
+  // `quota` reaches `isHardQuotaText`. Text is not a structured code, so the run
+  // stays `empty_output` and retryable.
+  it('still classifies a bare AGENT_EXECUTION_FAILED empty-output run as empty output', () => {
+    const code: ApiErrorCode = 'AGENT_EXECUTION_FAILED';
+    const guardMessage =
+      'Agent completed without producing any output. The model or provider may have returned an empty response. Check the agent logs for upstream errors, then try re-authenticating the agent, checking quota, or switching models.';
+    expect(
+      classify(code, guardMessage, [errorEvent(code, guardMessage, true)]),
+    ).toMatchObject({
+      failure_category: 'empty_output',
+      failure_detail: 'empty_output',
+      failure_stage: 'first_token_wait',
+      retryable: true,
+      user_action: 'retry',
+    });
+  });
+
+  // Control (W1L.4, must stay green): quota wording alone is remediation advice,
+  // not a code. `isHardQuotaText` matches `quota` here and would report
+  // `hard_quota` with `user_action: 'none'`, which is exactly the suppression
+  // W1L.4 removed.
+  it('still classifies text-only quota wording next to empty output as empty output', () => {
+    const code: ApiErrorCode = 'AGENT_EXECUTION_FAILED';
+    const message =
+      'Agent produced no visible output. Try checking quota, then run the turn again.';
+    expect(
+      classify(code, message, [errorEvent(code, message, true)]),
+    ).toMatchObject({
+      failure_category: 'empty_output',
+      failure_detail: 'empty_output',
+      failure_stage: 'first_token_wait',
+      retryable: true,
+      user_action: 'retry',
+    });
+  });
+
+  // Control (W1L.4, must stay green): `classifyAgentServiceFailure` is a regex
+  // over the same free text, so its `RATE_LIMITED` is text-derived evidence and
+  // must NOT outrank empty output. Only `errorCode` does.
+  it('still classifies a text-derived rate-limit service failure next to empty output as empty output', () => {
+    const code: ApiErrorCode = 'AGENT_EXECUTION_FAILED';
+    const message =
+      'Session limit reached. The agent returned an empty response for this turn.';
+    expect(
+      classify(code, message, [errorEvent(code, message, true)]),
     ).toMatchObject({
       failure_category: 'empty_output',
       failure_detail: 'empty_output',
