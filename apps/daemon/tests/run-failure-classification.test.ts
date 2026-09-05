@@ -607,9 +607,14 @@ describe('classifyRunFailure', () => {
     });
   });
 
-  // `collectFailureText` appends the normalized code to the text it hands the
-  // detail matchers, so `upstreamDetail` reads the literal `UPSTREAM_UNAVAILABLE`
-  // and names the detail `upstream_5xx`. The category is what this case pins.
+  // Superseded by W1M.3 (FU-30). This case used to assert
+  // `failure_detail: 'upstream_5xx'`, and its own comment recorded why: the
+  // normalized code was appended to the failure text, so `upstreamDetail` read
+  // the literal `UPSTREAM_UNAVAILABLE` and answered `upstream_5xx`. That claimed
+  // a status no provider returned. The code is evidence, not text
+  // (`isStructuredFailureCode`), and `EMPTY_OUTPUT_FLAVORED_TEXT` names no
+  // upstream mechanism, so the honest detail is the generic
+  // `upstream_unavailable`. The category is what this case pins.
   it('keeps a structured UPSTREAM_UNAVAILABLE code ahead of the empty-output text matcher', () => {
     const code: ApiErrorCode = 'UPSTREAM_UNAVAILABLE';
     expect(
@@ -618,13 +623,18 @@ describe('classifyRunFailure', () => {
       ]),
     ).toMatchObject({
       failure_category: 'upstream_unavailable',
-      failure_detail: 'upstream_5xx',
+      failure_detail: 'upstream_unavailable',
       failure_stage: 'first_token_wait',
       retryable: true,
       user_action: 'retry',
     });
   });
 
+  // Superseded by W1M.3 (FU-30) for the same reason. This case used to assert
+  // `failure_detail: 'network_error'`, which it reached only because no matcher
+  // fired and `upstreamDetail` fell through to that label. Nothing here observed
+  // a transport fault: `AGENT_CONNECTION_DROPPED` says the connection to the
+  // provider ended, and `EMPTY_OUTPUT_FLAVORED_TEXT` says nothing about how.
   it('keeps a structured AGENT_CONNECTION_DROPPED code ahead of the empty-output text matcher', () => {
     const code: ApiErrorCode = 'AGENT_CONNECTION_DROPPED';
     expect(
@@ -633,7 +643,7 @@ describe('classifyRunFailure', () => {
       ]),
     ).toMatchObject({
       failure_category: 'upstream_unavailable',
-      failure_detail: 'network_error',
+      failure_detail: 'upstream_unavailable',
       failure_stage: 'first_token_wait',
       retryable: true,
       user_action: 'retry',
