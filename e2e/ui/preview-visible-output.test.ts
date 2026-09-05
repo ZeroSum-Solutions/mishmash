@@ -36,6 +36,13 @@
 // Timing is silent, in `packages/contracts/tests/preview-paint-transparent.
 // test.ts`.
 
+// W2I.1 — wave-2 round 3 added the third outcome: a first contentful paint is
+// evidence, not a settlement. The producer now asks the scan even when Paint
+// Timing answered, and says which of the two the settle rests on. The cases
+// below judge that in the browser, along with the vendor-prefixed gradients
+// Chromium keeps in the computed value and the late paint only a second ask
+// can see.
+
 import { PREVIEW_PAINT_REPORT_PRODUCER_SOURCE } from '@open-design/contracts/runtime/preview-paint-report';
 import type { Page } from '@playwright/test';
 
@@ -49,7 +56,13 @@ interface PaintReport {
   reason?: unknown;
   evidence?: unknown;
   scanTruncated?: unknown;
-  counters?: { seen?: unknown; hidden?: unknown; clipped?: unknown; blank?: unknown };
+  counters?: {
+    seen?: unknown;
+    hidden?: unknown;
+    clipped?: unknown;
+    blank?: unknown;
+    imageUnverified?: unknown;
+  };
   width?: unknown;
 }
 
@@ -308,6 +321,15 @@ test('[P1] which image pixels a preview document may read', async ({ page }) => 
   // `packages/contracts/tests/preview-paint-transparent.test.ts`. This case
   // exists so a future Chromium that stops reporting a contentful paint for a
   // transparent image is noticed HERE rather than in a user's blank preview.
+  //
+  // W2I.1 SUPERSEDES what this pair used to claim. It asserted `painted: true`
+  // and `paint-timing` and stopped there, which read as "this settles, and
+  // nothing is said about it" — the silent settle of a visually blank document
+  // that wave-2 round 3 finding F1 called out. The verdict is unchanged (a
+  // contentful paint is real evidence, and the preview is not torn down over a
+  // caveat); what is new is that the report NAMES what the settle rests on, so
+  // the host can show a soft unverified-render notice and record a
+  // `preview-error` caveat instead of settling in silence.
   const transparentReport = await reportFor(
     page,
     `<img src="${TRANSPARENT_PNG}" style="width:60px;height:60px">`,
@@ -315,8 +337,13 @@ test('[P1] which image pixels a preview document may read', async ({ page }) => 
   expect(transparentReport.painted).toBe(true);
   expect(
     transparentReport.reason,
-    'the user agent answered for this document; the scan never reached the image',
+    'the user agent answered for this document; the scan corroborated nothing',
   ).toBe('paint-timing');
+  expect(
+    transparentReport.evidence,
+    'the scan found no paint of its own here, so the report says the settle rests on the ' +
+      'user agent alone',
+  ).toBe('paint-timing-unverified');
 
   const crossOriginReport = await reportFor(
     page,
@@ -324,6 +351,119 @@ test('[P1] which image pixels a preview document may read', async ({ page }) => 
   );
   expect(crossOriginReport.painted).toBe(true);
   expect(crossOriginReport.reason).toBe('paint-timing');
+  expect(crossOriginReport.evidence).toBe('paint-timing-unverified');
+});
+
+test('[P1] a contentful paint the scan can corroborate carries no caveat', async ({ page }) => {
+  // W2I.1 red spec, finding F1, in the browser the finding was raised against.
+  // The other two outcomes beside the caveat above, so the middle one reads as
+  // a THIRD outcome rather than a reversal of the "Paint Timing first" trade.
+  const opaqueImage = await reportFor(page, `<img src="${RED_PNG}" style="width:60px;height:60px">`);
+  expect(opaqueImage.painted).toBe(true);
+  expect(
+    opaqueImage.evidence,
+    'a `data:` image is same-origin, so the scan read its pixels and corroborated the paint entry',
+  ).toBe(null);
+
+  const text = await reportFor(page, '<h1 style="color:#111">Artifact</h1>');
+  expect(text.painted).toBe(true);
+  expect(text.evidence, 'painted text is evidence the scan can stand behind').toBe(null);
+});
+
+test('[P1] a transparent vendor-prefixed gradient is not paint', async ({ page }) => {
+  // W2I.1 red spec, finding F6. Chromium keeps the prefix in the computed
+  // value — asserted here rather than assumed, because the whole defect follows
+  // from it — so matching unprefixed gradients only sent this layer to the
+  // unknown-layer branch, called it `image-unverified`, and settled a blank
+  // preview as painted.
+  await page.goto('about:blank');
+  await page.setContent(
+    '<!doctype html><html><head><meta charset="utf-8"></head><body>' +
+      '<div id="od-prefixed" style="width:200px;height:120px;' +
+      'background-image:-webkit-linear-gradient(transparent, transparent)"></div>' +
+      '</body></html>',
+  );
+  const computed = await page.evaluate(() => {
+    const box = document.getElementById('od-prefixed');
+    return box ? getComputedStyle(box).backgroundImage : '';
+  });
+  expect(computed, 'Chromium preserves the vendor prefix in the computed value').toContain(
+    '-webkit-linear-gradient',
+  );
+
+  const prefixed = await reportFor(
+    page,
+    '<div style="width:200px;height:120px;' +
+      'background-image:-webkit-linear-gradient(transparent, transparent)"></div>',
+  );
+  expect(prefixed.painted, 'a prefix does not make a transparent gradient ink').toBe(false);
+  expect(prefixed.reason).toBe('no-visible-output');
+  expect(Number(prefixed.counters?.imageUnverified), 'a gradient is not a raster').toBe(0);
+
+  const inked = await reportFor(
+    page,
+    '<div style="width:200px;height:120px;' +
+      'background-image:-webkit-linear-gradient(#2563eb, transparent)"></div>',
+  );
+  expect(inked.painted, 'a prefixed gradient with a colour stop still inks').toBe(true);
+  expect(inked.evidence).toBe(null);
+});
+
+test('[P1] a stable-size canvas that draws late is seen only by asking again', async ({ page }) => {
+  // W2I.1 red spec, finding F4, the producer half in a real browser. This
+  // document never changes size, so `resize`, `ResizeObserver` and the initial
+  // 0/80/260 ms timers have all passed before it paints. The only way its paint
+  // is ever observed is a host that asks again — which is what the host fix
+  // makes the watchdog do until the document settles or the deadline passes.
+  await page.goto('about:blank');
+  await page.setContent(
+    '<!doctype html><html><head><meta charset="utf-8"></head><body>' +
+      '<canvas id="od-late" width="240" height="120"></canvas>' +
+      '</body></html>',
+  );
+  await page.addScriptTag({ content: PREVIEW_PAINT_REPORT_PRODUCER_SOURCE });
+
+  const ask = async (): Promise<PaintReport> =>
+    page.evaluate(
+      (reportType: string) =>
+        new Promise<PaintReport>((resolve) => {
+          window.addEventListener('message', (event: MessageEvent) => {
+            const data = event.data as { type?: string } | null;
+            if (data?.type === reportType) resolve(data as PaintReport);
+          });
+          (
+            window as unknown as { __odPreviewPaintReport: { post: () => void } }
+          ).__odPreviewPaintReport.post();
+        }),
+      REPORT,
+    );
+
+  const before = await ask();
+  expect(
+    before.painted,
+    'an undrawn canvas is a rectangle of nothing, and the scan cannot see into one',
+  ).toBe(false);
+
+  await page.evaluate(() => {
+    const canvas = document.getElementById('od-late') as HTMLCanvasElement | null;
+    const context = canvas?.getContext('2d');
+    if (!context) throw new Error('no 2d context');
+    context.fillStyle = '#111827';
+    context.fillRect(0, 0, 240, 120);
+  });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 120)));
+      }),
+  );
+
+  const after = await ask();
+  expect(
+    after.painted,
+    'the draw fired a contentful paint, and a fresh ask is what surfaces it',
+  ).toBe(true);
+  expect(after.reason).toBe('paint-timing');
 });
 
 test('[P1] Paint Timing answers for content the scan cannot enumerate', async ({ page }) => {
