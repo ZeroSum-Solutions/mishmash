@@ -1,3 +1,5 @@
+import type { MediaAspect } from './projects.js';
+
 export type ModelCost = 'low' | 'medium' | 'high' | 'very_high';
 
 export type ModelCapability = 'standard' | 'advanced' | 'best_quality';
@@ -373,6 +375,29 @@ export function isPromptTemplatesResponse(value: unknown): value is PromptTempla
 
 export function isPromptTemplateResponse(value: unknown): value is PromptTemplateResponse {
   return isPromptTemplateRecord(value) && isPromptTemplateDetail(value.promptTemplate);
+}
+
+/** The ratios `MediaAspect` admits, for narrowing a catalogue `aspect`. */
+const MEDIA_ASPECT_VALUES: readonly MediaAspect[] = ['1:1', '16:9', '9:16', '4:3', '3:4'];
+
+/**
+ * The catalogue `aspect` as a `MediaAspect`, or `undefined` when the product
+ * does not offer that ratio.
+ *
+ * INVARIANT: only a ratio the media surfaces actually support is carried into
+ * `PromptTemplateMetadata`, which is the subset persisted on the project and
+ * read by the agent every turn.
+ *
+ * The two types differ on purpose. `PromptTemplateSummary.aspect` describes the
+ * wire, and the shipped catalogue serves `2:3`, which `MediaAspect` does not
+ * contain. `PromptTemplateMetadata.aspect` describes what the product can act
+ * on. Dropping the unsupported ratio at the boundary is what the media surfaces
+ * already expect: they stopped seeding a ratio at all, and the system prompt
+ * prints "(unknown - ask: ...)" for an unset field, so the agent asks during the
+ * run instead of being handed a value it cannot use.
+ */
+export function promptTemplateMediaAspect(aspect: string | undefined): MediaAspect | undefined {
+  return MEDIA_ASPECT_VALUES.find((candidate) => candidate === aspect);
 }
 
 

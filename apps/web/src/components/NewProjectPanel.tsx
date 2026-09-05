@@ -11,6 +11,7 @@ import {
   trackNewProjectModalSurfaceView,
   trackNewProjectModalTabClick,
 } from '../analytics/events';
+import { promptTemplateMediaAspect } from '@open-design/contracts';
 import type { ConnectorDetail } from '@open-design/contracts';
 import type {
   TrackingDesignSystemApplyTargetKind,
@@ -3292,7 +3293,9 @@ function buildPromptTemplateMetadata(
       category: summary.category || undefined,
       tags: summary.tags && summary.tags.length > 0 ? summary.tags : undefined,
       model: summary.model,
-      aspect: summary.aspect,
+      // The catalogue serves ratios the media surfaces do not offer (`2:3`);
+      // `PromptTemplateMetadata.aspect` is the subset the product can act on.
+      aspect: promptTemplateMediaAspect(summary.aspect),
       source: summary.source
         ? {
             repo: summary.source.repo,
