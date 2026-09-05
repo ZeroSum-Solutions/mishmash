@@ -130,6 +130,28 @@ async function timedGet(baseUrl: string, path: string): Promise<TimedResponse> {
 }
 
 /**
+ * Fail with a named cause when a shipped fixture entry is missing.
+ *
+ * Several rows address `lexington-westend` and `lexington-sandstone` by id
+ * because those two entries ship the real `assets/poster.jpg` and `fonts/`
+ * directory the sub-resource routes need. They are repository content, so a
+ * rename or removal would otherwise surface as an unexplained 404 in the
+ * middle of the route table rather than as "the fixture is gone".
+ */
+async function assertFixtureEntriesPresent(daemonUrl: string): Promise<void> {
+  const templates = await requestJson<DesignTemplatesResponse>(
+    daemonUrl,
+    '/api/design-templates',
+  );
+  const ids = new Set(templates.designTemplates.map((entry) => entry.id));
+  const missing = [POSTER_TEMPLATE_ID, FONTS_TEMPLATE_ID].filter((id) => !ids.has(id));
+  expect(
+    missing,
+    'shipped fixture entry missing: these design templates carry the assets/poster.jpg and fonts/ this spec addresses by id; if they were renamed or removed, repoint the constants at entries that still ship those files',
+  ).toEqual([]);
+}
+
+/**
  * Seed enough projects that no row measures an empty daemon, and return the id
  * the per-project rows address.
  */
@@ -166,6 +188,7 @@ describe('W3F read-route contracts, budget and containment', () => {
 
     await suite.with.toolsDev(async ({ runtime }) => {
       const daemonUrl = `http://127.0.0.1:${runtime.daemonPort}/`;
+      await assertFixtureEntriesPresent(daemonUrl);
       const seededProjectId = await seedProjects(daemonUrl);
 
       // Each row names the `packages/contracts` export that owns its
@@ -402,6 +425,7 @@ describe('W3F read-route contracts, budget and containment', () => {
 
     await suite.with.toolsDev(async ({ runtime }) => {
       const daemonUrl = `http://127.0.0.1:${runtime.daemonPort}/`;
+      await assertFixtureEntriesPresent(daemonUrl);
 
       // --- FU-28 ----------------------------------------------------------
       // The gallery asks for `assets/poster.jpg` for every listed entry. The
