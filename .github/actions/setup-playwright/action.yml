@@ -79,14 +79,18 @@ runs:
 
     # `playwright install --with-deps` runs apt on every job; an apt mirror hiccup returns exit 100 and once
     # failed three jobs of one PR outright (#192). Retry the install up to three times before failing the job.
+    # A mirror can also hang instead of failing: on #213 `apt-get update` sat on a dead us.archive.ubuntu.com
+    # connection for 19 minutes and the 20-minute job cap cancelled the job before attempt 2 could run. Each
+    # attempt is therefore bounded; with a warm browser cache a healthy install finishes in well under a minute.
     - name: Install Playwright browsers
       shell: bash
       env:
         INSTALL_COMMAND: ${{ inputs.install-command }}
+        ATTEMPT_TIMEOUT: 5m
       run: |
         for attempt in 1 2 3; do
-          if bash -c "$INSTALL_COMMAND"; then exit 0; fi
-          echo "playwright install attempt $attempt failed" >&2
+          if timeout --kill-after=30s "$ATTEMPT_TIMEOUT" bash -c "$INSTALL_COMMAND"; then exit 0; fi
+          echo "playwright install attempt $attempt failed or timed out after $ATTEMPT_TIMEOUT" >&2
           sleep $((attempt * 15))
         done
         exit 1
