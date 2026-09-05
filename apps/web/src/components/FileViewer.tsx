@@ -10914,11 +10914,13 @@ function HtmlViewer({
   // an unanswered format is treated as available (see `clientExportCapabilities`),
   // so a slow or silent probe never removes a working choice.
   const [exportCapabilities, setExportCapabilities] = useState<ExportCapabilitiesResponse | null>(null);
-  // Re-read on every menu open, not once per mount: this tab outlives a daemon
-  // restart, and the reader keys its cache on the daemon boot id, so opening the
-  // menu is what re-probes a daemon that was replaced underneath the session.
+  // Read on menu OPEN and only on open: this tab outlives a daemon restart, and
+  // the reader keys its cache on the daemon boot id, so opening the menu is what
+  // re-probes a daemon that was replaced underneath the session. A viewer whose
+  // menu is never opened asks nothing, and closing the menu cannot change what
+  // the daemon can rasterize, so neither costs a request.
   useEffect(() => {
-    if (!canShare) return;
+    if (!canShare || !downloadMenuOpen) return;
     let cancelled = false;
     void clientExportCapabilities().then((capabilities) => {
       if (!cancelled) setExportCapabilities(capabilities);
