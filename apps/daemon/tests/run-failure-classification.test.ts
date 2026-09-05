@@ -538,6 +538,33 @@ describe('classifyRunFailure', () => {
     });
   });
 
+  // W1L.4 red spec: the daemon's empty-output guard emits its FULL message,
+  // whose remediation advice ends "...checking quota, or switching models".
+  // `isHardQuotaText` matches the bare word `quota`, and the quota branch is
+  // tested before `isEmptyOutputText`, so the guard's own message classified as
+  // `rate_limit`/`hard_quota` and `decideSafeRunRetry` suppressed the same-run
+  // retry the policy allows for `empty_output`. The case above passes only
+  // because it uses the first sentence alone. Message copied verbatim from the
+  // guard in `apps/daemon/src/server.ts` (the `code === 0` with no substantive
+  // output branch).
+  it('classifies the empty-output guard\u2019s own full message as empty output, not hard quota', () => {
+    const guardMessage =
+      'Agent completed without producing any output. The model or provider may have returned an empty response. Check the agent logs for upstream errors, then try re-authenticating the agent, checking quota, or switching models.';
+    expect(
+      classify(
+        'AGENT_EXECUTION_FAILED',
+        guardMessage,
+        [errorEvent('AGENT_EXECUTION_FAILED', guardMessage, true)],
+      ),
+    ).toMatchObject({
+      failure_category: 'empty_output',
+      failure_detail: 'empty_output',
+      failure_stage: 'first_token_wait',
+      retryable: true,
+      user_action: 'retry',
+    });
+  });
+
   it('maps signal exits and stall text to timeout', () => {
     expect(
       classifyRunFailure({
