@@ -111,10 +111,13 @@ export function MessageCenter({ onOpenNotificationSettings }: Props) {
   // local route that replaced it, which is defined to answer with an empty page
   // until there is a first-party source of messages. A timer that re-asks a
   // question with one permanent answer cannot change the panel, and every tick
-  // is a request that can be recorded slow or unanswered — 204 `request-slow`
-  // and 37 `request-unreachable` rows for this endpoint in the team daemon's
-  // anomaly log, all of them after the vendor proxy was removed. PRD 3.5's
-  // second arm: an endpoint either answers fast or is not polled.
+  // is a request that can be recorded slow or unanswered. The team daemon's
+  // anomaly log holds 457 `request-slow` and 57 `request-unreachable` rows for
+  // this endpoint dated after the vendor proxy was removed (capture of
+  // 2026-09-05) — against a handler that answers synchronously, so they measure
+  // the host stalling, not the route working. The poll is what turns each stall
+  // into another row. PRD 3.5's second arm: an endpoint either answers fast or
+  // is not polled.
   useEffect(() => {
     retrySync();
     const onVisibility = () => {
