@@ -14,6 +14,7 @@ import { buildSrcdoc, type SrcdocOptions } from './srcdoc';
 import { buildReactComponentSrcdoc } from './react-component';
 import { buildZip } from './zip';
 import { randomUUID } from '../utils/uuid';
+import type { ExportCapabilitiesResponse } from '@open-design/contracts';
 import {
   captureHostPage,
   isOpenDesignHostAvailable,
@@ -1136,6 +1137,68 @@ export function readPreviewViewportRect(
   } catch {
     return null;
   }
+}
+
+// Cached answer to `GET /api/export/capabilities`. `null` means "not decided
+// yet": either nothing has asked, or the daemon could not be reached / did not
+// answer the question, which is deliberately NOT cached as a decision.
+let cachedScreenshotExportAvailable: boolean | null = null;
+let screenshotExportCapabilityProbe: Promise<boolean> | null = null;
+
+async function readDaemonScreenshotExportCapability(): Promise<boolean> {
+  try {
+    const resp = await fetch('/api/export/capabilities');
+    if (!resp.ok) return true;
+    const body = (await resp.json()) as Partial<ExportCapabilitiesResponse> | null;
+    if (typeof body?.image !== 'boolean') return true;
+    cachedScreenshotExportAvailable = body.image;
+    return body.image;
+  } catch {
+    // Offline, or a daemon older than the capability route. "We did not find
+    // out" is not "it cannot", so keep the previous behaviour: ask, and let the
+    // response decide.
+    return true;
+  }
+}
+
+/**
+ * Whether this daemon says it can rasterize `POST /api/projects/:id/export/image`.
+ *
+ * Read once per session, because the answer is a property of how the daemon was
+ * booted: the desktop renderers are wired at startup and cannot appear later, so
+ * a definitive answer never goes stale. Only a definitive answer is cached — an
+ * unreachable daemon resolves `true` and is asked again next time.
+ */
+export function daemonScreenshotExportAvailable(): Promise<boolean> {
+  if (cachedScreenshotExportAvailable !== null) {
+    return Promise.resolve(cachedScreenshotExportAvailable);
+  }
+  if (!screenshotExportCapabilityProbe) {
+    screenshotExportCapabilityProbe = readDaemonScreenshotExportCapability();
+    void screenshotExportCapabilityProbe.finally(() => {
+      screenshotExportCapabilityProbe = null;
+    });
+  }
+  return screenshotExportCapabilityProbe;
+}
+
+/**
+ * INVARIANT: no caller may request an off-screen image render from a runtime
+ * that has already said it cannot produce one.
+ *
+ * A daemon booted without a desktop renderer answers 501 `UPSTREAM_UNAVAILABLE`
+ * for every image export, permanently. Asking anyway still works for the user —
+ * `exportProjectImageDataUrl` reports `unavailable` and the caller falls through
+ * to its visible-preview capture — but the failed request is recorded as a
+ * product fault on every single click, by the daemon's own 5xx anomaly observer
+ * and by the web fetch wrapper. That is what this predicate exists to stop.
+ *
+ * A desktop host is exempt and always answers true: it reaches the renderer its
+ * own daemon wired, so every host capture path is unchanged.
+ */
+export async function canRequestOffscreenImageRender(): Promise<boolean> {
+  if (isOpenDesignHostAvailable()) return true;
+  return daemonScreenshotExportAvailable();
 }
 
 export async function exportProjectImageDataUrl(opts: {

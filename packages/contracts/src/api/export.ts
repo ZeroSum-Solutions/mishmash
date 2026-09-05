@@ -61,3 +61,22 @@ export function isExportFormat(value: unknown): value is ExportFormat {
 export function isExportImageFormat(value: unknown): value is ExportImageFormat {
   return typeof value === 'string' && (EXPORT_IMAGE_FORMATS as readonly string[]).includes(value);
 }
+
+/**
+ * What THIS daemon's export routes can actually rasterize, served by
+ * `GET /api/export/capabilities`.
+ *
+ * Rasterization happens in a desktop renderer reached over sidecar IPC, so the
+ * answer is a property of how the daemon was booted, not of the artifact: a
+ * daemon started without one answers 501 `UPSTREAM_UNAVAILABLE` for every
+ * screenshot export, forever. A client that carries its own fallback asks this
+ * once instead of learning it from a 501 on every user action.
+ */
+export interface ExportCapabilitiesResponse {
+  /**
+   * `POST /api/projects/:id/export/image` can return image bytes. False means
+   * every image export on this daemon 501s; the daemon reports it fail-closed,
+   * so an unwired renderer is `false` rather than unknown.
+   */
+  image: boolean;
+}
