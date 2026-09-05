@@ -183,11 +183,12 @@ export function migrateLibrary(db: SqliteDb): void {
   }
 
   // skip_reason (W3G / T-08): same no-ADD-COLUMN-IF-NOT-EXISTS dance. Left
-  // NULL on existing rows deliberately — the 4,331 tasks already on disk were
+  // NULL on existing rows deliberately — every task already on disk was
   // written by the unconditional-skip code path, which never checked whether a
-  // model was configured, so backfilling them with a reason would assert
+  // model was configured, so backfilling those rows with a reason would assert
   // something that code never established. NULL reads honestly as "recorded
-  // before this row stated its reason".
+  // before this row stated its reason". (No count is quoted: it grows with
+  // ordinary use, so a number in a comment is stale the day after it lands.)
   const taskCols = db.prepare(`PRAGMA table_info(library_tasks)`).all() as Array<{ name: string }>;
   if (!taskCols.some((c) => c.name === 'skip_reason')) {
     db.exec(`ALTER TABLE library_tasks ADD COLUMN skip_reason TEXT`);
