@@ -222,12 +222,15 @@ describe('isRenderableCoverPng', () => {
     expect(isRenderableCoverPng(withRepairedCrc(damaged, ihdr))).toBe(false);
   });
 
-  it('accepts an interlaced PNG whose stream inflates, declining to predict its length', () => {
-    // Adam7's seven reduced passes each carry their own row padding, so the
-    // single-pass byte count does not apply. The predicate drops the length
-    // claim rather than inventing one; the stream must still inflate.
+  it('rejects an interlaced PNG, a layout no cover this daemon writes is in', () => {
+    // This assertion used to claim the opposite -- that an Adam7-interlaced
+    // PNG is accepted, because only its length claim was unknown and the
+    // stream still inflated. That was the W2J.2 defect: "unknown layout, so
+    // allow it" is the allowance an IHDR that merely CLAIMS interlacing walks
+    // through, and there is no legitimate cover to protect on the other side
+    // of it -- covers/crop.ts writes sharp's non-interlaced PNG output.
     expect(interlaced.readUInt8(8 + 8 + 12), 'the fixture is Adam7-interlaced').toBe(1);
-    expect(isRenderableCoverPng(interlaced)).toBe(true);
+    expect(isRenderableCoverPng(interlaced)).toBe(false);
   });
 
   it('rejects an interlaced PNG whose stream does not inflate', () => {
