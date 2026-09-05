@@ -125,11 +125,15 @@ export function execAgentFile(
     let settled = false;
     let timedOut = false;
     let overflowed = false;
+    let aborted = false;
     let deadline: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
 
     const stop = () => {
       if (deadline) clearTimeout(deadline);
       deadline = undefined;
+      if (onAbort) options.signal?.removeEventListener('abort', onAbort);
+      onAbort = undefined;
     };
 
     const capture = (
@@ -164,7 +168,7 @@ export function execAgentFile(
       stop();
       error.stdout = stdout;
       error.stderr = stderr;
-      if (timedOut) error.killed = true;
+      if (timedOut || aborted) error.killed = true;
       reject(error);
     };
 
@@ -172,17 +176,19 @@ export function execAgentFile(
 
     child.on('close', (code, signal) => {
       if (settled) return;
-      if (code === 0 && !timedOut && !overflowed) {
+      if (code === 0 && !timedOut && !overflowed && !aborted) {
         settled = true;
         stop();
         resolve({ stdout, stderr });
         return;
       }
-      const reason = timedOut
-        ? `timed out after ${String(timeout)}ms`
-        : overflowed
-          ? `produced more than ${String(maxBuffer)} bytes of output`
-          : `exited with code ${String(code)}`;
+      const reason = aborted
+        ? 'was aborted by its caller'
+        : timedOut
+          ? `timed out after ${String(timeout)}ms`
+          : overflowed
+            ? `produced more than ${String(maxBuffer)} bytes of output`
+            : `exited with code ${String(code)}`;
       const error: AgentExecError = new Error(
         `Command failed: ${invocation.command} ${invocation.args.join(' ')} (${reason})\n${stderr}`,
       );
@@ -197,6 +203,20 @@ export function execAgentFile(
         terminateProbeTree(child.pid);
       }, timeout);
       deadline.unref();
+    }
+
+    // `RuntimeExecOptions` extends `ExecFileOptions`, which carries `signal`,
+    // and the `execFile` this replaced honoured it. Keep honouring it, so a
+    // caller that passes one is never silently ignored — and route it through
+    // `terminateProbeTree` rather than a bare SIGTERM, for the same reason the
+    // timeout does.
+    if (options.signal) {
+      onAbort = () => {
+        aborted = true;
+        terminateProbeTree(child.pid);
+      };
+      if (options.signal.aborted) onAbort();
+      else options.signal.addEventListener('abort', onAbort, { once: true });
     }
   });
 }

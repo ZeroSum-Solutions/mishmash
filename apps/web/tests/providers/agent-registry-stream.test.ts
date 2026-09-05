@@ -148,12 +148,28 @@ describe('fetchAgentsStream contract frames', () => {
       release = resolve;
     });
     let seenSignal: AbortSignal | undefined;
+    // The mock honours its AbortSignal the way a real fetch does. Without
+    // that, an implementation that hands the caller's OWN signal to fetch is
+    // indistinguishable from one that owns a shared controller: the request
+    // simply keeps running and the test times out instead of failing on the
+    // claim it makes.
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        seenSignal = init?.signal ?? undefined;
-        await gate;
-        return streamResponse(encodeFrames(frames));
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        const signal = init?.signal ?? undefined;
+        seenSignal = signal;
+        return new Promise<Response>((resolve, reject) => {
+          const onAbort = () => reject(signal?.reason ?? new Error('aborted'));
+          if (signal?.aborted) {
+            onAbort();
+            return;
+          }
+          signal?.addEventListener('abort', onAbort, { once: true });
+          void gate.then(() => {
+            signal?.removeEventListener('abort', onAbort);
+            resolve(streamResponse(encodeFrames(frames)));
+          });
+        });
       }),
     );
 

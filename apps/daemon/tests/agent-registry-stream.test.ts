@@ -223,6 +223,63 @@ describe('agent probe timeout kill', () => {
     },
     20_000,
   );
+  it.skipIf(process.platform === 'win32')(
+    'stops a probe whose caller aborted it',
+    async () => {
+      const pidFile = path.join(tempRoot, 'pids');
+      const script = path.join(tempRoot, 'aborted-probe.sh');
+      fs.writeFileSync(
+        script,
+        [
+          '#!/bin/sh',
+          "trap '' TERM",
+          'sleep 30 &',
+          'child=$!',
+          'echo "$$ $child" > "$1"',
+          'wait "$child"',
+          '',
+        ].join('\n'),
+      );
+      fs.chmodSync(script, 0o755);
+
+      const controller = new AbortController();
+      // `RuntimeExecOptions` extends `ExecFileOptions`, so `signal` is part of
+      // this helper's advertised contract and `execFile` honoured it. Pin that
+      // it survived the rewrite to `spawn`, which forwards options explicitly.
+      const settled = execAgentFile(script, [pidFile], { signal: controller.signal }).then(
+        () => 'settled' as const,
+        () => 'settled' as const,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      controller.abort();
+      const outcome = await Promise.race([
+        settled,
+        new Promise<'hung'>((resolve) => setTimeout(() => resolve('hung'), 5_000)),
+      ]);
+
+      const pids = fs
+        .readFileSync(pidFile, 'utf8')
+        .trim()
+        .split(/\s+/)
+        .map((value) => Number(value));
+      const survivors = await waitUntilGone(pids, 3_000);
+      for (const pid of survivors) {
+        try {
+          process.kill(-pid, 'SIGKILL');
+        } catch {
+          /* not a group leader, or already gone */
+        }
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          /* already gone */
+        }
+      }
+
+      expect({ outcome, survivors }).toEqual({ outcome: 'settled', survivors: [] });
+    },
+    20_000,
+  );
 });
 
 describe('GET /api/agents?stream=1 probe sharing', () => {
