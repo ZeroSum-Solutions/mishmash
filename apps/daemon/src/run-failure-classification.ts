@@ -1,3 +1,4 @@
+import { API_ERROR_CODES } from '@open-design/contracts';
 import type {
   TrackingRunFailureCategory,
   TrackingRunFailureDetail,
@@ -47,6 +48,40 @@ function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+/** Every failure code this daemon assigns, normalized the way `normalizeCode`
+ *  normalizes one. Derived from the contracts union so a renamed or newly added
+ *  code cannot quietly start being read as prose. */
+const STRUCTURED_FAILURE_CODES: ReadonlySet<string> = new Set(
+  API_ERROR_CODES.map((code) => code.toUpperCase()),
+);
+
+/**
+ * A structured failure code is evidence ABOUT a failure, never text that
+ * describes one.
+ *
+ * The invariant: nothing this classifier already reads as a code may re-enter
+ * the free text its detail matchers read, or the classifier reads its own
+ * conclusion back as proof. `classifyRunFailure` branches on the run's
+ * `errorCode` and on the `code` an SSE error frame carries (`ApiError.code`,
+ * the closed `ApiErrorCode` union in `packages/contracts`); the literal token
+ * `UPSTREAM_UNAVAILABLE` also matches `upstreamDetail`'s
+ * `upstream[ _-](?:error|unavailable)` 5xx pattern, so a run whose only "5xx"
+ * evidence was that code reported `upstream_5xx` — a status no provider ever
+ * returned, printed verbatim by `od run info`.
+ *
+ * A code the PROVIDER named (`overloaded_error`, `rate_limit_error`) is not in
+ * this union and stays part of the text: it is the provider talking, not us.
+ */
+function isStructuredFailureCode(value: string): boolean {
+  return STRUCTURED_FAILURE_CODES.has(normalizeCode(value));
+}
+
+/** A code field's contribution to the failure text: nothing when this daemon
+ *  assigned the code (see `isStructuredFailureCode`). */
+function codeAsFailureText(value: string | undefined): string | undefined {
+  return value && !isStructuredFailureCode(value) ? value : undefined;
+}
+
 function readBool(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
 }
@@ -63,9 +98,9 @@ function eventErrorText(data: unknown): string[] {
     : {};
   return [
     readString(payload.message),
-    readString(payload.code),
+    codeAsFailureText(readString(payload.code)),
     readString(nested.message),
-    readString(nested.code),
+    codeAsFailureText(readString(nested.code)),
     readString(nestedData.message),
     typeof nestedData.statusCode === 'number' ? `statusCode:${nestedData.statusCode}` : undefined,
   ].filter((value): value is string => Boolean(value));
@@ -156,7 +191,7 @@ function collectFailureText(input: RunFailureClassificationInput): string {
   const parts: string[] = [];
   const statusError = readString(input.status.error);
   if (statusError) parts.push(statusError);
-  const code = normalizeCode(input.errorCode ?? input.status.errorCode);
+  const code = codeAsFailureText(normalizeCode(input.errorCode ?? input.status.errorCode));
   if (code) parts.push(code);
   const events = input.events ?? [];
   for (let i = events.length - 1; i >= 0 && parts.length < 24; i -= 1) {
@@ -425,6 +460,19 @@ function authDetail(text: string): TrackingRunFailureDetail {
   return 'auth_required';
 }
 
+/**
+ * The mechanism behind an `upstream_unavailable` run, read from what the
+ * provider actually said.
+ *
+ * `text` reaches here free of this daemon's own structured codes (see
+ * `isStructuredFailureCode`), so every detail below is named by provider
+ * evidence. When the text names no upstream mechanism at all, the run got here
+ * on a structured code alone — `UPSTREAM_UNAVAILABLE` or
+ * `AGENT_CONNECTION_DROPPED` — and that code says only that the upstream was
+ * unavailable. The honest detail is then the generic `upstream_unavailable`:
+ * claiming `upstream_5xx` invents a status nobody reported, and claiming
+ * `network_error` invents a transport fault nobody observed.
+ */
 function upstreamDetail(text: string): TrackingRunFailureDetail {
   if (/\b(AMR model catalog is (?:temporarily )?unavailable|no endpoints found that support tool use|provider routing)\b/i.test(text)) {
     return 'provider_routing_error';
@@ -439,7 +487,9 @@ function upstreamDetail(text: string): TrackingRunFailureDetail {
     .test(text)) {
     return 'upstream_5xx';
   }
-  return 'network_error';
+  // The text named a connection-level fault without naming a status.
+  if (isUpstreamDetailText(text)) return 'network_error';
+  return 'upstream_unavailable';
 }
 
 // Signals that mean the agent process aborted abnormally (segfault, abort,
@@ -644,6 +694,7 @@ export function isResumableFailure(
     (
       failure.failure_detail === 'stream_disconnected' ||
       failure.failure_detail === 'upstream_5xx' ||
+      failure.failure_detail === 'upstream_unavailable' ||
       failure.failure_detail === 'network_error' ||
       failure.failure_detail === 'provider_high_demand' ||
       failure.failure_detail === 'provider_routing_error'

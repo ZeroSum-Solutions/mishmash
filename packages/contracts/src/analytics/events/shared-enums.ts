@@ -231,6 +231,7 @@ export type TrackingRunFailureDetail =
   | 'prompt_tokenization_failed'
   | 'provider_resource_not_found'
   | 'upstream_5xx'
+  | 'upstream_unavailable'
   | 'upstream_client_error'
   | 'stream_disconnected'
   | 'network_error'

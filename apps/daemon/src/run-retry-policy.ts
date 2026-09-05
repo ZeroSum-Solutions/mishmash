@@ -115,6 +115,7 @@ function transientSuppressedReason(
   if (category === 'upstream_unavailable') {
     return detail === 'stream_disconnected' ||
       detail === 'upstream_5xx' ||
+      detail === 'upstream_unavailable' ||
       detail === 'provider_high_demand' ||
       detail === 'provider_routing_error' ||
       detail === 'network_error'
