@@ -103,15 +103,25 @@ export function MessageCenter({ onOpenNotificationSettings }: Props) {
     clearAnonymousState(window.localStorage);
   }, []);
 
+  // Sync on the events that can change what the panel should show — never on a
+  // clock.
+  //
+  // There used to be a 60-second interval here as well. It made sense against
+  // the vendor feed, which could publish at any moment; it does not against the
+  // local route that replaced it, which is defined to answer with an empty page
+  // until there is a first-party source of messages. A timer that re-asks a
+  // question with one permanent answer cannot change the panel, and every tick
+  // is a request that can be recorded slow or unanswered — 204 `request-slow`
+  // and 37 `request-unreachable` rows for this endpoint in the team daemon's
+  // anomaly log, all of them after the vendor proxy was removed. PRD 3.5's
+  // second arm: an endpoint either answers fast or is not polled.
   useEffect(() => {
     retrySync();
-    const interval = window.setInterval(retrySync, 60_000);
     const onVisibility = () => {
       if (document.visibilityState === 'visible') retrySync();
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      window.clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [retrySync]);
