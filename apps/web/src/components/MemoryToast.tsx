@@ -4,13 +4,15 @@
 // doesn't bounce a redundant toast back at the user (their click was the
 // confirmation). The pill is clickable: tapping it opens Settings →
 // Memory so the user can immediately see (and edit) the freshly
-// extracted entries. The component owns its own EventSource so it can
-// be dropped into App.tsx with no other plumbing.
+// extracted entries. The subscription runs through the per-tab stream
+// budget, so the toast costs no connection of its own when Settings →
+// Memory is open too, and none at all while the tab is hidden.
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { MemoryChangeEvent } from '@open-design/contracts';
 import { useT } from '../i18n';
+import { MEMORY_EVENTS_URL, useSharedEventStream } from '../providers/tab-stream-budget';
 import { toastSlideUp } from '../motion';
 
 interface ActiveToast {
@@ -34,40 +36,33 @@ export function MemoryToast({ onOpenMemory }: Props) {
   // resets the countdown instead of double-dismissing.
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    // Guard for environments without EventSource (jsdom in tests, SSR).
-    // The toast is purely a UX nicety; no SSE just means no auto-pop-up.
-    if (typeof EventSource === 'undefined') return;
-    const es = new EventSource('/api/memory/events');
-    es.addEventListener('change', (raw) => {
-      try {
-        const event = JSON.parse((raw as MessageEvent).data) as MemoryChangeEvent;
-        if (event.kind !== 'extract') return;
-        if ((event.count ?? 0) <= 0) return;
-        // Source defaults to heuristic but a manual extract via curl
-        // would still be useful to surface. Only suppress when source is
-        // 'manual' (won't currently fire, reserved for future settings
-        // bulk-import hook).
-        if (event.source === 'manual') return;
-        setToast({
-          key: Date.now(),
-          count: event.count ?? 1,
-          source: event.source,
-        });
-      } catch {
-        // Malformed payload — ignore.
-      }
-    });
-    es.addEventListener('error', () => {
-      // The browser will auto-reconnect. We don't surface connection
-      // failures because the SSE channel is purely a UX nicety; missing
-      // a notification still lets the user see updates next time they
-      // open Settings → Memory.
-    });
-    return () => {
-      es.close();
-    };
-  }, []);
+  // Shared with Settings → Memory through the per-tab stream budget, so a tab
+  // showing both surfaces still holds one memory connection, and none at all
+  // while it is hidden. A toast missed while hidden needs no resync: it
+  // announces an event, it does not mirror state.
+  useSharedEventStream(MEMORY_EVENTS_URL, {
+    events: {
+      change: (raw) => {
+        try {
+          const event = JSON.parse(raw.data) as MemoryChangeEvent;
+          if (event.kind !== 'extract') return;
+          if ((event.count ?? 0) <= 0) return;
+          // Source defaults to heuristic but a manual extract via curl
+          // would still be useful to surface. Only suppress when source is
+          // 'manual' (won't currently fire, reserved for future settings
+          // bulk-import hook).
+          if (event.source === 'manual') return;
+          setToast({
+            key: Date.now(),
+            count: event.count ?? 1,
+            source: event.source,
+          });
+        } catch {
+          // Malformed payload — ignore.
+        }
+      },
+    },
+  });
 
   useEffect(() => {
     if (!toast) return;
