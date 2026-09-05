@@ -160,6 +160,12 @@ export interface ReadUiLagResult {
    * `ReadTimingLogResult` carries `unparseableLines`.
    */
   unmeasurable: number;
+  /**
+   * Every in-window `ui-lag` record read, measured or not: the denominator the
+   * validator checks `samples` and `unmeasurable` add back up to, so rows deleted
+   * after the capture cannot pass as rows that never existed.
+   */
+  recordsRead: number;
 }
 
 /**
@@ -179,10 +185,12 @@ export function readUiLag(records: readonly AnomalyRecord[], window: W3Interval)
   const end = Date.parse(window.endUtc);
   const samples: W3UiLagSample[] = [];
   let unmeasurable = 0;
+  let recordsRead = 0;
   for (const record of records) {
     if (record.kind !== 'ui-lag') continue;
     const at = Date.parse(record.at);
     if (!Number.isFinite(at) || at < start || at > end) continue;
+    recordsRead += 1;
     const duration = record.detail?.['duration_ms'];
     if (typeof duration !== 'number' || !Number.isFinite(duration)) {
       unmeasurable += 1;
@@ -190,7 +198,7 @@ export function readUiLag(records: readonly AnomalyRecord[], window: W3Interval)
     }
     samples.push({ atUtc: record.at, durationMs: duration });
   }
-  return { samples, unmeasurable };
+  return { samples, unmeasurable, recordsRead };
 }
 
 export interface BuildProofInput {
@@ -221,6 +229,7 @@ export function buildProof(input: BuildProofInput): W3EndpointLatencyProof {
     samples: timing.samples,
     uiLag: uiLag.samples,
     uiLagUnmeasurable: uiLag.unmeasurable,
+    uiLagRecordsRead: uiLag.recordsRead,
   };
 }
 

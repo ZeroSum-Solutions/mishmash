@@ -266,6 +266,17 @@ export interface W3EndpointLatencyProof {
    * reports, which is what this whole module exists to refuse.
    */
   uiLagUnmeasurable: number;
+  /**
+   * Every `ui-lag` record the capture READ inside the window, measured or not.
+   *
+   * The long-task half's denominator, and the exact counterpart of
+   * `routeAttempts` on the endpoint half. Without it, deleting entries from
+   * `uiLag` after the capture is undetectable: the count simply drops, and a
+   * capture that failed INV-3.10 reads as one that passed it. With it,
+   * `uiLag.length + uiLagUnmeasurable` must equal this number or the capture is
+   * refused.
+   */
+  uiLagRecordsRead: number;
 }
 
 export type W3ViolationCode =
@@ -275,6 +286,7 @@ export type W3ViolationCode =
   | 'dropped-failures'
   | 'missing-route-attempts'
   | 'unmeasurable-ui-lag'
+  | 'dropped-ui-lag'
   | 'window-not-24h'
   | 'window-not-continuous'
   | 'sample-outside-window'
@@ -454,6 +466,25 @@ function validateUiLag(proof: W3EndpointLatencyProof): W3Violation[] {
   // Not `?? 0`. An absent count would read as "none", which makes deleting the
   // field cheaper than deleting the records — the same absent-denominator hole
   // `missing-route-attempts` closes on the endpoint half.
+  // Every ui-lag record read in the window must still be accounted for as either a
+  // written row or an unmeasurable one. This is `routeAttempts` for the long-task
+  // half: without a denominator, deleting rows is invisible and INV-3.10 becomes a
+  // count of whatever survived.
+  const recordsRead = proof.uiLagRecordsRead;
+  const accounted = (proof.uiLag?.length ?? 0) + (proof.uiLagUnmeasurable ?? 0);
+  if (typeof recordsRead !== 'number' || !Number.isFinite(recordsRead) || recordsRead < 0) {
+    violations.push({
+      code: 'dropped-ui-lag',
+      subject: 'uiLagRecordsRead',
+      detail: 'the capture does not say how many ui-lag records it read, so its rows cannot be checked for censoring',
+    });
+  } else if (accounted !== recordsRead) {
+    violations.push({
+      code: 'dropped-ui-lag',
+      subject: 'uiLagRecordsRead',
+      detail: `${recordsRead} ui-lag record(s) were read and ${accounted} accounted for; ${recordsRead - accounted} went missing`,
+    });
+  }
   const unmeasurable = proof.uiLagUnmeasurable;
   if (typeof unmeasurable !== 'number' || !Number.isFinite(unmeasurable) || unmeasurable < 0) {
     violations.push({

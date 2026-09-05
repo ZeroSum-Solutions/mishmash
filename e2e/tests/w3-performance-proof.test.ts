@@ -113,7 +113,7 @@ function healthyProof(overrides: Partial<Proof> = {}): Proof {
       });
     }
   }
-  return {
+  const merged = {
     window: { startUtc: WINDOW_START, endUtc: WINDOW_END, gaps: [] },
     capture: captureMetadata(),
     routeAttempts: requiredRoutes().map((required) => ({
@@ -122,9 +122,16 @@ function healthyProof(overrides: Partial<Proof> = {}): Proof {
       attempts: 30,
     })),
     samples,
-    uiLag: [],
+    uiLag: [] as ProofModule.W3UiLagSample[],
     uiLagUnmeasurable: 0,
     ...overrides,
+  };
+  return {
+    // Derived, not written: a fixture whose ui-lag denominator disagreed with its own
+    // rows by accident would make every other case fight a violation it did not mean
+    // to raise. A case that wants the disagreement sets the field itself.
+    uiLagRecordsRead: merged.uiLag.length + merged.uiLagUnmeasurable,
+    ...merged,
   } as Proof;
 }
 
@@ -286,6 +293,36 @@ describe('W3 endpoint-latency proof — validator', () => {
     // nobody defined leaves the reader unable to say which one they are reading.
     expect(codes, why('a cache policy must be one the reader can interpret')).toContain(
       'missing-capture-metadata',
+    );
+  });
+
+  it('rejects a capture that deleted its ui-lag record count', () => {
+    const candidate = healthyProof({ uiLag: [{ atUtc: WINDOW_START, durationMs: 1_800 }] });
+    const { uiLagRecordsRead: _dropped, ...withoutCount } = candidate;
+    const codes = violationCodes(withoutCount as Proof);
+
+    expect(codes, why('an absent ui-lag denominator is not a denominator of zero')).toContain(
+      'dropped-ui-lag',
+    );
+  });
+
+  it('rejects a capture that dropped a long task after reading it', () => {
+    const codes = violationCodes(
+      healthyProof({
+        uiLag: [
+          { atUtc: WINDOW_START, durationMs: 1_800 },
+          { atUtc: WINDOW_START, durationMs: 1_900 },
+        ],
+        // Five ui-lag records were read in the window; two rows reached the file
+        // and none was unmeasurable, so three long tasks went missing between
+        // the read and the write. Without a denominator this is invisible: the
+        // count simply drops and a failing capture reads as a pass.
+        uiLagRecordsRead: 5,
+      } as Partial<Proof>),
+    );
+
+    expect(codes, why('long tasks dropped after they were read are censored')).toContain(
+      'dropped-ui-lag',
     );
   });
 
