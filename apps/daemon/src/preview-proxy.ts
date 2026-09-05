@@ -444,9 +444,16 @@ const DAEMON_OWNED_PATH_PREFIXES = ['/api', '/artifacts', '/frames'] as const;
  * server asks for its assets by SITE root, outside every namespace above.
  * Classifying one as an unattributable preview asset would explain a preview
  * to a caller who never asked about one.
+ *
+ * Compared case-insensitively, because that is how the routes themselves
+ * match: Express's `caseSensitive` setting is off by default, so `/API/nope`
+ * enters the same `/api` router `/api/nope` does and falls through the same
+ * way. A case-sensitive test here would hand the daemon's own namespaces back
+ * to the classifier under any other spelling.
  */
 function isDaemonOwnedPath(pathname: string): boolean {
-  return DAEMON_OWNED_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  const path = pathname.toLowerCase();
+  return DAEMON_OWNED_PATH_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
 /**

@@ -202,7 +202,19 @@ describe('a root-absolute preview asset the daemon cannot attribute to a page', 
     // `static-spa.ts` already excludes from the SPA fallback for the same
     // reason. Each is asked for in the exact shape that used to be
     // misclassified: no `Referer`, and a subresource `Accept`.
-    for (const pathname of ['/api/nope', '/artifacts/nope.css', '/frames/nope.html']) {
+    //
+    // The upper-case spellings are the same namespaces: Express matches routes
+    // case-insensitively by default, so `/API/nope` enters the `/api` router
+    // and misses exactly as `/api/nope` does, and the daemon owes it the same
+    // answer.
+    for (const pathname of [
+      '/api/nope',
+      '/artifacts/nope.css',
+      '/frames/nope.html',
+      '/API/nope',
+      '/Artifacts/nope.css',
+      '/FRAMES/nope.html',
+    ]) {
       const answered = await get(apiPort, pathname, { headers: { Accept: SCRIPT_ACCEPT } });
 
       expect(answered.body, pathname).not.toContain('PREVIEW_REFERRER_REQUIRED');
