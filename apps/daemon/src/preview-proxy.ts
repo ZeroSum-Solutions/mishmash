@@ -424,6 +424,32 @@ export function createPreviewProxyHandler(deps: PreviewProxyDeps): RequestHandle
 }
 
 /**
+ * The path prefixes the daemon's own routes answer, read from `server.ts`'s
+ * route registrations: `/api` (every REST and SSE endpoint, the preview proxy
+ * mount included), `/artifacts` and `/frames` (the two static mounts).
+ * `static-spa.ts` keeps the same list for the SPA fallback registered after
+ * this one, and for the same reason.
+ */
+const DAEMON_OWNED_PATH_PREFIXES = ['/api', '/artifacts', '/frames'] as const;
+
+/**
+ * A path inside a namespace the daemon owns, whether or not a route under it
+ * matched.
+ *
+ * A miss there is still the daemon's own answer to give: an unknown `/api`
+ * endpoint has no handler, and the `/artifacts` and `/frames` static mounts
+ * call `next()` on a file they do not hold. Such a request named a daemon
+ * resource, so it can never be a preview page's root-absolute asset — a
+ * preview's own bytes are reached through `previewProxyPath()`, and a dev
+ * server asks for its assets by SITE root, outside every namespace above.
+ * Classifying one as an unattributable preview asset would explain a preview
+ * to a caller who never asked about one.
+ */
+function isDaemonOwnedPath(pathname: string): boolean {
+  return DAEMON_OWNED_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+/**
  * The one fall-through the daemon owes an explanation for: a preview page's
  * root-absolute asset that no page claimed.
  *
@@ -435,8 +461,11 @@ export function createPreviewProxyHandler(deps: PreviewProxyDeps): RequestHandle
  * app — and the preview half-rendered with nothing said. It cannot be SERVED
  * without body rewriting or a per-preview origin, so it is NAMED instead.
  *
- * Four conditions, each keeping a different request out of that answer:
+ * Five conditions, each keeping a different request out of that answer:
  *
+ * - the path lies outside every namespace the daemon's own routes own
+ *   (`isDaemonOwnedPath` above), because a miss inside one of those is the
+ *   daemon's answer, not a preview's;
  * - a preview is running, because otherwise the explanation would name
  *   something that does not exist;
  * - no `Referer` at all, because a `Referer` that names another site or
@@ -451,6 +480,7 @@ export function createPreviewProxyHandler(deps: PreviewProxyDeps): RequestHandle
  *   a running preview is disclosed to the same audience its bytes are.
  */
 function isUnattributablePreviewAsset(req: Request, hasLivePreview: boolean): boolean {
+  if (isDaemonOwnedPath(req.path)) return false;
   if (!hasLivePreview) return false;
   if (headerText(req.headers.referer).trim()) return false;
   const accept = headerText(req.headers.accept).toLowerCase();
