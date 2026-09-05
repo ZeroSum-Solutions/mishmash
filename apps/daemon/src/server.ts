@@ -684,6 +684,7 @@ import { registerOpenDesignPublicMetadataRoutes } from './routes/open-design-pub
 import { registerWhatsNewRoutes } from './routes/whats-new.js';
 import { registerMemoryRoutes } from './routes/memory.js';
 import { createAnomalySurface, registerAnomalyRoutes } from './routes/anomalies.js';
+import { createRequestTimingObserver } from './http/request-timing-log.js';
 import { createCompositionMetricsStore } from './composition-metrics-store.js';
 import { registerCompositionMetricsRoutes } from './routes/composition-metrics.js';
 import { buildCatalogueCandidates, registerCatalogueMatchRoutes } from './routes/catalogue-match.js';
@@ -2183,6 +2184,11 @@ export async function startServer({
     createGateway: createRouteFilesystemWriteGateway,
   });
   app.use(anomalies.observer);
+  // All-observations request timing, off unless OD_REQUEST_TIMING_LOG turns it
+  // on. It shares the anomaly observer's vantage point — before every route —
+  // because it is the only sink that sees healthy requests, which is what a
+  // p95 is made of.
+  app.use(createRequestTimingObserver({ dataDir: RUNTIME_DATA_DIR }));
   // Clipper page captures are self-contained HTML with inlined images plus a
   // Figma IR, which for an image-heavy site (The Economist, news front pages)
   // runs to tens of MB — far past a normal JSON body. Give the ingest route a
