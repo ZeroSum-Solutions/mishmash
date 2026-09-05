@@ -154,6 +154,53 @@ describe('same-run retry runtime', () => {
     });
   });
 
+  // W1L.4 red spec: a clean `code === 0` exit with no output trips the daemon's
+  // empty-output guard, whose message advises "...checking quota, or switching
+  // models". `isHardQuotaText` matches the bare word `quota` and is tested
+  // before `isEmptyOutputText`, so the run was classified `rate_limit`/
+  // `hard_quota` and `decideSafeRunRetry` suppressed the same-run retry with
+  // `hard_quota` -- a run the daemon could have retried to success ended failed.
+  it('retries a clean exit that produced no output instead of suppressing it as hard quota', async () => {
+    binDir = await mkdtemp(path.join(os.tmpdir(), 'od-run-retry-empty-output-bin-'));
+    const fakeOpenCode = await writeSilentThenSuccessfulOpenCode(
+      binDir,
+      'opencode-empty-output-then-success',
+    );
+
+    delete process.env.POSTHOG_KEY;
+    delete process.env.POSTHOG_HOST;
+    delete process.env.LANGFUSE_PUBLIC_KEY;
+    delete process.env.LANGFUSE_SECRET_KEY;
+    delete process.env.LANGFUSE_BASE_URL;
+    delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+
+    started = await startServer({ port: 0, returnServer: true }) as StartedServer;
+    await putConfig(started.url, {
+      agentId: 'opencode',
+      agentCliEnv: { opencode: { OPENCODE_BIN: fakeOpenCode } },
+      telemetry: { metrics: true, content: false, artifactManifest: false },
+      privacyDecisionAt: Date.now(),
+    });
+
+    const run = await createAndWaitForRun(started.url, 'opencode');
+    const events = await readRunEvents(started.url, run.id);
+
+    const retryFinished = events.filter((event) => event.event === 'run_retry_finished');
+    expect(retryFinished).toHaveLength(1);
+    expect(retryFinished[0]?.data.retry_suppressed_reason).toBeUndefined();
+
+    const retryAttempted = events.filter((event) => event.event === 'run_retry_attempted');
+    expect(retryAttempted).toHaveLength(1);
+    expect(retryAttempted[0]?.data).toMatchObject({
+      failure_category: 'empty_output',
+      failure_detail: 'empty_output',
+      retry_reason: 'transient_failure',
+    });
+
+    expect(events.filter((event) => event.event === 'start')).toHaveLength(2);
+    expect(run.status).toBe('succeeded');
+  });
+
   it('retries an ACP fatal close after persisting its runtime close reason', async () => {
     binDir = await mkdtemp(path.join(os.tmpdir(), 'od-run-retry-acp-fatal-bin-'));
     const fakeVela = await writeFatalThenSuccessfulVela(binDir, 'vela-fatal-then-success');
@@ -470,6 +517,50 @@ if (attempts === 0) {
     type: 'text',
     sessionID,
     part: { type: 'text', text: 'Recovered after a generic stream error.' },
+  }));
+  console.log(JSON.stringify({
+    type: 'step_finish',
+    sessionID,
+    part: {
+      type: 'step-finish',
+      tokens: { input: 8, output: 7, reasoning: 0, cache: { read: 0, write: 0 } },
+      cost: 0,
+    },
+  }));
+  setTimeout(() => process.exit(0), 20);
+}
+`, 'utf8');
+  await chmod(bin, 0o755);
+  return bin;
+}
+
+async function writeSilentThenSuccessfulOpenCode(dir: string, name: string): Promise<string> {
+  const bin = path.join(dir, name);
+  const counterPath = path.join(dir, `${name}-attempts`);
+  await writeFile(bin, `#!/usr/bin/env node
+const fs = require('node:fs');
+const argv = process.argv.slice(2);
+const counterPath = ${JSON.stringify(counterPath)};
+if (argv.includes('--version')) { console.log('1.17.7'); process.exit(0); }
+if (argv.includes('--help')) { console.log('opencode run [message..]'); process.exit(0); }
+if (argv[0] === 'models') { console.log('anthropic/claude-sonnet-4-5'); process.exit(0); }
+if (argv[0] !== 'run' || !process.cwd().includes('retry_runtime_')) {
+  process.exit(0);
+}
+let attempts = 0;
+try { attempts = Number(fs.readFileSync(counterPath, 'utf8')) || 0; } catch {}
+fs.writeFileSync(counterPath, String(attempts + 1));
+if (attempts === 0) {
+  // Exit cleanly having written nothing at all: the shape that trips the
+  // daemon's empty-output guard.
+  setTimeout(() => process.exit(0), 20);
+} else {
+  const sessionID = 'ses_retry_empty_output_success';
+  console.log(JSON.stringify({ type: 'step_start', sessionID, part: { type: 'step-start' } }));
+  console.log(JSON.stringify({
+    type: 'text',
+    sessionID,
+    part: { type: 'text', text: 'Recovered after an empty-output attempt.' },
   }));
   console.log(JSON.stringify({
     type: 'step_finish',

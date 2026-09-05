@@ -1,7 +1,7 @@
 // W2H.1d — what actually ends an HTML comment, measured in the browser whose
 // parser the body-close scan exists to agree with.
 //
-// `apps/daemon/src/http/body-close-splice.ts` decides where a preview's paint
+// `packages/contracts/src/runtime/body-close-splice.ts` decides where a preview's paint
 // producer is spliced, and the decision turns on where each comment ends. Read
 // a comment as ending too LATE and the scan swallows real markup: the
 // document's genuine `</body>` is lost, and — the blocking half of D-17 round 4

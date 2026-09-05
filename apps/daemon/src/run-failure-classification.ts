@@ -842,6 +842,28 @@ export function classifyRunFailure(
     );
   }
 
+  // A run that produced nothing is an empty-output failure, and stays one even
+  // when its failure text also names a quota, a rate limit, or an upstream
+  // fault. Empty output is the more specific evidence: the daemon observed the
+  // absence of output itself, while every matcher below reads free text that
+  // may only be remediation advice. The daemon's own empty-output guard
+  // (`server.ts`, the clean-exit-with-no-output branch) tells the user to try
+  // "...checking quota, or switching models"; both `isHardQuotaText` here and
+  // `classifyAgentServiceFailure`'s rate-failure regex match that bare word
+  // `quota`. Classified in the old order, the guard's own message reported
+  // `rate_limit`/`hard_quota`, and `decideSafeRunRetry` then suppressed with
+  // `hard_quota` the same-run retry the policy allows for `empty_output` -- a
+  // run the daemon could have retried to success ended failed instead.
+  if (isEmptyOutputText(text)) {
+    return classification(
+      'empty_output',
+      'empty_output',
+      inferFailureStageFromEvents(input.events, 'first_token_wait'),
+      retryableHint ?? true,
+      'retry',
+    );
+  }
+
   if (errorCode === 'RATE_LIMITED' || serviceFailure === 'RATE_LIMITED' || isHardQuotaText(text) || isRateLimitText(text)) {
     const hardQuota = isHardQuotaText(text);
     const workspaceCredits = isWorkspaceCreditsText(text);
@@ -878,16 +900,6 @@ export function classifyRunFailure(
       inferFailureStageFromEvents(input.events, 'first_token_wait'),
       retryable,
       retryable ? 'retry' : 'none',
-    );
-  }
-
-  if (isEmptyOutputText(text)) {
-    return classification(
-      'empty_output',
-      'empty_output',
-      inferFailureStageFromEvents(input.events, 'first_token_wait'),
-      retryableHint ?? true,
-      'retry',
     );
   }
 
