@@ -10,7 +10,14 @@ import {
   trackProjectsMorePopoverClick,
 } from "../analytics/events";
 import { useT } from "../i18n";
-import { deleteLiveArtifact, fetchLiveArtifacts, fetchProjectFiles, liveArtifactPreviewUrl } from "../providers/registry";
+import {
+	deleteLiveArtifact,
+	fetchLiveArtifacts,
+	fetchProjectFiles,
+	latestProjectFileMtime,
+	liveArtifactPreviewUrl,
+	mergeProjectFileDelta,
+} from "../providers/registry";
 import type {
 	DesignSystemSummary,
 	LiveArtifactSummary,
@@ -85,6 +92,30 @@ type DesignListItem =
 	  };
 
 const DESIGNS_VIEW_STORAGE_KEY = "od:designs:view";
+
+// One project's file tree as the cover scan last saw it, plus the project
+// revision that tree belongs to.
+interface ScannedProjectFiles {
+	revision: number;
+	files: ProjectFile[];
+}
+
+/**
+ * List one project's files for the cover scan, re-walking only what changed.
+ *
+ * INVARIANT (INV-3.3): once a project's tree has been walked, a later scan of
+ * the SAME project revision asks the daemon only for entries newer than the
+ * newest mtime already seen and folds that delta into the held tree. A `since`
+ * response cannot express a deletion, so a project whose `updatedAt` moved --
+ * the only way a file can have been removed -- is re-walked in full instead.
+ */
+async function listProjectFilesSince(
+	projectId: string,
+	held: ProjectFile[],
+): Promise<ProjectFile[]> {
+	const delta = await fetchProjectFiles(projectId, { since: latestProjectFileMtime(held) });
+	return mergeProjectFileDelta(held, delta);
+}
 const PROJECTS_AUTO_REFRESH_MS = 15000;
 
 export const STATUS_ORDER = [
@@ -162,6 +193,9 @@ export function DesignsTab({
 	const [coverByProject, setCoverByProject] = useState<
 		Record<string, ProjectCoverOverride | null>
 	>({});
+	// File trees the cover scan already walked, so a re-render caused by another
+	// project in the list does not re-walk the ones that did not change.
+	const scannedFilesByProject = useRef(new Map<string, ScannedProjectFiles>());
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 	const [selectMode, setSelectMode] = useState(false);
 	const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -225,7 +259,12 @@ export function DesignsTab({
 		let cancelled = false;
 		if (projects.length === 0) {
 			setCoverByProject({});
+			scannedFilesByProject.current.clear();
 			return;
+		}
+		const scanned = scannedFilesByProject.current;
+		for (const id of [...scanned.keys()]) {
+			if (!projects.some((project) => project.id === id)) scanned.delete(id);
 		}
 		void mapWithConcurrencyLimit(projects, FAN_OUT_CONCURRENCY, async (project) => {
 			const designSystemProject = isDesignSystemProject(project);
@@ -234,14 +273,19 @@ export function DesignsTab({
 			// file scan entirely for them.
 			if (project.metadata?.kind === "brand") return [project.id, null] as const;
 			if (project.metadata?.entryFile && !designSystemProject) return [project.id, null] as const;
-			let files: Awaited<ReturnType<typeof fetchProjectFiles>>;
+			const held = scanned.get(project.id);
+			let files: ProjectFile[];
 			try {
-				files = await fetchProjectFiles(project.id);
+				files =
+					held && held.revision === project.updatedAt
+						? await listProjectFilesSince(project.id, held.files)
+						: await fetchProjectFiles(project.id);
 			} catch {
 				// One project's failure must not blank the rest of the grid --
 				// every other project's fetch keeps running via the shared pool.
 				return [project.id, null] as const;
 			}
+			scanned.set(project.id, { revision: project.updatedAt, files });
 			if (designSystemProject) {
 				const logo = findDesignSystemLogoFile(files);
 				if (logo) {

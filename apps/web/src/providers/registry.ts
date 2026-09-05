@@ -25,6 +25,7 @@ import type {
   SocialShareRequest,
   SocialShareResponse,
 } from '@open-design/contracts';
+import { parseAgentRegistrySseEvent } from '@open-design/contracts';
 import type {
   AgentInfo,
   AppVersionInfo,
@@ -117,104 +118,184 @@ export async function fetchAgents(options?: { throwOnError?: boolean }): Promise
   }
 }
 
-// Incremental agent detection over Server-Sent Events: `onAgent` fires once
-// per agent the moment its probe settles (completion order, not registry
-// order), so a caller can paint cards as they resolve instead of waiting for
-// the slowest CLI. Resolves with every agent collected once the stream's
-// terminal `done` event arrives. This is additive: callers that don't need
-// incremental delivery keep using `fetchAgents()` (whose batch probe is now
-// parallelized per-agent and so is itself faster). Pass an AbortSignal to
-// cancel the underlying request.
+// One caller's view of the shared agent-detection stream.
+interface AgentStreamListener {
+  onAgent: (agent: AgentInfo) => void;
+}
+
+interface SharedAgentStream {
+  /** Agents already painted, replayed to a caller that joins mid-stream. */
+  agents: AgentInfo[];
+  listeners: Set<AgentStreamListener>;
+  promise: Promise<AgentInfo[]>;
+}
+
+let inFlightAgentStream: SharedAgentStream | null = null;
+
+function readAgentRegistryStream(
+  forceRefresh: boolean,
+  shared: SharedAgentStream,
+): Promise<AgentInfo[]> {
+  const query = forceRefresh ? '?stream=1&refresh=1' : '?stream=1';
+  return (async () => {
+    const resp = await fetch(`/api/agents${query}`, {
+      cache: 'no-store',
+      headers: { Accept: 'text/event-stream' },
+    });
+    if (!resp.ok || !resp.body) {
+      throw new Error(`agents stream ${resp.status}`);
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let done = false;
+
+    // Each SSE record is `event: <name>\ndata: <json>`. The contracts decoder
+    // owns which names and bodies are real, so an unknown or malformed record
+    // is skipped rather than cast to an AgentInfo the daemon never sent.
+    const handleEvent = (rawEvent: string) => {
+      let eventName = 'message';
+      const dataLines: string[] = [];
+      for (const line of rawEvent.split('\n')) {
+        if (line.startsWith('event:')) eventName = line.slice(6).trim();
+        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+      }
+      const frame = parseAgentRegistrySseEvent(eventName, dataLines.join('\n'));
+      if (!frame) return;
+      if (frame.event === 'done') {
+        done = true;
+        return;
+      }
+      if (frame.event === 'error') {
+        throw new Error(frame.data.error || 'agents stream error');
+      }
+      shared.agents.push(frame.data);
+      for (const listener of shared.listeners) listener.onAgent(frame.data);
+    };
+
+    try {
+      while (!done) {
+        const { value, done: streamDone } = await reader.read();
+        if (streamDone) break;
+        buffer += decoder.decode(value, { stream: true });
+        let sep: number;
+        // SSE records are separated by a blank line ("\n\n").
+        while ((sep = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          if (rawEvent.trim().length > 0) handleEvent(rawEvent);
+          if (done) break;
+        }
+      }
+      if (!done && buffer.trim().length > 0) {
+        handleEvent(buffer);
+      }
+    } finally {
+      try {
+        await reader.cancel();
+      } catch {
+        // Reader may already be closed; nothing to do.
+      }
+    }
+    if (!done) {
+      throw new Error('agents stream ended before done');
+    }
+    return shared.agents;
+  })();
+}
+
+/**
+ * Attach one caller to a shared detection stream.
+ *
+ * A caller that joins after some probes have already settled is replayed the
+ * agents painted so far, so joining never loses a card. The caller's
+ * AbortSignal detaches that caller only: the shared request keeps serving
+ * everyone else, which is what makes the boot call's unmount abort safe to
+ * share with a later `refreshAgents`.
+ */
+function joinAgentRegistryStream(
+  shared: SharedAgentStream,
+  onAgent: (agent: AgentInfo) => void,
+  signal?: AbortSignal,
+): Promise<AgentInfo[]> {
+  if (signal?.aborted) {
+    return Promise.reject(signal.reason ?? new Error('agents stream aborted'));
+  }
+  const listener: AgentStreamListener = { onAgent };
+  for (const agent of shared.agents) onAgent(agent);
+  shared.listeners.add(listener);
+  const detach = () => {
+    shared.listeners.delete(listener);
+  };
+  if (!signal) {
+    return shared.promise.then(
+      (agents) => {
+        detach();
+        return agents;
+      },
+      (err) => {
+        detach();
+        throw err;
+      },
+    );
+  }
+  return new Promise<AgentInfo[]>((resolve, reject) => {
+    const onAbort = () => {
+      detach();
+      reject(signal.reason ?? new Error('agents stream aborted'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    shared.promise.then(
+      (agents) => {
+        signal.removeEventListener('abort', onAbort);
+        detach();
+        resolve(agents);
+      },
+      (err) => {
+        signal.removeEventListener('abort', onAbort);
+        detach();
+        reject(err);
+      },
+    );
+  });
+}
+
+/**
+ * Incremental agent detection over Server-Sent Events.
+ *
+ * `onAgent` fires once per agent the moment its probe settles (completion
+ * order, not registry order), so a caller paints cards as they resolve instead
+ * of waiting for the slowest CLI. Resolves with every agent collected once the
+ * terminal `done` frame arrives.
+ *
+ * INVARIANT (INV-3.5, client half): overlapping callers share ONE request. The
+ * app opens a stream at boot and `refreshAgents` opens another; without this
+ * the daemon ran the whole probe set twice for one user action. A forced
+ * refresh deliberately opts out — it exists to bypass a stale result — and is
+ * never shared in either direction.
+ */
 export async function fetchAgentsStream(args: {
   onAgent: (agent: AgentInfo) => void;
   signal?: AbortSignal;
   forceRefresh?: boolean;
 }): Promise<AgentInfo[]> {
   const { onAgent, signal, forceRefresh = false } = args;
-  const query = forceRefresh ? '?stream=1&refresh=1' : '?stream=1';
-  const resp = await fetch(`/api/agents${query}`, {
-    cache: 'no-store',
-    headers: { Accept: 'text/event-stream' },
-    ...(signal ? { signal } : {}),
+  if (!forceRefresh && inFlightAgentStream) {
+    return joinAgentRegistryStream(inFlightAgentStream, onAgent, signal);
+  }
+  const shared: SharedAgentStream = {
+    agents: [],
+    listeners: new Set(),
+    promise: Promise.resolve([]),
+  };
+  shared.promise = readAgentRegistryStream(forceRefresh, shared).finally(() => {
+    if (inFlightAgentStream === shared) inFlightAgentStream = null;
   });
-  if (!resp.ok || !resp.body) {
-    throw new Error(`agents stream ${resp.status}`);
-  }
-  const collected: AgentInfo[] = [];
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let done = false;
-  const errorMessageFromData = (data: string): string => {
-    if (!data.trim()) return 'agents stream error';
-    try {
-      const parsed = JSON.parse(data) as { error?: unknown; message?: unknown };
-      const message = parsed.error ?? parsed.message;
-      if (typeof message === 'string' && message.trim()) return message;
-    } catch {
-      // Fall through to the raw data string below.
-    }
-    return data;
-  };
-
-  const handleEvent = (rawEvent: string) => {
-    // Each SSE record is `event: <name>\ndata: <json>`; we act on `agent`
-    // (one AgentInfo), `error` (terminal failure), and `done` (terminal
-    // success). Unknown events are ignored so the protocol can grow without
-    // breaking older clients.
-    let eventName = 'message';
-    const dataLines: string[] = [];
-    for (const line of rawEvent.split('\n')) {
-      if (line.startsWith('event:')) eventName = line.slice(6).trim();
-      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
-    }
-    const data = dataLines.join('\n');
-    if (eventName === 'done') {
-      done = true;
-      return;
-    }
-    if (eventName === 'error') {
-      throw new Error(errorMessageFromData(data));
-    }
-    if (eventName === 'agent' && data) {
-      try {
-        const agent = JSON.parse(data) as AgentInfo;
-        collected.push(agent);
-        onAgent(agent);
-      } catch {
-        // Ignore a malformed record rather than aborting the whole stream.
-      }
-    }
-  };
-
-  try {
-    while (!done) {
-      const { value, done: streamDone } = await reader.read();
-      if (streamDone) break;
-      buffer += decoder.decode(value, { stream: true });
-      let sep: number;
-      // SSE records are separated by a blank line ("\n\n").
-      while ((sep = buffer.indexOf('\n\n')) !== -1) {
-        const rawEvent = buffer.slice(0, sep);
-        buffer = buffer.slice(sep + 2);
-        if (rawEvent.trim().length > 0) handleEvent(rawEvent);
-        if (done) break;
-      }
-    }
-    if (!done && buffer.trim().length > 0) {
-      handleEvent(buffer);
-    }
-  } finally {
-    try {
-      await reader.cancel();
-    } catch {
-      // Reader may already be closed; nothing to do.
-    }
-  }
-  if (!done) {
-    throw new Error('agents stream ended before done');
-  }
-  return collected;
+  // A caller that aborts detaches itself, so the shared promise can end up with
+  // no handler; keep its rejection from surfacing as an unhandled rejection.
+  void shared.promise.catch(() => undefined);
+  if (!forceRefresh) inFlightAgentStream = shared;
+  return joinAgentRegistryStream(shared, onAgent, signal);
 }
 
 export async function fetchSkills(): Promise<SkillSummary[]> {
@@ -1527,15 +1608,79 @@ export async function createSocialSharePayload(
 
 // Project files — all paths are scoped under .od/projects/<id>/ on disk.
 
-export async function fetchProjectFiles(projectId: string): Promise<ProjectFile[]> {
-  try {
-    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/files`);
-    if (!resp.ok) return [];
-    const json = (await resp.json()) as { files: ProjectFile[] };
-    return json.files ?? [];
-  } catch {
-    return [];
+const inFlightProjectFileLists = new Map<string, Promise<ProjectFile[]>>();
+
+function projectFileKey(file: ProjectFile): string {
+  return file.path ?? file.name;
+}
+
+/**
+ * List a project's files, as a whole tree or as a delta.
+ *
+ * INVARIANT: at most one list request per project and cursor is in flight at a
+ * time. The home grid re-lists on a 15 s timer and again on window focus and
+ * on visibility change, so without this one tab can have several walks of the
+ * same tree running against each other.
+ *
+ * With `since`, the daemon answers with only the entries whose mtime is newer
+ * than the cursor (INV-3.3), so an unchanged file is ABSENT from the response
+ * and the caller must fold the result into the tree it already holds — see
+ * `mergeProjectFileDelta`. Omit `since` for the first load.
+ */
+export async function fetchProjectFiles(
+  projectId: string,
+  options?: { since?: number },
+): Promise<ProjectFile[]> {
+  const since = Number(options?.since);
+  const cursor = Number.isFinite(since) && since > 0
+    ? `?since=${encodeURIComponent(String(since))}`
+    : '';
+  const url = `/api/projects/${encodeURIComponent(projectId)}/files${cursor}`;
+  const inFlight = inFlightProjectFileLists.get(url);
+  if (inFlight) return inFlight;
+  const pending = (async () => {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) return [];
+      const json = (await resp.json()) as { files: ProjectFile[] };
+      return json.files ?? [];
+    } catch {
+      return [];
+    } finally {
+      inFlightProjectFileLists.delete(url);
+    }
+  })();
+  inFlightProjectFileLists.set(url, pending);
+  return pending;
+}
+
+/**
+ * Fold a `since` delta into the file tree the caller already holds.
+ *
+ * INVARIANT: a file the delta omitted is a file that did not change, so it
+ * survives untouched; a file the delta carries replaces its held entry; and
+ * the merged tree keeps the newest-first order the daemon lists in.
+ */
+export function mergeProjectFileDelta(
+  current: ProjectFile[],
+  delta: ProjectFile[],
+): ProjectFile[] {
+  if (delta.length === 0) return current;
+  const merged = new Map(current.map((file) => [projectFileKey(file), file]));
+  for (const file of delta) merged.set(projectFileKey(file), file);
+  return Array.from(merged.values()).sort(
+    (left, right) => Number(right.mtime) - Number(left.mtime),
+  );
+}
+
+/** The cursor to send on the next poll: the newest mtime already observed. */
+export function latestProjectFileMtime(files: ProjectFile[]): number {
+  let latest = 0;
+  for (const file of files) {
+    const mtime = Number(file.mtime);
+    if (Number.isFinite(mtime) && mtime > latest) latest = mtime;
   }
+  return latest;
 }
 
 export async function fetchProjectFolders(projectId: string): Promise<ProjectFolder[]> {

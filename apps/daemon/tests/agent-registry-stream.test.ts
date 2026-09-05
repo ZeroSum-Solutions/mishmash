@@ -163,9 +163,14 @@ describe('agent probe timeout kill', () => {
       );
       fs.chmodSync(script, 0o755);
 
-      await expect(
-        execAgentFile(script, [pidFile], { timeout: 500 }),
-      ).rejects.toBeTruthy();
+      const settled = execAgentFile(script, [pidFile], { timeout: 500 }).then(
+        () => 'settled' as const,
+        () => 'settled' as const,
+      );
+      const outcome = await Promise.race([
+        settled,
+        new Promise<'hung'>((resolve) => setTimeout(() => resolve('hung'), 5_000)),
+      ]);
 
       const pids = fs
         .readFileSync(pidFile, 'utf8')
@@ -175,15 +180,13 @@ describe('agent probe timeout kill', () => {
       expect(pids).toHaveLength(2);
       expect(pids.every((pid) => Number.isInteger(pid) && pid > 0)).toBe(true);
 
-      // Red on base: `execFile`'s own timeout sends one SIGTERM to the direct
-      // child, which ignores it; there is no process group and no SIGKILL
-      // escalation, so both the probe and its `sleep` outlive the budget.
-      const survivors = await waitUntilGone(pids, 5_000);
+      const survivors = await waitUntilGone(pids, 3_000);
+      // Leave no orphan behind even when the assertion below fails.
       for (const pid of survivors) {
         try {
           process.kill(-pid, 'SIGKILL');
         } catch {
-          /* group already gone */
+          /* not a group leader, or already gone */
         }
         try {
           process.kill(pid, 'SIGKILL');
@@ -191,7 +194,12 @@ describe('agent probe timeout kill', () => {
           /* already gone */
         }
       }
-      expect(survivors).toEqual([]);
+
+      // Red on base: `execFile`'s own timeout sends one SIGTERM to the direct
+      // child, which ignores it. There is no process group and no SIGKILL
+      // escalation, so the probe call never settles and both the probe and its
+      // `sleep` grandchild outlive the budget.
+      expect({ outcome, survivors }).toEqual({ outcome: 'settled', survivors: [] });
     },
     20_000,
   );

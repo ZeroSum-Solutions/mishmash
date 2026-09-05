@@ -380,12 +380,63 @@ function rememberDetectedLiveModels(
   rememberLiveModels(agent.id, agent.models, scope);
 }
 
+/**
+ * Overall wall-clock bound for one detection pass.
+ *
+ * INVARIANT: a detection pass always settles, so `/api/agents` always reaches
+ * a terminal frame and the in-flight promise every other caller shares is
+ * always released. Per-probe timeouts alone do not give this: they bound each
+ * `execFile` call, not the pass, and they compose — a single agent runs a
+ * version probe and then three concurrent post-version probes.
+ *
+ * The value sits above the slowest composition `AGENT_DEFS` can produce today:
+ * `pi` allows 15 s for `--version` and 60 s for `--list-models`
+ * (`runtimes/defs/pi.ts`), which compose to 75 s. A healthy slow probe is
+ * therefore never truncated. An agent still pending at the deadline is
+ * surfaced as unavailable — the same shape `safeProbe` returns when a probe
+ * throws — so every registry entry is still reported exactly once.
+ */
+export const AGENT_DETECTION_WALL_CLOCK_MS = 90_000;
+
+const DETECTION_DEADLINE = Symbol('agent-detection-deadline');
+
+interface DetectionDeadline {
+  reached: Promise<typeof DETECTION_DEADLINE>;
+  cancel: () => void;
+}
+
+function startDetectionDeadline(budgetMs = AGENT_DETECTION_WALL_CLOCK_MS): DetectionDeadline {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const reached = new Promise<typeof DETECTION_DEADLINE>((resolve) => {
+    timer = setTimeout(() => resolve(DETECTION_DEADLINE), budgetMs);
+    timer.unref?.();
+  });
+  return {
+    reached,
+    cancel: () => {
+      if (timer) clearTimeout(timer);
+    },
+  };
+}
+
 export async function detectAgents(
   configuredEnvByAgent: Record<string, Record<string, string>> = {},
 ) {
-  const results = await Promise.all(
-    AGENT_DEFS.map((def) => safeProbe(def, configuredEnvForAgent(configuredEnvByAgent, def.id))),
-  );
+  const deadline = startDetectionDeadline();
+  let results: DetectedAgent[];
+  try {
+    results = await Promise.all(
+      AGENT_DEFS.map(async (def) => {
+        const settled = await Promise.race([
+          safeProbe(def, configuredEnvForAgent(configuredEnvByAgent, def.id)),
+          deadline.reached,
+        ]);
+        return settled === DETECTION_DEADLINE ? unavailableAgent(def) : settled;
+      }),
+    );
+  } finally {
+    deadline.cancel();
+  }
   // Refresh the validation cache from whatever we just surfaced to the UI
   // so /api/chat can accept any model the user could have just picked,
   // including ones that only showed up after a CLI re-auth.
@@ -413,11 +464,24 @@ export async function* detectAgentsStream(
     }),
   );
   const pending = new Set(tagged.keys());
-  while (pending.size > 0) {
-    const { index, agent } = await Promise.race(
-      tagged.filter((_, i) => pending.has(i)),
-    );
-    pending.delete(index);
-    yield agent;
+  const deadline = startDetectionDeadline();
+  try {
+    while (pending.size > 0) {
+      const settled = await Promise.race([
+        Promise.race(tagged.filter((_, i) => pending.has(i))),
+        deadline.reached,
+      ]);
+      if (settled === DETECTION_DEADLINE) {
+        for (const index of pending) {
+          const def = AGENT_DEFS[index];
+          if (def) yield unavailableAgent(def);
+        }
+        return;
+      }
+      pending.delete(settled.index);
+      yield settled.agent;
+    }
+  } finally {
+    deadline.cancel();
   }
 }
