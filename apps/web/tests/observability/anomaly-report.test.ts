@@ -50,6 +50,25 @@ describe('safety event → anomaly mapping', () => {
     );
   });
 
+  it('maps an uncorroborated preview settle to preview-error', () => {
+    // W2I.1. A preview that settled on evidence nobody could corroborate — a
+    // contentful paint the scan did not back up, or image pixels the frame was
+    // not allowed to read — is a preview that may be blank in front of a user.
+    // It went to PostHog only, which is a no-op without a build-time key, so it
+    // reached nothing a maintainer reads. It is a caveat rather than an
+    // outright failure, which is what `warn` says.
+    const anomaly = anomalyForSafetyEvent('client_iframe_paint_unverified', {
+      surface: 'file_viewer_preview',
+      report_evidence: 'paint-timing-unverified',
+      report_image_unverified: 0,
+      report_candidates: 4,
+    });
+
+    expect(anomaly?.kind).toBe('preview-error');
+    expect(anomaly?.severity).toBe('warn');
+    expect(anomaly?.summary).toContain('paint-timing-unverified');
+  });
+
   it('maps a stuck run to an error and carries its run id through', () => {
     const anomaly = anomalyForSafetyEvent('client_run_stuck', {
       run_id: 'run-42',

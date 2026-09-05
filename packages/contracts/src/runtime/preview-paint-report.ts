@@ -24,10 +24,11 @@ export const PREVIEW_PAINT_REPORT_REQUEST = 'od:preview-content-size-request';
  * Why a document reported what it did about its own rendering.
  *
  *  - `paint-timing` — the user agent's own Paint Timing reported a contentful
- *    paint for this document. It is the preferred signal, and it is checked
- *    before the scan: the UA sees paint sources no enumeration can keep up with
- *    (`::before` content, for one). It is never the only signal, because Paint
- *    Timing in a nested browsing context is optional per user agent.
+ *    paint for this document. The UA sees paint sources no enumeration can keep
+ *    up with (`::before` content, for one), so it is the preferred signal — but
+ *    it is evidence, not a settlement. The scan runs anyway, and `evidence`
+ *    says whether it corroborated the entry. Paint Timing is also optional in a
+ *    nested browsing context, which is why the scan exists at all.
  *  - `painted` — Paint Timing said nothing, and the scan found an element that
  *    puts visible output on screen.
  *  - `no-elements` — there is nothing under `<body>` to look at.
@@ -52,9 +53,27 @@ export type PreviewPaintReason =
  *    are then indistinguishable, and the report says `painted: true` AND says
  *    it could not check — rather than guessing either way.
  *
+ *  - `'css-unverified'` — the only paint source found was a non-raster CSS
+ *    construct this scan does not classify (`paint()`, `element()`, the legacy
+ *    `-webkit-gradient()` form). Like the raster case it is assumed to ink,
+ *    because calling a healthy preview blank is the failure this detector
+ *    exists to remove — but it is NOT raster evidence, and filing it as
+ *    `image-unverified` would make that counter mean two different things.
+ *
+ *  - `'paint-timing-unverified'` — the user agent reported a contentful paint
+ *    and the scan corroborated nothing. The report still says `painted: true`,
+ *    because the entry is the UA's word that this document put content on
+ *    screen and there is nothing to gain by disbelieving it. What the caveat
+ *    adds is that NOTHING ELSE saw it: Chromium fires a contentful paint for a
+ *    decoded image whether or not that image has visible pixels, so a fully
+ *    transparent PNG lands here, and so does a canvas the scan may not read.
+ *
  * `null` on every other report: the evidence was decidable in the document.
  */
-export type PreviewPaintEvidence = 'image-unverified';
+export type PreviewPaintEvidence =
+  | 'image-unverified'
+  | 'css-unverified'
+  | 'paint-timing-unverified';
 
 /** How many candidates the scan rejected, and for what. */
 export interface PreviewPaintCounters {
@@ -68,6 +87,15 @@ export interface PreviewPaintCounters {
   blank: number;
   /** Candidates whose only paint source was an image whose pixels could not be read. */
   imageUnverified: number;
+  /**
+   * Candidates rejected for a CSS paint source the scan READ and found fully
+   * transparent. Counted inside `blank`, and separately here because this is
+   * the only evidence exact enough to contradict the user agent's own paint
+   * entry — see `PREVIEW_PAINT_REPORT_PRODUCER_SOURCE`.
+   */
+  transparent: number;
+  /** Candidates whose only paint source was a non-raster CSS construct the scan cannot classify. */
+  cssUnverified: number;
 }
 
 /** What a previewed document posts about its own rendering. */
@@ -111,11 +139,12 @@ export const PREVIEW_PAINT_SCAN_BUDGET_MS = 50;
  *   - `post()` — posts a `PreviewPaintReport` to the host.
  *
  * **What `painted` means: visible output, not geometry.** The user agent's own
- * Paint Timing answers first when it has an answer — a `first-contentful-paint`
- * entry for this document is the UA saying it painted content, and it sees
- * sources no enumeration can match. It is optional in a nested browsing
- * context, so when there is no entry the producer decides for itself, and an
- * element counts only when ALL of these hold:
+ * Paint Timing is asked first — a `first-contentful-paint` entry for this
+ * document is the UA saying it painted content, and it sees sources no
+ * enumeration can match. It is EVIDENCE, not a settlement: the scan runs
+ * anyway, and `evidence` says which of the two the report rests on. See
+ * `paintVerdict` below for the three outcomes that produces. An element counts
+ * as visible output only when ALL of these hold:
  *
  *   - no ancestor is `display:none`, `visibility:hidden|collapse`, or clipped
  *     to nothing by `clip-path`;
@@ -168,11 +197,16 @@ export const PREVIEW_PAINT_SCAN_BUDGET_MS = 50;
  *
  * **False negatives** (says not painted while something is visible): a
  * document that paints later than the host's watchdog window — the producer
- * re-reports on resize, fonts-ready and its own timers, so a late painter
- * settles when it paints, but one slower than the watchdog is filed. A
- * deliberately blank artifact is reported as not painted, which is the same
- * signal as a broken one; the host cannot tell those apart from outside the
- * frame and reports what it can see.
+ * re-reports on resize, fonts-ready and its own timers, AND answers every ask
+ * the host makes while the navigation is unsettled, so a late painter settles
+ * when it paints, but one slower than the watchdog is filed. A deliberately
+ * blank artifact is reported as not painted, which is the same signal as a
+ * broken one; the host cannot tell those apart from outside the frame and
+ * reports what it can see. One more, narrow: a document whose EVERY enumerable
+ * paint source is a gradient stated fully transparent, which also painted
+ * through a source the scan cannot model, is reported not painted — the
+ * contradiction rule in `paintVerdict` — because CSS-stated transparency is
+ * the one evidence exact enough to overrule the user agent.
  *
  * **False positives** (says painted while the user sees nothing): content
  * hidden by a mechanism the scan does not model — an opaque element stacked
@@ -180,14 +214,15 @@ export const PREVIEW_PAINT_SCAN_BUDGET_MS = 50;
  * the forms recognised here, or a filter that erases the pixels. A document
  * that painted and then blanked itself also keeps its Paint Timing entry, and
  * is reported as painted; it did render, and the entry is the UA's word for
- * that. An image whose pixels could not be read is the one false positive the
- * report NAMES rather than merely admits to, through `evidence`.
+ * that. The three false positives the report NAMES rather than merely admits
+ * to, through `evidence`: an image whose pixels could not be read, a CSS paint
+ * source this does not classify, and a contentful paint the scan corroborated
+ * with nothing at all.
  *
- * Paint Timing is asked before any of this, and a user agent that reports a
- * contentful paint for a decoded image reports one whether or not the image
- * has visible pixels — Chromium does. So the image rules above decide in the
- * user agents that expose no paint timing for a nested browsing context, which
- * the spec allows and which is why the scan exists at all.
+ * A user agent that reports a contentful paint for a decoded image reports one
+ * whether or not the image has visible pixels — Chromium does. That is why the
+ * paint entry is corroborated rather than obeyed, and why a canvas-only or
+ * transparent-image-only document settles with a caveat instead of in silence.
  */
 export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
   if (window.__odPreviewPaintReport) return;
@@ -203,12 +238,28 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
   var PAINTS = 'paint';
   var PAINTS_NOT = 'none';
   var PAINTS_UNVERIFIED = 'image-unverified';
+  // A non-raster CSS construct this scan does not classify. Assumed to ink like
+  // the raster case, and kept apart from it so 'image-unverified' keeps meaning
+  // raster evidence only.
+  var PAINTS_CSS_UNVERIFIED = 'css-unverified';
+  // A paint source the scan READ and found fully transparent. Not paint, and --
+  // unlike a candidate that simply has no paint source -- decidable.
+  var PAINTS_TRANSPARENT = 'transparent';
+  // The settle rests on the user agent's paint entry alone.
+  var PAINT_TIMING_UNVERIFIED = 'paint-timing-unverified';
   // Alpha is sampled on a 16x16 grid rather than read whole: enough to catch a
   // fully transparent image, cheap enough to run inside the scan's budget. It
   // is a SAMPLE, so an image whose only ink is a speck too small to survive
   // the downscale reads as blank -- which is what such an image looks like.
   var IMAGE_ALPHA_SAMPLE = 16;
-  var GRADIENT_FUNCTION = /^(?:repeating-)?(?:linear|radial|conic)-gradient\\(/i;
+  // Vendor prefixes are part of the COMPUTED value, not just the authored one:
+  // Chromium hands back '-webkit-linear-gradient(top, rgba(0, 0, 0, 0), ...)'
+  // for a prefixed gradient. Matching the unprefixed spelling only sent such a
+  // layer to the unknown-layer branch below, where it was assumed to ink.
+  var GRADIENT_FUNCTION = /^(?:-(?:webkit|moz|o|ms)-)?(?:repeating-)?(?:linear|radial|conic)-gradient\\(/i;
+  // The raster layers: a resource whose pixels this document may not be allowed
+  // to read. Everything else that is not a gradient is CSS uncertainty.
+  var RASTER_FUNCTION = /^(?:url|(?:-(?:webkit|moz|o|ms)-)?image-set)\\(/i;
   // Colour stops as they can be written: hex with or without alpha, any
   // functional colour, and the two keywords.
   var COLOUR_TOKEN = /#[0-9a-f]{3,8}|(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\\([^()]*\\)|\\b(?:transparent|currentcolor)\\b/gi;
@@ -462,23 +513,32 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     return residue.indexOf('(') >= 0;
   }
   // What a 'background-image' value puts on screen: PAINTS when some layer
-  // states a non-transparent stop, PAINTS_NOT when every layer is a gradient
-  // with nothing but transparent stops, PAINTS_UNVERIFIED when the only inking
-  // layer is a raster this cannot read ('url(...)', 'image-set(...)').
+  // states a non-transparent stop, PAINTS_TRANSPARENT when every layer is a
+  // gradient with nothing but transparent stops, PAINTS_UNVERIFIED when the
+  // only inking layer is a raster this cannot read ('url(...)',
+  // 'image-set(...)'), PAINTS_CSS_UNVERIFIED when it is some other CSS
+  // construct this does not classify ('paint(...)', 'element(...)', the legacy
+  // '-webkit-gradient(...)' form).
   function backgroundImagePaints(value){
     if (!value || value === 'none') return PAINTS_NOT;
     var layers = splitLayers(String(value));
-    var unverified = false;
+    var raster = false;
+    var css = false;
+    var transparent = false;
     for (var i = 0; i < layers.length; i += 1) {
       var layer = layers[i].trim();
       if (layer === '' || layer.toLowerCase() === 'none') continue;
       if (GRADIENT_FUNCTION.test(layer)) {
         if (gradientPaints(layer)) return PAINTS;
+        transparent = true;
         continue;
       }
-      unverified = true;
+      if (RASTER_FUNCTION.test(layer)) { raster = true; continue; }
+      css = true;
     }
-    return unverified ? PAINTS_UNVERIFIED : PAINTS_NOT;
+    if (raster) return PAINTS_UNVERIFIED;
+    if (css) return PAINTS_CSS_UNVERIFIED;
+    return transparent ? PAINTS_TRANSPARENT : PAINTS_NOT;
   }
   // Whether a decoded image's pixels are visible. Reading them needs an
   // untainted canvas, which needs an image this document is allowed to read;
@@ -505,13 +565,17 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
   }
   function paintsSomething(el, style){
     var tag = el.tagName ? String(el.tagName).toLowerCase() : '';
-    var unverified = false;
+    var raster = false;
+    var css = false;
+    var transparent = false;
     if (style) {
       if (hasDirectText(el) && alphaOf(style.color) > 0) return PAINTS;
       if (alphaOf(style.backgroundColor) > 0) return PAINTS;
       var background = backgroundImagePaints(style.backgroundImage);
       if (background === PAINTS) return PAINTS;
-      if (background === PAINTS_UNVERIFIED) unverified = true;
+      if (background === PAINTS_UNVERIFIED) raster = true;
+      else if (background === PAINTS_CSS_UNVERIFIED) css = true;
+      else if (background === PAINTS_TRANSPARENT) transparent = true;
       if (hasVisibleBorder(style)) return PAINTS;
       if (style.boxShadow && style.boxShadow !== 'none') return PAINTS;
       if (hasVisibleOutline(style)) return PAINTS;
@@ -523,7 +587,11 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     if (tag === 'img') {
       if (el.complete === true && num(el.naturalWidth) > 0 && num(el.naturalHeight) > 0) {
         var pixels = imagePixelsPaint(el);
-        if (pixels !== PAINTS_NOT) return pixels;
+        if (pixels === PAINTS) return PAINTS;
+        // An all-zero alpha read is NOT PAINTS_TRANSPARENT. It is a 16x16
+        // SAMPLE of a decoded resource, and the report will not overrule the
+        // user agent's own paint entry on a sample -- see paintVerdict.
+        if (pixels === PAINTS_UNVERIFIED) raster = true;
       }
     } else if (tag === 'video') {
       // A poster and a decoded frame are rasters like any other, and there is
@@ -535,9 +603,11 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
       }
     }
     // A canvas, an svg root and an iframe are blank rectangles until something
-    // paints in them, and the scan cannot see in. A drawn canvas settles
-    // through Paint Timing above, never through its geometry here.
-    return unverified ? PAINTS_UNVERIFIED : PAINTS_NOT;
+    // paints in them, and the scan cannot see in. A drawn canvas is reported
+    // through Paint Timing, never through its geometry here.
+    if (raster) return PAINTS_UNVERIFIED;
+    if (css) return PAINTS_CSS_UNVERIFIED;
+    return transparent ? PAINTS_TRANSPARENT : PAINTS_NOT;
   }
   function candidateIsVisibleOutput(el, scan){
     var state = stateOf(el, scan);
@@ -547,7 +617,12 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     if (!clipAdmits(rect, state.clipSelf)) { scan.clipped += 1; return PAINTS_NOT; }
     var paints = paintsSomething(el, styleOf(el, scan));
     if (paints === PAINTS_NOT) { scan.blank += 1; return PAINTS_NOT; }
+    // A source read as transparent is still a candidate that painted nothing,
+    // so it counts as blank -- and it is counted again on its own, because it
+    // is the only rejection decidable enough to contradict Paint Timing.
+    if (paints === PAINTS_TRANSPARENT) { scan.blank += 1; scan.transparent += 1; return paints; }
     if (paints === PAINTS_UNVERIFIED) scan.imageUnverified += 1;
+    if (paints === PAINTS_CSS_UNVERIFIED) scan.cssUnverified += 1;
     return paints;
   }
   function hitTestTargets(viewport){
@@ -570,6 +645,48 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     } catch (_) {}
     return found;
   }
+  // THE INVARIANT: a preview settles as painted only on evidence something
+  // NAMED. There are three outcomes, never two, and this is the only place they
+  // are decided:
+  //
+  //   1. The scan found paint it can stand behind -> painted, no caveat. When
+  //      the user agent also reported a contentful paint the reason stays
+  //      'paint-timing', because that is what answered first; the scan
+  //      corroborated it.
+  //   2. A contentful paint stands uncorroborated, or the only paint source
+  //      found could not be read -> painted, WITH the caveat named in
+  //      'evidence'. Nothing is torn down over a caveat: the paint entry is the
+  //      user agent's word that this document put content on screen, and an
+  //      unread image is not evidence of blankness either. What the host owes
+  //      this outcome is a soft notice and a record, not a failure.
+  //   3. Nothing was found and the user agent said nothing, or every paint
+  //      source the scan READ states full transparency -> not painted.
+  //
+  // A CSS paint source is the only evidence exact enough to contradict the user
+  // agent, and 'transparent' is the counter for it: a gradient's colour stops
+  // are in the computed value. An image's are a 16x16 SAMPLE of a resource the
+  // sandboxed frame is usually not allowed to read at all, and a canvas cannot
+  // be read without calling getContext and taking it away from the artifact's
+  // own renderer -- neither is exact enough to call a document the user agent
+  // says painted blank. That asymmetry is the whole of finding F1: Chromium
+  // fires a contentful paint for a decoded fully transparent PNG, and this used
+  // to settle such a document silently.
+  function paintVerdict(contentfulPaint, raster, css, scan){
+    if (contentfulPaint) {
+      if (scan.transparent > 0 && !raster && !css) {
+        return { painted: false, reason: 'no-visible-output', evidence: null, scan: scan };
+      }
+      return { painted: true, reason: 'paint-timing', evidence: PAINT_TIMING_UNVERIFIED, scan: scan };
+    }
+    if (raster) return { painted: true, reason: 'painted', evidence: PAINTS_UNVERIFIED, scan: scan };
+    if (css) return { painted: true, reason: 'painted', evidence: PAINTS_CSS_UNVERIFIED, scan: scan };
+    return {
+      painted: false,
+      reason: scan.seen === 0 ? 'no-elements' : 'no-visible-output',
+      evidence: null,
+      scan: scan
+    };
+  }
   function scanForVisibleOutput(){
     var viewport = viewportRect();
     var scan = {
@@ -582,18 +699,18 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
       clipped: 0,
       blank: 0,
       imageUnverified: 0,
+      transparent: 0,
+      cssUnverified: 0,
       truncated: false
     };
-    // Preferred signal, asked first: the user agent reports a contentful paint
-    // for sources no enumeration can keep up with. Never the only signal --
-    // Paint Timing is optional in a nested browsing context, and the scan below
-    // is what answers when the UA says nothing.
-    if (paintTimingSawContent()) {
-      return { painted: true, reason: 'paint-timing', evidence: null, scan: scan };
-    }
+    // The preferred signal, and it is read BEFORE the walk so the verdict can
+    // say whether the walk corroborated it. It is not a short circuit: a
+    // contentful paint fires for a decoded image with no visible pixels, so
+    // obeying it alone settles a blank document.
+    var contentfulPaint = paintTimingSawContent();
     var body = document.body;
     if (!body) {
-      return { painted: false, reason: 'no-elements', evidence: null, scan: scan };
+      return paintVerdict(contentfulPaint, false, false, scan);
     }
     var queue = hitTestTargets(viewport);
     queue.push(body);
@@ -603,7 +720,8 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
     } catch (_) { walker = null; }
     var visited = new WeakSet();
     var index = 0;
-    var unverified = false;
+    var raster = false;
+    var css = false;
     var deadline = nowMs() + BUDGET_MS;
     while (true) {
       if (scan.seen >= CANDIDATE_LIMIT) { scan.truncated = true; break; }
@@ -620,19 +738,17 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
       // candidate does not: a document that also holds something decidably
       // visible deserves to be reported on THAT, without the caveat.
       if (paints === PAINTS) {
-        return { painted: true, reason: 'painted', evidence: null, scan: scan };
+        return {
+          painted: true,
+          reason: contentfulPaint ? 'paint-timing' : 'painted',
+          evidence: null,
+          scan: scan
+        };
       }
-      if (paints === PAINTS_UNVERIFIED) unverified = true;
+      if (paints === PAINTS_UNVERIFIED) raster = true;
+      if (paints === PAINTS_CSS_UNVERIFIED) css = true;
     }
-    if (unverified) {
-      return { painted: true, reason: 'painted', evidence: PAINTS_UNVERIFIED, scan: scan };
-    }
-    return {
-      painted: false,
-      reason: scan.seen === 0 ? 'no-elements' : 'no-visible-output',
-      evidence: null,
-      scan: scan
-    };
+    return paintVerdict(contentfulPaint, raster, css, scan);
   }
   window.__odPreviewPaintReport = {
     rememberToken: function(next){
@@ -652,7 +768,9 @@ export const PREVIEW_PAINT_REPORT_PRODUCER_SOURCE = `(function(){
             hidden: result.scan.hidden,
             clipped: result.scan.clipped,
             blank: result.scan.blank,
-            imageUnverified: result.scan.imageUnverified
+            imageUnverified: result.scan.imageUnverified,
+            transparent: result.scan.transparent,
+            cssUnverified: result.scan.cssUnverified
           },
           scanTruncated: result.scan.truncated,
           token: token

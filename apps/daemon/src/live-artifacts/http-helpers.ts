@@ -4,8 +4,8 @@ import {
   PREVIEW_PAINT_REPORT_PRODUCER_SOURCE,
   PREVIEW_PAINT_REPORT_REQUEST,
 } from '@open-design/contracts/runtime/preview-paint-report';
+import { injectBeforeGenuineBodyClose } from '@open-design/contracts/runtime/body-close-splice';
 import { ConnectorServiceError } from '../connectors/service.js';
-import { injectBeforeGenuineBodyClose } from '../http/body-close-splice.js';
 import { sendApiError } from '../http/api-errors.js';
 import { LiveArtifactRefreshAbortError } from './refresh.js';
 import { LiveArtifactRefreshUnavailableError } from './refresh-service.js';
@@ -111,8 +111,9 @@ export function setLiveArtifactPreviewHeaders(res: Response): string {
  * Placement is `injectBeforeGenuineBodyClose`, not a raw search for `</body>`:
  * a body close written inside a comment or a raw-text element is text, and a
  * producer spliced into one never runs — which turns a healthy artifact into
- * "Preview did not render". See `http/body-close-splice.ts` for what the
- * scanner does and does not promise.
+ * "Preview did not render". See `@open-design/contracts/runtime/body-close-splice`
+ * — the one splice rule every preview transport shares — for what the scanner
+ * does and does not promise.
  */
 export function injectLiveArtifactPaintReporter(html: string, nonce: string): string {
   const script = `<script nonce="${nonce}" data-od-live-artifact-paint-bridge>${PREVIEW_PAINT_REPORT_PRODUCER_SOURCE}

@@ -22,6 +22,7 @@ import {
   PREVIEW_PAINT_REPORT_PRODUCER_SOURCE,
   PREVIEW_PAINT_REPORT_REQUEST,
 } from '@open-design/contracts/runtime/preview-paint-report';
+import { lastGenuineBodyCloseIndex } from '@open-design/contracts/runtime/body-close-splice';
 import { withProjectAssetBaseHref } from '@open-design/contracts/runtime/project-asset-base';
 
 import {
@@ -1220,12 +1221,15 @@ function injectBeforeHeadEnd(doc: string, payload: string): string {
 }
 
 function injectBeforeBodyEnd(doc: string, payload: string): string {
-  // String-first (see injectBeforeHeadEnd). Find the real </body> (last one
-  // before </html>) to skip </body> literals inside <script>/<style>.
-  const lower = doc.toLowerCase();
-  const htmlEnd = lower.lastIndexOf('</html>');
-  const limit = htmlEnd >= 0 ? htmlEnd : lower.length;
-  const idx = lower.lastIndexOf('</body>', limit - 1);
+  // String-first (see injectBeforeHeadEnd). Where the payload may land is not
+  // this file's decision: `lastGenuineBodyCloseIndex` is the one splice rule
+  // every preview transport shares, and the daemon injectors ask it the same
+  // question about the responses they serve. A raw text search cannot tell a
+  // genuine body close from one written inside a comment, a raw-text element, a
+  // `<template>` or a quoted attribute value, and a bridge spliced into any of
+  // those is text the browser never runs — which reports a preview that
+  // rendered as one that did not.
+  const idx = lastGenuineBodyCloseIndex(doc);
   if (idx >= 0) return doc.slice(0, idx) + payload + doc.slice(idx);
   // No recognizable </body>: let DOMParser normalize (it synthesizes a body).
   if (typeof DOMParser !== 'undefined') {

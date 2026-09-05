@@ -1544,14 +1544,16 @@ function usePreviewServers(projectId: string, enabled: boolean): PreviewInfo[] {
  * page from a site root, so it is what the panel offers when the srcdoc
  * render cannot show the page (issue #158). Each URL is the preview's path on
  * the Open Design front this browser is on: the daemon serves the preview
- * itself (decision D-14), so the link works for anyone who can open this
- * workspace, not only for someone sitting at the daemon's machine.
+ * itself (decision D-14), so the link opens wherever this workspace opens,
+ * not only for someone sitting at the daemon's machine.
  *
- * With one thing the link cannot do on its own, which the announcement
- * reports: a front that is not the daemon does not forward the preview page's
- * root-absolute assets to it (`PreviewInfo.frontServesRootAbsoluteAssets`).
- * That is the development front, and the panel names it there instead of
- * repeating the claim that the link simply works.
+ * With the limits the link carries, which the panel states rather than
+ * leaving a reader to meet them: a preview page that suppresses its own
+ * referrer cannot load its root-absolute assets (the daemon answers those
+ * requests in words), and a request body over the daemon's 4mb API limit is
+ * refused. A front that is not the daemon does not forward root-absolute
+ * assets to it at all (`PreviewInfo.frontServesRootAbsoluteAssets`); that is
+ * the development front, and the panel names it there instead.
  *
  * "Open in Chrome" asks the daemon to launch the preview on its own machine,
  * for a host whose default browser refuses loopback. It is therefore offered

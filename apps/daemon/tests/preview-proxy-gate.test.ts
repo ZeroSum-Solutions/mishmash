@@ -146,7 +146,10 @@ describe('the preview proxy gate on the entry points outside the router', () => 
       projectStore: { getProject: (id: string) => (id === 'p1' ? { id: 'p1' } : null) },
       resolvePreviewCwd: () => tempDir,
     });
-    app.use(createPreviewRootAssetFallback({ getPreview: (id) => previews.get(id) }));
+    app.use(createPreviewRootAssetFallback({
+      getPreview: (id) => previews.get(id),
+      hasLivePreview: () => previews.list().length > 0,
+    }));
     const server = http.createServer(app);
     server.on('upgrade', createPreviewProxyUpgradeHandler({ getPreview: (id) => previews.get(id) }));
     servers.push(server);
