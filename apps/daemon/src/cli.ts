@@ -1788,9 +1788,12 @@ Output is JSON on stdout.
 
 \`start\` and \`list\` announce each preview as a path on the Open Design front
 this command reached the daemon on. The daemon serves the preview itself, so
-that URL works for anyone who can reach Open Design rather than only on the
-daemon's own machine (issue #158). \`open\` launches the preview in Google
-Chrome on the DAEMON's machine, for a default browser that refuses loopback.
+that URL opens wherever Open Design opens rather than only on the daemon's own
+machine (issue #158). Two limits stay: a preview page that sends no referrer
+cannot load its root-absolute assets — the daemon answers those requests with a
+named PREVIEW_REFERRER_REQUIRED failure instead — and a request body over 4mb
+is refused. \`open\` launches the preview in Google Chrome on the DAEMON's
+machine, for a default browser that refuses loopback.
 
 Each announced preview carries \`frontServesRootAbsoluteAssets\`. It is false
 when a separate web front stands between the caller and the daemon — the Next

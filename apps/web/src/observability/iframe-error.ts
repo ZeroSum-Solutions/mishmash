@@ -76,9 +76,18 @@ interface TrackPreviewPaintOptions {
   /**
    * True when the host knows the document it wants watched has ALREADY
    * committed into this frame — a warm transport, materialised while hidden
-   * and only now becoming visible, whose `load` fired before this watchdog
-   * existed. Only the caller can know that: it is the one that put the
-   * document there and saw the frame load it.
+   * and only now becoming visible, or a fast one whose `load` fired between
+   * the render that pointed the frame at it and this watchdog's installation.
+   * Only the caller can know that: it is the one that put the document there
+   * and saw the frame load it.
+   *
+   * Read ONCE, at installation, so it must be read AT installation: pass a
+   * value the caller computed one render earlier and a `load` that landed in
+   * between is lost — the watchdog waits for one that has already happened and
+   * rejects the producer's report as unsolicited. `useCommittedDocument`
+   * answers this with a live read for exactly that reason; re-installing the
+   * watchdog to refresh the answer instead would arm a second epoch over a
+   * document that had already proved itself.
    *
    * Left false (the default) the watchdog says nothing to the frame until a
    * `load` proves the incoming document is in it. That is the point of the

@@ -1826,6 +1826,9 @@ test('[P0] @critical daemon error details persist between failed sends', async (
       'event: error',
       'data: {"message":"connection refused"}',
       '',
+      'event: end',
+      'data: {"code":1,"status":"failed"}',
+      '',
       '',
     ].join('\n');
 
@@ -1918,6 +1921,9 @@ test('[P0] a successful retry after a failed send restores the workspace to a fr
             'event: error',
             'data: {"message":"connection refused"}',
             '',
+            'event: end',
+            'data: {"code":1,"status":"failed"}',
+            '',
             '',
           ].join('\n')
         : [
@@ -1986,6 +1992,9 @@ test('[P0] retrying a failed run does not duplicate the original user message', 
             '',
             'event: error',
             'data: {"message":"connection refused"}',
+            '',
+            'event: end',
+            'data: {"code":1,"status":"failed"}',
             '',
             '',
           ].join('\n')
