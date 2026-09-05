@@ -48,19 +48,34 @@ const VELA_MESSAGE_CENTER_PREFIX = '/api/integrations/vela/message-center';
 const AMR_API_UPSTREAM_ORIGIN = 'https://amr-api.open-design.ai';
 
 /**
- * INV-3.7 — `GET /api/integrations/vela/status` answers within this budget
- * whatever the vela CLI does.
+ * INV-3.7 — `GET /api/integrations/vela/status` answers within this budget,
+ * measured from the moment the request arrives, whatever the vela CLI does.
  */
 const VELA_STATUS_ANSWER_BUDGET_MS = 2_000;
 
 /**
- * Wait for `pending`, but never longer than the status route's answer budget.
+ * Held back from the budget for the work that still has to happen after the
+ * billing wait gives up: applying the projection and writing the response.
  *
- * Resolves `null` when the budget lapses; `pending` is left running so the work
- * still lands in the live-account cache for the next poll. The invariant this
- * expresses is that the ANSWER is bounded, not the work: the status route is
- * read by focus, menu and login surfaces, and an optional billing projection is
- * never worth holding one of those requests open for.
+ * Without it the wait would be allowed to consume the whole budget, so the
+ * ANSWER could only ever land after it — the route would promise 2,000 ms and
+ * deliver 2,000 ms plus the write.
+ */
+const VELA_STATUS_ANSWER_RESERVE_MS = 250;
+
+/**
+ * Wait for `pending`, but never past `deadline` (an epoch-milliseconds instant).
+ *
+ * Resolves `null` when the deadline lapses; `pending` is left running so the
+ * work still lands in the live-account cache for the next poll. The invariant
+ * this expresses is that the ANSWER is bounded, not the work: the status route
+ * is read by focus, menu and login surfaces, and an optional billing projection
+ * is never worth holding one of those requests open for.
+ *
+ * A deadline rather than a duration because the budget belongs to the whole
+ * request. Everything before this wait — reading app config, reading the vela
+ * config profile — spends the same 2,000 ms, so a duration started here would
+ * let the answer drift past the bound it is named for.
  *
  * A bound here as well as on the CLI spawn because they guarantee different
  * things. The spawn bound keeps one subprocess from outliving its budget; this
@@ -68,9 +83,9 @@ const VELA_STATUS_ANSWER_BUDGET_MS = 2_000;
  * spawn — a caller joining a single-flight fetch that started earlier, or any
  * later step added between the two.
  */
-function answerWithinStatusBudget<T>(pending: Promise<T>): Promise<T | null> {
+function answerByDeadline<T>(pending: Promise<T>, deadline: number): Promise<T | null> {
   return new Promise<T | null>((resolve) => {
-    const timer = setTimeout(() => resolve(null), VELA_STATUS_ANSWER_BUDGET_MS);
+    const timer = setTimeout(() => resolve(null), Math.max(0, deadline - Date.now()));
     // `unref` so a lapsed budget's timer never holds the process open; the
     // daemon must still be able to exit while a stuck CLI is pending.
     timer.unref?.();
@@ -468,6 +483,10 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
   });
 
   app.get('/api/integrations/vela/status', async (_req, res) => {
+    // INV-3.7's clock starts here, not at the billing wait: every step before
+    // it spends the same budget.
+    const answerBy =
+      Date.now() + VELA_STATUS_ANSWER_BUDGET_MS - VELA_STATUS_ANSWER_RESERVE_MS;
     try {
       const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
       const configuredEnv = agentCliEnvForAgent(appConfig.agentCliEnv, 'amr');
@@ -485,10 +504,11 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
         const probe = resolveAmrModelProbeForEnv(configuredEnv);
         const cachedAccount = peekVelaLiveAccount(accountCacheKey);
         if (refresh) {
-          const liveAccount = await answerWithinStatusBudget(
+          const liveAccount = await answerByDeadline(
             fetchVelaLiveAccountSingleFlight(accountCacheKey, probe, {
               invalidateModelsOnPlanChange: true,
             }),
+            answerBy,
           );
           applyVelaLiveAccount(status, liveAccount);
         } else if (!cachedAccount) {
@@ -505,8 +525,9 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
           const liveAccount =
             inFlightVelaAccountFetches.has(accountCacheKey) ||
             shouldRefreshVelaLiveAccount(accountCacheKey)
-              ? await answerWithinStatusBudget(
+              ? await answerByDeadline(
                   fetchVelaLiveAccountSingleFlight(accountCacheKey, probe),
+                  answerBy,
                 )
               : null;
           applyVelaLiveAccount(status, liveAccount);
