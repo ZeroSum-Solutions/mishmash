@@ -110,6 +110,11 @@ async function captureMinuteIntervals(page: Page) {
       configurable: true,
       value: () => callbacks.forEach((callback) => callback()),
     });
+
+    Object.defineProperty(window, '__odCapturedMinuteIntervals', {
+      configurable: true,
+      value: () => callbacks.length,
+    });
   });
 }
 
@@ -119,6 +124,22 @@ async function runMinuteIntervals(page: Page) {
       .__odRunMinuteIntervals;
     if (!run) throw new Error('minute interval capture was not installed');
     run();
+  });
+}
+
+/**
+ * How many 60-second intervals the app registered while the capture was
+ * installed.
+ *
+ * Throws rather than returning 0 when the capture is missing, so "no interval
+ * was registered" and "nothing was watching" can never report the same number.
+ */
+async function capturedMinuteIntervalCount(page: Page): Promise<number> {
+  return await page.evaluate(() => {
+    const count = (window as Window & { __odCapturedMinuteIntervals?: () => number })
+      .__odCapturedMinuteIntervals;
+    if (!count) throw new Error('minute interval capture was not installed');
+    return count();
   });
 }
 
@@ -166,6 +187,17 @@ async function runLifecycle(
   // polled"). Asserting that no 60-second interval is registered at all is the
   // stronger form of the same claim — traffic a user never asked for cannot
   // reach anyone if it is never sent.
+  //
+  // Two assertions, because one of them alone is ambiguous. The registration
+  // count is the direct claim, and it throws instead of returning 0 when the
+  // capture is missing, so a broken harness cannot read as a removed interval.
+  // Ticking whatever was captured and requiring no new request then covers a
+  // timer registered at some other period, which the capture does not intercept
+  // and which would sync natively during the settle window.
+  expect(
+    await capturedMinuteIntervalCount(page),
+    'the app still registers a 60-second interval for the message center',
+  ).toBe(0);
   await runMinuteIntervals(page);
   await page.waitForTimeout(250);
   expect(
