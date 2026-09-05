@@ -9,6 +9,11 @@
  * one implementation or the three drift apart. Both live here because
  * `packages/contracts` is the only place web and daemon may share a rule.
  *
+ * The same file carries the report a previewed document posts when it FAILS
+ * (`PREVIEW_DOCUMENT_ERROR`, below): both are the previewed document telling
+ * its host what happened, both are embedded by the same transports, and
+ * splitting them would put one half of one conversation in another module.
+ *
  * Pure strings and types: no DOM, no fetch, no Node APIs. The producer source
  * is JavaScript text the transports embed; it runs in the previewed document,
  * never here.
@@ -789,3 +794,159 @@ export function mintPreviewNavigationToken(): string {
   const random = Math.random().toString(36).slice(2);
   return `pnv-${Date.now().toString(36)}-${random}`;
 }
+
+/**
+ * The other half of this protocol: what a previewed document says when it
+ * FAILS.
+ *
+ * A preview iframe is sandboxed without `allow-same-origin`, so the document
+ * inside it holds an opaque origin and the host cannot reach into it; the web
+ * app's own `window` listeners (`observability/error-tracking.ts`) never see
+ * an exception thrown in there. A previewed artifact could therefore paint its
+ * shell, die on its next line, and leave the user looking at a loading message
+ * forever with nothing in the anomaly log to explain it (FU-31). The producer
+ * below is that missing report: it runs inside the previewed document and
+ * posts its own failures out to the host, which files them as `preview-error`
+ * records naming the cause.
+ */
+
+/** Failure a previewed document posts to its host. */
+export const PREVIEW_DOCUMENT_ERROR = 'od:preview-document-error';
+
+/**
+ * What went wrong, in the document's own terms.
+ *
+ *  - `uncaught-error` — a script in the previewed document threw and nothing
+ *    caught it.
+ *  - `unhandled-rejection` — a promise in the previewed document rejected with
+ *    no handler. This is the shape a failed `async` bootstrap takes.
+ *  - `subresource-refused` — a `fetch` the document issued never produced a
+ *    response: refused by the daemon's origin gate, blocked by the browser, or
+ *    unreachable. The document only learns "failed to fetch", so the report
+ *    carries the URL rather than a status; the status is decidable only on the
+ *    daemon side (`apps/daemon/tests/preview-sibling-fetch-origin.test.ts`).
+ *    A request the AUTHOR cancelled is not this: an abort or an author timeout
+ *    is a deliberate outcome, so the wrapper leaves those alone rather than
+ *    filing a refusal the log would have to be read past.
+ */
+export type PreviewDocumentErrorCause =
+  | 'uncaught-error'
+  | 'unhandled-rejection'
+  | 'subresource-refused';
+
+/** One failure report from a previewed document. */
+export interface PreviewDocumentErrorReport {
+  type: typeof PREVIEW_DOCUMENT_ERROR;
+  cause: PreviewDocumentErrorCause;
+  /** The engine's own message, bounded so one report cannot flood the log. */
+  message: string;
+  /** Absolute URL the failure names, when there is one. */
+  url: string | null;
+}
+
+const PREVIEW_DOCUMENT_ERROR_CAUSES: readonly PreviewDocumentErrorCause[] = [
+  'uncaught-error',
+  'unhandled-rejection',
+  'subresource-refused',
+];
+
+/** Longest message or URL a report may carry. */
+export const PREVIEW_DOCUMENT_ERROR_TEXT_LIMIT = 400;
+
+/**
+ * Reads a posted message as a `PreviewDocumentErrorReport`, or returns null.
+ *
+ * The sender is agent-written artifact code running in a sandbox, so every
+ * field is untrusted input and is validated here rather than at each host call
+ * site — the same reason the paint report is parsed before it is believed.
+ */
+export function parsePreviewDocumentErrorReport(value: unknown): PreviewDocumentErrorReport | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.type !== PREVIEW_DOCUMENT_ERROR) return null;
+  const cause = candidate.cause;
+  if (typeof cause !== 'string' || !PREVIEW_DOCUMENT_ERROR_CAUSES.includes(cause as PreviewDocumentErrorCause)) {
+    return null;
+  }
+  const message = typeof candidate.message === 'string' ? candidate.message : '';
+  const url = typeof candidate.url === 'string' && candidate.url.length > 0 ? candidate.url : null;
+  return {
+    type: PREVIEW_DOCUMENT_ERROR,
+    cause: cause as PreviewDocumentErrorCause,
+    message: message.slice(0, PREVIEW_DOCUMENT_ERROR_TEXT_LIMIT),
+    ...(url ? { url: url.slice(0, PREVIEW_DOCUMENT_ERROR_TEXT_LIMIT) } : { url: null }),
+  };
+}
+
+/**
+ * Source of the failure reporter, as JavaScript text, for a transport to embed
+ * in the previewed document.
+ *
+ * Idempotent, installs three observers, and reports each distinct failure once
+ * up to a hard cap — a render loop that throws every frame must not be able to
+ * turn this into the flood it exists to make readable. The `fetch` wrapper
+ * re-throws, so author code sees exactly what it saw before.
+ */
+export const PREVIEW_DOCUMENT_ERROR_PRODUCER_SOURCE = `(function(){
+  if (window.__odPreviewDocumentError) return;
+  var LIMIT = ${PREVIEW_DOCUMENT_ERROR_TEXT_LIMIT};
+  var MAX_REPORTS = 20;
+  var seen = {};
+  var refused = {};
+  var sent = 0;
+  function text(value){
+    var s = value === undefined || value === null ? '' : String(value);
+    return s.length > LIMIT ? s.slice(0, LIMIT) : s;
+  }
+  function report(cause, message, url){
+    var key = cause + '|' + message + '|' + (url || '');
+    if (seen[key] || sent >= MAX_REPORTS) return;
+    seen[key] = true;
+    sent += 1;
+    try {
+      window.parent.postMessage({
+        type: ${JSON.stringify(PREVIEW_DOCUMENT_ERROR)},
+        cause: cause,
+        message: text(message),
+        url: url ? text(url) : null
+      }, '*');
+    } catch (_) {}
+  }
+  window.__odPreviewDocumentError = report;
+  window.addEventListener('error', function(ev){
+    // A failed <img>/<script>/<link> fires here too, with the ELEMENT as the
+    // target. Those already have their own detector on the host side; this
+    // reporter is only for script failures.
+    if (ev && ev.target && ev.target !== window) return;
+    report('uncaught-error', (ev && ev.message) || 'no message reported', ev && ev.filename);
+  }, true);
+  window.addEventListener('unhandledrejection', function(ev){
+    var reason = ev && ev.reason;
+    var message = text((reason && reason.message) || reason || 'no reason reported');
+    // A refused fetch with no catch surfaces twice -- once as the refusal, then
+    // as the rejection it turns into. The refusal is the report that names the
+    // URL, so the echo is dropped rather than filed as a second failure.
+    if (refused[message]) return;
+    report('unhandled-rejection', message, null);
+  });
+  var nativeFetch = window.fetch;
+  if (typeof nativeFetch === 'function') {
+    window.fetch = function(input, init){
+      var raw;
+      try { raw = typeof input === 'string' ? input : (input && input.url) || ''; } catch (_) { raw = ''; }
+      var url = raw;
+      try { url = new URL(raw, document.baseURI).href; } catch (_) {}
+      return nativeFetch.apply(this, arguments).catch(function(err){
+        // An author-cancelled request is not a refusal. Reporting it would put
+        // a healthy event in a log that is only skimmable while it holds
+        // unhealthy ones.
+        var name = err && err.name;
+        if (name === 'AbortError' || name === 'TimeoutError') throw err;
+        var message = text((err && err.message) || 'fetch failed');
+        refused[message] = true;
+        report('subresource-refused', message, url);
+        throw err;
+      });
+    };
+  }
+})();`;
