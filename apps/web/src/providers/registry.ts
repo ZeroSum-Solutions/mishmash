@@ -173,7 +173,16 @@ function readAgentRegistryStream(
         throw new Error(frame.data.error || 'agents stream error');
       }
       shared.agents.push(frame.data);
-      for (const listener of shared.listeners) listener.onAgent(frame.data);
+      // Snapshot the listener set: a caller may detach from inside its own
+      // paint. One caller throwing must not tear the shared stream down for
+      // the others, so each paint is isolated.
+      for (const listener of [...shared.listeners]) {
+        try {
+          listener.onAgent(frame.data);
+        } catch {
+          // A caller's own render error is that caller's problem.
+        }
+      }
     };
 
     try {
