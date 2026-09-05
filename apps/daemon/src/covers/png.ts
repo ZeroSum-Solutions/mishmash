@@ -22,16 +22,28 @@ const IHDR_BIT_DEPTH_OFFSET = 8;
 const IHDR_COLOUR_TYPE_OFFSET = 9;
 const IHDR_INTERLACE_OFFSET = 12;
 
-/** Samples per pixel for each colour type the PNG format defines. */
-const CHANNELS_BY_COLOUR_TYPE: ReadonlyMap<number, number> = new Map([
-  [0, 1], // greyscale
-  [2, 3], // truecolour
-  [3, 1], // indexed
-  [4, 2], // greyscale with alpha
-  [6, 4], // truecolour with alpha
+/** How one colour type lays its samples out. */
+interface ColourTypeLayout {
+  /** Samples per pixel. */
+  channels: number;
+  /** The bit depths the PNG format pairs with this colour type, and no others. */
+  bitDepths: ReadonlySet<number>;
+}
+
+/**
+ * The five colour types the PNG format defines, each with the bit depths the
+ * format allows it. The pairing is the point: a bit depth that is legal on its
+ * own is still not a PNG on the wrong colour type -- indexed colour stops at 8
+ * bits per sample, and every colour type carrying alpha starts at 8 -- and a
+ * pair the format does not define has no row width to compute from.
+ */
+const LAYOUT_BY_COLOUR_TYPE: ReadonlyMap<number, ColourTypeLayout> = new Map([
+  [0, { channels: 1, bitDepths: new Set([1, 2, 4, 8, 16]) }], // greyscale
+  [2, { channels: 3, bitDepths: new Set([8, 16]) }], // truecolour
+  [3, { channels: 1, bitDepths: new Set([1, 2, 4, 8]) }], // indexed
+  [4, { channels: 2, bitDepths: new Set([8, 16]) }], // greyscale with alpha
+  [6, { channels: 4, bitDepths: new Set([8, 16]) }], // truecolour with alpha
 ]);
-/** The bit depths the format defines; every other value makes a row width meaningless. */
-const LEGAL_BIT_DEPTHS: ReadonlySet<number> = new Set([1, 2, 4, 8, 16]);
 /** Interlace method 0: rows in order. Method 1 is Adam7's seven reduced passes. */
 const INTERLACE_NONE = 0;
 
@@ -112,25 +124,34 @@ function readIntactContainer(bytes: Buffer): IntactPngContainer | null {
  * declares must have: one filter byte in front of every row, each row
  * `ceil(width x channels x bitDepth / 8)` bytes wide.
  *
- * `null` means "this header describes a layout the arithmetic above does not
- * model", and the caller then requires only that the stream inflates at all.
- * Two headers land there: an interlaced image, whose seven Adam7 passes each
- * carry their own row padding and so do not sum to the single-pass figure; and
- * a colour type or bit depth the format does not define, where there is no
- * honest row width to compute. Neither is a shape this repository's renderer
- * produces -- `apps/daemon/src/covers/crop.ts` writes non-interlaced sharp PNG
- * output -- so declining is a narrow allowance, not the usual path.
+ * `null` means the header declares no layout this arithmetic can honestly
+ * describe, and such a header is rejected rather than exempted from the length
+ * check (W2J.2). Two headers land there:
+ *
+ *   - An interlaced one. Adam7's seven reduced passes each carry their own row
+ *     padding, so the single-pass figure above does not describe them. This
+ *     repository's cover writer, `apps/daemon/src/covers/crop.ts`, produces
+ *     non-interlaced sharp PNG output, so no legitimate cover is interlaced and
+ *     rejecting the layout costs nothing -- where accepting it would take the
+ *     interlace byte's word for a layout the rows are not in.
+ *   - A colour type and bit depth the format does not pair. There is no honest
+ *     row width for `ceil()` to return, so any figure it did return would be
+ *     invented rather than declared.
+ *
+ * Neither is treated as "unknown, so allow it": a header that lies about
+ * either survives every chunk CRC and inflates a full zlib stream, and a
+ * decoder still reads nothing from it.
  */
 function declaredPixelStreamLength(header: Buffer): number | null {
   if (header.readUInt8(IHDR_INTERLACE_OFFSET) !== INTERLACE_NONE) return null;
 
   const bitDepth = header.readUInt8(IHDR_BIT_DEPTH_OFFSET);
-  const channels = CHANNELS_BY_COLOUR_TYPE.get(header.readUInt8(IHDR_COLOUR_TYPE_OFFSET));
-  if (channels === undefined || !LEGAL_BIT_DEPTHS.has(bitDepth)) return null;
+  const layout = LAYOUT_BY_COLOUR_TYPE.get(header.readUInt8(IHDR_COLOUR_TYPE_OFFSET));
+  if (!layout || !layout.bitDepths.has(bitDepth)) return null;
 
   const width = header.readUInt32BE(IHDR_WIDTH_OFFSET);
   const height = header.readUInt32BE(IHDR_HEIGHT_OFFSET);
-  const rowBytes = Math.ceil((width * channels * bitDepth) / 8);
+  const rowBytes = Math.ceil((width * layout.channels * bitDepth) / 8);
   return height * (1 + rowBytes);
 }
 
@@ -156,29 +177,34 @@ function declaredPixelStreamLength(header: Buffer): number | null {
  * stream the `IDAT` chunks concatenate into, and require the byte count the
  * header's width, height, bit depth, and colour type predict.
  *
+ * A third shape reaches it through the header rather than the stream (W2J.2):
+ * an `IHDR` that lies about the layout its own rows are in. Flip the interlace
+ * byte to 1, or pair a colour type with a bit depth the format does not define,
+ * repair the one chunk CRC, and the container is coherent and the stream still
+ * inflates -- while `sharp` reads "invalid scanline filter" and "invalid bit
+ * depth" respectively. So the header must first declare a layout whose row
+ * arithmetic is honest, and only then is the stream judged against it: a
+ * `declaredPixelStreamLength` of `null` is a rejection, never a licence to
+ * accept whatever inflates.
+ *
  * `node:zlib` only, no image library: inflating a cover's few kilobytes is
  * milliseconds, where a full decode through `sharp` would be the heavier and
- * cache-hostile option on a route that answers `no-store`. Where the header
- * describes a layout whose length is not computable this way -- an interlaced
- * image, an undefined colour type or bit depth, none of which this
- * repository's renderer produces -- the length is not invented: the stream
- * must still inflate, and only the length claim is dropped. When the length IS
- * known it also bounds the inflate, so a stream claiming to be far larger than
- * its own header fails on the spot rather than allocating first.
+ * cache-hostile option on a route that answers `no-store`. The declared length
+ * also bounds the inflate, so a stream claiming to be far larger than its own
+ * header fails on the spot rather than allocating first.
  */
 export function isRenderableCoverPng(bytes: Buffer): boolean {
   const container = readIntactContainer(bytes);
   if (!container) return false;
 
   const declaredLength = declaredPixelStreamLength(container.header);
+  if (declaredLength === null) return false;
+
   let pixels: Buffer;
   try {
-    pixels = inflateSync(
-      container.compressedPixels,
-      declaredLength === null ? {} : { maxOutputLength: declaredLength },
-    );
+    pixels = inflateSync(container.compressedPixels, { maxOutputLength: declaredLength });
   } catch {
     return false;
   }
-  return declaredLength === null || pixels.length === declaredLength;
+  return pixels.length === declaredLength;
 }
