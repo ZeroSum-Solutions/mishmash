@@ -62,6 +62,11 @@ export type PreviewProxyDeps = {
   getPreview: PreviewLookup;
 };
 
+export type PreviewRootAssetFallbackDeps = PreviewProxyDeps & {
+  /** Whether any preview session is running on this daemon right now. */
+  hasLivePreview: () => boolean;
+};
+
 /** The daemon-origin path a preview is served under. Always ends in `/`. */
 export function previewProxyPath(projectId: string, previewId: string): string {
   return `/api/projects/${encodeURIComponent(projectId)}/previews/${encodeURIComponent(previewId)}/proxy/`;
@@ -297,17 +302,41 @@ export function rewriteUpstreamSetCookie(setCookie: string, basePath: string): s
   return [...kept, ` Path=${scoped}`].join(';');
 }
 
-/** The named answer for a chat link whose preview has since stopped. */
-function sendPreviewGone(req: Request, res: Response): void {
-  const message =
-    'This preview server is no longer running. Previews stop when they are stopped by hand or when the daemon restarts; start a new one to get a fresh link.';
+/**
+ * A preview failure said in words, in the shape the caller asked for. A reader
+ * meets these in a browser tab or a devtools response body, so the cause has to
+ * be IN the answer: a status alone names nothing.
+ */
+function sendPreviewFailure(req: Request, res: Response, code: string, title: string, message: string): void {
   if (req.accepts(['json', 'html']) === 'html') {
     res.status(404).type('html').send(
-      `<!doctype html><meta charset="utf-8"><title>Preview stopped</title><p>${message}</p>`,
+      `<!doctype html><meta charset="utf-8"><title>${title}</title><p>${message}</p>`,
     );
     return;
   }
-  res.status(404).json({ error: 'PREVIEW_NOT_FOUND', message });
+  res.status(404).json({ error: code, message });
+}
+
+/** The named answer for a chat link whose preview has since stopped. */
+function sendPreviewGone(req: Request, res: Response): void {
+  sendPreviewFailure(
+    req,
+    res,
+    'PREVIEW_NOT_FOUND',
+    'Preview stopped',
+    'This preview server is no longer running. Previews stop when they are stopped by hand or when the daemon restarts; start a new one to get a fresh link.',
+  );
+}
+
+/** The named answer for a preview asset no page claimed. */
+function sendPreviewNeedsReferrer(req: Request, res: Response): void {
+  sendPreviewFailure(
+    req,
+    res,
+    'PREVIEW_REFERRER_REQUIRED',
+    'Preview asset needs a page referrer',
+    'This file was asked for by site root, and the page that asked sent no referrer, so Open Design cannot tell which preview it belongs to. A preview page that suppresses its referrer — a no-referrer policy, a privacy extension — cannot load its root-absolute assets through this link; ask for the file under the preview path instead.',
+  );
 }
 
 /**
@@ -395,6 +424,41 @@ export function createPreviewProxyHandler(deps: PreviewProxyDeps): RequestHandle
 }
 
 /**
+ * The one fall-through the daemon owes an explanation for: a preview page's
+ * root-absolute asset that no page claimed.
+ *
+ * `Referer` is how the fallback above attributes an asset to a session, and a
+ * page under a `no-referrer` policy (or behind a privacy extension) sends
+ * none. Such a request is indistinguishable from any other path the daemon
+ * does not own, so it used to leave through the daemon's ordinary answer —
+ * a bare 404, or the app's own `index.html` where the daemon serves the web
+ * app — and the preview half-rendered with nothing said. It cannot be SERVED
+ * without body rewriting or a per-preview origin, so it is NAMED instead.
+ *
+ * Four conditions, each keeping a different request out of that answer:
+ *
+ * - a preview is running, because otherwise the explanation would name
+ *   something that does not exist;
+ * - no `Referer` at all, because a `Referer` that names another site or
+ *   another path is somebody else's page and gets told nothing about the
+ *   previews on this daemon;
+ * - the caller asked for a subresource, not a page. A browser admits
+ *   `text/html` when it navigates and does not when it fetches a script,
+ *   stylesheet, image or font, and a navigation with no `Referer` is the
+ *   ordinary way a person opens the app — that one belongs to the SPA
+ *   fallback registered after this one (`static-spa.ts`);
+ * - and the membership rule this handler already applies, so the existence of
+ *   a running preview is disclosed to the same audience its bytes are.
+ */
+function isUnattributablePreviewAsset(req: Request, hasLivePreview: boolean): boolean {
+  if (!hasLivePreview) return false;
+  if (headerText(req.headers.referer).trim()) return false;
+  const accept = headerText(req.headers.accept).toLowerCase();
+  if (!accept || accept.includes('text/html')) return false;
+  return !isCrossSiteOrigin(req.headers) && isAuthorizedPreviewProxyRequest(req);
+}
+
+/**
  * A dev server asks for its assets by site root (`/_next/static/…`), which
  * resolves to the daemon's root rather than the preview's base path. The
  * browser names the page that asked in `Referer`, and `Referer` cannot be
@@ -413,12 +477,17 @@ export function createPreviewProxyHandler(deps: PreviewProxyDeps): RequestHandle
  * front stops there. Which front a caller is on is reported to them on
  * `PreviewInfo.frontServesRootAbsoluteAssets` (`preview-origin.ts`), so the
  * surface offering the link can say so rather than half-render in silence.
+ * A request that reaches the daemon and still names no page is answered in
+ * words instead (`isUnattributablePreviewAsset` above).
  */
-export function createPreviewRootAssetFallback(deps: PreviewProxyDeps): RequestHandler {
+export function createPreviewRootAssetFallback(deps: PreviewRootAssetFallbackDeps): RequestHandler {
   return (req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
     const referred = referringPreviewPage(req.headers);
-    if (!referred) return next();
+    if (!referred) {
+      if (isUnattributablePreviewAsset(req, deps.hasLivePreview())) return sendPreviewNeedsReferrer(req, res);
+      return next();
+    }
     const session = deps.getPreview(referred.previewId);
     if (!session || session.projectId !== referred.projectId) return next();
     if (isCrossSiteOrigin(req.headers) || !isAuthorizedPreviewProxyRequest(req)) return next();

@@ -2709,7 +2709,7 @@ export const en: Dict = {
   'designFiles.previewClose': 'Close preview',
   'designFiles.previewServer.title': 'Preview server',
   'designFiles.previewServer.openInChrome': 'Open in Chrome',
-  'designFiles.previewServer.sharedLink': 'Open Design serves this preview itself, so the link works for anyone who can open this workspace.',
+  'designFiles.previewServer.sharedLink': 'Open Design serves this preview itself, so the link opens wherever this workspace opens — with two limits: a page that sends no referrer cannot load its root-absolute assets, and a request body over 4mb is refused.',
   'designFiles.previewServer.openFailed': 'Chrome did not open. Use the link instead.',
   'designFiles.previewServer.frontRootAssets': 'Heads up: this preview cannot serve root-absolute assets through the development front. The Next dev server forwards only /api, /artifacts and /frames to Open Design, so a page that asks for /_nuxt/entry.js never reaches the preview and stays on its loader. Open the workspace on the daemon’s own front to see the page complete.',
   'designFiles.previewServer.rootAbsolute': 'This page asks for files by site root path, like /_nuxt/entry.js. The panel preview serves files next to the file itself, so those requests fail and the page stays on its own loader.',

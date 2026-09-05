@@ -239,7 +239,17 @@ describe('Design Files panel preview server offer', () => {
     expect(offer.textContent).not.toContain(en['designFiles.previewServer.sharedLink']);
   });
 
-  it('keeps the unconditional claim when the front does serve root-absolute assets', async () => {
+  /**
+   * Named supersession of 2H.6's copy case ('keeps the unconditional claim
+   * when the front does serve root-absolute assets'), W2I.3.
+   *
+   * The daemon front does hand the preview its root-absolute assets, but only
+   * for a page the browser attributes — a page that suppresses its referrer
+   * gets a named failure instead of the file, and a body over the daemon's
+   * 4mb API limit is refused. So the offer states those two limits rather
+   * than promising the link works for anyone who can open the workspace.
+   */
+  it('states the link limits when the front does serve root-absolute assets', async () => {
     stubDaemon({
       html: ROOT_ABSOLUTE_PAGE,
       previews: [
@@ -260,5 +270,12 @@ describe('Design Files panel preview server offer', () => {
     const offer = container.querySelector('[data-testid="design-file-preview-server"]')!;
     expect(offer.textContent).toContain(en['designFiles.previewServer.sharedLink']);
     expect(container.querySelector('.df-preview-server-front-limit')).toBeNull();
+
+    // THE BAR: the shown copy names both limits and makes no unconditional
+    // promise. Asserted on the string itself, because reading it back out of
+    // the same dictionary the panel rendered proves only that they match.
+    expect(en['designFiles.previewServer.sharedLink']).not.toMatch(/works for anyone/i);
+    expect(en['designFiles.previewServer.sharedLink']).toMatch(/referrer/i);
+    expect(en['designFiles.previewServer.sharedLink']).toMatch(/4\s?mb/i);
   });
 });
