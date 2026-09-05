@@ -21,6 +21,7 @@ import {
   priceForModel,
   projectUsageSummary,
   recordRunUsage,
+  SAME_LIST_RATE_MODEL_ALIASES,
   workspaceUsageSummary,
 } from '../../src/runtimes/usage-tracking.js';
 
@@ -126,6 +127,18 @@ describe('priceForModel', () => {
 
   it('prices a bracketed context-window variant of claude-fable-5-1 at the same rate', () => {
     expect(priceForModel(null, 'claude-fable-5-1[1m]')).toEqual({ input: 10, output: 50 });
+  });
+
+  // An alias whose target is missing from the table resolves to null exactly
+  // like an unknown model, so a typo would silently re-open FU-32 instead of
+  // failing loudly. Pin the whole map, not just the entry above.
+  it('every same-list-rate alias points at a row the table actually prices', () => {
+    for (const [aliasId, targetId] of Object.entries(SAME_LIST_RATE_MODEL_ALIASES)) {
+      expect(KNOWN_MODEL_PRICING_USD_PER_MILLION[targetId]).toBeDefined();
+      expect(priceForModel(null, aliasId)).toEqual(
+        KNOWN_MODEL_PRICING_USD_PER_MILLION[targetId],
+      );
+    }
   });
 
   it('prices a bracketed context-window variant at the base model rate', () => {

@@ -109,6 +109,44 @@ export const KNOWN_MODEL_PRICING_USD_PER_MILLION: Readonly<
 };
 
 /**
+ * Model ids that bill at another priced id's list rate, because the provider
+ * publishes them in the same tier at the same base input and output price.
+ *
+ * The invariant an entry asserts is narrow and matches exactly what this table
+ * stores: the same BASE INPUT and OUTPUT rate, the only two figures priced
+ * here. It is not a claim that two ids share an entire price sheet -- cache
+ * write/read multipliers can differ between aliased ids, and this module has
+ * no cache-rate column to disagree about.
+ *
+ * Aliasing rather than copying the two numbers keeps the derived id honest: a
+ * provider reprice edits one row and both ids follow, instead of leaving a
+ * stale duplicate behind.
+ *
+ * `claude-fable-5-1` -> `claude-fable-5`: Claude Fable 5.1 lists at $10/MTok
+ * base input and $50/MTok output, identical to Claude Fable 5
+ * (platform.claude.com/docs/en/about-claude/pricing, read 2026-09-05 -- the
+ * same document the Claude rows above were verified against). Their cache-hit
+ * rates do differ ($0.25 vs $1 per MTok), which this table does not model.
+ */
+export const SAME_LIST_RATE_MODEL_ALIASES: Readonly<Record<string, string>> = {
+  'claude-fable-5-1': 'claude-fable-5',
+};
+
+/**
+ * Invariant: a model id has a static list price when the table names it
+ * directly, or when an alias points it at a table row that lists at the same
+ * base input/output rate. Anything else has no static price and stays
+ * unpriceable -- this never borrows a number from a merely similar id.
+ */
+function staticListPriceFor(model: string): { input: number; output: number } | null {
+  const direct = KNOWN_MODEL_PRICING_USD_PER_MILLION[model];
+  if (direct) return { ...direct };
+  const aliasOf = SAME_LIST_RATE_MODEL_ALIASES[model];
+  const aliased = aliasOf ? KNOWN_MODEL_PRICING_USD_PER_MILLION[aliasOf] : undefined;
+  return aliased ? { ...aliased } : null;
+}
+
+/**
  * Resolves a per-million-token price for `model`. Prefers a live-fetched
  * catalog price (`liveModels`, e.g. AMR's own real per-model USD rate --
  * the actual account's catalog, not a guess) over the static table, since
@@ -130,16 +168,16 @@ export function priceForModel(
   ) {
     return { input: live.inputPriceUsdPerMillion, output: live.outputPriceUsdPerMillion };
   }
-  const known = KNOWN_MODEL_PRICING_USD_PER_MILLION[model];
-  if (known) return { ...known };
+  const known = staticListPriceFor(model);
+  if (known) return known;
   // Claude CLIs report context-window variants as `<model>[1m]`-style ids.
   // "Claude 4.6 and later models include the full 1M token context window at
   // standard pricing" (pricing docs, read 2026-08-02), so the bracket suffix
   // is a window flag on the same SKU — price it as the base model.
   const baseModel = model.replace(/\[[^\]]*\]$/, '');
   if (baseModel !== model) {
-    const base = KNOWN_MODEL_PRICING_USD_PER_MILLION[baseModel];
-    if (base) return { ...base };
+    const base = staticListPriceFor(baseModel);
+    if (base) return base;
   }
   return null;
 }
