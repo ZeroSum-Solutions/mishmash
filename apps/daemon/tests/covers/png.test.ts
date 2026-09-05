@@ -94,6 +94,24 @@ function withIdatStream(bytes: Buffer, payload: Buffer): Buffer {
   return withRepairedCrc(rebuilt, { offset: first.offset, length: payload.length, type: 'IDAT' });
 }
 
+/** Whether a real PNG decoder can turn `bytes` into pixels, as an `<img>` must. */
+async function decodesToPixels(bytes: Buffer): Promise<boolean> {
+  try {
+    await sharp(bytes).raw().toBuffer();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Rewrites IHDR's 13 data bytes through `edit`, with the chunk CRC repaired. */
+function withEditedHeader(bytes: Buffer, edit: (header: Buffer) => void): Buffer {
+  const ihdr = chunkOf(bytes, 'IHDR');
+  const edited = Buffer.from(bytes);
+  edit(edited.subarray(ihdr.offset + 8, ihdr.offset + 8 + ihdr.length));
+  return withRepairedCrc(edited, ihdr);
+}
+
 describe('isRenderableCoverPng', () => {
   it('accepts the PNG the cover renderer produces', () => {
     expect(isRenderableCoverPng(intact)).toBe(true);
@@ -217,5 +235,41 @@ describe('isRenderableCoverPng', () => {
     const flipped = Buffer.from(interlaced);
     flipByte(flipped, idat.offset + 8 + 3);
     expect(isRenderableCoverPng(withRepairedCrc(flipped, idat))).toBe(false);
+  });
+
+  // W2J.2: the container is coherent, every CRC agrees, and the IDAT stream
+  // inflates -- and the IHDR still describes a layout no decoder can read. The
+  // pixel-stream length check cannot see either of these on its own, so each
+  // case is proved undecodable by sharp, the engine the cover renderer writes
+  // with, before the predicate is asked about it.
+
+  it('rejects an IHDR that lies about interlace, with the chunk CRC repaired', async () => {
+    const damaged = withEditedHeader(intact, (header) => {
+      // IHDR byte 12 is the interlace method. 0 is the single pass the cover
+      // renderer writes; 1 claims Adam7's seven reduced passes over rows that
+      // were never laid out that way.
+      header.writeUInt8(1, 12);
+    });
+    expect(damaged.length, 'the lie costs no bytes').toBe(intact.length);
+    expect(await decodesToPixels(damaged), 'sharp cannot read the lie').toBe(false);
+    expect(isRenderableCoverPng(damaged)).toBe(false);
+  });
+
+  it('rejects an IHDR pairing colour type 3 with bit depth 16', async () => {
+    const ihdr = chunkOf(intact, 'IHDR');
+    const width = intact.readUInt32BE(ihdr.offset + 8);
+    const height = intact.readUInt32BE(ihdr.offset + 12);
+    // The PNG format defines indexed colour at bit depths 1, 2, 4 and 8 only,
+    // so this header has no honest row width. The IDAT is rebuilt to exactly
+    // the byte count the illegal pair predicts, so what must be caught is the
+    // pair itself and not a length mismatch behind it.
+    const rowBytes = Math.ceil((width * 1 * 16) / 8);
+    const rebuilt = withIdatStream(intact, deflateSync(Buffer.alloc(height * (1 + rowBytes))));
+    const damaged = withEditedHeader(rebuilt, (header) => {
+      header.writeUInt8(16, 8);
+      header.writeUInt8(3, 9);
+    });
+    expect(await decodesToPixels(damaged), 'sharp cannot read the pair').toBe(false);
+    expect(isRenderableCoverPng(damaged)).toBe(false);
   });
 });
