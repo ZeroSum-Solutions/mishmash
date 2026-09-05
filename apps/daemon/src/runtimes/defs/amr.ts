@@ -599,6 +599,24 @@ export interface VelaBillingSummary {
 }
 
 /**
+ * Bound for one `vela billing summary` spawn.
+ *
+ * Deliberately its own constant rather than {@link AMR_MODELS_TIMEOUT_MS}: a
+ * model-catalog probe runs in the background and may take its ten seconds, but
+ * billing is read on the `/api/integrations/vela/status` request path, whose
+ * answer budget is 2,000 ms (INV-3.7). This has to stay below that budget.
+ *
+ * Paired with `killSignal: 'SIGKILL'` below because the CLI this bounds is
+ * untrusted about signals. `execFile`'s default SIGTERM is only a request: a
+ * child that installs a SIGTERM handler and never exits leaves the exec promise
+ * unsettled forever, so the route it feeds never answers at all — the exact
+ * "never answered" shape INV-3.7 names. A read-only metadata probe already past
+ * its budget has nothing to flush, so there is nothing for a graceful stop to
+ * save.
+ */
+const AMR_BILLING_TIMEOUT_MS = 1_500;
+
+/**
  * Read the signed-in account's billing summary via the vela CLI — the same
  * data source used for models, so balance/tier come through the versioned CLI
  * contract rather than a separate HTTP call. Returns total available balance
@@ -611,7 +629,12 @@ export async function fetchVelaBillingSummary(
   const { stdout } = await execAgentFile(
     resolvedBin,
     ['billing', 'summary', '--format', 'json'],
-    { env, timeout: AMR_MODELS_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
+    {
+      env,
+      timeout: AMR_BILLING_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
+      maxBuffer: 1024 * 1024,
+    },
   );
   const data = JSON.parse(String(stdout)) as {
     balanceUsd?: unknown;

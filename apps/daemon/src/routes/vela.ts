@@ -47,6 +47,49 @@ const AMR_API_PROXY_PREFIX = '/api/integrations/vela/api-proxy';
 const VELA_MESSAGE_CENTER_PREFIX = '/api/integrations/vela/message-center';
 const AMR_API_UPSTREAM_ORIGIN = 'https://amr-api.open-design.ai';
 
+/**
+ * INV-3.7 — `GET /api/integrations/vela/status` answers within this budget
+ * whatever the vela CLI does.
+ */
+const VELA_STATUS_ANSWER_BUDGET_MS = 2_000;
+
+/**
+ * Wait for `pending`, but never longer than the status route's answer budget.
+ *
+ * Resolves `null` when the budget lapses; `pending` is left running so the work
+ * still lands in the live-account cache for the next poll. The invariant this
+ * expresses is that the ANSWER is bounded, not the work: the status route is
+ * read by focus, menu and login surfaces, and an optional billing projection is
+ * never worth holding one of those requests open for.
+ *
+ * A bound here as well as on the CLI spawn because they guarantee different
+ * things. The spawn bound keeps one subprocess from outliving its budget; this
+ * keeps the response bounded even when the awaited promise is not a single
+ * spawn — a caller joining a single-flight fetch that started earlier, or any
+ * later step added between the two.
+ */
+function answerWithinStatusBudget<T>(pending: Promise<T>): Promise<T | null> {
+  return new Promise<T | null>((resolve) => {
+    const timer = setTimeout(() => resolve(null), VELA_STATUS_ANSWER_BUDGET_MS);
+    // `unref` so a lapsed budget's timer never holds the process open; the
+    // daemon must still be able to exit while a stuck CLI is pending.
+    timer.unref?.();
+    void pending.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        // `fetchVelaLiveAccountSingleFlight` already swallows its own failures
+        // into `null`; this arm only exists so an unexpected rejection degrades
+        // to "unknown account" rather than a 500 on the whole status read.
+        clearTimeout(timer);
+        resolve(null);
+      },
+    );
+  });
+}
+
 type ReadAppConfig = (dataDir: string) => Promise<AppConfigPrefs>;
 type PublicBaseUrlResolver = (req: Request) => string;
 
@@ -442,23 +485,29 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
         const probe = resolveAmrModelProbeForEnv(configuredEnv);
         const cachedAccount = peekVelaLiveAccount(accountCacheKey);
         if (refresh) {
-          const liveAccount = await fetchVelaLiveAccountSingleFlight(accountCacheKey, probe, {
-            invalidateModelsOnPlanChange: true,
-          });
+          const liveAccount = await answerWithinStatusBudget(
+            fetchVelaLiveAccountSingleFlight(accountCacheKey, probe, {
+              invalidateModelsOnPlanChange: true,
+            }),
+          );
           applyVelaLiveAccount(status, liveAccount);
         } else if (!cachedAccount) {
-          // Cold cache (or a fetch already in flight): BLOCK on the single-flight
+          // Cold cache (or a fetch already in flight): wait on the single-flight
           // billing fetch so the first open already carries plan/balance. The
           // consumers (settings card, inline switcher, avatar) read /status once
           // and do not re-poll, so returning config-only here would hide the
-          // fields until the user refocuses. On failure the helper resolves null
-          // and the refresh throttle becomes a short negative cache/backoff, so
-          // repeated menu/focus polls degrade to config-only instead of each
-          // awaiting the same optional billing probe.
+          // fields until the user refocuses. That wait is bounded by the answer
+          // budget: an upstream that never settles yields config-only instead of
+          // holding the request. On failure the helper resolves null and the
+          // refresh throttle becomes a short negative cache/backoff, so repeated
+          // menu/focus polls degrade to config-only instead of each awaiting the
+          // same optional billing probe.
           const liveAccount =
             inFlightVelaAccountFetches.has(accountCacheKey) ||
             shouldRefreshVelaLiveAccount(accountCacheKey)
-              ? await fetchVelaLiveAccountSingleFlight(accountCacheKey, probe)
+              ? await answerWithinStatusBudget(
+                  fetchVelaLiveAccountSingleFlight(accountCacheKey, probe),
+                )
               : null;
           applyVelaLiveAccount(status, liveAccount);
         } else {
