@@ -23,8 +23,16 @@ import { useEffect, useRef, useState } from 'react';
  * stream share one connection instead of opening two. The connection closes
  * when the last subscriber unmounts and whenever the document becomes hidden,
  * and reopens on the next `visible`. A subscriber that mirrors server state
- * resyncs through `onReopen`, because events emitted while the tab held no
- * connection are not replayed.
+ * resyncs through `onReopen` across THAT release, because events emitted while
+ * the tab deliberately held no connection are not replayed.
+ *
+ * `onReopen` covers the release this module performs, and nothing else. A
+ * transport drop that `EventSource` reconnects across on its own, and a fatal
+ * error that ends its reconnection, both lose events without calling it — the
+ * same exposure each surface carried before it moved here, since they relied on
+ * the browser's auto-reconnect with no error handling of their own. Closing
+ * that gap is a change to what the app does about a dead stream, not to the
+ * connection budget, so it is deliberately not folded in here.
  */
 
 /**
