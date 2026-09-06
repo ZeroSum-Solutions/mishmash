@@ -1310,6 +1310,8 @@ async function checkCiTopology(): Promise<boolean> {
       "needs.scopes.outputs.run_ui_p0 == 'true'",
       "pnpm -C e2e exec tsx scripts/playwright.ts run-ui-group critical-extras",
       "pnpm -C e2e exec tsx scripts/playwright.ts run-ui-group ${{ matrix.shard }}",
+      "vitest run -c vitest.config.ts --shard ${{ matrix.shard }}/4",
+      "Daemon full tests (${{ matrix.shard }}/4)",
     ]
       .filter((needle) => !ciWorkflow.includes(needle))
       .map((needle) => `.github/workflows/ci.yml is missing ${needle}`),
