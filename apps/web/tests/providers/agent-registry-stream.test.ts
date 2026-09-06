@@ -147,31 +147,32 @@ describe('fetchAgentsStream contract frames', () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    let seenSignal: AbortSignal | undefined;
+    // One entry per request the provider actually opened, so the assertion
+    // below reads the signal of THE shared request rather than whichever call
+    // happened to run last.
+    const seenSignals: (AbortSignal | undefined)[] = [];
     // The mock honours its AbortSignal the way a real fetch does. Without
     // that, an implementation that hands the caller's OWN signal to fetch is
     // indistinguishable from one that owns a shared controller: the request
     // simply keeps running and the test times out instead of failing on the
     // claim it makes.
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
-        const signal = init?.signal ?? undefined;
-        seenSignal = signal;
-        return new Promise<Response>((resolve, reject) => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const signal = init?.signal ?? undefined;
+      seenSignals.push(signal);
+      return new Promise<Response>((resolve, reject) => {
           const onAbort = () => reject(signal?.reason ?? new Error('aborted'));
           if (signal?.aborted) {
             onAbort();
             return;
           }
           signal?.addEventListener('abort', onAbort, { once: true });
-          void gate.then(() => {
-            signal?.removeEventListener('abort', onAbort);
-            resolve(streamResponse(encodeFrames(frames)));
-          });
+        void gate.then(() => {
+          signal?.removeEventListener('abort', onAbort);
+          resolve(streamResponse(encodeFrames(frames)));
         });
-      }),
-    );
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
 
     const boot = new AbortController();
     const bootCall = fetchAgentsStream({ onAgent: vi.fn(), signal: boot.signal });
@@ -179,8 +180,12 @@ describe('fetchAgentsStream contract frames', () => {
 
     boot.abort();
     await expect(bootCall).rejects.toBeTruthy();
-    // The peer is still listening, so the shared request keeps running.
-    expect(seenSignal?.aborted).toBe(false);
+    // Both callers joined ONE request, and it is still running because the peer
+    // has not let go. Assert the count first: on the base each caller opens its
+    // own request, and that is the claim this case is about.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(seenSignals).toHaveLength(1);
+    expect(seenSignals[0]?.aborted).toBe(false);
 
     release();
     await expect(refreshCall).resolves.toHaveLength(2);
