@@ -23,6 +23,7 @@ import { isTodoWriteToolName, stopReasonIsTruncation, todoItemsFromTodoWriteInpu
 // WR wave (t9 fix-round, Sol review MED-3): validates a raw chat-body
 // `routingOverride` field before it ever reaches resolveDispatchRouting.
 import { isRoutingOverrideRequest } from '@open-design/contracts';
+import type { DaemonHealthResponse } from '@open-design/contracts';
 import {
   composeSystemPrompt,
   detectDeckIntentSignal,
@@ -3181,9 +3182,22 @@ export async function startServer({
     OD_BIN,
   };
 
+  // Identity of THIS daemon process, minted once when it starts. A browser tab
+  // outlives `tools-dev restart`, so a client that caches a boot-time answer
+  // needs a cheap way to notice the process it asked is gone; comparing this
+  // value on the liveness probe it already has is that way. Random rather than a
+  // start timestamp so two daemons started in the same millisecond cannot look
+  // like one.
+  const daemonBootId = randomUUID();
+
   app.get('/api/health', async (_req, res) => {
     const versionInfo = await readCurrentAppVersionInfo();
-    res.json({ ok: true, version: versionInfo.version });
+    const body: DaemonHealthResponse = {
+      ok: true,
+      version: versionInfo.version,
+      bootId: daemonBootId,
+    };
+    res.json(body);
   });
 
   app.get('/api/ready', async (_req, res) => {
