@@ -388,12 +388,36 @@ export function collectBinaryPreviewAssetPaths(
   ownerFilePath: string,
   projectFilePaths: ReadonlySet<string>,
 ): string[] {
-  const paths = new Set<string>();
+  return [...countBinaryPreviewAssetRefs(html, ownerFilePath, projectFilePaths).keys()];
+}
+
+/**
+ * How many times each binary project asset is referenced, accumulated across
+ * every document the swap pass will run over (the HTML, plus each stylesheet
+ * that is about to be inlined into it).
+ *
+ * `collectBinaryPreviewAssetPaths` answers WHICH assets to fetch. This answers
+ * how much of the emitted document each one will occupy, which is the quantity
+ * the inlining budget has to bound: `inlineBinaryAssetRefs` writes the asset's
+ * `data:` URL at EVERY confirmed reference, not once.
+ *
+ * The count is an upper bound on the substitutions, never an undercount. A
+ * `srcset` list is the one place the two differ: every candidate that names the
+ * asset is counted, while the swap pass emits a single `src` per tag.
+ */
+function countBinaryPreviewAssetRefs(
+  html: string,
+  ownerFilePath: string,
+  projectFilePaths: ReadonlySet<string>,
+  into: Map<string, number> = new Map(),
+): Map<string, number> {
   eachAssetRef(html, (ref) => {
     const projectPath = confirmedAssetPath(ref, ownerFilePath, projectFilePaths);
-    if (projectPath && isBinaryPreviewAssetPath(projectPath)) paths.add(projectPath);
+    if (projectPath && isBinaryPreviewAssetPath(projectPath)) {
+      into.set(projectPath, (into.get(projectPath) ?? 0) + 1);
+    }
   });
-  return [...paths];
+  return into;
 }
 
 /**
@@ -654,14 +678,15 @@ export async function inlineRelativeAssets(
   const binaryDataUrls = projectFilePaths
     ? await resolveBinaryAssetDataUrls(
         projectId,
-        [
-          ...collectBinaryPreviewAssetPaths(normalized, fileName, projectFilePaths),
-          ...sheets.flatMap(({ asset }) =>
-            asset
-              ? collectBinaryPreviewAssetPaths(asset.text, asset.filePath, projectFilePaths)
-              : [],
-          ),
-        ],
+        countBinaryAssetRefsAcross(
+          [
+            { ownerFilePath: fileName, text: normalized },
+            ...sheets.flatMap(({ asset }) =>
+              asset ? [{ ownerFilePath: asset.filePath, text: asset.text }] : [],
+            ),
+          ],
+          projectFilePaths,
+        ),
         access,
         progress,
       )
@@ -725,19 +750,74 @@ export async function inlineRelativeAssets(
 }
 
 const BINARY_ASSET_MAX_BYTES = 8 * 1024 * 1024;
+/**
+ * The most the binary-asset pass may ADD to the preview document.
+ *
+ * The bound is on EMITTED bytes because that is the quantity the preview's
+ * cost scales with: every pass that runs after this one — `buildSrcdoc`'s
+ * annotate and serialize walks, `scanBodyClose` — is linear in the length of
+ * the document it produces.
+ */
 const BINARY_ASSET_TOTAL_BUDGET_BYTES = 16 * 1024 * 1024;
 
+/** One document the swap pass will run over, and the path it is relative to. */
+interface BinaryAssetRefSource {
+  ownerFilePath: string;
+  text: string;
+}
+
+/** Reference counts for every binary asset reachable from these documents. */
+function countBinaryAssetRefsAcross(
+  sources: readonly BinaryAssetRefSource[],
+  projectFilePaths: ReadonlySet<string>,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const { ownerFilePath, text } of sources) {
+    countBinaryPreviewAssetRefs(text, ownerFilePath, projectFilePaths, counts);
+  }
+  return counts;
+}
+
+/**
+ * What one asset costs the emitted document.
+ *
+ * `inlineBinaryAssetRefs` substitutes the asset's `data:` URL at every
+ * confirmed reference, so an asset referenced five times is written into the
+ * document five times. base64 emits four characters per three source bytes,
+ * padded up to a multiple of four, after the `data:<mime>;base64,` prefix.
+ */
+function emittedInlineBytes(blobSize: number, mime: string, refCount: number): number {
+  const dataUrlLength = `data:${mime};base64,`.length + 4 * Math.ceil(blobSize / 3);
+  return dataUrlLength * refCount;
+}
+
+/**
+ * Fetch each referenced binary asset and turn it into a `data:` URL, while the
+ * running total of what those URLs will add to the document stays inside
+ * `BINARY_ASSET_TOTAL_BUDGET_BYTES`.
+ *
+ * The invariant is that the charge matches the emission. Charging an asset its
+ * file size — once — while the swap pass writes it once per reference let a
+ * document exceed the budget by its reference count: measured on `d3b9bd38b`,
+ * five 1.4 MiB photos referenced five ways each are 7.35 MB of distinct binary,
+ * which the old accounting charged in full and let through, emitting a 49.0 MB
+ * document that blocked the main thread for over 1.8 s in one Long Task entry
+ * (`e2e/ui/w3-long-task-attribution.test.ts`; the red run it comes from is
+ * recorded in `proof/w3/3H-red-spec.txt`).
+ *
+ * An asset whose copies do not fit is declined whole and keeps the project ref
+ * it arrived with, exactly as an over-cap asset does today.
+ */
 async function resolveBinaryAssetDataUrls(
   projectId: string,
-  paths: readonly string[],
+  refCounts: ReadonlyMap<string, number>,
   access: PreviewAssetAccess,
   progress: { expect: (count: number) => void; settle: () => void },
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  const unique = new Set(paths);
-  progress.expect(unique.size);
+  progress.expect(refCounts.size);
   let spent = 0;
-  for (const path of unique) {
+  for (const [path, refCount] of refCounts) {
     // Past the budget the remaining refs are left as-is, but they are no
     // longer pending work — settle them so the reported total stays reachable
     // instead of stranding the progress line short of its own denominator.
@@ -750,13 +830,14 @@ async function resolveBinaryAssetDataUrls(
       if (!resp.ok) continue;
       const blob = await resp.blob();
       if (blob.size > BINARY_ASSET_MAX_BYTES) continue;
-      if (spent + blob.size > BINARY_ASSET_TOTAL_BUDGET_BYTES) continue;
       const mime = binaryPreviewAssetMime(path);
       if (!mime) continue;
+      const cost = emittedInlineBytes(blob.size, mime, refCount);
+      if (spent + cost > BINARY_ASSET_TOTAL_BUDGET_BYTES) continue;
       const dataUrl = await blobToDataUrl(blob, mime);
       if (!dataUrl) continue;
       out.set(path, dataUrl);
-      spent += blob.size;
+      spent += cost;
     } catch {
       // Leave the ref as-is; one missing asset must not break the preview.
     } finally {
