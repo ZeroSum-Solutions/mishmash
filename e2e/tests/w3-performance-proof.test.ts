@@ -905,6 +905,17 @@ describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotat
     }
   }
 
+  /** The same build, letting the capture's boundary refusals through to the caller. */
+  function buildOrThrow(polls: readonly ListAnomaliesResponse[]): Proof | undefined {
+    return capture?.buildProof({
+      timingLog: golden,
+      anomalies: polls,
+      startUtc: WINDOW_START,
+      sourceRun: 'golden',
+      capture: { ...CAPTURE_METADATA },
+    });
+  }
+
   /**
    * The sequence ranges a built capture declares it never read, as `from..to`.
    *
@@ -992,6 +1003,21 @@ describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotat
     expect(gapRanges(buildFromPolls([first, second])), why('the first poll defines the floor')).toEqual([]);
   });
 
+  it('refuses polls whose sequence range runs backwards', () => {
+    // A later answer ending below what an earlier one already read means the
+    // numbers restarted — the polls were handed over out of order, or the log was
+    // cleared between them. Either way the ranges on the two sides of the seam
+    // count different runs of the same numbers, so a gap across it would be named
+    // in figures that mean two things. Refused rather than reconciled.
+    const before = uiLagExport([lagAt(50, 5), lagAt(60, 6)]);
+    const afterReset = uiLagExport([lagAt(70, 1), lagAt(80, 2)]);
+
+    expect(
+      () => buildOrThrow([before, afterReset]),
+      why('a sequence that goes backwards is not a sequence anyone can reconcile'),
+    ).toThrow(/out of order, or the log was cleared/);
+  });
+
   it('refuses a ui-lag export that carries no sequence range at all', () => {
     // An export with no range is an export nobody can reconcile: it cannot say
     // which records the log still retains, so the next poll cannot prove it
@@ -1004,14 +1030,7 @@ describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotat
     } as unknown as ListAnomaliesResponse;
 
     expect(
-      () =>
-        capture?.buildProof({
-          timingLog: golden,
-          anomalies: [unnumbered],
-          startUtc: WINDOW_START,
-          sourceRun: 'golden',
-          capture: { ...CAPTURE_METADATA },
-        }),
+      () => buildOrThrow([unnumbered]),
       why('an export with no sequence range cannot be reconciled across a rotation'),
     ).toThrow(/sequence range/);
   });

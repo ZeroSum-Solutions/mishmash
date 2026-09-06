@@ -387,10 +387,16 @@ export interface UiLagReconciliation {
  * deliver the same records twice — an overlap that double-counted its own long
  * tasks would fail INV-3.10 for the wrong reason.
  *
- * Throws on an export with no sequence range at all. That is not a log that
- * happened to be empty (which declares `null` and reconciles fine) but an answer
- * from a daemon that does not number its records, and there is no honest way to
- * read it as continuous.
+ * Throws on two answers it cannot honestly read. An export with no sequence range
+ * at all is not a log that happened to be empty (which declares `null` and
+ * reconciles fine) but an answer from a daemon that does not number its records.
+ * And an export whose range ENDS below what an earlier poll already read is a
+ * sequence that went backwards: either the polls were handed over out of order,
+ * or the log was cleared between them and restarted its numbering
+ * (`clear()` in apps/daemon/src/anomaly-log.ts). Both make every range after that
+ * point refer to a different run of the numbers than the ranges before it, so a
+ * gap computed across the seam would be named in numbers that mean two things.
+ * Neither is reconcilable, and both are refused rather than guessed at.
  */
 export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): UiLagReconciliation {
   const byId = new Map<string, AnomalyRecord>();
@@ -422,6 +428,13 @@ export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): 
     if (firstSeq == null || lastSeq == null) {
       polledBefore = true;
       return;
+    }
+    if (covered != null && lastSeq < covered) {
+      throw new Error(
+        `ui-lag export ${index + 1} of ${polls.length} ends at sequence ${lastSeq}, below the `
+        + `${covered} an earlier poll had already read; the polls are out of order, or the log `
+        + 'was cleared between them and its numbering restarted',
+      );
     }
     if (covered == null && polledBefore && firstSeq > 1) {
       // An earlier poll found the log holding nothing, and an emptied log
