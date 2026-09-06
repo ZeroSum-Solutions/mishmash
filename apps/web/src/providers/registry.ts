@@ -1661,11 +1661,16 @@ export async function fetchProjectFiles(
       return json.files ?? [];
     } catch {
       return [];
-    } finally {
-      inFlightProjectFileLists.delete(url);
     }
   })();
   inFlightProjectFileLists.set(url, pending);
+  // Released AFTER the entry is installed, and only if this call still owns it,
+  // so no settled promise can be left behind as a permanent answer for the URL.
+  void pending.finally(() => {
+    if (inFlightProjectFileLists.get(url) === pending) {
+      inFlightProjectFileLists.delete(url);
+    }
+  });
   return pending;
 }
 
