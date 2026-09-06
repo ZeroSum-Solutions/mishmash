@@ -547,8 +547,8 @@ jobs:
       - name: Run UI P0 domain
         run: pnpm -C e2e exec tsx scripts/playwright.ts run-ui-group ${{ matrix.shard }}
 
-      - name: Preserve project-runtime domain artifact
-        if: ${{ success() && matrix.shard == 'project-runtime' }}
+      - name: Preserve project-runtime-daemon domain artifact
+        if: ${{ success() && matrix.shard == 'project-runtime-daemon' }}
         uses: actions/upload-artifact@v7
         with:
           name: ui-p0-ci-${{ github.run_id }}-${{ matrix.name }}-domain
@@ -561,7 +561,7 @@ jobs:
           retention-days: 7
 
       - name: Run UI critical extras
-        if: ${{ matrix.shard == 'project-runtime' }}
+        if: ${{ matrix.shard == 'project-runtime-daemon' }}
         run: pnpm -C e2e exec tsx scripts/playwright.ts run-ui-group critical-extras
 
       - name: Upload Playwright debug artifact
