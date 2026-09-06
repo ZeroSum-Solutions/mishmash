@@ -35,10 +35,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Decode one raw SSE record of the agent-registry stream.
  *
- * INVARIANT: a consumer only ever sees a frame this repository's daemon can
- * emit. An unknown event name, a body that is not JSON, and a body that does
- * not carry the minimum shape of its frame all decode to `null`, so a caller
- * can skip the record instead of casting an unvalidated body to `AgentInfo`.
+ * INVARIANT: a consumer never sees a frame it cannot name. An unknown event
+ * name, a body that is not JSON, and a body that does not carry the MINIMUM
+ * shape of its frame all decode to `null`, so a caller skips the record
+ * instead of casting an unvalidated body to `AgentInfo`.
+ *
+ * "Minimum shape" is deliberate and is less than the full `AgentInfo`: an
+ * `agent` frame is accepted on `id` and `available` alone, the two fields every
+ * consumer discriminates on. This decoder is a wire guard, not a schema
+ * validator; it does not promise that every optional field of `AgentInfo` is
+ * present or well-typed.
  *
  * `data` is the joined `data:` payload of the record, exactly as it arrived on
  * the wire.
