@@ -21,6 +21,7 @@ import {
   priceForModel,
   projectUsageSummary,
   recordRunUsage,
+  SAME_LIST_RATE_MODEL_ALIASES,
   workspaceUsageSummary,
 } from '../../src/runtimes/usage-tracking.js';
 
@@ -30,6 +31,63 @@ function agentUsageEvent(usage: Record<string, number>) {
 function agentStatusInitEvent(model: string) {
   return { event: 'agent', data: { type: 'status', label: 'initializing', model }, timestamp: Date.now() };
 }
+
+/**
+ * FU-32 red spec fixture. Two frames copied VERBATIM out of a real daemon run's
+ * event log -- `.od/runs/62813f64-9fde-4dc9-8d2e-cd9d7fb9d677/events.jsonl`
+ * lines 14 and 38, recorded 2026-09-05 by the team daemon on the fleet's
+ * default driver. Not a hand-written wire shape: the `agent`/`status` and
+ * `agent`/`usage` payloads below (extra provider keys and all) are exactly what
+ * `runtimes/claude-stream.ts` emitted for that turn. The same run's persisted
+ * `run_usage` row reads input_tokens_effective=82392, output_tokens=1456,
+ * cost_usd=NULL, pricing_version='unavailable' -- the symptom this spec pins.
+ */
+const REAL_CLAUDE_FABLE_5_1_RUN_EVENTS = [
+  {
+    id: 14,
+    event: 'agent',
+    data: {
+      type: 'status',
+      label: 'initializing',
+      model: 'claude-fable-5-1',
+      sessionId: '95ba6093-22e0-41af-bdaa-6d8c0041af7f',
+    },
+    timestamp: 1788588942674,
+  },
+  {
+    id: 38,
+    event: 'agent',
+    data: {
+      type: 'usage',
+      usage: {
+        input_tokens: 2,
+        cache_creation_input_tokens: 72381,
+        cache_read_input_tokens: 10009,
+        output_tokens: 1456,
+        output_tokens_details: { thinking_tokens: 658 },
+        server_tool_use: { web_search_requests: 0, web_fetch_requests: 0 },
+        service_tier: 'standard',
+        cache_creation: { ephemeral_1h_input_tokens: 72381, ephemeral_5m_input_tokens: 0 },
+        inference_geo: 'not_available',
+        iterations: [
+          {
+            input_tokens: 2,
+            output_tokens: 1456,
+            cache_read_input_tokens: 10009,
+            cache_creation_input_tokens: 72381,
+            cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 72381 },
+            type: 'message',
+          },
+        ],
+        speed: 'standard',
+      },
+      costUsd: 1.52294225,
+      durationMs: 32976,
+      stopReason: 'end_turn',
+    },
+    timestamp: 1788588967764,
+  },
+];
 
 describe('priceForModel', () => {
   it('returns the known table entry for a priced model', () => {
@@ -56,6 +114,31 @@ describe('priceForModel', () => {
     expect(priceForModel(null, 'claude-opus-5')).toEqual({ input: 5, output: 25 });
     expect(priceForModel(null, 'claude-sonnet-5')).toEqual({ input: 3, output: 15 });
     expect(priceForModel(null, 'claude-fable-5')).toEqual({ input: 10, output: 50 });
+  });
+
+  // FU-32: claude-fable-5-1 is the fleet's default driver and was absent from
+  // the table, so every turn on it priced to null. List price read 2026-09-05
+  // from platform.claude.com/docs/en/about-claude/pricing -- the same document
+  // the Claude rows above were verified against: Claude Fable 5.1 bills at the
+  // same $10/MTok base input and $50/MTok output as Claude Fable 5.
+  it('prices claude-fable-5-1 at the published Fable-tier list rate', () => {
+    expect(priceForModel(null, 'claude-fable-5-1')).toEqual({ input: 10, output: 50 });
+  });
+
+  it('prices a bracketed context-window variant of claude-fable-5-1 at the same rate', () => {
+    expect(priceForModel(null, 'claude-fable-5-1[1m]')).toEqual({ input: 10, output: 50 });
+  });
+
+  // An alias whose target is missing from the table resolves to null exactly
+  // like an unknown model, so a typo would silently re-open FU-32 instead of
+  // failing loudly. Pin the whole map, not just the entry above.
+  it('every same-list-rate alias points at a row the table actually prices', () => {
+    for (const [aliasId, targetId] of Object.entries(SAME_LIST_RATE_MODEL_ALIASES)) {
+      expect(KNOWN_MODEL_PRICING_USD_PER_MILLION[targetId]).toBeDefined();
+      expect(priceForModel(null, aliasId)).toEqual(
+        KNOWN_MODEL_PRICING_USD_PER_MILLION[targetId],
+      );
+    }
   });
 
   it('prices a bracketed context-window variant at the base model rate', () => {
@@ -129,6 +212,28 @@ describe('computeRunUsageRecord', () => {
     expect(small.costUsd).not.toBeNull();
     expect(large.costUsd).not.toBeNull();
     expect(large.costUsd as number).toBeGreaterThan(small.costUsd as number);
+  });
+
+  // FU-32 red spec: replaying a REAL claude-fable-5-1 turn (see
+  // REAL_CLAUDE_FABLE_5_1_RUN_EVENTS above) must resolve a price and yield a
+  // numeric cost. On d3b9bd38b it returns costUsd null / 'unavailable', which
+  // is what AssistantMessage.tsx:1752-1763 renders as "Cost: unavailable".
+  it('prices a real claude-fable-5-1 turn instead of reporting cost unavailable', () => {
+    const record = computeRunUsageRecord({
+      requestedRaw: 'default',
+      resolvedRaw: 'claude-fable-5-1',
+      reportedRaw: 'claude-fable-5-1',
+      agentId: 'claude',
+      events: REAL_CLAUDE_FABLE_5_1_RUN_EVENTS,
+    });
+    expect(record.model).toBe('claude-fable-5-1');
+    // Matches the persisted run_usage row for this run id exactly.
+    expect(record.inputTokensEffective).toBe(82392);
+    expect(record.outputTokens).toBe(1456);
+    expect(record.pricingVersion).toBe('estimated');
+    expect(typeof record.costUsd).toBe('number');
+    // (82392 / 1e6) * $10 + (1456 / 1e6) * $50
+    expect(record.costUsd).toBeCloseTo(0.89672, 10);
   });
 
   it('is unavailable (never a fake number) for a model with no known price', () => {
