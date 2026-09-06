@@ -308,8 +308,9 @@ jobs:
   # Runs serially (vitest fileParallelism: false is a correctness constraint),
   # hence the dedicated job and generous timeout instead of sharing
   # workspace_unit_tests' 20-minute budget. Sharded 4-way via vitest --shard
-  # to cut the 25-minute serial wall clock down to ~6–7 minutes while keeping
-  # files serial inside each shard.
+  # (2026-09-06, FU-47): the single job measured 24.8-26 min over seven runs;
+  # --shard splits files by hash count, not by duration, so the per-shard wall
+  # clock is whatever the first live runs show. Files stay serial inside each shard.
   daemon_full_tests:
     name: Daemon full tests (${{ matrix.shard }}/4)
     needs: [scopes, runners]
