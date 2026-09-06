@@ -105,4 +105,22 @@ describe('HomeAmbientBackdrop layout discipline', () => {
     runFrames(3);
     expect(drawCalls).toBeGreaterThan(drawnWhileVisible);
   });
+
+  it('keeps its drawing buffer when the observer reports a zero-size box (the view was hidden)', () => {
+    const { canvas } = mountVisible();
+    expect(canvas.width).toBe(1200);
+    // EntryShell hides the home view with display:none on a route switch; the
+    // canvas box collapses to 0x0. Reallocating the buffer for that is a
+    // GPU realloc on every switch, and the next reveal would realloc again.
+    act(() => {
+      resizeCallback?.([{ target: canvas, contentRect: { width: 0, height: 0, left: 0, top: 0 } } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+      intersectionCallback?.([{ target: canvas, isIntersecting: false } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+    });
+    expect(canvas.width).toBe(1200);
+    act(() => {
+      resizeCallback?.([{ target: canvas, contentRect: { width: 1200, height: 800, left: 0, top: 0 } } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+      intersectionCallback?.([{ target: canvas, isIntersecting: true } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+    });
+    expect(canvas.width).toBe(1200);
+  });
 });

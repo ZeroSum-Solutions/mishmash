@@ -214,6 +214,10 @@ export function HomeAmbientBackdrop() {
         : new ResizeObserver((entries) => {
             const entry = entries[entries.length - 1];
             if (!entry) return;
+            // A 0x0 box means the home view was hidden (display:none on a
+            // route switch). Keep the buffer: reallocating it here, and
+            // again on the next reveal, is GPU work with nothing to show.
+            if (entry.contentRect.width === 0 || entry.contentRect.height === 0) return;
             // Reported after layout, so this read is free; it is the one
             // place the loop learns where the canvas sits.
             const rect = entry.target.getBoundingClientRect();
