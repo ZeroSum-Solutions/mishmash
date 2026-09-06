@@ -77,6 +77,11 @@ import type {
   ProjectFolder,
   ProjectFileKind,
   ProjectKind,
+  PromptTemplateDetail,
+  PromptTemplateResponse,
+  PromptTemplateSource,
+  PromptTemplateSummary,
+  PromptTemplatesResponse,
   ProjectMetadata,
   ProjectTemplate,
   RenameProjectFileResponse,
@@ -545,31 +550,6 @@ export interface AgentModelOption {
 
 export type Surface = 'web' | 'image' | 'video' | 'audio';
 
-export interface PromptTemplateSource {
-  repo: string;
-  license: string;
-  author?: string;
-  url?: string;
-}
-
-export interface PromptTemplateSummary {
-  id: string;
-  surface: 'image' | 'video';
-  title: string;
-  summary: string;
-  category: string;
-  tags?: string[];
-  model?: string;
-  aspect?: MediaAspect;
-  previewImageUrl?: string;
-  previewVideoUrl?: string;
-  source: PromptTemplateSource;
-}
-
-export interface PromptTemplateDetail extends PromptTemplateSummary {
-  prompt: string;
-}
-
 export type {
   AgentInfo,
   AgentDiagnostic,
@@ -625,6 +605,11 @@ export type {
   ProjectKind,
   ProjectMetadata,
   ProjectTemplate,
+  PromptTemplateDetail,
+  PromptTemplateResponse,
+  PromptTemplateSource,
+  PromptTemplateSummary,
+  PromptTemplatesResponse,
   RenameProjectFileResponse,
   ProviderTestRequest,
   ProviderModelOption,

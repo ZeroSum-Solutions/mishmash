@@ -3,6 +3,8 @@ import type { Express } from 'express';
 import type {
   MediaExecutionPolicy,
   MediaGenerationResultProps,
+  PublicMediaProviderConfigResponse,
+  RecentLinkedDirsResponse,
 } from '@open-design/contracts';
 import type { AnalyticsContext } from '../analytics.js';
 import { defaultMediaExecutionPolicy, mediaPolicyDenial } from '../media/policy.js';
@@ -432,7 +434,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
 
   app.get('/api/media/config', async (_req, res) => {
     try {
-      const cfg = await readMaskedConfig(PROJECT_ROOT);
+      const cfg: PublicMediaProviderConfigResponse = await readMaskedConfig(PROJECT_ROOT);
       res.json(cfg);
     } catch (err: any) {
       res
@@ -443,7 +445,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
 
   app.put('/api/media/config', async (req, res) => {
     try {
-      const cfg = await writeConfig(PROJECT_ROOT, req.body);
+      const cfg: PublicMediaProviderConfigResponse = await writeConfig(PROJECT_ROOT, req.body);
       res.json(cfg);
     } catch (err: any) {
       const status = typeof err?.status === 'number' ? err.status : 400;
@@ -549,8 +551,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
       if (existing.length !== recents.length) {
         await writeAppConfig(RUNTIME_DATA_DIR, { recentLinkedDirs: existing });
       }
-      /** @type {import('@open-design/contracts').RecentLinkedDirsResponse} */
-      const body = { dirs: existing };
+      const body: RecentLinkedDirsResponse = { dirs: existing };
       res.json(body);
     } catch (err: any) {
       res

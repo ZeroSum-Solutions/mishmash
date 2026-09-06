@@ -103,15 +103,34 @@ export function MessageCenter({ onOpenNotificationSettings }: Props) {
     clearAnonymousState(window.localStorage);
   }, []);
 
+  // Sync on the events that can change what the panel should show — never on a
+  // clock.
+  //
+  // There used to be a 60-second interval here as well. It made sense against
+  // the vendor feed, which could publish at any moment; it does not against the
+  // local route that replaced it, which is defined to answer with an empty page
+  // until there is a first-party source of messages. A timer that re-asks a
+  // question with one permanent answer cannot change the panel, and every tick
+  // is a request that can be recorded slow or unanswered.
+  //
+  // The team daemon's anomaly log bears that out. Over both retained
+  // generations up to the 2026-09-05T23:40Z capture, rows whose path sits under
+  // `/api/integrations/vela/message-center/` and are dated after the vendor
+  // proxy was removed (7294969f9, 2026-08-19T17:51Z) number 472 `request-slow`
+  // and 54 `request-unreachable`. Seventeen of the slow rows come from the
+  // daemon's OWN observer — status 200, 4.1s to 32.1s — against a handler that
+  // returns `emptyMessageCenterPage()` with no I/O at all. A synchronous
+  // handler cannot spend 32 seconds, so those rows measure the host stalling
+  // around the request rather than the route doing work. The poll is what turns
+  // each stall into another row. PRD 3.5's second arm: an endpoint either
+  // answers fast or is not polled.
   useEffect(() => {
     retrySync();
-    const interval = window.setInterval(retrySync, 60_000);
     const onVisibility = () => {
       if (document.visibilityState === 'visible') retrySync();
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      window.clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [retrySync]);
