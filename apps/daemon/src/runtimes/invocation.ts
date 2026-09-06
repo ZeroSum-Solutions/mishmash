@@ -1,10 +1,115 @@
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import os from 'node:os';
-import { promisify } from 'node:util';
 import { createCommandInvocation } from '@open-design/platform';
-import type { RuntimeExecOptions } from './types.js';
 
-const execFileP = promisify(execFile);
+export interface AgentExecResult {
+  stdout: string;
+  stderr: string;
+}
+
+/**
+ * The options an agent probe may pass, and the complete set this helper acts
+ * on.
+ *
+ * Deliberately narrower than the `RuntimeExecOptions` this signature used to
+ * take: that type extends Node's `ExecFileOptions`, and the fields it carries
+ * beyond the ones below (`shell`, `encoding`, `windowsHide`, `uid`, `gid`)
+ * were spread straight into `execFile`. The probe is spawned by hand now, so
+ * those fields would be advertised and silently ignored.
+ * `killSignal` is kept because a caller already relies on it: it names the
+ * FIRST signal `terminateProbeTree` sends. The escalation to SIGKILL after the
+ * grace still follows whatever is named, so a caller can ask for a harder stop
+ * (`'SIGKILL'`, which skips the grace) but can never talk the helper out of
+ * one.
+ */
+export interface AgentProbeExecOptions {
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  /** Wall-clock budget for the probe, in ms; expiry kills the process tree. */
+  timeout?: number;
+  /** Cap on captured stdout/stderr, in bytes; overflow kills the tree. */
+  maxBuffer?: number;
+  signal?: AbortSignal;
+  /**
+   * First signal sent to the probe's process tree when it must stop (timeout,
+   * output overflow, or abort). Default SIGTERM. SIGKILL always follows after
+   * the escalation grace; passing `'SIGKILL'` here sends it at once instead,
+   * for a CLI that is untrusted about signals.
+   */
+  killSignal?: NodeJS.Signals;
+}
+
+/**
+ * Rejection shape of a failed probe.
+ *
+ * Callers discriminate on `code`: a string is an OS-level spawn rejection
+ * (`ENOENT`, `EACCES`, `ENOTDIR`) and a number is a real non-zero exit status.
+ * `stdout` / `stderr` carry whatever the child produced before it failed, and
+ * `killed` marks a child this module stopped rather than one that exited on
+ * its own. This mirrors what `util.promisify(execFile)` attached, which is
+ * what `runtimes/detection.ts` and `runtimes/auth.ts` read.
+ */
+export interface AgentExecError extends Omit<NodeJS.ErrnoException, 'code'> {
+  code?: string | number;
+  signal?: NodeJS.Signals | string;
+  killed?: boolean;
+  stdout?: string;
+  stderr?: string;
+}
+
+const DEFAULT_PROBE_MAX_BUFFER = 1024 * 1024;
+
+// Grace between the polite stop and the unconditional one. Long enough for a
+// well-behaved CLI to flush and exit on SIGTERM, short enough that a stuck
+// probe cannot hold a detection's wall-clock budget open.
+const PROBE_KILL_ESCALATION_MS = 250;
+
+/**
+ * Stop one probe subprocess and everything it started.
+ *
+ * INVARIANT: no probe child, and no descendant it spawned, outlives the budget
+ * its caller gave it. The child is spawned `detached`, which makes it the
+ * leader of its own process group, so signalling the negated pid reaches the
+ * whole group. SIGTERM asks first; SIGKILL follows after a short grace, which
+ * is what catches a CLI that traps or ignores SIGTERM.
+ *
+ * `child_process.execFile`'s own `timeout` gives neither: it sends a single
+ * SIGTERM to the direct child, so a CLI that ignores it — or a wrapper whose
+ * real worker is a grandchild — keeps running and the exec call never settles.
+ * 29 orphaned `cursor-agent` probes accumulated that way and tripped the
+ * fan-out guard (item B-22).
+ *
+ * Windows has no POSIX process groups; there the escalation still runs but
+ * reaches the direct child only.
+ */
+function terminateProbeTree(pid: number | undefined, first: NodeJS.Signals = 'SIGTERM'): void {
+  if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return;
+  const targets = process.platform === 'win32' ? [pid] : [-pid, pid];
+  const signal = (target: number, name: NodeJS.Signals): boolean => {
+    try {
+      process.kill(target, name);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (first === 'SIGKILL') {
+    // The caller asked for the unconditional stop up front; there is no
+    // polite phase to grant a grace for.
+    for (const target of targets) signal(target, 'SIGKILL');
+    return;
+  }
+  const reached = targets.filter((target) => signal(target, first));
+  if (reached.length === 0) return;
+  // Deliberately NOT unref'd: a probe that ignored SIGTERM is only actually
+  // stopped by the SIGKILL below, so letting the event loop drain during the
+  // grace window would leave exactly the orphan this function exists to
+  // prevent. The window is a quarter of a second, so holding the loop open for
+  // it cannot meaningfully delay a daemon shutdown.
+  setTimeout(() => {
+    for (const target of reached) signal(target, 'SIGKILL');
+  }, PROBE_KILL_ESCALATION_MS);
+}
 
 // Agent probes (model-list / version / help / auth-status) are short read-only
 // metadata calls that never need the caller's project files. Default them to a
@@ -17,11 +122,15 @@ const execFileP = promisify(execFile);
 // over the repo, wiping its pnpm store and breaking `next dev`. A probe writing a
 // stray lockfile under the OS temp dir is harmless. Actual agent runs spawn
 // elsewhere with an explicit project cwd and are unaffected.
+//
+// The child is spawned rather than `execFile`d because `execFile` does not
+// forward `detached` to `spawn`, and without its own process group a timed-out
+// probe cannot be killed as a tree — see `terminateProbeTree`.
 export function execAgentFile(
   command: string,
   args: string[],
-  options: RuntimeExecOptions = {},
-) {
+  options: AgentProbeExecOptions = {},
+): Promise<AgentExecResult> {
   const invocation = createCommandInvocation(
     options.env
       ? {
@@ -34,9 +143,117 @@ export function execAgentFile(
           args,
         },
   );
-  return execFileP(invocation.command, invocation.args, {
-    ...options,
-    cwd: options.cwd ?? os.tmpdir(),
-    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+  const maxBuffer = typeof options.maxBuffer === 'number' && options.maxBuffer > 0
+    ? options.maxBuffer
+    : DEFAULT_PROBE_MAX_BUFFER;
+  const { timeout } = options;
+  const firstSignal: NodeJS.Signals = options.killSignal ?? 'SIGTERM';
+
+  return new Promise<AgentExecResult>((resolve, reject) => {
+    const child = spawn(invocation.command, invocation.args, {
+      cwd: options.cwd ?? os.tmpdir(),
+      ...(options.env ? { env: options.env } : {}),
+      windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+      // Own process group, so a timeout can reach grandchildren too.
+      detached: process.platform !== 'win32',
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    let timedOut = false;
+    let overflowed = false;
+    let aborted = false;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
+
+    const stop = () => {
+      if (deadline) clearTimeout(deadline);
+      deadline = undefined;
+      if (onAbort) options.signal?.removeEventListener('abort', onAbort);
+      onAbort = undefined;
+    };
+
+    const capture = (
+      stream: NodeJS.ReadableStream | null,
+      append: (chunk: string) => void,
+    ) => {
+      if (!stream) return;
+      stream.setEncoding('utf8');
+      stream.on('data', (chunk: string) => append(chunk));
+    };
+
+    capture(child.stdout, (chunk) => {
+      if (stdout.length + chunk.length > maxBuffer) {
+        overflowed = true;
+        terminateProbeTree(child.pid, firstSignal);
+        return;
+      }
+      stdout += chunk;
+    });
+    capture(child.stderr, (chunk) => {
+      if (stderr.length + chunk.length > maxBuffer) {
+        overflowed = true;
+        terminateProbeTree(child.pid, firstSignal);
+        return;
+      }
+      stderr += chunk;
+    });
+
+    const fail = (error: AgentExecError) => {
+      if (settled) return;
+      settled = true;
+      stop();
+      error.stdout = stdout;
+      error.stderr = stderr;
+      if (timedOut || aborted) error.killed = true;
+      reject(error);
+    };
+
+    child.on('error', (error) => fail(error as AgentExecError));
+
+    child.on('close', (code, signal) => {
+      if (settled) return;
+      if (code === 0 && !timedOut && !overflowed && !aborted) {
+        settled = true;
+        stop();
+        resolve({ stdout, stderr });
+        return;
+      }
+      const reason = aborted
+        ? 'was aborted by its caller'
+        : timedOut
+          ? `timed out after ${String(timeout)}ms`
+          : overflowed
+            ? `produced more than ${String(maxBuffer)} bytes of output`
+            : `exited with code ${String(code)}`;
+      const error: AgentExecError = new Error(
+        `Command failed: ${invocation.command} ${invocation.args.join(' ')} (${reason})\n${stderr}`,
+      );
+      if (typeof code === 'number') error.code = code;
+      if (signal) error.signal = signal;
+      fail(error);
+    });
+
+    if (typeof timeout === 'number' && timeout > 0) {
+      deadline = setTimeout(() => {
+        timedOut = true;
+        terminateProbeTree(child.pid, firstSignal);
+      }, timeout);
+      deadline.unref();
+    }
+
+    // The `execFile` this replaced honoured a caller's `AbortSignal`; keep
+    // honouring it, so a caller that passes one is never silently ignored —
+    // and route it through `terminateProbeTree` rather than a bare SIGTERM,
+    // for the same reason the timeout does.
+    if (options.signal) {
+      onAbort = () => {
+        aborted = true;
+        terminateProbeTree(child.pid, firstSignal);
+      };
+      if (options.signal.aborted) onAbort();
+      else options.signal.addEventListener('abort', onAbort, { once: true });
+    }
   });
 }

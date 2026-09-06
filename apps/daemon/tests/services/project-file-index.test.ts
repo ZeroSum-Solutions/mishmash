@@ -261,4 +261,51 @@ describe('project file index', () => {
     await expect(concurrentListing).resolves.toEqual([UPDATED_INDEX_FILE]);
     expect(scanProjectFiles).toHaveBeenCalledTimes(2);
   });
+  it('returns only the entries newer than a since cursor, newest first', async () => {
+    const files: IndexedProjectFile[] = [
+      { ...INDEX_FILE, name: 'a.html', path: 'a.html', mtime: 1_000 },
+      { ...INDEX_FILE, name: 'b.html', path: 'b.html', mtime: 3_000 },
+      { ...INDEX_FILE, name: 'c.html', path: 'c.html', mtime: 2_000 },
+    ];
+    const index = createProjectFileIndex({
+      scanProjectFiles: vi.fn(async () => files),
+      readProjectFileEntry: vi.fn(),
+      resolveProjectDir: () => '/projects/project-1',
+    });
+
+    const full = await index.list({ projectsRoot: '/projects', projectId: 'project-1' });
+    expect(full.map((file) => file.path)).toEqual(['b.html', 'c.html', 'a.html']);
+
+    // INV-3.3: an unchanged file is ABSENT from a `since` response.
+    const delta = await index.list({
+      projectsRoot: '/projects',
+      projectId: 'project-1',
+      since: 1_500,
+    });
+    expect(delta.map((file) => file.path)).toEqual(['b.html', 'c.html']);
+
+    const emptyDelta = await index.list({
+      projectsRoot: '/projects',
+      projectId: 'project-1',
+      since: 3_000,
+    });
+    expect(emptyDelta).toEqual([]);
+  });
+
+  it('ignores a cursor that is not a usable timestamp', async () => {
+    const index = createProjectFileIndex({
+      scanProjectFiles: vi.fn(async () => [INDEX_FILE]),
+      readProjectFileEntry: vi.fn(),
+      resolveProjectDir: () => '/projects/project-1',
+    });
+
+    await expect(
+      index.list({ projectsRoot: '/projects', projectId: 'project-1' }),
+    ).resolves.toEqual([INDEX_FILE]);
+    for (const since of [0, -1, Number.NaN]) {
+      await expect(
+        index.list({ projectsRoot: '/projects', projectId: 'project-1', since }),
+      ).resolves.toEqual([INDEX_FILE]);
+    }
+  });
 });

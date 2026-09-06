@@ -62,8 +62,31 @@ export function createProjectFileIndex(deps: ProjectFileIndexDeps): ProjectFileI
   const keyFor = (input: Pick<ProjectFileListInput, 'projectsRoot' | 'projectId' | 'metadata'>) =>
     deps.resolveProjectDir(input.projectsRoot, input.projectId, input.metadata);
 
-  const sortFiles = (files: Iterable<IndexedProjectFile>) =>
-    Array.from(files).sort((left, right) => Number(right.mtime) - Number(left.mtime));
+  const byNewestFirst = (left: IndexedProjectFile, right: IndexedProjectFile) =>
+    Number(right.mtime) - Number(left.mtime);
+
+  /**
+   * Collect the entries a listing has to return, newest first.
+   *
+   * INVARIANT: a `since` listing pays for the delta, not for the tree. The
+   * cursor prunes BEFORE the sort, so an unchanged file costs one numeric
+   * comparison instead of a place in an O(n log n) sort of the whole index —
+   * which is what the caller asked for by sending a cursor, since an unchanged
+   * file is absent from a `since` response by contract (INV-3.3).
+   */
+  const collectListing = (
+    files: Iterable<IndexedProjectFile>,
+    since: number,
+  ): IndexedProjectFile[] => {
+    if (!(Number.isFinite(since) && since > 0)) {
+      return Array.from(files).sort(byNewestFirst);
+    }
+    const changed: IndexedProjectFile[] = [];
+    for (const file of files) {
+      if (Number(file.mtime) > since) changed.push(file);
+    }
+    return changed.sort(byNewestFirst);
+  };
 
   const remember = (key: string, pending: Promise<IndexedProject>) => {
     if (listings.has(key)) listings.delete(key);
@@ -108,11 +131,7 @@ export function createProjectFileIndex(deps: ProjectFileIndexDeps): ProjectFileI
     async list(input) {
       const key = keyFor(input);
       const listing = await getFreshListing(key, input);
-      const files = sortFiles(listing.files.values());
-      const since = Number(input.since);
-      return Number.isFinite(since) && since > 0
-        ? files.filter((file) => Number(file.mtime) > since)
-        : files;
+      return collectListing(listing.files.values(), Number(input.since));
     },
 
     async applyWatchEvent(input) {

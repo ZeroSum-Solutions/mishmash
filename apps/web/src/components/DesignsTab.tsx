@@ -10,7 +10,15 @@ import {
   trackProjectsMorePopoverClick,
 } from "../analytics/events";
 import { useT } from "../i18n";
-import { deleteLiveArtifact, fetchLiveArtifacts, fetchProjectFiles, liveArtifactPreviewUrl } from "../providers/registry";
+import {
+	canListProjectFilesAsDelta,
+	deleteLiveArtifact,
+	fetchLiveArtifacts,
+	fetchProjectFiles,
+	latestProjectFileMtime,
+	liveArtifactPreviewUrl,
+	mergeProjectFileDelta,
+} from "../providers/registry";
 import type {
 	DesignSystemSummary,
 	LiveArtifactSummary,
@@ -85,6 +93,35 @@ type DesignListItem =
 	  };
 
 const DESIGNS_VIEW_STORAGE_KEY = "od:designs:view";
+
+// One project's file tree as the cover scan last saw it, the project revision
+// that tree belongs to, and how many deltas have been merged into it since the
+// last full walk.
+interface ScannedProjectFiles {
+	revision: number;
+	files: ProjectFile[];
+	deltaScans: number;
+}
+
+/**
+ * List one project's files for the cover scan, re-walking only what changed.
+ *
+ * INVARIANT (INV-3.3): once a project's tree has been walked, a later scan the
+ * bound in `canListProjectFilesAsDelta` still allows asks the daemon only for
+ * entries newer than the newest mtime already seen, and folds that delta into
+ * the held tree. A `since` response cannot express a deletion, which is why
+ * that bound exists -- see its docblock.
+ */
+async function listProjectFilesSince(
+	projectId: string,
+	held: ProjectFile[],
+): Promise<ProjectFile[]> {
+	const delta = await fetchProjectFiles(projectId, {
+		since: latestProjectFileMtime(held),
+		joinInFlight: true,
+	});
+	return mergeProjectFileDelta(held, delta);
+}
 const PROJECTS_AUTO_REFRESH_MS = 15000;
 
 export const STATUS_ORDER = [
@@ -162,6 +199,25 @@ export function DesignsTab({
 	const [coverByProject, setCoverByProject] = useState<
 		Record<string, ProjectCoverOverride | null>
 	>({});
+	// File trees the cover scan already walked, so a re-render caused by another
+	// project in the list does not re-walk the ones that did not change.
+	const scannedFilesByProject = useRef(new Map<string, ScannedProjectFiles>());
+	// Ticks the grid's per-card scans on a schedule of its own.
+	//
+	// INVARIANT: every per-card fan-out keyed on `projects` still runs once per
+	// poll -- the cover scan AND the live-artifact scan. The `projects` array
+	// now keeps its identity across a content-equal poll
+	// (`preserveProjectListIdentity` in App.tsx), which is what stops the grid
+	// re-walking every card, but on its own it would also mean an idle grid
+	// never scans again. Neither scan has another trigger: a file deleted
+	// behind the daemon's back does not move `project.updatedAt`, and a live
+	// artifact created by an agent does not either
+	// (`POST /api/tools/live-artifacts/create` never calls `updateProject`),
+	// while the grid does not subscribe to the per-project event stream that
+	// announces it. Each tick costs one `since` request and one live-artifact
+	// request per card; the daemon answers an unchanged tree with an empty
+	// list -- not a walk.
+	const [gridScanEpoch, setGridScanEpoch] = useState(0);
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 	const [selectMode, setSelectMode] = useState(false);
 	const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -195,6 +251,10 @@ export function DesignsTab({
 		}
 	});
 
+	// Live artifacts for every card. Keyed on `gridScanEpoch` as well as
+	// `projects` because an agent creating a live artifact does not move
+	// `project.updatedAt`, so a content-equal poll leaves this the grid's only
+	// way to notice one.
 	useEffect(() => {
 		let cancelled = false;
 		const projectIds = projects.map((project) => project.id);
@@ -219,13 +279,18 @@ export function DesignsTab({
 		return () => {
 			cancelled = true;
 		};
-	}, [projects]);
+	}, [projects, gridScanEpoch]);
 
 	useEffect(() => {
 		let cancelled = false;
 		if (projects.length === 0) {
 			setCoverByProject({});
+			scannedFilesByProject.current.clear();
 			return;
+		}
+		const scanned = scannedFilesByProject.current;
+		for (const id of [...scanned.keys()]) {
+			if (!projects.some((project) => project.id === id)) scanned.delete(id);
 		}
 		void mapWithConcurrencyLimit(projects, FAN_OUT_CONCURRENCY, async (project) => {
 			const designSystemProject = isDesignSystemProject(project);
@@ -234,14 +299,34 @@ export function DesignsTab({
 			// file scan entirely for them.
 			if (project.metadata?.kind === "brand") return [project.id, null] as const;
 			if (project.metadata?.entryFile && !designSystemProject) return [project.id, null] as const;
-			let files: Awaited<ReturnType<typeof fetchProjectFiles>>;
+			const held = scanned.get(project.id);
+			// The tree this scan may extend with a delta, or null to walk in
+			// full. The first scan of a project always walks in full, so the
+			// bound is only consulted once a tree is actually held. A held tree
+			// with no entries carries no cursor, and a request sent without one
+			// is a full listing however it was reached -- so it stays null and
+			// the delta run restarts from zero rather than counting a walk.
+			const extend =
+				held !== undefined &&
+				canListProjectFilesAsDelta(held, project.updatedAt) &&
+				latestProjectFileMtime(held.files) > 0
+					? held
+					: null;
+			let files: ProjectFile[];
 			try {
-				files = await fetchProjectFiles(project.id);
+				files = extend
+					? await listProjectFilesSince(project.id, extend.files)
+					: await fetchProjectFiles(project.id, { joinInFlight: true });
 			} catch {
 				// One project's failure must not blank the rest of the grid --
 				// every other project's fetch keeps running via the shared pool.
 				return [project.id, null] as const;
 			}
+			scanned.set(project.id, {
+				revision: project.updatedAt,
+				files,
+				deltaScans: extend ? extend.deltaScans + 1 : 0,
+			});
 			if (designSystemProject) {
 				const logo = findDesignSystemLogoFile(files);
 				if (logo) {
@@ -257,7 +342,27 @@ export function DesignsTab({
 		return () => {
 			cancelled = true;
 		};
-	}, [projects]);
+	}, [projects, gridScanEpoch]);
+
+	// The tick that drives both per-card scans. It follows the same rule as the
+	// project-list poll below -- same period, same `isActive` and visibility
+	// gate -- because scanning the cards of a list nobody is refreshing spends
+	// one file request and one live-artifact request per card for nothing.
+	// Becoming visible again ticks at once rather than waiting out the rest of
+	// the interval.
+	useEffect(() => {
+		if (!isActive) return;
+		const tick = () => {
+			if (document.visibilityState !== "visible") return;
+			setGridScanEpoch((epoch) => epoch + 1);
+		};
+		const interval = window.setInterval(tick, PROJECTS_AUTO_REFRESH_MS);
+		document.addEventListener("visibilitychange", tick);
+		return () => {
+			window.clearInterval(interval);
+			document.removeEventListener("visibilitychange", tick);
+		};
+	}, [isActive]);
 
 	useEffect(() => {
 		if (!menuOpenId) return;
