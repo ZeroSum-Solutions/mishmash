@@ -277,6 +277,29 @@ export interface W3EndpointLatencyProof {
    * refused.
    */
   uiLagRecordsRead: number;
+  /**
+   * `ui-lag` records the export MATCHED but did not hand over.
+   *
+   * `GET /api/anomalies` applies its `limit` after matching and reports the
+   * matched count as `total` (`apps/daemon/src/anomaly-log.ts`), so an export
+   * taken with too small a limit is a page of the answer rather than the answer.
+   * Every other long-task check is blind to this: the records that WERE delivered
+   * are perfectly self-consistent with each other, `uiLagRecordsRead` counts them
+   * honestly, and the count INV-3.10 is judged on is simply smaller than the truth.
+   * The envelope is the only place the loss is visible, so the capture reads it
+   * there and carries the difference here.
+   */
+  uiLagExportShortfall: number;
+  /**
+   * Timing-log lines the reader could not parse.
+   *
+   * The endpoint half's counterpart to `uiLagUnmeasurable`. A daemon killed
+   * mid-append leaves a half-written row; the reader drops it from the rows AND
+   * from that route's attempts in the same pass, so the capture stays internally
+   * consistent while its population quietly shrinks — the one way the endpoint
+   * half could still be smaller than what was observed without any check firing.
+   */
+  unparseableTimingLines: number;
 }
 
 export type W3ViolationCode =
@@ -287,6 +310,8 @@ export type W3ViolationCode =
   | 'missing-route-attempts'
   | 'unmeasurable-ui-lag'
   | 'dropped-ui-lag'
+  | 'truncated-ui-lag-export'
+  | 'unparseable-timing-line'
   | 'window-not-24h'
   | 'window-not-continuous'
   | 'sample-outside-window'
@@ -326,6 +351,16 @@ export function validateProof(proof: W3EndpointLatencyProof): W3Violation[] {
   violations.push(...validateWindow(proof.window));
   violations.push(...validateMetadata(proof.capture));
   violations.push(...validateSamples(proof));
+  violations.push(
+    ...declaredLoss({
+      code: 'unparseable-timing-line',
+      field: 'unparseableTimingLines',
+      value: proof.unparseableTimingLines,
+      absent: 'the capture does not say how many timing-log lines it could not parse',
+      nonZero: (count) =>
+        `${count} timing-log line(s) could not be parsed; each was an observation the population lost`,
+    }),
+  );
   violations.push(...validateUiLag(proof));
   violations.push(...validateRouteCoverage(proof));
   return violations;
@@ -485,21 +520,52 @@ function validateUiLag(proof: W3EndpointLatencyProof): W3Violation[] {
       detail: `${recordsRead} ui-lag record(s) were read and ${accounted} accounted for; ${recordsRead - accounted} went missing`,
     });
   }
-  const unmeasurable = proof.uiLagUnmeasurable;
-  if (typeof unmeasurable !== 'number' || !Number.isFinite(unmeasurable) || unmeasurable < 0) {
-    violations.push({
+  violations.push(
+    ...declaredLoss({
       code: 'unmeasurable-ui-lag',
-      subject: 'uiLagUnmeasurable',
-      detail: 'the capture does not say how many ui-lag records it could not measure',
-    });
-  } else if (unmeasurable > 0) {
-    violations.push({
-      code: 'unmeasurable-ui-lag',
-      subject: 'uiLagUnmeasurable',
-      detail: `${unmeasurable} ui-lag record(s) carried no readable duration; each may have been over the bar`,
-    });
-  }
+      field: 'uiLagUnmeasurable',
+      value: proof.uiLagUnmeasurable,
+      absent: 'the capture does not say how many ui-lag records it could not measure',
+      nonZero: (count) =>
+        `${count} ui-lag record(s) carried no readable duration; each may have been over the bar`,
+    }),
+    ...declaredLoss({
+      code: 'truncated-ui-lag-export',
+      field: 'uiLagExportShortfall',
+      value: proof.uiLagExportShortfall,
+      absent: 'the capture does not say whether its ui-lag export was a complete answer or one page of it',
+      nonZero: (count) =>
+        `the ui-lag export matched ${count} record(s) it did not hand over; the long-task count is a page, not the window`,
+    }),
+  );
   return violations;
+}
+
+/**
+ * A count of evidence the capture KNOWS it lost.
+ *
+ * Three fields have this exact shape, and each closes the same hole from a
+ * different side: a number the capture must state, whose only acceptable value
+ * is zero, and whose absence must be refused rather than read as zero. Absence
+ * is the important half — a reader that treats a missing count as "none" makes
+ * deleting the field cheaper than deleting the records it accounts for, which is
+ * the move every censoring check here exists to block.
+ */
+function declaredLoss(spec: {
+  code: W3ViolationCode;
+  field: string;
+  value: unknown;
+  absent: string;
+  nonZero: (count: number) => string;
+}): W3Violation[] {
+  const { value } = spec;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return [{ code: spec.code, subject: spec.field, detail: spec.absent }];
+  }
+  if (value > 0) {
+    return [{ code: spec.code, subject: spec.field, detail: spec.nonZero(value) }];
+  }
+  return [];
 }
 
 function validateRouteCoverage(proof: W3EndpointLatencyProof): W3Violation[] {

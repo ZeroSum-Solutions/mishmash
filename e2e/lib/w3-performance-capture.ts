@@ -230,7 +230,29 @@ export function buildProof(input: BuildProofInput): W3EndpointLatencyProof {
     uiLag: uiLag.samples,
     uiLagUnmeasurable: uiLag.unmeasurable,
     uiLagRecordsRead: uiLag.recordsRead,
+    uiLagExportShortfall: uiLagExportShortfall(input.anomalies),
+    unparseableTimingLines: timing.unparseableLines,
   };
+}
+
+/**
+ * How many records the ui-lag export matched but did not hand over.
+ *
+ * `GET /api/anomalies` filters first and applies `limit` afterwards, reporting
+ * the matched count as `total` (`apps/daemon/src/anomaly-log.ts`). So the
+ * envelope, and only the envelope, knows whether the array beside it is the whole
+ * answer or one page of it — the delivered records agree with each other either
+ * way. Measured on the envelope's own terms rather than on the ui-lag subset, so
+ * an export taken without a `kind` filter is judged the same way.
+ *
+ * A `total` that is not a number is not a shortfall of zero: it is an envelope
+ * nobody can check, so it becomes a value the validator refuses.
+ */
+function uiLagExportShortfall(response: ListAnomaliesResponse): number {
+  const delivered = response.anomalies?.length;
+  if (typeof response.total !== 'number' || !Number.isFinite(response.total)) return Number.NaN;
+  if (typeof delivered !== 'number') return Number.NaN;
+  return Math.max(0, response.total - delivered);
 }
 
 // ---------------------------------------------------------------------------

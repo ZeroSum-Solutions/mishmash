@@ -124,6 +124,8 @@ function healthyProof(overrides: Partial<Proof> = {}): Proof {
     samples,
     uiLag: [] as ProofModule.W3UiLagSample[],
     uiLagUnmeasurable: 0,
+    uiLagExportShortfall: 0,
+    unparseableTimingLines: 0,
     ...overrides,
   };
   return {
@@ -323,6 +325,51 @@ describe('W3 endpoint-latency proof — validator', () => {
 
     expect(codes, why('long tasks dropped after they were read are censored')).toContain(
       'dropped-ui-lag',
+    );
+  });
+
+  it('rejects a capture whose ui-lag export was a truncated page of its own query', () => {
+    const codes = violationCodes(healthyProof({ uiLagExportShortfall: 3 } as Partial<Proof>));
+
+    // `GET /api/anomalies` applies `limit` AFTER matching, and reports the matched
+    // count as `total` (apps/daemon/src/anomaly-log.ts). An export that delivered
+    // fewer records than it matched is a page, not a window: the records it left
+    // behind are invisible to every other check, because the ones it DID deliver
+    // are perfectly self-consistent with each other.
+    expect(codes, why('a truncated ui-lag export undercounts INV-3.10 silently')).toContain(
+      'truncated-ui-lag-export',
+    );
+  });
+
+  it('rejects a capture that deleted its ui-lag export shortfall', () => {
+    const candidate = healthyProof();
+    const { uiLagExportShortfall: _dropped, ...withoutShortfall } = candidate;
+    const codes = violationCodes(withoutShortfall as Proof);
+
+    expect(codes, why('an absent shortfall is not a shortfall of zero')).toContain(
+      'truncated-ui-lag-export',
+    );
+  });
+
+  it('rejects a capture with a torn timing-log line', () => {
+    const codes = violationCodes(healthyProof({ unparseableTimingLines: 2 } as Partial<Proof>));
+
+    // A daemon killed mid-append leaves a half-written row. The reader drops it
+    // from the rows AND from the attempts in the same pass, so the capture stays
+    // internally consistent while its population quietly shrinks — the endpoint
+    // half of exactly what `uiLagUnmeasurable` refuses on the long-task half.
+    expect(codes, why('a torn timing row is a lost observation, not an absent one')).toContain(
+      'unparseable-timing-line',
+    );
+  });
+
+  it('rejects a capture that deleted its torn-line count', () => {
+    const candidate = healthyProof();
+    const { unparseableTimingLines: _dropped, ...withoutCount } = candidate;
+    const codes = violationCodes(withoutCount as Proof);
+
+    expect(codes, why('an absent torn-line count is not a count of zero')).toContain(
+      'unparseable-timing-line',
     );
   });
 
@@ -654,6 +701,62 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
     expect(derive(404)).toBe('client-error');
     expect(derive(503)).toBe('server-error');
     expect(derive(0)).toBe('unreachable');
+  });
+
+  it('carries the shortfall of a truncated ui-lag export into the proof', () => {
+    const delivered = [uiLagRecord('2026-09-06T10:00:00.000Z', 1_200)];
+    const built = capture?.buildProof({
+      timingLog: golden,
+      // The envelope says five ui-lag records matched the query and hands back one:
+      // `GET /api/anomalies` applied a `limit` the operator did not widen.
+      anomalies: { anomalies: delivered, total: 5, path: '/dev/null' },
+      startUtc: WINDOW_START,
+      sourceRun: 'golden',
+      capture: { ...CAPTURE_METADATA },
+    });
+
+    expect(built?.uiLagExportShortfall, why('the export declared more records than it delivered')).toBe(4);
+    expect(violationCodes(built as Proof)).toContain('truncated-ui-lag-export');
+  });
+
+  it('does not read a window filter as a truncated export', () => {
+    // Every matched record was delivered; four of the five simply fall outside the
+    // pinned window. That is the capture doing its job, not a page boundary, so it
+    // must not raise the truncation violation.
+    const records = [
+      uiLagRecord('2026-09-06T10:00:00.000Z', 1_200),
+      uiLagRecord('2020-01-01T00:00:00.000Z', 1_200),
+      uiLagRecord('2020-01-02T00:00:00.000Z', 1_200),
+      uiLagRecord('2020-01-03T00:00:00.000Z', 1_200),
+      uiLagRecord('2020-01-04T00:00:00.000Z', 1_200),
+    ];
+    const built = capture?.buildProof({
+      timingLog: golden,
+      anomalies: { anomalies: records, total: records.length, path: '/dev/null' },
+      startUtc: WINDOW_START,
+      sourceRun: 'golden',
+      capture: { ...CAPTURE_METADATA },
+    });
+
+    expect(built?.uiLagExportShortfall, why('an out-of-window record was still delivered')).toBe(0);
+    expect(violationCodes(built as Proof)).not.toContain('truncated-ui-lag-export');
+  });
+
+  it('carries a torn timing-log line into the proof rather than dropping it', () => {
+    // A killed daemon's half-written row, made by cutting a real recorded line
+    // short rather than by inventing one.
+    const recorded = golden.split('\n').filter((line) => line.trim() !== '');
+    const torn = `${(recorded[1] as string).slice(0, 40)}\n`;
+    const built = capture?.buildProof({
+      timingLog: golden + torn,
+      anomalies: { anomalies: [], total: 0, path: '/dev/null' },
+      startUtc: WINDOW_START,
+      sourceRun: 'golden',
+      capture: { ...CAPTURE_METADATA },
+    });
+
+    expect(built?.unparseableTimingLines, why('a torn row must reach the artefact')).toBe(1);
+    expect(violationCodes(built as Proof)).toContain('unparseable-timing-line');
   });
 
   it('builds a proof whose window is exactly 24 h from the recorded rows', () => {
