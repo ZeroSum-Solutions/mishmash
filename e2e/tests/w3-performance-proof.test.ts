@@ -742,6 +742,77 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
     expect(violationCodes(built as Proof)).not.toContain('truncated-ui-lag-export');
   });
 
+  it('counts an attempt with no terminal row as an unreachable observation', () => {
+    // A daemon killed mid-request leaves exactly this: the entry row it already
+    // wrote, and no terminal row beside it. Made by deleting one recorded
+    // terminal line from the golden rather than by writing a row by hand.
+    const lines = golden.split('\n').filter((line) => line.trim() !== '');
+    const orphanedId = 'ba352d71-5';
+    const kept = lines.filter(
+      (line) => !(line.includes(`"${orphanedId}"`) && line.includes('"phase":"end"')),
+    );
+    const result = capture?.readTimingLog(kept.join('\n'), {
+      window: { startUtc: '2020-01-01T00:00:00.000Z', endUtc: '2099-01-01T00:00:00.000Z' },
+      sourceRun: 'golden',
+    });
+
+    // Never dropped: an attempt nobody answered is the observation the whole
+    // journal exists to make visible, so it is carried as a status-0 row and
+    // counted in its route's attempts like any other.
+    expect(result?.unparseableLines, why('an entry row is a row, not a torn line')).toBe(0);
+    const unreachable = (result?.samples ?? []).filter((sample) => sample.status === 0);
+    expect(unreachable.length, why('an unterminated attempt must survive into the samples')).toBe(2);
+    expect(unreachable.every((sample) => sample.outcome === 'unreachable')).toBe(true);
+    // Three GETs to /api/skills were recorded; deleting one terminal row must
+    // not turn three attempts into two.
+    const skills = (result?.routeAttempts ?? []).find((entry) => entry.route === '/api/skills');
+    const skillRows = (result?.samples ?? []).filter((sample) => sample.route === '/api/skills');
+    expect(skills?.attempts, why('the unterminated attempt is still an attempt')).toBe(3);
+    expect(skillRows.length, why('and it is still a row')).toBe(3);
+  });
+
+  it('reads the aborted attempt the recording holds as an unreachable row', () => {
+    const result = capture?.readTimingLog(golden, {
+      window: { startUtc: '2020-01-01T00:00:00.000Z', endUtc: '2099-01-01T00:00:00.000Z' },
+      sourceRun: 'golden',
+    });
+
+    // The recording contains one GET the client aborted before any byte went
+    // out. It is the never-answered condition 3D fixes, and before the journal
+    // it left no row at all — thirty healthy completions on the same route with
+    // no sign that anything had failed.
+    const aborted = (result?.samples ?? []).filter(
+      (sample) => sample.route === '/api/agents' && sample.outcome === 'unreachable',
+    );
+    expect(aborted.length, why('the recorded abort must reach the capture')).toBe(1);
+    expect(aborted[0]?.status).toBe(0);
+    expect(aborted[0]?.durationMs).toBeGreaterThan(0);
+  });
+
+  it('refuses a ui-lag export whose envelope disagrees with the array beside it', () => {
+    const delivered = [
+      uiLagRecord('2026-09-06T10:00:00.000Z', 1_200),
+      uiLagRecord('2026-09-06T11:00:00.000Z', 1_200),
+      uiLagRecord('2026-09-06T12:00:00.000Z', 1_200),
+    ];
+    const built = capture?.buildProof({
+      timingLog: golden,
+      // `total` is the matched count and the array is what was handed over, so
+      // the two must be equal or the export is not a whole answer. A `total`
+      // BELOW the array length is an envelope nobody can reconcile with its own
+      // records; reading it as a shortfall of zero accepts a file whose two
+      // halves contradict each other.
+      anomalies: { anomalies: delivered, total: 1, path: '/dev/null' },
+      startUtc: WINDOW_START,
+      sourceRun: 'golden',
+      capture: { ...CAPTURE_METADATA },
+    });
+
+    expect(violationCodes(built as Proof), why('total must equal the delivered array length')).toContain(
+      'truncated-ui-lag-export',
+    );
+  });
+
   it('carries a torn timing-log line into the proof rather than dropping it', () => {
     // A killed daemon's half-written row, made by cutting a real recorded line
     // short rather than by inventing one.
