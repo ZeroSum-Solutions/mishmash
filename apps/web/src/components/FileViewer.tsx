@@ -11502,6 +11502,7 @@ function HtmlViewer({
     imageExportResolvedRef.current = true;
     const requestId = imageExportRequestIdRef.current ?? analytics.newRequestId();
     const started = imageExportStartedRef.current || performance.now();
+    const durationMs = Math.round(performance.now() - started);
     trackArtifactExportResult(
       analytics.track,
       {
@@ -11512,12 +11513,22 @@ function HtmlViewer({
         export_format: 'image',
         result,
         ...(errorCode ? { error_code: errorCode } : {}),
-        export_duration_ms: Math.round(performance.now() - started),
+        export_duration_ms: durationMs,
         project_id: projectId,
         project_kind: projectKind,
       },
       { requestId },
     );
+    if (result === 'failed') {
+      reportAnomaly(
+        anomalyForImageExportFailure({
+          fileName: file.name,
+          errorCode: errorCode ?? 'UNKNOWN',
+          projectId,
+          durationMs,
+        }),
+      );
+    }
     // Onboarding first-loop 交付 step (spec §8.3): only a SUCCESSFUL image
     // export closes the loop. Project-scoped no-op unless started from Home.
     if (result === 'success') recordFirstLoopStep(analytics.track, 'delivered', projectId);
@@ -11563,14 +11574,6 @@ function HtmlViewer({
         if (!snap) {
           setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
           fireImageExportResult('failed', 'CAPTURE_FAILED');
-          reportAnomaly(
-            anomalyForImageExportFailure({
-              fileName: file.name,
-              errorCode: 'CAPTURE_FAILED',
-              projectId,
-              durationMs: Math.round(performance.now() - (imageExportStartedRef.current || performance.now())),
-            }),
-          );
           return;
         }
         dataUrl = snap.dataUrl;
@@ -11580,14 +11583,6 @@ function HtmlViewer({
       if (blob.size <= 0) {
         setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
         fireImageExportResult('failed', 'EMPTY_IMAGE');
-        reportAnomaly(
-          anomalyForImageExportFailure({
-            fileName: file.name,
-            errorCode: 'EMPTY_IMAGE',
-            projectId,
-            durationMs: Math.round(performance.now() - (imageExportStartedRef.current || performance.now())),
-          }),
-        );
         return;
       }
       const target = await prepareImageExportTarget(targetTitle, imageExportFormat, { useNativePicker: false });
