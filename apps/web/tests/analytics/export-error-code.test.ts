@@ -23,7 +23,9 @@ describe('exportErrorCode', () => {
     expect(exportErrorCode(new Error('timeout'))).toBe('CAPTURE_TIMEOUT');
     expect(exportErrorCode(new Error('empty-render'))).toBe('CAPTURE_EMPTY_RENDER');
     expect(exportErrorCode(new Error('tainted-canvas'))).toBe('CAPTURE_TAINTED');
-    expect(exportErrorCode(new Error('SecurityError: The operation is insecure.'))).toBe('CAPTURE_TAINTED');
+    const securityErr = new Error('The operation is insecure.');
+    securityErr.name = 'SecurityError';
+    expect(exportErrorCode(securityErr)).toBe('CAPTURE_TAINTED');
   });
 
   it('prefers a structured .code over message classification', () => {

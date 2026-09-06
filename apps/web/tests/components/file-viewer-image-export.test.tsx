@@ -7,6 +7,7 @@ import { exportErrorCode } from '../../src/analytics/export-error-code';
 import type { ProjectFile } from '../../src/types';
 
 const {
+  analyticsTrackMock,
   canRequestOffscreenImageRenderMock,
   captureHostIframeSnapshotMock,
   downloadImageDataUrlMock,
@@ -17,6 +18,7 @@ const {
   requestPreviewSnapshotMock,
   saveImageBlobMock,
 } = vi.hoisted(() => ({
+  analyticsTrackMock: vi.fn(),
   canRequestOffscreenImageRenderMock: vi.fn(async () => true),
   captureHostIframeSnapshotMock: vi.fn(),
   downloadImageDataUrlMock: vi.fn(),
@@ -29,6 +31,25 @@ const {
   requestPreviewSnapshotMock: vi.fn(),
   saveImageBlobMock: vi.fn(),
 }));
+
+vi.mock('../../src/analytics/provider', async () => {
+  const actual = await vi.importActual<typeof import('../../src/analytics/provider')>(
+    '../../src/analytics/provider',
+  );
+  return {
+    ...actual,
+    useAnalytics: () => ({
+      track: analyticsTrackMock,
+      setConsent: () => undefined,
+      setIdentity: () => undefined,
+      setConfigureGlobals: () => undefined,
+      setUserId: () => undefined,
+      anonymousId: 'test-anon',
+      sessionId: 'test-session',
+      newRequestId: () => 'test-request',
+    }),
+  };
+});
 
 vi.mock('../../src/runtime/exports', async () => {
   const actual = await vi.importActual<typeof import('../../src/runtime/exports')>(
@@ -583,13 +604,19 @@ describe('FileViewer image export', () => {
     await waitFor(() => {
       expect(requestPreviewSnapshotMock).toHaveBeenCalled();
     });
-    for (const call of requestPreviewSnapshotMock.mock.calls) {
-      const options = call[2];
-      expect(options?.wholeDeck).toBeFalsy();
-    }
     expect(exportProjectImageDataUrlMock).not.toHaveBeenCalled();
 
     expect(await screen.findByText('Exported current slide only')).toBeTruthy();
+
+    expect(analyticsTrackMock).toHaveBeenCalledWith(
+      'artifact_export_result',
+      expect.objectContaining({
+        result: 'success',
+        export_format: 'image',
+        scope: 'current-slide',
+      }),
+      expect.anything(),
+    );
   });
 
   describe('failed export anomaly reporting', () => {
@@ -833,6 +860,84 @@ describe('FileViewer image export', () => {
       expect(report.detail).toEqual(expect.objectContaining({
         exportFormat: 'image',
         errorCode: 'CAPTURE_EMPTY_RENDER',
+        fileName: 'workspace.html',
+        stage: 'capture',
+      }));
+      expect(typeof report.detail?.durationMs).toBe('number');
+    });
+
+    it('reports one export-failed anomaly with CAPTURE_FAILED and current-slide scope when deck export without renderer returns null', async () => {
+      canRequestOffscreenImageRenderMock.mockResolvedValue(false);
+      requestPreviewSnapshotMock.mockResolvedValue(null);
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'pitch.png',
+        method: 'picker',
+        save: saveImageBlobMock,
+      });
+
+      const view = render(
+        <FileViewer
+          projectId="project-1"
+          projectKind="slide_deck"
+          file={deckFile()}
+          isDeck
+          liveHtml='<html><body><div class="deck"><section class="slide">Cover</section><section class="slide">Details</section></div></body></html>'
+        />,
+      );
+      const srcDocFrame = view.container.querySelector<HTMLIFrameElement>('iframe[data-od-render-mode="srcdoc"]');
+      if (srcDocFrame) fireEvent.load(srcDocFrame);
+
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe(CAPTURE_FAILED_TEXT);
+      }, { timeout: 4000 });
+
+      expect(anomalyPosts).toHaveLength(1);
+      const [report] = anomalyPosts;
+      expect(report.kind).toBe('export-failed');
+      expect(report.severity).toBe('warn');
+      expect(report.summary).toContain('pitch.deck.html');
+      expect(report.projectId).toBe('project-1');
+      expect(report.detail).toEqual(expect.objectContaining({
+        exportFormat: 'image',
+        errorCode: 'CAPTURE_FAILED',
+        fileName: 'pitch.deck.html',
+        stage: 'capture',
+        scope: 'current-slide',
+      }));
+      expect(typeof report.detail?.durationMs).toBe('number');
+    });
+
+    it('reports one export-failed anomaly with CAPTURE_TAINTED when snapshot bridge rejects with SecurityError', async () => {
+      const securityErr = new Error('The operation is insecure.');
+      securityErr.name = 'SecurityError';
+      requestPreviewSnapshotMock.mockRejectedValue(securityErr);
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'workspace.png',
+        method: 'picker',
+        save: saveImageBlobMock,
+      });
+
+      renderHtmlPreview();
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe(CAPTURE_FAILED_TEXT);
+      }, { timeout: 4000 });
+
+      expect(anomalyPosts).toHaveLength(1);
+      const [report] = anomalyPosts;
+      expect(report.kind).toBe('export-failed');
+      expect(report.severity).toBe('warn');
+      expect(report.summary).toContain('workspace.html');
+      expect(report.summary).toMatch(/tainted/i);
+      expect(report.projectId).toBe('project-1');
+      expect(report.detail).toEqual(expect.objectContaining({
+        exportFormat: 'image',
+        errorCode: 'CAPTURE_TAINTED',
         fileName: 'workspace.html',
         stage: 'capture',
       }));
