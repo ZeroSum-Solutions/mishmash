@@ -63,6 +63,10 @@ function skill(overrides: Partial<SkillSummary> & Pick<SkillSummary, 'id' | 'nam
     hasBody: overrides.hasBody ?? true,
     examplePrompt: overrides.examplePrompt ?? `Build ${overrides.name}.`,
     aggregatesExamples: overrides.aggregatesExamples ?? false,
+    // The listing states whether the entry ships `assets/poster.jpg`, and only
+    // one shipped design template does. `false` is therefore the realistic
+    // default; the poster cases below opt in explicitly.
+    hasPoster: overrides.hasPoster ?? false,
   };
 }
 
@@ -97,8 +101,14 @@ describe('TemplatesSection card contract', () => {
     expect(openSandboxedUrlInNewTab).toHaveBeenCalled();
   });
 
+  // These two cases used to build their fixture without `hasPoster` and still
+  // expect an `<img>`, because the component asked for a poster for every
+  // entry. That was the FU-28 defect: only one shipped design template has the
+  // file, so the request 404'd for nearly every card. The behaviour they pin is
+  // still right, but it belongs to an entry that actually advertises a poster,
+  // so the fixture now says so.
   it('swaps a failed poster image to the live preview fallback instead of a broken-image glyph', () => {
-    const templates = [skill({ id: 'broken-poster', name: 'Broken Poster' })];
+    const templates = [skill({ hasPoster: true, id: 'broken-poster', name: 'Broken Poster' })];
     render(<TemplatesSection templates={templates} active onUseTemplate={vi.fn()} />);
 
     const card = screen.getByTestId('templates-card');
@@ -118,7 +128,7 @@ describe('TemplatesSection card contract', () => {
   });
 
   it('keeps the poster hidden until it decodes, so a failed load never flashes a broken-image glyph', () => {
-    const templates = [skill({ id: 'loading-poster', name: 'Loading Poster' })];
+    const templates = [skill({ hasPoster: true, id: 'loading-poster', name: 'Loading Poster' })];
     render(<TemplatesSection templates={templates} active onUseTemplate={vi.fn()} />);
 
     const card = screen.getByTestId('templates-card');
@@ -127,6 +137,19 @@ describe('TemplatesSection card contract', () => {
 
     fireEvent.load(poster);
     expect(poster.classList.contains('is-loaded')).toBe(true);
+  });
+
+  it('never requests a poster for an entry whose listing says it ships none', () => {
+    const templates = [skill({ hasPoster: false, id: 'no-poster', name: 'No Poster' })];
+    render(<TemplatesSection templates={templates} active onUseTemplate={vi.fn()} />);
+
+    // FU-28: the poster URL is derived from the entry id, so an entry that
+    // ships no `assets/poster.jpg` must go straight to the live frame. Mounting
+    // the img and relying on onError would spend a 404 on the sub-resource
+    // route for every such card.
+    const card = screen.getByTestId('templates-card');
+    expect(card.querySelector('img')).toBeNull();
+    expect(card.querySelector('iframe')).toBeTruthy();
   });
 
   it('renders the shared fallback immediately for an entry with no rendered example, without ever mounting an img', () => {
