@@ -11214,7 +11214,7 @@ function HtmlViewer({
       // no literal `.slide`) export as a deck instead of a single page-mode shot
       // of slide 1. The vector-PDF fallback below uses the SAME signal, so an
       // artifact exports identically with or without a desktop host.
-      const wholeDeck = options?.wholeDeck === true && (!imageDeckSignal || await canRequestOffscreenImageRender());
+      const wholeDeck = options?.wholeDeck === true;
       // For a CURRENT-slide capture we need the active slide index, which only
       // exists when the viewer tracks it. Runtime-managed decks have no
       // active-slide bridge (slideState===null); for those the off-screen path
@@ -11497,9 +11497,15 @@ function HtmlViewer({
   // emit the one terminal result for an image export session.
   const fireImageExportResult = (
     result: 'success' | 'failed' | 'cancelled',
-    errorCode?: string,
-    stage?: ImageExportStage,
-    scope?: string,
+    {
+      errorCode,
+      stage,
+      scope,
+    }: {
+      errorCode?: string;
+      stage?: ImageExportStage;
+      scope?: string;
+    } = {},
   ) => {
     if (imageExportResolvedRef.current) return;
     imageExportResolvedRef.current = true;
@@ -11562,9 +11568,11 @@ function HtmlViewer({
     const context = imageExportContext;
     const isDeck = deckExportSignalForContext(context);
     let isCurrentSlideFallback = false;
+    let scope: string | undefined;
     try {
       const canOffscreen = await canRequestOffscreenImageRender();
       isCurrentSlideFallback = isDeck && !canOffscreen;
+      scope = isCurrentSlideFallback ? 'current-slide' : undefined;
       const targetTitle = context?.title ?? exportTitle;
       let dataUrl = imageExportSnapshotDataUrlRef.current;
       if (!dataUrl) {
@@ -11587,12 +11595,11 @@ function HtmlViewer({
         });
         if (!snap) {
           setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
-          fireImageExportResult(
-            'failed',
-            'CAPTURE_FAILED',
-            'capture',
-            isCurrentSlideFallback ? 'current-slide' : undefined,
-          );
+          fireImageExportResult('failed', {
+            errorCode: 'CAPTURE_FAILED',
+            stage: 'capture',
+            scope,
+          });
           return;
         }
         dataUrl = snap.dataUrl;
@@ -11602,12 +11609,11 @@ function HtmlViewer({
       const blob = await imageDataUrlToBlob(dataUrl, imageExportFormat);
       if (blob.size <= 0) {
         setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
-        fireImageExportResult(
-          'failed',
-          'EMPTY_IMAGE',
-          'encode',
-          isCurrentSlideFallback ? 'current-slide' : undefined,
-        );
+        fireImageExportResult('failed', {
+          errorCode: 'EMPTY_IMAGE',
+          stage: 'encode',
+          scope,
+        });
         return;
       }
       stage = 'target';
@@ -11624,12 +11630,7 @@ function HtmlViewer({
       } else {
         await target.save(blob);
       }
-      fireImageExportResult(
-        'success',
-        undefined,
-        undefined,
-        isCurrentSlideFallback ? 'current-slide' : undefined,
-      );
+      fireImageExportResult('success', { scope });
       setExportToast({
         message: isCurrentSlideFallback
           ? t('fileViewer.exportImageCurrentSlideOnly')
@@ -11646,12 +11647,11 @@ function HtmlViewer({
         ? t('fileViewer.exportImageFailed')
         : (err instanceof Error && err.message ? err.message : t('fileViewer.exportImageFailed'));
       setExportToast({ message, tone: 'error' });
-      fireImageExportResult(
-        'failed',
-        code,
+      fireImageExportResult('failed', {
+        errorCode: code,
         stage,
-        isCurrentSlideFallback ? 'current-slide' : undefined,
-      );
+        scope,
+      });
     } finally {
       imageExportInFlightRef.current = false;
     }
@@ -13801,7 +13801,7 @@ function HtmlViewer({
                 onClick={() => {
                   // User dismissed the image export modal without saving —
                   // close the ui_click(image)→result funnel as cancelled.
-                  fireImageExportResult('cancelled', 'MODAL_DISMISSED');
+                  fireImageExportResult('cancelled', { errorCode: 'MODAL_DISMISSED' });
                   setImageExportModalOpen(false);
                   setImageExportError(null);
                 }}

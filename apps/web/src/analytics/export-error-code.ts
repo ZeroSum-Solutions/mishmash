@@ -29,6 +29,6 @@ export function exportErrorCode(err: unknown): string {
   if (/renderer (?:is )?unavailable/i.test(message)) return 'DESKTOP_RENDERER_UNAVAILABLE';
   if (/timeout/i.test(message) || err.name === 'TimeoutError') return 'CAPTURE_TIMEOUT';
   if (/empty-render/i.test(message)) return 'CAPTURE_EMPTY_RENDER';
-  if (/taint|security/i.test(message) || err.name === 'SecurityError') return 'CAPTURE_TAINTED';
+  if (err.name === 'SecurityError' || /tainted/i.test(message)) return 'CAPTURE_TAINTED';
   return err.name || 'UNKNOWN';
 }
