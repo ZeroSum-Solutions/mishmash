@@ -2,7 +2,7 @@
 //
 // Every home-route switch re-rendered EntryShell and, with it, every view it
 // keeps mounted behind `display: none`: TasksView, PluginsView, HomeView,
-// DesignSystemsTab and LibrarySection reconciled their whole trees (about
+// DesignSystemsTab, LibrarySection and TemplatesSection reconciled their whole trees (about
 // 4 ms of the ~20 ms route-switch budget in production, see the 3P
 // attribution) without a DOM change. The shell must stop its render at the
 // boundary of any view whose inputs did not change.
@@ -13,7 +13,7 @@ import { EntryShell } from '../../src/components/EntryShell';
 import { I18nProvider } from '../../src/i18n';
 import type { AgentInfo, AppConfig } from '../../src/types';
 
-const renders = vi.hoisted(() => ({ home: 0, projects: 0, tasks: 0, plugins: 0, designSystems: 0, library: 0 }));
+const renders = vi.hoisted(() => ({ home: 0, projects: 0, tasks: 0, plugins: 0, designSystems: 0, library: 0, templates: 0 }));
 
 vi.mock('../../src/runtime/exports', () => ({ openSandboxedUrlInNewTab: vi.fn() }));
 vi.mock('../../src/components/HomeView', async (importOriginal) => ({
@@ -39,6 +39,10 @@ vi.mock('../../src/components/DesignSystemsTab', async (importOriginal) => ({
 vi.mock('../../src/components/LibrarySection', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../src/components/LibrarySection')>()),
   LibrarySection: () => { renders.library += 1; return <div data-testid="stub-library" />; },
+}));
+vi.mock('../../src/components/TemplatesSection', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/components/TemplatesSection')>()),
+  TemplatesSection: () => { renders.templates += 1; return <div data-testid="stub-templates" />; },
 }));
 
 class ResizeObserverMock { observe() {} disconnect() {} unobserve() {} }
@@ -101,7 +105,7 @@ function switchTo(path: string) {
 }
 
 beforeEach(() => {
-  renders.home = renders.projects = renders.tasks = renders.plugins = renders.designSystems = renders.library = 0;
+  renders.home = renders.projects = renders.tasks = renders.plugins = renders.designSystems = renders.library = renders.templates = 0;
   globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
   globalThis.IntersectionObserver = IntersectionObserverMock as unknown as typeof IntersectionObserver;
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } })));
@@ -134,7 +138,7 @@ describe('EntryShell view-switch isolation', () => {
     // changed a data input or an active flag of these views: the shell
     // re-rendered, they must not have.
     const extraRenders = Object.fromEntries(Object.entries(renders).map(([k, v]) => [k, v - afterMount[k as keyof typeof afterMount]]));
-    expect(extraRenders).toEqual({ home: 0, projects: 0, tasks: 0, plugins: 0, designSystems: 0, library: 0 });
+    expect(extraRenders).toEqual({ home: 0, projects: 0, tasks: 0, plugins: 0, designSystems: 0, library: 0, templates: 0 });
   });
 
   it('resets the scroll position on a view switch only when the outgoing view was scrolled', () => {
