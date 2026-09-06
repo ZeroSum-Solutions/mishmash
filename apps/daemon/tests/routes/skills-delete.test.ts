@@ -122,6 +122,30 @@ describe('DELETE /api/skills/:id', () => {
     expect(resp.status).not.toBe(200);
   });
 
+  it('stops serving the deleted skill\'s sub-resources immediately', async () => {
+    // `sendSkillSubresource` resolves the entry through a 60 s listing cache
+    // (`resolveSkillLikeEntry`), and a delete does not invalidate it: for the
+    // rest of the TTL a lookup can still name the removed entry's directory.
+    // What must stay true is the OBSERVABLE half — the asset stops being
+    // served — and it does, because the handler resolves the file under that
+    // directory and answers 404 when it is gone. Fetching before AND after is
+    // what makes this a cache test rather than a plain 404 test: the first GET
+    // is what warms the listing the second GET must not be able to serve from.
+    const dir = seedSkill('poster-skill', 'poster-skill');
+    mkdirSync(path.join(dir, 'assets'), { recursive: true });
+    writeFileSync(path.join(dir, 'assets', 'poster.jpg'), 'not really a jpeg');
+
+    const warm = await fetch(`${baseUrl}/api/skills/poster-skill/assets/poster.jpg`);
+    expect(warm.status).toBe(200);
+
+    const deleted = await fetch(`${baseUrl}/api/skills/poster-skill`, { method: 'DELETE' });
+    expect(deleted.status).toBe(200);
+    expect(existsSync(dir)).toBe(false);
+
+    const afterDelete = await fetch(`${baseUrl}/api/skills/poster-skill/assets/poster.jpg`);
+    expect(afterDelete.status).toBe(404);
+  });
+
   it('returns 404 for an unknown id', async () => {
     const resp = await fetch(`${baseUrl}/api/skills/does-not-exist-${Date.now()}`, {
       method: 'DELETE',

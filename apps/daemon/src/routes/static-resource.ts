@@ -4,7 +4,12 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
-import type { DesignSystemTokenContractRebuildJobResponse } from '@open-design/contracts';
+import type {
+  DesignSystemsResponse,
+  DesignSystemTokenContractRebuildJobResponse,
+  PromptTemplateResponse,
+  PromptTemplatesResponse,
+} from '@open-design/contracts';
 import { detectAgents, detectAgentsStream } from '../agents.js';
 import type { DetectedAgent } from '../runtimes/types.js';
 import {
@@ -116,14 +121,64 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
     sendApiError(res, 403, 'FORBIDDEN', 'local origin required');
     return false;
   };
+  const skillSubresourceCacheTtlMs = 60_000;
+  let cachedSkillLikeEntries: {
+    entries: Awaited<ReturnType<typeof listAllSkillLikeEntries>>;
+    expiresAt: number;
+  } | null = null;
+
+  /**
+   * Resolve the on-disk directory a skill-like entry owns, for a sub-resource
+   * request.
+   *
+   * INVARIANT: a hit is answered from a listing at most
+   * `skillSubresourceCacheTtlMs` old, and a miss always rescans before it
+   * answers 404 -- so an entry installed a moment ago is never hidden by the
+   * cache, and the only thing the cache can do is skip work.
+   *
+   * Removal is the one direction a lookup miss cannot catch: for up to the TTL
+   * a hit can still name the directory of an entry that has just been deleted.
+   * That is harmless because the directory is what the entry OWNS, not what it
+   * serves -- `sendSkillSubresource` still resolves the file under it and
+   * answers 404 when it is gone, which is the same status a cold listing would
+   * have produced. `apps/daemon/tests/routes/skills-delete.test.ts` pins that:
+   * it warms the cache with a 200, deletes the skill, and requires the next
+   * request for the same asset to be a 404.
+   *
+   * The scan it skips is the whole registry: `listAllSkillLikeEntries` reads
+   * and parses every SKILL.md under the skill and design-template roots -- 362
+   * entries on a stock checkout. A page of the Templates gallery is one
+   * request per card plus a font request per opened preview, and every one of
+   * them paid that scan again, which is why `GET /api/skills/:id/assets/*`
+   * carries more `request-slow` rows (143) than any other route in the wave-3
+   * latency capture. Measured by `e2e/tests/w3-read-endpoints.test.ts`, whose
+   * table issues one request to each sub-resource route in turn: the first
+   * pays the scan and takes 100-160 ms across runs, the second answers from
+   * the warm listing in 1-3 ms. On the base tree both pay it (111 ms, 92 ms).
+   * Against a hand-driven daemon whose TTL had just expired, 906 ms then
+   * 1.8 ms, so the scan is also what load stretches.
+   *
+   * Retention, not peak memory, is what the cache adds: the listing was
+   * already built in full on every request; it is now held for the TTL.
+   */
+  const resolveSkillLikeEntry = async (id: unknown) => {
+    const now = Date.now();
+    if (cachedSkillLikeEntries && cachedSkillLikeEntries.expiresAt > now) {
+      const cached = findSkillById(cachedSkillLikeEntries.entries, id);
+      if (cached) return cached;
+    }
+    const entries = await listAllSkillLikeEntries();
+    cachedSkillLikeEntries = { entries, expiresAt: Date.now() + skillSubresourceCacheTtlMs };
+    return findSkillById(entries, id);
+  };
+
   const sendSkillSubresource = async (
     req: Request,
     res: Response,
     rootName: 'assets' | 'fonts',
     allowedExtensions?: ReadonlySet<string>,
   ) => {
-    const skills = await listAllSkillLikeEntries();
-    const skill = findSkillById(skills, req.params.id);
+    const skill = await resolveSkillLikeEntry(req.params.id);
     if (!skill) {
       return res.status(404).type('text/plain').send('skill not found');
     }
@@ -594,9 +649,10 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   app.get('/api/design-systems', async (_req, res) => {
     try {
       const systems = await listAllDesignSystems();
-      res.json({
-        designSystems: systems.map(({ body, ...rest }) => rest),
-      });
+      const body: DesignSystemsResponse = {
+        designSystems: systems.map(({ body: _body, ...rest }) => rest),
+      };
+      res.json(body);
     } catch (err: any) {
       res.status(500).json({ error: String(err) });
     }
@@ -605,9 +661,10 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   app.get('/api/prompt-templates', async (_req, res) => {
     try {
       const templates = await listPromptTemplates(PROMPT_TEMPLATES_DIR);
-      res.json({
+      const body: PromptTemplatesResponse = {
         promptTemplates: templates.map(({ prompt: _prompt, ...rest }) => rest),
-      });
+      };
+      res.json(body);
     } catch (err: any) {
       res.status(500).json({ error: String(err) });
     }
@@ -622,7 +679,8 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       );
       if (!tpl)
         return res.status(404).json({ error: 'prompt template not found' });
-      res.json({ promptTemplate: tpl });
+      const body: PromptTemplateResponse = { promptTemplate: tpl };
+      res.json(body);
     } catch (err: any) {
       res.status(500).json({ error: String(err) });
     }
