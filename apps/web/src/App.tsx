@@ -171,12 +171,16 @@ const AGENT_FOCUS_REFRESH_THROTTLE_MS = 10_000;
  *
  * INVARIANT: `projects` changes reference only when its content changed. The
  * home grid polls `/api/projects` every 15 s and again on focus and on
- * visibility change; `DesignsTab` keys its per-card file scan on
+ * visibility change; `DesignsTab` keys its per-card fan-outs on
  * `useEffect([projects])`, so handing it a fresh-but-equal array made it
  * re-walk every project's files on every tick. The comparison is a structural
  * one because any field the grid renders (status, cover, metadata) has to be
  * able to trigger a repaint; it runs once per poll over a list the same poll
  * just parsed from JSON, so it costs far less than the walk it prevents.
+ *
+ * A stable reference is not a schedule: the fan-outs that used to ride on this
+ * array's churn keep their cadence from `DesignsTab`'s own poll epoch
+ * (`gridScanEpoch`), not from here.
  */
 export function preserveProjectListIdentity(current: Project[], next: Project[]): Project[] {
   if (current === next) return current;

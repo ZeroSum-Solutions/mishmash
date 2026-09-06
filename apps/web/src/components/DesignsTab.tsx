@@ -199,19 +199,22 @@ export function DesignsTab({
 	// File trees the cover scan already walked, so a re-render caused by another
 	// project in the list does not re-walk the ones that did not change.
 	const scannedFilesByProject = useRef(new Map<string, ScannedProjectFiles>());
-	// Ticks the cover scan on a schedule of its own.
+	// Ticks the grid's per-card scans on a schedule of its own.
 	//
-	// INVARIANT: the scan runs on every poll, so the delta bound in
-	// `canListProjectFilesAsDelta` expires on the schedule its docblock claims.
-	// The scan's other trigger is the `projects` array, and that array now keeps
-	// its identity across a content-equal poll (`preserveProjectListIdentity` in
-	// App.tsx) -- which is what stops the grid re-walking every card, but on its
-	// own would also mean an idle grid never scans again. A file deleted behind
-	// the daemon's back does not move `project.updatedAt`, so nothing else would
-	// ever release the stale cover. Each tick this adds costs one `since`
-	// request per card, which the daemon answers with an empty list for an
-	// unchanged tree -- not a walk.
-	const [coverScanEpoch, setCoverScanEpoch] = useState(0);
+	// INVARIANT: every per-card fan-out keyed on `projects` still runs once per
+	// poll -- the cover scan AND the live-artifact scan. The `projects` array
+	// now keeps its identity across a content-equal poll
+	// (`preserveProjectListIdentity` in App.tsx), which is what stops the grid
+	// re-walking every card, but on its own it would also mean an idle grid
+	// never scans again. Neither scan has another trigger: a file deleted
+	// behind the daemon's back does not move `project.updatedAt`, and a live
+	// artifact created by an agent does not either
+	// (`POST /api/tools/live-artifacts/create` never calls `updateProject`),
+	// while the grid does not subscribe to the per-project event stream that
+	// announces it. Each tick costs one `since` request and one live-artifact
+	// request per card; the daemon answers an unchanged tree with an empty
+	// list -- not a walk.
+	const [gridScanEpoch, setGridScanEpoch] = useState(0);
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 	const [selectMode, setSelectMode] = useState(false);
 	const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -245,6 +248,10 @@ export function DesignsTab({
 		}
 	});
 
+	// Live artifacts for every card. Keyed on `gridScanEpoch` as well as
+	// `projects` because an agent creating a live artifact does not move
+	// `project.updatedAt`, so a content-equal poll leaves this the grid's only
+	// way to notice one.
 	useEffect(() => {
 		let cancelled = false;
 		const projectIds = projects.map((project) => project.id);
@@ -269,7 +276,7 @@ export function DesignsTab({
 		return () => {
 			cancelled = true;
 		};
-	}, [projects]);
+	}, [projects, gridScanEpoch]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -327,11 +334,11 @@ export function DesignsTab({
 		return () => {
 			cancelled = true;
 		};
-	}, [projects, coverScanEpoch]);
+	}, [projects, gridScanEpoch]);
 
 	useEffect(() => {
 		const interval = window.setInterval(
-			() => setCoverScanEpoch((epoch) => epoch + 1),
+			() => setGridScanEpoch((epoch) => epoch + 1),
 			PROJECTS_AUTO_REFRESH_MS,
 		);
 		return () => window.clearInterval(interval);
