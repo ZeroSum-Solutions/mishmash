@@ -48,7 +48,7 @@ export const W3_SAMPLE_OUTCOMES: readonly W3SampleOutcome[] = [
 /**
  * Which side of the wire measured the duration.
  *
- * `daemon` is middleware entry to response `finish`. `web` is the browser's own
+ * `daemon` is middleware entry to the request's terminal event. `web` is the browser's own
  * view, which includes per-host connection queueing — with several tabs open a
  * request can sit minutes in the browser's queue while the daemon served it in
  * milliseconds (D-21). Both are recorded; only `daemon` decides INV-3.1.
@@ -203,11 +203,12 @@ export interface W3UiLagSample {
  *
  * What this cross-check does and does not catch, stated plainly so nobody reads
  * more into it than it carries. `readTimingLog` counts an attempt and writes the
- * row from the SAME parsed line, so for a capture the shipped script produced the
- * two agree by construction. The check therefore catches rows removed AFTER the
- * capture — a hand-edited proof JSON, a filtered export — and not an observer
- * that never saw the request at all. That is still the move worth blocking,
- * because it is the one a reader of the finished file cannot otherwise detect.
+ * row from the SAME journaled attempt, so for a capture the shipped script
+ * produced the two agree by construction. The check therefore catches rows
+ * removed AFTER the capture — a hand-edited proof JSON, a filtered export — and
+ * not an observer that never saw the request at all. What closes THAT hole is
+ * upstream: the daemon journals the attempt on arrival, so a request it never
+ * answered reaches the log as a status-0 row rather than as nothing.
  * A route that declares no attempts at all is refused outright
  * (`missing-route-attempts`): an absent denominator would make the check vacuous,
  * which is the cheapest way around it.
@@ -278,7 +279,7 @@ export interface W3EndpointLatencyProof {
    */
   uiLagRecordsRead: number;
   /**
-   * `ui-lag` records the export MATCHED but did not hand over.
+   * `total` from the ui-lag export's envelope, minus the records it handed over.
    *
    * `GET /api/anomalies` applies its `limit` after matching and reports the
    * matched count as `total` (`apps/daemon/src/anomaly-log.ts`), so an export
@@ -288,6 +289,11 @@ export interface W3EndpointLatencyProof {
    * honestly, and the count INV-3.10 is judged on is simply smaller than the truth.
    * The envelope is the only place the loss is visible, so the capture reads it
    * there and carries the difference here.
+   *
+   * Signed, because the invariant is equality rather than "not truncated". A
+   * negative value is an envelope that declares fewer records than sit beside it,
+   * which is a file whose two halves cannot both be true — refused, not read as
+   * zero loss.
    */
   uiLagExportShortfall: number;
   /**
@@ -529,22 +535,52 @@ function validateUiLag(proof: W3EndpointLatencyProof): W3Violation[] {
       nonZero: (count) =>
         `${count} ui-lag record(s) carried no readable duration; each may have been over the bar`,
     }),
-    ...declaredLoss({
-      code: 'truncated-ui-lag-export',
-      field: 'uiLagExportShortfall',
-      value: proof.uiLagExportShortfall,
-      absent: 'the capture does not say whether its ui-lag export was a complete answer or one page of it',
-      nonZero: (count) =>
-        `the ui-lag export matched ${count} record(s) it did not hand over; the long-task count is a page, not the window`,
-    }),
+    ...exportEnvelopeAgrees(proof.uiLagExportShortfall),
   );
   return violations;
 }
 
 /**
+ * The ui-lag export's envelope must agree exactly with the array beside it.
+ *
+ * Its own check rather than a `declaredLoss` count, because this difference is
+ * signed and each sign is a different untruth. Above zero the export matched
+ * records it did not hand over, so the long-task count is a page of the window.
+ * Below zero the envelope declares fewer records than it delivered, so nothing
+ * in the file can be reconciled with anything else in it. Absent, and there is
+ * no envelope to check at all — which must be refused rather than read as a
+ * complete answer, for the reason `declaredLoss` states.
+ */
+function exportEnvelopeAgrees(difference: unknown): W3Violation[] {
+  const subject = 'uiLagExportShortfall';
+  if (typeof difference !== 'number' || !Number.isFinite(difference)) {
+    return [{
+      code: 'truncated-ui-lag-export',
+      subject,
+      detail: 'the capture does not say whether its ui-lag export was a complete answer or one page of it',
+    }];
+  }
+  if (difference > 0) {
+    return [{
+      code: 'truncated-ui-lag-export',
+      subject,
+      detail: `the ui-lag export matched ${difference} record(s) it did not hand over; the long-task count is a page, not the window`,
+    }];
+  }
+  if (difference < 0) {
+    return [{
+      code: 'truncated-ui-lag-export',
+      subject,
+      detail: `the ui-lag export declared ${-difference} record(s) fewer than it delivered; its envelope contradicts its own records`,
+    }];
+  }
+  return [];
+}
+
+/**
  * A count of evidence the capture KNOWS it lost.
  *
- * Three fields have this exact shape, and each closes the same hole from a
+ * Two fields have this exact shape, and each closes the same hole from a
  * different side: a number the capture must state, whose only acceptable value
  * is zero, and whose absence must be refused rather than read as zero. Absence
  * is the important half — a reader that treats a missing count as "none" makes

@@ -7,11 +7,18 @@
 // the percentile of the outliers. Filling it with healthy rows to fix that
 // would destroy the log.
 //
-// This module is the separate sink the 24 h endpoint-latency proof needs: one
-// JSONL row per COMPLETED request, healthy ones included, measured from
-// middleware entry to the response's `finish` event. It is off unless
+// This module is the separate sink the 24 h endpoint-latency proof needs: a
+// JSONL journal of every request ATTEMPT, healthy ones included, measured from
+// middleware entry to whichever event ends the exchange. It is off unless
 // `OD_REQUEST_TIMING_LOG` turns it on, so an ordinary run pays nothing and
 // writes nothing.
+//
+// Attempts rather than completions, because a capture that can only see
+// completed requests cannot see the failure the proof is about. A request that
+// is aborted, loses its connection, or never answers at all used to leave no
+// trace here, so thirty healthy completions could sit beside any number of
+// invisible never-answered ones and the capture would report a perfect route.
+// Entry writes the attempt; the terminal event writes its status.
 //
 // Data-directory contract: the capture file descends from the data root handed
 // in by the caller (the daemon's resolved `RUNTIME_DATA_DIR`). The env value is
@@ -19,6 +26,7 @@
 // root, leaves the capture off rather than writing daemon data outside it. This
 // module never reads `process.env.OD_DATA_DIR` and never falls back to cwd.
 
+import { randomUUID } from 'node:crypto';
 import { isAbsolute, join, normalize, relative, sep } from 'node:path';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
@@ -45,7 +53,7 @@ function isExplicitOff(value: string | undefined): boolean {
 }
 
 /**
- * One completed request.
+ * Fields both phases of one attempt carry.
  *
  * `route` is the Express route pattern the request matched, exactly as the
  * anomaly observer records it, so the two sinks group on the same string and a
@@ -53,15 +61,40 @@ function isExplicitOff(value: string | undefined): boolean {
  * here: a request that matched no route falls back to its concrete path, and
  * turning either spelling into the proof's normalized key is the capture
  * script's job (`e2e/lib/w3-performance-proof.ts`), not the daemon's.
+ *
+ * `id` pairs the two rows of one attempt. It carries a per-process token so two
+ * daemon lifetimes appending to the same file cannot collide on a counter and
+ * make one lifetime's start look like it terminated in the other's.
  */
-export interface RequestTimingRow {
+interface RequestTimingRowBase {
+  id: string;
   method: string;
   route: string;
-  status: number;
-  /** Middleware entry to response `finish`, whole milliseconds. */
-  durationMs: number;
   atUtc: string;
 }
+
+/**
+ * A request arriving.
+ *
+ * Written before the handler runs, so it survives a daemon killed mid-request:
+ * an attempt with no terminal row beside it is the only durable evidence that
+ * the request was ever made. `route` here is the concrete path — Express has
+ * not routed yet — and the terminal row carries the matched pattern.
+ */
+export interface RequestTimingStartRow extends RequestTimingRowBase {
+  phase: 'start';
+}
+
+/** A request ending, however it ended. */
+export interface RequestTimingEndRow extends RequestTimingRowBase {
+  phase: 'end';
+  /** The response's status, or `0` when nothing was ever sent to the client. */
+  status: number;
+  /** Middleware entry to the terminal event, whole milliseconds. */
+  durationMs: number;
+}
+
+export type RequestTimingRow = RequestTimingStartRow | RequestTimingEndRow;
 
 export interface RequestTimingLogOptions {
   /** The daemon's resolved data root. Required; there is deliberately no default. */
@@ -124,11 +157,40 @@ function routeLabel(req: Request): string {
 }
 
 /**
+ * Records the one terminal row that closes a journaled attempt.
+ *
+ * The invariant this function exists to hold: every attempt written at entry
+ * reaches the log again exactly once, with a status. `finish` is the answered
+ * case. `close` fires for BOTH a completed response and a connection the client
+ * dropped, so it is the only event that also covers an abort, and the
+ * once-only flag is what keeps the two from writing a second row for the same
+ * attempt. (`req.on('aborted')` would add nothing: it is deprecated in current
+ * Node, and every case it reports also emits `close` on the response.)
+ *
+ * The status is the honest one for each ending. Headers that never went out
+ * mean the request never answered, which is status `0` — what the capture reads
+ * as `unreachable`. Headers that did go out mean it answered and then ended, so
+ * the real status stands even though `finish` never came: that is a long-lived
+ * SSE stream the client walked away from, and calling it unreachable would be a
+ * lie about a route that served every frame it was asked for.
+ */
+function recordTerminalRow(res: Response, write: (status: number) => void): void {
+  let recorded = false;
+  const terminal = (): void => {
+    if (recorded) return;
+    recorded = true;
+    write(res.headersSent ? res.statusCode : 0);
+  };
+  res.on('finish', terminal);
+  res.on('close', terminal);
+}
+
+/**
  * Builds the timing middleware.
  *
  * Returns a pass-through when the capture is off, so the caller mounts one line
  * unconditionally and an ordinary run carries no branch of its own. Like the
- * anomaly observer it only reads response metadata on `finish`, so it can
+ * anomaly observer it only reads response metadata from listeners, so it can
  * neither alter nor delay a response, and a failed write is reported and
  * dropped rather than raised at the request.
  */
@@ -152,6 +214,8 @@ export function createRequestTimingObserver(options: RequestTimingLogOptions): R
   }
 
   const append = createAppender(path, options, warn);
+  const lifetime = randomUUID().slice(0, 8);
+  let sequence = 0;
 
   return function requestTimingObserver(req: Request, res: Response, next: NextFunction): void {
     // Only the API surface, matching the anomaly observer's scope: static asset
@@ -160,12 +224,17 @@ export function createRequestTimingObserver(options: RequestTimingLogOptions): R
       next();
       return;
     }
+    sequence += 1;
+    const id = `${lifetime}-${sequence}`;
     const startedAt = process.hrtime.bigint();
-    res.on('finish', () => {
+    append({ phase: 'start', id, method: req.method, route: routeLabel(req), atUtc: new Date().toISOString() });
+    recordTerminalRow(res, (status) => {
       append({
+        phase: 'end',
+        id,
         method: req.method,
         route: routeLabel(req),
-        status: res.statusCode,
+        status,
         durationMs: Number((process.hrtime.bigint() - startedAt) / 1_000_000n),
         atUtc: new Date().toISOString(),
       });

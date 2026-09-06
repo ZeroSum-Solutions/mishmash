@@ -3,9 +3,10 @@
 //
 // Two sources, because no single one can carry the proof. Endpoint durations
 // come from the daemon's opt-in request-timing capture
-// (`apps/daemon/src/http/request-timing-log.ts`), which records EVERY completed
-// request: the anomaly log holds only failures and requests over 4 s, so a p95
-// taken from it would be the p95 of the outliers. Long tasks come from
+// (`apps/daemon/src/http/request-timing-log.ts`), which journals EVERY request
+// attempt — the ones that never answered included: the anomaly log holds only
+// failures and requests over 4 s, so a p95 taken from it would be the p95 of the
+// outliers. Long tasks come from
 // `GET /api/anomalies?kind=ui-lag`, which is where the web's `longtask`
 // observer already files them and where they belong — they are the product
 // misbehaving, which is what that log is for.
@@ -46,12 +47,38 @@ import {
 /**
  * One line of the daemon's request-timing log.
  *
+ * The daemon journals every request twice: an attempt on arrival, and a terminal
+ * row carrying the status it ended with (`apps/daemon/src/http/request-timing-log.ts`).
  * Declared here rather than imported: this is a file format read off disk, and
- * e2e may not reach into `apps/daemon/src` for a shared helper. `parseTimingRow`
+ * e2e may not reach into `apps/daemon/src` for a shared helper. `parseTimingLine`
  * is therefore the boundary validator — an unparseable or half-written line is
  * dropped, never guessed at.
  */
-interface RequestTimingRow {
+interface TimingStartLine {
+  phase: 'start';
+  id: string;
+  method: string;
+  route: string;
+  atUtc: string;
+}
+
+interface TimingEndLine extends Omit<TimingStartLine, 'phase'> {
+  phase: 'end';
+  status: number;
+  durationMs: number;
+}
+
+type TimingLine = TimingStartLine | TimingEndLine;
+
+/**
+ * One request as the capture sees it, whether or not it ever ended.
+ *
+ * An attempt with no terminal row beside it is a request the daemon received
+ * and never answered — the exact condition the journal exists to make visible.
+ * It is carried here with status 0 rather than discarded, so it reaches
+ * `samples` and its route's attempt count like every other observation.
+ */
+interface TimingObservation {
   method: string;
   route: string;
   status: number;
@@ -73,7 +100,7 @@ export function outcomeForStatus(status: number): W3SampleOutcome {
   return 'success';
 }
 
-function parseTimingRow(line: string): RequestTimingRow | null {
+function parseTimingLine(line: string): TimingLine | null {
   const trimmed = line.trim();
   if (trimmed === '') return null;
   let parsed: unknown;
@@ -84,13 +111,58 @@ function parseTimingRow(line: string): RequestTimingRow | null {
     return null;
   }
   if (parsed == null || typeof parsed !== 'object') return null;
-  const row = parsed as Partial<RequestTimingRow>;
+  const row = parsed as Partial<TimingEndLine>;
+  if (row.phase !== 'start' && row.phase !== 'end') return null;
+  if (typeof row.id !== 'string' || row.id === '') return null;
   if (typeof row.method !== 'string' || row.method === '') return null;
   if (typeof row.route !== 'string' || row.route === '') return null;
   if (typeof row.atUtc !== 'string' || !Number.isFinite(Date.parse(row.atUtc))) return null;
+  const base = { id: row.id, method: row.method, route: row.route, atUtc: row.atUtc };
+  if (row.phase === 'start') return { phase: 'start', ...base };
   if (typeof row.durationMs !== 'number' || !Number.isFinite(row.durationMs)) return null;
   if (typeof row.status !== 'number' || !Number.isFinite(row.status)) return null;
-  return { method: row.method, route: row.route, status: row.status, durationMs: row.durationMs, atUtc: row.atUtc };
+  return { phase: 'end', ...base, status: row.status, durationMs: row.durationMs };
+}
+
+/**
+ * Every attempt the log journaled, terminated or not.
+ *
+ * The invariant: a start line and the terminal line that shares its id are ONE
+ * observation, and a start line with no such terminal line is still one. Pairing
+ * runs over the whole file before any window filter, so a request that arrived
+ * inside the window and ended outside it is not mistaken for an attempt nobody
+ * answered.
+ *
+ * An unterminated attempt is recorded with status 0 — `unreachable` — and a
+ * duration of 0. The zero is not a claim that it was fast: a request that never
+ * ended has no elapsed time to report, and the percentiles the bar is judged on
+ * are taken over SUCCESSFUL rows only, so the row can only ever move the failure
+ * counts it belongs in.
+ */
+function pairAttempts(lines: readonly TimingLine[]): TimingObservation[] {
+  const terminated = new Set(lines.filter((line) => line.phase === 'end').map((line) => line.id));
+  const observations: TimingObservation[] = [];
+  for (const line of lines) {
+    if (line.phase === 'end') {
+      observations.push({
+        method: line.method,
+        route: line.route,
+        status: line.status,
+        durationMs: line.durationMs,
+        atUtc: line.atUtc,
+      });
+      continue;
+    }
+    if (terminated.has(line.id)) continue;
+    observations.push({
+      method: line.method,
+      route: line.route,
+      status: 0,
+      durationMs: 0,
+      atUtc: line.atUtc,
+    });
+  }
+  return observations;
 }
 
 export interface ReadTimingLogResult {
@@ -103,9 +175,11 @@ export interface ReadTimingLogResult {
 /**
  * Reads a request-timing log into samples and the per-route attempt counts.
  *
- * Attempts are counted from the same pass that writes the rows, so the two can
- * only disagree if rows were removed afterwards — which is the check the
- * validator's `dropped-failures` rule performs.
+ * Every journaled attempt becomes exactly one sample, including an attempt that
+ * never terminated; none is dropped. Attempts are counted from the same pass
+ * that writes the rows, so the two can only disagree if rows were removed
+ * afterwards — which is the check the validator's `dropped-failures` rule
+ * performs.
  */
 export function readTimingLog(
   contents: string,
@@ -118,13 +192,18 @@ export function readTimingLog(
   const attempts = new Map<string, W3RouteAttempts>();
   let unparseableLines = 0;
 
+  const parsed: TimingLine[] = [];
   for (const line of contents.split('\n')) {
     if (line.trim() === '') continue;
-    const row = parseTimingRow(line);
+    const row = parseTimingLine(line);
     if (row == null) {
       unparseableLines += 1;
       continue;
     }
+    parsed.push(row);
+  }
+
+  for (const row of pairAttempts(parsed)) {
     const at = Date.parse(row.atUtc);
     if (at < start || at > end) continue;
     const key = normalizeRouteKey(row.method, row.route);
@@ -236,7 +315,7 @@ export function buildProof(input: BuildProofInput): W3EndpointLatencyProof {
 }
 
 /**
- * How many records the ui-lag export matched but did not hand over.
+ * By how much the ui-lag export's envelope disagrees with the array beside it.
  *
  * `GET /api/anomalies` filters first and applies `limit` afterwards, reporting
  * the matched count as `total` (`apps/daemon/src/anomaly-log.ts`). So the
@@ -245,14 +324,19 @@ export function buildProof(input: BuildProofInput): W3EndpointLatencyProof {
  * way. Measured on the envelope's own terms rather than on the ui-lag subset, so
  * an export taken without a `kind` filter is judged the same way.
  *
- * A `total` that is not a number is not a shortfall of zero: it is an envelope
- * nobody can check, so it becomes a value the validator refuses.
+ * The invariant is equality, and the difference is signed for that reason. A
+ * `total` above the array is the page boundary above; a `total` below it is an
+ * envelope that contradicts its own records, which is not a shortfall of zero —
+ * clamping it there would accept a file whose two halves cannot both be true.
+ *
+ * A `total` that is not a number is neither: it is an envelope nobody can check,
+ * so it becomes a value the validator refuses.
  */
 function uiLagExportShortfall(response: ListAnomaliesResponse): number {
   const delivered = response.anomalies?.length;
   if (typeof response.total !== 'number' || !Number.isFinite(response.total)) return Number.NaN;
   if (typeof delivered !== 'number') return Number.NaN;
-  return Math.max(0, response.total - delivered);
+  return response.total - delivered;
 }
 
 // ---------------------------------------------------------------------------
