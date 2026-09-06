@@ -145,8 +145,8 @@ describe('TemplatesSection card contract', () => {
 
     // FU-28: the poster URL is derived from the entry id, so an entry that
     // ships no `assets/poster.jpg` must go straight to the live frame. Mounting
-    // the img and relying on onError would spend a 404 on the daemon's slowest
-    // sub-resource route for every such card.
+    // the img and relying on onError would spend a 404 on the sub-resource
+    // route for every such card.
     const card = screen.getByTestId('templates-card');
     expect(card.querySelector('img')).toBeNull();
     expect(card.querySelector('iframe')).toBeTruthy();

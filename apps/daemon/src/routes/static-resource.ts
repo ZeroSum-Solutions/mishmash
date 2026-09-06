@@ -136,14 +136,25 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
    * answers 404 -- so an entry installed a moment ago is never hidden by the
    * cache, and the only thing the cache can do is skip work.
    *
+   * Removal is the one direction a lookup miss cannot catch: for up to the TTL
+   * a hit can still name the directory of an entry that has just been deleted.
+   * That is harmless because the directory is what the entry OWNS, not what it
+   * serves -- `sendSkillSubresource` still resolves the file under it and
+   * answers 404 when it is gone, which is the same status a cold listing would
+   * have produced. `apps/daemon/tests/routes/skills-delete.test.ts` pins that:
+   * it warms the cache with a 200, deletes the skill, and requires the next
+   * request for the same asset to be a 404.
+   *
    * The scan it skips is the whole registry: `listAllSkillLikeEntries` reads
    * and parses every SKILL.md under the skill and design-template roots -- 362
    * entries on a stock checkout. A page of the Templates gallery is one
    * request per card plus a font request per opened preview, and every one of
    * them paid that scan again, which is why `GET /api/skills/:id/assets/*`
-   * leads the wave-2 `request-slow` table. Measured by
-   * `e2e/tests/w3-read-endpoints.test.ts`: the run's first sub-resource
-   * request takes 611 ms and the next one, through the warm listing, 3.1 ms.
+   * carries more `request-slow` rows (143) than any other route in the wave-3
+   * latency capture. Measured by `e2e/tests/w3-read-endpoints.test.ts`: the
+   * run's first sub-resource request takes 108.8 ms and the next one, through
+   * the warm listing, 1.3 ms. Against a hand-driven daemon whose TTL had just
+   * expired, 906 ms then 1.8 ms.
    *
    * Retention, not peak memory, is what the cache adds: the listing was
    * already built in full on every request; it is now held for the TTL.

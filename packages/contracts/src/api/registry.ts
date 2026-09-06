@@ -213,8 +213,9 @@ export interface SkillSummary {
    * derives that URL from the entry id, so a listing that stays silent makes
    * every card without the file fire a 404 through the sub-resource route
    * (361 of the 362 shipped design templates, FU-28). A 404 is a failed
-   * observation, not a sample, and the route is the busiest slow one in the
-   * latency capture, so the listing has to answer the question instead.
+   * observation, not a sample, and that route carries more `request-slow`
+   * rows than any other in the wave-3 route table, so the listing has to
+   * answer the question instead.
    *
    * Optional in the type only so existing fixtures that predate the field
    * still describe a valid summary; every daemon listing sets it.

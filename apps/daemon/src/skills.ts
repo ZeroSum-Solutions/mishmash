@@ -477,9 +477,10 @@ function collectReferencedSideFiles(body: string): string[] {
  * `/api/skills/<id>/assets/poster.jpg` from the entry id alone, so an entry
  * that stays silent about the file makes every card without one fire a 404
  * through `sendSkillSubresource` -- 361 of the 362 shipped design templates
- * (FU-28), each costing a registry resolution on the busiest slow route in
- * the latency capture. Answering the question in the listing is what lets a
- * client ask only for posters that exist.
+ * (FU-28), each costing a registry resolution on the route that carries more
+ * `request-slow` rows than any other in the wave-3 route table (143).
+ * Answering the question in the listing is what lets a client ask only for
+ * posters that exist.
  */
 async function entryShipsPoster(dir: string): Promise<boolean> {
   try {
