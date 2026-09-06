@@ -7,6 +7,7 @@ import {
   OPEN_DESIGN_GITHUB_REPO_URL,
   type CompositionMetrics,
   type CompositionMetricsRecord,
+  type ExportCapabilitiesResponse,
   type ProjectFileVersion,
   type SocialShareRequest,
   type SocialShareResponse,
@@ -110,6 +111,7 @@ import {
   exportReactComponentAsHtml,
   exportReactComponentAsZip,
   canRequestOffscreenImageRender,
+  clientExportCapabilities,
   captureHostIframeSnapshot,
   imageDataUrlToBlob,
   isOpenDesignHostAvailable,
@@ -10908,10 +10910,33 @@ function HtmlViewer({
     rendererId === 'html';
   const canShare = source !== null && isShareableArtifact;
   const canDownload = source !== null && (isShareableArtifact || isMarkdownArtifact);
+  // What the daemon behind this page can rasterize. `null` until it answers;
+  // an unanswered format is treated as available (see `clientExportCapabilities`),
+  // so a slow or silent probe never removes a working choice.
+  const [exportCapabilities, setExportCapabilities] = useState<ExportCapabilitiesResponse | null>(null);
+  // Read on menu OPEN and only on open: this tab outlives a daemon restart, and
+  // the reader keys its cache on the daemon boot id, so opening the menu is what
+  // re-probes a daemon that was replaced underneath the session. A viewer whose
+  // menu is never opened asks nothing, and closing the menu cannot change what
+  // the daemon can rasterize, so neither costs a request.
+  useEffect(() => {
+    if (!canShare || !downloadMenuOpen) return;
+    let cancelled = false;
+    void clientExportCapabilities().then((capabilities) => {
+      if (!cancelled) setExportCapabilities(capabilities);
+    });
+    return () => { cancelled = true; };
+  }, [canShare, downloadMenuOpen]);
+
   // PPTX export is slide-based, so show it only for explicit decks plus
   // structured deck runtimes. Do not key this off plain `.slide`: ordinary
   // parallax/long pages may use that class but must remain page-mode exports.
-  const showPptxExport = canShare && deckExportSignal;
+  //
+  // It also needs the daemon's slide renderer. Unlike PDF — which falls back to
+  // browser PDF generation on the 501 and is therefore never withheld — a .pptx
+  // has no client-side substitute, so offering it on a daemon without one only
+  // buys the user a failure and both anomaly sources a 501 row.
+  const showPptxExport = canShare && deckExportSignal && exportCapabilities?.pptx !== false;
   const canPptx = showPptxExport && !streaming;
   const showMarkdownExport = source !== null && isMarkdownArtifact;
   const showImageExport = canShare;

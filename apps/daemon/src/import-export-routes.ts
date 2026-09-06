@@ -1024,21 +1024,35 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
     }
   });
 
-  // What this daemon can rasterize, so a client that carries its own fallback
-  // never sends a request the daemon has already decided it cannot serve.
-  //
-  // INVARIANT: this answers for the same renderers `handleScreenshotExport`
-  // rasterizes with, through the same predicate the agent charter reads
-  // (`isImageScreenshotExportAvailable`). A caller told `image: false` would get
-  // 501 UPSTREAM_UNAVAILABLE from `POST /api/projects/:id/export/image` on every
-  // attempt, in this daemon process, for as long as it lives -- the renderers are
-  // wired once at boot and never appear later. Not project-scoped for the same
-  // reason.
-  app.get('/api/export/capabilities', (_req, res) => {
-    const body: ExportCapabilitiesResponse = {
+  /**
+   * What this daemon can rasterize, so a client that carries its own fallback
+   * never sends a request the daemon has already decided it cannot serve.
+   *
+   * INVARIANT: every flag answers for exactly the renderer the route behind it
+   * calls. A caller told `false` would get 501 UPSTREAM_UNAVAILABLE from that
+   * route on every attempt, in this daemon process, for as long as it lives --
+   * the renderers are wired once at boot and never appear later. Not
+   * project-scoped for the same reason.
+   *
+   * The flags are computed separately because the wiring is:
+   * `desktopPdfExporter` serves the native PDF route alone,
+   * `desktopSlideRenderer` serves all three screenshot formats, and
+   * `desktopArtifactExporter` is `handleScreenshotExport`'s fallback for
+   * `format === 'image'` only -- which is what `isImageScreenshotExportAvailable`,
+   * the same predicate the agent charter reads, already encodes.
+   */
+  function wiredExportCapabilities(): ExportCapabilitiesResponse {
+    const canRenderSlides = typeof desktopSlideRenderer === 'function';
+    return {
+      nativePdf: typeof desktopPdfExporter === 'function',
+      rasterPdf: canRenderSlides,
+      pptx: canRenderSlides,
       image: isImageScreenshotExportAvailable({ desktopSlideRenderer, desktopArtifactExporter }),
     };
-    res.json(body);
+  }
+
+  app.get('/api/export/capabilities', (_req, res) => {
+    res.json(wiredExportCapabilities());
   });
 
   // Programmatic screenshot-based PPTX: render each deck slide to a pixel-perfect
