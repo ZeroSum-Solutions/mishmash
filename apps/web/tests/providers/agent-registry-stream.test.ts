@@ -191,6 +191,66 @@ describe('fetchAgentsStream contract frames', () => {
     await expect(refreshCall).resolves.toHaveLength(2);
   });
 
+  it('does not hand a new caller the stream its last listener just cancelled', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const signal = init?.signal ?? undefined;
+      return new Promise<Response>((resolve, reject) => {
+        const onAbort = () => reject(signal?.reason ?? new Error('aborted'));
+        if (signal?.aborted) {
+          onAbort();
+          return;
+        }
+        signal?.addEventListener('abort', onAbort, { once: true });
+        void gate.then(() => {
+          signal?.removeEventListener('abort', onAbort);
+          resolve(streamResponse(encodeFrames(frames)));
+        });
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const boot = new AbortController();
+    const bootCall = fetchAgentsStream({ onAgent: vi.fn(), signal: boot.signal });
+
+    // The join happens in the SAME tick as the abort, before the cancelled
+    // request has had a chance to reject: a stream retired by its last
+    // listener must already be unpublished, not merely on its way out.
+    boot.abort();
+    const joined = fetchAgentsStream({ onAgent: vi.fn() });
+
+    await expect(bootCall).rejects.toBeTruthy();
+    release();
+    await expect(joined).resolves.toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('hands every joined caller its own array of agents', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        await gate;
+        return streamResponse(encodeFrames(frames));
+      }),
+    );
+
+    const boot = fetchAgentsStream({ onAgent: vi.fn() });
+    const refresh = fetchAgentsStream({ onAgent: vi.fn() });
+    release();
+    const [bootAgents, refreshAgents] = await Promise.all([boot, refresh]);
+
+    expect(bootAgents).not.toBe(refreshAgents);
+    bootAgents.length = 0;
+    expect(refreshAgents.map((agent) => agent.id)).toEqual(['codex', 'claude']);
+  });
+
   it('does not let a forced refresh join an older in-flight stream', async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {

@@ -124,7 +124,10 @@ interface AgentStreamListener {
 }
 
 interface SharedAgentStream {
-  /** Agents already painted, replayed to a caller that joins mid-stream. */
+  /**
+   * Agents already painted, replayed to a caller that joins mid-stream. This
+   * is the stream's own accumulator; callers are handed a copy of it.
+   */
   agents: AgentInfo[];
   listeners: Set<AgentStreamListener>;
   promise: Promise<AgentInfo[]>;
@@ -231,21 +234,33 @@ function joinAgentRegistryStream(
   onAgent: (agent: AgentInfo) => void,
   signal?: AbortSignal,
 ): Promise<AgentInfo[]> {
-  if (signal?.aborted) {
-    return Promise.reject(signal.reason ?? new Error('agents stream aborted'));
-  }
   const listener: AgentStreamListener = { onAgent };
-  for (const agent of shared.agents) onAgent(agent);
-  shared.listeners.add(listener);
+  // Retiring the stream and cancelling it are one step: a stream nobody is
+  // listening to is aborted, and an aborted stream must not still be published
+  // for the next caller to join. Clearing it here rather than only in the
+  // request's own `finally` closes the window between the last detach and the
+  // aborted fetch rejecting, during which a joiner would be handed that
+  // rejection instead of a detection.
   const detach = () => {
     shared.listeners.delete(listener);
-    if (shared.listeners.size === 0) shared.abort.abort();
+    if (shared.listeners.size > 0) return;
+    if (inFlightAgentStream === shared) inFlightAgentStream = null;
+    shared.abort.abort();
   };
+  if (signal?.aborted) {
+    detach();
+    return Promise.reject(signal.reason ?? new Error('agents stream aborted'));
+  }
+  for (const agent of shared.agents) onAgent(agent);
+  shared.listeners.add(listener);
+  // Each caller resolves with its own array: `shared.agents` is the stream's
+  // accumulator, and one caller sorting or splicing its result must not be
+  // visible to the next one that joins.
   if (!signal) {
     return shared.promise.then(
       (agents) => {
         detach();
-        return agents;
+        return agents.slice();
       },
       (err) => {
         detach();
@@ -263,7 +278,7 @@ function joinAgentRegistryStream(
       (agents) => {
         signal.removeEventListener('abort', onAbort);
         detach();
-        resolve(agents);
+        resolve(agents.slice());
       },
       (err) => {
         signal.removeEventListener('abort', onAbort);
