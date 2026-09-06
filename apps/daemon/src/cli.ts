@@ -1443,6 +1443,17 @@ Options:
                    to that interface only.
   --no-open        Do not open the browser after start.
 
+Environment:
+  OD_REQUEST_TIMING_LOG
+                   Off by default. Set to 1 to append one JSONL row per
+                   completed API request (method, route, status, duration,
+                   timestamp) to request-timing/requests.jsonl under the
+                   resolved daemon data directory; set a relative path to
+                   choose another name under that directory. This is the
+                   all-observations capture the endpoint-latency proof reads;
+                   the anomaly log holds only failures and slow requests, so it
+                   cannot supply a percentile.
+
 What the daemon does:
   * scans PATH for installed code-agent CLIs (claude, codex, devin, opencode, cursor-agent, ...)
   * serves the chat UI at http://<host>:<port>
