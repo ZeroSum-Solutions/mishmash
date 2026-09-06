@@ -305,10 +305,10 @@ export interface ImageExportFailureInput {
 /**
  * Builds the anomaly record for a failed client-side image export.
  *
- * Invariant: Every client-side export failure must yield an anomaly record with
- * kind `'export-failed'`, severity `'warn'`, a human-readable summary naming both
- * the target file and the failure cause, and a detail payload preserving the export
- * format (`image`), error code, file name, and elapsed duration.
+ * Invariant: Every failed client-side image export (Save as image / Copy screenshot)
+ * yields an anomaly record with kind `'export-failed'`, severity `'warn'`, a human-readable
+ * summary naming both the target file and the failure cause, and a detail payload preserving
+ * the export format (`image`), error code, file name, and elapsed duration.
  */
 export function anomalyForImageExportFailure(
   input: ImageExportFailureInput,
