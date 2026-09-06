@@ -11640,11 +11640,15 @@ function HtmlViewer({
       });
     } catch (err) {
       console.warn('[exportAsImage] failed to save snapshot:', err);
-      const message = err instanceof Error && err.message ? err.message : t('fileViewer.exportImageFailed');
+      const code = exportErrorCode(err);
+      const isCaptureFailure = stage === 'capture' || code.startsWith('CAPTURE_');
+      const message = isCaptureFailure
+        ? t('fileViewer.exportImageFailed')
+        : (err instanceof Error && err.message ? err.message : t('fileViewer.exportImageFailed'));
       setExportToast({ message, tone: 'error' });
       fireImageExportResult(
         'failed',
-        exportErrorCode(err),
+        code,
         stage,
         isCurrentSlideFallback ? 'current-slide' : undefined,
       );
