@@ -398,6 +398,7 @@ export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): 
   let shortfall = 0;
   let envelopeUnreadable = false;
   let covered: number | null = null;
+  let polledBefore = false;
 
   polls.forEach((poll, index) => {
     const delivered = Array.isArray(poll?.anomalies) ? poll.anomalies : null;
@@ -418,11 +419,24 @@ export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): 
     }
     // A log that retains nothing has nothing to reconcile against, and must not
     // reset what earlier polls already proved was read.
-    if (firstSeq == null || lastSeq == null) return;
+    if (firstSeq == null || lastSeq == null) {
+      polledBefore = true;
+      return;
+    }
+    if (covered == null && polledBefore && firstSeq > 1) {
+      // An earlier poll found the log holding nothing, and an emptied log
+      // restarts its sequence at 1 (`clear()` in apps/daemon/src/anomaly-log.ts).
+      // So every record below this one was written after that poll — inside the
+      // window — and had already left the log by the time anybody asked for it.
+      // Without this the loss is invisible: the first poll read nothing, so
+      // there is no `covered` for the ordinary check to compare against.
+      gaps.push({ fromSeq: 1, toSeq: firstSeq - 1 });
+    }
     if (covered != null && firstSeq > covered + 1) {
       gaps.push({ fromSeq: covered + 1, toSeq: firstSeq - 1 });
     }
     covered = covered == null ? lastSeq : Math.max(covered, lastSeq);
+    polledBefore = true;
   });
 
   const records = [...byId.values()].sort(

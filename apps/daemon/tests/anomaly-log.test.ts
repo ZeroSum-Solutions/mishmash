@@ -166,7 +166,7 @@ describe('anomaly log', () => {
   // A rotation is the one event that removes records nobody deleted. The 24 h
   // capture behind INV-3.10 polls this log for a whole day, which is long enough
   // to roll it, so a reader has to be able to tell a quiet window from a rolled
-  // one. These four cases pin what makes that possible: a number on every
+  // one. The cases below pin what makes that possible: a number on every
   // record, a read that covers both generations, and an envelope that says so.
 
   /** Pushes the current generation past its cap so the next append has to rotate. */
@@ -231,6 +231,24 @@ describe('anomaly log', () => {
     expect(result.generations).toBe(1);
     expect(result.firstSeq).toBe(1);
     expect(result.lastSeq).toBe(1);
+  });
+
+  it('restarts the sequence after a clear, so an empty log always means seq 1 next', async () => {
+    const log = createAnomalyLog({ dataDir });
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'one' }, 'web');
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'two' }, 'web');
+
+    await log.clear();
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'after the clear' }, 'web');
+
+    // Nothing survives a clear for the next record to be monotonic against, and
+    // a reader needs "the log is empty" and "the next record is seq 1" to be the
+    // same statement: it is what lets a later answer starting above 1 be read as
+    // records that were written and lost.
+    const { anomalies, firstSeq, lastSeq } = await log.list({});
+    expect(anomalies.map((a) => a.seq)).toEqual([1]);
+    expect(firstSeq).toBe(1);
+    expect(lastSeq).toBe(1);
   });
 
   it('clears the log and reports how many records went away', async () => {

@@ -967,6 +967,31 @@ describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotat
     expect(built?.uiLagExportShortfall, why('every poll handed over everything it matched')).toBe(0);
   });
 
+  it('refuses records that arrived and rotated away after a poll found the log empty', () => {
+    // The first poll proves the capture was running and the log held nothing.
+    // An emptied log restarts at seq 1, so a later answer starting at 5 says
+    // records 1 to 4 were written inside the window and were already gone. With
+    // no earlier record read there is no covered sequence for the ordinary
+    // overlap check to compare against, which is what made this loss invisible.
+    const empty = uiLagExport([]);
+    const after = uiLagExport([lagAt(50, 5), lagAt(60, 6)], { generations: 2 });
+    const built = buildFromPolls([empty, after]);
+
+    expect(gapRanges(built), why('an empty first poll is a floor, not an absence of evidence')).toEqual([
+      '1..4',
+    ]);
+  });
+
+  it('does not read a first poll that starts above one as a gap', () => {
+    // Nothing preceded the first poll, so the records below its range may have
+    // been discarded long before the window opened. Refusing here would refuse
+    // every capture taken against a log that had ever been used.
+    const first = uiLagExport([lagAt(50, 5), lagAt(60, 6)], { generations: 2 });
+    const second = uiLagExport([lagAt(60, 6), lagAt(70, 7)], { generations: 2 });
+
+    expect(gapRanges(buildFromPolls([first, second])), why('the first poll defines the floor')).toEqual([]);
+  });
+
   it('refuses a ui-lag export that carries no sequence range at all', () => {
     // An export with no range is an export nobody can reconcile: it cannot say
     // which records the log still retains, so the next poll cannot prove it

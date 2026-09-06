@@ -168,12 +168,20 @@ function storedSequence(record: AnomalyRecord): number | null {
   return typeof record.seq === 'number' && Number.isFinite(record.seq) ? record.seq : null;
 }
 
-/** Reads a log generation, or null when that generation does not exist. */
+/**
+ * Reads a log generation, or null when that generation does not exist.
+ *
+ * Only absence is swallowed. A generation that exists and cannot be read is
+ * raised, because the alternative is the failure this module exists to prevent:
+ * an answer that is quietly smaller than the log, with nothing in it to say a
+ * whole generation was skipped.
+ */
 async function readGeneration(file: string): Promise<string | null> {
   try {
     return await readFile(file, 'utf8');
-  } catch {
-    return null;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return null;
+    throw err;
   }
 }
 
@@ -372,6 +380,14 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
           await gateway.mkdir(capability, dirname(path), { recursive: true });
           await gateway.writeFile(capability, path, '', 'utf8');
           await gateway.rm(capability, retainedPath, { force: true });
+          // Both generations are gone, so there is nothing left for the next
+          // record to be monotonic with respect to. Restarting makes "the log is
+          // empty" and "the next record is seq 1" the same statement, which is
+          // what lets a reader treat a later answer starting above 1 as records
+          // that were written and lost rather than as records deliberately
+          // discarded before it looked. Reset only after the writes succeeded:
+          // restarting over records that survived would mint duplicates.
+          nextSequence = 1;
         } catch (err) {
           console.warn('[anomaly-log] could not clear:', err);
         }
