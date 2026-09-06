@@ -29,7 +29,14 @@ import type {
   ResearchOptions,
   RunContextSelection,
   SseErrorPayload,
+  VelaLoginStatus,
 } from '@open-design/contracts';
+
+// The Vela sign-in projection is a daemon/web shared response shape, so it is
+// owned by `packages/contracts` (AGENTS.md, "Boundary constraints"). Re-exported
+// here because this module is the app's daemon-provider seam and every consumer
+// already reaches the AMR types through it.
+export type { VelaLiveAccount, VelaLoginStatus, VelaUser } from '@open-design/contracts';
 import type { StreamHandlers } from './anthropic';
 
 /**
@@ -903,16 +910,6 @@ export async function launchAntigravityOauth(): Promise<LaunchAntigravityOauthRe
   }
 }
 
-export interface VelaUser {
-  id: string;
-  email: string;
-  name?: string;
-  image?: string | null;
-  plan?: string;
-  /** Wallet balance (USD, string) from the live `/api/v1/me` projection; `null` when unknown. */
-  balanceUsd?: string | null;
-}
-
 /**
  * Format a raw wallet `balanceUsd` string (e.g. "12.3") into a display string
  * (e.g. "$12.30"). Returns `null` when the balance is unknown/unparseable so
@@ -942,32 +939,6 @@ export function canUpgradeVelaPlan(plan?: string | null): boolean {
   const normalized = plan?.trim().toLowerCase();
   if (!normalized) return false;
   return normalized !== VELA_TOP_PLAN_TIER;
-}
-
-/**
- * Live billing projection (plan tier + wallet balance) for the signed-in
- * account, surfaced on its OWN field rather than on {@link VelaUser} so
- * env-backed sessions (where `user` is null) can show plan/balance without a
- * fabricated identity. Absent means unknown → hide the fields.
- */
-export interface VelaLiveAccount {
-  plan?: string;
-  balanceUsd?: string | null;
-}
-
-export interface VelaLoginStatus {
-  loggedIn: boolean;
-  loginInFlight?: boolean;
-  profile: string;
-  user: VelaUser | null;
-  account?: VelaLiveAccount;
-  configPath: string;
-  // Device-authorization details parsed from `vela login` output while a login
-  // is in flight, so the UI can offer a manual sign-in link when the browser
-  // did not auto-open. See parseVelaLoginActivation in the daemon's vela.ts.
-  activationUrl?: string;
-  userCode?: string;
-  browserOpenFailed?: boolean;
 }
 
 // AMR (vela) login surfaces three thin endpoints on the daemon:
