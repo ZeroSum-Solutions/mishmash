@@ -31,7 +31,7 @@ const preserveProjectListIdentity = appModule.preserveProjectListIdentity as (
 
 const fetchProjectFiles = registry.fetchProjectFiles as (
   projectId: string,
-  options?: { since?: number },
+  options?: { since?: number; joinInFlight?: boolean },
 ) => Promise<ProjectFile[]>;
 
 const canListProjectFilesAsDelta = registry.canListProjectFilesAsDelta as (
@@ -101,14 +101,50 @@ describe('fetchProjectFiles incremental listing', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const [first, second] = await Promise.all([
-      fetchProjectFiles('project-1'),
-      fetchProjectFiles('project-1'),
+      fetchProjectFiles('project-1', { joinInFlight: true }),
+      fetchProjectFiles('project-1', { joinInFlight: true }),
     ]);
 
     // Red on base: every caller opens its own request, so the 15 s grid tick
     // and a focus refresh both walk the same tree.
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(first).toEqual(second);
+  });
+
+  it('gives a caller that did not ask to join its own fresh listing', async () => {
+    // The project view lists right after the agent's Write lands, to find the
+    // file it must auto-open. A listing that began BEFORE that write is stale
+    // for it, however fresh it looks to the grid poll.
+    let calls = 0;
+    const fetchMock = vi.fn(async () => {
+      calls += 1;
+      return calls === 1
+        ? filesResponse([projectFile('plan.md', 10)])
+        : filesResponse([projectFile('index.html', 20), projectFile('plan.md', 10)]);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const stale = fetchProjectFiles('project-1', { joinInFlight: true });
+    const fresh = fetchProjectFiles('project-1');
+    const [staleFiles, freshFiles] = await Promise.all([stale, fresh]);
+
+    // Red on the 3B head: the second caller joined the first request and never
+    // saw index.html, so the turn-end auto-open had nothing to open.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(staleFiles.map((file) => file.name)).toEqual(['plan.md']);
+    expect(freshFiles.map((file) => file.name)).toEqual(['index.html', 'plan.md']);
+  });
+
+  it('lets a grid poll join a fresh listing that is already in flight', async () => {
+    const fetchMock = vi.fn(async () => filesResponse([projectFile('a.html', 10)]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await Promise.all([
+      fetchProjectFiles('project-1'),
+      fetchProjectFiles('project-1', { joinInFlight: true }),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('does not share an in-flight full load with a delta request', async () => {

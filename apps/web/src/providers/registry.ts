@@ -1647,10 +1647,16 @@ function projectFileKey(file: ProjectFile): string {
 /**
  * List a project's files, as a whole tree or as a delta.
  *
- * INVARIANT: at most one list request per project and cursor is in flight at a
- * time. The home grid re-lists on a 15 s timer and again on window focus and
- * on visibility change, so without this one tab can have several walks of the
- * same tree running against each other.
+ * INVARIANT: a caller that asks to `joinInFlight` shares the list request
+ * already running for the same project and cursor instead of opening its own.
+ * The home grid re-lists on a 15 s timer and again on window focus and on
+ * visibility change, so without this one tab can have several walks of the
+ * same tree running against each other. Joining is OPT-IN because a request
+ * answers with the tree as it stood when the request began: a caller that
+ * lists right after a write (the project view refreshing to auto-open a file
+ * the agent produced) must not be handed a listing that began before that
+ * write landed, or the new file is invisible to it. Every fresh request still
+ * installs itself, so a poll that arrives while it runs can join it.
  *
  * With `since`, the daemon answers with only the entries whose mtime is newer
  * than the cursor (INV-3.3), so an unchanged file is ABSENT from the response
@@ -1659,15 +1665,17 @@ function projectFileKey(file: ProjectFile): string {
  */
 export async function fetchProjectFiles(
   projectId: string,
-  options?: { since?: number },
+  options?: { since?: number; joinInFlight?: boolean },
 ): Promise<ProjectFile[]> {
   const since = Number(options?.since);
   const cursor = Number.isFinite(since) && since > 0
     ? `?since=${encodeURIComponent(String(since))}`
     : '';
   const url = `/api/projects/${encodeURIComponent(projectId)}/files${cursor}`;
-  const inFlight = inFlightProjectFileLists.get(url);
-  if (inFlight) return inFlight;
+  if (options?.joinInFlight) {
+    const inFlight = inFlightProjectFileLists.get(url);
+    if (inFlight) return inFlight;
+  }
   const pending = (async () => {
     try {
       const resp = await fetch(url);

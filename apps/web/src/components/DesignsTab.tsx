@@ -116,7 +116,10 @@ async function listProjectFilesSince(
 	projectId: string,
 	held: ProjectFile[],
 ): Promise<ProjectFile[]> {
-	const delta = await fetchProjectFiles(projectId, { since: latestProjectFileMtime(held) });
+	const delta = await fetchProjectFiles(projectId, {
+		since: latestProjectFileMtime(held),
+		joinInFlight: true,
+	});
 	return mergeProjectFileDelta(held, delta);
 }
 const PROJECTS_AUTO_REFRESH_MS = 15000;
@@ -313,7 +316,7 @@ export function DesignsTab({
 			try {
 				files = extend
 					? await listProjectFilesSince(project.id, extend.files)
-					: await fetchProjectFiles(project.id);
+					: await fetchProjectFiles(project.id, { joinInFlight: true });
 			} catch {
 				// One project's failure must not blank the rest of the grid --
 				// every other project's fetch keeps running via the shared pool.
