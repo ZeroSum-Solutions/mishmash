@@ -1514,6 +1514,13 @@ const VITE_CONFIG_FILENAMES = [
  * file there, or a `vite` dependency in its `package.json` — never to the page
  * being classified. A caller holding the root's file names answers it without
  * touching the filesystem, so a tree of many `index.html` pages asks once.
+ *
+ * A name in `rootFileNames` is a file or a symlink, which is the widest the
+ * directory listing can say. A symlink at the root NAMED `vite.config.ts` but
+ * pointing at a directory therefore counts as a config here, where a `stat`
+ * would have rejected it; that shape has no meaning to Vite either, and paying
+ * a `stat` per candidate to reject it would give the walk back the per-entry
+ * cost this helper exists to remove.
  */
 async function readsViteDevProject(projectDirPath, rootFileNames?: ReadonlySet<string> | null) {
   for (const candidate of VITE_CONFIG_FILENAMES) {
