@@ -7,6 +7,7 @@
 // All paths flowing in from HTTP handlers are validated against the project
 // directory to prevent path traversal — see resolveSafe().
 
+import type { Dirent } from 'node:fs';
 import { realpathSync } from 'node:fs';
 import { link, lstat, mkdir, readdir, readFile, realpath, rename, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -231,17 +232,19 @@ async function scanProjectFiles(projectsRoot, projectId, opts = {}) {
  * server — is answered once, from the root listing the walk already holds.
  */
 function createProjectScanContext(projectRoot: string) {
-  let rootFileNames: ReadonlySet<string> | null = null;
+  let rootEntries: ReadonlyMap<string, Dirent> | null = null;
   let viteDevProject: Promise<boolean> | null = null;
   return {
     projectRoot,
     /** Hand the walk's listing of `dir` to the memo; only the root's counts. */
-    observeDirectory(dir: string, fileNames: ReadonlySet<string>) {
-      if (rootFileNames) return;
-      if (path.resolve(dir) === path.resolve(projectRoot)) rootFileNames = fileNames;
+    observeDirectory(dir: string, entries: Dirent[]) {
+      if (rootEntries) return;
+      if (path.resolve(dir) === path.resolve(projectRoot)) {
+        rootEntries = new Map(entries.map((e) => [e.name, e]));
+      }
     },
     isViteDevProject(): Promise<boolean> {
-      viteDevProject ??= readsViteDevProject(projectRoot, rootFileNames);
+      viteDevProject ??= readsViteDevProject(projectRoot, rootEntries);
       return viteDevProject;
     },
   };
@@ -479,7 +482,7 @@ async function collectFiles(
   const fileNames = new Set<string>(
     entries.filter((e) => e.isFile() || e.isSymbolicLink()).map((e) => e.name),
   );
-  scan.observeDirectory(dir, fileNames);
+  scan.observeDirectory(dir, entries);
   for (const e of entries) {
     if (e.name.startsWith('.')) continue;
     const rel = relDir ? `${relDir}/${e.name}` : e.name;
@@ -1512,20 +1515,30 @@ const VITE_CONFIG_FILENAMES = [
  *
  * INVARIANT: the answer belongs to the project root alone — a `vite.config.*`
  * file there, or a `vite` dependency in its `package.json` — never to the page
- * being classified. A caller holding the root's file names answers it without
- * touching the filesystem, so a tree of many `index.html` pages asks once.
+ * being classified. A caller holding the root's directory entries answers it
+ * without touching the filesystem for regular files, so a tree of many `index.html`
+ * pages asks once.
  *
- * A name in `rootFileNames` is a file or a symlink, which is the widest the
- * directory listing can say. A symlink at the root NAMED `vite.config.ts` but
- * pointing at a directory therefore counts as a config here, where a `stat`
- * would have rejected it; that shape has no meaning to Vite either, and paying
- * a `stat` per candidate to reject it would give the walk back the per-entry
- * cost this helper exists to remove.
+ * For candidates matching `vite.config.*`, a regular file is accepted directly by
+ * its `Dirent` kind with zero extra stat calls. A symlink is checked with `stat`
+ * to confirm it resolves to a regular file (rejecting broken symlinks or directory
+ * targets as base did); this pays at most one stat only when a symlinked Vite
+ * config is present.
  */
-async function readsViteDevProject(projectDirPath, rootFileNames?: ReadonlySet<string> | null) {
+async function readsViteDevProject(projectDirPath, rootEntries?: ReadonlyMap<string, Dirent> | null) {
   for (const candidate of VITE_CONFIG_FILENAMES) {
-    if (rootFileNames) {
-      if (rootFileNames.has(candidate)) return true;
+    if (rootEntries) {
+      const entry = rootEntries.get(candidate);
+      if (!entry) continue;
+      if (entry.isFile()) return true;
+      if (entry.isSymbolicLink()) {
+        try {
+          const st = await stat(path.join(projectDirPath, candidate));
+          if (st.isFile()) return true;
+        } catch (err) {
+          if (!err || err.code !== 'ENOENT') return false;
+        }
+      }
       continue;
     }
     try {
@@ -1535,7 +1548,7 @@ async function readsViteDevProject(projectDirPath, rootFileNames?: ReadonlySet<s
       if (!err || err.code !== 'ENOENT') return false;
     }
   }
-  if (rootFileNames && !rootFileNames.has('package.json')) return false;
+  if (rootEntries && !rootEntries.has('package.json')) return false;
   try {
     const raw = await readFile(path.join(projectDirPath, 'package.json'), 'utf8');
     const pkg = JSON.parse(raw);
