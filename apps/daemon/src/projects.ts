@@ -218,9 +218,36 @@ async function scanProjectFiles(projectsRoot, projectId, opts = {}) {
   // Skip generated dependency/build trees for all project roots. Standard OD
   // projects can contain framework installs too; surfacing package HTML like
   // node_modules/tslib/*.html as artifacts produces blank previews.
-  await collectFiles(dir, '', out, isIgnoredProjectDirName, dir);
+  await collectFiles(dir, '', out, isIgnoredProjectDirName, dir, createProjectScanContext(dir));
   return out;
 }
+
+/**
+ * Per-scan memo for one project tree walk.
+ *
+ * INVARIANT: a cold walk costs one `readdir` per directory plus one `stat`
+ * per file it reports. Every fact that belongs to the project ROOT rather
+ * than to a single entry — here, whether the project is served by a Vite dev
+ * server — is answered once, from the root listing the walk already holds.
+ */
+function createProjectScanContext(projectRoot: string) {
+  let rootFileNames: ReadonlySet<string> | null = null;
+  let viteDevProject: Promise<boolean> | null = null;
+  return {
+    projectRoot,
+    /** Hand the walk's listing of `dir` to the memo; only the root's counts. */
+    observeDirectory(dir: string, fileNames: ReadonlySet<string>) {
+      if (rootFileNames) return;
+      if (path.resolve(dir) === path.resolve(projectRoot)) rootFileNames = fileNames;
+    },
+    isViteDevProject(): Promise<boolean> {
+      viteDevProject ??= readsViteDevProject(projectRoot, rootFileNames);
+      return viteDevProject;
+    },
+  };
+}
+
+type ProjectScanContext = ReturnType<typeof createProjectScanContext>;
 
 const projectFileIndex = createProjectFileIndex({
   scanProjectFiles,
@@ -430,7 +457,14 @@ export async function detectEntryFile(dir: string): Promise<string | null> {
   return null;
 }
 
-async function collectFiles(dir, relDir, out, shouldSkipDir?: (name: string) => boolean, projectRoot = dir) {
+async function collectFiles(
+  dir,
+  relDir,
+  out,
+  shouldSkipDir?: (name: string) => boolean,
+  projectRoot = dir,
+  scan: ProjectScanContext = createProjectScanContext(projectRoot),
+) {
   let entries = [];
   try {
     entries = await readdir(dir, { withFileTypes: true });
@@ -438,19 +472,24 @@ async function collectFiles(dir, relDir, out, shouldSkipDir?: (name: string) => 
     if (err && err.code === 'ENOENT') return;
     throw err;
   }
+  // The one read of this directory. Its `Dirent`s carry every entry's kind and
+  // name every sidecar it holds, so nothing below has to ask the filesystem
+  // again for what this listing already says.
+  const fileNames = new Set<string>(entries.filter((e) => e.isFile()).map((e) => e.name));
+  scan.observeDirectory(dir, fileNames);
   for (const e of entries) {
     if (e.name.startsWith('.')) continue;
     const rel = relDir ? `${relDir}/${e.name}` : e.name;
     const full = path.join(dir, e.name);
     if (e.isDirectory()) {
       if (shouldSkipDir?.(e.name)) continue;
-      await collectFiles(full, rel, out, shouldSkipDir, projectRoot);
+      await collectFiles(full, rel, out, shouldSkipDir, projectRoot, scan);
       continue;
     }
     if (!e.isFile()) continue;
     if (e.name.endsWith('.artifact.json')) continue;
     const st = await stat(full);
-    const manifest = await readManifestForPath(projectRoot, rel);
+    const manifest = await readManifestForListedFile(scan, rel, full, e.name, fileNames);
     out.push({
       name: rel,
       path: rel,
@@ -1174,6 +1213,37 @@ async function readManifestForPath(projectDirPath, relPath) {
   return inferLegacyManifest(relPath);
 }
 
+/**
+ * Resolve a walked file's artifact manifest from the directory listing the
+ * walk already holds.
+ *
+ * INVARIANT: a file whose `<name>.artifact.json` sibling is absent from that
+ * listing costs no manifest read. `readdir` has already named every sidecar in
+ * the directory, so an open() that could only end in ENOENT is never issued.
+ */
+async function readManifestForListedFile(
+  scan: ProjectScanContext,
+  relPath: string,
+  fullPath: string,
+  fileName: string,
+  siblingFileNames: ReadonlySet<string>,
+) {
+  if (containsIgnoredProjectDirSegment(relPath)) return null;
+  if (await isViteDevHtmlEntry(scan.projectRoot, relPath, fullPath, () => scan.isViteDevProject())) {
+    return null;
+  }
+  const manifestName = artifactManifestNameFor(fileName);
+  if (siblingFileNames.has(manifestName)) {
+    try {
+      const parsed = parseManifest(await readFile(path.join(path.dirname(fullPath), manifestName), 'utf8'));
+      if (parsed) return parsed;
+    } catch {
+      // ignore malformed/unreadable manifests and fall back to inference
+    }
+  }
+  return inferLegacyManifest(relPath);
+}
+
 function parseManifest(raw) {
   return parsePersistedManifest(raw, '');
 }
@@ -1425,7 +1495,52 @@ async function collectArtifactManifestFiles(dir, relDir, out) {
   }
 }
 
-async function isViteDevHtmlEntry(projectDirPath, safeName, targetPath) {
+const VITE_CONFIG_FILENAMES = [
+  'vite.config.js',
+  'vite.config.mjs',
+  'vite.config.cjs',
+  'vite.config.ts',
+  'vite.config.mts',
+  'vite.config.cts',
+];
+
+/**
+ * Whether the PROJECT is served by a Vite dev server.
+ *
+ * INVARIANT: the answer belongs to the project root alone — a `vite.config.*`
+ * file there, or a `vite` dependency in its `package.json` — never to the page
+ * being classified. A caller holding the root's file names answers it without
+ * touching the filesystem, so a tree of many `index.html` pages asks once.
+ */
+async function readsViteDevProject(projectDirPath, rootFileNames?: ReadonlySet<string> | null) {
+  for (const candidate of VITE_CONFIG_FILENAMES) {
+    if (rootFileNames) {
+      if (rootFileNames.has(candidate)) return true;
+      continue;
+    }
+    try {
+      const st = await stat(path.join(projectDirPath, candidate));
+      if (st.isFile()) return true;
+    } catch (err) {
+      if (!err || err.code !== 'ENOENT') return false;
+    }
+  }
+  if (rootFileNames && !rootFileNames.has('package.json')) return false;
+  try {
+    const raw = await readFile(path.join(projectDirPath, 'package.json'), 'utf8');
+    const pkg = JSON.parse(raw);
+    return Boolean(pkg?.dependencies?.vite || pkg?.devDependencies?.vite);
+  } catch {
+    return false;
+  }
+}
+
+async function isViteDevHtmlEntry(
+  projectDirPath,
+  safeName,
+  targetPath,
+  resolveViteDevProject?: () => Promise<boolean>,
+) {
   if (!/(^|\/)index\.html?$/i.test(safeName)) return false;
   let body = '';
   try {
@@ -1436,29 +1551,7 @@ async function isViteDevHtmlEntry(projectDirPath, safeName, targetPath) {
   if (!/<script\b[^>]*\btype=["']module["'][^>]*\bsrc=["']\/src\//i.test(body)) {
     return false;
   }
-  const viteConfigCandidates = [
-    'vite.config.js',
-    'vite.config.mjs',
-    'vite.config.cjs',
-    'vite.config.ts',
-    'vite.config.mts',
-    'vite.config.cts',
-  ];
-  for (const candidate of viteConfigCandidates) {
-    try {
-      const st = await stat(path.join(projectDirPath, candidate));
-      if (st.isFile()) return true;
-    } catch (err) {
-      if (!err || err.code !== 'ENOENT') return false;
-    }
-  }
-  try {
-    const raw = await readFile(path.join(projectDirPath, 'package.json'), 'utf8');
-    const pkg = JSON.parse(raw);
-    return Boolean(pkg?.dependencies?.vite || pkg?.devDependencies?.vite);
-  } catch {
-    return false;
-  }
+  return resolveViteDevProject ? await resolveViteDevProject() : await readsViteDevProject(projectDirPath);
 }
 
 function ownerNameForArtifactManifest(manifestName) {
