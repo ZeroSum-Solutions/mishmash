@@ -36,6 +36,7 @@ import {
   connectConnector,
   fetchConnectorStatuses,
 } from '../providers/registry';
+import { MEMORY_EVENTS_URL, useSharedEventStream } from '../providers/tab-stream-budget';
 import { notifyConnectorsChanged } from './connectors-events';
 import { hasConnectorStatusChanges } from './connectors-state';
 import { MemoryProfilePanel } from './MemoryProfilePanel';
@@ -917,56 +918,58 @@ export function MemorySection({
   // (manual upserts/deletes via this same panel) by listening only to
   // the broader signals — the local code already updated state
   // optimistically, but a re-fetch keeps mtime / index in sync anyway,
-  // so we just always reload on any change. EventSource auto-reconnects
-  // on temporary daemon hiccups.
-  useEffect(() => {
-    const es = new EventSource('/api/memory/events');
-    es.addEventListener('change', (raw) => {
-      try {
-        const ev = JSON.parse((raw as MessageEvent).data) as MemoryChangeEvent;
-        // Don't reload if the event payload is just a connection ping.
-        if (!ev || !ev.kind) return;
-        void reload();
-      } catch {
-        // Malformed — ignore.
-      }
-    });
-    es.addEventListener('extraction', (raw) => {
-      try {
-        const ev = JSON.parse((raw as MessageEvent).data) as MemoryExtractionEvent;
-        if (!ev || !ev.id) return;
-        // Pseudo-phases: the daemon emits these synthetically when a
-        // row is dropped from the buffer, either by the manual delete
-        // button per row or by the "Clear" affordance at the top.
-        if (ev.phase === 'cleared') {
-          setExtractions([]);
-          return;
+  // so we just always reload on any change. The subscription runs through the
+  // per-tab stream budget: it shares the connection the global memory toast
+  // already holds instead of opening a second one.
+  useSharedEventStream(MEMORY_EVENTS_URL, {
+    // The tab drops its memory connection while hidden, so anything the daemon
+    // emitted in the meantime is gone; re-read the list when it comes back.
+    onReopen: () => { void reload(); },
+    events: {
+      change: (raw) => {
+        try {
+          const ev = JSON.parse(raw.data) as MemoryChangeEvent;
+          // Don't reload if the event payload is just a connection ping.
+          if (!ev || !ev.kind) return;
+          void reload();
+        } catch {
+          // Malformed — ignore.
         }
-        if (ev.phase === 'deleted') {
-          setExtractions((prev) => prev.filter((r) => r.id !== ev.id));
-          return;
-        }
-        // Merge by id: phase transitions for an in-flight attempt
-        // collapse onto a single row instead of stacking N entries
-        // for the same attempt. New ids are unshifted so the latest
-        // appears at the top.
-        setExtractions((prev) => {
-          const existing = prev.findIndex((r) => r.id === ev.id);
-          if (existing >= 0) {
-            const next = prev.slice();
-            next[existing] = ev;
-            return next;
+      },
+      extraction: (raw) => {
+        try {
+          const ev = JSON.parse(raw.data) as MemoryExtractionEvent;
+          if (!ev || !ev.id) return;
+          // Pseudo-phases: the daemon emits these synthetically when a
+          // row is dropped from the buffer, either by the manual delete
+          // button per row or by the "Clear" affordance at the top.
+          if (ev.phase === 'cleared') {
+            setExtractions([]);
+            return;
           }
-          return [ev, ...prev].slice(0, 30);
-        });
-      } catch {
-        // Malformed — ignore.
-      }
-    });
-    return () => {
-      es.close();
-    };
-  }, [reload]);
+          if (ev.phase === 'deleted') {
+            setExtractions((prev) => prev.filter((r) => r.id !== ev.id));
+            return;
+          }
+          // Merge by id: phase transitions for an in-flight attempt
+          // collapse onto a single row instead of stacking N entries
+          // for the same attempt. New ids are unshifted so the latest
+          // appears at the top.
+          setExtractions((prev) => {
+            const existing = prev.findIndex((r) => r.id === ev.id);
+            if (existing >= 0) {
+              const next = prev.slice();
+              next[existing] = ev;
+              return next;
+            }
+            return [ev, ...prev].slice(0, 30);
+          });
+        } catch {
+          // Malformed — ignore.
+        }
+      },
+    },
+  });
 
   const filtered = useMemo(() => {
     if (filter === 'all') return entries;

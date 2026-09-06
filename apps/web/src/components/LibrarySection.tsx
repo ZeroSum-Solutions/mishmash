@@ -68,6 +68,7 @@ import {
   type Band,
   type CardRect,
 } from './library/library-utils';
+import { useDocumentVisible } from '../providers/tab-stream-budget';
 import styles from './LibrarySection.module.css';
 
 // Re-exported so existing tests importing these pure helpers from
@@ -327,6 +328,26 @@ export function LibrarySection({ active, onOpenProject }: Props) {
     setHasMore(fetchedCountRef.current < nextTotal);
   }, []);
 
+  // Per-tab stream budget: the grid's live channel is one of the six HTTP/1.1
+  // connections the browser allows per origin, so it is held only while the
+  // Library page is open AND the tab is visible.
+  const documentVisible = useDocumentVisible();
+
+  // Captures and deletes that happened while the tab held no stream are not
+  // replayed, so a tab coming back from hidden re-reads the grid once. The
+  // first visible render is not a return, so it does not double-load.
+  const releasedWhileHidden = useRef(false);
+  useEffect(() => {
+    if (!active) return;
+    if (!documentVisible) {
+      releasedWhileHidden.current = true;
+      return;
+    }
+    if (!releasedWhileHidden.current) return;
+    releasedWhileHidden.current = false;
+    void loadRef.current();
+  }, [active, documentVisible]);
+
   // Live updates: clipper captures and deletes patch the grid incrementally.
   // A burst of captures used to trigger one full refetch + full re-render PER
   // event; here events are coalesced over a short window and applied as a
@@ -334,7 +355,7 @@ export function LibrarySection({ active, onOpenProject }: Props) {
   // filter is active — or any per-id fetch is ambiguous — we fall back to a
   // single full reload for that window.
   useEffect(() => {
-    if (!active) return;
+    if (!active || !documentVisible) return;
     let es: EventSource | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const pendingIngest = new Set<string>();
@@ -417,7 +438,7 @@ export function LibrarySection({ active, onOpenProject }: Props) {
       if (timer) clearTimeout(timer);
       es?.close();
     };
-  }, [active, reconcilePagingAfterRemoval]);
+  }, [active, documentVisible, reconcilePagingAfterRemoval]);
 
   // Drop selected ids that no longer exist after a reload / delete. Membership
   // is a single Set lookup so a large grid + large selection stays O(n).

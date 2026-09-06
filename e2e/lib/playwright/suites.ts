@@ -80,6 +80,7 @@ export const uiP0Groups = {
       "ui/side-chat-mount-during-run.test.ts",
       "ui/amr-logout-requires-relogin.test.ts",
       "ui/settings-local-cli-codex-fallback.test.ts",
+      "ui/tab-stream-budget.test.ts",
     ],
   },
 } as const satisfies Record<string, UiPlaywrightGroup>;
@@ -124,6 +125,7 @@ const uiP0CoverageFiles = [
   "ui/settings-connectors-auth-recovery.test.ts",
   "ui/settings-local-cli-codex-fallback.test.ts",
   "ui/side-chat-mount-during-run.test.ts",
+  "ui/tab-stream-budget.test.ts",
   "ui/template-entry-file-shim.test.ts",
   "ui/typeface-specimens.test.ts",
   "ui/workspace-keyboard-flows.test.ts",
