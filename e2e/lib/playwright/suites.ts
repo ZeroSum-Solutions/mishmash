@@ -69,18 +69,31 @@ export const uiP0Groups = {
       "ui/workspace-keyboard-flows.test.ts",
     ],
   },
-  "project-runtime": {
+  // Split out of the former single `project-runtime` group (2026-09-06). That
+  // group had become the CI critical path at 549 s of serial payload (one
+  // worker) while every other shard finished 3-6 min in; run 34023927186
+  // measured inferred-failure-retraction alone at 264 s. The halves are
+  // balanced on those per-file times (~280 s retraction / ~270 s daemon).
+  // Coverage is unchanged and `e2e/tests/playwright-suite-topology.test.ts`
+  // pins the partition; validatePlaywrightSuiteTopology() pins coverage.
+  "project-runtime-retraction": {
+    grep: String.raw`\[P0\]`,
+    workers: 1,
+    files: [
+      "ui/inferred-failure-retraction.test.ts",
+      "ui/amr-logout-requires-relogin.test.ts",
+      "ui/tab-stream-budget.test.ts",
+    ],
+  },
+  "project-runtime-daemon": {
     grep: String.raw`\[P0\]`,
     workers: 1,
     files: [
       "ui/real-daemon-run.test.ts",
-      "ui/amr-run-failure-recovery.test.ts",
       "ui/run-failure-retraction.test.ts",
-      "ui/inferred-failure-retraction.test.ts",
+      "ui/amr-run-failure-recovery.test.ts",
       "ui/side-chat-mount-during-run.test.ts",
-      "ui/amr-logout-requires-relogin.test.ts",
       "ui/settings-local-cli-codex-fallback.test.ts",
-      "ui/tab-stream-budget.test.ts",
     ],
   },
 } as const satisfies Record<string, UiPlaywrightGroup>;
@@ -91,7 +104,8 @@ export const uiP0CiMatrix = [
   { name: "entry-chrome", shard: "entry-chrome" },
   { name: "settings-onboarding", shard: "settings-onboarding" },
   { name: "project-workspace", shard: "project-workspace" },
-  { name: "project-runtime", shard: "project-runtime" },
+  { name: "project-runtime-retraction", shard: "project-runtime-retraction" },
+  { name: "project-runtime-daemon", shard: "project-runtime-daemon" },
   { name: "workspace-restoration", shard: "workspace-restoration" },
 ] as const satisfies readonly UiP0CiMatrixEntry[];
 
