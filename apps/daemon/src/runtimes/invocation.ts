@@ -1,11 +1,33 @@
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 import { createCommandInvocation } from '@open-design/platform';
-import type { RuntimeExecOptions } from './types.js';
 
 export interface AgentExecResult {
   stdout: string;
   stderr: string;
+}
+
+/**
+ * The options an agent probe may pass, and the complete set this helper acts
+ * on.
+ *
+ * Deliberately narrower than the `RuntimeExecOptions` this signature used to
+ * take: that type extends Node's `ExecFileOptions`, and the fields it carries
+ * beyond the ones below (`shell`, `killSignal`, `encoding`, `windowsHide`,
+ * `uid`, `gid`) were spread straight into `execFile`. The probe is spawned by
+ * hand now, so those fields would be advertised and silently ignored.
+ * `killSignal` is the one that matters: stopping a probe belongs to
+ * `terminateProbeTree`, which escalates SIGTERM to SIGKILL by design and must
+ * not be talked out of it.
+ */
+export interface AgentProbeExecOptions {
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  /** Wall-clock budget for the probe, in ms; expiry kills the process tree. */
+  timeout?: number;
+  /** Cap on captured stdout/stderr, in bytes; overflow kills the tree. */
+  maxBuffer?: number;
+  signal?: AbortSignal;
 }
 
 /**
@@ -92,7 +114,7 @@ function terminateProbeTree(pid: number | undefined): void {
 export function execAgentFile(
   command: string,
   args: string[],
-  options: RuntimeExecOptions = {},
+  options: AgentProbeExecOptions = {},
 ): Promise<AgentExecResult> {
   const invocation = createCommandInvocation(
     options.env
@@ -205,11 +227,10 @@ export function execAgentFile(
       deadline.unref();
     }
 
-    // `RuntimeExecOptions` extends `ExecFileOptions`, which carries `signal`,
-    // and the `execFile` this replaced honoured it. Keep honouring it, so a
-    // caller that passes one is never silently ignored — and route it through
-    // `terminateProbeTree` rather than a bare SIGTERM, for the same reason the
-    // timeout does.
+    // The `execFile` this replaced honoured a caller's `AbortSignal`; keep
+    // honouring it, so a caller that passes one is never silently ignored —
+    // and route it through `terminateProbeTree` rather than a bare SIGTERM,
+    // for the same reason the timeout does.
     if (options.signal) {
       onAbort = () => {
         aborted = true;

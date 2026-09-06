@@ -243,9 +243,9 @@ describe('agent probe timeout kill', () => {
       fs.chmodSync(script, 0o755);
 
       const controller = new AbortController();
-      // `RuntimeExecOptions` extends `ExecFileOptions`, so `signal` is part of
-      // this helper's advertised contract and `execFile` honoured it. Pin that
-      // it survived the rewrite to `spawn`, which forwards options explicitly.
+      // `signal` is part of this helper's advertised options and the
+      // `execFile` it replaced honoured it. Pin that it survived the rewrite
+      // to `spawn`, which forwards options explicitly.
       const settled = execAgentFile(script, [pidFile], { signal: controller.signal }).then(
         () => 'settled' as const,
         () => 'settled' as const,
