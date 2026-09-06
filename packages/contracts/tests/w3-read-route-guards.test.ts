@@ -6,6 +6,7 @@ import {
   isPromptTemplatesResponse,
   isPublicMediaProviderConfigEntry,
   isPublicMediaProviderConfigResponse,
+  promptTemplateMediaAspect,
 } from '../src/index';
 
 // These guards are what makes "packages/contracts owns this envelope" a claim a
@@ -125,5 +126,30 @@ describe('prompt template guards', () => {
 
   it('rejects a detail body with no prompt, which is what the listing strips', () => {
     expect(isPromptTemplateResponse({ promptTemplate: promptTemplateSummary() })).toBe(false);
+  });
+});
+
+// `promptTemplateMediaAspect` is the narrowing the two types exist to make
+// safe: `PromptTemplateSummary.aspect` describes the wire, which carries
+// ratios the media surfaces do not offer, and `PromptTemplateMetadata.aspect`
+// describes what the product can act on and is persisted on the project. The
+// cases below are the behaviour that difference is for. Without them the
+// helper's INVARIANT docblock is the only statement of a rule that changes
+// what the agent reads every turn.
+describe('promptTemplateMediaAspect', () => {
+  it('drops a catalogue ratio the media surfaces do not offer', () => {
+    // `2:3` is shipped today by the prompt-template catalogue.
+    expect(promptTemplateMediaAspect('2:3')).toBeUndefined();
+  });
+
+  it('passes through every ratio MediaAspect admits', () => {
+    for (const aspect of ['1:1', '16:9', '9:16', '4:3', '3:4'] as const) {
+      expect(promptTemplateMediaAspect(aspect)).toBe(aspect);
+    }
+  });
+
+  it('leaves an unset aspect unset rather than inventing a default', () => {
+    expect(promptTemplateMediaAspect(undefined)).toBeUndefined();
+    expect(promptTemplateMediaAspect('')).toBeUndefined();
   });
 });
