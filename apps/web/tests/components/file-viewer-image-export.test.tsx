@@ -555,6 +555,7 @@ describe('FileViewer image export', () => {
     });
 
     afterEach(() => {
+      cleanup();
       globalThis.fetch = originalFetch;
       if (typeof window !== 'undefined') {
         window.fetch = originalFetch;
