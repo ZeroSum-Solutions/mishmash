@@ -24,7 +24,11 @@ import {
 import { useAnalytics } from '../analytics/provider';
 import { exportErrorCode } from '../analytics/export-error-code';
 import { deployErrorCode } from '../analytics/deploy-error-code';
-import { reportPreviewDocumentErrorAnomaly } from '../observability/anomaly-report';
+import {
+  anomalyForImageExportFailure,
+  reportAnomaly,
+  reportPreviewDocumentErrorAnomaly,
+} from '../observability/anomaly-report';
 import { parsePreviewDocumentErrorReport } from '@open-design/contracts/runtime/preview-paint-report';
 import { trackPreviewPaint } from '../observability/iframe-error';
 import type { PreviewPaintState } from '../observability/iframe-error';
@@ -11559,6 +11563,14 @@ function HtmlViewer({
         if (!snap) {
           setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
           fireImageExportResult('failed', 'CAPTURE_FAILED');
+          reportAnomaly(
+            anomalyForImageExportFailure({
+              fileName: file.name,
+              errorCode: 'CAPTURE_FAILED',
+              projectId,
+              durationMs: Math.round(performance.now() - (imageExportStartedRef.current || performance.now())),
+            }),
+          );
           return;
         }
         dataUrl = snap.dataUrl;
@@ -11568,6 +11580,14 @@ function HtmlViewer({
       if (blob.size <= 0) {
         setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
         fireImageExportResult('failed', 'EMPTY_IMAGE');
+        reportAnomaly(
+          anomalyForImageExportFailure({
+            fileName: file.name,
+            errorCode: 'EMPTY_IMAGE',
+            projectId,
+            durationMs: Math.round(performance.now() - (imageExportStartedRef.current || performance.now())),
+          }),
+        );
         return;
       }
       const target = await prepareImageExportTarget(targetTitle, imageExportFormat, { useNativePicker: false });

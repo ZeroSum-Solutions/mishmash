@@ -288,6 +288,47 @@ export function anomalyForPreviewDocumentError(
 }
 
 /**
+ * Human-readable labels for client-side image export failure causes.
+ */
+const IMAGE_EXPORT_ERROR_CAUSE_LABELS: Record<string, string> = {
+  CAPTURE_FAILED: 'snapshot capture produced no image',
+  EMPTY_IMAGE: 'captured image was empty',
+};
+
+export interface ImageExportFailureInput {
+  fileName: string;
+  errorCode: string;
+  projectId?: string;
+  durationMs?: number;
+}
+
+/**
+ * Builds the anomaly record for a failed client-side image export.
+ *
+ * Invariant: Every client-side export failure must yield an anomaly record with
+ * kind `'export-failed'`, severity `'warn'`, a human-readable summary naming both
+ * the target file and the failure cause, and a detail payload preserving the export
+ * format (`image`), error code, file name, and elapsed duration.
+ */
+export function anomalyForImageExportFailure(
+  input: ImageExportFailureInput,
+): ReportAnomalyRequest {
+  const cause = IMAGE_EXPORT_ERROR_CAUSE_LABELS[input.errorCode] ?? `export failed (${input.errorCode})`;
+  return {
+    kind: 'export-failed',
+    severity: 'warn',
+    summary: `Image export of ${input.fileName} failed: ${cause}`,
+    ...(input.projectId ? { projectId: input.projectId } : {}),
+    detail: {
+      exportFormat: 'image',
+      errorCode: input.errorCode,
+      fileName: input.fileName,
+      ...(input.durationMs != null ? { durationMs: input.durationMs } : {}),
+    },
+  };
+}
+
+/**
  * Files one preview-document failure, under the same flood guard uncaught host
  * exceptions use: a previewed render loop that throws every frame repeats the
  * identical signature, and the log has to stay skimmable.

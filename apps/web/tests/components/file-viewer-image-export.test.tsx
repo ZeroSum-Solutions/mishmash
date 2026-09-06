@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { isAnomalyKind } from '@open-design/contracts';
 import type { ProjectFile } from '../../src/types';
 
 const {
@@ -647,6 +648,10 @@ describe('FileViewer image export', () => {
       });
 
       expect(anomalyPosts).toHaveLength(0);
+    });
+
+    it('contracts recognises export-failed as a valid anomaly kind', () => {
+      expect(isAnomalyKind('export-failed')).toBe(true);
     });
   });
 });
