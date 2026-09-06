@@ -96,7 +96,12 @@ describe('fetchProjectFiles incremental listing', () => {
     expect(requestedUrls(fetchMock)).toEqual(['/api/projects/project-1/files']);
   });
 
-  it('shares one in-flight list per project instead of re-walking concurrently', async () => {
+  it('shares one in-flight list per project between callers that opt in', async () => {
+    // SUPERSEDES the original W3B assertion (3B-red-spec.txt, two DEFAULT calls
+    // coalesced). Coalescing is opt-in since 1f55d0717: a listing answers with
+    // the tree as of when it began, so the project view's post-write refresh
+    // must never be handed an older request (see the test below). The home
+    // grid's 15 s tick and its focus refresh are the callers that opt in.
     const fetchMock = vi.fn(async () => filesResponse([projectFile('a.html', 10)]));
     vi.stubGlobal('fetch', fetchMock);
 
