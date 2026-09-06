@@ -151,10 +151,12 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
    * request per card plus a font request per opened preview, and every one of
    * them paid that scan again, which is why `GET /api/skills/:id/assets/*`
    * carries more `request-slow` rows (143) than any other route in the wave-3
-   * latency capture. Measured by `e2e/tests/w3-read-endpoints.test.ts`: the
-   * run's first sub-resource request takes 108.8 ms and the next one, through
-   * the warm listing, 1.3 ms. Against a hand-driven daemon whose TTL had just
-   * expired, 906 ms then 1.8 ms.
+   * latency capture. Measured by `e2e/tests/w3-read-endpoints.test.ts`, whose
+   * table issues one request to each sub-resource route in turn: the first
+   * pays the scan and takes 100-160 ms across runs, the second answers from
+   * the warm listing in 1-3 ms. On the base tree both pay it (111 ms, 92 ms).
+   * Against a hand-driven daemon whose TTL had just expired, 906 ms then
+   * 1.8 ms, so the scan is also what load stretches.
    *
    * Retention, not peak memory, is what the cache adds: the listing was
    * already built in full on every request; it is now held for the TTL.
