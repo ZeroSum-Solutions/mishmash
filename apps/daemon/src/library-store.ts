@@ -25,6 +25,35 @@ import type {
 
 type SqliteDb = Database.Database;
 
+/**
+ * Why a `library_tasks` row ended `skipped`, as a closed vocabulary kept next
+ * to the schema that stores it (same discipline as `AnomalyKind`: a call site
+ * picks from this list, it does not invent a string).
+ *
+ *   - `no_model_configured`      no caption / OCR / embedding model credential
+ *                                is available to the daemon, so the AI layer
+ *                                had nothing to call.
+ *   - `enrichment_not_implemented`
+ *                                a model IS reachable, but this cut ships no
+ *                                caption / OCR / embedding pipeline to run it
+ *                                through (`apps/daemon/src/library.ts:11`).
+ *
+ * `library.ts`'s `resolveEnrichmentSkipReason` is the only producer; adding a
+ * third outcome means adding it here first.
+ */
+export const LIBRARY_TASK_SKIP_REASONS = ['no_model_configured', 'enrichment_not_implemented'] as const;
+
+export type LibraryTaskSkipReason = (typeof LIBRARY_TASK_SKIP_REASONS)[number];
+
+/** A `LibraryTask` as actually persisted: the wire shape
+ * (`packages/contracts/src/api/library.ts:131`) plus the stored-only
+ * `skipReason`, in the same strict-extension pattern
+ * `StoredRoutingTelemetryRow` uses over `RoutingTelemetryRow`. `null` for any
+ * task that did not end `skipped`. */
+export interface StoredLibraryTask extends LibraryTask {
+  skipReason: LibraryTaskSkipReason | null;
+}
+
 export function migrateLibrary(db: SqliteDb): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS library_assets (
@@ -115,6 +144,7 @@ export function migrateLibrary(db: SqliteDb): void {
       error_json TEXT,
       started_at INTEGER NOT NULL,
       ended_at INTEGER,
+      skip_reason TEXT,
       FOREIGN KEY(asset_id) REFERENCES library_assets(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_library_tasks_asset
@@ -150,6 +180,18 @@ export function migrateLibrary(db: SqliteDb): void {
   }
   if (!assetCols.some((c) => c.name === 'missing_since')) {
     db.exec(`ALTER TABLE library_assets ADD COLUMN missing_since INTEGER`);
+  }
+
+  // skip_reason (W3G / T-08): same no-ADD-COLUMN-IF-NOT-EXISTS dance. Left
+  // NULL on existing rows deliberately — every task already on disk was
+  // written by the unconditional-skip code path, which never checked whether a
+  // model was configured, so backfilling those rows with a reason would assert
+  // something that code never established. NULL reads honestly as "recorded
+  // before this row stated its reason". (No count is quoted: it grows with
+  // ordinary use, so a number in a comment is stale the day after it lands.)
+  const taskCols = db.prepare(`PRAGMA table_info(library_tasks)`).all() as Array<{ name: string }>;
+  if (!taskCols.some((c) => c.name === 'skip_reason')) {
+    db.exec(`ALTER TABLE library_tasks ADD COLUMN skip_reason TEXT`);
   }
 }
 
@@ -786,9 +828,14 @@ interface RawTaskRow {
   errorJson: string | null;
   startedAt: number;
   endedAt: number | null;
+  skipReason: string | null;
 }
 
-function normalizeTask(raw: RawTaskRow): LibraryTask {
+function isLibraryTaskSkipReason(value: unknown): value is LibraryTaskSkipReason {
+  return typeof value === 'string' && (LIBRARY_TASK_SKIP_REASONS as readonly string[]).includes(value);
+}
+
+function normalizeTask(raw: RawTaskRow): StoredLibraryTask {
   return {
     id: raw.id,
     assetId: raw.assetId,
@@ -797,16 +844,20 @@ function normalizeTask(raw: RawTaskRow): LibraryTask {
     error: parseJson<LibraryTaskError | null>(raw.errorJson, null),
     startedAt: Number(raw.startedAt),
     endedAt: raw.endedAt == null ? null : Number(raw.endedAt),
+    // A value outside the closed set can only come from a row this daemon did
+    // not write; report it as "no stated reason" rather than widening the type.
+    skipReason: isLibraryTaskSkipReason(raw.skipReason) ? raw.skipReason : null,
   };
 }
 
 const TASK_COLS = `id, asset_id AS assetId, status, progress_json AS progressJson,
-  error_json AS errorJson, started_at AS startedAt, ended_at AS endedAt`;
+  error_json AS errorJson, started_at AS startedAt, ended_at AS endedAt,
+  skip_reason AS skipReason`;
 
-export function insertLibraryTask(db: SqliteDb, task: LibraryTask): void {
+export function insertLibraryTask(db: SqliteDb, task: StoredLibraryTask): void {
   db.prepare(
-    `INSERT INTO library_tasks (id, asset_id, status, progress_json, error_json, started_at, ended_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO library_tasks (id, asset_id, status, progress_json, error_json, started_at, ended_at, skip_reason)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     task.id,
     task.assetId,
@@ -815,10 +866,11 @@ export function insertLibraryTask(db: SqliteDb, task: LibraryTask): void {
     task.error ? JSON.stringify(task.error) : null,
     task.startedAt,
     task.endedAt ?? null,
+    task.skipReason,
   );
 }
 
-export function getLibraryTask(db: SqliteDb, id: string): LibraryTask | null {
+export function getLibraryTask(db: SqliteDb, id: string): StoredLibraryTask | null {
   const raw = db.prepare(`SELECT ${TASK_COLS} FROM library_tasks WHERE id = ?`).get(id) as
     | RawTaskRow
     | undefined;

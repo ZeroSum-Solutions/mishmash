@@ -32,6 +32,7 @@ import {
   materializeLibraryAssetToOwned,
   updateLibraryAsset,
   type LibraryAssetRecord,
+  type LibraryTaskSkipReason,
 } from './library-store.js';
 import type {
   FilesystemWriteCapability,
@@ -466,18 +467,76 @@ export async function registerLibraryAsset(
 }
 
 /**
+ * INVARIANT: a skipped enrichment task always records WHY it skipped, as one
+ * of `LIBRARY_TASK_SKIP_REASONS` (library-store.ts) — never as prose alone.
+ *
+ * The reason is resolved from the daemon's own environment, not asserted: a
+ * credential for a text/vision provider means the AI layer had something to
+ * call and the block is this cut's missing pipeline
+ * (`enrichment_not_implemented`); no credential means it had nothing to call
+ * (`no_model_configured`).
+ *
+ * `ENRICHMENT_MODEL_CREDENTIAL_ENV_KEYS` is deliberately the EXACT credential
+ * set `apps/daemon/src/memory-llm.ts` already treats as "a provider is
+ * reachable" before it records its own `skipped: no-provider` attempt -- not a
+ * shorter convenience list. A narrower list would report `no_model_configured`
+ * on a daemon that does have a reachable provider (say Azure or AIHubMix only),
+ * which is the same class of unchecked claim this invariant exists to remove.
+ * `apps/daemon/tests/library-task-skip-reason.test.ts` reads memory-llm.ts and
+ * pins the two sets equal, so they cannot drift apart silently.
+ *
+ * Every task on the live daemon reads `skipped` with the literal line
+ * "ai: caption/ocr/embedding skipped (no model configured)" — a claim the
+ * previous code never tested, because it wrote that line unconditionally with
+ * no configuration check anywhere. (The row count is deliberately not quoted:
+ * it grows with ordinary use, so a number in a comment rots.)
+ */
+export const ENRICHMENT_MODEL_CREDENTIAL_ENV_KEYS = [
+  'AIHUBMIX_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'AZURE_API_KEY',
+  'AZURE_OPENAI_API_KEY',
+  'GEMINI_API_KEY',
+  'GOOGLE_API_KEY',
+  'OD_AIHUBMIX_API_KEY',
+  'OD_SENSEAUDIO_API_KEY',
+  'OLLAMA_API_KEY',
+  'OPENAI_API_KEY',
+  'SENSEAUDIO_API_KEY',
+] as const;
+
+function resolveEnrichmentSkipReason(env: NodeJS.ProcessEnv): LibraryTaskSkipReason {
+  const configured = ENRICHMENT_MODEL_CREDENTIAL_ENV_KEYS.some((name) => {
+    const key = env[name];
+    return typeof key === 'string' && key.trim().length > 0;
+  });
+  return configured ? 'enrichment_not_implemented' : 'no_model_configured';
+}
+
+/** The user-visible progress line for a skip, generated FROM the stored reason
+ * so the prose and the queryable value can never drift apart. */
+function enrichmentSkipProgressLine(reason: LibraryTaskSkipReason): string {
+  const detail =
+    reason === 'no_model_configured'
+      ? 'no caption/ocr/embedding model is configured'
+      : 'no caption/ocr/embedding pipeline is implemented yet';
+  return `ai: caption/ocr/embedding skipped (${reason}: ${detail})`;
+}
+
+/**
  * Record the enrichment task. The programmatic layer (size / mime / dims /
  * tags) already ran inline above, so it lands `done`; the AI layer (caption /
- * OCR / embedding) is recorded `skipped` until a model is configured — a
+ * OCR / embedding) is recorded `skipped` with the typed reason above — a
  * future `od library reindex` can re-run it.
  */
 function recordEnrichmentTask(db: SqliteDb, assetId: string, kind: LibraryAssetKind): string {
   const id = randomUUID();
   const now = Date.now();
+  const skipReason = resolveEnrichmentSkipReason(process.env);
   const progress = [
     'programmatic: hashed + sized + mime detected',
     kind === 'image' ? 'programmatic: image dimensions read' : 'programmatic: text/metadata captured',
-    'ai: caption/ocr/embedding skipped (no model configured)',
+    enrichmentSkipProgressLine(skipReason),
   ];
   insertLibraryTask(db, {
     id,
@@ -487,6 +546,7 @@ function recordEnrichmentTask(db: SqliteDb, assetId: string, kind: LibraryAssetK
     error: null,
     startedAt: now,
     endedAt: now,
+    skipReason,
   });
   return id;
 }
