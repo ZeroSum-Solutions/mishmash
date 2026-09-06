@@ -201,6 +201,14 @@ describe('EntryShell view-switch isolation', () => {
       switchTo('/projects');
       switchTo('/automations');
       expect(setScrollTop).not.toHaveBeenCalled();
+
+      // The remounted container's listener still records a real scroll.
+      const remounted = document.querySelector('main.entry-main--scroll') as HTMLElement;
+      const getScrollTopAgain = vi.spyOn(HTMLElement.prototype, 'scrollTop', 'get').mockReturnValue(120);
+      act(() => { remounted.dispatchEvent(new Event('scroll')); });
+      getScrollTopAgain.mockRestore();
+      switchTo('/projects');
+      expect(setScrollTop).toHaveBeenCalledWith(0);
     } finally {
       setScrollTop.mockRestore();
     }
