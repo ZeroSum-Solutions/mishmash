@@ -335,7 +335,9 @@ describe('EntryShell route scroll isolation', () => {
     renderHome();
 
     const scrollContainer = entryScrollContainer();
+    // A browser follows a programmatic scroll with a scroll event; jsdom does not.
     scrollContainer.scrollTop = 280;
+    fireEvent.scroll(scrollContainer);
     fireEvent.click(screen.getByTestId('entry-nav-projects'));
 
     await waitFor(() => {
@@ -349,7 +351,9 @@ describe('EntryShell route scroll isolation', () => {
     renderHome({}, '/projects');
 
     const scrollContainer = entryScrollContainer();
+    // A browser follows a programmatic scroll with a scroll event; jsdom does not.
     scrollContainer.scrollTop = 360;
+    fireEvent.scroll(scrollContainer);
     fireEvent.click(screen.getByTestId('entry-nav-home'));
 
     await waitFor(() => {

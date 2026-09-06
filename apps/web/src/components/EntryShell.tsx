@@ -152,6 +152,7 @@ import {
   type PluginShareProjectOutcome,
 } from '../state/projects';
 import { TasksView } from './TasksView';
+import { useStableHandler } from '../hooks/useStableHandler';
 import {
   API_KEY_PLACEHOLDERS,
   API_PROTOCOL_TABS,
@@ -189,6 +190,18 @@ import { resolveByokModelPreference } from './byok/validation';
 const DesignLibrarySection = memo(lazy(() =>
   import('./DesignLibrarySection').then(({ DesignLibrarySection }) => ({ default: DesignLibrarySection })),
 ));
+
+// Views the shell keeps mounted behind `display: none` while another route
+// is on screen. The shell re-renders on every route switch; without these
+// boundaries each of them reconciled its whole tree on every switch (about
+// 4 ms of the route-switch budget, no DOM change). Their callback props are
+// made identity-stable below with useStableHandler so the boundary holds.
+const IsolatedHomeView = memo(HomeView);
+const IsolatedDesignsTab = memo(DesignsTab);
+const IsolatedTasksView = memo(TasksView);
+const IsolatedPluginsView = memo(PluginsView);
+const IsolatedDesignSystemsTab = memo(DesignSystemsTab);
+const IsolatedLibrarySection = memo(LibrarySection);
 
 // Persist the entry nav-rail open/collapsed state so it survives both a
 // home -> project -> home navigation (EntryShell unmounts on the project
@@ -773,10 +786,25 @@ export function EntryShell({
   const [onboardingRec, setOnboardingRec] = useState<Recommendation | null>(null);
   const entryMainScrollRef = useRef<HTMLElement | null>(null);
   // Entry views share this element, so route changes must not inherit the previous view's offset.
-  useLayoutEffect(() => {
+  // Writing scrollTop is a forced style+layout pass over the document that
+  // the view switch has just mutated. Pay it only when there is a position
+  // to reset: the scroll listener remembers whether the outgoing view was
+  // scrolled, and a switch from the top of a view leaves layout alone.
+  const mainScrolledRef = useRef(false);
+  useEffect(() => {
     const scrollContainer = entryMainScrollRef.current;
     if (!scrollContainer) return;
+    const remember = () => {
+      mainScrolledRef.current = scrollContainer.scrollTop > 0;
+    };
+    scrollContainer.addEventListener('scroll', remember, { passive: true });
+    return () => scrollContainer.removeEventListener('scroll', remember);
+  }, []);
+  useLayoutEffect(() => {
+    const scrollContainer = entryMainScrollRef.current;
+    if (!scrollContainer || !mainScrolledRef.current) return;
     scrollContainer.scrollTop = 0;
+    mainScrolledRef.current = false;
   }, [view]);
   const analytics = useAnalytics();
   function changeView(next: EntryViewKind) {
@@ -1093,6 +1121,30 @@ export function EntryShell({
   );
 
 
+  // Identity-stable handlers for the isolated views (see the memo block at
+  // the top of the file). Each one forwards to the plain function above it,
+  // so behaviour is unchanged; only the prop identity is.
+  const submitPluginLoop = useStableHandler(handlePluginLoopSubmit);
+  const viewAllProjects = useStableHandler(() => changeView('projects'));
+  const browseRegistry = useStableHandler(() => changeView('plugins'));
+  const openConnectorsTab = useStableHandler(() => openIntegrationTab('connectors'));
+  const openMcpTab = useStableHandler(() => openIntegrationTab('mcp'));
+  const openNewProjectFromHome = useStableHandler((tab?: CreateTab) => {
+    openNewProject(tab);
+  });
+  const openNewProjectDefault = useStableHandler(() => {
+    openNewProject();
+  });
+  const startBlankProject = useStableHandler(startBlankProjectFromRail);
+  const startRecommendation = useStableHandler(handleRecommendationStart);
+  const dismissRecommendationStable = useStableHandler(dismissRecommendation);
+  const createPluginFromLibrary = useStableHandler(startPluginAuthoring);
+  const usePluginStable = useStableHandler(usePluginFromLibrary);
+  const openLibraryProject = useStableHandler((projectId: string, fileName?: string) =>
+    navigate({ kind: 'project', projectId, conversationId: null, fileName: fileName ?? null }),
+  );
+
+
   if (view === 'onboarding') {
     return (
       <div className="entry-shell entry-shell--no-header entry-shell--onboarding">
@@ -1276,34 +1328,32 @@ export function EntryShell({
             }`}
           >
             <div data-testid="entry-view-home" data-active={view === 'home' ? 'true' : 'false'} {...inactiveViewProps(view === 'home')}>
-              <HomeView
+              <IsolatedHomeView
                 isActive={view === 'home'}
                 projects={projects}
                 projectsLoading={projectsLoading}
                 designSystems={designSystems}
                 defaultDesignSystemId={defaultDesignSystemId}
-                onSubmit={handlePluginLoopSubmit}
+                onSubmit={submitPluginLoop}
                 onOpenProject={onOpenProject}
                 {...(onOpenProjectFromDesignLibrary ? { onOpenProjectFromDesignLibrary } : {})}
-                onViewAllProjects={() => changeView('projects')}
+                onViewAllProjects={viewAllProjects}
                 onDeleteProject={onDeleteProject}
                 onDuplicateProject={onDuplicateProject}
                 onRenameProject={onRenameProject}
-                onBrowseRegistry={() => changeView('plugins')}
-                onOpenIntegrations={() => openIntegrationTab('connectors')}
-                onOpenMcp={() => openIntegrationTab('mcp')}
-                onOpenNewProject={(tab) => {
-                  openNewProject(tab);
-                }}
-                onStartBlankProject={startBlankProjectFromRail}
+                onBrowseRegistry={browseRegistry}
+                onOpenIntegrations={openConnectorsTab}
+                onOpenMcp={openMcpTab}
+                onOpenNewProject={openNewProjectFromHome}
+                onStartBlankProject={startBlankProject}
                 promptHandoff={homePromptHandoff}
                 skills={skills}
                 skillsLoading={skillsLoading}
                 connectors={connectors}
                 promptTemplates={promptTemplates}
                 recommendation={onboardingRec}
-                onRecommendationStart={handleRecommendationStart}
-                onRecommendationDismiss={dismissRecommendation}
+                onRecommendationStart={startRecommendation}
+                onRecommendationDismiss={dismissRecommendationStable}
                 executionSwitcher={view === 'home' ? homeExecutionSwitcher : undefined}
                 artifactUpgradeSlot={artifactUpgradeSlot}
               />
@@ -1316,7 +1366,7 @@ export function EntryShell({
                   <header className="entry-section__head">
                     <h1 className="entry-section__title">{t('entry.navProjects')}</h1>
                   </header>
-                  <DesignsTab
+                  <IsolatedDesignsTab
                     projects={projects}
                     skills={skills}
                     designSystems={designSystems}
@@ -1327,15 +1377,13 @@ export function EntryShell({
                     onRename={onRenameProject}
                     onRefresh={onProjectsRefresh}
                     isActive={view === 'projects'}
-                    onNewProject={() => {
-                      openNewProject();
-                    }}
+                    onNewProject={openNewProjectDefault}
                   />
                 </div>
               )}
             </div>
             <div data-testid="entry-view-tasks" data-active={view === 'tasks' ? 'true' : 'false'} {...inactiveViewProps(view === 'tasks')}>
-              <TasksView
+              <IsolatedTasksView
                 skills={skills}
                 designTemplates={designTemplates}
                 connectors={connectors}
@@ -1343,9 +1391,9 @@ export function EntryShell({
               />
             </div>
             <div data-testid="entry-view-plugins" data-active={view === 'plugins' ? 'true' : 'false'} {...inactiveViewProps(view === 'plugins')}>
-              <PluginsView
-                onCreatePlugin={startPluginAuthoring}
-                onUsePlugin={usePluginFromLibrary}
+              <IsolatedPluginsView
+                onCreatePlugin={createPluginFromLibrary}
+                onUsePlugin={usePluginStable}
                 onCreatePluginShareProject={onCreatePluginShareProject}
               />
             </div>
@@ -1355,7 +1403,7 @@ export function EntryShell({
                   <header className="entry-section__head">
                     <h1 className="entry-section__title">{t('entry.navDesignSystems')}</h1>
                   </header>
-                  <DesignSystemsTab
+                  <IsolatedDesignSystemsTab
                     loading
                     systems={[]}
                     templates={templates}
@@ -1371,7 +1419,7 @@ export function EntryShell({
                   <header className="entry-section__head">
                     <h1 className="entry-section__title">{t('entry.navDesignSystems')}</h1>
                   </header>
-                  <DesignSystemsTab
+                  <IsolatedDesignSystemsTab
                     systems={designSystems}
                     templates={templates}
                     selectedId={defaultDesignSystemId}
@@ -1385,11 +1433,9 @@ export function EntryShell({
             </div>
             {LIBRARY_UI_VISIBLE ? (
               <div data-testid="entry-view-library" data-active={view === 'library' ? 'true' : 'false'} {...inactiveViewProps(view === 'library')}>
-                <LibrarySection
+                <IsolatedLibrarySection
                   active={view === 'library'}
-                  onOpenProject={(projectId, fileName) =>
-                    navigate({ kind: 'project', projectId, conversationId: null, fileName: fileName ?? null })
-                  }
+                  onOpenProject={openLibraryProject}
                 />
               </div>
             ) : null}
