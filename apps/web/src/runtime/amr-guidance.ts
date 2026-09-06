@@ -401,6 +401,7 @@ const RUN_FAILURE_TITLE_BY_DETAIL: Record<RunFailureDetail, RunFailureTitleKey> 
   upstream_client_error: 'chat.runError.title.requestRejected',
   // The model service.
   upstream_5xx: 'chat.runError.title.upstreamUnavailable',
+  upstream_unavailable: 'chat.runError.title.upstreamUnavailable',
   provider_high_demand: 'chat.runError.title.upstreamUnavailable',
   provider_routing_error: 'chat.runError.title.upstreamUnavailable',
   stream_disconnected: 'chat.runError.title.connectionDropped',

@@ -607,9 +607,14 @@ describe('classifyRunFailure', () => {
     });
   });
 
-  // `collectFailureText` appends the normalized code to the text it hands the
-  // detail matchers, so `upstreamDetail` reads the literal `UPSTREAM_UNAVAILABLE`
-  // and names the detail `upstream_5xx`. The category is what this case pins.
+  // Superseded by W1M.3 (FU-30). This case used to assert
+  // `failure_detail: 'upstream_5xx'`, and its own comment recorded why: the
+  // normalized code was appended to the failure text, so `upstreamDetail` read
+  // the literal `UPSTREAM_UNAVAILABLE` and answered `upstream_5xx`. That claimed
+  // a status no provider returned. The code is evidence, not text
+  // (`isStructuredFailureCode`), and `EMPTY_OUTPUT_FLAVORED_TEXT` names no
+  // upstream mechanism, so the honest detail is the generic
+  // `upstream_unavailable`. The category is what this case pins.
   it('keeps a structured UPSTREAM_UNAVAILABLE code ahead of the empty-output text matcher', () => {
     const code: ApiErrorCode = 'UPSTREAM_UNAVAILABLE';
     expect(
@@ -618,13 +623,18 @@ describe('classifyRunFailure', () => {
       ]),
     ).toMatchObject({
       failure_category: 'upstream_unavailable',
-      failure_detail: 'upstream_5xx',
+      failure_detail: 'upstream_unavailable',
       failure_stage: 'first_token_wait',
       retryable: true,
       user_action: 'retry',
     });
   });
 
+  // Superseded by W1M.3 (FU-30) for the same reason. This case used to assert
+  // `failure_detail: 'network_error'`, which it reached only because no matcher
+  // fired and `upstreamDetail` fell through to that label. Nothing here observed
+  // a transport fault: `AGENT_CONNECTION_DROPPED` says the connection to the
+  // provider ended, and `EMPTY_OUTPUT_FLAVORED_TEXT` says nothing about how.
   it('keeps a structured AGENT_CONNECTION_DROPPED code ahead of the empty-output text matcher', () => {
     const code: ApiErrorCode = 'AGENT_CONNECTION_DROPPED';
     expect(
@@ -633,7 +643,7 @@ describe('classifyRunFailure', () => {
       ]),
     ).toMatchObject({
       failure_category: 'upstream_unavailable',
-      failure_detail: 'network_error',
+      failure_detail: 'upstream_unavailable',
       failure_stage: 'first_token_wait',
       retryable: true,
       user_action: 'retry',
@@ -2110,5 +2120,80 @@ describe('classifyRunFailure — sampled 0.15.1 provider request failures', () =
 
     expect(result).toMatchObject(expected);
     expect(isResumableFailure(result)).toBe(resumable);
+  });
+});
+
+// W1M.3 red spec (FU-30). `collectFailureText` appends the NORMALIZED structured
+// error code to the free text it hands the detail matchers, and `upstreamDetail`'s
+// 5xx pattern includes `upstream[ _-](?:error|unavailable)` -- which the literal
+// token `UPSTREAM_UNAVAILABLE` matches. So a run whose only "5xx" evidence is the
+// code the daemon itself assigned was reported as `upstream_5xx`: a circle, and a
+// status no provider ever returned. `od run info` prints that detail verbatim
+// (`run-failure-summary.ts`), so the false cause reaches the user.
+//
+// The code reaches the classifier by two routes and both are covered here: the
+// run's own top-level `errorCode`, and the `code` an SSE error frame carries on
+// one of the run's events (`ApiError.code` in `packages/contracts`, the same
+// closed union `errorEvent` above builds). Codes are declared as `ApiErrorCode`
+// so a renamed code fails typecheck here instead of silently passing a string
+// the daemon never emits.
+describe('classifyRunFailure — a structured code is evidence, not 5xx text', () => {
+  // Carries no quota, rate-limit, timeout, empty-output or upstream wording, so
+  // the only thing any matcher can read is the structured code itself.
+  const CODE_ONLY_MESSAGE = 'The run ended before the provider answered.';
+
+  it('names a top-level UPSTREAM_UNAVAILABLE code upstream_unavailable, not upstream_5xx', () => {
+    const code: ApiErrorCode = 'UPSTREAM_UNAVAILABLE';
+    expect(classify(code, CODE_ONLY_MESSAGE, [])).toMatchObject({
+      failure_category: 'upstream_unavailable',
+      failure_detail: 'upstream_unavailable',
+      failure_stage: 'first_token_wait',
+      retryable: true,
+      user_action: 'retry',
+    });
+  });
+
+  it('names an event-carried UPSTREAM_UNAVAILABLE code upstream_unavailable, not upstream_5xx', () => {
+    // The run's own code is a different one, so the literal `UPSTREAM_UNAVAILABLE`
+    // exists only on the error frame recorded against the run's events.
+    const runCode: ApiErrorCode = 'AGENT_CONNECTION_DROPPED';
+    const eventCode: ApiErrorCode = 'UPSTREAM_UNAVAILABLE';
+    expect(
+      classify(runCode, CODE_ONLY_MESSAGE, [
+        errorEvent(eventCode, CODE_ONLY_MESSAGE, true),
+      ]),
+    ).toMatchObject({
+      failure_category: 'upstream_unavailable',
+      failure_detail: 'upstream_unavailable',
+      failure_stage: 'first_token_wait',
+      retryable: true,
+      user_action: 'retry',
+    });
+  });
+
+  // Control: real 5xx evidence still names `upstream_5xx`. The text is the one a
+  // real daemon run records for this case -- the `claude-upstream` fake agent in
+  // `tests/runtimes/run-failure-telemetry-smoke.test.ts`, whose end-to-end case
+  // pins the same category/detail pair off the run's own `events.jsonl`.
+  it('still names upstream_5xx when the provider reported a real 5xx status', () => {
+    const code: ApiErrorCode = 'UPSTREAM_UNAVAILABLE';
+    const message = 'HTTP 503 Service Unavailable: upstream provider unavailable. '
+      + 'Gateway timeout while waiting for first token.';
+    expect(
+      classify(code, message, [errorEvent(code, message, true)]),
+    ).toMatchObject({
+      failure_category: 'upstream_unavailable',
+      failure_detail: 'upstream_5xx',
+      failure_stage: 'first_token_wait',
+      retryable: true,
+      user_action: 'retry',
+    });
+  });
+
+  // A code-only upstream failure stays recoverable the same way `upstream_5xx`
+  // was: nothing about the run changed except the honesty of its name.
+  it('keeps a code-only upstream failure resumable', () => {
+    const code: ApiErrorCode = 'UPSTREAM_UNAVAILABLE';
+    expect(isResumableFailure(classify(code, CODE_ONLY_MESSAGE, []))).toBe(true);
   });
 });
