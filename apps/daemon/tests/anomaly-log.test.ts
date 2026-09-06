@@ -222,7 +222,7 @@ describe('anomaly log', () => {
     expect(result.generations).toBe(2);
   });
 
-  it('reports one generation and no sequence range for a log that has never been written', async () => {
+  it('reports one generation and a one-record range after the first append', async () => {
     const log = createAnomalyLog({ dataDir });
     await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'only one' }, 'web');
 
@@ -231,6 +231,18 @@ describe('anomaly log', () => {
     expect(result.generations).toBe(1);
     expect(result.firstSeq).toBe(1);
     expect(result.lastSeq).toBe(1);
+  });
+
+  it('reports zero generations and no sequence range for a log that has never been written', async () => {
+    const log = createAnomalyLog({ dataDir });
+
+    const result = await log.list({});
+
+    expect(result.generations).toBe(0);
+    expect(result.firstSeq).toBe(null);
+    expect(result.lastSeq).toBe(null);
+    expect(result.total).toBe(0);
+    expect(result.anomalies).toEqual([]);
   });
 
   it('restarts the sequence after a clear, so an empty log always means seq 1 next', async () => {
