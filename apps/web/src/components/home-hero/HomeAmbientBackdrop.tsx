@@ -208,6 +208,21 @@ export function HomeAmbientBackdrop() {
         Math.max(0, (event.clientX - bounds.left) / Math.max(bounds.width, 1)),
       );
     };
+    // Without a ResizeObserver (older WebKit) the canvas is measured once
+    // here and again on each window resize: one layout read per resize
+    // event instead of one per frame. With the observer, a window resize
+    // only recomputes the buffer from the cached bounds so a change of
+    // devicePixelRatio alone (zoom, a move between displays) is honoured
+    // without a layout read; the observer delivers any size change.
+    const measure = () => {
+      const rect = canvas.getBoundingClientRect();
+      bounds = { left: rect.left, width: rect.width, height: rect.height };
+    };
+    const handleWindowResize = () => {
+      if (!resizeObserver) measure();
+      resize();
+      if (onScreen) draw(performance.now());
+    };
     const resizeObserver =
       typeof ResizeObserver === 'undefined'
         ? null
@@ -236,11 +251,16 @@ export function HomeAmbientBackdrop() {
           });
 
     resizeObserver?.observe(canvas);
+    if (!resizeObserver) {
+      measure();
+      resize();
+    }
     intersectionObserver?.observe(canvas);
     if (!intersectionObserver) {
       onScreen = true;
       start();
     }
+    window.addEventListener('resize', handleWindowResize);
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
     document.addEventListener('visibilitychange', start);
     reducedMotion.addEventListener('change', start);
@@ -249,6 +269,7 @@ export function HomeAmbientBackdrop() {
       window.cancelAnimationFrame(animationFrame);
       resizeObserver?.disconnect();
       intersectionObserver?.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
       window.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('visibilitychange', start);
       reducedMotion.removeEventListener('change', start);

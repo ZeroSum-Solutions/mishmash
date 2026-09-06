@@ -1143,6 +1143,26 @@ export function EntryShell({
   const openLibraryProject = useStableHandler((projectId: string, fileName?: string) =>
     navigate({ kind: 'project', projectId, conversationId: null, fileName: fileName ?? null }),
   );
+  // Incoming callbacks too: App subscribes to the route and re-renders on
+  // every switch, and some of what it passes down is inline or depends on
+  // the route, so the identities arrive fresh each time. The boundary has
+  // to hold from in here regardless of what the parent does.
+  const openProject = useStableHandler(onOpenProject);
+  const openProjectFromDesignLibrary = useStableHandler<Parameters<NonNullable<typeof onOpenProjectFromDesignLibrary>>, void>(
+    (...args) => onOpenProjectFromDesignLibrary?.(...args),
+  );
+  const openLiveArtifact = useStableHandler(onOpenLiveArtifact);
+  const deleteProject = useStableHandler(onDeleteProject);
+  const duplicateProject = useStableHandler<Parameters<NonNullable<typeof onDuplicateProject>>, Promise<void> | void>(
+    (...args) => onDuplicateProject?.(...args),
+  );
+  const renameProject = useStableHandler(onRenameProject);
+  const refreshProjects = useStableHandler<[], Promise<void> | void>(() => onProjectsRefresh?.());
+  const changeDefaultDesignSystem = useStableHandler(onChangeDefaultDesignSystem);
+  const createDesignSystem = useStableHandler<[], void>(() => onCreateDesignSystem?.());
+  const openDesignSystem = useStableHandler<[string], void>((id) => onOpenDesignSystem?.(id));
+  const refreshDesignSystems = useStableHandler<[], Promise<void> | void>(() => onDesignSystemsRefresh?.());
+  const createPluginShareProject = useStableHandler(onCreatePluginShareProject);
 
 
   if (view === 'onboarding') {
@@ -1335,12 +1355,12 @@ export function EntryShell({
                 designSystems={designSystems}
                 defaultDesignSystemId={defaultDesignSystemId}
                 onSubmit={submitPluginLoop}
-                onOpenProject={onOpenProject}
-                {...(onOpenProjectFromDesignLibrary ? { onOpenProjectFromDesignLibrary } : {})}
+                onOpenProject={openProject}
+                {...(onOpenProjectFromDesignLibrary ? { onOpenProjectFromDesignLibrary: openProjectFromDesignLibrary } : {})}
                 onViewAllProjects={viewAllProjects}
-                onDeleteProject={onDeleteProject}
-                onDuplicateProject={onDuplicateProject}
-                onRenameProject={onRenameProject}
+                onDeleteProject={deleteProject}
+                {...(onDuplicateProject ? { onDuplicateProject: duplicateProject } : {})}
+                onRenameProject={renameProject}
                 onBrowseRegistry={browseRegistry}
                 onOpenIntegrations={openConnectorsTab}
                 onOpenMcp={openMcpTab}
@@ -1370,12 +1390,12 @@ export function EntryShell({
                     projects={projects}
                     skills={skills}
                     designSystems={designSystems}
-                    onOpen={onOpenProject}
-                    onOpenLiveArtifact={onOpenLiveArtifact}
-                    onDelete={onDeleteProject}
-                    onDuplicate={onDuplicateProject}
-                    onRename={onRenameProject}
-                    onRefresh={onProjectsRefresh}
+                    onOpen={openProject}
+                    onOpenLiveArtifact={openLiveArtifact}
+                    onDelete={deleteProject}
+                    {...(onDuplicateProject ? { onDuplicate: duplicateProject } : {})}
+                    onRename={renameProject}
+                    {...(onProjectsRefresh ? { onRefresh: refreshProjects } : {})}
                     isActive={view === 'projects'}
                     onNewProject={openNewProjectDefault}
                   />
@@ -1394,7 +1414,7 @@ export function EntryShell({
               <IsolatedPluginsView
                 onCreatePlugin={createPluginFromLibrary}
                 onUsePlugin={usePluginStable}
-                onCreatePluginShareProject={onCreatePluginShareProject}
+                onCreatePluginShareProject={createPluginShareProject}
               />
             </div>
             <div data-testid="entry-view-design-systems" data-active={view === 'design-systems' ? 'true' : 'false'} {...inactiveViewProps(view === 'design-systems')}>
@@ -1408,10 +1428,10 @@ export function EntryShell({
                     systems={[]}
                     templates={templates}
                     selectedId={defaultDesignSystemId}
-                    onSelect={onChangeDefaultDesignSystem}
-                    onCreate={onCreateDesignSystem}
-                    onOpenSystem={onOpenDesignSystem}
-                    onSystemsRefresh={onDesignSystemsRefresh}
+                    onSelect={changeDefaultDesignSystem}
+                    {...(onCreateDesignSystem ? { onCreate: createDesignSystem } : {})}
+                    {...(onOpenDesignSystem ? { onOpenSystem: openDesignSystem } : {})}
+                    {...(onDesignSystemsRefresh ? { onSystemsRefresh: refreshDesignSystems } : {})}
                   />
                 </div>
               ) : (
@@ -1423,10 +1443,10 @@ export function EntryShell({
                     systems={designSystems}
                     templates={templates}
                     selectedId={defaultDesignSystemId}
-                    onSelect={onChangeDefaultDesignSystem}
-                    onCreate={onCreateDesignSystem}
-                    onOpenSystem={onOpenDesignSystem}
-                    onSystemsRefresh={onDesignSystemsRefresh}
+                    onSelect={changeDefaultDesignSystem}
+                    {...(onCreateDesignSystem ? { onCreate: createDesignSystem } : {})}
+                    {...(onOpenDesignSystem ? { onOpenSystem: openDesignSystem } : {})}
+                    {...(onDesignSystemsRefresh ? { onSystemsRefresh: refreshDesignSystems } : {})}
                   />
                 </div>
               )}

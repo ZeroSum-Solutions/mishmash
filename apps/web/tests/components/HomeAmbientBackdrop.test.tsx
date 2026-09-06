@@ -123,4 +123,40 @@ describe('HomeAmbientBackdrop layout discipline', () => {
     });
     expect(canvas.width).toBe(1200);
   });
+
+  it('measures once and on window resize when ResizeObserver is unavailable', () => {
+    (globalThis as any).ResizeObserver = undefined;
+    let box = { width: 1000, height: 600, left: 0 };
+    const rectSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockImplementation(() => box as DOMRect);
+    try {
+      render(<HomeAmbientBackdrop />);
+      const canvas = screen.getByTestId('home-ambient-canvas') as HTMLCanvasElement;
+      act(() => { intersectionCallback?.([{ target: canvas, isIntersecting: true } as unknown as IntersectionObserverEntry], {} as IntersectionObserver); });
+      expect(canvas.width).toBe(1000);
+      const readsAfterMount = rectSpy.mock.calls.length;
+      runFrames(3);
+      expect(rectSpy.mock.calls.length).toBe(readsAfterMount);
+
+      box = { width: 800, height: 500, left: 0 };
+      act(() => { window.dispatchEvent(new Event('resize')); });
+      expect(canvas.width).toBe(800);
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
+  it('re-sizes the buffer from cached bounds when only devicePixelRatio changes', () => {
+    const { canvas, rect } = mountVisible();
+    expect(canvas.width).toBe(1200);
+    rect.mockClear();
+    const originalRatio = window.devicePixelRatio;
+    try {
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 1.25 });
+      act(() => { window.dispatchEvent(new Event('resize')); });
+      expect(canvas.width).toBe(1500);
+      expect(rect).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: originalRatio });
+    }
+  });
 });
