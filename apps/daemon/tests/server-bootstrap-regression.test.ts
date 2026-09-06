@@ -456,6 +456,11 @@ describe('bootstrap route regressions', () => {
       examplePrompt: '',
       aggregatesExamples: false,
       critiquePolicy: null,
+      // This fixture stands in for a listing entry, and a listing entry now
+      // states whether it ships `assets/poster.jpg` (FU-28). The smoke
+      // template has no assets directory, so `false` is what the real
+      // listing would report for it.
+      hasPoster: false,
       body: 'Render the route smoke template.',
       dir: templateDir,
     };
