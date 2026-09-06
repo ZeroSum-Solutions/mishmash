@@ -295,9 +295,19 @@ const IMAGE_EXPORT_ERROR_CAUSE_LABELS: Record<string, string> = {
   EMPTY_IMAGE: 'captured image was empty',
 };
 
+export type ImageExportStage = 'capture' | 'encode' | 'target' | 'save';
+
+const IMAGE_EXPORT_STAGE_LABELS: Record<ImageExportStage, string> = {
+  capture: 'snapshot capture failed',
+  encode: 'image encoding failed',
+  target: 'choosing the save target failed',
+  save: 'saving the image failed',
+};
+
 export interface ImageExportFailureInput {
   fileName: string;
   errorCode: string;
+  stage?: ImageExportStage;
   projectId?: string;
   durationMs?: number;
 }
@@ -305,15 +315,16 @@ export interface ImageExportFailureInput {
 /**
  * Builds the anomaly record for a failed client-side image export.
  *
- * Invariant: Every failed client-side image export (Save as image / Copy screenshot)
- * yields an anomaly record with kind `'export-failed'`, severity `'warn'`, a human-readable
- * summary naming both the target file and the failure cause, and a detail payload preserving
- * the export format (`image`), error code, file name, and elapsed duration.
+ * Invariant: Every failed "Download → Export as image" attempt yields one
+ * `'export-failed'` row.
  */
 export function anomalyForImageExportFailure(
   input: ImageExportFailureInput,
 ): ReportAnomalyRequest {
-  const cause = IMAGE_EXPORT_ERROR_CAUSE_LABELS[input.errorCode] ?? `export failed (${input.errorCode})`;
+  const stageLabel = input.stage ? IMAGE_EXPORT_STAGE_LABELS[input.stage] : undefined;
+  const cause =
+    IMAGE_EXPORT_ERROR_CAUSE_LABELS[input.errorCode] ??
+    (stageLabel ? `${stageLabel} (${input.errorCode})` : `export failed (${input.errorCode})`);
   return {
     kind: 'export-failed',
     severity: 'warn',
@@ -323,6 +334,7 @@ export function anomalyForImageExportFailure(
       exportFormat: 'image',
       errorCode: input.errorCode,
       fileName: input.fileName,
+      ...(input.stage ? { stage: input.stage } : {}),
       ...(input.durationMs != null ? { durationMs: input.durationMs } : {}),
     },
   };
