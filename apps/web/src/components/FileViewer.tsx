@@ -11214,7 +11214,7 @@ function HtmlViewer({
       // no literal `.slide`) export as a deck instead of a single page-mode shot
       // of slide 1. The vector-PDF fallback below uses the SAME signal, so an
       // artifact exports identically with or without a desktop host.
-      const wholeDeck = options?.wholeDeck === true;
+      const wholeDeck = options?.wholeDeck === true && (!imageDeckSignal || await canRequestOffscreenImageRender());
       // For a CURRENT-slide capture we need the active slide index, which only
       // exists when the viewer tracks it. Runtime-managed decks have no
       // active-slide bridge (slideState===null); for those the off-screen path
@@ -11499,6 +11499,7 @@ function HtmlViewer({
     result: 'success' | 'failed' | 'cancelled',
     errorCode?: string,
     stage?: ImageExportStage,
+    scope?: string,
   ) => {
     if (imageExportResolvedRef.current) return;
     imageExportResolvedRef.current = true;
@@ -11518,6 +11519,7 @@ function HtmlViewer({
         export_duration_ms: durationMs,
         project_id: projectId,
         project_kind: projectKind,
+        ...(scope ? { scope } : {}),
       },
       { requestId },
     );
@@ -11529,6 +11531,7 @@ function HtmlViewer({
           stage,
           projectId,
           durationMs,
+          scope,
         }),
       );
     }
@@ -11556,8 +11559,12 @@ function HtmlViewer({
     await waitForAnimationFrame();
     await waitForAnimationFrame();
     let stage: ImageExportStage = 'capture';
+    const context = imageExportContext;
+    const isDeck = deckExportSignalForContext(context);
+    let isCurrentSlideFallback = false;
     try {
-      const context = imageExportContext;
+      const canOffscreen = await canRequestOffscreenImageRender();
+      isCurrentSlideFallback = isDeck && !canOffscreen;
       const targetTitle = context?.title ?? exportTitle;
       let dataUrl = imageExportSnapshotDataUrlRef.current;
       if (!dataUrl) {
@@ -11570,14 +11577,22 @@ function HtmlViewer({
         // renderer cannot serve (it answers 501 → `unavailable`) still falls
         // through to the bridge chain below, which is what the precedence specs
         // in `file-viewer-image-export.test.tsx` pin.
+        // When the off-screen renderer is unavailable, a deck cannot be stitched
+        // by the client bridge: capture the current slide alone and state that
+        // in the success toast and telemetry, never asking the bridge for wholeDeck.
         const snap = await captureExportImageSnapshot({
-          wholeDeck: true,
+          wholeDeck: !isCurrentSlideFallback,
           context,
           allowOffscreenRender: true,
         });
         if (!snap) {
           setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
-          fireImageExportResult('failed', 'CAPTURE_FAILED', 'capture');
+          fireImageExportResult(
+            'failed',
+            'CAPTURE_FAILED',
+            'capture',
+            isCurrentSlideFallback ? 'current-slide' : undefined,
+          );
           return;
         }
         dataUrl = snap.dataUrl;
@@ -11587,7 +11602,12 @@ function HtmlViewer({
       const blob = await imageDataUrlToBlob(dataUrl, imageExportFormat);
       if (blob.size <= 0) {
         setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
-        fireImageExportResult('failed', 'EMPTY_IMAGE', 'encode');
+        fireImageExportResult(
+          'failed',
+          'EMPTY_IMAGE',
+          'encode',
+          isCurrentSlideFallback ? 'current-slide' : undefined,
+        );
         return;
       }
       stage = 'target';
@@ -11604,10 +11624,16 @@ function HtmlViewer({
       } else {
         await target.save(blob);
       }
-      fireImageExportResult('success');
+      fireImageExportResult(
+        'success',
+        undefined,
+        undefined,
+        isCurrentSlideFallback ? 'current-slide' : undefined,
+      );
       setExportToast({
-        message:
-          target.method === 'picker'
+        message: isCurrentSlideFallback
+          ? t('fileViewer.exportImageCurrentSlideOnly')
+          : target.method === 'picker'
             ? t('fileViewer.exportImageSaved')
             : t('fileViewer.exportImageDownloadStarted'),
         tone: 'success',
@@ -11616,7 +11642,12 @@ function HtmlViewer({
       console.warn('[exportAsImage] failed to save snapshot:', err);
       const message = err instanceof Error && err.message ? err.message : t('fileViewer.exportImageFailed');
       setExportToast({ message, tone: 'error' });
-      fireImageExportResult('failed', exportErrorCode(err), stage);
+      fireImageExportResult(
+        'failed',
+        exportErrorCode(err),
+        stage,
+        isCurrentSlideFallback ? 'current-slide' : undefined,
+      );
     } finally {
       imageExportInFlightRef.current = false;
     }

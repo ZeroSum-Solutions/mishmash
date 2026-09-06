@@ -310,6 +310,7 @@ export interface ImageExportFailureInput {
   stage?: ImageExportStage;
   projectId?: string;
   durationMs?: number;
+  scope?: string;
 }
 
 /**
@@ -336,6 +337,7 @@ export function anomalyForImageExportFailure(
       fileName: input.fileName,
       ...(input.stage ? { stage: input.stage } : {}),
       ...(input.durationMs != null ? { durationMs: input.durationMs } : {}),
+      ...(input.scope ? { scope: input.scope } : {}),
     },
   };
 }
