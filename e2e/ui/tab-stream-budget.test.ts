@@ -83,13 +83,28 @@ const BROWSER_CONFIG = {
  * requests that hold a socket for the life of the tab, and the ones the budget
  * is about. An ordinary request that is merely slow on a loaded runner is not
  * one, which is why the assertion below counts these and not everything pending.
+ *
+ * Takes the `pathname + search` string `trackLongLivedRequests` returns, so the
+ * census has one parsing convention rather than two.
  */
-function isStreamRequest(target: string): boolean {
-  const url = new URL(target);
-  return url.pathname.endsWith('/events') || url.searchParams.get('stream') === '1';
+function isStreamRequest(pathAndSearch: string): boolean {
+  const queryAt = pathAndSearch.indexOf('?');
+  const pathname = queryAt < 0 ? pathAndSearch : pathAndSearch.slice(0, queryAt);
+  const search = queryAt < 0 ? '' : pathAndSearch.slice(queryAt + 1);
+  return pathname.endsWith('/events') || new URLSearchParams(search).get('stream') === '1';
 }
 
-/** Requests this tab has held open for longer than `LONG_LIVED_MS`. */
+/**
+ * Requests this tab has held open for longer than `LONG_LIVED_MS`.
+ *
+ * The age filter is what separates a stream from an ordinary request that has
+ * merely not answered yet, and it is also why a tab that opened its streams a
+ * moment ago reads as empty: a connection younger than `LONG_LIVED_MS` has not
+ * yet earned the name. The census below is read shortly after the third tab
+ * boots, so the third tab's own entries are empty on both trees for that reason,
+ * and the census is a statement about the two tabs that have been sitting in the
+ * background — not a claim that the third tab holds nothing.
+ */
 function trackLongLivedRequests(page: Page): () => string[] {
   const inFlight = new Map<unknown, { startedAt: number; url: string }>();
   page.on('request', (request) => {
@@ -198,7 +213,7 @@ test('[P0] a third app tab boots and persists a message while two tabs sit in th
     // below. This line catches a future regression that holds MORE streams than
     // it should — a fourth surface subscribing app-wide, say — which the write
     // alone would not name.
-    const streamsHeld = heldPerTab.flat().filter((held) => isStreamRequest(new URL(held, 'http://tab').href));
+    const streamsHeld = heldPerTab.flat().filter(isStreamRequest);
     expect(
       streamsHeld.length,
       `the three tabs must not hold the whole six-connection budget between them; held: ${JSON.stringify(heldPerTab)}`,
