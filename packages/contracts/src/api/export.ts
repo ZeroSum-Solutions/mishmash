@@ -70,9 +70,34 @@ export function isExportImageFormat(value: unknown): value is ExportImageFormat 
  * answer is a property of how the daemon was booted, not of the artifact: a
  * daemon started without one answers 501 `UPSTREAM_UNAVAILABLE` for every
  * screenshot export, forever. A client that carries its own fallback asks this
- * once instead of learning it from a 501 on every user action.
+ * once per daemon process instead of learning it from a 501 on every user
+ * action.
+ *
+ * The flags are SEPARATE because the renderers behind them are: the native PDF
+ * exporter, the slide renderer, and the artifact exporter are three independent
+ * closures and a daemon may be booted with any subset of them. A single
+ * combined flag can only be right about one format and wrong about the rest.
  */
 export interface ExportCapabilitiesResponse {
+  /**
+   * `POST /api/projects/:id/export/pdf` can return a native (vector) PDF.
+   *
+   * False is NOT "no PDF export": a browser client falls back to its own PDF
+   * generation on the 501, so this reports fidelity, not availability. Nothing
+   * may hide "Export as PDF" on the strength of it.
+   */
+  nativePdf: boolean;
+  /**
+   * `POST /api/projects/:id/export/pdf-image` can return a raster (screenshot)
+   * PDF -- one pixel-perfect page per slide. Needs the slide renderer.
+   */
+  rasterPdf: boolean;
+  /**
+   * `POST /api/projects/:id/export/pptx` can return a .pptx. Needs the slide
+   * renderer. There is no client-side substitute for it, so false means the
+   * format is genuinely unavailable on this daemon.
+   */
+  pptx: boolean;
   /**
    * `POST /api/projects/:id/export/image` can return image bytes. False means
    * every image export on this daemon 501s; the daemon reports it fail-closed,
