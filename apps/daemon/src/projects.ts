@@ -474,8 +474,11 @@ async function collectFiles(
   }
   // The one read of this directory. Its `Dirent`s carry every entry's kind and
   // name every sidecar it holds, so nothing below has to ask the filesystem
-  // again for what this listing already says.
-  const fileNames = new Set<string>(entries.filter((e) => e.isFile()).map((e) => e.name));
+  // again for what this listing already says. Symlinks count: a `stat` used to
+  // resolve them, so a symlinked sidecar or `vite.config.*` must stay visible.
+  const fileNames = new Set<string>(
+    entries.filter((e) => e.isFile() || e.isSymbolicLink()).map((e) => e.name),
+  );
   scan.observeDirectory(dir, fileNames);
   for (const e of entries) {
     if (e.name.startsWith('.')) continue;

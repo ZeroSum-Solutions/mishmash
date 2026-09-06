@@ -44,7 +44,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   };
 });
 
-const { mkdir, mkdtemp, rm, writeFile } = await import('node:fs/promises');
+const { mkdir, mkdtemp, rm, symlink, writeFile } = await import('node:fs/promises');
 const { listFiles } = await import('../src/projects.js');
 const { IGNORED_PROJECT_DIR_NAMES } = await import('../src/project-ignored-dirs.js');
 
@@ -163,5 +163,39 @@ describe('cold project file scan cost', () => {
     // `alpha.html.artifact.json` is the only sidecar the fixture writes.
     expect(manifestReads).toHaveLength(1);
     expect(path.basename(manifestReads[0] ?? '')).toBe('alpha.html.artifact.json');
+  });
+});
+
+describe('artifact manifests the directory listing reaches through a symlink', () => {
+  it('still reads a sidecar that is a symlink, not a plain file', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'od-project-scan-symlink-'));
+    roots.push(root);
+    const projectsRoot = path.join(root, 'projects');
+    const projectId = 'symlinked-sidecar';
+    const projectDir = path.join(projectsRoot, projectId);
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(path.join(projectDir, 'page.html'), '<!doctype html><p>page</p>');
+    await writeFile(
+      path.join(projectDir, 'shared.artifact.json'),
+      JSON.stringify({
+        version: 1,
+        kind: 'html',
+        title: 'SIDECAR VIA SYMLINK',
+        entry: 'page.html',
+        renderer: 'html',
+        status: 'complete',
+        exports: ['html', 'pdf', 'zip'],
+      }),
+    );
+    await symlink(
+      path.join(projectDir, 'shared.artifact.json'),
+      path.join(projectDir, 'page.html.artifact.json'),
+    );
+
+    const files = await listFiles(projectsRoot, projectId);
+    const page = files.find((file) => String(file.path) === 'page.html');
+
+    expect((page?.artifactManifest as { title?: string } | undefined)?.title)
+      .toBe('SIDECAR VIA SYMLINK');
   });
 });
