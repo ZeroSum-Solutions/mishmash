@@ -199,6 +199,19 @@ export function DesignsTab({
 	// File trees the cover scan already walked, so a re-render caused by another
 	// project in the list does not re-walk the ones that did not change.
 	const scannedFilesByProject = useRef(new Map<string, ScannedProjectFiles>());
+	// Ticks the cover scan on a schedule of its own.
+	//
+	// INVARIANT: the scan runs on every poll, so the delta bound in
+	// `canListProjectFilesAsDelta` expires on the schedule its docblock claims.
+	// The scan's other trigger is the `projects` array, and that array now keeps
+	// its identity across a content-equal poll (`preserveProjectListIdentity` in
+	// App.tsx) -- which is what stops the grid re-walking every card, but on its
+	// own would also mean an idle grid never scans again. A file deleted behind
+	// the daemon's back does not move `project.updatedAt`, so nothing else would
+	// ever release the stale cover. Each tick this adds costs one `since`
+	// request per card, which the daemon answers with an empty list for an
+	// unchanged tree -- not a walk.
+	const [coverScanEpoch, setCoverScanEpoch] = useState(0);
 	const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 	const [selectMode, setSelectMode] = useState(false);
 	const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -314,7 +327,15 @@ export function DesignsTab({
 		return () => {
 			cancelled = true;
 		};
-	}, [projects]);
+	}, [projects, coverScanEpoch]);
+
+	useEffect(() => {
+		const interval = window.setInterval(
+			() => setCoverScanEpoch((epoch) => epoch + 1),
+			PROJECTS_AUTO_REFRESH_MS,
+		);
+		return () => window.clearInterval(interval);
+	}, []);
 
 	useEffect(() => {
 		if (!menuOpenId) return;
