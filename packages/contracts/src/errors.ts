@@ -195,6 +195,36 @@ export type ApiProviderErrorDetails = {
   provider: string;
 };
 
+/**
+ * Why `POST /api/runs` produced no run, in the two cases where the BROWSER is
+ * the only witness.
+ *
+ * Neither reaches the daemon's own failure taxonomy. An involuntary abort never
+ * reaches a route at all — the browser tore the request down, so the daemon has
+ * no verdict to lend — and a body over the global request limit is rejected by
+ * the body parser before routing, which answers an HTML error page rather than
+ * an `ApiErrorResponse`. The client is therefore the party that mints the
+ * error, and this union is the vocabulary it mints it in, so every client names
+ * the same two causes the same way.
+ *
+ * - 'aborted': the create request, or the read of its response body, was torn
+ *   down while the caller was still waiting. The daemon creates and pins the
+ *   run BEFORE it answers, so this says nothing about whether a run exists.
+ * - 'payload-too-large': the daemon answered 413. It refused the request, so no
+ *   run was made and a smaller turn is the fix.
+ *
+ * A cancellation the USER asked for is deliberately absent: it is not a failure
+ * and carries no detail.
+ */
+export const RUN_CREATE_FAILURE_REASONS = ['aborted', 'payload-too-large'] as const;
+export type RunCreateFailureReason = (typeof RUN_CREATE_FAILURE_REASONS)[number];
+
+/** `ApiError.details` shape for a run creation that produced no run. */
+export type RunCreateFailureDetails = {
+  kind: 'run-create-failure';
+  reason: RunCreateFailureReason;
+};
+
 /** Success payload or shared error envelope for agent-facing daemon tool endpoints. */
 export type AgentToolApiResponse<TSuccess> = TSuccess | ApiErrorResponse;
 

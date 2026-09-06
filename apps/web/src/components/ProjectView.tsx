@@ -508,6 +508,24 @@ let liveArtifactEventSequence = 0;
 // local literal to respect the web↔daemon boundary.
 const BRAND_KIT_FILE = 'brand.html';
 const BRAND_EMPTY_TRANSCRIPT_RETRY_DELAYS_MS = [120, 500, 1_200, 2_000] as const;
+/**
+ * The invariant the Loading pane is held to: A CONVERSATION THAT WILL NOT LOAD
+ * SAYS SO.
+ *
+ * `listMessages` reports a rejected fetch and an empty conversation alike, so
+ * the only read that leaves this pane loading is one that never answers at all
+ * — which is exactly what a request queued behind an exhausted per-host
+ * connection budget does. D-21 recorded 7.7 minutes of it: the pane held
+ * "Loading…", Send stayed disabled, and the prompt was lost with nothing on
+ * screen to read and nothing to press.
+ *
+ * So the read is bounded by the budget INV-3.13 judges a write against. When it
+ * elapses, the conversation is marked failed-to-load — the state the read's own
+ * catch already produces — which is what puts the error surface and its Retry
+ * on screen. A read that answers after the bound still applies (only `cancelled`
+ * discards it), so a merely slow daemon loses nothing but the card.
+ */
+const CONVERSATION_LOAD_BUDGET_MS = 10_000;
 const CHAT_PANEL_WIDTH_STORAGE_KEY = 'open-design.project.chatPanelWidth';
 const DEFAULT_CHAT_PANEL_WIDTH = 460;
 const MIN_CHAT_PANEL_WIDTH = 345;
@@ -1525,6 +1543,12 @@ export function ProjectView({
   const [failedMessagesConversationId, setFailedMessagesConversationId] = useState<string | null>(null);
   const [conversationLoadError, setConversationLoadError] = useState<string | null>(null);
   const [messageLoadRetryNonce, setMessageLoadRetryNonce] = useState(0);
+  // The bound below reads its message through this ref so the conversation-read
+  // effect keeps the dependency list it has always had. `t` is rebuilt whenever
+  // the locale changes, and a translator identity change must never re-issue a
+  // conversation read.
+  const translateRef = useRef(t);
+  translateRef.current = t;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [forkingMessageId, setForkingMessageId] = useState<string | null>(null);
   const [activePluginActionPaths, setActivePluginActionPaths] = useState<Set<string>>(() => new Set());
@@ -2103,6 +2127,14 @@ export function ProjectView({
     if (messagesConversationIdRef.current !== activeConversationId) {
       messagesConversationIdRef.current = null;
     }
+    const loadBudget = window.setTimeout(() => {
+      if (cancelled) return;
+      setMessages([]);
+      setError(translateRef.current('chat.conversationLoad.timedOut'));
+      messagesConversationIdRef.current = null;
+      setMessagesConversationId(null);
+      setFailedMessagesConversationId(activeConversationId);
+    }, CONVERSATION_LOAD_BUDGET_MS);
     (async () => {
       try {
         const [list, comments] = await Promise.all([
@@ -2110,6 +2142,7 @@ export function ProjectView({
           fetchPreviewComments(project.id, activeConversationId),
         ]);
         if (cancelled) return;
+        window.clearTimeout(loadBudget);
         setMessages(list);
         setMessagesInitialized(true);
         setPreviewComments(comments);
@@ -2122,6 +2155,7 @@ export function ProjectView({
         setFailedMessagesConversationId(null);
       } catch (err) {
         if (cancelled) return;
+        window.clearTimeout(loadBudget);
         const message = err instanceof Error ? err.message : 'Could not load messages for this conversation.';
         setMessages([]);
         setPreviewComments([]);
@@ -2136,8 +2170,16 @@ export function ProjectView({
     })();
     return () => {
       cancelled = true;
+      window.clearTimeout(loadBudget);
     };
   }, [project.id, activeConversationId, messageLoadRetryNonce]);
+
+  /** Re-issue a conversation read the bound above gave up on. */
+  const retryConversationLoad = useCallback(() => {
+    setError(null);
+    setFailedMessagesConversationId(null);
+    setMessageLoadRetryNonce((nonce) => nonce + 1);
+  }, []);
 
   useEffect(() => {
     if (!projectIsProgrammaticBrandExtraction) return undefined;
@@ -9286,6 +9328,11 @@ export function ProjectView({
               sendDisabledReason={currentConversationSendDisabledReason}
               queuedItems={currentConversationQueuedItems}
               error={conversationLoadError ?? error}
+              onRetryLoad={
+                failedMessagesConversationId === activeConversationId
+                  ? retryConversationLoad
+                  : undefined
+              }
               runCheck={runCheck}
               onRunCheckAgain={recheckUnresolvedRun}
               projectId={project.id}

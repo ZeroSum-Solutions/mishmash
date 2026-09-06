@@ -2677,6 +2677,13 @@ export interface Dict {
   // verdict. Not a failure: the run is unresolved until it answers for itself.
   'chat.runError.title.notStarted': string;
   'chat.runError.notStartedMessage': string;
+  // The daemon refused the create request because the turn's body was over the
+  // global request limit. No route ran, so no run exists and Retry is safe.
+  'chat.runError.title.payloadTooLarge': string;
+  'chat.runError.payloadTooLargeMessage': string;
+  // The bound on the Loading pane: a conversation read that never answered.
+  // Shown with the Retry that re-issues the read.
+  'chat.conversationLoad.timedOut': string;
   'chat.runChecking.title': string;
   'chat.runChecking.message': string;
   'chat.runChecking.unreachableTitle': string;

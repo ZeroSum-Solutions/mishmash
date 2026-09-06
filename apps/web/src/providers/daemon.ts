@@ -12,6 +12,7 @@
 import type { AgentEvent, ChatCommentAttachment, ChatMessage } from '../types';
 import type { AmrEntryAttribution } from '../analytics/amr-attribution';
 import type {
+  ApiErrorCode,
   ChatAnalyticsHints,
   ChatRunCreateResponse,
   ChatRunListResponse,
@@ -28,6 +29,8 @@ import type {
   MediaExecutionPolicy,
   ResearchOptions,
   RunContextSelection,
+  RunCreateFailureDetails,
+  RunCreateFailureReason,
   SseErrorPayload,
   VelaLoginStatus,
 } from '@open-design/contracts';
@@ -708,6 +711,53 @@ function cleanAmrOpenCodeStderrFallback(agentId: string | undefined, stderr: str
     .trim();
 }
 
+/**
+ * The invariant every failed run creation is held to: ONLY A CANCELLATION THE
+ * USER ASKED FOR IS SILENT.
+ *
+ * `POST /api/runs` below is issued with no signal of its own, so an
+ * `AbortError` from it is never this client choosing to stop reading. It is the
+ * browser tearing the request down: a per-host connection budget an extra tab
+ * exhausted (D-21), a connection that died, a navigation away. Returning from
+ * all of them made an involuntary abort and a user's Stop indistinguishable —
+ * both showed nothing — and the turn was lost with no error and no retry.
+ *
+ * The caller's own signals are what separate the two. `signal` stops this
+ * client's stream and `cancelSignal` cancels the run; either one already
+ * aborted means the user asked for this, and only then is silence right.
+ * Every other abort is reported.
+ */
+function userCancelledRunCreate(
+  error: Error,
+  signal: AbortSignal,
+  cancelSignal: AbortSignal | undefined,
+): boolean {
+  if (error.name !== 'AbortError') return false;
+  return signal.aborted || cancelSignal?.aborted === true;
+}
+
+/**
+ * Stamp why a run creation produced no run, in the shared vocabulary
+ * `packages/contracts` defines for it (`RunCreateFailureReason`).
+ *
+ * `code` is set only where a contracts `ApiErrorCode` is actually true of the
+ * failure. The daemon's 413 refusal is `PAYLOAD_TOO_LARGE`, and that code is
+ * what lets the pane name the card instead of falling back to "Task failed"
+ * over an HTML error page (`runtime/amr-guidance.ts`). An involuntary abort
+ * gets no code, because the daemon said nothing at all: that one is resolved by
+ * the lost-create lookup (`runtime/lost-run-create.ts`), the only thing that
+ * can rule out a run the daemon may already be running.
+ */
+function markRunCreateFailure<E extends Error>(
+  error: E,
+  reason: RunCreateFailureReason,
+): E & { details: RunCreateFailureDetails } {
+  const marked = error as E & { details: RunCreateFailureDetails; code?: ApiErrorCode };
+  marked.details = { kind: 'run-create-failure', reason };
+  if (reason === 'payload-too-large') marked.code = 'PAYLOAD_TOO_LARGE';
+  return marked;
+}
+
 export async function streamViaDaemon({
   agentId,
   history,
@@ -802,16 +852,24 @@ export async function streamViaDaemon({
     if (!createResp.ok) {
       const text = await createResp.text().catch(() => '');
       emitRunStatus('failed');
-      // The daemon never named a run, so nothing was adjudicated.
-      handlers.onError(markStreamUnadjudicated(new Error(`daemon ${createResp.status}: ${text || 'no body'}`)));
+      // The daemon never named a run, so nothing was adjudicated. A 413 is the
+      // one refusal whose cause the client can name for itself: the body parser
+      // rejected the turn before any route saw it.
+      const refusal = new Error(`daemon ${createResp.status}: ${text || 'no body'}`);
+      handlers.onError(markStreamUnadjudicated(
+        createResp.status === 413 ? markRunCreateFailure(refusal, 'payload-too-large') : refusal,
+      ));
       return;
     }
 
     created = (await createResp.json()) as ChatRunCreateResponse;
   } catch (err) {
-    if ((err as Error).name === 'AbortError') return;
+    const error = err instanceof Error ? err : new Error(String(err));
+    if (userCancelledRunCreate(error, signal, cancelSignal)) return;
     handlers.onError(
-      markLostRunCreate(err instanceof Error ? err : new Error(String(err))),
+      markLostRunCreate(
+        error.name === 'AbortError' ? markRunCreateFailure(error, 'aborted') : error,
+      ),
     );
     return;
   }
