@@ -11,11 +11,23 @@
 // observer already files them and where they belong — they are the product
 // misbehaving, which is what that log is for.
 //
+// The long-task half is POLLED, not read once at the end. The anomaly log is
+// size-capped and keeps one previous generation, so a 24 h window can roll it
+// past what it retains; poll it through the window with each --since reaching
+// back before the previous answer ended, and append every envelope to one JSON
+// array:
+//
+//   od anomalies --kind ui-lag --since <before the last answer ended> --json
+//
+// reconcileUiLagExports then merges those answers, and refuses the window when
+// two consecutive polls do not overlap: the records between them left the log
+// unread, and no single answer can show it.
+//
 // Run it after the capture window closes:
 //
 //   pnpm exec tsx lib/w3-performance-capture.ts \
 //     --timing-log <data root>/request-timing/requests.jsonl \
-//     --anomalies <ui-lag export>.json \
+//     --anomalies <one ui-lag export, or a JSON array of the polled exports> \
 //     --start 2026-09-06T09:00:00.000Z \
 //     --source-run w3-24h-1 --daemon-sha <sha> --runtime "<machine>" \
 //     --workload "<what was being done>" --open-tabs 2 \
@@ -40,6 +52,7 @@ import {
   type W3LatencySample,
   type W3RouteAttempts,
   type W3SampleOutcome,
+  type W3SequenceGap,
   type W3TimingSource,
   type W3UiLagSample,
 } from './w3-performance-proof.js';
@@ -283,7 +296,16 @@ export function readUiLag(records: readonly AnomalyRecord[], window: W3Interval)
 
 export interface BuildProofInput {
   timingLog: string;
-  anomalies: ListAnomaliesResponse;
+  /**
+   * The ui-lag export, or the ordered sequence of exports the capture polled.
+   *
+   * A 24 h window outlives the anomaly log's size cap, so one export cannot be
+   * the whole answer: the operator polls `od anomalies --kind ui-lag --json
+   * --since <before the previous answer ended>` and appends each envelope to
+   * this file. Ordered oldest poll first — the reconciliation below reads the
+   * order as the order they were taken in.
+   */
+  anomalies: ListAnomaliesResponse | readonly ListAnomaliesResponse[];
   /** Start of the pinned window; the end is fixed 24 h later. */
   startUtc: string;
   sourceRun: string;
@@ -301,7 +323,11 @@ export function buildProof(input: BuildProofInput): W3EndpointLatencyProof {
     gaps: input.gaps ?? [],
   };
   const timing = readTimingLog(input.timingLog, { window, sourceRun: input.sourceRun });
-  const uiLag = readUiLag(input.anomalies.anomalies, window);
+  const polls = Array.isArray(input.anomalies)
+    ? (input.anomalies as readonly ListAnomaliesResponse[])
+    : [input.anomalies as ListAnomaliesResponse];
+  const reconciled = reconcileUiLagExports(polls);
+  const uiLag = readUiLag(reconciled.records, window);
   return {
     window,
     capture: { ...input.capture, normalizationKey: W3_ROUTE_NORMALIZATION_KEY },
@@ -310,34 +336,105 @@ export function buildProof(input: BuildProofInput): W3EndpointLatencyProof {
     uiLag: uiLag.samples,
     uiLagUnmeasurable: uiLag.unmeasurable,
     uiLagRecordsRead: uiLag.recordsRead,
-    uiLagExportShortfall: uiLagExportShortfall(input.anomalies),
+    uiLagExportShortfall: reconciled.shortfall,
+    uiLagSequenceGaps: reconciled.gaps,
     unparseableTimingLines: timing.unparseableLines,
   };
 }
 
+export interface UiLagReconciliation {
+  /** Every ui-lag record the polls delivered, deduplicated, oldest sequence first. */
+  records: AnomalyRecord[];
+  /**
+   * By how much a poll's envelope disagreed with the array beside it — the
+   * disagreement of greatest magnitude across the polls, positive winning a tie.
+   *
+   * `GET /api/anomalies` filters first and applies `limit` afterwards, reporting
+   * the matched count as `total` (`apps/daemon/src/anomaly-log.ts`). So the
+   * envelope, and only the envelope, knows whether the array beside it is the
+   * whole answer or one page of it — the delivered records agree with each other
+   * either way. Measured on the envelope's own terms rather than on the ui-lag
+   * subset, so an export taken without a `kind` filter is judged the same way.
+   *
+   * The invariant is equality, and the difference is signed for that reason. A
+   * `total` above the array is the page boundary above; a `total` below it is an
+   * envelope that contradicts its own records, which is not a shortfall of zero —
+   * clamping it there would accept a file whose two halves cannot both be true.
+   * The extreme rather than the sum, so one poll's page boundary cannot be
+   * cancelled by another poll's opposite error.
+   *
+   * A `total` that is not a number is neither: it is an envelope nobody can
+   * check, so it becomes a value the validator refuses.
+   */
+  shortfall: number;
+  /** Sequence ranges no poll covered — see `W3SequenceGap`. */
+  gaps: W3SequenceGap[];
+}
+
 /**
- * By how much the ui-lag export's envelope disagrees with the array beside it.
+ * Merges the ordered exports one capture polled into a single ui-lag population.
  *
- * `GET /api/anomalies` filters first and applies `limit` afterwards, reporting
- * the matched count as `total` (`apps/daemon/src/anomaly-log.ts`). So the
- * envelope, and only the envelope, knows whether the array beside it is the whole
- * answer or one page of it — the delivered records agree with each other either
- * way. Measured on the envelope's own terms rather than on the ui-lag subset, so
- * an export taken without a `kind` filter is judged the same way.
+ * What must hold: consecutive polls OVERLAP. The anomaly log keeps one previous
+ * generation, so a record leaves it for good once two rotations have passed;
+ * poll `n + 1` therefore has to still retain everything poll `n` had reached, or
+ * the records between them are gone and nobody asked for them. Each answer
+ * declares the sequence range the log still retains, which makes that checkable:
+ * the polls are continuous exactly when the next range starts no later than one
+ * past the furthest sequence already read, and any daylight between the two is a
+ * gap this returns by name.
  *
- * The invariant is equality, and the difference is signed for that reason. A
- * `total` above the array is the page boundary above; a `total` below it is an
- * envelope that contradicts its own records, which is not a shortfall of zero —
- * clamping it there would accept a file whose two halves cannot both be true.
+ * Deduplication is by record id, because overlapping polls are supposed to
+ * deliver the same records twice — an overlap that double-counted its own long
+ * tasks would fail INV-3.10 for the wrong reason.
  *
- * A `total` that is not a number is neither: it is an envelope nobody can check,
- * so it becomes a value the validator refuses.
+ * Throws on an export with no sequence range at all. That is not a log that
+ * happened to be empty (which declares `null` and reconciles fine) but an answer
+ * from a daemon that does not number its records, and there is no honest way to
+ * read it as continuous.
  */
-function uiLagExportShortfall(response: ListAnomaliesResponse): number {
-  const delivered = response.anomalies?.length;
-  if (typeof response.total !== 'number' || !Number.isFinite(response.total)) return Number.NaN;
-  if (typeof delivered !== 'number') return Number.NaN;
-  return response.total - delivered;
+export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): UiLagReconciliation {
+  const byId = new Map<string, AnomalyRecord>();
+  const gaps: W3SequenceGap[] = [];
+  let shortfall = 0;
+  let envelopeUnreadable = false;
+  let covered: number | null = null;
+
+  polls.forEach((poll, index) => {
+    const delivered = Array.isArray(poll?.anomalies) ? poll.anomalies : null;
+    if (delivered == null || typeof poll?.total !== 'number' || !Number.isFinite(poll.total)) {
+      envelopeUnreadable = true;
+    } else {
+      const difference = poll.total - delivered.length;
+      if (outranks(difference, shortfall)) shortfall = difference;
+    }
+    for (const record of delivered ?? []) byId.set(record.id, record);
+
+    const { firstSeq, lastSeq } = poll ?? {};
+    if (firstSeq === undefined || lastSeq === undefined) {
+      throw new Error(
+        `ui-lag export ${index + 1} of ${polls.length} carries no sequence range; `
+        + 'a log whose records are not numbered cannot be reconciled across a rotation',
+      );
+    }
+    // A log that retains nothing has nothing to reconcile against, and must not
+    // reset what earlier polls already proved was read.
+    if (firstSeq == null || lastSeq == null) return;
+    if (covered != null && firstSeq > covered + 1) {
+      gaps.push({ fromSeq: covered + 1, toSeq: firstSeq - 1 });
+    }
+    covered = covered == null ? lastSeq : Math.max(covered, lastSeq);
+  });
+
+  const records = [...byId.values()].sort(
+    (left, right) => (left.seq ?? 0) - (right.seq ?? 0) || left.at.localeCompare(right.at),
+  );
+  return { records, gaps, shortfall: envelopeUnreadable ? Number.NaN : shortfall };
+}
+
+/** True when `candidate` is the more serious envelope disagreement, positive winning a tie. */
+function outranks(candidate: number, incumbent: number): boolean {
+  if (Math.abs(candidate) !== Math.abs(incumbent)) return Math.abs(candidate) > Math.abs(incumbent);
+  return candidate > incumbent;
 }
 
 // ---------------------------------------------------------------------------
@@ -366,7 +463,8 @@ export async function runCapture(argv: readonly string[]): Promise<string> {
   const cachePolicy = requestedCachePolicy as W3CachePolicy;
   const proof = buildProof({
     timingLog: await readFile(required(argv, 'timing-log'), 'utf8'),
-    anomalies: JSON.parse(await readFile(required(argv, 'anomalies'), 'utf8')) as ListAnomaliesResponse,
+    anomalies: JSON.parse(await readFile(required(argv, 'anomalies'), 'utf8')) as
+      ListAnomaliesResponse | ListAnomaliesResponse[],
     startUtc: required(argv, 'start'),
     sourceRun: required(argv, 'source-run'),
     capture: {

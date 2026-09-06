@@ -63,6 +63,20 @@ export type AnomalySource = 'web' | 'daemon';
 export interface AnomalyRecord {
   /** Unique per record, so a reader can refer to one line unambiguously. */
   id: string;
+  /**
+   * Monotonic position in the log, stamped by the daemon on append and never
+   * reused.
+   *
+   * What it is for: the log is size-capped and rotates, so records leave it
+   * without anyone deleting them. Ids are random and timestamps repeat, which
+   * means neither can tell a reader whether the answer they hold is the whole
+   * retained history or what is left of it after a roll. An ordered number can:
+   * two reads of the log are continuous exactly when their sequence ranges
+   * touch, and the difference between them names the records that rolled away.
+   *
+   * Optional because records written before the daemon stamped it carry none.
+   */
+  seq?: number;
   /** ISO-8601 timestamp of when the anomaly was observed. */
   at: string;
   kind: AnomalyKind;
@@ -120,6 +134,23 @@ export interface ListAnomaliesResponse {
   total: number;
   /** Absolute path of the log file, so a reader can go straight to it. */
   path: string;
+  /**
+   * Lowest `seq` the log still retains, across every generation this answer
+   * read. `null` when it retains no sequenced record.
+   *
+   * Deliberately describes the LOG rather than the page: a filtered read still
+   * has to tell a poller which records the log could have shown it, or two
+   * consecutive filtered polls cannot prove they overlapped.
+   */
+  firstSeq: number | null;
+  /** Highest `seq` the log still retains. `null` when it retains none. */
+  lastSeq: number | null;
+  /**
+   * How many on-disk generations this answer read: 1 for the current file
+   * alone, 2 once a rotation has left a retained previous generation beside it.
+   * Above 1 says the answer spans a rotation.
+   */
+  generations: number;
 }
 
 export interface ClearAnomaliesResponse {

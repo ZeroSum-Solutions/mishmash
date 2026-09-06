@@ -125,6 +125,7 @@ function healthyProof(overrides: Partial<Proof> = {}): Proof {
     uiLag: [] as ProofModule.W3UiLagSample[],
     uiLagUnmeasurable: 0,
     uiLagExportShortfall: 0,
+    uiLagSequenceGaps: [] as ProofModule.W3SequenceGap[],
     unparseableTimingLines: 0,
     ...overrides,
   };
@@ -634,11 +635,7 @@ describe('W3 endpoint-latency proof — report', () => {
       // Outside the pinned interval: the bar is the window, not the calendar.
       uiLagRecord('2026-09-05T23:00:00.000Z', 9_000),
     ];
-    const response: ListAnomaliesResponse = {
-      anomalies: records,
-      total: records.length,
-      path: '/dev/null',
-    };
+    const response: ListAnomaliesResponse = uiLagExport(records);
     const read = capture?.readUiLag(records, { startUtc: WINDOW_START, endUtc: WINDOW_END });
     const uiLag = read?.samples ?? [];
     const report = proof?.reportProof(healthyProof({ uiLag }));
@@ -736,7 +733,7 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
       timingLog: golden,
       // The envelope says five ui-lag records matched the query and hands back one:
       // `GET /api/anomalies` applied a `limit` the operator did not widen.
-      anomalies: { anomalies: delivered, total: 5, path: '/dev/null' },
+      anomalies: uiLagExport(delivered, { total: 5 }),
       startUtc: WINDOW_START,
       sourceRun: 'golden',
       capture: { ...CAPTURE_METADATA },
@@ -759,7 +756,7 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
     ];
     const built = capture?.buildProof({
       timingLog: golden,
-      anomalies: { anomalies: records, total: records.length, path: '/dev/null' },
+      anomalies: uiLagExport(records),
       startUtc: WINDOW_START,
       sourceRun: 'golden',
       capture: { ...CAPTURE_METADATA },
@@ -829,7 +826,7 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
       // BELOW the array length is an envelope nobody can reconcile with its own
       // records; reading it as a shortfall of zero accepts a file whose two
       // halves contradict each other.
-      anomalies: { anomalies: delivered, total: 1, path: '/dev/null' },
+      anomalies: uiLagExport(delivered, { total: 1 }),
       startUtc: WINDOW_START,
       sourceRun: 'golden',
       capture: { ...CAPTURE_METADATA },
@@ -847,7 +844,7 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
     const torn = `${(recorded[1] as string).slice(0, 40)}\n`;
     const built = capture?.buildProof({
       timingLog: golden + torn,
-      anomalies: { anomalies: [], total: 0, path: '/dev/null' },
+      anomalies: uiLagExport([]),
       startUtc: WINDOW_START,
       sourceRun: 'golden',
       capture: { ...CAPTURE_METADATA },
@@ -860,7 +857,7 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
   it('builds a proof whose window is exactly 24 h from the recorded rows', () => {
     const built = capture?.buildProof({
       timingLog: golden,
-      anomalies: { anomalies: [], total: 0, path: '/dev/null' },
+      anomalies: uiLagExport([]),
       startUtc: WINDOW_START,
       sourceRun: 'golden',
       capture: {
