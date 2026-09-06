@@ -41,7 +41,34 @@ const ARTIFACT_HTML =
   + '</body></html>';
 
 /** What a daemon booted without a desktop renderer answers. */
-const NO_RENDERER_CAPABILITIES: ExportCapabilitiesResponse = { image: false };
+const NO_RENDERER_CAPABILITIES: ExportCapabilitiesResponse = {
+  nativePdf: false,
+  rasterPdf: false,
+  pptx: false,
+  image: false,
+};
+
+/**
+ * A daemon that can rasterize an image but cannot build a .pptx or a raster PDF
+ * -- i.e. the artifact exporter is wired and the slide renderer is not. The one
+ * boot-time value a tools-dev runtime cannot produce, substituted exactly as the
+ * renderer-less body above is; the body is the contracts DTO, and
+ * `apps/daemon/tests/export-capabilities.test.ts` asserts a real daemon booted
+ * that way returns exactly this.
+ */
+const NO_SLIDE_RENDERER_CAPABILITIES: ExportCapabilitiesResponse = {
+  nativePdf: false,
+  rasterPdf: false,
+  pptx: false,
+  image: true,
+};
+
+const DECK_ARTIFACT = 'deck.html';
+const DECK_ARTIFACT_HTML =
+  '<!doctype html><html><head><title>Export probe deck</title></head><body>'
+  + '<deck-stage><section data-screen-label="One"><h1>Slide one</h1></section>'
+  + '<section data-screen-label="Two"><h1>Slide two</h1></section></deck-stage>'
+  + '</body></html>';
 
 const CONFIG_STORAGE_KEY = 'mishmash:config';
 
@@ -133,6 +160,74 @@ test('[P1] a daemon with a desktop renderer is still asked, and still serves the
   expect(download!).toMatch(/\.png$/);
 });
 
+// W2K.3 red spec (UI half) -- the Download menu must gate ONLY the choices that
+// need a daemon-side renderer, and must not gate "Export as PDF".
+//
+// 2K.1 left the menu offering every choice on every runtime, because one `image`
+// flag could not tell pptx and the raster PDF apart from the image export. PPTX
+// has no client-side fallback: on a renderer-less daemon the button 501s and the
+// user gets nothing. PDF is the opposite -- `exportProjectAsPdf` falls back to
+// browser PDF generation on the 501 -- so hiding it would remove a working
+// export. Both directions are pinned here.
+//
+// RED on `d3b9bd38b`: the first case reads `undefined` for the three new flags;
+// the second still finds "Export as PPTX" in a menu whose daemon cannot build one.
+test('[P1] the tools-dev daemon reports every renderer-backed export format separately', async ({ page }) => {
+  // No substitution: this runtime's daemon wires all three renderer closures
+  // through its sidecar (`apps/daemon/src/sidecar/server.ts`), so every format
+  // is genuinely available and the real wire says so.
+  const response = await page.request.get('/api/export/capabilities');
+  expect(response.ok(), `read export capabilities: ${await response.text()}`).toBeTruthy();
+  const capabilities = (await response.json()) as ExportCapabilitiesResponse;
+
+  expect(capabilities, 'a renderer-backed daemon must report each format separately').toEqual({
+    nativePdf: true,
+    rasterPdf: true,
+    pptx: true,
+    image: true,
+  });
+
+  const projectId = await seedProject(page, 'w2k3-renderer-menu');
+  await seedDeckArtifact(page, projectId);
+  await openWorkspaceTab(page, projectId, DECK_ARTIFACT);
+
+  await page.getByRole('button', { name: 'Download' }).click();
+  const menu = page.getByRole('menu');
+  await expect(
+    menu.getByRole('menuitem', { name: 'Export as PPTX' }),
+    'a daemon that can build a .pptx did not offer the choice',
+  ).toBeVisible({ timeout: T.medium });
+  await expect(menu.getByRole('menuitem', { name: 'Export as PDF' })).toBeVisible();
+});
+
+test('[P1] a daemon with no slide renderer offers no PPTX choice, and still offers PDF', async ({ page }) => {
+  await page.route('**/api/export/capabilities', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify(NO_SLIDE_RENDERER_CAPABILITIES),
+      contentType: 'application/json',
+      status: 200,
+    });
+  });
+
+  const projectId = await seedProject(page, 'w2k3-no-slide-renderer');
+  await seedDeckArtifact(page, projectId);
+  await openWorkspaceTab(page, projectId, DECK_ARTIFACT);
+
+  await page.getByRole('button', { name: 'Download' }).click();
+  const menu = page.getByRole('menu');
+  await expect(menu.getByRole('menuitem', { name: 'Export as PDF' })).toBeVisible({
+    timeout: T.medium,
+  });
+  await expect(
+    menu.getByRole('menuitem', { name: 'Export as PPTX' }),
+    'the menu offered a .pptx export the daemon answers 501 for, with no fallback',
+  ).toHaveCount(0);
+  await expect(
+    menu.getByRole('menuitem', { name: 'Export as image' }),
+    'the image export is still available on this daemon and must stay offered',
+  ).toBeVisible();
+});
+
 /**
  * Collect every image-export request the page issues from now on.
  *
@@ -189,6 +284,13 @@ async function seedArtifact(page: Page, projectId: string) {
     data: { content: ARTIFACT_HTML, name: ARTIFACT },
   });
   expect(response.ok(), `seed ${ARTIFACT}: ${await response.text()}`).toBeTruthy();
+}
+
+async function seedDeckArtifact(page: Page, projectId: string) {
+  const response = await page.request.post(`/api/projects/${projectId}/files`, {
+    data: { content: DECK_ARTIFACT_HTML, name: DECK_ARTIFACT },
+  });
+  expect(response.ok(), `seed ${DECK_ARTIFACT}: ${await response.text()}`).toBeTruthy();
 }
 
 async function openWorkspaceTab(page: Page, projectId: string, tabId: string) {

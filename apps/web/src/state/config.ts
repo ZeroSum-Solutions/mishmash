@@ -1,4 +1,4 @@
-import type { AppConfigPrefs } from '@open-design/contracts';
+import type { AppConfigPrefs, PublicMediaProviderConfigResponse } from '@open-design/contracts';
 import { MEDIA_PROVIDERS } from '../media/models';
 import { isOpenAICompatible } from '../providers/openai-compatible';
 import type {
@@ -786,18 +786,6 @@ export function loadConfig(): AppConfig {
 interface PublicComposioConfigResponse {
   configured?: boolean;
   apiKeyTail?: string;
-}
-
-interface PublicMediaProviderConfigEntry {
-  configured?: boolean;
-  source?: string;
-  apiKeyTail?: string;
-  baseUrl?: string;
-  model?: string;
-}
-
-interface PublicMediaProviderConfigResponse {
-  providers?: Record<string, PublicMediaProviderConfigEntry>;
 }
 
 export type DaemonMediaProvidersFetchResult =

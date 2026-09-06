@@ -1,3 +1,4 @@
+import { promptTemplateMediaAspect } from '@open-design/contracts';
 import type { InputFieldSpec, ProjectKind } from '@open-design/contracts';
 import type { AudioKind, ProjectMetadata, PromptTemplateSummary } from '../../types';
 import {
@@ -177,7 +178,11 @@ export function metadataForHomeMediaComposer(
         category: template.category,
         ...(template.tags ? { tags: template.tags } : {}),
         ...(template.model ? { model: template.model } : {}),
-        ...(template.aspect ? { aspect: template.aspect } : {}),
+        // Only a ratio the media surfaces offer reaches the persisted
+        // metadata; the catalogue also serves `2:3`, which they do not.
+        ...(promptTemplateMediaAspect(template.aspect)
+          ? { aspect: promptTemplateMediaAspect(template.aspect) }
+          : {}),
         source: template.source,
       }
     : undefined;

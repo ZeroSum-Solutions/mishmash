@@ -66,19 +66,38 @@ function posterUrl(id: string): string {
 // frame.
 //
 // Rendering the example in an iframe per card does not scale. Each example is
-// a whole site — its own CSS, fonts, and images — and the asset route rescans
-// every registry root per request, so a screenful of frames means hundreds of
-// requests and the gallery paints blank while the daemon catches up. Every
-// ingested entry ships an `assets/poster.jpg` (one request, one decode), so
-// prefer it and keep the frame as the fallback for entries without one.
+// a whole site — its own CSS, fonts, and images — so a screenful of frames
+// means hundreds of requests and the gallery paints blank while the daemon
+// catches up. An entry that ships an `assets/poster.jpg` is one request and one
+// decode, so prefer it and keep the frame as the fallback for entries without
+// one. (The asset route used to rescan every registry root per request too;
+// `sendSkillSubresource` now resolves through a short-lived listing cache, so
+// the remaining per-card cost is the frame itself.)
+//
+// `hasPoster` comes from the listing: asking for a poster the entry does not
+// have used to cost a 404 through the same slow sub-resource route for nearly
+// every card (FU-28), which the onError fallback hid from view but not from
+// the daemon. The error path stays as the fallback for a poster that is
+// listed but unreadable.
 //
 // Both paths are still gated on an IntersectionObserver: `loading="lazy"` did
 // not stop the browser from starting all 300+ requests at once.
-function TemplateThumb({ id, title, previewLabel }: { id: string; title: string; previewLabel: string }) {
+function TemplateThumb({
+  hasPoster,
+  id,
+  title,
+  previewLabel,
+}: {
+  hasPoster: boolean;
+  id: string;
+  title: string;
+  previewLabel: string;
+}) {
   const ref = useRef<HTMLSpanElement | null>(null);
   const [visible, setVisible] = useState(false);
   const [posterFailed, setPosterFailed] = useState(false);
   const [posterLoaded, setPosterLoaded] = useState(false);
+  const showPoster = hasPoster && !posterFailed;
 
   // Keep observing rather than disconnecting on first sight. A scripted frame
   // that stays mounted after scrolling away is a live document holding timers,
@@ -98,10 +117,10 @@ function TemplateThumb({ id, title, previewLabel }: { id: string; title: string;
 
   return (
     <span
-      className={`templates-card__thumb${posterFailed ? '' : ' templates-card__thumb--poster'}`}
+      className={`templates-card__thumb${showPoster ? ' templates-card__thumb--poster' : ''}`}
       ref={ref}
     >
-      {!visible ? null : posterFailed ? (
+      {!visible ? null : !showPoster ? (
         <iframe src={exampleUrl(id)} title={title} sandbox="allow-scripts" tabIndex={-1} aria-hidden="true" />
       ) : (
         // Hidden until decoded: a failed poster request never paints a
@@ -286,6 +305,7 @@ function TemplateCard({
     >
       {hasHtmlPreview(tpl) ? (
         <TemplateThumb
+          hasPoster={tpl.hasPoster === true}
           id={tpl.id}
           title={t('templates.previewAria', { name })}
           previewLabel={t('common.preview')}

@@ -14,7 +14,7 @@ import { buildSrcdoc, type SrcdocOptions } from './srcdoc';
 import { buildReactComponentSrcdoc } from './react-component';
 import { buildZip } from './zip';
 import { randomUUID } from '../utils/uuid';
-import type { ExportCapabilitiesResponse } from '@open-design/contracts';
+import type { DaemonHealthResponse, ExportCapabilitiesResponse } from '@open-design/contracts';
 import {
   captureHostPage,
   isOpenDesignHostAvailable,
@@ -1139,47 +1139,122 @@ export function readPreviewViewportRect(
   }
 }
 
-// Cached answer to `GET /api/export/capabilities`. `null` means "not decided
-// yet": either nothing has asked, or the daemon could not be reached / did not
-// answer the question, which is deliberately NOT cached as a decision.
-let cachedScreenshotExportAvailable: boolean | null = null;
-let screenshotExportCapabilityProbe: Promise<boolean> | null = null;
+// What a runtime that has told us nothing is assumed to be able to do. "We did
+// not find out" is not "it cannot": suppressing an export on a daemon that never
+// answered would silently downgrade a runtime that can render.
+const EVERY_EXPORT_AVAILABLE: ExportCapabilitiesResponse = {
+  nativePdf: true,
+  rasterPdf: true,
+  pptx: true,
+  image: true,
+};
 
-async function readDaemonScreenshotExportCapability(): Promise<boolean> {
+// The last definitive answer, together with the daemon process it came from.
+// `null` means "not decided yet": either nothing has asked, or the daemon could
+// not be reached / did not answer, which is deliberately NOT cached as a
+// decision.
+let cachedExportCapabilities:
+  | { bootId: string | null; capabilities: ExportCapabilitiesResponse }
+  | null = null;
+let exportCapabilitiesProbe: Promise<ExportCapabilitiesResponse> | null = null;
+
+/**
+ * Which daemon process is answering right now, from `GET /api/health`.
+ *
+ * `null` is a real, stable identity meaning "this daemon does not report one"
+ * (it predates the field, or could not be reached). Treating it as a fresh
+ * identity each time would make the reader re-probe on every call against an
+ * older daemon, so it compares equal to itself like any other value.
+ */
+async function readDaemonBootId(): Promise<string | null> {
   try {
-    const resp = await fetch('/api/export/capabilities');
-    if (!resp.ok) return true;
-    const body = (await resp.json()) as Partial<ExportCapabilitiesResponse> | null;
-    if (typeof body?.image !== 'boolean') return true;
-    cachedScreenshotExportAvailable = body.image;
-    return body.image;
+    const resp = await fetch('/api/health');
+    if (!resp.ok) return null;
+    const body = (await resp.json()) as Partial<DaemonHealthResponse> | null;
+    return typeof body?.bootId === 'string' && body.bootId.length > 0 ? body.bootId : null;
   } catch {
-    // Offline, or a daemon older than the capability route. "We did not find
-    // out" is not "it cannot", so keep the previous behaviour: ask, and let the
-    // response decide.
-    return true;
+    return null;
   }
 }
 
 /**
- * Whether this daemon says it can rasterize `POST /api/projects/:id/export/image`.
- *
- * Read once per session, because the answer is a property of how the daemon was
- * booted: the desktop renderers are wired at startup and cannot appear later, so
- * a definitive answer never goes stale. Only a definitive answer is cached — an
- * unreachable daemon resolves `true` and is asked again next time.
+ * A format the daemon did not answer for is treated as available, for the same
+ * reason an unreachable daemon is: a daemon older than the per-format split
+ * reports `image` alone, and the three formats it stayed silent about must keep
+ * the behaviour they had before the split rather than disappear.
  */
-export function daemonScreenshotExportAvailable(): Promise<boolean> {
-  if (cachedScreenshotExportAvailable !== null) {
-    return Promise.resolve(cachedScreenshotExportAvailable);
+function readExportCapabilities(
+  body: Partial<ExportCapabilitiesResponse> | null | undefined,
+): ExportCapabilitiesResponse | null {
+  if (!body || typeof body !== 'object') return null;
+  const flag = (value: unknown): boolean => (typeof value === 'boolean' ? value : true);
+  return {
+    nativePdf: flag(body.nativePdf),
+    rasterPdf: flag(body.rasterPdf),
+    pptx: flag(body.pptx),
+    image: flag(body.image),
+  };
+}
+
+async function probeDaemonExportCapabilities(): Promise<ExportCapabilitiesResponse> {
+  const bootId = await readDaemonBootId();
+  const cached = cachedExportCapabilities;
+  if (cached && cached.bootId === bootId) return cached.capabilities;
+  try {
+    const resp = await fetch('/api/export/capabilities');
+    if (!resp.ok) return EVERY_EXPORT_AVAILABLE;
+    const capabilities = readExportCapabilities(
+      (await resp.json()) as Partial<ExportCapabilitiesResponse> | null,
+    );
+    if (!capabilities) return EVERY_EXPORT_AVAILABLE;
+    cachedExportCapabilities = { bootId, capabilities };
+    return capabilities;
+  } catch {
+    // Offline, or a daemon older than the capability route.
+    return EVERY_EXPORT_AVAILABLE;
   }
-  if (!screenshotExportCapabilityProbe) {
-    screenshotExportCapabilityProbe = readDaemonScreenshotExportCapability();
-    void screenshotExportCapabilityProbe.finally(() => {
-      screenshotExportCapabilityProbe = null;
+}
+
+/**
+ * What the daemon this page is talking to says it can export.
+ *
+ * INVARIANT: the answer is always the CURRENT daemon process's, never a dead
+ * one's. Which renderers are wired is fixed for the life of a daemon process,
+ * but a browser session outlives `tools-dev restart`, so the cache is keyed on
+ * the boot id from `GET /api/health` and re-probed whenever that changes. Only a
+ * definitive answer is cached — a daemon that did not answer resolves to
+ * {@link EVERY_EXPORT_AVAILABLE} and is asked again next time.
+ */
+export function daemonExportCapabilities(): Promise<ExportCapabilitiesResponse> {
+  if (!exportCapabilitiesProbe) {
+    exportCapabilitiesProbe = probeDaemonExportCapabilities();
+    void exportCapabilitiesProbe.finally(() => {
+      exportCapabilitiesProbe = null;
     });
   }
-  return screenshotExportCapabilityProbe;
+  return exportCapabilitiesProbe;
+}
+
+/** Whether this daemon says it can rasterize `POST /api/projects/:id/export/image`. */
+export async function daemonScreenshotExportAvailable(): Promise<boolean> {
+  return (await daemonExportCapabilities()).image;
+}
+
+/**
+ * What THIS client can export, which is the daemon's answer everywhere except
+ * inside a desktop host.
+ *
+ * INVARIANT: a UI surface may withhold an export only where the matching flag is
+ * false AND the client has no substitute of its own. `nativePdf` therefore never
+ * gates anything: `exportProjectAsPdf` falls back to browser PDF generation on
+ * the 501, so "Export as PDF" is offered on every runtime.
+ *
+ * A desktop host reports every format available without asking: it reaches the
+ * renderers its own daemon wired, so every host export path is unchanged.
+ */
+export async function clientExportCapabilities(): Promise<ExportCapabilitiesResponse> {
+  if (isOpenDesignHostAvailable()) return EVERY_EXPORT_AVAILABLE;
+  return daemonExportCapabilities();
 }
 
 /**
@@ -1192,13 +1267,9 @@ export function daemonScreenshotExportAvailable(): Promise<boolean> {
  * to its visible-preview capture — but the failed request is recorded as a
  * product fault on every single click, by the daemon's own 5xx anomaly observer
  * and by the web fetch wrapper. That is what this predicate exists to stop.
- *
- * A desktop host is exempt and always answers true: it reaches the renderer its
- * own daemon wired, so every host capture path is unchanged.
  */
 export async function canRequestOffscreenImageRender(): Promise<boolean> {
-  if (isOpenDesignHostAvailable()) return true;
-  return daemonScreenshotExportAvailable();
+  return (await clientExportCapabilities()).image;
 }
 
 export async function exportProjectImageDataUrl(opts: {

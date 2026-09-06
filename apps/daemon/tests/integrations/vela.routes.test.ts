@@ -824,6 +824,36 @@ describe('GET /api/integrations/vela/status', () => {
     expect(body.account?.balanceUsd).toBe('247.51');
   });
 
+  it('answers a cold signed-in /status inside the budget when billing never settles', async () => {
+    // INV-3.7. The cold path above waits for live billing, and that wait is
+    // what a never-settling vela CLI turns into a request that never answers.
+    // The wait is bounded now: config-only inside 2,000 ms beats plan/balance
+    // at an unbounded cost.
+    clearAllVelaLiveAccounts();
+    // Far longer than both the CLI's own bound and the route's answer budget,
+    // so the summary this fake would eventually print can never arrive in time.
+    process.env.FAKE_VELA_BILLING_DELAY_MS = '30000';
+    process.env.FAKE_VELA_BILLING_TIER = 'plus';
+    process.env.FAKE_VELA_BILLING_BALANCE_USD = '31.00';
+    seedLogin('local', {
+      user: { id: 'budget-1', email: 'budget@example.com', plan: undefined },
+    });
+
+    const startedAt = Date.now();
+    const { status, body } = await getJson<{
+      loggedIn: boolean;
+      user: { email?: string } | null;
+      account?: { plan?: string; balanceUsd?: string | null };
+    }>(`${baseUrl}/api/integrations/vela/status`);
+    const elapsedMs = Date.now() - startedAt;
+
+    expect(status).toBe(200);
+    expect(body.loggedIn).toBe(true);
+    // Nothing settled, so there is no live billing projection to report.
+    expect(body.account).toBeUndefined();
+    expect(elapsedMs, `/status answered in ${elapsedMs}ms`).toBeLessThan(2_000);
+  });
+
   it('normalizes a successful billing summary without a tier to free (upgradeable)', async () => {
     // membershipTier is omitted for free accounts; a successful read must still
     // surface a concrete plan so the UI shows it AND keeps the Upgrade CTA.
