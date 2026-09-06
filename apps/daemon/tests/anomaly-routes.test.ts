@@ -250,4 +250,23 @@ describe('daemon HTTP observer', () => {
     expect(anomalies).toHaveLength(1);
     expect(anomalies[0]?.summary).toBe('one real record');
   });
+
+  it('carries the retained sequence range and generation count in the list envelope', async () => {
+    await start();
+
+    await post('/api/anomalies', { kind: 'ui-lag', severity: 'warn', summary: 'lag one' });
+    await post('/api/anomalies', { kind: 'white-screen', severity: 'error', summary: 'blank' });
+    await post('/api/anomalies', { kind: 'ui-lag', severity: 'warn', summary: 'lag two' });
+
+    const { json } = await get('/api/anomalies?kind=ui-lag');
+
+    // The 24 h capture that judges INV-3.10 polls this endpoint with a filter.
+    // The range therefore describes the LOG, not the filtered page: it is what
+    // lets consecutive polls prove they overlapped instead of straddling a
+    // rotation that took the records between them.
+    expect(json.anomalies.map((a: { seq?: number }) => a.seq)).toEqual([3, 1]);
+    expect(json.firstSeq).toBe(1);
+    expect(json.lastSeq).toBe(3);
+    expect(json.generations).toBe(1);
+  });
 });

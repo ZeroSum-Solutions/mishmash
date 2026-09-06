@@ -137,15 +137,42 @@ function healthyProof(overrides: Partial<Proof> = {}): Proof {
   } as Proof;
 }
 
-function uiLagRecord(at: string, durationMs: number): AnomalyRecord {
+function uiLagRecord(at: string, durationMs: number, seq?: number): AnomalyRecord {
   return {
     id: `ui-lag-${at}`,
+    ...(seq == null ? {} : { seq }),
     at,
     kind: 'ui-lag',
     severity: 'warn',
     source: 'web',
     summary: `Main thread blocked for ${durationMs}ms`,
     detail: { safetyEvent: 'client_long_task', duration_ms: durationMs },
+  };
+}
+
+/**
+ * One `GET /api/anomalies` answer, in the envelope the daemon returns.
+ *
+ * The envelope is where a rotation becomes visible: `total` says whether the
+ * array beside it is the whole match, and the sequence range says which records
+ * the log still retains. Built here rather than written per case so no fixture
+ * can accidentally describe an answer the daemon could not produce (D-18).
+ */
+function uiLagExport(
+  records: readonly AnomalyRecord[],
+  overrides: Partial<ListAnomaliesResponse> = {},
+): ListAnomaliesResponse {
+  const sequences = records
+    .map((record) => record.seq)
+    .filter((seq): seq is number => typeof seq === 'number');
+  return {
+    anomalies: [...records],
+    total: records.length,
+    path: '/dev/null',
+    firstSeq: sequences.length === 0 ? null : Math.min(...sequences),
+    lastSeq: sequences.length === 0 ? null : Math.max(...sequences),
+    generations: 1,
+    ...overrides,
   };
 }
 
@@ -851,5 +878,119 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
     // The recording predates the pinned window, so a fresh build holds no rows —
     // and the validator says so rather than reporting an empty table as a pass.
     expect(violationCodes(built as Proof)).toContain('missing-route-row');
+  });
+});
+
+describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotation', () => {
+  /** A `ui-lag` record inside the pinned window, numbered as the daemon numbers it. */
+  function lagAt(minutes: number, seq: number, durationMs = 1_200): AnomalyRecord {
+    const at = new Date(Date.parse(WINDOW_START) + minutes * 60_000).toISOString();
+    return uiLagRecord(at, durationMs, seq);
+  }
+
+  /**
+   * The proof one ordered sequence of polls builds, or null when this revision
+   * cannot reconcile a poll sequence at all.
+   */
+  function buildFromPolls(polls: readonly ListAnomaliesResponse[]): Proof | null {
+    try {
+      return (
+        capture?.buildProof({
+          timingLog: golden,
+          anomalies: polls,
+          startUtc: WINDOW_START,
+          sourceRun: 'golden',
+          capture: { ...CAPTURE_METADATA },
+        }) ?? null
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The sequence ranges a built capture declares it never read, as `from..to`.
+   *
+   * A sentinel rather than an empty list when nothing can be read: an empty list
+   * is the shape of "the polls covered everything", so returning it for a
+   * revision that cannot reconcile polls would let the accepting case below pass
+   * vacuously.
+   */
+  function gapRanges(candidate: Proof | null): string[] {
+    const gaps = candidate?.uiLagSequenceGaps;
+    if (!Array.isArray(gaps)) return ['<this revision does not reconcile a ui-lag poll sequence>'];
+    return gaps.map((gap: ProofModule.W3SequenceGap) => `${gap.fromSeq}..${gap.toSeq}`);
+  }
+
+  /** Only the continuity violations, so a case measures the gap and nothing else. */
+  function gapViolationSubjects(candidate: Proof | null): string {
+    if (proof == null || candidate == null) return '';
+    return proof
+      .validateProof(candidate)
+      .filter((violation) => violation.code === 'ui-lag-gap')
+      .map((violation) => `${violation.subject} ${violation.detail}`)
+      .join(' | ');
+  }
+
+  it('refuses a window whose polls missed the records a rotation rolled away', () => {
+    // The anomaly log keeps one previous generation. A capture that stops polling
+    // long enough for TWO rolls loses everything the first roll had moved, and no
+    // field of a single export shows it: the records that arrive are perfectly
+    // self-consistent and the count INV-3.10 is judged on is simply smaller.
+    const before = uiLagExport([lagAt(10, 1), lagAt(20, 2), lagAt(30, 3)]);
+    const after = uiLagExport([lagAt(70, 7), lagAt(80, 8), lagAt(90, 9)], { generations: 2 });
+    const built = buildFromPolls([before, after]);
+
+    expect(gapRanges(built), why('records 4 to 6 rolled away between the two polls')).toEqual([
+      '4..6',
+    ]);
+    // The violation has to NAME the range; a bare "something is missing" leaves a
+    // reader unable to say how much of the window the capture cannot vouch for.
+    expect(
+      gapViolationSubjects(built),
+      why('the refusal must name the range the capture never read'),
+    ).toContain('4..6');
+  });
+
+  it('accepts polls that overlap across a rotation and counts every record once', () => {
+    // The same rotation, polled the way the capture is meant to poll it: each
+    // `?since=` reaches back before the previous answer ended, so the retained
+    // generation still covers the seam. Nothing was lost, and the records the two
+    // polls share are one record, not two.
+    const before = uiLagExport([1, 2, 3, 4, 5].map((seq) => lagAt(seq * 10, seq)));
+    const after = uiLagExport(
+      [3, 4, 5, 6, 7, 8, 9].map((seq) => lagAt(seq * 10, seq)),
+      { generations: 2 },
+    );
+    const built = buildFromPolls([before, after]);
+
+    expect(gapRanges(built), why('overlapping polls across a rotation leave nothing unread')).toEqual([]);
+    expect(built?.uiLagRecordsRead, why('nine distinct records were read, three of them twice')).toBe(9);
+    expect(built?.uiLag.length, why('and each is one long task, not two')).toBe(9);
+    expect(built?.uiLagExportShortfall, why('every poll handed over everything it matched')).toBe(0);
+  });
+
+  it('refuses a ui-lag export that carries no sequence range at all', () => {
+    // An export with no range is an export nobody can reconcile: it cannot say
+    // which records the log still retains, so the next poll cannot prove it
+    // overlapped. Refused at the capture boundary rather than read as continuous,
+    // for the reason every absent count in this schema is refused.
+    const unnumbered = {
+      anomalies: [lagAt(10, 1)],
+      total: 1,
+      path: '/dev/null',
+    } as unknown as ListAnomaliesResponse;
+
+    expect(
+      () =>
+        capture?.buildProof({
+          timingLog: golden,
+          anomalies: [unnumbered],
+          startUtc: WINDOW_START,
+          sourceRun: 'golden',
+          capture: { ...CAPTURE_METADATA },
+        }),
+      why('an export with no sequence range cannot be reconciled across a rotation'),
+    ).toThrow(/sequence range/);
   });
 });

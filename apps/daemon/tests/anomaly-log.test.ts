@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -161,6 +161,76 @@ describe('anomaly log', () => {
     // The previous generation is kept rather than deleted, so a rotation in the
     // middle of a testing session does not destroy what was already caught.
     expect(await readFile(`${log.path}.1`, 'utf8')).toContain('x');
+  });
+
+  // A rotation is the one event that removes records nobody deleted. The 24 h
+  // capture behind INV-3.10 polls this log for a whole day, which is long enough
+  // to roll it, so a reader has to be able to tell a quiet window from a rolled
+  // one. These four cases pin what makes that possible: a number on every
+  // record, a read that covers both generations, and an envelope that says so.
+
+  /** Pushes the current generation past its cap so the next append has to rotate. */
+  async function fillPastCap(path: string): Promise<void> {
+    // Padding the reader skips, so the rotated generation still holds only real
+    // records — the point is what survives the roll, not what pads it.
+    await appendFile(path, `${' '.repeat(ANOMALY_LOG_MAX_BYTES)}\n`, 'utf8');
+  }
+
+  it('stamps a monotonic sequence that keeps counting across a rotation', async () => {
+    const log = createAnomalyLog({ dataDir });
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'one' }, 'web');
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'two' }, 'web');
+    await fillPastCap(log.path);
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'three' }, 'web');
+
+    const { anomalies, firstSeq, lastSeq } = await log.list({});
+
+    // Ids are random and timestamps repeat, so only an ordered number lets a
+    // reader count the records a rotation took away.
+    expect(anomalies.map((a) => a.seq)).toEqual([3, 2, 1]);
+    expect(firstSeq).toBe(1);
+    expect(lastSeq).toBe(3);
+  });
+
+  it('recovers the sequence from disk so a restart does not reuse a number', async () => {
+    const first = createAnomalyLog({ dataDir });
+    await first.append({ kind: 'ui-lag', severity: 'warn', summary: 'one' }, 'web');
+    await first.append({ kind: 'ui-lag', severity: 'warn', summary: 'two' }, 'web');
+
+    // A new daemon process reading the same data root continues the count; a
+    // sequence that restarted at one would look to a poller like a rotation.
+    const restarted = createAnomalyLog({ dataDir });
+    await restarted.append({ kind: 'ui-lag', severity: 'warn', summary: 'three' }, 'web');
+
+    expect((await restarted.list({})).anomalies.map((a) => a.seq)).toEqual([3, 2, 1]);
+  });
+
+  it('reads the retained generation, so a rotation does not censor an interval export', async () => {
+    const log = createAnomalyLog({ dataDir });
+    const before = new Date(Date.now() - 60_000).toISOString();
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'before the roll' }, 'web');
+    await fillPastCap(log.path);
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'after the roll' }, 'web');
+
+    const result = await log.list({ since: before });
+
+    // Both records are still on disk. A read that covers only the current file
+    // returns the newer one and says nothing about the older, which is data loss
+    // no field of the answer reveals.
+    expect(result.anomalies.map((a) => a.summary)).toEqual(['after the roll', 'before the roll']);
+    expect(result.total).toBe(2);
+    expect(result.generations).toBe(2);
+  });
+
+  it('reports one generation and no sequence range for a log that has never been written', async () => {
+    const log = createAnomalyLog({ dataDir });
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'only one' }, 'web');
+
+    const result = await log.list({});
+
+    expect(result.generations).toBe(1);
+    expect(result.firstSeq).toBe(1);
+    expect(result.lastSeq).toBe(1);
   });
 
   it('clears the log and reports how many records went away', async () => {
