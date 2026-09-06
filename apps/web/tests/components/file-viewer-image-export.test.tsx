@@ -7,6 +7,7 @@ import { exportErrorCode } from '../../src/analytics/export-error-code';
 import type { ProjectFile } from '../../src/types';
 
 const {
+  canRequestOffscreenImageRenderMock,
   captureHostIframeSnapshotMock,
   downloadImageDataUrlMock,
   exportProjectImageDataUrlMock,
@@ -16,6 +17,7 @@ const {
   requestPreviewSnapshotMock,
   saveImageBlobMock,
 } = vi.hoisted(() => ({
+  canRequestOffscreenImageRenderMock: vi.fn(async () => true),
   captureHostIframeSnapshotMock: vi.fn(),
   downloadImageDataUrlMock: vi.fn(),
   exportProjectImageDataUrlMock: vi.fn(),
@@ -34,6 +36,7 @@ vi.mock('../../src/runtime/exports', async () => {
   );
   return {
     ...actual,
+    canRequestOffscreenImageRender: canRequestOffscreenImageRenderMock,
     captureHostIframeSnapshot: captureHostIframeSnapshotMock,
     downloadImageDataUrl: downloadImageDataUrlMock,
     exportProjectImageDataUrl: exportProjectImageDataUrlMock,
@@ -65,6 +68,23 @@ function htmlFile(): ProjectFile {
       entry: 'workspace.html',
       renderer: 'html',
       exports: ['html'],
+    },
+  };
+}
+
+function deckFile(): ProjectFile {
+  return {
+    ...htmlFile(),
+    name: 'pitch.deck.html',
+    path: 'pitch.deck.html',
+    kind: 'deck',
+    artifactManifest: {
+      version: 1,
+      kind: 'deck',
+      title: 'Pitch Deck',
+      entry: 'pitch.deck.html',
+      renderer: 'deck-html',
+      exports: ['html', 'deck'],
     },
   };
 }
@@ -120,6 +140,7 @@ describe('FileViewer image export', () => {
     // meaning what they say: they pin the fallback chain that runs when the
     // renderer is unavailable, not a claim that the renderer is never asked.
     exportProjectImageDataUrlMock.mockResolvedValue({ ok: false, unavailable: true });
+    canRequestOffscreenImageRenderMock.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -528,6 +549,47 @@ describe('FileViewer image export', () => {
     });
     expect(requestPreviewSnapshotMock).not.toHaveBeenCalled();
     expect(captureHostIframeSnapshotMock).not.toHaveBeenCalled();
+  });
+
+  it('exports current slide only and names current-slide scope when deck export has no offscreen renderer', async () => {
+    canRequestOffscreenImageRenderMock.mockResolvedValue(false);
+    requestPreviewSnapshotMock.mockResolvedValueOnce({
+      dataUrl: 'data:image/png;base64,current-slide',
+      w: 800,
+      h: 600,
+    });
+    imageDataUrlToBlobMock.mockResolvedValueOnce(new Blob(['png'], { type: 'image/png' }));
+    prepareImageExportTargetMock.mockResolvedValueOnce({
+      filename: 'pitch.png',
+      method: 'picker',
+      save: saveImageBlobMock,
+    });
+
+    const view = render(
+      <FileViewer
+        projectId="project-1"
+        projectKind="slide_deck"
+        file={deckFile()}
+        isDeck
+        liveHtml='<html><body><div class="deck"><section class="slide">Cover</section><section class="slide">Details</section></div></body></html>'
+      />,
+    );
+    const srcDocFrame = view.container.querySelector<HTMLIFrameElement>('iframe[data-od-render-mode="srcdoc"]');
+    if (srcDocFrame) fireEvent.load(srcDocFrame);
+
+    await openImageExportDialog();
+    await clickSave();
+
+    await waitFor(() => {
+      expect(requestPreviewSnapshotMock).toHaveBeenCalled();
+    });
+    for (const call of requestPreviewSnapshotMock.mock.calls) {
+      const options = call[2];
+      expect(options?.wholeDeck).toBeFalsy();
+    }
+    expect(exportProjectImageDataUrlMock).not.toHaveBeenCalled();
+
+    expect(await screen.findByText('Exported current slide only')).toBeTruthy();
   });
 
   describe('failed export anomaly reporting', () => {
