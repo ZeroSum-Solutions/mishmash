@@ -775,6 +775,70 @@ describe('FileViewer image export', () => {
       expect(typeof report.detail?.durationMs).toBe('number');
     });
 
+    it('reports one export-failed anomaly with CAPTURE_TIMEOUT when snapshot bridge times out', async () => {
+      requestPreviewSnapshotMock.mockRejectedValue(new Error('timeout'));
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'workspace.png',
+        method: 'picker',
+        save: saveImageBlobMock,
+      });
+
+      renderHtmlPreview();
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe(CAPTURE_FAILED_TEXT);
+      }, { timeout: 4000 });
+
+      expect(anomalyPosts).toHaveLength(1);
+      const [report] = anomalyPosts;
+      expect(report.kind).toBe('export-failed');
+      expect(report.severity).toBe('warn');
+      expect(report.summary).toContain('workspace.html');
+      expect(report.summary).toMatch(/timed out/i);
+      expect(report.projectId).toBe('project-1');
+      expect(report.detail).toEqual(expect.objectContaining({
+        exportFormat: 'image',
+        errorCode: 'CAPTURE_TIMEOUT',
+        fileName: 'workspace.html',
+        stage: 'capture',
+      }));
+      expect(typeof report.detail?.durationMs).toBe('number');
+    });
+
+    it('reports one export-failed anomaly with CAPTURE_EMPTY_RENDER when canvas paints blank', async () => {
+      requestPreviewSnapshotMock.mockRejectedValue(new Error('empty-render'));
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'workspace.png',
+        method: 'picker',
+        save: saveImageBlobMock,
+      });
+
+      renderHtmlPreview();
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe(CAPTURE_FAILED_TEXT);
+      }, { timeout: 4000 });
+
+      expect(anomalyPosts).toHaveLength(1);
+      const [report] = anomalyPosts;
+      expect(report.kind).toBe('export-failed');
+      expect(report.severity).toBe('warn');
+      expect(report.summary).toContain('workspace.html');
+      expect(report.summary).toMatch(/blank/i);
+      expect(report.projectId).toBe('project-1');
+      expect(report.detail).toEqual(expect.objectContaining({
+        exportFormat: 'image',
+        errorCode: 'CAPTURE_EMPTY_RENDER',
+        fileName: 'workspace.html',
+        stage: 'capture',
+      }));
+      expect(typeof report.detail?.durationMs).toBe('number');
+    });
+
     it('contracts recognises export-failed as a valid anomaly kind', () => {
       expect(isAnomalyKind('export-failed')).toBe(true);
     });
