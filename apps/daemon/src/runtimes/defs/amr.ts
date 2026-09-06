@@ -599,22 +599,41 @@ export interface VelaBillingSummary {
 }
 
 /**
- * Bound for one `vela billing summary` spawn.
+ * Ceiling for one `vela billing summary` BACKGROUND PROCESS.
  *
- * Deliberately its own constant rather than {@link AMR_MODELS_TIMEOUT_MS}: a
- * model-catalog probe runs in the background and may take its ten seconds, but
- * billing is read on the `/api/integrations/vela/status` request path, whose
- * answer budget is 2,000 ms (INV-3.7). This has to stay below that budget.
+ * INV-3.7 involves two separate limits, and they bound two different things:
+ *
+ * - The **HTTP answer budget** — 2,000 ms, owned by
+ *   `VELA_STATUS_ANSWER_BUDGET_MS` / `answerByDeadline` in
+ *   `apps/daemon/src/routes/vela.ts`. It bounds the RESPONSE. When it lapses
+ *   the route answers config-only and deliberately leaves this process
+ *   running, so the projection it eventually produces warms the live-account
+ *   cache for the next poll.
+ * - This **process ceiling** — the point past which a billing read is no
+ *   longer plausibly working and is only holding a subprocess open. It bounds
+ *   the WORK, not the answer.
+ *
+ * The process ceiling therefore has to sit ABOVE the answer budget, not below
+ * it. A ceiling under the answer budget would kill every healthy command that
+ * outlives 2,000 ms, so the cache could never warm and every poll after the
+ * first would pay the deadline path forever.
+ *
+ * Ten seconds, the same ceiling every other vela metadata probe already
+ * carries ({@link AMR_MODELS_TIMEOUT_MS}). Evidence for that number: the team
+ * daemon's own `request-slow` rows for `/api/integrations/vela/status`
+ * (`.od/anomalies/anomalies.jsonl*`, window 2026-08-18T21:57Z to
+ * 2026-09-05T21:45Z, 49 daemon-side rows, all status 200) show 28 reads that
+ * COMPLETED between 4,080 ms and 9,388 ms under the pre-existing ten-second
+ * exec bound. A healthy billing read on that host is a multi-second read.
  *
  * Paired with `killSignal: 'SIGKILL'` below because the CLI this bounds is
  * untrusted about signals. `execFile`'s default SIGTERM is only a request: a
  * child that installs a SIGTERM handler and never exits leaves the exec promise
- * unsettled forever, so the route it feeds never answers at all — the exact
- * "never answered" shape INV-3.7 names. A read-only metadata probe already past
- * its budget has nothing to flush, so there is nothing for a graceful stop to
- * save.
+ * unsettled forever, so the single-flight it feeds never settles and the cache
+ * never warms. A read-only metadata probe already past its ceiling has nothing
+ * to flush, so there is nothing for a graceful stop to save.
  */
-const AMR_BILLING_TIMEOUT_MS = 1_500;
+const AMR_BILLING_PROCESS_CEILING_MS = AMR_MODELS_TIMEOUT_MS;
 
 /**
  * Read the signed-in account's billing summary via the vela CLI — the same
@@ -631,7 +650,7 @@ export async function fetchVelaBillingSummary(
     ['billing', 'summary', '--format', 'json'],
     {
       env,
-      timeout: AMR_BILLING_TIMEOUT_MS,
+      timeout: AMR_BILLING_PROCESS_CEILING_MS,
       killSignal: 'SIGKILL',
       maxBuffer: 1024 * 1024,
     },
