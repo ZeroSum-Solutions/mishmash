@@ -30,7 +30,8 @@
 import type { ChatMessage, MessagesResponse } from '@open-design/contracts';
 import type { Page } from '@playwright/test';
 
-import { createProjectViaApi, gotoProject, STORAGE_KEY } from '@/playwright/amr';
+import { createProjectViaApi, gotoProject, putAppConfig, STORAGE_KEY } from '@/playwright/amr';
+import { createFakeAgentRuntimes } from '@/playwright/fake-agents';
 import { expect, test } from '@/playwright/suite';
 import { T } from '@/timeouts';
 
@@ -38,6 +39,33 @@ import { T } from '@/timeouts';
 const LONG_LIVED_MS = 3_000;
 /** INV-3.13's bar for the third tab's write. */
 const MESSAGE_WRITE_BUDGET_MS = 10_000;
+
+/**
+ * The fake `claude` runtime answers this prompt by opening its turn and then
+ * holding it (`e2e/lib/fake-agents.ts`, `emitClaudeHeldNoWriteRun`), which is
+ * how this case gets a genuinely active daemon run for the conversation it
+ * writes to. The run is started through the daemon's own `POST /api/runs` and
+ * has no stored assistant row to attach to, so no tab opens a run stream for
+ * it: the conversation's run is active daemon-side while the socket census
+ * below stays the one three project tabs actually produce.
+ */
+const HOLD_OPEN_PROMPT = 'Hold the daemon run open without writing any file';
+
+/** Daemon app config that leaves no fake agent behind for the next file on this worker. */
+const NEUTRAL_APP_CONFIG = {
+  onboardingCompleted: true,
+  agentId: 'mock',
+  agentModels: {},
+  agentCliEnv: {},
+  skillId: null,
+  designSystemId: null,
+};
+
+let fakeRuntimes: Awaited<ReturnType<typeof createFakeAgentRuntimes>>;
+
+test.beforeAll(async () => {
+  fakeRuntimes = await createFakeAgentRuntimes();
+});
 
 const BROWSER_CONFIG = {
   mode: 'daemon',
@@ -99,6 +127,8 @@ test('[P0] a third app tab boots and persists a message while two tabs sit in th
 
   const opened: Page[] = [];
   const pending: Array<() => string[]> = [];
+  let heldRunId: string | null = null;
+  let appConfigChanged = false;
   try {
     // Two tabs already open on the project, then backgrounded, exactly as a
     // person leaves them while they work in a third.
@@ -117,6 +147,45 @@ test('[P0] a third app tab boots and persists a message while two tabs sit in th
     // ordinary boot requests never got a socket and the workspace never
     // rendered.
     await gotoProject(third, projectId);
+
+    // The criterion is a write that lands while this conversation's own run is
+    // active, so start one on the real wire before measuring. Started here, a
+    // few seconds before the write, rather than up front: the fixture holds its
+    // turn for 60 s, and three tab boots on a loaded runner can spend most of
+    // that window.
+    await putAppConfig(third, {
+      onboardingCompleted: true,
+      agentId: 'claude',
+      agentModels: { claude: { model: 'default', reasoning: 'default' } },
+      agentCliEnv: { claude: fakeRuntimes.claude.env },
+      skillId: null,
+      designSystemId: null,
+    });
+    appConfigChanged = true;
+    const created = await third.request.post('/api/runs', {
+      data: {
+        agentId: 'claude',
+        message: HOLD_OPEN_PROMPT,
+        projectId,
+        conversationId,
+        clientRequestId: `tab-stream-budget-${testInfo.workerIndex}-${Date.now()}`,
+        skillId: null,
+        designSystemId: null,
+        model: 'default',
+        reasoning: 'default',
+      },
+    });
+    expect(created.ok(), await created.text()).toBeTruthy();
+    heldRunId = ((await created.json()) as { runId: string }).runId;
+    // Precondition, not the bar: the run really reached the agent, so the write
+    // below lands against an active run rather than an already-dead one.
+    await expect
+      .poll(async () => {
+        const status = await third.request.get(`/api/runs/${heldRunId}`);
+        if (!status.ok()) return `http-${status.status()}`;
+        return ((await status.json()) as { status: string }).status;
+      }, { intervals: [250], timeout: T.long })
+      .toBe('running');
 
     const heldPerTab = pending.map((read) => read());
     await testInfo.attach('long-lived-requests-per-tab', {
@@ -189,6 +258,10 @@ test('[P0] a third app tab boots and persists a message while two tabs sit in th
     expect(Array.isArray(listed.body.messages)).toBe(true);
     expect(listed.body.messages.map((entry) => entry.id)).toContain(message.id);
   } finally {
+    if (heldRunId) await page.request.post(`/api/runs/${heldRunId}/cancel`).catch(() => {});
+    if (appConfigChanged) {
+      await page.request.put('/api/app-config', { data: NEUTRAL_APP_CONFIG }).catch(() => {});
+    }
     for (const tab of opened) {
       if (tab !== page) await tab.close().catch(() => {});
     }
