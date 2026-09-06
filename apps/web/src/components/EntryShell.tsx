@@ -202,6 +202,7 @@ const IsolatedTasksView = memo(TasksView);
 const IsolatedPluginsView = memo(PluginsView);
 const IsolatedDesignSystemsTab = memo(DesignSystemsTab);
 const IsolatedLibrarySection = memo(LibrarySection);
+const IsolatedTemplatesSection = memo(TemplatesSection);
 
 // Persist the entry nav-rail open/collapsed state so it survives both a
 // home -> project -> home navigation (EntryShell unmounts on the project
@@ -788,17 +789,23 @@ export function EntryShell({
   // Entry views share this element, so route changes must not inherit the previous view's offset.
   // Writing scrollTop is a forced style+layout pass over the document that
   // the view switch has just mutated. Pay it only when there is a position
-  // to reset: the scroll listener remembers whether the outgoing view was
-  // scrolled, and a switch from the top of a view leaves layout alone.
+  // to reset: a scroll listener on the container remembers whether the
+  // outgoing view was scrolled, and a switch from the top of a view leaves
+  // layout alone. The listener rides a callback ref because the container
+  // is not in the tree while the onboarding view is up: a shell that first
+  // mounted in onboarding gets its container later, and must still track it.
   const mainScrolledRef = useRef(false);
-  useEffect(() => {
-    const scrollContainer = entryMainScrollRef.current;
+  const detachMainScrollRef = useRef<(() => void) | null>(null);
+  const attachMainScroll = useCallback((scrollContainer: HTMLElement | null) => {
+    detachMainScrollRef.current?.();
+    detachMainScrollRef.current = null;
+    entryMainScrollRef.current = scrollContainer;
     if (!scrollContainer) return;
     const remember = () => {
       mainScrolledRef.current = scrollContainer.scrollTop > 0;
     };
     scrollContainer.addEventListener('scroll', remember, { passive: true });
-    return () => scrollContainer.removeEventListener('scroll', remember);
+    detachMainScrollRef.current = () => scrollContainer.removeEventListener('scroll', remember);
   }, []);
   useLayoutEffect(() => {
     const scrollContainer = entryMainScrollRef.current;
@@ -1163,6 +1170,7 @@ export function EntryShell({
   const openDesignSystem = useStableHandler<[string], void>((id) => onOpenDesignSystem?.(id));
   const refreshDesignSystems = useStableHandler<[], Promise<void> | void>(() => onDesignSystemsRefresh?.());
   const createPluginShareProject = useStableHandler(onCreatePluginShareProject);
+  const useTemplate = useStableHandler(startProjectFromTemplate);
 
 
   if (view === 'onboarding') {
@@ -1254,7 +1262,7 @@ export function EntryShell({
             tabIndex={-1}
           />
         ) : null}
-        <main className="entry-main entry-main--scroll" ref={entryMainScrollRef}>
+        <main className="entry-main entry-main--scroll" ref={attachMainScroll}>
           <div className="entry-main__topbar">
             <button
               type="button"
@@ -1470,10 +1478,10 @@ export function EntryShell({
               ) : null}
             </div>
             <div data-testid="entry-view-templates" data-active={view === 'templates' ? 'true' : 'false'} {...inactiveViewProps(view === 'templates')}>
-              <TemplatesSection
+              <IsolatedTemplatesSection
                 templates={designTemplates}
                 active={view === 'templates'}
-                onUseTemplate={startProjectFromTemplate}
+                onUseTemplate={useTemplate}
               />
             </div>
             <div data-testid="entry-view-storyboard" data-active={view === 'storyboard' ? 'true' : 'false'} {...inactiveViewProps(view === 'storyboard')}>

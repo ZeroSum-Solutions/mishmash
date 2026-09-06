@@ -159,4 +159,25 @@ describe('EntryShell view-switch isolation', () => {
       setScrollTop.mockRestore();
     }
   });
+
+  it('still resets the scroll position when the shell first mounted in onboarding, before its scroll container existed', () => {
+    // The onboarding view returns before the scroll container renders. The
+    // same shell instance then navigates to Home; the scroll listener must
+    // attach to the container when it appears, not only on the first mount.
+    renderShellAt('/onboarding');
+    expect(document.querySelector('main.entry-main--scroll')).toBeNull();
+    switchTo('/projects');
+    const main = document.querySelector('main.entry-main--scroll') as HTMLElement;
+    expect(main).toBeTruthy();
+    const setScrollTop = vi.spyOn(HTMLElement.prototype, 'scrollTop', 'set');
+    const getScrollTop = vi.spyOn(HTMLElement.prototype, 'scrollTop', 'get').mockReturnValue(240);
+    try {
+      act(() => { main.dispatchEvent(new Event('scroll')); });
+      switchTo('/automations');
+      expect(setScrollTop).toHaveBeenCalledWith(0);
+    } finally {
+      getScrollTop.mockRestore();
+      setScrollTop.mockRestore();
+    }
+  });
 });
