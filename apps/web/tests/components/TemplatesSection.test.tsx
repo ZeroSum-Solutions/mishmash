@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { Profiler } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -149,14 +150,21 @@ describe('TemplatesSection card contract', () => {
 
   it('never requests a poster for an entry whose listing says it ships none', async () => {
     const templates = [skill({ hasPoster: false, id: 'no-poster', name: 'No Poster' })];
-    render(<TemplatesSection templates={templates} active onUseTemplate={vi.fn()} />);
-
     // FU-28: the poster URL is derived from the entry id, so an entry that
     // ships no `assets/poster.jpg` must go straight to the live frame. Mounting
     // the img and relying on onError would spend a 404 on the sub-resource
-    // route for every such card.
+    // route for every such card. Previews mount after the idle fill, so the
+    // check runs on every commit, not only the settled one.
+    const imgsPerCommit: number[] = [];
+    render(
+      <Profiler id="no-poster" onRender={() => imgsPerCommit.push(document.querySelectorAll('[data-testid="templates-card"] img').length)}>
+        <TemplatesSection templates={templates} active onUseTemplate={vi.fn()} />
+      </Profiler>,
+    );
     const card = screen.getByTestId('templates-card');
     await waitFor(() => expect(card.querySelector('iframe')).toBeTruthy());
+    expect(imgsPerCommit.length).toBeGreaterThan(1);
+    expect(imgsPerCommit.every((n) => n === 0)).toBe(true);
     expect(card.querySelector('img')).toBeNull();
   });
 

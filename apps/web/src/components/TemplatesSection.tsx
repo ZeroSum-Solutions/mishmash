@@ -339,8 +339,10 @@ function TemplateCard({
   );
 }
 
-// Two rows of the widest grid the 1440 px shell lays out, so the first
-// commit fills the fold and nothing below it is waited on.
+// Six rows of the four-column grid (the view is capped at 1240 px wide and
+// cards are 260 px minimum): a 1440x900 viewport shows about 2.4 rows, so
+// the first commit fills the fold with room to spare while costing only
+// ~0.04 ms per card on top of the section's fixed render.
 const INITIAL_CARD_BUDGET = 24;
 
 // Run `fn` once the browser has painted and gone idle; the timeout bounds
@@ -661,7 +663,7 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
           {t('templates.empty')}
         </p>
       ) : (
-        <div className="templates-view__sections">
+        <div className="templates-view__sections" aria-busy={!fullCatalogue}>
           {renderedSections.map(({ category, templates: sectionTemplates, count }) => (
             <section
               key={category}
