@@ -111,17 +111,18 @@ function parseTimingLine(line: string): TimingLine | null {
     return null;
   }
   if (parsed == null || typeof parsed !== 'object') return null;
-  const row = parsed as Partial<TimingEndLine>;
-  if (row.phase !== 'start' && row.phase !== 'end') return null;
-  if (typeof row.id !== 'string' || row.id === '') return null;
-  if (typeof row.method !== 'string' || row.method === '') return null;
-  if (typeof row.route !== 'string' || row.route === '') return null;
-  if (typeof row.atUtc !== 'string' || !Number.isFinite(Date.parse(row.atUtc))) return null;
-  const base = { id: row.id, method: row.method, route: row.route, atUtc: row.atUtc };
-  if (row.phase === 'start') return { phase: 'start', ...base };
-  if (typeof row.durationMs !== 'number' || !Number.isFinite(row.durationMs)) return null;
-  if (typeof row.status !== 'number' || !Number.isFinite(row.status)) return null;
-  return { phase: 'end', ...base, status: row.status, durationMs: row.durationMs };
+  const row = parsed as Record<string, unknown>;
+  const phase = row['phase'];
+  if (phase !== 'start' && phase !== 'end') return null;
+  const { id, method, route, atUtc, status, durationMs } = row;
+  if (typeof id !== 'string' || id === '') return null;
+  if (typeof method !== 'string' || method === '') return null;
+  if (typeof route !== 'string' || route === '') return null;
+  if (typeof atUtc !== 'string' || !Number.isFinite(Date.parse(atUtc))) return null;
+  if (phase === 'start') return { phase: 'start', id, method, route, atUtc };
+  if (typeof durationMs !== 'number' || !Number.isFinite(durationMs)) return null;
+  if (typeof status !== 'number' || !Number.isFinite(status)) return null;
+  return { phase: 'end', id, method, route, atUtc, status, durationMs };
 }
 
 /**
