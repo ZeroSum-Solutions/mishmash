@@ -77,14 +77,14 @@ function deckFile(): ProjectFile {
     ...htmlFile(),
     name: 'pitch.deck.html',
     path: 'pitch.deck.html',
-    kind: 'deck',
+    kind: 'presentation',
     artifactManifest: {
       version: 1,
       kind: 'deck',
       title: 'Pitch Deck',
       entry: 'pitch.deck.html',
       renderer: 'deck-html',
-      exports: ['html', 'deck'],
+      exports: ['html'],
     },
   };
 }
