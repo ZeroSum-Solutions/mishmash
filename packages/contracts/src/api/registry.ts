@@ -1,3 +1,5 @@
+import type { MediaAspect } from './projects.js';
+
 export type ModelCost = 'low' | 'medium' | 'high' | 'very_high';
 
 export type ModelCapability = 'standard' | 'advanced' | 'best_quality';
@@ -203,6 +205,22 @@ export interface SkillSummary {
   // prompt" fast-create on a derived card still composes the parent's
   // SKILL.md body.
   aggregatesExamples: boolean;
+  /**
+   * Whether this entry ships `assets/poster.jpg`.
+   *
+   * INVARIANT: a listing entry advertises a poster only when
+   * `GET /api/skills/:id/assets/poster.jpg` answers 200 for it. The gallery
+   * derives that URL from the entry id, so a listing that stays silent makes
+   * every card without the file fire a 404 through the sub-resource route
+   * (361 of the 362 shipped design templates, FU-28). A 404 is a failed
+   * observation, not a sample, and that route carries more `request-slow`
+   * rows than any other in the wave-3 route table, so the listing has to
+   * answer the question instead.
+   *
+   * Optional in the type only so existing fixtures that predate the field
+   * still describe a valid summary; every daemon listing sets it.
+   */
+  hasPoster?: boolean;
 }
 
 // Body shape for POST /api/skills/import. The daemon turns this into a
@@ -269,6 +287,120 @@ export type DesignTemplateDetail = SkillDetail;
 export interface DesignTemplatesResponse {
   designTemplates: DesignTemplateSummary[];
 }
+
+// Prompt templates — the media (image/video) prompt catalogue served by
+// GET /api/prompt-templates and GET /api/prompt-templates/:surface/:id
+// (`apps/daemon/src/routes/static-resource.ts`). These lived as private
+// interfaces in `apps/web/src/types.ts` until DEF-3.3; the daemon is the only
+// producer and the web app the only consumer, so the shapes belong here.
+
+export interface PromptTemplateSource {
+  repo: string;
+  license: string;
+  author?: string;
+  url?: string;
+}
+
+export interface PromptTemplateSummary {
+  id: string;
+  surface: 'image' | 'video';
+  title: string;
+  summary: string;
+  category: string;
+  tags?: string[];
+  model?: string;
+  /**
+   * Aspect ratio the catalogue entry suggests, served straight from the
+   * template's frontmatter. Deliberately wider than `MediaAspect`: the shipped
+   * catalogue carries ratios the media surfaces do not offer (`2:3` today), so
+   * a consumer that needs a `MediaAspect` narrows it -- the web-private copy
+   * this replaced declared `MediaAspect` and was simply wrong about the wire.
+   */
+  aspect?: string;
+  previewImageUrl?: string;
+  previewVideoUrl?: string;
+  source: PromptTemplateSource;
+}
+
+/** The listing strips `prompt`; the detail route is what carries it. */
+export interface PromptTemplateDetail extends PromptTemplateSummary {
+  prompt: string;
+}
+
+export interface PromptTemplatesResponse {
+  promptTemplates: PromptTemplateSummary[];
+}
+
+export interface PromptTemplateResponse {
+  promptTemplate: PromptTemplateDetail;
+}
+
+function isPromptTemplateRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isPromptTemplateTagList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+}
+
+function isPromptTemplateSource(value: unknown): value is PromptTemplateSource {
+  if (!isPromptTemplateRecord(value)) return false;
+  if (typeof value.repo !== 'string' || typeof value.license !== 'string') return false;
+  if (value.author !== undefined && typeof value.author !== 'string') return false;
+  if (value.url !== undefined && typeof value.url !== 'string') return false;
+  return true;
+}
+
+export function isPromptTemplateSummary(value: unknown): value is PromptTemplateSummary {
+  if (!isPromptTemplateRecord(value)) return false;
+  for (const key of ['id', 'title', 'summary', 'category'] as const) {
+    if (typeof value[key] !== 'string') return false;
+  }
+  if (value.surface !== 'image' && value.surface !== 'video') return false;
+  if (value.tags !== undefined && !isPromptTemplateTagList(value.tags)) return false;
+  for (const key of ['model', 'aspect', 'previewImageUrl', 'previewVideoUrl'] as const) {
+    if (value[key] !== undefined && typeof value[key] !== 'string') return false;
+  }
+  return isPromptTemplateSource(value.source);
+}
+
+export function isPromptTemplateDetail(value: unknown): value is PromptTemplateDetail {
+  return isPromptTemplateSummary(value) && typeof (value as PromptTemplateDetail).prompt === 'string';
+}
+
+export function isPromptTemplatesResponse(value: unknown): value is PromptTemplatesResponse {
+  if (!isPromptTemplateRecord(value)) return false;
+  const { promptTemplates } = value;
+  return Array.isArray(promptTemplates) && promptTemplates.every(isPromptTemplateSummary);
+}
+
+export function isPromptTemplateResponse(value: unknown): value is PromptTemplateResponse {
+  return isPromptTemplateRecord(value) && isPromptTemplateDetail(value.promptTemplate);
+}
+
+/** The ratios `MediaAspect` admits, for narrowing a catalogue `aspect`. */
+const MEDIA_ASPECT_VALUES: readonly MediaAspect[] = ['1:1', '16:9', '9:16', '4:3', '3:4'];
+
+/**
+ * The catalogue `aspect` as a `MediaAspect`, or `undefined` when the product
+ * does not offer that ratio.
+ *
+ * INVARIANT: only a ratio the media surfaces actually support is carried into
+ * `PromptTemplateMetadata`, which is the subset persisted on the project and
+ * read by the agent every turn.
+ *
+ * The two types differ on purpose. `PromptTemplateSummary.aspect` describes the
+ * wire, and the shipped catalogue serves `2:3`, which `MediaAspect` does not
+ * contain. `PromptTemplateMetadata.aspect` describes what the product can act
+ * on. Dropping the unsupported ratio at the boundary is what the media surfaces
+ * already expect: they stopped seeding a ratio at all, and the system prompt
+ * prints "(unknown - ask: ...)" for an unset field, so the agent asks during the
+ * run instead of being handed a value it cannot use.
+ */
+export function promptTemplateMediaAspect(aspect: string | undefined): MediaAspect | undefined {
+  return MEDIA_ASPECT_VALUES.find((candidate) => candidate === aspect);
+}
+
 
 export interface DesignTemplateResponse {
   designTemplate: DesignTemplateDetail;

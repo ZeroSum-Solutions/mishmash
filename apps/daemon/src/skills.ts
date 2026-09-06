@@ -86,6 +86,11 @@ export interface SkillInfo {
   examplePromptI18n?: Record<string, string>;
   aggregatesExamples: boolean;
   /**
+   * Whether the entry's directory holds `assets/poster.jpg` -- see
+   * `entryShipsPoster`.
+   */
+  hasPoster: boolean;
+  /**
    * Per-skill Critique Theater override declared via `od.critique.policy`
    * in the skill's SKILL.md frontmatter. The daemon's rollout resolver
    * uses this as the highest-priority signal when deciding whether to
@@ -177,6 +182,7 @@ export async function listSkills(
         if (seenIds.has(parentId)) continue;
         seenIds.add(parentId);
         const hasAttachments = await dirHasAttachments(dir);
+        const hasPoster = await entryShipsPoster(dir);
         const mode = normalizeMode(data.od?.mode, body, data.description);
         const surface = normalizeSurface(data.od?.surface, mode);
         const platform = normalizePlatform(
@@ -248,6 +254,7 @@ export async function listSkills(
           animations: normalizeBoolHint(data.od?.animations),
           examplePrompt: derivePrompt(data),
           ...(examplePromptI18n ? { examplePromptI18n } : {}),
+          hasPoster,
           aggregatesExamples,
           critiquePolicy: normalizeCritiquePolicy(data.od?.critique?.policy),
           body: parentBody,
@@ -291,6 +298,9 @@ export async function listSkills(
             examplePrompt: derivePrompt(data),
             ...(examplePromptI18n ? { examplePromptI18n } : {}),
             aggregatesExamples: false,
+            // A derived card resolves to the parent's directory, so it ships
+            // a poster exactly when the parent does.
+            hasPoster,
             // Derived cards inherit the parent's critique policy so a
             // single SKILL.md that opts in (or out) applies the same
             // gate to every example in its gallery.
@@ -457,6 +467,27 @@ function collectReferencedSideFiles(body: string): string[] {
   for (const match of matches) files.add(match[0]);
   if (/\bexample\.html\b/.test(body)) files.add("example.html");
   return Array.from(files).sort();
+}
+
+/**
+ * Whether `<dir>/assets/poster.jpg` exists.
+ *
+ * INVARIANT: a listing entry advertises a poster only when the sub-resource
+ * route can serve it. The Templates gallery derives
+ * `/api/skills/<id>/assets/poster.jpg` from the entry id alone, so an entry
+ * that stays silent about the file makes every card without one fire a 404
+ * through `sendSkillSubresource` -- 361 of the 362 shipped design templates
+ * (FU-28), each costing a registry resolution on the route that carries more
+ * `request-slow` rows than any other in the wave-3 route table (143).
+ * Answering the question in the listing is what lets a client ask only for
+ * posters that exist.
+ */
+async function entryShipsPoster(dir: string): Promise<boolean> {
+  try {
+    return (await stat(path.join(dir, "assets", "poster.jpg"))).isFile();
+  } catch {
+    return false;
+  }
 }
 
 async function dirHasAttachments(dir: string): Promise<boolean> {

@@ -8,14 +8,15 @@
 //
 // A point-in-time check gated on "the panel is open" is not enough, and
 // neither is a single aggregate request count taken after the fact: deleting
-// the mount, interval, or visibility-change sync entirely would still leave
-// that count positive once the panel is opened, so it would prove nothing
-// about the three syncs that matter most (the ones a user never asked for).
-// This checkpoints the request count separately after each trigger — mount,
-// the interval (invoked through a captured callback rather than a real
-// 60-second wait),
-// a visibility change, and the panel actually being opened — so every trigger
-// has to prove it fired. It also runs across both a fresh profile and one
+// the mount or visibility-change sync entirely would still leave that count
+// positive once the panel is opened, so it would prove nothing about the syncs
+// that matter most (the ones a user never asked for). This checkpoints the
+// request count separately after each trigger — mount, a 60-second interval
+// tick (invoked through a captured callback rather than a real 60-second
+// wait), a visibility change, and the panel actually being opened — so each
+// one has to prove what it does. The interval checkpoint is the odd one out:
+// the interval is gone, and its checkpoint now proves a tick produces no
+// request at all. It also runs across both a fresh profile and one
 // with the vendor feed already cached, and both signed-in and signed-out
 // (via deterministic status mocks, not whatever the local daemon happens to
 // report), since none of those four combinations should behave differently.
@@ -109,6 +110,11 @@ async function captureMinuteIntervals(page: Page) {
       configurable: true,
       value: () => callbacks.forEach((callback) => callback()),
     });
+
+    Object.defineProperty(window, '__odCapturedMinuteIntervals', {
+      configurable: true,
+      value: () => callbacks.length,
+    });
   });
 }
 
@@ -118,6 +124,22 @@ async function runMinuteIntervals(page: Page) {
       .__odRunMinuteIntervals;
     if (!run) throw new Error('minute interval capture was not installed');
     run();
+  });
+}
+
+/**
+ * How many 60-second intervals the app registered while the capture was
+ * installed.
+ *
+ * Throws rather than returning 0 when the capture is missing, so "no interval
+ * was registered" and "nothing was watching" can never report the same number.
+ */
+async function capturedMinuteIntervalCount(page: Page): Promise<number> {
+  return await page.evaluate(() => {
+    const count = (window as Window & { __odCapturedMinuteIntervals?: () => number })
+      .__odCapturedMinuteIntervals;
+    if (!count) throw new Error('minute interval capture was not installed');
+    return count();
   });
 }
 
@@ -154,13 +176,34 @@ async function runLifecycle(
     .toBeGreaterThan(0);
   const afterMount = messageCenterRequests.length;
 
-  // 1. The 60-second interval, independent of the panel ever being opened.
+  // 1. The 60-second interval, which must no longer exist.
+  //
+  // This checkpoint used to assert the opposite — that a tick DID produce a
+  // request — because at the time the interval was a real sync and the file's
+  // question was only "where does its traffic go". That was wrong once the
+  // route became local: it answers with an empty page by definition, so a
+  // timer re-asking every 60 seconds can never change what the panel shows and
+  // only manufactures request rows (PRD 3.5, "either answers fast or is not
+  // polled"). Asserting that no 60-second interval is registered at all is the
+  // stronger form of the same claim — traffic a user never asked for cannot
+  // reach anyone if it is never sent.
+  //
+  // Two assertions, because one of them alone is ambiguous. The registration
+  // count is the direct claim, and it throws instead of returning 0 when the
+  // capture is missing, so a broken harness cannot read as a removed interval.
+  // Ticking whatever was captured and requiring no new request then covers a
+  // timer registered at some other period, which the capture does not intercept
+  // and which would sync natively during the settle window.
+  expect(
+    await capturedMinuteIntervalCount(page),
+    'the app still registers a 60-second interval for the message center',
+  ).toBe(0);
   await runMinuteIntervals(page);
-  await expect
-    .poll(() => messageCenterRequests.length, {
-      message: 'the request count did not increase after the interval tick — the interval sync never fired',
-    })
-    .toBeGreaterThan(afterMount);
+  await page.waitForTimeout(250);
+  expect(
+    messageCenterRequests.length,
+    'a 60-second interval is still syncing the message center',
+  ).toBe(afterMount);
   const afterInterval = messageCenterRequests.length;
 
   // 2. A visibility change, still independent of the panel being opened.
@@ -235,7 +278,7 @@ for (const seeded of [false, true]) {
   for (const loggedIn of [false, true]) {
     const profile = seeded ? 'a seeded profile carrying a cached vendor feed' : 'a fresh profile';
     const session = loggedIn ? 'signed in' : 'signed out';
-    test(`[P0] the message center syncs on mount, interval, visibility change, and open with no off-daemon request (${profile}, ${session})`, async ({
+    test(`[P0] the message center syncs on mount, visibility change and open — never on an interval — with no off-daemon request (${profile}, ${session})`, async ({
       page,
       baseURL,
     }) => {
