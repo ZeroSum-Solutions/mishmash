@@ -80,6 +80,7 @@ function capture(err: unknown): CapturedError {
 function handlersWithError(seen: CapturedError[]) {
   return {
     onText: vi.fn(),
+    onDelta: vi.fn(),
     onDone: vi.fn(),
     onError: vi.fn((err: Error) => {
       seen.push(capture(err));
