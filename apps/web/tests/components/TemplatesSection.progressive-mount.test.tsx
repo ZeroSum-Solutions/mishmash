@@ -161,6 +161,8 @@ describe('TemplatesSection progressive mount', () => {
     const queue: Idle[] = [];
     const cancelled: number[] = [];
     let next = 1;
+    const originalRequest = (globalThis as any).requestIdleCallback;
+    const originalCancel = (globalThis as any).cancelIdleCallback;
     (globalThis as any).requestIdleCallback = (fn: () => void) => {
       const handle = next++;
       queue.push({ handle, fn });
@@ -203,11 +205,12 @@ describe('TemplatesSection progressive mount', () => {
       expect(cards()).toBe(CATALOGUE.length);
       runIdle();
       expect(frames()).toBe(CATALOGUE.length);
-      // Unmount while the stubs are still installed: the effect cleanup cancels through them.
-      cleanup();
     } finally {
-      delete (globalThis as any).requestIdleCallback;
-      delete (globalThis as any).cancelIdleCallback;
+      // Unmount while the stubs are still installed, whether or not an
+      // assertion failed: the effect cleanup cancels through them.
+      cleanup();
+      (globalThis as any).requestIdleCallback = originalRequest;
+      (globalThis as any).cancelIdleCallback = originalCancel;
     }
   });
 });
