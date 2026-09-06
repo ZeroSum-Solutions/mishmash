@@ -616,6 +616,18 @@ describe('GET /api/integrations/vela/wallet', () => {
   });
 });
 
+/**
+ * A billing command that is slow but perfectly healthy.
+ *
+ * Sits above the 2,000 ms HTTP answer budget (so the first poll must give up on
+ * it) and below any defensible ceiling for the background process (so it must
+ * still be allowed to finish). The real reads this models took 4.1 s to 9.4 s.
+ */
+const HEALTHY_BILLING_MS = 3_000;
+
+/** Slack over {@link HEALTHY_BILLING_MS} for spawn + cache write. */
+const BILLING_SETTLE_MARGIN_MS = 4_000;
+
 describe('GET /api/integrations/vela/status', () => {
   it('reports loggedIn=false when ~/.amr/config.json is absent', async () => {
     const { status, body } = await getJson<{
@@ -853,6 +865,76 @@ describe('GET /api/integrations/vela/status', () => {
     expect(body.account).toBeUndefined();
     expect(elapsedMs, `/status answered in ${elapsedMs}ms`).toBeLessThan(2_000);
   });
+
+  it(
+    'warms the live account from a healthy 3s billing command while the first poll stays inside the budget',
+    { timeout: 60_000 },
+    async () => {
+      // W3D.2. The two limits INV-3.7 needs are different limits. The RESPONSE
+      // is bounded at 2,000 ms by `answerByDeadline`; the background billing
+      // PROCESS has its own, larger ceiling, because the whole point of leaving
+      // the fetch running past the deadline is that it warms the cache for the
+      // next poll. A process ceiling below a healthy command's runtime collapses
+      // the two: every real billing read is killed, the cache never warms, and
+      // every poll after the first pays the deadline path forever.
+      //
+      // 3,000 ms is a healthy runtime, not a hang: the team daemon's own
+      // request-slow rows for this route show 28 reads that COMPLETED with
+      // status 200 between 4,080 ms and 9,388 ms.
+      clearAllVelaLiveAccounts();
+      process.env.FAKE_VELA_BILLING_DELAY_MS = String(HEALTHY_BILLING_MS);
+      process.env.FAKE_VELA_BILLING_TIER = 'max';
+      process.env.FAKE_VELA_BILLING_BALANCE_USD = '412.75';
+      const billingLog = path.join(tmpHome, 'billing-summary-warm.log');
+      process.env.FAKE_VELA_BILLING_LOG = billingLog;
+      seedLogin('local', {
+        user: { id: 'warm-1', email: 'warm@example.com', plan: undefined },
+      });
+
+      const startedAt = Date.now();
+      const first = await getJson<{
+        loggedIn: boolean;
+        account?: { plan?: string; balanceUsd?: string | null };
+      }>(`${baseUrl}/api/integrations/vela/status`);
+      const firstElapsedMs = Date.now() - startedAt;
+
+      // (a) The response invariant is unchanged: the first poll cannot wait for
+      // a 3 s command, so it answers config-only inside the budget.
+      expect(first.status).toBe(200);
+      expect(first.body.loggedIn).toBe(true);
+      expect(first.body.account).toBeUndefined();
+      expect(
+        firstElapsedMs,
+        `the first /status answered in ${firstElapsedMs}ms`,
+      ).toBeLessThan(2_000);
+
+      // Give the healthy command the time it honestly needs to finish and store
+      // its projection. Measured from the request, so the wait covers the spawn.
+      const settleBy = startedAt + HEALTHY_BILLING_MS + BILLING_SETTLE_MARGIN_MS;
+      await new Promise((resolve) => setTimeout(resolve, Math.max(0, settleBy - Date.now())));
+
+      // (b) The command was healthy, so it finished, so a later poll serves the
+      // warmed account data. On a process ceiling below 3 s the command is
+      // killed instead, the cache stays cold, and this is where it shows.
+      const second = await getJson<{
+        loggedIn: boolean;
+        account?: { plan?: string; balanceUsd?: string | null };
+      }>(`${baseUrl}/api/integrations/vela/status`);
+      expect(second.status).toBe(200);
+      expect(
+        second.body.account?.plan,
+        'the healthy billing command never warmed the live-account cache',
+      ).toBe('max');
+      expect(second.body.account?.balanceUsd).toBe('412.75');
+
+      // Exactly one spawn: the warm poll is served from the cache, not from a
+      // second command. A second attempt would mean the first never landed.
+      const attempts = existsSync(billingLog)
+        ? readFileSync(billingLog, 'utf8').trim().split('\n').filter(Boolean)
+        : [];
+      expect(attempts).toHaveLength(1);
+    },
+  );
 
   it('normalizes a successful billing summary without a tier to free (upgradeable)', async () => {
     // membershipTier is omitted for free accounts; a successful read must still
