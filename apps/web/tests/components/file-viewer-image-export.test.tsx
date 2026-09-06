@@ -527,4 +527,127 @@ describe('FileViewer image export', () => {
     expect(requestPreviewSnapshotMock).not.toHaveBeenCalled();
     expect(captureHostIframeSnapshotMock).not.toHaveBeenCalled();
   });
+
+  describe('failed export anomaly reporting', () => {
+    const anomalyPosts: any[] = [];
+    let originalFetch: typeof globalThis.fetch;
+
+    beforeEach(() => {
+      anomalyPosts.length = 0;
+      originalFetch = globalThis.fetch;
+      const fetchSpy = vi.fn(async (input: any, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : String(input?.url ?? input);
+        if (url.includes('/api/anomalies')) {
+          anomalyPosts.push(JSON.parse(String(init?.body ?? '{}')));
+          return new Response('{"ok":true,"id":"anomaly-1"}', { status: 200 });
+        }
+        if (typeof originalFetch === 'function') {
+          return originalFetch(input, init);
+        }
+        return new Response('{}', { status: 200 });
+      });
+      globalThis.fetch = fetchSpy as unknown as typeof fetch;
+      if (typeof window !== 'undefined') {
+        window.fetch = fetchSpy as unknown as typeof fetch;
+      }
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+      if (typeof window !== 'undefined') {
+        window.fetch = originalFetch;
+      }
+    });
+
+    it('reports one export-failed anomaly when snapshot capture returns null', async () => {
+      requestPreviewSnapshotMock.mockResolvedValue(null);
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'workspace.png',
+        method: 'picker',
+        save: saveImageBlobMock,
+      });
+
+      renderHtmlPreview();
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe(CAPTURE_FAILED_TEXT);
+      }, { timeout: 4000 });
+
+      expect(anomalyPosts).toHaveLength(1);
+      const [report] = anomalyPosts;
+      expect(report.kind).toBe('export-failed');
+      expect(report.severity).toBe('warn');
+      expect(report.summary).toContain('workspace.html');
+      expect(report.summary.toLowerCase()).toContain('capture');
+      expect(report.projectId).toBe('project-1');
+      expect(report.detail).toEqual(expect.objectContaining({
+        exportFormat: 'image',
+        errorCode: 'CAPTURE_FAILED',
+        fileName: 'workspace.html',
+      }));
+      expect(typeof report.detail?.durationMs).toBe('number');
+    });
+
+    it('reports one export-failed anomaly when captured image is empty', async () => {
+      requestPreviewSnapshotMock.mockResolvedValueOnce({
+        dataUrl: 'data:image/png;base64,ok',
+        w: 800,
+        h: 600,
+      });
+      imageDataUrlToBlobMock.mockResolvedValueOnce(new Blob([]));
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'workspace.png',
+        method: 'picker',
+        save: saveImageBlobMock,
+      });
+
+      renderHtmlPreview();
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe(CAPTURE_FAILED_TEXT);
+      }, { timeout: 4000 });
+
+      expect(anomalyPosts).toHaveLength(1);
+      const [report] = anomalyPosts;
+      expect(report.kind).toBe('export-failed');
+      expect(report.severity).toBe('warn');
+      expect(report.summary).toContain('workspace.html');
+      expect(report.projectId).toBe('project-1');
+      expect(report.detail).toEqual(expect.objectContaining({
+        exportFormat: 'image',
+        errorCode: 'EMPTY_IMAGE',
+        fileName: 'workspace.html',
+      }));
+      expect(typeof report.detail?.durationMs).toBe('number');
+    });
+
+    it('sends no anomaly on a successful export', async () => {
+      requestPreviewSnapshotMock.mockResolvedValueOnce({
+        dataUrl: 'data:image/png;base64,ok',
+        w: 800,
+        h: 600,
+      });
+      imageDataUrlToBlobMock.mockResolvedValueOnce(new Blob(['png'], { type: 'image/png' }));
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'workspace.png',
+        method: 'download',
+        save: saveImageBlobMock,
+      });
+
+      renderHtmlPreview();
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(downloadImageDataUrlMock).toHaveBeenCalledWith('data:image/png;base64,ok', 'workspace.png');
+      });
+
+      expect(anomalyPosts).toHaveLength(0);
+    });
+  });
 });
+
