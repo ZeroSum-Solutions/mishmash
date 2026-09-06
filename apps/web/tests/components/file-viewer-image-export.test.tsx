@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isAnomalyKind } from '@open-design/contracts';
+import { exportErrorCode } from '../../src/analytics/export-error-code';
 import type { ProjectFile } from '../../src/types';
 
 const {
@@ -648,6 +649,64 @@ describe('FileViewer image export', () => {
       });
 
       expect(anomalyPosts).toHaveLength(0);
+    });
+
+    it('sends no anomaly when user dismisses the save picker', async () => {
+      requestPreviewSnapshotMock.mockResolvedValueOnce({
+        dataUrl: 'data:image/png;base64,ok',
+        w: 800,
+        h: 600,
+      });
+      imageDataUrlToBlobMock.mockResolvedValueOnce(new Blob(['png'], { type: 'image/png' }));
+      prepareImageExportTargetMock.mockResolvedValueOnce(null);
+
+      renderHtmlPreview();
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(prepareImageExportTargetMock).toHaveBeenCalled();
+        expect(screen.queryByRole('alert')).toBeNull();
+      });
+
+      expect(anomalyPosts).toHaveLength(0);
+    });
+
+    it('reports one export-failed anomaly when save target rejects', async () => {
+      requestPreviewSnapshotMock.mockResolvedValueOnce({
+        dataUrl: 'data:image/png;base64,ok',
+        w: 800,
+        h: 600,
+      });
+      imageDataUrlToBlobMock.mockResolvedValueOnce(new Blob(['png'], { type: 'image/png' }));
+      const saveError = Object.assign(new Error('disk write failure'), { code: 'SAVE_FAILED' });
+      const failingSave = vi.fn().mockRejectedValueOnce(saveError);
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'workspace.png',
+        method: 'picker',
+        save: failingSave,
+      });
+
+      renderHtmlPreview();
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe('disk write failure');
+      }, { timeout: 4000 });
+
+      expect(anomalyPosts).toHaveLength(1);
+      const [report] = anomalyPosts;
+      expect(report.kind).toBe('export-failed');
+      expect(report.severity).toBe('warn');
+      expect(report.summary).toContain('workspace.html');
+      expect(report.projectId).toBe('project-1');
+      expect(report.detail).toEqual(expect.objectContaining({
+        exportFormat: 'image',
+        errorCode: exportErrorCode(saveError),
+        fileName: 'workspace.html',
+      }));
+      expect(typeof report.detail?.durationMs).toBe('number');
     });
 
     it('contracts recognises export-failed as a valid anomaly kind', () => {
