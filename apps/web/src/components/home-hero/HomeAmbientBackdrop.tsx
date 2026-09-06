@@ -149,9 +149,17 @@ export function HomeAmbientBackdrop() {
     let animationFrame = 0;
     let lastDrawAt = 0;
     const startedAt = performance.now();
+    // The canvas stays mounted for the whole session (EntryShell keeps the
+    // home view behind display:none while another route is on screen), so
+    // this loop must never read layout on its own: a getBoundingClientRect
+    // per frame or per pointer move is a forced style+layout pass for the
+    // whole document, and on a route switch it landed between the first
+    // two frames. Sizes come from the ResizeObserver, which reports after
+    // layout; the loop stops while the canvas is off screen.
+    let bounds = { left: 0, width: 0, height: 0 };
+    let onScreen = false;
 
     const resize = () => {
-      const bounds = canvas.getBoundingClientRect();
       let ratio = Math.min(window.devicePixelRatio || 1, 1.25);
       // Full-bleed on a 4K/ultrawide display multiplies fragment count just
       // as the warped shader multiplied per-fragment cost; cap the drawing
@@ -171,7 +179,6 @@ export function HomeAmbientBackdrop() {
       if (reducedMotion.matches || document.hidden) draw(performance.now());
     };
     const draw = (now: number) => {
-      resize();
       pointer.current += (pointer.target - pointer.current) * 0.04;
       gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
       gl.uniform1f(timeLocation, (now - startedAt) / 1000);
@@ -187,6 +194,7 @@ export function HomeAmbientBackdrop() {
     };
     const start = () => {
       window.cancelAnimationFrame(animationFrame);
+      if (!onScreen) return;
       if (reducedMotion.matches || document.hidden) {
         draw(performance.now());
         return;
@@ -194,26 +202,74 @@ export function HomeAmbientBackdrop() {
       animationFrame = window.requestAnimationFrame(animate);
     };
     const handlePointerMove = (event: PointerEvent) => {
-      const bounds = canvas.getBoundingClientRect();
+      if (!onScreen) return;
       pointer.target = Math.min(
         1,
         Math.max(0, (event.clientX - bounds.left) / Math.max(bounds.width, 1)),
       );
     };
+    // Without a ResizeObserver (older WebKit) the canvas is measured once
+    // here and again on each window resize: one layout read per resize
+    // event instead of one per frame. With the observer, a window resize
+    // only recomputes the buffer from the cached bounds so a change of
+    // devicePixelRatio alone (zoom, a move between displays) is honoured
+    // without a layout read; the observer delivers any size change.
+    const measure = () => {
+      const rect = canvas.getBoundingClientRect();
+      bounds = { left: rect.left, width: rect.width, height: rect.height };
+    };
+    const handleWindowResize = () => {
+      if (!resizeObserver) measure();
+      resize();
+      if (onScreen) draw(performance.now());
+    };
     const resizeObserver =
-      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize);
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver((entries) => {
+            const entry = entries[entries.length - 1];
+            if (!entry) return;
+            // A 0x0 box means the home view was hidden (display:none on a
+            // route switch). Keep the buffer: reallocating it here, and
+            // again on the next reveal, is GPU work with nothing to show.
+            if (entry.contentRect.width === 0 || entry.contentRect.height === 0) return;
+            // Reported after layout, so this read is free; it is the one
+            // place the loop learns where the canvas sits.
+            const rect = entry.target.getBoundingClientRect();
+            bounds = { left: rect.left, width: entry.contentRect.width, height: entry.contentRect.height };
+            resize();
+            if (onScreen) draw(performance.now());
+          });
+    const intersectionObserver =
+      typeof IntersectionObserver === 'undefined'
+        ? null
+        : new IntersectionObserver((entries) => {
+            const entry = entries[entries.length - 1];
+            if (!entry) return;
+            onScreen = entry.isIntersecting;
+            start();
+          });
 
     resizeObserver?.observe(canvas);
-    window.addEventListener('resize', resize);
+    if (!resizeObserver) {
+      measure();
+      resize();
+    }
+    intersectionObserver?.observe(canvas);
+    if (!intersectionObserver) {
+      onScreen = true;
+      start();
+    }
+    window.addEventListener('resize', handleWindowResize);
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
     document.addEventListener('visibilitychange', start);
     reducedMotion.addEventListener('change', start);
-    start();
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
       resizeObserver?.disconnect();
-      window.removeEventListener('resize', resize);
+      intersectionObserver?.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
       window.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('visibilitychange', start);
       reducedMotion.removeEventListener('change', start);
