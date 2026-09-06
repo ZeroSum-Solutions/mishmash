@@ -133,6 +133,13 @@ describe('per-tab library stream budget', () => {
     // Events the daemon emitted while the tab held no connection are gone, so
     // the grid the user comes back to has to be re-read rather than trusted.
     await waitFor(() =>
-      expect(fetchLibraryAssetsPage.mock.calls.length).toBeGreaterThan(readsBeforeHiding));
+      expect(fetchLibraryAssetsPage.mock.calls.length).toBe(readsBeforeHiding + 1));
+
+    // Exactly one, which is what the case is named for: a return that re-read the
+    // grid twice would be a burst of full refetches on every tab switch, the cost
+    // this grid's live channel was coalesced to avoid in the first place. Held
+    // across a settle window so a second read arriving late still fails here.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(fetchLibraryAssetsPage.mock.calls.length).toBe(readsBeforeHiding + 1);
   });
 });
