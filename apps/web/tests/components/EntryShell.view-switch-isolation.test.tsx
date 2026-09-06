@@ -88,16 +88,19 @@ const shell = (props: React.ComponentProps<typeof EntryShell>) => (
 
 let rerenderShell: ((ui: React.ReactElement) => void) | null = null;
 
-function renderShellAt(path: string) {
+let propOverrides: Partial<React.ComponentProps<typeof EntryShell>> = {};
+
+function renderShellAt(path: string, overrides: Partial<React.ComponentProps<typeof EntryShell>> = {}) {
+  propOverrides = overrides;
   window.history.replaceState(null, '', path);
-  rerenderShell = render(shell(freshProps())).rerender;
+  rerenderShell = render(shell({ ...freshProps(), ...propOverrides })).rerender;
 }
 
 // A route switch as production delivers it: the parent re-renders with new
 // callback identities, then the URL changes.
 function switchTo(path: string) {
   act(() => {
-    rerenderShell?.(shell(freshProps()));
+    rerenderShell?.(shell({ ...freshProps(), ...propOverrides }));
     window.history.pushState({}, '', path);
     window.dispatchEvent(new PopStateEvent('popstate'));
   });
@@ -118,6 +121,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   globalThis.ResizeObserver = originalResizeObserver;
   globalThis.IntersectionObserver = originalIntersectionObserver;
+  propOverrides = {};
   window.history.replaceState(null, '', '/');
 });
 
@@ -141,6 +145,21 @@ describe('EntryShell view-switch isolation', () => {
     expect(extraRenders).toEqual({ home: 0, projects: 0, tasks: 0, plugins: 0, designSystems: 0, library: 0, templates: 0 });
   });
 
+  it('keeps the design-systems view isolated while design systems are still loading', () => {
+    // On app boot the design systems are still loading while the user clicks
+    // around. The loading branch must not hand the memoized view a fresh empty
+    // list on every shell render, or the boundary is defeated exactly then.
+    renderShellAt('/plugins', { designSystemsLoading: true });
+    const afterMount = { ...renders };
+    expect(afterMount.designSystems).toBeGreaterThan(0);
+
+    switchTo('/automations');
+    switchTo('/plugins');
+    switchTo('/automations');
+
+    expect(renders.designSystems - afterMount.designSystems).toBe(0);
+  });
+
   it('resets the scroll position on a view switch only when the outgoing view was scrolled', () => {
     renderShellAt('/projects');
     const main = document.querySelector('main.entry-main--scroll') as HTMLElement;
@@ -159,6 +178,37 @@ describe('EntryShell view-switch isolation', () => {
       switchTo('/automations');
       expect(setScrollTop).toHaveBeenCalledWith(0);
       getScrollTop.mockRestore();
+    } finally {
+      setScrollTop.mockRestore();
+    }
+  });
+
+  it('forgets a scrolled state when the scroll container leaves the tree', () => {
+    // Home was scrolled, the shell went back to onboarding (no container), then
+    // returned. The new container starts at the top; the remembered "scrolled"
+    // flag from the old container must not force a scrollTop write.
+    renderShellAt('/projects');
+    const main = document.querySelector('main.entry-main--scroll') as HTMLElement;
+    const getScrollTop = vi.spyOn(HTMLElement.prototype, 'scrollTop', 'get').mockReturnValue(240);
+    act(() => { main.dispatchEvent(new Event('scroll')); });
+    getScrollTop.mockRestore();
+    switchTo('/onboarding');
+    expect(document.querySelector('main.entry-main--scroll')).toBeNull();
+    const setScrollTop = vi.spyOn(HTMLElement.prototype, 'scrollTop', 'set');
+    try {
+      // The new container mounts at the top: neither its first view nor the
+      // next switch may pay for a scrollTop write.
+      switchTo('/projects');
+      switchTo('/automations');
+      expect(setScrollTop).not.toHaveBeenCalled();
+
+      // The remounted container's listener still records a real scroll.
+      const remounted = document.querySelector('main.entry-main--scroll') as HTMLElement;
+      const getScrollTopAgain = vi.spyOn(HTMLElement.prototype, 'scrollTop', 'get').mockReturnValue(120);
+      act(() => { remounted.dispatchEvent(new Event('scroll')); });
+      getScrollTopAgain.mockRestore();
+      switchTo('/projects');
+      expect(setScrollTop).toHaveBeenCalledWith(0);
     } finally {
       setScrollTop.mockRestore();
     }
