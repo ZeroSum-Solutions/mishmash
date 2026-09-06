@@ -143,7 +143,7 @@ describe('cold project file scan cost', () => {
     expect(new Set(measurement.readdir).size).toBe(EXPECTED_DIRECTORIES);
   });
 
-  it('stats only the entries it reports with an mtime', () => {
+  it('one readdir per traversed directory, one stat per reported regular file, no speculative absent-manifest open, each existing sidecar/package file read at most once', () => {
     const reportedWithMtime = measurement.files.filter((file) => Number.isFinite(file.mtime)).length;
     expect(reportedWithMtime).toBe(EXPECTED_FILES);
     expect(measurement.stat.length).toBeLessThanOrEqual(reportedWithMtime);
@@ -199,3 +199,68 @@ describe('artifact manifests the directory listing reaches through a symlink', (
       .toBe('SIDECAR VIA SYMLINK');
   });
 });
+
+describe('Vite dev project detection with symlinked vite.config.*', () => {
+  async function setupViteSymlinkProject(projectId: string) {
+    const root = await mkdtemp(path.join(tmpdir(), 'od-project-scan-vite-symlink-'));
+    roots.push(root);
+    const projectsRoot = path.join(root, 'projects');
+    const projectDir = path.join(projectsRoot, projectId);
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(
+      path.join(projectDir, 'package.json'),
+      JSON.stringify({ name: projectId, devDependencies: { typescript: '5.0.0' } }),
+    );
+    await writeFile(path.join(projectDir, 'index.html'), VITE_DEV_HTML);
+    await writeFile(
+      path.join(projectDir, 'index.html.artifact.json'),
+      JSON.stringify({
+        version: 1,
+        kind: 'html',
+        title: 'STANDALONE MANIFEST',
+        entry: 'index.html',
+        renderer: 'html',
+        status: 'complete',
+        exports: ['html'],
+      }),
+    );
+    return { projectsRoot, projectId, projectDir };
+  }
+
+  it('accepts a symlink pointing to a regular file as a Vite config (suppressing artifact manifest)', async () => {
+    const { projectsRoot, projectId, projectDir } = await setupViteSymlinkProject('symlink-file');
+    const targetConfig = path.join(projectDir, 'actual.vite.config.ts');
+    await writeFile(targetConfig, 'export default {};');
+    await symlink(targetConfig, path.join(projectDir, 'vite.config.ts'));
+
+    const files = await listFiles(projectsRoot, projectId);
+    const index = files.find((file) => String(file.path) === 'index.html');
+    expect(index).toBeDefined();
+    expect(index?.artifactManifest).toBeNull();
+  });
+
+  it('rejects a symlink pointing to a directory as a Vite config (returns artifact manifest)', async () => {
+    const { projectsRoot, projectId, projectDir } = await setupViteSymlinkProject('symlink-dir');
+    const targetDir = path.join(projectDir, 'vite-config-folder');
+    await mkdir(targetDir, { recursive: true });
+    await symlink(targetDir, path.join(projectDir, 'vite.config.ts'));
+
+    const files = await listFiles(projectsRoot, projectId);
+    const index = files.find((file) => String(file.path) === 'index.html');
+    expect(index).toBeDefined();
+    expect((index?.artifactManifest as { title?: string } | undefined)?.title)
+      .toBe('STANDALONE MANIFEST');
+  });
+
+  it('rejects a broken symlink as a Vite config (returns artifact manifest)', async () => {
+    const { projectsRoot, projectId, projectDir } = await setupViteSymlinkProject('symlink-broken');
+    await symlink(path.join(projectDir, 'nonexistent.vite.config.ts'), path.join(projectDir, 'vite.config.ts'));
+
+    const files = await listFiles(projectsRoot, projectId);
+    const index = files.find((file) => String(file.path) === 'index.html');
+    expect(index).toBeDefined();
+    expect((index?.artifactManifest as { title?: string } | undefined)?.title)
+      .toBe('STANDALONE MANIFEST');
+  });
+});
+
