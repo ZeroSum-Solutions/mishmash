@@ -20,6 +20,7 @@
 // that fills with healthy events cannot be skimmed for the unhealthy ones.
 
 import type { AnomalyKind, AnomalySeverity, ReportAnomalyRequest } from '@open-design/contracts';
+import type { PreviewDocumentErrorCause, PreviewDocumentErrorReport } from '@open-design/contracts/runtime/preview-paint-report';
 
 /** How a safety event becomes an anomaly record. */
 interface SafetyEventMapping {
@@ -242,6 +243,62 @@ export function reportUncaughtExceptionAnomaly(input: UncaughtExceptionInput): v
   const signature = `${input.rejection === true ? 'rejection' : 'error'}:${input.message}:${input.source ?? ''}`;
   if (!shouldFileUncaughtException(signature)) return;
   reportAnomaly(anomalyForUncaughtException(input));
+}
+
+/**
+ * What each preview-document failure is called in the log.
+ *
+ * The wave-2 bar is that every `preview-error` row names a cause, so the cause
+ * is spelled out for a person rather than passed through as the wire token.
+ */
+const PREVIEW_DOCUMENT_ERROR_CAUSE_LABELS: Record<PreviewDocumentErrorCause, string> = {
+  'subresource-refused': 'a refused request',
+  'uncaught-error': 'an uncaught error',
+  'unhandled-rejection': 'an unhandled promise rejection',
+};
+
+/**
+ * Builds the anomaly record for a failure a previewed document reported about
+ * itself (`PREVIEW_DOCUMENT_ERROR` in `@open-design/contracts`).
+ *
+ * `preview-error` is the existing kind for "the preview did not work"; what is
+ * new is that a preview which PAINTED and then failed can now produce one. Its
+ * `where` is the previewed file, because a project can have several previews
+ * open and the row is useless without knowing which one spoke.
+ */
+export function anomalyForPreviewDocumentError(
+  report: PreviewDocumentErrorReport,
+  where: { projectId?: string; filePath?: string } = {},
+): ReportAnomalyRequest {
+  const label = PREVIEW_DOCUMENT_ERROR_CAUSE_LABELS[report.cause];
+  const what = report.message.length > 0 ? report.message : 'no message reported';
+  return {
+    kind: 'preview-error',
+    severity: 'warn',
+    summary:
+      `Preview of ${where.filePath ?? 'an artifact'} reported ${label}: ${what}`
+      + (report.url ? ` (${report.url})` : ''),
+    ...(where.projectId ? { projectId: where.projectId } : {}),
+    detail: {
+      cause: report.cause,
+      ...(report.url ? { url: report.url } : {}),
+      ...(where.filePath ? { filePath: where.filePath } : {}),
+    },
+  };
+}
+
+/**
+ * Files one preview-document failure, under the same flood guard uncaught host
+ * exceptions use: a previewed render loop that throws every frame repeats the
+ * identical signature, and the log has to stay skimmable.
+ */
+export function reportPreviewDocumentErrorAnomaly(
+  report: PreviewDocumentErrorReport,
+  where: { projectId?: string; filePath?: string } = {},
+): void {
+  const signature = `preview:${report.cause}:${where.filePath ?? ''}:${report.url ?? ''}:${report.message}`;
+  if (!shouldFileUncaughtException(signature)) return;
+  reportAnomaly(anomalyForPreviewDocumentError(report, where));
 }
 
 /** Endpoint the daemon exposes for client-reported anomalies. */

@@ -19,6 +19,7 @@ import {
   injectDeckStageFallback,
 } from '@open-design/contracts/runtime/deck-stage-fallback';
 import {
+  PREVIEW_DOCUMENT_ERROR_PRODUCER_SOURCE,
   PREVIEW_PAINT_REPORT_PRODUCER_SOURCE,
   PREVIEW_PAINT_REPORT_REQUEST,
 } from '@open-design/contracts/runtime/preview-paint-report';
@@ -448,7 +449,11 @@ export function buildSrcdoc(
   const withNavigationBridge = options.baseHref && !options.deck
     ? injectPreviewNavigationBridge(withBase, options.previewNavigationRootHref)
     : withBase;
-  const withShim = injectSandboxShim(withNavigationBridge);
+  // The failure reporter goes in FIRST so it is installed ahead of the shim
+  // and of every author script, and can therefore witness their failures.
+  // Both injectors write immediately after `<head>`, so the later call sits in
+  // front of the earlier one.
+  const withShim = injectPreviewDocumentErrorReporter(injectSandboxShim(withNavigationBridge));
   const blockLoadTimeScriptRedirect = htmlHasLoadTimeLocationNavigation(withBase);
   // Always on: a redirect loop can freeze ANY previewed artifact, and the guard
   // is inert on documents that never self-redirect. Injected right after the
@@ -1297,6 +1302,21 @@ function injectPreviewNavigationBridge(doc: string, navigationRootHref?: string)
 // links with target="_blank" to work in the sandboxed preview.
 // Empty hrefs and hash only hrefs will be intercepted and ignored.
 // hrefs leading to an id on the page will be scrolled into view.
+//
+// The same shim also holds the History guard, for the same reason at a
+// different API. The preview document's origin is opaque while its base href
+// names the project's raw-file route, so EVERY History URL an author router
+// passes — `'#/overview'` as much as an absolute path — resolves to a URL the
+// document may not claim, and `pushState`/`replaceState` throw SecurityError.
+// That kills a hash-router bootstrap on its first line, after the data it
+// fetched had already arrived (FU-31). `guardHistory` keeps the two halves an
+// opaque origin may still perform — the state object through the no-URL form,
+// a same-document fragment through `location.hash` — and drops the rest
+// instead of throwing, on the same principle as the storage shims: a preview
+// may lose an address-bar update, never its whole boot. The fragment fallback
+// is an ASSIGNMENT, so a `replaceState` that lands there adds the history
+// entry the real call would have replaced; inside a preview frame that costs
+// one extra Back step and nothing else.
 function injectSandboxShim(doc: string): string {
   const shim = `<script data-od-sandbox-shim>(function(){
   function makeStore(){
@@ -1321,6 +1341,36 @@ function injectSandboxShim(doc: string): string {
   }
   tryShim('localStorage');
   tryShim('sessionStorage');
+  // An opaque origin may not name a History URL under this document's stated
+  // base href; keep the legal halves, drop the rest. See injectSandboxShim.
+  function guardHistory(name){
+    var native = window.history && window.history[name];
+    if (typeof native !== 'function') return;
+    window.history[name] = function(state, title, url){
+      try { return native.call(window.history, state, title, url); }
+      catch (err) {
+        if (!err || err.name !== 'SecurityError') throw err;
+        try { native.call(window.history, state, title); } catch (_) {}
+        if (url === undefined || url === null) return undefined;
+        var fragment = null;
+        var text = String(url);
+        if (text.charAt(0) === '#') fragment = text;
+        else {
+          try {
+            var target = new URL(text, document.baseURI);
+            var here = new URL(document.baseURI);
+            if (target.origin === here.origin && target.pathname === here.pathname && target.search === here.search) {
+              fragment = target.hash;
+            }
+          } catch (__) {}
+        }
+        if (fragment !== null && location.hash !== fragment) location.hash = fragment;
+        return undefined;
+      }
+    };
+  }
+  guardHistory('pushState');
+  guardHistory('replaceState');
   document.addEventListener('click', (e) => {
     if (!e.target || !(e.target instanceof Element)) return;
     var link = e.target.closest('a[href]');
@@ -1361,6 +1411,23 @@ function injectSandboxShim(doc: string): string {
   if (/<body[^>]*>/i.test(doc))
     return doc.replace(/<body[^>]*>/i, (m) => `${m}${shim}`);
   return shim + doc;
+}
+
+/**
+ * Give the previewed document a way to name its own failures.
+ *
+ * The invariant: a preview that fails after it painted must not be silent. The
+ * iframe's sandbox denies `allow-same-origin`, so the host window never sees
+ * an exception thrown inside the document and the app's own error listeners
+ * (`observability/error-tracking.ts`) cannot help; the reporter runs in the
+ * document and posts out. `FileViewer` turns each report into a
+ * `preview-error` anomaly that names the cause.
+ */
+function injectPreviewDocumentErrorReporter(doc: string): string {
+  const script = `<script data-od-preview-document-error>${PREVIEW_DOCUMENT_ERROR_PRODUCER_SOURCE}</script>`;
+  if (/<head[^>]*>/i.test(doc)) return doc.replace(/<head[^>]*>/i, (m) => `${m}${script}`);
+  if (/<body[^>]*>/i.test(doc)) return doc.replace(/<body[^>]*>/i, (m) => `${m}${script}`);
+  return script + doc;
 }
 
 function injectPreviewFocusGuard(doc: string): string {

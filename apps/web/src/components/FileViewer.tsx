@@ -24,6 +24,8 @@ import {
 import { useAnalytics } from '../analytics/provider';
 import { exportErrorCode } from '../analytics/export-error-code';
 import { deployErrorCode } from '../analytics/deploy-error-code';
+import { reportPreviewDocumentErrorAnomaly } from '../observability/anomaly-report';
+import { parsePreviewDocumentErrorReport } from '@open-design/contracts/runtime/preview-paint-report';
 import { trackPreviewPaint } from '../observability/iframe-error';
 import type { PreviewPaintState } from '../observability/iframe-error';
 import { useCommittedDocument } from './preview-committed-document';
@@ -7678,6 +7680,27 @@ function HtmlViewer({
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, []);
+
+  // The injected failure reporter (runtime/srcdoc.ts) posts
+  // `od:preview-document-error` when the previewed document throws, rejects, or
+  // has a request refused. Nothing else can see those: the srcDoc frame is
+  // sandboxed without `allow-same-origin`, so its exceptions never reach this
+  // window and `observability/error-tracking.ts` cannot observe them. Without
+  // this hop an artifact that painted its shell and then died left the user on
+  // a loading message with an empty anomaly log (FU-31). Only the srcDoc frame
+  // is trusted here, because it is the only transport carrying the reporter,
+  // and the payload is agent-written sandbox content so it is parsed before it
+  // is believed.
+  useEffect(() => {
+    function onMessage(ev: MessageEvent) {
+      if (ev.source !== srcDocPreviewIframeRef.current?.contentWindow) return;
+      const report = parsePreviewDocumentErrorReport(ev.data);
+      if (!report) return;
+      reportPreviewDocumentErrorAnomaly(report, { filePath: file.name, projectId });
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [file.name, projectId]);
 
   // The injected navigation bridge (runtime/srcdoc.ts) posts
   // `od:preview-navigate` when the user clicks the previewed site's own
