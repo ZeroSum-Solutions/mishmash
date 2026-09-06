@@ -201,6 +201,10 @@ const IsolatedDesignsTab = memo(DesignsTab);
 const IsolatedTasksView = memo(TasksView);
 const IsolatedPluginsView = memo(PluginsView);
 const IsolatedDesignSystemsTab = memo(DesignSystemsTab);
+// The loading branch below renders the design-systems view with no systems.
+// One shared empty list keeps that prop identity stable across shell
+// renders; an inline `[]` would defeat the memo boundary while loading.
+const EMPTY_DESIGN_SYSTEMS: never[] = [];
 const IsolatedLibrarySection = memo(LibrarySection);
 const IsolatedTemplatesSection = memo(TemplatesSection);
 
@@ -800,7 +804,12 @@ export function EntryShell({
     detachMainScrollRef.current?.();
     detachMainScrollRef.current = null;
     entryMainScrollRef.current = scrollContainer;
-    if (!scrollContainer) return;
+    if (!scrollContainer) {
+      // A container that left the tree takes its scrolled state with it; the
+      // next one mounts at the top.
+      mainScrolledRef.current = false;
+      return;
+    }
     const remember = () => {
       mainScrolledRef.current = scrollContainer.scrollTop > 0;
     };
@@ -1433,7 +1442,7 @@ export function EntryShell({
                   </header>
                   <IsolatedDesignSystemsTab
                     loading
-                    systems={[]}
+                    systems={EMPTY_DESIGN_SYSTEMS}
                     templates={templates}
                     selectedId={defaultDesignSystemId}
                     onSelect={changeDefaultDesignSystem}
