@@ -680,7 +680,7 @@ describe('FileViewer image export', () => {
         h: 600,
       });
       imageDataUrlToBlobMock.mockResolvedValueOnce(new Blob(['png'], { type: 'image/png' }));
-      const saveError = Object.assign(new Error('disk write failure'), { code: 'SAVE_FAILED' });
+      const saveError = new Error('disk write failure');
       const failingSave = vi.fn().mockRejectedValueOnce(saveError);
       prepareImageExportTargetMock.mockResolvedValueOnce({
         filename: 'workspace.png',
@@ -701,12 +701,15 @@ describe('FileViewer image export', () => {
       expect(report.kind).toBe('export-failed');
       expect(report.severity).toBe('warn');
       expect(report.summary).toContain('workspace.html');
+      expect(report.summary).toMatch(/saving the image failed/);
       expect(report.projectId).toBe('project-1');
       expect(report.detail).toEqual(expect.objectContaining({
         exportFormat: 'image',
         errorCode: exportErrorCode(saveError),
         fileName: 'workspace.html',
+        stage: 'save',
       }));
+      expect(report.detail?.stage).toBe('save');
       expect(typeof report.detail?.durationMs).toBe('number');
     });
 
