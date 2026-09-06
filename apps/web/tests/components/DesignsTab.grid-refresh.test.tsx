@@ -120,6 +120,59 @@ describe('DesignsTab per-card refresh schedule', () => {
     expect(fetchLiveArtifactsMock).toHaveBeenCalledWith('project-1');
   });
 
+  it('stops ticking while the grid is not the active view', async () => {
+    const { rerender } = renderGrid();
+    await flush();
+    fetchLiveArtifactsMock.mockClear();
+
+    rerender(
+      <DesignsTab
+        projects={PROJECTS}
+        skills={[]}
+        designSystems={[]}
+        isActive={false}
+        onOpen={vi.fn()}
+        onOpenLiveArtifact={vi.fn()}
+        onDelete={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      vi.advanceTimersByTime(PROJECTS_AUTO_REFRESH_MS * 2);
+    });
+    await flush();
+
+    // The project-list poll is gated the same way, so these requests would
+    // scan a list that is not being refreshed.
+    expect(fetchLiveArtifactsMock).not.toHaveBeenCalled();
+  });
+
+  it('does not scan cards while the tab is hidden, and scans again when it returns', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    visibility.mockReturnValue('hidden');
+    renderGrid();
+    await flush();
+    fetchLiveArtifactsMock.mockClear();
+
+    await act(async () => {
+      vi.advanceTimersByTime(PROJECTS_AUTO_REFRESH_MS);
+    });
+    await flush();
+
+    // The project list itself is not polled while hidden, so scanning every
+    // card would spend a request per card against a list nobody is refreshing.
+    expect(fetchLiveArtifactsMock).not.toHaveBeenCalled();
+
+    visibility.mockReturnValue('visible');
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await flush();
+
+    expect(fetchLiveArtifactsMock).toHaveBeenCalledWith('project-1');
+    visibility.mockRestore();
+  });
+
   it('re-scans covers on the same tick', async () => {
     renderGrid();
     await flush();

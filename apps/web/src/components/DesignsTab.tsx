@@ -341,13 +341,25 @@ export function DesignsTab({
 		};
 	}, [projects, gridScanEpoch]);
 
+	// The tick that drives both per-card scans. It follows the same rule as the
+	// project-list poll below -- same period, same `isActive` and visibility
+	// gate -- because scanning the cards of a list nobody is refreshing spends
+	// one file request and one live-artifact request per card for nothing.
+	// Becoming visible again ticks at once rather than waiting out the rest of
+	// the interval.
 	useEffect(() => {
-		const interval = window.setInterval(
-			() => setGridScanEpoch((epoch) => epoch + 1),
-			PROJECTS_AUTO_REFRESH_MS,
-		);
-		return () => window.clearInterval(interval);
-	}, []);
+		if (!isActive) return;
+		const tick = () => {
+			if (document.visibilityState !== "visible") return;
+			setGridScanEpoch((epoch) => epoch + 1);
+		};
+		const interval = window.setInterval(tick, PROJECTS_AUTO_REFRESH_MS);
+		document.addEventListener("visibilitychange", tick);
+		return () => {
+			window.clearInterval(interval);
+			document.removeEventListener("visibilitychange", tick);
+		};
+	}, [isActive]);
 
 	useEffect(() => {
 		if (!menuOpenId) return;
