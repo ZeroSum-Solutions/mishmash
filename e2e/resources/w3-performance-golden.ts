@@ -10,7 +10,9 @@
 // must keep rather than drop. Do not hand-edit it; its whole value is that no
 // hand wrote it. Re-record it the same way when the row shape changes.
 //
-// Recorded 2026-09-05 against the attempt-journal daemon on darwin/arm64:
+// Recorded 2026-09-05 on darwin/arm64 against the attempt-journal daemon of
+// `703597afc`, whose `apps/daemon/src/http/request-timing-log.ts` is unchanged at
+// the branch head:
 //
 //   OD_DATA_DIR=<scratch> OD_REQUEST_TIMING_LOG=1 pnpm tools-dev start web \
 //     --namespace gauntlet-w3-3a --daemon-port 20311 --web-port 20312
