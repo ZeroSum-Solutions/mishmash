@@ -307,13 +307,19 @@ jobs:
   # only since "Temporarily narrow CI debug scope" (891981d46) — never reverted.
   # Runs serially (vitest fileParallelism: false is a correctness constraint),
   # hence the dedicated job and generous timeout instead of sharing
-  # workspace_unit_tests' 20-minute budget.
+  # workspace_unit_tests' 20-minute budget. Sharded 4-way via vitest --shard
+  # to cut the 25-minute serial wall clock down to ~6–7 minutes while keeping
+  # files serial inside each shard.
   daemon_full_tests:
-    name: Daemon full tests
+    name: Daemon full tests (${{ matrix.shard }}/4)
     needs: [scopes, runners]
     if: ${{ needs.scopes.outputs.daemon_tests_required == 'true' }}
     runs-on: ${{ fromJSON(needs.runners.outputs.runs_on).workspace_unit }}
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     steps:
       - name: Checkout
@@ -366,7 +372,7 @@ jobs:
       - name: Daemon full tests
         env:
           OD_WATCHER_TEST_DEBUG: "1"
-        run: pnpm --filter @open-design/daemon exec vitest run -c vitest.config.ts
+        run: pnpm --filter @open-design/daemon exec vitest run -c vitest.config.ts --shard ${{ matrix.shard }}/4
 
   windows_tools_pack_payload_tests:
     name: Windows tools-pack payload tests
