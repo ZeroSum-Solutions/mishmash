@@ -625,6 +625,9 @@ export interface VelaBillingSummary {
  * 2026-09-05T21:45Z, 49 daemon-side rows, all status 200) show 28 reads that
  * COMPLETED between 4,080 ms and 9,388 ms under the pre-existing ten-second
  * exec bound. A healthy billing read on that host is a multi-second read.
+ * The other 21 rows in that window ran past ten seconds (median 8.6 s
+ * overall, max 108 s): they are the never-settling stuck-child shape W3D
+ * already mitigates with SIGKILL, not healthy runtime, and are excluded.
  *
  * Paired with `killSignal: 'SIGKILL'` below because the CLI this bounds is
  * untrusted about signals. `execFile`'s default SIGTERM is only a request: a

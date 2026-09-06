@@ -625,8 +625,12 @@ describe('GET /api/integrations/vela/wallet', () => {
  */
 const HEALTHY_BILLING_MS = 3_000;
 
-/** Slack over {@link HEALTHY_BILLING_MS} for spawn + cache write. */
-const BILLING_SETTLE_MARGIN_MS = 4_000;
+/**
+ * Slack over {@link HEALTHY_BILLING_MS} for spawn + cache write. Generous on
+ * purpose: a loaded CI runner can delay the spawn by seconds, and the test
+ * asserts the second poll is warm by this point, not that it is fast.
+ */
+const BILLING_SETTLE_MARGIN_MS = 8_000;
 
 describe('GET /api/integrations/vela/status', () => {
   it('reports loggedIn=false when ~/.amr/config.json is absent', async () => {
