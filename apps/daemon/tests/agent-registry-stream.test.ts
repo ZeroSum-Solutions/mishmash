@@ -224,6 +224,68 @@ describe('agent probe timeout kill', () => {
     20_000,
   );
   it.skipIf(process.platform === 'win32')(
+    'sends the signal a caller names first, so killSignal SIGKILL skips the polite stop',
+    async () => {
+      const pidFile = path.join(tempRoot, 'pids');
+      const termMarker = path.join(tempRoot, 'got-term');
+      const script = path.join(tempRoot, 'term-trapping-probe.sh');
+      // A CLI that survives SIGTERM and records that it saw one. The Vela
+      // billing probe (3D) asks for SIGKILL up front for exactly this shape,
+      // so the marker must never appear when it does.
+      fs.writeFileSync(
+        script,
+        [
+          '#!/bin/sh',
+          `trap 'touch "${termMarker}"' TERM`,
+          'sleep 30 &',
+          'child=$!',
+          'echo "$$ $child" > "$1"',
+          'wait "$child"',
+          '',
+        ].join('\n'),
+      );
+      fs.chmodSync(script, 0o755);
+
+      const result = await execAgentFile(script, [pidFile], {
+        timeout: 500,
+        killSignal: 'SIGKILL',
+      }).then(
+        () => ({ settled: 'resolved' as const, signal: undefined as string | undefined }),
+        (error: { signal?: string }) => ({ settled: 'rejected' as const, signal: error.signal }),
+      );
+
+      const pids = fs
+        .readFileSync(pidFile, 'utf8')
+        .trim()
+        .split(/\s+/)
+        .map((value) => Number(value));
+      const survivors = await waitUntilGone(pids, 3_000);
+      for (const pid of survivors) {
+        try {
+          process.kill(-pid, 'SIGKILL');
+        } catch {
+          /* not a group leader, or already gone */
+        }
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          /* already gone */
+        }
+      }
+
+      // Red on base: `killSignal` is not an option the rewritten helper reads,
+      // so the timeout still sends SIGTERM first, the trap fires and writes the
+      // marker, and the probe dies only on the escalation.
+      expect({ ...result, survivors, sawTerm: fs.existsSync(termMarker) }).toEqual({
+        settled: 'rejected',
+        signal: 'SIGKILL',
+        survivors: [],
+        sawTerm: false,
+      });
+    },
+    20_000,
+  );
+  it.skipIf(process.platform === 'win32')(
     'stops a probe whose caller aborted it',
     async () => {
       const pidFile = path.join(tempRoot, 'pids');

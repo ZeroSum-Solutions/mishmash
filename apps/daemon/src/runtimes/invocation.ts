@@ -13,12 +13,14 @@ export interface AgentExecResult {
  *
  * Deliberately narrower than the `RuntimeExecOptions` this signature used to
  * take: that type extends Node's `ExecFileOptions`, and the fields it carries
- * beyond the ones below (`shell`, `killSignal`, `encoding`, `windowsHide`,
- * `uid`, `gid`) were spread straight into `execFile`. The probe is spawned by
- * hand now, so those fields would be advertised and silently ignored.
- * `killSignal` is the one that matters: stopping a probe belongs to
- * `terminateProbeTree`, which escalates SIGTERM to SIGKILL by design and must
- * not be talked out of it.
+ * beyond the ones below (`shell`, `encoding`, `windowsHide`, `uid`, `gid`)
+ * were spread straight into `execFile`. The probe is spawned by hand now, so
+ * those fields would be advertised and silently ignored.
+ * `killSignal` is kept because a caller already relies on it: it names the
+ * FIRST signal `terminateProbeTree` sends. The escalation to SIGKILL after the
+ * grace still follows whatever is named, so a caller can ask for a harder stop
+ * (`'SIGKILL'`, which skips the grace) but can never talk the helper out of
+ * one.
  */
 export interface AgentProbeExecOptions {
   cwd?: string;
@@ -28,6 +30,13 @@ export interface AgentProbeExecOptions {
   /** Cap on captured stdout/stderr, in bytes; overflow kills the tree. */
   maxBuffer?: number;
   signal?: AbortSignal;
+  /**
+   * First signal sent to the probe's process tree when it must stop (timeout,
+   * output overflow, or abort). Default SIGTERM. SIGKILL always follows after
+   * the escalation grace; passing `'SIGKILL'` here sends it at once instead,
+   * for a CLI that is untrusted about signals.
+   */
+  killSignal?: NodeJS.Signals;
 }
 
 /**
@@ -73,7 +82,7 @@ const PROBE_KILL_ESCALATION_MS = 250;
  * Windows has no POSIX process groups; there the escalation still runs but
  * reaches the direct child only.
  */
-function terminateProbeTree(pid: number | undefined): void {
+function terminateProbeTree(pid: number | undefined, first: NodeJS.Signals = 'SIGTERM'): void {
   if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return;
   const targets = process.platform === 'win32' ? [pid] : [-pid, pid];
   const signal = (target: number, name: NodeJS.Signals): boolean => {
@@ -84,7 +93,13 @@ function terminateProbeTree(pid: number | undefined): void {
       return false;
     }
   };
-  const reached = targets.filter((target) => signal(target, 'SIGTERM'));
+  if (first === 'SIGKILL') {
+    // The caller asked for the unconditional stop up front; there is no
+    // polite phase to grant a grace for.
+    for (const target of targets) signal(target, 'SIGKILL');
+    return;
+  }
+  const reached = targets.filter((target) => signal(target, first));
   if (reached.length === 0) return;
   // Deliberately NOT unref'd: a probe that ignored SIGTERM is only actually
   // stopped by the SIGKILL below, so letting the event loop drain during the
@@ -132,6 +147,7 @@ export function execAgentFile(
     ? options.maxBuffer
     : DEFAULT_PROBE_MAX_BUFFER;
   const { timeout } = options;
+  const firstSignal: NodeJS.Signals = options.killSignal ?? 'SIGTERM';
 
   return new Promise<AgentExecResult>((resolve, reject) => {
     const child = spawn(invocation.command, invocation.args, {
@@ -170,7 +186,7 @@ export function execAgentFile(
     capture(child.stdout, (chunk) => {
       if (stdout.length + chunk.length > maxBuffer) {
         overflowed = true;
-        terminateProbeTree(child.pid);
+        terminateProbeTree(child.pid, firstSignal);
         return;
       }
       stdout += chunk;
@@ -178,7 +194,7 @@ export function execAgentFile(
     capture(child.stderr, (chunk) => {
       if (stderr.length + chunk.length > maxBuffer) {
         overflowed = true;
-        terminateProbeTree(child.pid);
+        terminateProbeTree(child.pid, firstSignal);
         return;
       }
       stderr += chunk;
@@ -222,7 +238,7 @@ export function execAgentFile(
     if (typeof timeout === 'number' && timeout > 0) {
       deadline = setTimeout(() => {
         timedOut = true;
-        terminateProbeTree(child.pid);
+        terminateProbeTree(child.pid, firstSignal);
       }, timeout);
       deadline.unref();
     }
@@ -234,7 +250,7 @@ export function execAgentFile(
     if (options.signal) {
       onAbort = () => {
         aborted = true;
-        terminateProbeTree(child.pid);
+        terminateProbeTree(child.pid, firstSignal);
       };
       if (options.signal.aborted) onAbort();
       else options.signal.addEventListener('abort', onAbort, { once: true });
