@@ -132,5 +132,9 @@ describe('DesignsTab per-card refresh schedule', () => {
     await flush();
 
     expect(fetchProjectFilesMock).toHaveBeenCalled();
+    // A held tree with no entries carries no cursor, so the next scan is a
+    // full listing and must be sent as one -- not as a `since` request the
+    // delta bound would then count.
+    expect(fetchProjectFilesMock.mock.calls.at(-1)).toEqual(['project-1']);
   });
 });

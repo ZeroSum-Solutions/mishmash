@@ -299,9 +299,14 @@ export function DesignsTab({
 			const held = scanned.get(project.id);
 			// The tree this scan may extend with a delta, or null to walk in
 			// full. The first scan of a project always walks in full, so the
-			// bound is only consulted once a tree is actually held.
+			// bound is only consulted once a tree is actually held. A held tree
+			// with no entries carries no cursor, and a request sent without one
+			// is a full listing however it was reached -- so it stays null and
+			// the delta run restarts from zero rather than counting a walk.
 			const extend =
-				held !== undefined && canListProjectFilesAsDelta(held, project.updatedAt)
+				held !== undefined &&
+				canListProjectFilesAsDelta(held, project.updatedAt) &&
+				latestProjectFileMtime(held.files) > 0
 					? held
 					: null;
 			let files: ProjectFile[];
