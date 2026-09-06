@@ -266,8 +266,11 @@ describe('anomaly log', () => {
   it('clears the log and reports how many records went away', async () => {
     const log = createAnomalyLog({ dataDir });
     await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'a' }, 'web');
+    await fillPastCap(log.path);
     await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'b' }, 'web');
 
+    // The cleared count must include the retained generation (.1), which
+    // readRetainedHistory() provides, and clearing removes both generations.
     expect(await log.clear()).toBe(2);
     expect((await log.list({})).total).toBe(0);
     // Clearing an already-empty log is not an error.
