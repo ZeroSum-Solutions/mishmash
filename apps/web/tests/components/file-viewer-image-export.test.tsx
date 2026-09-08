@@ -802,6 +802,55 @@ describe('FileViewer image export', () => {
       expect(typeof report.detail?.durationMs).toBe('number');
     });
 
+    it('keeps a save-stage SecurityError distinct from a capture-stage CAPTURE_TAINTED code', async () => {
+      // Nothing was captured here — the bridge already returned a snapshot and
+      // encoding succeeded — so a `SecurityError` thrown by the save target
+      // itself (e.g. a file-system permission denial) must NOT read as the
+      // bridge's "tainted canvas" capture failure. `exportErrorCode` maps any
+      // `SecurityError` to `CAPTURE_TAINTED` regardless of caller; the export
+      // flow has to gate that classification on `stage === 'capture'` to avoid
+      // misattributing a save failure as a capture one.
+      requestPreviewSnapshotMock.mockResolvedValueOnce({
+        dataUrl: 'data:image/png;base64,ok',
+        w: 800,
+        h: 600,
+      });
+      imageDataUrlToBlobMock.mockResolvedValueOnce(new Blob(['png'], { type: 'image/png' }));
+      const saveError = new Error('permission denied writing to the target folder');
+      saveError.name = 'SecurityError';
+      const failingSave = vi.fn().mockRejectedValueOnce(saveError);
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'workspace.png',
+        method: 'picker',
+        save: failingSave,
+      });
+
+      renderHtmlPreview();
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe('permission denied writing to the target folder');
+      }, { timeout: 4000 });
+      // The generic capture-failure toast must not appear for a save-stage error.
+      expect(screen.getByRole('alert').textContent).not.toBe(CAPTURE_FAILED_TEXT);
+
+      expect(anomalyPosts).toHaveLength(1);
+      const [report] = anomalyPosts;
+      expect(report.kind).toBe('export-failed');
+      expect(report.summary).toContain('workspace.html');
+      expect(report.summary).toMatch(/saving the image failed/);
+      expect(report.summary).not.toMatch(/tainted/i);
+      expect(report.detail).toEqual(expect.objectContaining({
+        exportFormat: 'image',
+        errorCode: 'SecurityError',
+        fileName: 'workspace.html',
+        stage: 'save',
+      }));
+      expect(report.detail?.errorCode).not.toBe('CAPTURE_TAINTED');
+      expect(typeof report.detail?.durationMs).toBe('number');
+    });
+
     it('reports one export-failed anomaly with CAPTURE_TIMEOUT when snapshot bridge times out', async () => {
       // The real bridge (`requestPreviewSnapshotResult` in runtime/exports.ts)
       // never rejects: every branch, including its own 1.5/3/6s timeout,

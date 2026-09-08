@@ -1370,6 +1370,22 @@ function bridgeCaptureFailureErrorCode(failure: PreviewSnapshotFailure): string 
   return code === 'Error' ? 'CAPTURE_FAILED' : code;
 }
 
+// `exportErrorCode`'s CAPTURE_TIMEOUT / CAPTURE_EMPTY_RENDER / CAPTURE_TAINTED
+// mapping exists to classify the client-bridge capture failure path (see
+// `bridgeCaptureFailureErrorCode` above). Reusing it unconditionally for a
+// throw caught later in `handleImageExportSave` (encode / target / save)
+// would misattribute an unrelated failure as a capture failure — e.g. a
+// `SecurityError` from `target.save(blob)` would read as `CAPTURE_TAINTED`
+// ("snapshot canvas was tainted") even though nothing was captured. Trust the
+// CAPTURE_* classification only when the failure actually happened during
+// capture; otherwise fall back to the error's own name, matching what
+// `exportErrorCode` returns for a code it doesn't recognise.
+function stageAwareExportErrorCode(err: unknown, stage: ImageExportStage): string {
+  const code = exportErrorCode(err);
+  if (stage === 'capture' || !code.startsWith('CAPTURE_')) return code;
+  return err instanceof Error ? err.name || 'UNKNOWN' : 'UNKNOWN';
+}
+
 function previewViewportStateKey(projectId: string, file: Pick<ProjectFile, 'name' | 'path'>): string {
   return `${projectId}:${file.path || file.name}`;
 }
@@ -11685,8 +11701,8 @@ function HtmlViewer({
       });
     } catch (err) {
       console.warn('[exportAsImage] failed to save snapshot:', err);
-      const code = exportErrorCode(err);
-      const isCaptureFailure = stage === 'capture' || code.startsWith('CAPTURE_');
+      const code = stageAwareExportErrorCode(err, stage);
+      const isCaptureFailure = stage === 'capture';
       const message = isCaptureFailure
         ? t('fileViewer.exportImageFailed')
         : (err instanceof Error && err.message ? err.message : t('fileViewer.exportImageFailed'));
