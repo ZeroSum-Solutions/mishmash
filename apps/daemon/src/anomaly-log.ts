@@ -18,6 +18,7 @@ import {
   type AnomalyRecord,
   type AnomalySource,
   type ListAnomaliesQuery,
+  type ListAnomaliesResponse,
   type ReportAnomalyRequest,
   isAnomalyKind,
   isAnomalySeverity,
@@ -76,14 +77,7 @@ export interface AnomalyLog {
    * what lets a reader polling over a long window tell a quiet log from one that
    * rotated between two reads.
    */
-  list(query: ListAnomaliesQuery): Promise<{
-    anomalies: AnomalyRecord[];
-    total: number;
-    path: string;
-    firstSeq: number | null;
-    lastSeq: number | null;
-    generations: number;
-  }>;
+  list(query: ListAnomaliesQuery): Promise<ListAnomaliesResponse>;
   /** Discards every record, returning how many went away. */
   clear(): Promise<number>;
 }
@@ -198,6 +192,11 @@ function matchesQuery(record: AnomalyRecord, query: ListAnomaliesQuery): boolean
 export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
   const path = join(options.dataDir, 'anomalies', 'anomalies.jsonl');
   const retainedPath = `${path}.1`;
+  // Survives `clear()`, which erases both generations above. Without a record
+  // outside them, a cleared log would have nothing left to be monotonic
+  // against, and "never reused" at packages/contracts/src/api/anomalies.ts:68
+  // would depend on the process never restarting.
+  const floorPath = join(dirname(path), 'sequence-floor.json');
 
   // Every mutation goes through the filesystem write gateway rather than
   // `node:fs` directly, so the log is subject to the same containment and audit
@@ -247,6 +246,19 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
    * data loss that looks exactly like a quiet log. `generations` says how many
    * files the answer came from, which is how a rotation becomes visible to the
    * caller rather than only to whoever reads the directory.
+   *
+   * Every caller reaches this through `serialise()`, never directly. The two
+   * reads below are not atomic with each other, and `append`'s rotate-then-
+   * write is not atomic with them either: `Promise.all` issues both reads
+   * together, but nothing stops a rotation from completing between the moment
+   * they are issued and the moment either resolves. A rename can slide in
+   * after the retained-generation read has already captured the old `.1` and
+   * before the current-generation read captures what rotation is about to
+   * move into it, silently omitting that generation — or the reverse ordering
+   * can capture it twice. Running this inside the same chain `append`'s
+   * rotate-and-write already serialises through makes the two mutually
+   * exclusive: a `list()` either completes entirely before a concurrent
+   * rotation starts or entirely after it, never mid-way.
    */
   async function readRetainedHistory(): Promise<{ records: AnomalyRecord[]; generations: number }> {
     const contents = await Promise.all([readGeneration(retainedPath), readGeneration(path)]);
@@ -282,8 +294,38 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
     return reserved;
   }
 
-  /** The highest sequence still on disk, or 0 for a log that has never held one. */
+  /**
+   * The floor `clear()` persisted, or 0 when the log has never been cleared.
+   *
+   * Read on its own rather than folded into `highestStoredSequence`'s disk
+   * scan: the floor lives outside the two generations that scan reads, so it
+   * has to be consulted regardless of what those generations currently hold.
+   */
+  async function sequenceFloor(): Promise<number> {
+    const stored = await readGeneration(floorPath);
+    if (stored == null) return 0;
+    try {
+      const parsed = JSON.parse(stored) as { seq?: unknown };
+      return typeof parsed.seq === 'number' && Number.isFinite(parsed.seq) ? parsed.seq : 0;
+    } catch {
+      // A corrupt floor file must not crash sequencing; disk records below
+      // still win if they are higher.
+      return 0;
+    }
+  }
+
+  /**
+   * The highest sequence a new record must exceed: whichever is greater of
+   * what is still on disk and the floor a previous `clear()` persisted.
+   *
+   * The floor matters exactly when the generations hold nothing higher than
+   * it — a fresh process recovering after a clear, before anything has been
+   * appended since. Once a generation holds a record above the floor, that
+   * record is definitionally the true high-water mark, so the disk scan below
+   * keeps its early return.
+   */
   async function highestStoredSequence(): Promise<number> {
+    const floor = await sequenceFloor();
     for (const file of [path, retainedPath]) {
       const generation = await readGeneration(file);
       if (generation == null) continue;
@@ -294,10 +336,10 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
       for (let index = lines.length - 1; index >= 0; index -= 1) {
         const record = parseRecordLine(lines[index] ?? '');
         const sequence = record == null ? null : storedSequence(record);
-        if (sequence != null) return sequence;
+        if (sequence != null) return Math.max(sequence, floor);
       }
     }
-    return 0;
+    return floor;
   }
 
   return {
@@ -343,7 +385,11 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
     },
 
     async list(query) {
-      const { records, generations } = await readRetainedHistory();
+      // Chained through the same primitive `append`'s rotate-and-write uses,
+      // so the two-generation read below is atomic with respect to a
+      // concurrent rotation rather than racing it — see the docblock on
+      // `readRetainedHistory`.
+      const { records, generations } = await serialise(readRetainedHistory);
       const matched: AnomalyRecord[] = [];
       let firstSeq: number | null = null;
       let lastSeq: number | null = null;
@@ -377,17 +423,25 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
       await serialise(async () => {
         try {
           const capability = await writeCapability();
+          // The two generations this call is about to erase are the only place
+          // a sequence number lives, so the highest one issued has to be
+          // written somewhere they cannot take it with them — otherwise the
+          // "never reused" promise at
+          // packages/contracts/src/api/anomalies.ts:68 would hold only until
+          // the next `clear()`, and a poller that had already read up to it
+          // would see a later answer start over from 1 with nothing to say the
+          // two runs of numbers are different.
+          const highest = await highestStoredSequence();
           await gateway.mkdir(capability, dirname(path), { recursive: true });
+          if (highest > 0) {
+            await gateway.writeFile(capability, floorPath, JSON.stringify({ seq: highest }), 'utf8');
+          }
           await gateway.writeFile(capability, path, '', 'utf8');
           await gateway.rm(capability, retainedPath, { force: true });
-          // Both generations are gone, so there is nothing left for the next
-          // record to be monotonic with respect to. Restarting makes "the log is
-          // empty" and "the next record is seq 1" the same statement, which is
-          // what lets a reader treat a later answer starting above 1 as records
-          // that were written and lost rather than as records deliberately
-          // discarded before it looked. Reset only after the writes succeeded:
-          // restarting over records that survived would mint duplicates.
-          nextSequence = 1;
+          // Continues from the floor rather than restarting at one: a reused
+          // number would let this reset hide behind a later answer that looks,
+          // on its sequence range alone, like an unbroken continuation.
+          nextSequence = highest + 1;
         } catch (err) {
           console.warn('[anomaly-log] could not clear:', err);
         }
