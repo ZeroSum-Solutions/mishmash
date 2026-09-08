@@ -174,8 +174,16 @@ test('[P1] a 413 on run creation names the failure and Retry then creates the ru
     await expect(card).not.toContainText(GENERIC_FAILURE_TITLE);
     expect(Date.now() - sentAt).toBeLessThan(D21_BUDGET_MS);
     // Evidence for the PR body's "after" screenshot — a real tools-dev daemon,
-    // the real app, the named card on screen.
-    await page.screenshot({ path: '../.github/screenshots/w3e2-413-after.png' });
+    // the real app, the named card on screen. Sol r2 finding (LOW): the two
+    // committed captures under `.github/screenshots/` are one-time evidence
+    // from the round that made them, not fixtures this permanent test should
+    // keep overwriting on every run — an attachment under Playwright's own
+    // per-test output directory carries the same evidence for a report or a
+    // failed-run artifact without churning tracked source-tree binaries.
+    await testInfo.attach('w3e2-413-after', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
 
     // The bar's second half: Retry re-issues the same turn, and this time the
     // create reaches the real daemon and is accepted.
@@ -259,8 +267,13 @@ test('[P1] a conversation read that never answers ends in a bounded error with R
     expect(Date.now() - firstReadAt).toBeLessThan(D21_BUDGET_MS + timingMarginMs);
     await expect(card).toContainText('did not answer in time');
     // Evidence for the PR body's "after" screenshot — a real tools-dev daemon,
-    // the real app, the named card on screen.
-    await page.screenshot({ path: '../.github/screenshots/w3e2-loading-after.png' });
+    // the real app, the named card on screen. Sol r2 finding (LOW): attached
+    // rather than written to the tracked `.github/screenshots/` path — see the
+    // 413 case above for why.
+    await testInfo.attach('w3e2-loading-after', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
 
     // And the surface carries an action: Retry re-issues the read, which now
     // answers, and the composer becomes usable again.
@@ -348,9 +361,13 @@ test('[P1] an involuntary create abort whose lookup cannot read the daemon settl
   context,
   page,
 }, testInfo) => {
-  // Three consecutive unanswered probes, each up to two bounded reads at
-  // `LOST_RUN_CREATE_PROBE_INTERVAL_MS`, land around 25-30s before setup and
-  // assertion overhead — well past the file's usual `T.xlong` test budget.
+  // Sol r2 fix round: the lookup's two reads now run CONCURRENTLY (one
+  // `AbortController` per probe, timed out and cancelled together), so one
+  // probe spends at most ONE read's timeout rather than both in series. Three
+  // consecutive unanswered probes now land around 15s (three cycles of a
+  // 3s bounded read plus a 3s `LOST_RUN_CREATE_PROBE_INTERVAL_MS` gap) rather
+  // than the ~25-30s a serial pair of reads per probe used to take — still
+  // comfortably inside `T.xlong` with the setup and assertion overhead below.
   test.setTimeout(T.xlong + T.long);
 
   await context.addInitScript(({ key, config }) => {
@@ -418,8 +435,8 @@ test('[P1] an involuntary create abort whose lookup cannot read the daemon settl
     // The bar: the notice reaches "not answering" in bounded time — not an
     // indefinite hang on its first ("Checking this run") wording. Each of the
     // lookup's two reads per probe is now bounded to
-    // `LOST_RUN_CREATE_PROBE_INTERVAL_MS` (3s) and both hang here, so three
-    // consecutive unanswered probes at the probe interval land around 25-30s —
+    // `LOST_RUN_CREATE_PROBE_INTERVAL_MS` (3s), run CONCURRENTLY, and both
+    // hang here, so three consecutive unanswered probes land around 15s —
     // `T.xlong` leaves real headroom above that rather than racing `T.long`.
     const checkingNotice = runCheckingNotice(page);
     await expect(checkingNotice).toBeVisible({ timeout: T.long });
@@ -430,6 +447,234 @@ test('[P1] an involuntary create abort whose lookup cannot read the daemon settl
     // stays absent even once the daemon is named unreachable (B-02).
     await expect(checkingNotice.getByRole('button', { name: /retry/i })).toHaveCount(0);
     await expect(runErrorCard(page)).toHaveCount(0);
+  } finally {
+    await page.unroute('**/api/runs*');
+    await page.unroute('**/conversations/*/messages*');
+    await putAppConfig(page, NEUTRAL_APP_CONFIG);
+  }
+});
+
+// Sol r2 fix round (2026-09-08), finding 1. The case above holds BOTH of the
+// lookup's own reads open, which the pre-fix `unanswered` counter already
+// handled (it counts a probe where NEITHER read landed). What it did not
+// handle is a MIXED probe: one read keeps landing and the other never does.
+// `unanswered` resets on either read landing, and `answered` needs BOTH, so
+// the pre-fix build held `nextLostRunCreateStep` on `'probe'` forever and the
+// notice never said anything but "still checking" — the wall-clock deadline
+// below is the fix. Two directions, since either read could be the one that
+// stalls.
+
+test('[P1] a lookup whose active-runs read answers but whose message read never does still settles to not answering', async ({
+  context,
+  page,
+}, testInfo) => {
+  test.setTimeout(T.xlong + T.long);
+
+  await context.addInitScript(({ key, config }) => {
+    if (window.localStorage.getItem(key)) return;
+    window.localStorage.setItem(key, JSON.stringify(config));
+  }, { key: STORAGE_KEY, config: BROWSER_CONFIG });
+
+  const projectId = `run-create-abort-mixed-a-${testInfo.workerIndex}-${Date.now().toString(36)}`;
+  await createProjectViaApi(page, projectId, 'Run create abort mixed direction A smoke');
+  await useFakeClaude(page);
+
+  // The create is torn down exactly as the cases above. `/api/runs*` GET reads
+  // reach the real daemon and answer truthfully every probe (no such run) —
+  // only the conversation's own message read is held.
+  let createAborted = false;
+  await page.route('**/api/runs*', async (route) => {
+    if (route.request().method() === 'POST') {
+      createAborted = true;
+      await route.abort();
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route('**/conversations/*/messages*', async (route) => {
+    if (route.request().method() !== 'GET' || !createAborted) {
+      await route.fallback();
+      return;
+    }
+    // Never fulfilled, never aborted: the request simply hangs.
+    await new Promise(() => {});
+  });
+
+  try {
+    await gotoProject(page, projectId);
+    const input = page.getByTestId('chat-composer-input');
+    await expect(input).toBeVisible({ timeout: T.medium });
+    await input.click();
+    await input.fill('Design a landing page for a bakery');
+    const sendButton = page.getByTestId('chat-send');
+    await expect(sendButton).toBeEnabled();
+    const sentAt = Date.now();
+    await sendButton.click();
+
+    // The bar: a probe that reads ONE surface every time must not hold the
+    // notice on "still checking" forever — it must turn over to the honest
+    // "not answering" wording once the overall lookup deadline elapses, the
+    // same wording (and the same no-Retry state) the fully-silent case above
+    // reaches. Bounded at roughly the ten-second deadline plus one more
+    // concurrent-read probe cycle (~3s read + interval), not the indefinite
+    // hang a build that only tracks `unanswered` produces.
+    const checkingNotice = runCheckingNotice(page);
+    await expect(checkingNotice).toBeVisible({ timeout: T.long });
+    await expect(checkingNotice).toContainText('MishMash is not answering', {
+      timeout: T.xlong,
+    });
+    expect(Date.now() - sentAt).toBeLessThan(T.xlong);
+    await expect(checkingNotice.getByRole('button', { name: /retry/i })).toHaveCount(0);
+    await expect(runErrorCard(page)).toHaveCount(0);
+  } finally {
+    await page.unroute('**/api/runs*');
+    await page.unroute('**/conversations/*/messages*');
+    await putAppConfig(page, NEUTRAL_APP_CONFIG);
+  }
+});
+
+test('[P1] a lookup whose message read answers but whose active-runs read never does still settles to not answering', async ({
+  context,
+  page,
+}, testInfo) => {
+  test.setTimeout(T.xlong + T.long);
+
+  await context.addInitScript(({ key, config }) => {
+    if (window.localStorage.getItem(key)) return;
+    window.localStorage.setItem(key, JSON.stringify(config));
+  }, { key: STORAGE_KEY, config: BROWSER_CONFIG });
+
+  const projectId = `run-create-abort-mixed-b-${testInfo.workerIndex}-${Date.now().toString(36)}`;
+  await createProjectViaApi(page, projectId, 'Run create abort mixed direction B smoke');
+  await useFakeClaude(page);
+
+  // The mirror direction: the conversation's message read answers truthfully
+  // every probe, and it is the active-runs read that never comes back. The
+  // trailing `*` matters here too — see the comment on the both-hang case
+  // above for why a bare `**/api/runs` glob would miss the query string.
+  let createAborted = false;
+  await page.route('**/api/runs*', async (route) => {
+    if (route.request().method() === 'POST') {
+      createAborted = true;
+      await route.abort();
+      return;
+    }
+    if (!createAborted) {
+      await route.fallback();
+      return;
+    }
+    // Never fulfilled, never aborted: the request simply hangs.
+    await new Promise(() => {});
+  });
+  await page.route('**/conversations/*/messages*', async (route) => {
+    await route.fallback();
+  });
+
+  try {
+    await gotoProject(page, projectId);
+    const input = page.getByTestId('chat-composer-input');
+    await expect(input).toBeVisible({ timeout: T.medium });
+    await input.click();
+    await input.fill('Design a landing page for a bakery');
+    const sendButton = page.getByTestId('chat-send');
+    await expect(sendButton).toBeEnabled();
+    const sentAt = Date.now();
+    await sendButton.click();
+
+    const checkingNotice = runCheckingNotice(page);
+    await expect(checkingNotice).toBeVisible({ timeout: T.long });
+    await expect(checkingNotice).toContainText('MishMash is not answering', {
+      timeout: T.xlong,
+    });
+    expect(Date.now() - sentAt).toBeLessThan(T.xlong);
+    await expect(checkingNotice.getByRole('button', { name: /retry/i })).toHaveCount(0);
+    await expect(runErrorCard(page)).toHaveCount(0);
+  } finally {
+    await page.unroute('**/api/runs*');
+    await page.unroute('**/conversations/*/messages*');
+    await putAppConfig(page, NEUTRAL_APP_CONFIG);
+  }
+});
+
+// Sol r2 fix round, finding 1's other half: a read that answers just BELOW
+// `LOST_RUN_CREATE_PROBE_INTERVAL_MS` (3s) is a real, if slow, answer — not a
+// timeout — and must not be mistaken for one. Both reads here always land, so
+// `answered` is true on every probe and the wall-clock override above (which
+// only fires while `answered` is false) must never engage: the lookup runs
+// its ordinary probe count to the honest "could not be started" verdict.
+test('[P1] a lookup whose reads answer just under the per-read bound still concludes correctly, not as not-answering', async ({
+  context,
+  page,
+}, testInfo) => {
+  test.setTimeout(T.xlong + T.long);
+
+  await context.addInitScript(({ key, config }) => {
+    if (window.localStorage.getItem(key)) return;
+    window.localStorage.setItem(key, JSON.stringify(config));
+  }, { key: STORAGE_KEY, config: BROWSER_CONFIG });
+
+  const projectId = `run-create-abort-near-timeout-${testInfo.workerIndex}-${Date.now().toString(36)}`;
+  await createProjectViaApi(page, projectId, 'Run create abort near-timeout smoke');
+  await useFakeClaude(page);
+
+  // Just under the 3s per-read bound (`LOST_RUN_CREATE_PROBE_INTERVAL_MS`),
+  // not over it — both reads answer, they just answer late.
+  const NEAR_TIMEOUT_DELAY_MS = 2_500;
+  // Unlike the mixed-direction cases above, this test DOES press Retry, so
+  // only the FIRST create is aborted — the retry's own POST must reach the
+  // real daemon and succeed, exactly like the first-case pattern in this file.
+  let createAborted = false;
+  await page.route('**/api/runs*', async (route) => {
+    if (route.request().method() === 'POST' && !createAborted) {
+      createAborted = true;
+      await route.abort();
+      return;
+    }
+    if (route.request().method() !== 'GET' || !createAborted) {
+      await route.fallback();
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, NEAR_TIMEOUT_DELAY_MS));
+    await route.fallback();
+  });
+  await page.route('**/conversations/*/messages*', async (route) => {
+    if (route.request().method() !== 'GET' || !createAborted) {
+      await route.fallback();
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, NEAR_TIMEOUT_DELAY_MS));
+    await route.fallback();
+  });
+
+  try {
+    await gotoProject(page, projectId);
+    const input = page.getByTestId('chat-composer-input');
+    await expect(input).toBeVisible({ timeout: T.medium });
+    await input.click();
+    await input.fill('Design a landing page for a bakery');
+    const sendButton = page.getByTestId('chat-send');
+    await expect(sendButton).toBeEnabled();
+    await sendButton.click();
+
+    // The bar: slow-but-real answers still reach the correct, honest verdict
+    // — a named "could not be started" failure with a working Retry — never
+    // the "not answering" wording the two mixed-direction cases above are for.
+    const card = runErrorCard(page);
+    await expect(card).toBeVisible({ timeout: T.xlong });
+    await expect(card).toContainText(RUN_NOT_STARTED_TITLE);
+    await expect(card).not.toContainText(GENERIC_FAILURE_TITLE);
+    const retry = card.getByRole('button', { name: 'Retry' });
+    await expect(retry).toHaveCount(1);
+    const [created] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST'
+          && new URL(response.url()).pathname === '/api/runs',
+        { timeout: T.long },
+      ),
+      retry.click(),
+    ]);
+    expect(created.ok(), await created.text()).toBeTruthy();
   } finally {
     await page.unroute('**/api/runs*');
     await page.unroute('**/conversations/*/messages*');
