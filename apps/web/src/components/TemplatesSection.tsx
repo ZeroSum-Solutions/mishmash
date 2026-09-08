@@ -17,7 +17,7 @@
 // content served from the daemon's own origin, so an unsandboxed frame could
 // reach `/api/*` with the user's session; an opaque origin cannot.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import type { GuidedCreateBrief, SkillSummary } from '@open-design/contracts';
 import { FilterActiveSummary, FilterSearchInput, FilterSelect } from '@open-design/components';
 import { Icon } from './Icon';
@@ -87,11 +87,16 @@ function TemplateThumb({
   id,
   title,
   previewLabel,
+  previews,
 }: {
   hasPoster: boolean;
   id: string;
   title: string;
   previewLabel: string;
+  // False while the section is still painting the route switch: a preview
+  // document per on-screen card is an ~8 ms commit that would otherwise
+  // land between the first two frames.
+  previews: boolean;
 }) {
   const ref = useRef<HTMLSpanElement | null>(null);
   const [visible, setVisible] = useState(false);
@@ -120,7 +125,7 @@ function TemplateThumb({
       className={`templates-card__thumb${showPoster ? ' templates-card__thumb--poster' : ''}`}
       ref={ref}
     >
-      {!visible ? null : !showPoster ? (
+      {!visible || !previews ? null : !showPoster ? (
         <iframe src={exampleUrl(id)} title={title} sandbox="allow-scripts" tabIndex={-1} aria-hidden="true" />
       ) : (
         // Hidden until decoded: a failed poster request never paints a
@@ -282,11 +287,13 @@ function TemplateCard({
   tpl,
   locale,
   t,
+  previews,
   onOpen,
 }: {
   tpl: SkillSummary;
   locale: ReturnType<typeof useI18n>['locale'];
   t: ReturnType<typeof useT>;
+  previews: boolean;
   onOpen: (id: string, el: HTMLElement) => void;
 }) {
   const name = localizeSkillName(locale, tpl);
@@ -309,6 +316,7 @@ function TemplateCard({
           id={tpl.id}
           title={t('templates.previewAria', { name })}
           previewLabel={t('common.preview')}
+          previews={previews}
         />
       ) : (
         <span className="templates-card__thumb templates-card__thumb--none">
@@ -331,6 +339,23 @@ function TemplateCard({
   );
 }
 
+// Six rows of the four-column grid (the view is capped at 1240 px wide and
+// cards are 260 px minimum): a 1440x900 viewport shows about 2.4 rows, so
+// the first commit fills the fold with room to spare while costing only
+// ~0.04 ms per card on top of the section's fixed render.
+const INITIAL_CARD_BUDGET = 24;
+
+// Run `fn` once the browser has painted and gone idle; the timeout bounds
+// the wait on a busy thread. Returns the cancel for effect cleanup.
+function whenIdle(fn: () => void): () => void {
+  if (typeof requestIdleCallback === 'function') {
+    const handle = requestIdleCallback(fn, { timeout: 200 });
+    return () => cancelIdleCallback(handle);
+  }
+  const handle = setTimeout(fn, 0);
+  return () => clearTimeout(handle);
+}
+
 export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
   const t = useT();
   const { locale } = useI18n();
@@ -343,6 +368,30 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
   // Guided create flow (PRD C8) — shown in front of "Start", not on open;
   // Skip-all reproduces today's single-click create exactly.
   const [guidedOpen, setGuidedOpen] = useState(false);
+  // The view mounts from nothing on activation (see the `active` early
+  // return below). Mounting the whole catalogue (561 cards, ~7,600 nodes)
+  // in that commit costs 17-35 ms on the route switch, and the preview
+  // documents for the on-screen cards another ~8 ms once the observer
+  // reports them visible. The route switch commits only what fits above
+  // the fold; the rest fills in once the browser has painted it and gone
+  // idle, and previews mount one idle period after that. (A transition
+  // scheduled straight from the effect commits before the second frame and
+  // delays the paint it was meant to protect.) Deactivating resets both so
+  // the next visit is as fast.
+  const [fullCatalogue, setFullCatalogue] = useState(false);
+  const [previewsEnabled, setPreviewsEnabled] = useState(false);
+  useEffect(() => {
+    if (!active) {
+      setFullCatalogue(false);
+      setPreviewsEnabled(false);
+      return;
+    }
+    return whenIdle(() => startTransition(() => setFullCatalogue(true)));
+  }, [active]);
+  useEffect(() => {
+    if (!fullCatalogue) return;
+    return whenIdle(() => setPreviewsEnabled(true));
+  }, [fullCatalogue]);
 
   const sorted = useMemo(
     () =>
@@ -421,6 +470,22 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
       .sort(byCategoryOrder)
       .map((category) => ({ category, templates: groups.get(category) ?? [] }));
   }, [shown]);
+
+  // Sections as rendered: the full grouping once the transition has
+  // committed, else the first INITIAL_CARD_BUDGET cards in section order.
+  // `count` always reports the section's true size so headers never show
+  // the truncated figure.
+  const renderedSections = useMemo(() => {
+    let budget = fullCatalogue ? Number.POSITIVE_INFINITY : INITIAL_CARD_BUDGET;
+    const out: Array<{ category: string; templates: SkillSummary[]; count: number }> = [];
+    for (const section of sections) {
+      if (budget <= 0) break;
+      const templates = fullCatalogue ? section.templates : section.templates.slice(0, budget);
+      budget -= templates.length;
+      out.push({ category: section.category, templates, count: section.templates.length });
+    }
+    return out;
+  }, [sections, fullCatalogue]);
 
   const open = useMemo(
     () => (openId ? (templates.find((tpl) => tpl.id === openId) ?? null) : null),
@@ -598,8 +663,8 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
           {t('templates.empty')}
         </p>
       ) : (
-        <div className="templates-view__sections">
-          {sections.map(({ category, templates: sectionTemplates }) => (
+        <div className="templates-view__sections" aria-busy={!fullCatalogue}>
+          {renderedSections.map(({ category, templates: sectionTemplates, count }) => (
             <section
               key={category}
               className="templates-view__section"
@@ -609,7 +674,7 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
               <header className="templates-view__section-head">
                 <h2 className="templates-view__section-title">{categoryLabel(category, t)}</h2>
                 <span className="templates-view__section-count">
-                  {t('templates.sectionCount', { count: sectionTemplates.length })}
+                  {t('templates.sectionCount', { count })}
                 </span>
               </header>
               <div className="templates-view__grid">
@@ -619,6 +684,7 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
                     tpl={tpl}
                     locale={locale}
                     t={t}
+                    previews={previewsEnabled}
                     onOpen={(id, el) => {
                       returnFocusRef.current = el;
                       setOpenId(id);

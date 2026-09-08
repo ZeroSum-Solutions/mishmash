@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { Profiler } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -107,15 +108,19 @@ describe('TemplatesSection card contract', () => {
   // file, so the request 404'd for nearly every card. The behaviour they pin is
   // still right, but it belongs to an entry that actually advertises a poster,
   // so the fixture now says so.
-  it('swaps a failed poster image to the live preview fallback instead of a broken-image glyph', () => {
+  it('swaps a failed poster image to the live preview fallback instead of a broken-image glyph', async () => {
     const templates = [skill({ hasPoster: true, id: 'broken-poster', name: 'Broken Poster' })];
     render(<TemplatesSection templates={templates} active onUseTemplate={vi.fn()} />);
 
     const card = screen.getByTestId('templates-card');
     // The poster/frame are decorative (alt=""), so they never expose an
-    // accessible "img" role — query the element directly.
-    const poster = card.querySelector('img') as HTMLImageElement;
-    expect(poster).toBeTruthy();
+    // accessible "img" role — query the element directly. Previews mount
+    // once the route switch has painted and the section has gone idle.
+    const poster = await waitFor(() => {
+      const img = card.querySelector('img');
+      expect(img).toBeTruthy();
+      return img as HTMLImageElement;
+    });
     expect(card.querySelector('iframe')).toBeNull();
 
     fireEvent.error(poster);
@@ -127,29 +132,40 @@ describe('TemplatesSection card contract', () => {
     expect(card.querySelector('iframe')).toBeTruthy();
   });
 
-  it('keeps the poster hidden until it decodes, so a failed load never flashes a broken-image glyph', () => {
+  it('keeps the poster hidden until it decodes, so a failed load never flashes a broken-image glyph', async () => {
     const templates = [skill({ hasPoster: true, id: 'loading-poster', name: 'Loading Poster' })];
     render(<TemplatesSection templates={templates} active onUseTemplate={vi.fn()} />);
 
     const card = screen.getByTestId('templates-card');
-    const poster = card.querySelector('img') as HTMLImageElement;
+    const poster = await waitFor(() => {
+      const img = card.querySelector('img');
+      expect(img).toBeTruthy();
+      return img as HTMLImageElement;
+    });
     expect(poster.classList.contains('is-loaded')).toBe(false);
 
     fireEvent.load(poster);
     expect(poster.classList.contains('is-loaded')).toBe(true);
   });
 
-  it('never requests a poster for an entry whose listing says it ships none', () => {
+  it('never requests a poster for an entry whose listing says it ships none', async () => {
     const templates = [skill({ hasPoster: false, id: 'no-poster', name: 'No Poster' })];
-    render(<TemplatesSection templates={templates} active onUseTemplate={vi.fn()} />);
-
     // FU-28: the poster URL is derived from the entry id, so an entry that
     // ships no `assets/poster.jpg` must go straight to the live frame. Mounting
     // the img and relying on onError would spend a 404 on the sub-resource
-    // route for every such card.
+    // route for every such card. Previews mount after the idle fill, so the
+    // check runs on every commit, not only the settled one.
+    const imgsPerCommit: number[] = [];
+    render(
+      <Profiler id="no-poster" onRender={() => imgsPerCommit.push(document.querySelectorAll('[data-testid="templates-card"] img').length)}>
+        <TemplatesSection templates={templates} active onUseTemplate={vi.fn()} />
+      </Profiler>,
+    );
     const card = screen.getByTestId('templates-card');
+    await waitFor(() => expect(card.querySelector('iframe')).toBeTruthy());
+    expect(imgsPerCommit.length).toBeGreaterThan(1);
+    expect(imgsPerCommit.every((n) => n === 0)).toBe(true);
     expect(card.querySelector('img')).toBeNull();
-    expect(card.querySelector('iframe')).toBeTruthy();
   });
 
   it('renders the shared fallback immediately for an entry with no rendered example, without ever mounting an img', () => {
