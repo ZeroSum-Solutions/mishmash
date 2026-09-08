@@ -526,6 +526,47 @@ const BRAND_EMPTY_TRANSCRIPT_RETRY_DELAYS_MS = [120, 500, 1_200, 2_000] as const
  * discards it), so a merely slow daemon loses nothing but the card.
  */
 const CONVERSATION_LOAD_BUDGET_MS = 10_000;
+
+/**
+ * Bounds one lost-create probe read to `LOST_RUN_CREATE_PROBE_INTERVAL_MS`.
+ *
+ * `fetchActiveChatRuns` and `fetchMessages` carry no `AbortSignal` of their
+ * own, so a request stuck behind the same exhausted per-host connection
+ * budget that loses a create response in the first place (D-21) can hang
+ * forever instead of settling to the `null` both already use for "did not
+ * answer." A probe that cannot even SETTLE stalls `scheduleLostRunCreateLookup`'s
+ * whole `await` chain, so its schedule never reaches its own next tick — the
+ * lookup stops advancing at all, which is worse than the honest "MishMash is
+ * not answering" notice `nextLostRunCreateStep` already knows how to show; it
+ * never reaches that notice. Racing the read against this bound turns a hang
+ * into the same `null` a rejected fetch already produces, so the lookup keeps
+ * moving and the bound above still ends it in bounded time.
+ */
+function withLostRunCreateProbeTimeout<T>(read: Promise<T | null>): Promise<T | null> {
+  return new Promise<T | null>((resolve) => {
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve(null);
+    }, LOST_RUN_CREATE_PROBE_INTERVAL_MS);
+    read.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(null);
+      },
+    );
+  });
+}
+
 const CHAT_PANEL_WIDTH_STORAGE_KEY = 'open-design.project.chatPanelWidth';
 const DEFAULT_CHAT_PANEL_WIDTH = 460;
 const MIN_CHAT_PANEL_WIDTH = 345;
@@ -3576,9 +3617,13 @@ export function ProjectView({
               return;
             }
             probes += 1;
-            const active = await fetchActiveChatRuns(project.id, conversationId);
+            const active = await withLostRunCreateProbeTimeout(
+              fetchActiveChatRuns(project.id, conversationId),
+            );
             let runId = active ? matchLostRunCreate(active, identity) : null;
-            const stored = runId ? [] : await fetchMessages(project.id, conversationId);
+            const stored = runId
+              ? []
+              : await withLostRunCreateProbeTimeout(fetchMessages(project.id, conversationId));
             if (!runId && stored) {
               runId = pinnedRunIdForAssistantRow(stored, identity.assistantMessageId);
             }
