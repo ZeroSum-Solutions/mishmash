@@ -166,13 +166,20 @@ function uiLagExport(
   const sequences = records
     .map((record) => record.seq)
     .filter((seq): seq is number => typeof seq === 'number');
+  const lastSeq = sequences.length === 0 ? null : Math.max(...sequences);
   return {
     anomalies: [...records],
     total: records.length,
     path: '/dev/null',
     firstSeq: sequences.length === 0 ? null : Math.min(...sequences),
-    lastSeq: sequences.length === 0 ? null : Math.max(...sequences),
+    lastSeq,
     generations: 1,
+    // Matches what a sound daemon reports whenever nothing has ever been
+    // cleared: `highWaterSeq` equals the highest retained sequence, since
+    // there is no persisted floor above it. A case that wants to describe a
+    // clear having advanced the floor past what is currently retained sets
+    // this explicitly via `overrides`.
+    highWaterSeq: lastSeq ?? 0,
     ...overrides,
   };
 }
@@ -1103,7 +1110,10 @@ describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotat
     // none. `storedSequence` returns null for every one of them, so
     // `firstSeq`/`lastSeq` come back null even though the log is not empty —
     // indistinguishable, on the null range alone, from "the log holds
-    // nothing" (Sol r1 MEDIUM finding, w3-performance-capture.ts:419).
+    // nothing" (Sol r1 MEDIUM finding, w3-performance-capture.ts:419). Built
+    // with a double cast, not a single one: a genuinely legacy envelope
+    // predates `highWaterSeq` too, so this object is not required to (and
+    // structurally cannot, without lying) supply it.
     const legacyAt = new Date(Date.parse(WINDOW_START) + 5 * 60_000).toISOString();
     const legacyRecord = uiLagRecord(legacyAt, 1_500);
     const legacyExport = {
@@ -1113,12 +1123,88 @@ describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotat
       firstSeq: null,
       lastSeq: null,
       generations: 1,
-    } as ListAnomaliesResponse;
+    } as unknown as ListAnomaliesResponse;
 
     expect(
       () => buildOrThrow([legacyExport]),
       why('a non-empty null-range export cannot be waved through as an empty log'),
     ).toThrow(/legacy records/);
+  });
+
+  it('refuses the same legacy export called directly against the reconciler, not just through buildProof', () => {
+    // Sol r2 MEDIUM finding: a restore-and-rerun of the pre-fix
+    // `w3-performance-capture.ts` against this test file failed on a
+    // `W3UiLagPoll` wrapper/shape mismatch (the pre-fix `buildProof` read
+    // fields straight off `{ atUtc, response }`, which has none of them) —
+    // not on the reconciler actually accepting the unsound input. Calling
+    // `reconcileUiLagExports` directly, at its own unwrapped signature
+    // (`ListAnomaliesResponse[]`, unchanged by the wrapper the poll-coverage
+    // feature added around it), exercises the real defect either way: a
+    // pre-fix reconciler run against this exact call silently returns the
+    // legacy record as if the log were empty, while this branch's reconciler
+    // throws.
+    const legacyAt = new Date(Date.parse(WINDOW_START) + 5 * 60_000).toISOString();
+    const legacyExport = {
+      anomalies: [uiLagRecord(legacyAt, 1_500)],
+      total: 1,
+      path: '/dev/null',
+      firstSeq: null,
+      lastSeq: null,
+      generations: 1,
+    } as unknown as ListAnomaliesResponse;
+
+    expect(
+      () => capture?.reconcileUiLagExports([legacyExport]),
+      why('the reconciler itself must refuse this, independent of how a poll reaches it'),
+    ).toThrow(/legacy records/);
+  });
+
+  it('refuses a sequence range that is null on only one side', () => {
+    // Sol r2 MEDIUM finding: the empty-range branch only checked
+    // `firstSeq == null || lastSeq == null`, which also waves through a
+    // half-null range that a sound daemon can never produce — `runCapture`
+    // merely casts parsed JSON, so a malformed capture file reaches this
+    // point unchecked.
+    const halfNull = uiLagExport([lagAt(10, 1)], { firstSeq: null });
+
+    expect(
+      () => buildOrThrow([halfNull]),
+      why('firstSeq null with lastSeq non-null is not a shape a sound daemon produces'),
+    ).toThrow(/malformed sequence range/);
+  });
+
+  it('refuses a sequence range that is null on the other side', () => {
+    const halfNull = uiLagExport([lagAt(10, 1)], { lastSeq: null });
+
+    expect(
+      () => buildOrThrow([halfNull]),
+      why('lastSeq null with firstSeq non-null is not a shape a sound daemon produces'),
+    ).toThrow(/malformed sequence range/);
+  });
+
+  it('refuses a censored clear that two empty polls would otherwise hide completely', () => {
+    // Sol r2 HIGH finding: `firstSeq`/`lastSeq` come back null on BOTH sides
+    // of a clear, so two polls that each find the log empty are, on the
+    // ordinary range check alone, indistinguishable from a log nobody ever
+    // used — even when a record was written and cleared in between. This is
+    // that exact scenario: the opening poll finds a virgin log, one ui-lag
+    // record gets written and cleared with nobody polling in between, and
+    // the closing poll finds the log empty again.
+    const opening = uiLagExport([]); // highWaterSeq 0 — nothing minted yet
+    // The clear persisted a floor of 1: one sequence was issued, and nothing
+    // is retained to show for it.
+    const closing = uiLagExport([], { highWaterSeq: 1 });
+
+    const built = buildFromPolls([opening, closing]);
+
+    expect(
+      gapRanges(built),
+      why('highWaterSeq advancing between two empty polls means a record was minted and lost'),
+    ).toEqual(['1..1']);
+    expect(
+      gapViolationSubjects(built),
+      why('the refusal must name the range, the same as an ordinary rotation gap'),
+    ).toContain('1..1');
   });
 });
 
@@ -1195,5 +1281,72 @@ describe('W3 endpoint-latency proof — ui-lag poll coverage', () => {
       () => buildWithPolls([first, second]),
       why('two polls bracketing the window is the minimum sound case'),
     ).not.toThrow();
+  });
+
+  describe('checkPollCoverage, called directly', () => {
+    // Sol r2 MEDIUM finding: `checkPollCoverage` reads only `atUtc` off each
+    // poll and has no equivalent in the pre-fix capture module (poll
+    // observation times, and the whole `W3UiLagPoll` concept, are new to this
+    // track) — restoring the pre-fix file and re-running a test that goes
+    // through `buildProof`'s wrapper only ever proves a shape mismatch, not
+    // this function's own behavior. Calling the exported validator directly,
+    // with no `response`/envelope on the polls at all, tests exactly this
+    // function and nothing a wrapper could get in the way of.
+    const window = { startUtc: WINDOW_START, endUtc: WINDOW_END };
+
+    it('refuses zero polls', () => {
+      expect(
+        () => capture?.checkPollCoverage([], window),
+        why('a window with no recorded observation cannot be judged'),
+      ).toThrow(/no ui-lag polls/);
+    });
+
+    it('refuses a single poll, however well placed', () => {
+      expect(
+        () => capture?.checkPollCoverage([{ atUtc: WINDOW_START, response: uiLagExport([]) }], window),
+        why('one poll cannot prove the window was watched continuously'),
+      ).toThrow(/only one ui-lag poll/);
+    });
+
+    it('refuses polls that never reach the window close', () => {
+      const secondHour = new Date(Date.parse(WINDOW_START) + 2 * 3_600_000).toISOString();
+      expect(
+        () => capture?.checkPollCoverage(
+          [
+            { atUtc: WINDOW_START, response: uiLagExport([]) },
+            { atUtc: secondHour, response: uiLagExport([]) },
+          ],
+          window,
+        ),
+        why('polls that stop hours before the window closes leave the tail unwatched'),
+      ).toThrow(/before the window closed/);
+    });
+
+    it('refuses polls that never reach the window open', () => {
+      const lateStart = new Date(Date.parse(WINDOW_START) + 2 * 3_600_000).toISOString();
+      expect(
+        () => capture?.checkPollCoverage(
+          [
+            { atUtc: lateStart, response: uiLagExport([]) },
+            { atUtc: WINDOW_END, response: uiLagExport([]) },
+          ],
+          window,
+        ),
+        why('polls that start hours after the window opens leave the head unwatched'),
+      ).toThrow(/after the window opened/);
+    });
+
+    it('accepts polls that bracket the window', () => {
+      expect(
+        () => capture?.checkPollCoverage(
+          [
+            { atUtc: WINDOW_START, response: uiLagExport([]) },
+            { atUtc: WINDOW_END, response: uiLagExport([]) },
+          ],
+          window,
+        ),
+        why('two polls bracketing the window is the minimum sound case'),
+      ).not.toThrow();
+    });
   });
 });

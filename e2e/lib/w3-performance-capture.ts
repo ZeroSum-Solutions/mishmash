@@ -347,8 +347,14 @@ export interface BuildProofInput {
  * additionally hold, checked here on the polls' own observation times: at
  * least one poll at or before the window opens, at least one at or after it
  * closes, and therefore at least two polls — one moment cannot be both.
+ *
+ * Exported so it can be pinned directly, independent of `buildProof`'s
+ * `W3UiLagPoll` wrapper. It reads only `atUtc` off each poll — never the
+ * envelope beside it — so a direct test exercises exactly this function's
+ * behavior rather than a fixture built to match whatever shape a wrapper
+ * happens to require.
  */
-function checkPollCoverage(polls: readonly W3UiLagPoll[], window: W3Interval): void {
+export function checkPollCoverage(polls: readonly W3UiLagPoll[], window: W3Interval): void {
   if (polls.length === 0) {
     throw new Error(
       'no ui-lag polls were supplied; a window with no recorded observation cannot be judged for INV-3.10',
@@ -440,6 +446,29 @@ export interface UiLagReconciliation {
 }
 
 /**
+ * A poll's sequence range is sound exactly when both bounds are `null` — the
+ * log genuinely retains nothing — or both are positive safe integers with
+ * `firstSeq <= lastSeq`. Anything else (one bound `null` and the other not,
+ * a negative or fractional bound, `firstSeq` above `lastSeq`) is not a shape
+ * a sound daemon can produce; `runCapture` only casts parsed JSON, so a
+ * malformed capture file reaches this function's caller unchecked otherwise.
+ */
+function classifySequenceRange(
+  firstSeq: number | null,
+  lastSeq: number | null,
+): { kind: 'empty' } | { kind: 'range'; firstSeq: number; lastSeq: number } | null {
+  if (firstSeq === null && lastSeq === null) return { kind: 'empty' };
+  if (
+    typeof firstSeq === 'number' && Number.isSafeInteger(firstSeq) && firstSeq > 0
+    && typeof lastSeq === 'number' && Number.isSafeInteger(lastSeq) && lastSeq > 0
+    && firstSeq <= lastSeq
+  ) {
+    return { kind: 'range', firstSeq, lastSeq };
+  }
+  return null;
+}
+
+/**
  * Merges the ordered exports one capture polled into a single ui-lag population.
  *
  * What must hold: consecutive polls OVERLAP. The anomaly log keeps one previous
@@ -451,20 +480,28 @@ export interface UiLagReconciliation {
  * past the furthest sequence already read, and any daylight between the two is a
  * gap this returns by name.
  *
+ * A clear is the one event that can erase records between two polls that both
+ * see the log empty — `firstSeq`/`lastSeq` come back `null` either way, so the
+ * ordinary range check above cannot see it. `highWaterSeq` (`packages/contracts/
+ * src/api/anomalies.ts`) is what closes that: it survives a clear, so a poll
+ * reporting a higher one than an earlier poll had already accounted for — while
+ * itself delivering nothing new — means something was minted and lost in
+ * between. Checked with the same "first poll defines the floor" exemption as
+ * the ordinary range check, and folded into the same running `covered`/`gaps`
+ * bookkeeping rather than a parallel mechanism, so the two cannot disagree
+ * about what has already been accounted for.
+ *
  * Deduplication is by record id, because overlapping polls are supposed to
  * deliver the same records twice — an overlap that double-counted its own long
  * tasks would fail INV-3.10 for the wrong reason.
  *
- * Throws on two answers it cannot honestly read. An export with no sequence range
- * at all is not a log that happened to be empty (which declares `null` and
- * reconciles fine) but an answer from a daemon that does not number its records.
- * And an export whose range ENDS below what an earlier poll already read is a
- * sequence that went backwards: either the polls were handed over out of order,
- * or the log was cleared between them and restarted its numbering
- * (`clear()` in apps/daemon/src/anomaly-log.ts). Both make every range after that
- * point refer to a different run of the numbers than the ranges before it, so a
- * gap computed across the seam would be named in numbers that mean two things.
- * Neither is reconcilable, and both are refused rather than guessed at.
+ * Throws on an answer it cannot honestly read: no sequence range at all (an
+ * answer from a daemon that does not number its records — distinct from a
+ * `null` range, which declares an empty log and reconciles fine), a range that
+ * is `null` on one side only or otherwise malformed (see `classifySequenceRange`),
+ * or a `highWaterSeq` that runs backwards between polls — every one of these
+ * means either the polls were handed over out of order or the file reporting
+ * them was corrupted, and neither is reconcilable by guessing.
  */
 export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): UiLagReconciliation {
   const byId = new Map<string, AnomalyRecord>();
@@ -473,6 +510,10 @@ export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): 
   let envelopeUnreadable = false;
   let covered: number | null = null;
   let polledBefore = false;
+  // The highest `highWaterSeq` any poll so far has reported. Distinct from
+  // `covered`: this can be known even for a poll that delivers nothing, which
+  // is exactly the case `covered` alone cannot see through.
+  let knownHighWater = 0;
 
   polls.forEach((poll, index) => {
     const delivered = Array.isArray(poll?.anomalies) ? poll.anomalies : null;
@@ -491,6 +532,34 @@ export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): 
         + 'a log whose records are not numbered cannot be reconciled across a rotation',
       );
     }
+    const range = classifySequenceRange(firstSeq, lastSeq);
+    if (range == null) {
+      throw new Error(
+        `ui-lag export ${index + 1} of ${polls.length} carries a malformed sequence range `
+        + `(firstSeq ${JSON.stringify(firstSeq)}, lastSeq ${JSON.stringify(lastSeq)}); a range must be `
+        + 'either both null — a genuinely empty log — or both positive integers with firstSeq <= lastSeq',
+      );
+    }
+
+    // `highWaterSeq` is read defensively rather than trusted off the type: a
+    // pre-fix or otherwise legacy envelope simply does not carry it, and that
+    // has to degrade to "cannot check censorship for this poll" rather than a
+    // crash — `runCapture` only casts parsed JSON, so a captured file from an
+    // older daemon reaches here unchecked.
+    const rawHighWater = (poll as { highWaterSeq?: unknown } | null | undefined)?.highWaterSeq;
+    const highWaterKnown = typeof rawHighWater === 'number' && Number.isSafeInteger(rawHighWater) && rawHighWater >= 0;
+    if (highWaterKnown) {
+      const highWater = rawHighWater as number;
+      if (highWater < knownHighWater) {
+        throw new Error(
+          `ui-lag export ${index + 1} of ${polls.length} reports highWaterSeq ${highWater}, below the `
+          + `${knownHighWater} an earlier poll already reported; the polls were handed over out of order `
+          + 'for reconciliation',
+        );
+      }
+      knownHighWater = highWater;
+    }
+
     // A log that retains nothing has nothing to reconcile against, and must not
     // reset what earlier polls already proved was read. But a null range is
     // only honest when the export really is empty: a legacy record written
@@ -498,7 +567,7 @@ export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): 
     // `lastSeq` come back null even though `total` and the delivered array are
     // not. Waving that through as "the log holds nothing" would let those
     // records vanish from every check below rather than being refused.
-    if (firstSeq == null || lastSeq == null) {
+    if (range.kind === 'empty') {
       const trulyEmpty = poll?.total === 0 && (delivered?.length ?? 0) === 0;
       if (!trulyEmpty) {
         throw new Error(
@@ -507,12 +576,29 @@ export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): 
           + 'before the daemon numbered them cannot be reconciled across a rotation',
         );
       }
+      // The censorship check: an empty answer delivers nothing, so the only
+      // way to see a clear that happened here is `highWaterSeq` itself moving
+      // past what an earlier poll already accounted for. Same exemption as
+      // the ordinary range check below — the very first poll defines the
+      // floor rather than being flagged, because nothing precedes it to
+      // disagree with.
+      if (highWaterKnown) {
+        const highWater = rawHighWater as number;
+        if (covered == null && polledBefore && highWater > 0) {
+          gaps.push({ fromSeq: 1, toSeq: highWater });
+        } else if (covered != null && highWater > covered) {
+          gaps.push({ fromSeq: covered + 1, toSeq: highWater });
+        }
+        covered = covered == null ? (highWater > 0 ? highWater : null) : Math.max(covered, highWater);
+      }
       polledBefore = true;
       return;
     }
-    if (covered != null && lastSeq < covered) {
+
+    const { firstSeq: rangeFirst, lastSeq: rangeLast } = range;
+    if (covered != null && rangeLast < covered) {
       throw new Error(
-        `ui-lag export ${index + 1} of ${polls.length} ends at sequence ${lastSeq}, below the `
+        `ui-lag export ${index + 1} of ${polls.length} ends at sequence ${rangeLast}, below the `
         + `${covered} an earlier poll had already read; the polls were handed over out of order `
         // `clear()` (apps/daemon/src/anomaly-log.ts) persists a floor and keeps
         // counting up rather than restarting at 1, so a sound daemon can no
@@ -521,7 +607,7 @@ export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): 
         + 'for reconciliation',
       );
     }
-    if (covered == null && polledBefore && firstSeq > 1) {
+    if (covered == null && polledBefore && rangeFirst > 1) {
       // An earlier poll found the log holding nothing. That is certain only for
       // a log that has never held ANY record: `clear()` (apps/daemon/src/
       // anomaly-log.ts) persists a floor and keeps counting up rather than
@@ -534,12 +620,12 @@ export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): 
       // safe direction for a measurement-integrity check, so this stays a known
       // conservative edge rather than a case this module tries to resolve
       // without seeing the floor itself.
-      gaps.push({ fromSeq: 1, toSeq: firstSeq - 1 });
+      gaps.push({ fromSeq: 1, toSeq: rangeFirst - 1 });
     }
-    if (covered != null && firstSeq > covered + 1) {
-      gaps.push({ fromSeq: covered + 1, toSeq: firstSeq - 1 });
+    if (covered != null && rangeFirst > covered + 1) {
+      gaps.push({ fromSeq: covered + 1, toSeq: rangeFirst - 1 });
     }
-    covered = covered == null ? lastSeq : Math.max(covered, lastSeq);
+    covered = covered == null ? rangeLast : Math.max(covered, rangeLast);
     polledBefore = true;
   });
 
