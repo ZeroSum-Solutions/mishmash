@@ -153,6 +153,21 @@ export interface ListAnomaliesResponse {
    * Above 1 says the answer spans a rotation.
    */
   generations: number;
+  /**
+   * The highest `seq` this log has EVER issued, including one `clear()`
+   * erased. Present on every answer, empty ones included — unlike
+   * `firstSeq`/`lastSeq`, which describe what is still retained and both come
+   * back `null` the moment a clear leaves nothing on disk.
+   *
+   * Why this cannot be derived from `lastSeq`: a clear can erase a record
+   * between two polls without either poll ever seeing it. `lastSeq` alone
+   * makes that erasure indistinguishable from a log that simply stayed quiet
+   * — both report `null`. `highWaterSeq` survives the clear (it is read back
+   * from the same persisted floor `clear()` writes), so a poller comparing it
+   * against what an earlier poll already reconciled can tell "nothing
+   * happened" from "something was issued and is now gone unread."
+   */
+  highWaterSeq: number;
 }
 
 export interface ClearAnomaliesResponse {

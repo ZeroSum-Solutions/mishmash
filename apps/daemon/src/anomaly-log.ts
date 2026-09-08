@@ -276,6 +276,30 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
   }
 
   /**
+   * One consistent snapshot of everything a reconciling caller needs: the
+   * retained records, how many generations they came from, and the highest
+   * sequence this log has ever issued — the floor included, so the number
+   * survives even a snapshot taken the instant after a clear left both
+   * generations empty.
+   *
+   * Both `list()` and `clear()` read through this rather than composing the
+   * two disk reads themselves. That is what makes `clear()`'s count and its
+   * erasure agree with each other: the snapshot both act on is taken once,
+   * inside the same `serialise()` call that goes on to mutate, so nothing
+   * concurrent can land between "what does the log hold" and "erase it."
+   */
+  async function readSnapshot(): Promise<{ records: AnomalyRecord[]; generations: number; highWaterSeq: number }> {
+    const { records, generations } = await readRetainedHistory();
+    const floor = await sequenceFloor();
+    let highWaterSeq = floor;
+    for (const record of records) {
+      const sequence = storedSequence(record);
+      if (sequence != null && sequence > highWaterSeq) highWaterSeq = sequence;
+    }
+    return { records, generations, highWaterSeq };
+  }
+
+  /**
    * Hands out the next sequence, recovered from disk on first use.
    *
    * What must hold: every appended record carries a number one higher than the
@@ -386,10 +410,10 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
 
     async list(query) {
       // Chained through the same primitive `append`'s rotate-and-write uses,
-      // so the two-generation read below is atomic with respect to a
-      // concurrent rotation rather than racing it — see the docblock on
-      // `readRetainedHistory`.
-      const { records, generations } = await serialise(readRetainedHistory);
+      // so the snapshot below is atomic with respect to a concurrent rotation
+      // or clear rather than racing either — see the docblock on
+      // `readSnapshot`.
+      const { records, generations, highWaterSeq } = await serialise(readSnapshot);
       const matched: AnomalyRecord[] = [];
       let firstSeq: number | null = null;
       let lastSeq: number | null = null;
@@ -415,12 +439,29 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
         firstSeq,
         lastSeq,
         generations,
+        // Present even when firstSeq/lastSeq come back null: a clear can leave
+        // both generations empty while this still names what was issued
+        // before it ran, which is exactly what an empty answer otherwise
+        // cannot distinguish from a log nobody ever wrote to.
+        highWaterSeq,
       };
     },
 
     async clear() {
-      const { total } = await this.list({});
-      await serialise(async () => {
+      // Read, count, persist the floor, and erase both generations inside
+      // ONE serialise() call rather than two. A prior version read the
+      // snapshot through a separate `list()` call, returned to the caller,
+      // and only then opened a second serialise() call to erase — leaving a
+      // gap between the two where a concurrent append could be queued,
+      // counted by neither: not present in the snapshot clear() reported,
+      // and erased anyway once it wrote. Doing both inside the same callback
+      // makes the two outcomes exhaustive: an append queued before this
+      // callback's turn on the chain is part of the snapshot and gets
+      // erased with it; one queued after runs only once this callback has
+      // returned, so it survives untouched.
+      return serialise(async () => {
+        const { records, highWaterSeq } = await readSnapshot();
+        const total = records.length;
         try {
           const capability = await writeCapability();
           // The two generations this call is about to erase are the only place
@@ -431,22 +472,21 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
           // the next `clear()`, and a poller that had already read up to it
           // would see a later answer start over from 1 with nothing to say the
           // two runs of numbers are different.
-          const highest = await highestStoredSequence();
           await gateway.mkdir(capability, dirname(path), { recursive: true });
-          if (highest > 0) {
-            await gateway.writeFile(capability, floorPath, JSON.stringify({ seq: highest }), 'utf8');
+          if (highWaterSeq > 0) {
+            await gateway.writeFile(capability, floorPath, JSON.stringify({ seq: highWaterSeq }), 'utf8');
           }
           await gateway.writeFile(capability, path, '', 'utf8');
           await gateway.rm(capability, retainedPath, { force: true });
           // Continues from the floor rather than restarting at one: a reused
           // number would let this reset hide behind a later answer that looks,
           // on its sequence range alone, like an unbroken continuation.
-          nextSequence = highest + 1;
+          nextSequence = highWaterSeq + 1;
         } catch (err) {
           console.warn('[anomaly-log] could not clear:', err);
         }
+        return total;
       });
-      return total;
     },
   };
 }

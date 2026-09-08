@@ -401,6 +401,80 @@ describe('anomaly log', () => {
     expect(await log.clear()).toBe(0);
   });
 
+  it('reports a positive highWaterSeq on an EMPTY answer once a clear has run, so a censored clear is not invisible', async () => {
+    const log = createAnomalyLog({ dataDir });
+
+    // A virgin log reports a zero high-water mark — there is nothing to be
+    // silent about yet.
+    expect((await log.list({})).highWaterSeq).toBe(0);
+
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'one' }, 'web');
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'two' }, 'web');
+    await log.clear();
+
+    // firstSeq/lastSeq come back null — the log genuinely retains nothing —
+    // but highWaterSeq still names that two sequences were issued before the
+    // clear. Without it, this answer is byte-for-byte identical to a log
+    // that was never written to, which is exactly what lets a clear censor a
+    // measurement window undetected.
+    const result = await log.list({});
+    expect(result.firstSeq).toBe(null);
+    expect(result.lastSeq).toBe(null);
+    expect(result.highWaterSeq, 'the floor a clear persisted must still surface on an empty answer').toBe(2);
+  });
+
+  it('performs its snapshot and its erasure as one atomic step, so a concurrent append is neither miscounted nor lost', async () => {
+    const log = createAnomalyLog({ dataDir });
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'a' }, 'web');
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'b' }, 'web');
+
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    let releaseSnapshotRead: (() => void) | null = null;
+    let pausedOnce = false;
+    readFileMock.mockImplementation(async (...args: unknown[]) => {
+      const [target] = args as [unknown];
+      if (target === log.path && !pausedOnce) {
+        pausedOnce = true;
+        // Pauses clear()'s own snapshot read mid-flight — the exact window
+        // the finding names: a prior version read this snapshot through a
+        // separate `list()` call, returned control to the caller, and only
+        // afterwards opened a second `serialise()` call to erase. A
+        // concurrent append queued in that gap was counted by neither: not
+        // in the snapshot clear() reported, and erased anyway once it
+        // wrote.
+        await new Promise<void>((resolve) => {
+          releaseSnapshotRead = resolve;
+        });
+      }
+      return (actual.readFile as (...a: unknown[]) => Promise<string>)(...args);
+    });
+
+    const clearPromise = log.clear();
+    await vi.waitFor(() => {
+      if (!pausedOnce) throw new Error('clear() has not reached the paused snapshot read yet');
+    });
+
+    // Queued while clear()'s snapshot read is still in flight. `clear()` has
+    // already claimed its place on the `serialise()` chain by this point (it
+    // did so synchronously, before its first `await`), so this append cannot
+    // be interleaved into the middle of clear()'s work — the fix makes that
+    // structurally impossible rather than merely unlikely.
+    const appendPromise = log.append({ kind: 'ui-lag', severity: 'warn', summary: 'concurrent' }, 'web');
+
+    releaseSnapshotRead?.();
+    const cleared = await clearPromise;
+    await appendPromise;
+
+    // Exactly one of the two honest outcomes holds: here, the append is
+    // chained strictly after clear()'s single atomic step, so it survives
+    // untouched and clear()'s count reflects only the two records that
+    // existed before it was ever called.
+    expect(cleared).toBe(2);
+    const after = await log.list({});
+    expect(after.total).toBe(1);
+    expect(after.anomalies.map((a) => a.summary)).toEqual(['concurrent']);
+  });
+
   it('keeps concurrent appends from interleaving into corrupt lines', async () => {
     const log = createAnomalyLog({ dataDir });
 
