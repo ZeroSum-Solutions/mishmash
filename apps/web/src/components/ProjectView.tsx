@@ -541,13 +541,27 @@ const CONVERSATION_LOAD_BUDGET_MS = 10_000;
  * never reaches that notice. Racing the read against this bound turns a hang
  * into the same `null` a rejected fetch already produces, so the lookup keeps
  * moving and the bound above still ends it in bounded time.
+ *
+ * Sol r2 (2026-09-08) finding 2: racing the Promise is not enough by itself —
+ * the underlying `fetch` this wraps was left running after the wrapper gave
+ * up on it, so a stalled probe read went on holding a real connection against
+ * the same per-origin budget D-21 exhausted, and every later probe added
+ * another. `controller` is the caller's own `AbortController` for this one
+ * read; on timeout this function calls `controller.abort()` so the request
+ * itself is torn down, not merely ignored. The caller (`attempt` below) is
+ * also what aborts `controller` on supersession, on `release()`, and on
+ * unmount, so no path through the lookup can leave one of these outstanding.
  */
-function withLostRunCreateProbeTimeout<T>(read: Promise<T | null>): Promise<T | null> {
+function withLostRunCreateProbeTimeout<T>(
+  read: Promise<T | null>,
+  controller: AbortController,
+): Promise<T | null> {
   return new Promise<T | null>((resolve) => {
     let settled = false;
     const timer = window.setTimeout(() => {
       if (settled) return;
       settled = true;
+      controller.abort();
       resolve(null);
     }, LOST_RUN_CREATE_PROBE_INTERVAL_MS);
     read.then(
@@ -566,6 +580,27 @@ function withLostRunCreateProbeTimeout<T>(read: Promise<T | null>): Promise<T | 
     );
   });
 }
+
+/**
+ * The overall wall-clock budget for ONE lost-create lookup, independent of the
+ * per-probe `answered`/`unanswered` bookkeeping `nextLostRunCreateStep` reads.
+ *
+ * Sol r2 (2026-09-08) finding 1: a probe where one read answers and the other
+ * never does keeps `unanswered` at zero forever — `unanswered` resets on
+ * EITHER read landing — while `answered` never reaches true, since that needs
+ * BOTH. `nextLostRunCreateStep` therefore keeps returning `'probe'`, and the
+ * notice never turns over to the honest "not answering" wording even though
+ * the daemon has plainly stopped settling the question. This budget is the
+ * backstop: once it elapses with the lookup still inconclusive (`runId` not
+ * found, `answered` still false), the probe is treated as `'unreachable'`
+ * regardless of which individual reads happened to land — the same safe,
+ * no-Retry "Check again" state a fully silent daemon already reaches. It
+ * changes no OUTCOME (the row still holds Send until a run is genuinely ruled
+ * out or adopted — B-02), only the WORDING, so a lookup where both reads keep
+ * answering is untouched and still runs its normal `LOST_RUN_CREATE_MAX_PROBES`
+ * course to `'abandon'`.
+ */
+const LOST_RUN_CREATE_LOOKUP_DEADLINE_MS = 10_000;
 
 const CHAT_PANEL_WIDTH_STORAGE_KEY = 'open-design.project.chatPanelWidth';
 const DEFAULT_CHAT_PANEL_WIDTH = 460;
@@ -1514,6 +1549,14 @@ export function ProjectView({
   const chatPanelPageViewFiredRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
   const trackedTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  // Outstanding lost-create-lookup probe requests, keyed by the assistant row
+  // they are looking up under. `withLostRunCreateProbeTimeout` aborts its own
+  // entry on its per-read timeout; this set is what lets a NEWER lookup
+  // generation, a row's `release()`, and unmount also reach a probe still in
+  // flight, so a probe superseded or abandoned mid-read stops holding an open
+  // connection against the same per-origin budget D-21 exhausted (Sol r2
+  // finding 2).
+  const lostRunCreateAbortControllersRef = useRef(new Map<string, Set<AbortController>>());
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1521,6 +1564,10 @@ export function ProjectView({
       mountedRef.current = false;
       for (const timer of trackedTimeoutsRef.current) clearTimeout(timer);
       trackedTimeoutsRef.current.clear();
+      for (const controllers of lostRunCreateAbortControllersRef.current.values()) {
+        for (const controller of controllers) controller.abort();
+      }
+      lostRunCreateAbortControllersRef.current.clear();
     };
   }, []);
 
@@ -3592,12 +3639,34 @@ export function ProjectView({
         identity,
         message: streamMessage,
       });
+      // A re-check (manual "Check again", or a fresh send onto the same row)
+      // bumps `generation` above but leaves any probe THIS call's predecessor
+      // already had in flight running — `superseded()` only stops it from
+      // acting on its result. Abort those directly so the new generation does
+      // not inherit an old lookup's still-open connections (Sol r2 finding 2).
+      const priorControllers = lostRunCreateAbortControllersRef.current.get(
+        identity.assistantMessageId,
+      );
+      if (priorControllers) {
+        for (const controller of priorControllers) controller.abort();
+        priorControllers.clear();
+      }
       const release = () => {
         lostRunCreateRowsRef.current.delete(identity.assistantMessageId);
         lostRunCreateLookupsRef.current.delete(identity.assistantMessageId);
+        const controllers = lostRunCreateAbortControllersRef.current.get(
+          identity.assistantMessageId,
+        );
+        if (controllers) {
+          for (const controller of controllers) controller.abort();
+          lostRunCreateAbortControllersRef.current.delete(identity.assistantMessageId);
+        }
       };
       let probes = 0;
       let unanswered = 0;
+      // See `LOST_RUN_CREATE_LOOKUP_DEADLINE_MS`: the wall-clock backstop for
+      // an inconclusive lookup, independent of the probe/miss counters below.
+      const startedAt = Date.now();
       const attempt = () => {
         if (superseded()) return;
         if (messagesConversationIdRef.current !== conversationId) {
@@ -3617,13 +3686,33 @@ export function ProjectView({
               return;
             }
             probes += 1;
-            const active = await withLostRunCreateProbeTimeout(
-              fetchActiveChatRuns(project.id, conversationId),
+            // Sol r2 finding 1: the two reads run CONCURRENTLY rather than in
+            // sequence, so one probe spends at most one read's timeout, not
+            // both — which is what lets three conclusive probes fit inside
+            // `LOST_RUN_CREATE_LOOKUP_DEADLINE_MS`. `fetchMessages` runs even
+            // when `active` alone could answer the question, at the cost of
+            // one extra read on the probe that resolves it.
+            const controller = new AbortController();
+            let controllers = lostRunCreateAbortControllersRef.current.get(
+              identity.assistantMessageId,
             );
+            if (!controllers) {
+              controllers = new Set();
+              lostRunCreateAbortControllersRef.current.set(identity.assistantMessageId, controllers);
+            }
+            controllers.add(controller);
+            const [active, stored] = await Promise.all([
+              withLostRunCreateProbeTimeout(
+                fetchActiveChatRuns(project.id, conversationId, controller.signal),
+                controller,
+              ),
+              withLostRunCreateProbeTimeout(
+                fetchMessages(project.id, conversationId, controller.signal),
+                controller,
+              ),
+            ]);
+            controllers.delete(controller);
             let runId = active ? matchLostRunCreate(active, identity) : null;
-            const stored = runId
-              ? []
-              : await withLostRunCreateProbeTimeout(fetchMessages(project.id, conversationId));
             if (!runId && stored) {
               runId = pinnedRunIdForAssistantRow(stored, identity.assistantMessageId);
             }
@@ -3644,19 +3733,31 @@ export function ProjectView({
             // daemon that is down counts here rather than falling to the catch.
             unanswered = active !== null || stored !== null ? 0 : unanswered + 1;
             const step = nextLostRunCreateStep(runId, probes, answered, unanswered);
-            if (step === 'probe' || step === 'unreachable') {
+            // Sol r2 finding 1: a probe where ONE read keeps landing and the
+            // other never does holds `answered` false and `unanswered` at
+            // zero forever — `nextLostRunCreateStep` would return `'probe'`
+            // on every future call, and the notice would never say anything
+            // but "still checking". Once the overall deadline has elapsed on
+            // a probe that is STILL inconclusive (`answered` false), tell the
+            // truth instead: the same `'unreachable'` wording a fully silent
+            // daemon already reaches. A probe where both reads keep landing
+            // (`answered` true) is untouched and runs its ordinary
+            // `LOST_RUN_CREATE_MAX_PROBES` course to `'abandon'`.
+            const overdue = Date.now() - startedAt >= LOST_RUN_CREATE_LOOKUP_DEADLINE_MS;
+            const effectiveStep = step === 'probe' && !answered && overdue ? 'unreachable' : step;
+            if (effectiveStep === 'probe' || effectiveStep === 'unreachable') {
               setRunCheck((current) =>
                 lostRunCreateCheckWithDaemonReachability(
                   current,
                   identity.assistantMessageId,
-                  step === 'probe',
+                  effectiveStep === 'probe',
                 ),
               );
               scheduleProjectTimeout(attempt, LOST_RUN_CREATE_PROBE_INTERVAL_MS);
               return;
             }
             release();
-            if (step === 'adopt' && runId) {
+            if (effectiveStep === 'adopt' && runId) {
               // Pin the run onto the row. `attachRecoverableRuns` reattaches the
               // event stream from there, so the user sees the turn's output and
               // not only its verdict; the follow is the net under that.

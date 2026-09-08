@@ -1130,10 +1130,11 @@ export async function reportChatRunFeedback(req: {
 export async function fetchActiveChatRuns(
   projectId: string,
   conversationId: string,
+  signal?: AbortSignal,
 ): Promise<ChatRunStatusResponse[] | null> {
   try {
     const qs = new URLSearchParams({ projectId, conversationId, status: 'active' });
-    const resp = await fetch(`/api/runs?${qs.toString()}`);
+    const resp = await fetch(`/api/runs?${qs.toString()}`, { signal });
     if (!resp.ok) return null;
     const body = (await resp.json()) as ChatRunListResponse;
     return body.runs ?? [];
