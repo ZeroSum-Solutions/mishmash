@@ -69,18 +69,32 @@ export const uiP0Groups = {
       "ui/workspace-keyboard-flows.test.ts",
     ],
   },
-  "project-runtime": {
+  // Split out of the former single `project-runtime` group (2026-09-06). That
+  // group had become the CI critical path at 549 s of serial payload (one
+  // worker) while every other shard finished 3-6 min in; run 34023927186
+  // measured inferred-failure-retraction alone at 264 s. The halves are
+  // balanced on those per-file times with the ~47 s critical-extras step the
+  // daemon half also runs counted in (~296 s retraction / ~253 s + 47 s daemon).
+  // Coverage is unchanged and `e2e/tests/playwright-suite-topology.test.ts`
+  // pins the partition; validatePlaywrightSuiteTopology() pins coverage.
+  "project-runtime-retraction": {
+    grep: String.raw`\[P0\]`,
+    workers: 1,
+    files: [
+      "ui/inferred-failure-retraction.test.ts",
+      "ui/side-chat-mount-during-run.test.ts",
+      "ui/tab-stream-budget.test.ts",
+    ],
+  },
+  "project-runtime-daemon": {
     grep: String.raw`\[P0\]`,
     workers: 1,
     files: [
       "ui/real-daemon-run.test.ts",
-      "ui/amr-run-failure-recovery.test.ts",
       "ui/run-failure-retraction.test.ts",
-      "ui/inferred-failure-retraction.test.ts",
-      "ui/side-chat-mount-during-run.test.ts",
+      "ui/amr-run-failure-recovery.test.ts",
       "ui/amr-logout-requires-relogin.test.ts",
       "ui/settings-local-cli-codex-fallback.test.ts",
-      "ui/tab-stream-budget.test.ts",
     ],
   },
 } as const satisfies Record<string, UiPlaywrightGroup>;
@@ -91,7 +105,8 @@ export const uiP0CiMatrix = [
   { name: "entry-chrome", shard: "entry-chrome" },
   { name: "settings-onboarding", shard: "settings-onboarding" },
   { name: "project-workspace", shard: "project-workspace" },
-  { name: "project-runtime", shard: "project-runtime" },
+  { name: "project-runtime-retraction", shard: "project-runtime-retraction" },
+  { name: "project-runtime-daemon", shard: "project-runtime-daemon" },
   { name: "workspace-restoration", shard: "workspace-restoration" },
 ] as const satisfies readonly UiP0CiMatrixEntry[];
 
@@ -139,15 +154,40 @@ export function listUiP0GroupNames(): string[] {
   return Object.keys(uiP0Groups).sort();
 }
 
-export function validatePlaywrightSuiteTopology(): string[] {
-  const errors: string[] = [];
-  const knownGroups = new Set(Object.keys(uiP0Groups));
-  const coverageFiles = sortedUnique(uiP0CoverageFiles);
-  const ciFiles = filesForUiP0Groups(uiP0CiMatrix.map((entry) => entry.shard));
+/** The pieces the validator judges; defaults to the live topology above. */
+export interface PlaywrightSuiteTopology {
+  groups: Record<string, UiPlaywrightGroup>;
+  matrix: readonly UiP0CiMatrixEntry[];
+  coverage: readonly string[];
+}
 
-  for (const entry of uiP0CiMatrix) {
+export function validatePlaywrightSuiteTopology(
+  topology: PlaywrightSuiteTopology = { groups: uiP0Groups, matrix: uiP0CiMatrix, coverage: uiP0CoverageFiles },
+): string[] {
+  const errors: string[] = [];
+  const { groups, matrix, coverage } = topology;
+  const knownGroups = new Set(Object.keys(groups));
+  const coverageFiles = sortedUnique(coverage);
+  const shards = matrix.map((entry) => entry.shard);
+  const ciFiles = sortedUnique(shards.flatMap((name) => groups[name]?.files ?? []));
+
+  for (const entry of matrix) {
     if (!knownGroups.has(entry.shard)) {
       errors.push(`UI P0 CI matrix references unknown group ${entry.shard}`);
+    }
+  }
+
+  // A file enrolled in two dispatched groups runs twice per CI run and, since
+  // coverage is compared on deduplicated sets, nothing else would say so.
+  const enrolledIn = new Map<string, string[]>();
+  for (const name of shards) {
+    for (const file of groups[name]?.files ?? []) {
+      enrolledIn.set(file, [...(enrolledIn.get(file) ?? []), name]);
+    }
+  }
+  for (const [file, names] of enrolledIn) {
+    if (names.length > 1) {
+      errors.push(`UI P0 CI matrix enrols ${file} in ${names.length} dispatched groups (${names.join(', ')})`);
     }
   }
 
@@ -166,10 +206,6 @@ export function validatePlaywrightSuiteTopology(): string[] {
   }
 
   return errors;
-}
-
-function filesForUiP0Groups(names: readonly string[]): string[] {
-  return sortedUnique(names.flatMap((name) => uiP0Groups[name as UiP0GroupName]?.files ?? []));
 }
 
 function difference(left: readonly string[], right: readonly string[]): string[] {

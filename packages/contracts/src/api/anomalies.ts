@@ -36,6 +36,8 @@ export type AnomalyKind =
   | 'request-unreachable'
   /** An HTTP call answered, but took longer than its budget. */
   | 'request-slow'
+  /** A client-side export (image capture or save) failed; no daemon request is involved, so nothing else can see it. */
+  | 'export-failed'
   /**
    * Classifier of last resort: a record reached the store without a kind this
    * union recognises. Nothing reports it deliberately — seeing one means a
@@ -169,6 +171,7 @@ export const ANOMALY_KINDS: readonly AnomalyKind[] = [
   'request-failed',
   'request-unreachable',
   'request-slow',
+  'export-failed',
   'unhandled-error',
 ];
 

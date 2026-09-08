@@ -1,100 +1,162 @@
 // @vitest-environment jsdom
+//
+// The aurora backdrop draws ~30 times a second for as long as the home view
+// is mounted, which is the whole session: EntryShell keeps the home view
+// behind `display: none` while another route is on screen. Each draw called
+// `getBoundingClientRect()` on the canvas, a forced style+layout pass, and
+// so did every pointer move anywhere in the app. On a route switch that
+// forced layout landed between the first two frames (see the 3P
+// attribution). Sizing must come from the ResizeObserver, and the loop must
+// stop while the canvas is not on screen.
+import { act, cleanup, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { cleanup, render } from '@testing-library/react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HomeAmbientBackdrop } from '../../src/components/home-hero/HomeAmbientBackdrop';
+
+type Frame = (now: number) => void;
+const frames: Frame[] = [];
+let now = 0;
+let resizeCallback: ResizeObserverCallback | null = null;
+let intersectionCallback: IntersectionObserverCallback | null = null;
+let drawCalls = 0;
+
+const originals = {
+  raf: globalThis.requestAnimationFrame,
+  caf: globalThis.cancelAnimationFrame,
+  ro: globalThis.ResizeObserver,
+  io: globalThis.IntersectionObserver,
+  matchMedia: window.matchMedia,
+  getContext: HTMLCanvasElement.prototype.getContext,
+  webgl2: (globalThis as any).WebGL2RenderingContext,
+};
+
+function fakeGl(): WebGL2RenderingContext {
+  const target: Record<string, unknown> = {
+    VERTEX_SHADER: 1, FRAGMENT_SHADER: 2, COMPILE_STATUS: 3, LINK_STATUS: 4, TRIANGLES: 5,
+    createShader: () => ({}), shaderSource: () => {}, compileShader: () => {}, getShaderParameter: () => true, deleteShader: () => {},
+    createProgram: () => ({}), attachShader: () => {}, linkProgram: () => {}, getProgramParameter: () => true, useProgram: () => {},
+    deleteProgram: () => {}, getUniformLocation: () => ({}), uniform2f: () => {}, uniform1f: () => {}, viewport: () => {},
+    drawArrays: () => { drawCalls += 1; },
+  };
+  return new Proxy(target, { get: (t, key) => (key in t ? t[key as string] : () => undefined) }) as unknown as WebGL2RenderingContext;
+}
+
+function runFrames(count: number, stepMs = 40) {
+  for (let i = 0; i < count; i++) {
+    now += stepMs;
+    const pending = frames.splice(0);
+    act(() => { pending.forEach((fn) => fn(now)); });
+  }
+}
+
+beforeEach(() => {
+  frames.length = 0; now = 0; drawCalls = 0; resizeCallback = null; intersectionCallback = null;
+  (globalThis as any).WebGL2RenderingContext = class {};
+  HTMLCanvasElement.prototype.getContext = (() => fakeGl()) as any;
+  globalThis.requestAnimationFrame = ((fn: Frame) => { frames.push(fn); return frames.length; }) as any;
+  globalThis.cancelAnimationFrame = ((id: number) => { frames.splice(id - 1, 1); }) as any;
+  (globalThis as any).ResizeObserver = class { constructor(cb: ResizeObserverCallback) { resizeCallback = cb; } observe() {} disconnect() {} unobserve() {} };
+  (globalThis as any).IntersectionObserver = class { constructor(cb: IntersectionObserverCallback) { intersectionCallback = cb; } observe() {} disconnect() {} unobserve() {} };
+  window.matchMedia = (() => ({ matches: false, addEventListener() {}, removeEventListener() {} })) as any;
+});
 
 afterEach(() => {
   cleanup();
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
+  globalThis.requestAnimationFrame = originals.raf; globalThis.cancelAnimationFrame = originals.caf;
+  (globalThis as any).ResizeObserver = originals.ro; (globalThis as any).IntersectionObserver = originals.io;
+  window.matchMedia = originals.matchMedia; HTMLCanvasElement.prototype.getContext = originals.getContext;
+  (globalThis as any).WebGL2RenderingContext = originals.webgl2;
 });
 
-describe('HomeAmbientBackdrop', () => {
-  it('renders a non-interactive canvas sourced from the bundled aurora example', () => {
-    const markup = renderToStaticMarkup(<HomeAmbientBackdrop />);
+function mountVisible() {
+  render(<HomeAmbientBackdrop />);
+  const canvas = screen.getByTestId('home-ambient-canvas') as HTMLCanvasElement;
+  const rect = vi.spyOn(canvas, 'getBoundingClientRect');
+  act(() => {
+    resizeCallback?.([{ target: canvas, contentRect: { width: 1200, height: 800, left: 0, top: 0 } } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+    intersectionCallback?.([{ target: canvas, isIntersecting: true } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+  });
+  return { canvas, rect };
+}
 
-    expect(markup).toContain('data-testid="home-ambient-canvas"');
-    expect(markup).toContain('data-source="webgl-aurora-veil"');
-    expect(markup).toContain('aria-hidden="true"');
+describe('HomeAmbientBackdrop layout discipline', () => {
+  it('sizes the drawing buffer from the ResizeObserver and never reads layout on a frame or a pointer move', () => {
+    const { canvas, rect } = mountVisible();
+    rect.mockClear();
+    runFrames(5);
+    act(() => { window.dispatchEvent(new PointerEvent('pointermove', { clientX: 300, clientY: 20 })); });
+    runFrames(2);
+    expect(drawCalls).toBeGreaterThan(0);
+    expect(canvas.width).toBe(1200);
+    expect(rect).not.toHaveBeenCalled();
   });
 
-  it('resizes the WebGL drawing buffer when its rendered backdrop changes size', () => {
-    let resizeCallback: ResizeObserverCallback | undefined;
-    const observe = vi.fn();
-    const disconnect = vi.fn();
-    vi.stubGlobal(
-      'ResizeObserver',
-      class {
-        constructor(callback: ResizeObserverCallback) {
-          resizeCallback = callback;
-        }
-        observe = observe;
-        disconnect = disconnect;
-        unobserve() {}
-      },
-    );
-    vi.stubGlobal('WebGL2RenderingContext', class {});
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn(() => ({
-        matches: true,
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-      })),
-    );
+  it('stops drawing while the canvas is off screen and resumes when it is back', () => {
+    const { canvas } = mountVisible();
+    runFrames(3);
+    const drawnWhileVisible = drawCalls;
+    expect(drawnWhileVisible).toBeGreaterThan(0);
 
-    const viewport = vi.fn();
-    const gl = {
-      VERTEX_SHADER: 1,
-      FRAGMENT_SHADER: 2,
-      COMPILE_STATUS: 3,
-      LINK_STATUS: 4,
-      TRIANGLES: 5,
-      createShader: vi.fn(() => ({})),
-      shaderSource: vi.fn(),
-      compileShader: vi.fn(),
-      getShaderParameter: vi.fn(() => true),
-      deleteShader: vi.fn(),
-      createProgram: vi.fn(() => ({})),
-      attachShader: vi.fn(),
-      linkProgram: vi.fn(),
-      getProgramParameter: vi.fn(() => true),
-      useProgram: vi.fn(),
-      getUniformLocation: vi.fn(() => ({})),
-      viewport,
-      uniform2f: vi.fn(),
-      uniform1f: vi.fn(),
-      drawArrays: vi.fn(),
-      deleteProgram: vi.fn(),
-    };
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
-      gl as unknown as WebGL2RenderingContext,
-    );
+    act(() => { intersectionCallback?.([{ target: canvas, isIntersecting: false } as unknown as IntersectionObserverEntry], {} as IntersectionObserver); });
+    runFrames(5);
+    expect(drawCalls).toBe(drawnWhileVisible);
 
-    const { getByTestId, unmount } = render(<HomeAmbientBackdrop />);
-    const canvas = getByTestId('home-ambient-canvas') as HTMLCanvasElement;
-    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
-      width: 1240,
-      height: 760,
-      top: 0,
-      right: 1240,
-      bottom: 760,
-      left: 0,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
+    act(() => { intersectionCallback?.([{ target: canvas, isIntersecting: true } as unknown as IntersectionObserverEntry], {} as IntersectionObserver); });
+    runFrames(3);
+    expect(drawCalls).toBeGreaterThan(drawnWhileVisible);
+  });
+
+  it('keeps its drawing buffer when the observer reports a zero-size box (the view was hidden)', () => {
+    const { canvas } = mountVisible();
+    expect(canvas.width).toBe(1200);
+    // EntryShell hides the home view with display:none on a route switch; the
+    // canvas box collapses to 0x0. Reallocating the buffer for that is a
+    // GPU realloc on every switch, and the next reveal would realloc again.
+    act(() => {
+      resizeCallback?.([{ target: canvas, contentRect: { width: 0, height: 0, left: 0, top: 0 } } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+      intersectionCallback?.([{ target: canvas, isIntersecting: false } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
     });
+    expect(canvas.width).toBe(1200);
+    act(() => {
+      resizeCallback?.([{ target: canvas, contentRect: { width: 1200, height: 800, left: 0, top: 0 } } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+      intersectionCallback?.([{ target: canvas, isIntersecting: true } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+    });
+    expect(canvas.width).toBe(1200);
+  });
 
-    expect(observe).toHaveBeenCalledWith(canvas);
-    resizeCallback?.([], {} as ResizeObserver);
+  it('measures once and on window resize when ResizeObserver is unavailable', () => {
+    (globalThis as any).ResizeObserver = undefined;
+    let box = { width: 1000, height: 600, left: 0 };
+    const rectSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockImplementation(() => box as DOMRect);
+    try {
+      render(<HomeAmbientBackdrop />);
+      const canvas = screen.getByTestId('home-ambient-canvas') as HTMLCanvasElement;
+      act(() => { intersectionCallback?.([{ target: canvas, isIntersecting: true } as unknown as IntersectionObserverEntry], {} as IntersectionObserver); });
+      expect(canvas.width).toBe(1000);
+      const readsAfterMount = rectSpy.mock.calls.length;
+      runFrames(3);
+      expect(rectSpy.mock.calls.length).toBe(readsAfterMount);
 
-    expect(canvas.width).toBe(1240);
-    expect(canvas.height).toBe(760);
-    expect(viewport).toHaveBeenLastCalledWith(0, 0, 1240, 760);
+      box = { width: 800, height: 500, left: 0 };
+      act(() => { window.dispatchEvent(new Event('resize')); });
+      expect(canvas.width).toBe(800);
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
 
-    unmount();
-    expect(disconnect).toHaveBeenCalledOnce();
+  it('re-sizes the buffer from cached bounds when only devicePixelRatio changes', () => {
+    const { canvas, rect } = mountVisible();
+    expect(canvas.width).toBe(1200);
+    rect.mockClear();
+    const originalRatio = window.devicePixelRatio;
+    try {
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 1.25 });
+      act(() => { window.dispatchEvent(new Event('resize')); });
+      expect(canvas.width).toBe(1500);
+      expect(rect).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: originalRatio });
+    }
   });
 });
