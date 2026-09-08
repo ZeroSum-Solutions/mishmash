@@ -77,11 +77,14 @@ const VELA_STATUS_ANSWER_RESERVE_MS = 250;
  * config profile — spends the same 2,000 ms, so a duration started here would
  * let the answer drift past the bound it is named for.
  *
- * A bound here as well as on the CLI spawn because they guarantee different
- * things. The spawn bound keeps one subprocess from outliving its budget; this
- * keeps the response bounded even when the awaited promise is not a single
- * spawn — a caller joining a single-flight fetch that started earlier, or any
- * later step added between the two.
+ * A bound here as well as on the CLI spawn because the two name different
+ * limits. This one is the ANSWER budget: it bounds the response, and it holds
+ * even when the awaited promise is not a single spawn — a caller joining a
+ * single-flight fetch that started earlier, or any later step added between the
+ * two. `AMR_BILLING_PROCESS_CEILING_MS` (`runtimes/defs/amr.ts`) is the PROCESS
+ * ceiling: it bounds the work, sits above this budget on purpose, and is what
+ * lets a healthy multi-second billing read survive a lapsed deadline and warm
+ * the live-account cache for the next poll.
  */
 function answerByDeadline<T>(pending: Promise<T>, deadline: number): Promise<T | null> {
   return new Promise<T | null>((resolve) => {
