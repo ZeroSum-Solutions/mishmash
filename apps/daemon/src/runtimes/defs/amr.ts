@@ -622,12 +622,17 @@ export interface VelaBillingSummary {
  * carries ({@link AMR_MODELS_TIMEOUT_MS}). Evidence for that number: the team
  * daemon's own `request-slow` rows for `/api/integrations/vela/status`
  * (`.od/anomalies/anomalies.jsonl*`, window 2026-08-18T21:57Z to
- * 2026-09-05T21:45Z, 49 daemon-side rows, all status 200) show 28 reads that
- * COMPLETED between 4,080 ms and 9,388 ms under the pre-existing ten-second
- * exec bound. A healthy billing read on that host is a multi-second read.
- * The other 21 rows in that window ran past ten seconds (median 8.6 s
- * overall, max 108 s): they are the never-settling stuck-child shape W3D
- * already mitigates with SIGKILL, not healthy runtime, and are excluded.
+ * 2026-09-05T21:45Z, 49 daemon-side rows, all status 200). These are
+ * ENDPOINT-LATENCY observations, not confirmed billing-command completions:
+ * the anomaly observer (`routes/anomalies.ts`) records only HTTP status and
+ * elapsed time, not billing subprocess exit status, the account projection,
+ * or a correlation id, and this route answers 200 even when the billing
+ * fetch fails. Within that limit, 28 of the 49 rows show the route
+ * answering between 4,080 ms and 9,388 ms — under the pre-existing
+ * ten-second exec bound — which is consistent with, but does not confirm, a
+ * multi-second healthy billing read on that host. The other 21 rows ran
+ * past ten seconds (median 8.6 s overall, max 108 s) and are excluded as the
+ * never-settling stuck-child shape W3D already mitigates with SIGKILL.
  *
  * Paired with `killSignal: 'SIGKILL'` below because the CLI this bounds is
  * untrusted about signals. `execFile`'s default SIGTERM is only a request: a
