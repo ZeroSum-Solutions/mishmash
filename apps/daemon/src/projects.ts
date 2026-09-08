@@ -1522,8 +1522,11 @@ const VITE_CONFIG_FILENAMES = [
  * For candidates matching `vite.config.*`, a regular file is accepted directly by
  * its `Dirent` kind with zero extra stat calls. A symlink is checked with `stat`
  * to confirm it resolves to a regular file (rejecting broken symlinks or directory
- * targets as base did); this pays at most one stat only when a symlinked Vite
- * config is present.
+ * targets as base did); each PRESENT symlinked candidate examined this way pays
+ * one targeted stat, so the cost is one stat per reported regular file PLUS one
+ * targeted stat per present `vite.config.*` symlink examined, bounded to six per
+ * scan (the number of recognized names) — never per page, since the answer is
+ * still memoized once for the whole project root.
  */
 async function readsViteDevProject(projectDirPath, rootEntries?: ReadonlyMap<string, Dirent> | null) {
   for (const candidate of VITE_CONFIG_FILENAMES) {

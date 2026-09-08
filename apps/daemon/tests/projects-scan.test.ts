@@ -264,3 +264,61 @@ describe('Vite dev project detection with symlinked vite.config.*', () => {
   });
 });
 
+describe('vite config symlink stat cost stays bounded', () => {
+  // Every recognized vite.config.* name present as a rejected symlink (half to
+  // a directory, half broken) so the loop in readsViteDevProject examines all
+  // six candidates instead of stopping at the first accepted file.
+  const VITE_CONFIG_FILENAMES = [
+    'vite.config.js',
+    'vite.config.mjs',
+    'vite.config.cjs',
+    'vite.config.ts',
+    'vite.config.mts',
+    'vite.config.cts',
+  ];
+
+  it('pays exactly one targeted stat per present symlinked candidate, capped at six, regardless of how many pages are in the tree', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'od-project-scan-vite-symlink-cost-'));
+    roots.push(root);
+    const projectsRoot = path.join(root, 'projects');
+    const projectId = 'vite-symlink-cost';
+    const projectDir = path.join(projectsRoot, projectId);
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(
+      path.join(projectDir, 'package.json'),
+      JSON.stringify({ name: projectId, devDependencies: { typescript: '5.0.0' } }),
+    );
+
+    const rejectedDir = path.join(projectDir, 'not-a-config');
+    await mkdir(rejectedDir, { recursive: true });
+    for (const [i, name] of VITE_CONFIG_FILENAMES.entries()) {
+      const target = i % 2 === 0 ? rejectedDir : path.join(projectDir, `missing-${name}`);
+      await symlink(target, path.join(projectDir, name));
+    }
+
+    // Several index.html pages: the per-project answer is memoized once, so the
+    // symlink-examination cost must not scale with page count (no per-tree
+    // amplification).
+    for (let i = 0; i < 5; i += 1) {
+      const dir = path.join(projectDir, `page-${i}`);
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, 'index.html'), VITE_DEV_HTML);
+    }
+
+    fsCalls.stat.length = 0;
+    fsCalls.recording = true;
+    const files = await listFiles(projectsRoot, projectId);
+    fsCalls.recording = false;
+
+    const reportedRegularFiles = files.filter((file) => Number.isFinite(Number(file.mtime))).length;
+    const symlinkTargets = new Set(VITE_CONFIG_FILENAMES.map((name) => path.join(projectDir, name)));
+    const symlinkStats = fsCalls.stat.filter((target) => symlinkTargets.has(target));
+
+    expect(symlinkStats).toHaveLength(6);
+    expect(new Set(symlinkStats).size).toBe(6);
+    // Total cost is exactly base (one stat per reported regular file) plus the
+    // bounded symlink-examination cost — never more, and never scaled by the
+    // 5 pages in the tree.
+    expect(fsCalls.stat.length).toBe(reportedRegularFiles + 6);
+  });
+});
