@@ -2682,7 +2682,10 @@ export interface Dict {
   'chat.runError.title.payloadTooLarge': string;
   'chat.runError.payloadTooLargeMessage': string;
   // The bound on the Loading pane: a conversation read that never answered.
-  // Shown with the Retry that re-issues the read.
+  // Shown with the Retry that re-issues the read. The title is the card's own
+  // visible line — `chat.conversationLoad.timedOut` sits in the collapsed
+  // details, same as every other named failure's message half.
+  'chat.conversationLoad.timedOutTitle': string;
   'chat.conversationLoad.timedOut': string;
   'chat.runChecking.title': string;
   'chat.runChecking.message': string;

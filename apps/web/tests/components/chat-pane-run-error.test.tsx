@@ -131,6 +131,13 @@ describe('a turn that never started', () => {
       onRetryLoad,
     });
 
+    // The named cause on the card's own visible title, not the generic
+    // fallback a plain page-level error (no `runFailureUi`) would otherwise
+    // get — the title is what a user reads without expanding anything; the
+    // fuller sentence stays in the collapsed details, same as every other
+    // named failure's message half.
+    expect(screen.queryByText('chat.runError.title.generic')).toBeNull();
+    expect(screen.getByText('chat.conversationLoad.timedOutTitle')).toBeTruthy();
     expect(screen.getByText('chat.conversationLoad.timedOut')).toBeTruthy();
     const retry = screen.getAllByRole('button', { name: 'promptTemplates.retry' });
     expect(retry).toHaveLength(1);

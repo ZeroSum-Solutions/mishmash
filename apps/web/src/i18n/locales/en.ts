@@ -90,6 +90,7 @@ export const en: Dict = {
   'chat.runError.notStartedMessage': 'MishMash never received this request, so nothing ran. Send it again.',
   'chat.runError.title.payloadTooLarge': 'Message too large to send',
   'chat.runError.payloadTooLargeMessage': 'This turn was larger than MishMash accepts, so nothing was sent. Remove some attachments or shorten the message, then retry.',
+  'chat.conversationLoad.timedOutTitle': 'This conversation did not load',
   'chat.conversationLoad.timedOut': 'This conversation did not load — MishMash did not answer in time. Retry to load it again.',
   'chat.runChecking.title': 'Checking this run',
   'chat.runChecking.message': 'Connection to the run was lost. Checking its result…',

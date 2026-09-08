@@ -2534,7 +2534,15 @@ export function ChatPane({
                   title={
                     runFailureUi
                       ? t(runFailureUi.titleKey)
-                      : t('chat.runError.title.generic')
+                      // A conversation load that timed out has no run row and so
+                      // no `runFailureUi`, which otherwise falls back to the
+                      // generic title — the same "Task failed" a run failure
+                      // shows, over a cause the user never asked about. Name it
+                      // instead: `showLoadRetry` is already the one signal that
+                      // means exactly this state (see its own definition).
+                      : showLoadRetry
+                        ? t('chat.conversationLoad.timedOutTitle')
+                        : t('chat.runError.title.generic')
                   }
                   open={errorSourceOpen}
                   onOpenChange={setErrorSourceOpen}
