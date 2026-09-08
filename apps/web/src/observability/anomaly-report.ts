@@ -288,6 +288,59 @@ export function anomalyForPreviewDocumentError(
 }
 
 /**
+ * Human-readable labels for client-side image export failure causes.
+ */
+const IMAGE_EXPORT_ERROR_CAUSE_LABELS: Record<string, string> = {
+  CAPTURE_FAILED: 'snapshot capture produced no image',
+  EMPTY_IMAGE: 'captured image was empty',
+};
+
+export type ImageExportStage = 'capture' | 'encode' | 'target' | 'save';
+
+const IMAGE_EXPORT_STAGE_LABELS: Record<ImageExportStage, string> = {
+  capture: 'snapshot capture failed',
+  encode: 'image encoding failed',
+  target: 'choosing the save target failed',
+  save: 'saving the image failed',
+};
+
+export interface ImageExportFailureInput {
+  fileName: string;
+  errorCode: string;
+  stage?: ImageExportStage;
+  projectId?: string;
+  durationMs?: number;
+}
+
+/**
+ * Builds the anomaly record for a failed client-side image export.
+ *
+ * Invariant: Every failed "Download → Export as image" attempt yields one
+ * `'export-failed'` row.
+ */
+export function anomalyForImageExportFailure(
+  input: ImageExportFailureInput,
+): ReportAnomalyRequest {
+  const stageLabel = input.stage ? IMAGE_EXPORT_STAGE_LABELS[input.stage] : undefined;
+  const cause =
+    IMAGE_EXPORT_ERROR_CAUSE_LABELS[input.errorCode] ??
+    (stageLabel ? `${stageLabel} (${input.errorCode})` : `export failed (${input.errorCode})`);
+  return {
+    kind: 'export-failed',
+    severity: 'warn',
+    summary: `Image export of ${input.fileName} failed: ${cause}`,
+    ...(input.projectId ? { projectId: input.projectId } : {}),
+    detail: {
+      exportFormat: 'image',
+      errorCode: input.errorCode,
+      fileName: input.fileName,
+      ...(input.stage ? { stage: input.stage } : {}),
+      ...(input.durationMs != null ? { durationMs: input.durationMs } : {}),
+    },
+  };
+}
+
+/**
  * Files one preview-document failure, under the same flood guard uncaught host
  * exceptions use: a previewed render loop that throws every frame repeats the
  * identical signature, and the log has to stay skimmable.

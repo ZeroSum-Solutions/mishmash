@@ -307,13 +307,20 @@ jobs:
   # only since "Temporarily narrow CI debug scope" (891981d46) — never reverted.
   # Runs serially (vitest fileParallelism: false is a correctness constraint),
   # hence the dedicated job and generous timeout instead of sharing
-  # workspace_unit_tests' 20-minute budget.
+  # workspace_unit_tests' 20-minute budget. Sharded 4-way via vitest --shard
+  # (2026-09-06, FU-47): the single job measured 24.8-26 min over seven runs;
+  # --shard splits files by hash count, not by duration, so the per-shard wall
+  # clock is whatever the first live runs show. Files stay serial inside each shard.
   daemon_full_tests:
-    name: Daemon full tests
+    name: Daemon full tests (${{ matrix.shard }}/4)
     needs: [scopes, runners]
     if: ${{ needs.scopes.outputs.daemon_tests_required == 'true' }}
     runs-on: ${{ fromJSON(needs.runners.outputs.runs_on).workspace_unit }}
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     steps:
       - name: Checkout
@@ -366,7 +373,7 @@ jobs:
       - name: Daemon full tests
         env:
           OD_WATCHER_TEST_DEBUG: "1"
-        run: pnpm --filter @open-design/daemon exec vitest run -c vitest.config.ts
+        run: pnpm --filter @open-design/daemon exec vitest run -c vitest.config.ts --shard ${{ matrix.shard }}/4
 
   windows_tools_pack_payload_tests:
     name: Windows tools-pack payload tests
@@ -547,8 +554,8 @@ jobs:
       - name: Run UI P0 domain
         run: pnpm -C e2e exec tsx scripts/playwright.ts run-ui-group ${{ matrix.shard }}
 
-      - name: Preserve project-runtime domain artifact
-        if: ${{ success() && matrix.shard == 'project-runtime' }}
+      - name: Preserve project-runtime-daemon domain artifact
+        if: ${{ success() && matrix.shard == 'project-runtime-daemon' }}
         uses: actions/upload-artifact@v7
         with:
           name: ui-p0-ci-${{ github.run_id }}-${{ matrix.name }}-domain
@@ -561,7 +568,7 @@ jobs:
           retention-days: 7
 
       - name: Run UI critical extras
-        if: ${{ matrix.shard == 'project-runtime' }}
+        if: ${{ matrix.shard == 'project-runtime-daemon' }}
         run: pnpm -C e2e exec tsx scripts/playwright.ts run-ui-group critical-extras
 
       - name: Upload Playwright debug artifact
