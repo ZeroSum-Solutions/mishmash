@@ -1051,3 +1051,92 @@ describe('FileViewer image export', () => {
   });
 });
 
+// The suite above mocks `requestPreviewSnapshot` itself at the module
+// boundary (see the `vi.mock('../../src/runtime/exports', ...)` above), so it
+// exercises the classification/toast/anomaly logic downstream of the bridge
+// but never proves the REAL `requestPreviewSnapshotResult` -> `onFailure`
+// wiring inside runtime/exports.ts actually fires. `vi.importActual` bypasses
+// this file's own mock to load the genuine, unmocked module so these specs
+// drive that boundary directly: a real `od:snapshot:result` postMessage
+// payload in, the exact `onFailure` callback payload out.
+describe('requestPreviewSnapshot real onFailure wiring (runtime/exports.ts)', () => {
+  // Mirrors the window stub in tests/runtime/exports.test.ts's own
+  // `requestPreviewSnapshot` suite: a plain listener registry sidesteps
+  // jsdom's stricter `MessageEvent.source` typing (Window | MessagePort |
+  // ServiceWorker) so a plain stand-in object can stand in for
+  // `iframe.contentWindow` and still satisfy the bridge's `ev.source === win`
+  // check.
+  function stubWindowMessaging() {
+    const listeners = new Map<string, Set<(ev: unknown) => void>>();
+    const fakeWindow = {
+      addEventListener: (type: string, fn: (ev: unknown) => void) => {
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type)!.add(fn);
+      },
+      removeEventListener: (type: string, fn: (ev: unknown) => void) => {
+        listeners.get(type)?.delete(fn);
+      },
+      dispatchEvent: (ev: { type: string }) => {
+        for (const fn of listeners.get(ev.type) ?? []) fn(ev);
+      },
+    };
+    vi.stubGlobal('window', fakeWindow);
+    return {
+      dispatch: (data: unknown, source: unknown) => {
+        fakeWindow.dispatchEvent({ type: 'message', source, data } as unknown as { type: string });
+      },
+      cleanup: () => vi.unstubAllGlobals(),
+    };
+  }
+
+  it('surfaces a real od:snapshot:result failure through the onFailure callback', async () => {
+    const { requestPreviewSnapshot: realRequestPreviewSnapshot } = await vi.importActual<
+      typeof import('../../src/runtime/exports')
+    >('../../src/runtime/exports');
+    const { dispatch, cleanup } = stubWindowMessaging();
+    try {
+      const postMessageMock = vi.fn();
+      const contentWindow = { postMessage: postMessageMock };
+      const iframe = { contentWindow } as unknown as HTMLIFrameElement;
+      const onFailure = vi.fn();
+
+      const promise = realRequestPreviewSnapshot(iframe, 8000, {}, onFailure);
+
+      expect(postMessageMock).toHaveBeenCalledOnce();
+      const { id } = postMessageMock.mock.calls[0]![0] as { type: string; id: string };
+
+      dispatch({ type: 'od:snapshot:result', id, error: 'empty-render' }, contentWindow);
+
+      const result = await promise;
+      expect(result).toBeNull();
+      expect(onFailure).toHaveBeenCalledTimes(1);
+      expect(onFailure).toHaveBeenCalledWith({ reason: 'render-error', error: 'empty-render' });
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('surfaces a real bridge timeout through the onFailure callback (fake timers)', async () => {
+    const { requestPreviewSnapshot: realRequestPreviewSnapshot } = await vi.importActual<
+      typeof import('../../src/runtime/exports')
+    >('../../src/runtime/exports');
+    const { cleanup } = stubWindowMessaging();
+    vi.useFakeTimers();
+    try {
+      const iframe = { contentWindow: { postMessage: vi.fn() } } as unknown as HTMLIFrameElement;
+      const onFailure = vi.fn();
+
+      const promise = realRequestPreviewSnapshot(iframe, 100, {}, onFailure);
+      await vi.advanceTimersByTimeAsync(150);
+
+      const result = await promise;
+      expect(result).toBeNull();
+      expect(onFailure).toHaveBeenCalledTimes(1);
+      expect(onFailure).toHaveBeenCalledWith({ reason: 'timeout', error: undefined });
+    } finally {
+      vi.useRealTimers();
+      cleanup();
+    }
+  });
+});
+
