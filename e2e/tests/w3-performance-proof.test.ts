@@ -177,6 +177,44 @@ function uiLagExport(
   };
 }
 
+/**
+ * Wraps a single export as the two timestamped polls `buildProof` now
+ * requires, both taken at the window's boundaries.
+ *
+ * Polling the SAME content at open and close is a legitimate minimal capture
+ * — nothing changed between the two, so there is nothing to reconcile beyond
+ * what `uiLagExport` already describes. Cases below that are about the polls
+ * THEMSELVES (coverage, or reconciling a genuine rotation) build
+ * `CaptureModule.W3UiLagPoll[]` directly instead of using this helper.
+ */
+function spanning(response: ListAnomaliesResponse): CaptureModule.W3UiLagPoll[] {
+  return [
+    { atUtc: WINDOW_START, response },
+    { atUtc: WINDOW_END, response },
+  ];
+}
+
+/**
+ * Times an ordered sequence of raw exports evenly across the window, first at
+ * `WINDOW_START` and last at `WINDOW_END`.
+ *
+ * Every case in the rotation `describe` block below is about what the
+ * SEQUENCE-RANGE reconciliation does with a given ordered poll sequence, not
+ * about poll coverage — bracketing them at the window's edges satisfies
+ * `checkPollCoverage` trivially so each case still measures only the thing it
+ * names.
+ */
+function toPolls(responses: readonly ListAnomaliesResponse[]): CaptureModule.W3UiLagPoll[] {
+  const start = Date.parse(WINDOW_START);
+  const end = Date.parse(WINDOW_END);
+  return responses.map((response, index) => ({
+    atUtc: new Date(
+      responses.length <= 1 ? start : start + ((end - start) * index) / (responses.length - 1),
+    ).toISOString(),
+    response,
+  }));
+}
+
 describe('W3 endpoint-latency proof — validator', () => {
   it('accepts a complete, continuous, daemon-timed capture', () => {
     expect(violationCodes(healthyProof()), why('a sound capture must raise no violation')).toEqual([]);
@@ -728,12 +766,12 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
   });
 
   it('carries the shortfall of a truncated ui-lag export into the proof', () => {
-    const delivered = [uiLagRecord('2026-09-06T10:00:00.000Z', 1_200)];
+    const delivered = [uiLagRecord('2026-09-06T10:00:00.000Z', 1_200, 1)];
     const built = capture?.buildProof({
       timingLog: golden,
       // The envelope says five ui-lag records matched the query and hands back one:
       // `GET /api/anomalies` applied a `limit` the operator did not widen.
-      anomalies: uiLagExport(delivered, { total: 5 }),
+      anomalies: spanning(uiLagExport(delivered, { total: 5 })),
       startUtc: WINDOW_START,
       sourceRun: 'golden',
       capture: { ...CAPTURE_METADATA },
@@ -748,15 +786,15 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
     // pinned window. That is the capture doing its job, not a page boundary, so it
     // must not raise the truncation violation.
     const records = [
-      uiLagRecord('2026-09-06T10:00:00.000Z', 1_200),
-      uiLagRecord('2020-01-01T00:00:00.000Z', 1_200),
-      uiLagRecord('2020-01-02T00:00:00.000Z', 1_200),
-      uiLagRecord('2020-01-03T00:00:00.000Z', 1_200),
-      uiLagRecord('2020-01-04T00:00:00.000Z', 1_200),
+      uiLagRecord('2026-09-06T10:00:00.000Z', 1_200, 5),
+      uiLagRecord('2020-01-01T00:00:00.000Z', 1_200, 1),
+      uiLagRecord('2020-01-02T00:00:00.000Z', 1_200, 2),
+      uiLagRecord('2020-01-03T00:00:00.000Z', 1_200, 3),
+      uiLagRecord('2020-01-04T00:00:00.000Z', 1_200, 4),
     ];
     const built = capture?.buildProof({
       timingLog: golden,
-      anomalies: uiLagExport(records),
+      anomalies: spanning(uiLagExport(records)),
       startUtc: WINDOW_START,
       sourceRun: 'golden',
       capture: { ...CAPTURE_METADATA },
@@ -815,9 +853,9 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
 
   it('refuses a ui-lag export whose envelope disagrees with the array beside it', () => {
     const delivered = [
-      uiLagRecord('2026-09-06T10:00:00.000Z', 1_200),
-      uiLagRecord('2026-09-06T11:00:00.000Z', 1_200),
-      uiLagRecord('2026-09-06T12:00:00.000Z', 1_200),
+      uiLagRecord('2026-09-06T10:00:00.000Z', 1_200, 1),
+      uiLagRecord('2026-09-06T11:00:00.000Z', 1_200, 2),
+      uiLagRecord('2026-09-06T12:00:00.000Z', 1_200, 3),
     ];
     const built = capture?.buildProof({
       timingLog: golden,
@@ -826,7 +864,7 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
       // BELOW the array length is an envelope nobody can reconcile with its own
       // records; reading it as a shortfall of zero accepts a file whose two
       // halves contradict each other.
-      anomalies: uiLagExport(delivered, { total: 1 }),
+      anomalies: spanning(uiLagExport(delivered, { total: 1 })),
       startUtc: WINDOW_START,
       sourceRun: 'golden',
       capture: { ...CAPTURE_METADATA },
@@ -844,7 +882,7 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
     const torn = `${(recorded[1] as string).slice(0, 40)}\n`;
     const built = capture?.buildProof({
       timingLog: golden + torn,
-      anomalies: uiLagExport([]),
+      anomalies: spanning(uiLagExport([])),
       startUtc: WINDOW_START,
       sourceRun: 'golden',
       capture: { ...CAPTURE_METADATA },
@@ -857,7 +895,7 @@ describe('W3 endpoint-latency proof — capture from a real daemon recording', (
   it('builds a proof whose window is exactly 24 h from the recorded rows', () => {
     const built = capture?.buildProof({
       timingLog: golden,
-      anomalies: uiLagExport([]),
+      anomalies: spanning(uiLagExport([])),
       startUtc: WINDOW_START,
       sourceRun: 'golden',
       capture: {
@@ -894,7 +932,9 @@ describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotat
       return (
         capture?.buildProof({
           timingLog: golden,
-          anomalies: polls,
+          // Bracketed at the window's edges (see `toPolls`) so every case here
+          // measures the sequence-range reconciliation alone, not poll coverage.
+          anomalies: toPolls(polls),
           startUtc: WINDOW_START,
           sourceRun: 'golden',
           capture: { ...CAPTURE_METADATA },
@@ -909,7 +949,7 @@ describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotat
   function buildOrThrow(polls: readonly ListAnomaliesResponse[]): Proof | undefined {
     return capture?.buildProof({
       timingLog: golden,
-      anomalies: polls,
+      anomalies: toPolls(polls),
       startUtc: WINDOW_START,
       sourceRun: 'golden',
       capture: { ...CAPTURE_METADATA },
@@ -1005,17 +1045,39 @@ describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotat
 
   it('refuses polls whose sequence range runs backwards', () => {
     // A later answer ending below what an earlier one already read means the
-    // numbers restarted — the polls were handed over out of order, or the log was
-    // cleared between them. Either way the ranges on the two sides of the seam
-    // count different runs of the same numbers, so a gap across it would be named
-    // in figures that mean two things. Refused rather than reconciled.
+    // polls were handed over out of order. `clear()` (apps/daemon/src/
+    // anomaly-log.ts) no longer restarts numbering at 1 — it persists a floor
+    // and keeps counting up — so a sound daemon cannot produce this by being
+    // cleared; only a genuinely out-of-order or corrupted poll sequence can.
     const before = uiLagExport([lagAt(50, 5), lagAt(60, 6)]);
     const afterReset = uiLagExport([lagAt(70, 1), lagAt(80, 2)]);
 
     expect(
       () => buildOrThrow([before, afterReset]),
       why('a sequence that goes backwards is not a sequence anyone can reconcile'),
-    ).toThrow(/out of order, or the log was cleared/);
+    ).toThrow(/out of order/);
+  });
+
+  it('catches a gap that spans a clear, now that a cleared log never reuses a sequence', () => {
+    // Before the fix, `clear()` reset numbering to 1, which could make records
+    // written and lost in the new epoch invisible to this reconciliation (Sol
+    // r1 HIGH finding, anomaly-log.ts:375). The fix removes the reset
+    // entirely: a poll taken after a clear is just an ordinary continuation
+    // from a persisted floor, not a new epoch, so the EXISTING overlap check
+    // below catches a rotation loss that happens to span a clear exactly as it
+    // would for any other rotation — no epoch-aware logic is needed here.
+    const before = uiLagExport([1, 2, 3, 4, 5].map((seq) => lagAt(seq * 10, seq)));
+    // The clear's floor was 5; the daemon continues at 6, and 6..10 roll away
+    // before the next poll, which only retains 11..15.
+    const after = uiLagExport(
+      [11, 12, 13, 14, 15].map((seq) => lagAt(seq * 10, seq)),
+      { generations: 2 },
+    );
+
+    expect(
+      gapRanges(buildFromPolls([before, after])),
+      why('records 6..10 rolled away in the continuation after the clear'),
+    ).toEqual(['6..10']);
   });
 
   it('refuses a ui-lag export that carries no sequence range at all', () => {
@@ -1033,5 +1095,105 @@ describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotat
       () => buildOrThrow([unnumbered]),
       why('an export with no sequence range cannot be reconciled across a rotation'),
     ).toThrow(/sequence range/);
+  });
+
+  it('refuses a non-empty export whose null range hides legacy pre-sequence records', () => {
+    // `seq` is optional (packages/contracts/src/api/anomalies.ts:81) precisely
+    // because records written before the daemon started stamping it carry
+    // none. `storedSequence` returns null for every one of them, so
+    // `firstSeq`/`lastSeq` come back null even though the log is not empty —
+    // indistinguishable, on the null range alone, from "the log holds
+    // nothing" (Sol r1 MEDIUM finding, w3-performance-capture.ts:419).
+    const legacyAt = new Date(Date.parse(WINDOW_START) + 5 * 60_000).toISOString();
+    const legacyRecord = uiLagRecord(legacyAt, 1_500);
+    const legacyExport = {
+      anomalies: [legacyRecord],
+      total: 1,
+      path: '/dev/null',
+      firstSeq: null,
+      lastSeq: null,
+      generations: 1,
+    } as ListAnomaliesResponse;
+
+    expect(
+      () => buildOrThrow([legacyExport]),
+      why('a non-empty null-range export cannot be waved through as an empty log'),
+    ).toThrow(/legacy records/);
+  });
+});
+
+describe('W3 endpoint-latency proof — ui-lag poll coverage', () => {
+  /** A `ui-lag` record inside the pinned window, numbered as the daemon numbers it. */
+  function lagAt(minutes: number, seq: number, durationMs = 1_200): AnomalyRecord {
+    const at = new Date(Date.parse(WINDOW_START) + minutes * 60_000).toISOString();
+    return uiLagRecord(at, durationMs, seq);
+  }
+
+  function pollAt(atUtc: string, response: ListAnomaliesResponse): CaptureModule.W3UiLagPoll {
+    return { atUtc, response };
+  }
+
+  function buildWithPolls(polls: readonly CaptureModule.W3UiLagPoll[]): Proof | undefined {
+    return capture?.buildProof({
+      timingLog: golden,
+      anomalies: polls,
+      startUtc: WINDOW_START,
+      sourceRun: 'golden',
+      capture: { ...CAPTURE_METADATA },
+    });
+  }
+
+  it('refuses a single late poll even when its retained range looks continuous', () => {
+    // The exact censoring shape the finding names (Sol r1 HIGH finding,
+    // w3-performance-capture.ts:297,401): one export taken near the window's
+    // close, whose range has nothing before it to disagree with — on sequence
+    // numbers alone this is indistinguishable from a log nobody had ever used.
+    // Records 1..99 may already have rotated away before this poll ever ran.
+    const lateHour = new Date(Date.parse(WINDOW_START) + 23 * 3_600_000).toISOString();
+    const late = uiLagExport([lagAt(23 * 60, 200)], { firstSeq: 100, lastSeq: 200, generations: 2 });
+
+    expect(
+      () => buildWithPolls([pollAt(lateHour, late)]),
+      why('a single poll cannot prove the window was watched from open to close'),
+    ).toThrow(/only one ui-lag poll/);
+  });
+
+  it('refuses zero ui-lag polls', () => {
+    expect(
+      () => buildWithPolls([]),
+      why('a capture with no observation cannot be judged for INV-3.10'),
+    ).toThrow(/no ui-lag polls/);
+  });
+
+  it('refuses polls that never reach the window close', () => {
+    const secondHour = new Date(Date.parse(WINDOW_START) + 2 * 3_600_000).toISOString();
+    const first = pollAt(WINDOW_START, uiLagExport([]));
+    const second = pollAt(secondHour, uiLagExport([]));
+
+    expect(
+      () => buildWithPolls([first, second]),
+      why('polls that stop hours before the window closes leave the tail unwatched'),
+    ).toThrow(/before the window closed/);
+  });
+
+  it('refuses polls that never reach the window open', () => {
+    const lateStart = new Date(Date.parse(WINDOW_START) + 2 * 3_600_000).toISOString();
+    const first = pollAt(lateStart, uiLagExport([]));
+    const second = pollAt(WINDOW_END, uiLagExport([]));
+
+    expect(
+      () => buildWithPolls([first, second]),
+      why('polls that start hours after the window opens leave the head unwatched'),
+    ).toThrow(/after the window opened/);
+  });
+
+  it('accepts polls that bracket the window even when only two were taken', () => {
+    const first = pollAt(WINDOW_START, uiLagExport([]));
+    const second = pollAt(WINDOW_END, uiLagExport([]));
+
+    expect(
+      () => buildWithPolls([first, second]),
+      why('two polls bracketing the window is the minimum sound case'),
+    ).not.toThrow();
   });
 });

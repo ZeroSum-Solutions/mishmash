@@ -14,20 +14,23 @@
 // The long-task half is POLLED, not read once at the end. The anomaly log is
 // size-capped and keeps one previous generation, so a 24 h window can roll it
 // past what it retains; poll it through the window with each --since reaching
-// back before the previous answer ended, and append every envelope to one JSON
-// array:
+// back before the previous answer ended, and append each poll — paired with
+// the moment it ran — to one JSON array:
 //
-//   od anomalies --kind ui-lag --since <before the last answer ended> --json
+//   { "atUtc": "<when this poll ran>", "response": <`od anomalies --kind ui-lag --json` output> }
 //
 // reconcileUiLagExports then merges those answers, and refuses the window when
 // two consecutive polls do not overlap: the records between them left the log
-// unread, and no single answer can show it.
+// unread, and no single answer can show it. checkPollCoverage separately
+// refuses a poll set whose OWN timestamps never reach both ends of the window
+// — at least one poll at or before it opens and one at or after it closes —
+// so a single late poll, or an empty one, cannot stand in for the whole 24 h.
 //
 // Run it after the capture window closes:
 //
 //   pnpm exec tsx lib/w3-performance-capture.ts \
 //     --timing-log <data root>/request-timing/requests.jsonl \
-//     --anomalies <one ui-lag export, or a JSON array of the polled exports> \
+//     --anomalies <a JSON array of timestamped ui-lag polls> \
 //     --start 2026-09-06T09:00:00.000Z \
 //     --source-run w3-24h-1 --daemon-sha <sha> --runtime "<machine>" \
 //     --workload "<what was being done>" --open-tabs 2 \
@@ -294,24 +297,90 @@ export function readUiLag(records: readonly AnomalyRecord[], window: W3Interval)
   return { samples, unmeasurable, recordsRead };
 }
 
+export interface W3UiLagPoll {
+  /**
+   * When this export was taken — the poller's own clock, not any timestamp
+   * inside the export.
+   *
+   * Why it is required: `reconcileUiLagExports` can only see whether
+   * consecutive polls' retained sequence ranges touch. It has no way to tell a
+   * poll taken once, late in the window, whose range simply has nothing
+   * earlier to disagree with, from a poll that genuinely started at the
+   * window's open — both look identical on sequence numbers alone (see "does
+   * not read a first poll that starts above one as a gap" in the tests). That
+   * distinction lives in when each poll ran, which `checkPollCoverage` checks
+   * below.
+   */
+  atUtc: string;
+  response: ListAnomaliesResponse;
+}
+
 export interface BuildProofInput {
   timingLog: string;
   /**
-   * The ui-lag export, or the ordered sequence of exports the capture polled.
+   * Every ui-lag export the capture polled, oldest first, each paired with
+   * when it was taken.
    *
    * A 24 h window outlives the anomaly log's size cap, so one export cannot be
    * the whole answer: the operator polls `od anomalies --kind ui-lag --json
-   * --since <before the previous answer ended>` and appends each envelope to
-   * this file. Ordered oldest poll first — the reconciliation below reads the
-   * order as the order they were taken in.
+   * --since <before the previous answer ended>` and appends each poll,
+   * timestamped, to this file. `buildProof` refuses the window outright unless
+   * the earliest poll reaches back to (or before) `startUtc` and the latest
+   * reaches (or past) the 24 h mark after it — see `checkPollCoverage`.
    */
-  anomalies: ListAnomaliesResponse | readonly ListAnomaliesResponse[];
+  anomalies: readonly W3UiLagPoll[];
   /** Start of the pinned window; the end is fixed 24 h later. */
   startUtc: string;
   sourceRun: string;
   capture: Omit<W3CaptureMetadata, 'normalizationKey'>;
   /** Stretches with no observer, e.g. a daemon restart. Empty means continuous. */
   gaps?: W3Interval[];
+}
+
+/**
+ * The polls themselves must prove the window was watched from open to close.
+ *
+ * `reconcileUiLagExports` reconciles the polls it is handed; it cannot refuse
+ * a poll set that never reached one end of the window, because a single late
+ * poll whose range starts above 1 is indistinguishable, on sequence numbers
+ * alone, from the first poll ever taken against an established log. What must
+ * additionally hold, checked here on the polls' own observation times: at
+ * least one poll at or before the window opens, at least one at or after it
+ * closes, and therefore at least two polls — one moment cannot be both.
+ */
+function checkPollCoverage(polls: readonly W3UiLagPoll[], window: W3Interval): void {
+  if (polls.length === 0) {
+    throw new Error(
+      'no ui-lag polls were supplied; a window with no recorded observation cannot be judged for INV-3.10',
+    );
+  }
+  if (polls.length === 1) {
+    throw new Error(
+      'only one ui-lag poll was supplied; a single poll cannot prove the window was watched continuously '
+      + 'from open to close — poll at or before the window opens and again at or after it closes',
+    );
+  }
+  const start = Date.parse(window.startUtc);
+  const end = Date.parse(window.endUtc);
+  const times = polls.map((poll) => Date.parse(poll.atUtc));
+  if (times.some((time) => !Number.isFinite(time))) {
+    throw new Error('a ui-lag poll carries an unparseable atUtc; its place in the window cannot be checked');
+  }
+  const earliest = Math.min(...times);
+  const latest = Math.max(...times);
+  if (earliest > start) {
+    throw new Error(
+      `the earliest ui-lag poll ran at ${new Date(earliest).toISOString()}, after the window opened at `
+      + `${window.startUtc}; records that had already rotated out of the log before polling started would `
+      + 'be invisible to every poll after them',
+    );
+  }
+  if (latest < end) {
+    throw new Error(
+      `the last ui-lag poll ran at ${new Date(latest).toISOString()}, before the window closed at `
+      + `${window.endUtc}; records written after polling stopped would never be read`,
+    );
+  }
 }
 
 export function buildProof(input: BuildProofInput): W3EndpointLatencyProof {
@@ -323,10 +392,9 @@ export function buildProof(input: BuildProofInput): W3EndpointLatencyProof {
     gaps: input.gaps ?? [],
   };
   const timing = readTimingLog(input.timingLog, { window, sourceRun: input.sourceRun });
-  const polls = Array.isArray(input.anomalies)
-    ? (input.anomalies as readonly ListAnomaliesResponse[])
-    : [input.anomalies as ListAnomaliesResponse];
-  const reconciled = reconcileUiLagExports(polls);
+  const polls = input.anomalies;
+  const reconciled = reconcileUiLagExports(polls.map((poll) => poll.response));
+  checkPollCoverage(polls, window);
   const uiLag = readUiLag(reconciled.records, window);
   return {
     window,
@@ -424,25 +492,48 @@ export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): 
       );
     }
     // A log that retains nothing has nothing to reconcile against, and must not
-    // reset what earlier polls already proved was read.
+    // reset what earlier polls already proved was read. But a null range is
+    // only honest when the export really is empty: a legacy record written
+    // before the daemon stamped `seq` has no sequence at all, so `firstSeq`/
+    // `lastSeq` come back null even though `total` and the delivered array are
+    // not. Waving that through as "the log holds nothing" would let those
+    // records vanish from every check below rather than being refused.
     if (firstSeq == null || lastSeq == null) {
+      const trulyEmpty = poll?.total === 0 && (delivered?.length ?? 0) === 0;
+      if (!trulyEmpty) {
+        throw new Error(
+          `ui-lag export ${index + 1} of ${polls.length} declares no sequence range but is not empty `
+          + `(total ${poll?.total}, ${delivered?.length ?? 0} record(s) delivered); legacy records written `
+          + 'before the daemon numbered them cannot be reconciled across a rotation',
+        );
+      }
       polledBefore = true;
       return;
     }
     if (covered != null && lastSeq < covered) {
       throw new Error(
         `ui-lag export ${index + 1} of ${polls.length} ends at sequence ${lastSeq}, below the `
-        + `${covered} an earlier poll had already read; the polls are out of order, or the log `
-        + 'was cleared between them and its numbering restarted',
+        + `${covered} an earlier poll had already read; the polls were handed over out of order `
+        // `clear()` (apps/daemon/src/anomaly-log.ts) persists a floor and keeps
+        // counting up rather than restarting at 1, so a sound daemon can no
+        // longer produce this by being cleared — a genuine daemon's numbers
+        // only run backwards when the polls themselves are out of sequence.
+        + 'for reconciliation',
       );
     }
     if (covered == null && polledBefore && firstSeq > 1) {
-      // An earlier poll found the log holding nothing, and an emptied log
-      // restarts its sequence at 1 (`clear()` in apps/daemon/src/anomaly-log.ts).
-      // So every record below this one was written after that poll — inside the
-      // window — and had already left the log by the time anybody asked for it.
-      // Without this the loss is invisible: the first poll read nothing, so
-      // there is no `covered` for the ordinary check to compare against.
+      // An earlier poll found the log holding nothing. That is certain only for
+      // a log that has never held ANY record: `clear()` (apps/daemon/src/
+      // anomaly-log.ts) persists a floor and keeps counting up rather than
+      // restarting at 1, so a poll taken while a just-cleared log is still idle
+      // reports "empty" here exactly like a virgin log — the envelope alone
+      // cannot tell the two apart. On a virgin log every record below
+      // `firstSeq` really was written and lost inside the window; on a
+      // post-clear idle log with a nonzero floor this also flags numbers below
+      // that floor that were never part of this window at all. Refusing is the
+      // safe direction for a measurement-integrity check, so this stays a known
+      // conservative edge rather than a case this module tries to resolve
+      // without seeing the floor itself.
       gaps.push({ fromSeq: 1, toSeq: firstSeq - 1 });
     }
     if (covered != null && firstSeq > covered + 1) {
@@ -490,8 +581,7 @@ export async function runCapture(argv: readonly string[]): Promise<string> {
   const cachePolicy = requestedCachePolicy as W3CachePolicy;
   const proof = buildProof({
     timingLog: await readFile(required(argv, 'timing-log'), 'utf8'),
-    anomalies: JSON.parse(await readFile(required(argv, 'anomalies'), 'utf8')) as
-      ListAnomaliesResponse | ListAnomaliesResponse[],
+    anomalies: JSON.parse(await readFile(required(argv, 'anomalies'), 'utf8')) as W3UiLagPoll[],
     startUtc: required(argv, 'start'),
     sourceRun: required(argv, 'source-run'),
     capture: {
