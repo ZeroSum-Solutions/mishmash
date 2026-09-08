@@ -249,7 +249,7 @@ describe('FileViewer image export', () => {
     await clickSave();
 
     await waitFor(() => {
-      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(activeFrame, 1500, undefined);
+      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(activeFrame, 1500, undefined, expect.any(Function));
       expect(imageDataUrlToBlobMock).toHaveBeenCalledWith('data:image/png;base64,ok', 'jpeg');
       expect(prepareImageExportTargetMock).toHaveBeenCalledWith('workspace', 'jpeg', { useNativePicker: false });
     });
@@ -300,8 +300,8 @@ describe('FileViewer image export', () => {
     await clickSave();
 
     await waitFor(() => {
-      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(srcDocFrame, 1500, undefined);
-      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(srcDocFrame, 3000, undefined);
+      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(srcDocFrame, 1500, undefined, expect.any(Function));
+      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(srcDocFrame, 3000, undefined, expect.any(Function));
       expect(imageDataUrlToBlobMock).toHaveBeenCalledWith('data:image/png;base64,recovered', 'png');
     }, { timeout: 4000 });
   });
@@ -325,10 +325,10 @@ describe('FileViewer image export', () => {
     await clickSave();
 
     await waitFor(() => {
-      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(activeFrame, 1500, undefined);
+      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(activeFrame, 1500, undefined, expect.any(Function));
       expect(imageDataUrlToBlobMock).toHaveBeenCalledWith('data:image/png;base64,visible', 'png');
     });
-    expect(requestPreviewSnapshotMock).not.toHaveBeenCalledWith(srcDocFrame, 1500, undefined);
+    expect(requestPreviewSnapshotMock).not.toHaveBeenCalledWith(srcDocFrame, 1500, undefined, expect.any(Function));
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -803,7 +803,23 @@ describe('FileViewer image export', () => {
     });
 
     it('reports one export-failed anomaly with CAPTURE_TIMEOUT when snapshot bridge times out', async () => {
-      requestPreviewSnapshotMock.mockRejectedValue(new Error('timeout'));
+      // The real bridge (`requestPreviewSnapshotResult` in runtime/exports.ts)
+      // never rejects: every branch, including its own 1.5/3/6s timeout,
+      // RESOLVES `{ ok: false, reason: 'timeout' }` and `requestPreviewSnapshot`
+      // reports that reason through its `onFailure` callback before resolving
+      // `null`. Mocking a rejection here would exercise a path production
+      // traffic can never take.
+      requestPreviewSnapshotMock.mockImplementation(
+        async (
+          _iframe: HTMLIFrameElement,
+          _timeout: number,
+          _options: unknown,
+          onFailure?: (failure: { reason: string; error?: string }) => void,
+        ) => {
+          onFailure?.({ reason: 'timeout' });
+          return null;
+        },
+      );
       prepareImageExportTargetMock.mockResolvedValueOnce({
         filename: 'workspace.png',
         method: 'picker',
@@ -835,7 +851,24 @@ describe('FileViewer image export', () => {
     });
 
     it('reports one export-failed anomaly with CAPTURE_EMPTY_RENDER when canvas paints blank', async () => {
-      requestPreviewSnapshotMock.mockRejectedValue(new Error('empty-render'));
+      // A blank foreignObject rasterization is caught by `canvasLooksBlank` in
+      // srcdoc.ts's captureSnapshot, which rejects the in-iframe promise with
+      // `new Error('empty-render')` — but that promise never crosses the
+      // postMessage boundary as a rejection. The host's `od:snapshot:result`
+      // handler serializes it to `{ error: 'empty-render' }` and
+      // `requestPreviewSnapshotResult` resolves `{ ok: false, reason:
+      // 'render-error', error: 'empty-render' }`, matching this mock.
+      requestPreviewSnapshotMock.mockImplementation(
+        async (
+          _iframe: HTMLIFrameElement,
+          _timeout: number,
+          _options: unknown,
+          onFailure?: (failure: { reason: string; error?: string }) => void,
+        ) => {
+          onFailure?.({ reason: 'render-error', error: 'empty-render' });
+          return null;
+        },
+      );
       prepareImageExportTargetMock.mockResolvedValueOnce({
         filename: 'workspace.png',
         method: 'picker',
@@ -910,10 +943,29 @@ describe('FileViewer image export', () => {
       expect(typeof report.detail?.durationMs).toBe('number');
     });
 
-    it('reports one export-failed anomaly with CAPTURE_TAINTED when snapshot bridge rejects with SecurityError', async () => {
-      const securityErr = new Error('The operation is insecure.');
-      securityErr.name = 'SecurityError';
-      requestPreviewSnapshotMock.mockRejectedValue(securityErr);
+    it('reports one export-failed anomaly with CAPTURE_TAINTED when the canvas is tainted', async () => {
+      // `canvas.toDataURL()` throws a real SecurityError inside the iframe
+      // (a cross-origin resource painted into the foreignObject taints the
+      // canvas), but the `.name` never survives the postMessage boundary —
+      // srcdoc.ts's message handler serializes only `err.message` to the
+      // host. The message text itself (Chromium's own wording) is what
+      // `exportErrorCode`'s `/tainted/i` check has to key on, so this mock
+      // resolves the same `{ reason: 'render-error', error: <message> }`
+      // shape the real bridge produces, not a rejection carrying `.name`.
+      requestPreviewSnapshotMock.mockImplementation(
+        async (
+          _iframe: HTMLIFrameElement,
+          _timeout: number,
+          _options: unknown,
+          onFailure?: (failure: { reason: string; error?: string }) => void,
+        ) => {
+          onFailure?.({
+            reason: 'render-error',
+            error: "Failed to execute 'toDataURL' on 'HTMLCanvasElement': Tainted canvases may not be exported.",
+          });
+          return null;
+        },
+      );
       prepareImageExportTargetMock.mockResolvedValueOnce({
         filename: 'workspace.png',
         method: 'picker',
