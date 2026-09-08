@@ -1294,8 +1294,31 @@ async function checkStylePolicy(): Promise<boolean> {
   return true;
 }
 
+function daemonFullTestsJobBlock(ciWorkflow: string): string | null {
+  const lines = ciWorkflow.split("\n");
+  const startIndex = lines.findIndex((line) => /^  daemon_full_tests:\s*$/.test(line));
+  if (startIndex === -1) return null;
+  const nextJobOffset = lines.slice(startIndex + 1).findIndex((line) => /^  [a-z_]+:\s*$/.test(line));
+  if (nextJobOffset === -1) {
+    return lines.slice(startIndex).join("\n");
+  }
+  return lines.slice(startIndex, startIndex + 1 + nextJobOffset).join("\n");
+}
+
 async function checkCiTopology(): Promise<boolean> {
   const ciWorkflow = await readFile(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8");
+  const daemonJob = daemonFullTestsJobBlock(ciWorkflow);
+  const daemonErrors = !daemonJob
+    ? [".github/workflows/ci.yml daemon_full_tests job block not found"]
+    : [
+        "name: Daemon full tests (${{ matrix.shard }}/4)",
+        "fail-fast: false",
+        "shard: [1, 2, 3, 4]",
+        "vitest run -c vitest.config.ts --shard ${{ matrix.shard }}/4",
+      ]
+        .filter((needle) => !daemonJob.includes(needle))
+        .map((needle) => `.github/workflows/ci.yml daemon_full_tests is missing ${needle}`);
+
   const errors = [
     ...validatePlaywrightSuiteTopology(),
     ...[
@@ -1313,6 +1336,7 @@ async function checkCiTopology(): Promise<boolean> {
     ]
       .filter((needle) => !ciWorkflow.includes(needle))
       .map((needle) => `.github/workflows/ci.yml is missing ${needle}`),
+    ...daemonErrors,
   ];
 
   if (errors.length > 0) {

@@ -10,7 +10,7 @@
 // literal words in the published name, and the licence) — never ranked or
 // recommended. AGENTS.md's Design authority section forbids this catalogue
 // from encoding a house aesthetic.
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Button } from '@open-design/components';
 import type { TypefaceDetail, TypefaceFace, TypefaceSummary } from '@open-design/contracts';
 import { fetchTypeface, fetchTypefaces, installTypefaceIntoProject, typefaceFaceUrl } from '../providers/typefaces';
@@ -320,7 +320,14 @@ function TypefaceRow({
   );
 }
 
-export function TypefacesSection() {
+// EntryShell keeps this view mounted behind `display: none` and renders it
+// inline, so every home-route switch re-renders the shell and reached in
+// here to reconcile every row (8-22 ms of work with ~90 families, no DOM
+// change). The section takes no props: memo stops the parent's render at
+// this boundary.
+export const TypefacesSection = memo(TypefacesSectionView);
+
+function TypefacesSectionView() {
   const t = useT();
   const [typefaces, setTypefaces] = useState<TypefaceSummary[]>([]);
   const [scannedFamilies, setScannedFamilies] = useState(0);

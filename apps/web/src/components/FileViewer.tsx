@@ -24,7 +24,12 @@ import {
 import { useAnalytics } from '../analytics/provider';
 import { exportErrorCode } from '../analytics/export-error-code';
 import { deployErrorCode } from '../analytics/deploy-error-code';
-import { reportPreviewDocumentErrorAnomaly } from '../observability/anomaly-report';
+import {
+  anomalyForImageExportFailure,
+  type ImageExportStage,
+  reportAnomaly,
+  reportPreviewDocumentErrorAnomaly,
+} from '../observability/anomaly-report';
 import { parsePreviewDocumentErrorReport } from '@open-design/contracts/runtime/preview-paint-report';
 import { trackPreviewPaint } from '../observability/iframe-error';
 import type { PreviewPaintState } from '../observability/iframe-error';
@@ -11493,11 +11498,13 @@ function HtmlViewer({
   const fireImageExportResult = (
     result: 'success' | 'failed' | 'cancelled',
     errorCode?: string,
+    stage?: ImageExportStage,
   ) => {
     if (imageExportResolvedRef.current) return;
     imageExportResolvedRef.current = true;
     const requestId = imageExportRequestIdRef.current ?? analytics.newRequestId();
     const started = imageExportStartedRef.current || performance.now();
+    const durationMs = Math.round(performance.now() - started);
     trackArtifactExportResult(
       analytics.track,
       {
@@ -11508,12 +11515,23 @@ function HtmlViewer({
         export_format: 'image',
         result,
         ...(errorCode ? { error_code: errorCode } : {}),
-        export_duration_ms: Math.round(performance.now() - started),
+        export_duration_ms: durationMs,
         project_id: projectId,
         project_kind: projectKind,
       },
       { requestId },
     );
+    if (result === 'failed') {
+      reportAnomaly(
+        anomalyForImageExportFailure({
+          fileName: file.name,
+          errorCode: errorCode ?? 'UNKNOWN',
+          stage,
+          projectId,
+          durationMs,
+        }),
+      );
+    }
     // Onboarding first-loop 交付 step (spec §8.3): only a SUCCESSFUL image
     // export closes the loop. Project-scoped no-op unless started from Home.
     if (result === 'success') recordFirstLoopStep(analytics.track, 'delivered', projectId);
@@ -11537,6 +11555,7 @@ function HtmlViewer({
     // it either way).
     await waitForAnimationFrame();
     await waitForAnimationFrame();
+    let stage: ImageExportStage = 'capture';
     try {
       const context = imageExportContext;
       const targetTitle = context?.title ?? exportTitle;
@@ -11558,18 +11577,20 @@ function HtmlViewer({
         });
         if (!snap) {
           setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
-          fireImageExportResult('failed', 'CAPTURE_FAILED');
+          fireImageExportResult('failed', 'CAPTURE_FAILED', 'capture');
           return;
         }
         dataUrl = snap.dataUrl;
         imageExportSnapshotDataUrlRef.current = dataUrl;
       }
+      stage = 'encode';
       const blob = await imageDataUrlToBlob(dataUrl, imageExportFormat);
       if (blob.size <= 0) {
         setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
-        fireImageExportResult('failed', 'EMPTY_IMAGE');
+        fireImageExportResult('failed', 'EMPTY_IMAGE', 'encode');
         return;
       }
+      stage = 'target';
       const target = await prepareImageExportTarget(targetTitle, imageExportFormat, { useNativePicker: false });
       if (!target) {
         // User dismissed the save picker — clear the loading toast.
@@ -11577,6 +11598,7 @@ function HtmlViewer({
         fireImageExportResult('cancelled');
         return;
       }
+      stage = 'save';
       if (target.method === 'download' && imageExportFormat === 'png' && dataUrl) {
         downloadImageDataUrl(dataUrl, target.filename);
       } else {
@@ -11594,7 +11616,7 @@ function HtmlViewer({
       console.warn('[exportAsImage] failed to save snapshot:', err);
       const message = err instanceof Error && err.message ? err.message : t('fileViewer.exportImageFailed');
       setExportToast({ message, tone: 'error' });
-      fireImageExportResult('failed', exportErrorCode(err));
+      fireImageExportResult('failed', exportErrorCode(err), stage);
     } finally {
       imageExportInFlightRef.current = false;
     }
