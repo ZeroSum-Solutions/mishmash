@@ -6,18 +6,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ANOMALY_LOG_MAX_BYTES, createAnomalyLog } from '../src/anomaly-log.js';
 
-// Controllable only for the atomicity test below, which needs to pause one
+// Controllable only for the atomicity test below. `readFileMock` pauses one
 // specific `readFile` call mid-flight to force a rotation into the window
-// between the log's two generation reads. Every other test's `readFile`
-// calls — including the ones this file makes directly — pass straight
-// through, so this mock is invisible to them.
+// between the log's two generation reads; `renameMock` reports when a
+// concurrent rotation's `rename` has actually landed on disk, which is what
+// lets that test tell a real interleave apart from a queued append that
+// simply has not run yet. Every other test's calls — including the ones this
+// file makes directly — pass straight through, so both mocks are invisible
+// to them.
 const readFileMock = vi.fn();
+const renameMock = vi.fn();
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   return {
     ...actual,
     readFile: (...args: unknown[]) => readFileMock(...args),
+    rename: (...args: unknown[]) => renameMock(...args),
   };
 });
 
@@ -28,6 +33,8 @@ beforeEach(async () => {
   const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
   readFileMock.mockImplementation((...args: unknown[]) =>
     (actual.readFile as (...a: unknown[]) => Promise<string>)(...args));
+  renameMock.mockImplementation((...args: unknown[]) =>
+    (actual.rename as (...a: unknown[]) => Promise<void>)(...args));
 });
 
 afterEach(async () => {
@@ -323,6 +330,16 @@ describe('anomaly log', () => {
       return (actual.readFile as (...a: unknown[]) => Promise<string>)(...args);
     });
 
+    let resolveRenameHappened: (() => void) | null = null;
+    const renameHappenedPromise = new Promise<void>((resolve) => {
+      resolveRenameHappened = resolve;
+    });
+    renameMock.mockImplementation(async (...args: unknown[]) => {
+      const result = await (actual.rename as (...a: unknown[]) => Promise<void>)(...args);
+      resolveRenameHappened?.();
+      return result;
+    });
+
     const listPromise = log.list({});
     await vi.waitFor(() => {
       if (!pausedOnce) throw new Error('list() has not reached the paused read yet');
@@ -332,6 +349,21 @@ describe('anomaly log', () => {
     // into the paused window, racing the in-flight two-generation read.
     await fillPastCap(log.path);
     const appendPromise = log.append({ kind: 'ui-lag', severity: 'warn', summary: 'concurrent' }, 'web');
+
+    // Whether the fix holds turns on WHEN this rotation actually reaches disk
+    // relative to the paused read, not on how quickly it is scheduled — an
+    // unserialised bug lets it complete almost immediately, while the fix
+    // holds it queued behind the still-in-flight list(). Racing against a
+    // short timeout distinguishes the two deterministically instead of
+    // guessing how many microtask ticks a real rename takes: on the buggy
+    // path the rename wins the race; on the fixed path nothing before the
+    // timeout can make it happen, because it has not even started.
+    await Promise.race([
+      renameHappenedPromise,
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, 100);
+      }),
+    ]);
 
     releaseCurrentRead?.();
     const firstResult = await listPromise;
