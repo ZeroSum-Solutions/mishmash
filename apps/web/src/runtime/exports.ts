@@ -390,6 +390,13 @@ export type PreviewSnapshotResult =
   | { ok: true; snapshot: PreviewSnapshot }
   | { ok: false; reason: 'loading' | 'post-message-error' | 'render-error' | 'timeout'; error?: string };
 
+// The failure half of `PreviewSnapshotResult`, without the `ok` discriminant —
+// what `requestPreviewSnapshot` hands to `onFailure` when it collapses a
+// failed result to `null` for its historical two-value callers, so a caller
+// that DOES care why (e.g. classifying an image-export capture failure) does
+// not have to re-derive the bridge's own reason from nothing.
+export type PreviewSnapshotFailure = Omit<Extract<PreviewSnapshotResult, { ok: false }>, 'ok'>;
+
 export function requestPreviewSnapshotResult(
   iframe: HTMLIFrameElement,
   timeout = 8000,
@@ -439,9 +446,16 @@ export async function requestPreviewSnapshot(
   iframe: HTMLIFrameElement,
   timeout = 8000,
   options: PreviewSnapshotOptions = {},
+  // Optional so every pre-existing caller (PreviewModal, PreviewDrawOverlay)
+  // keeps its exact two-value `PreviewSnapshot | null` contract untouched. A
+  // caller that needs to know WHY a capture failed (not just that it did)
+  // passes this instead of re-deriving the reason from a `null`.
+  onFailure?: (failure: PreviewSnapshotFailure) => void,
 ): Promise<PreviewSnapshot | null> {
   const result = await requestPreviewSnapshotResult(iframe, timeout, options);
-  return result.ok ? result.snapshot : null;
+  if (result.ok) return result.snapshot;
+  onFailure?.({ reason: result.reason, error: result.error });
+  return null;
 }
 
 /**
