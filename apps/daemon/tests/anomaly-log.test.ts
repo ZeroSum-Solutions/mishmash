@@ -2,14 +2,32 @@ import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ANOMALY_LOG_MAX_BYTES, createAnomalyLog } from '../src/anomaly-log.js';
+
+// Controllable only for the atomicity test below, which needs to pause one
+// specific `readFile` call mid-flight to force a rotation into the window
+// between the log's two generation reads. Every other test's `readFile`
+// calls — including the ones this file makes directly — pass straight
+// through, so this mock is invisible to them.
+const readFileMock = vi.fn();
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    ...actual,
+    readFile: (...args: unknown[]) => readFileMock(...args),
+  };
+});
 
 let dataDir = '';
 
 beforeEach(async () => {
   dataDir = await mkdtemp(join(tmpdir(), 'od-anomaly-log-'));
+  const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+  readFileMock.mockImplementation((...args: unknown[]) =>
+    (actual.readFile as (...a: unknown[]) => Promise<string>)(...args));
 });
 
 afterEach(async () => {
@@ -245,7 +263,7 @@ describe('anomaly log', () => {
     expect(result.anomalies).toEqual([]);
   });
 
-  it('restarts the sequence after a clear, so an empty log always means seq 1 next', async () => {
+  it('continues the sequence after a clear, so a cleared log never reuses a number', async () => {
     const log = createAnomalyLog({ dataDir });
     await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'one' }, 'web');
     await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'two' }, 'web');
@@ -253,14 +271,88 @@ describe('anomaly log', () => {
     await log.clear();
     await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'after the clear' }, 'web');
 
-    // Nothing survives a clear for the next record to be monotonic against, and
-    // a reader needs "the log is empty" and "the next record is seq 1" to be the
-    // same statement: it is what lets a later answer starting above 1 be read as
-    // records that were written and lost.
+    // A poller that already read seq 1..2 before the clear has to be able to
+    // tell "the log was cleared and rebuilt" from "the log reset and reused
+    // seq 1" — which only holds if the next number after a clear is never one
+    // an earlier poll already read. Resetting to 1 here is exactly the defect:
+    // it would make this record indistinguishable, on sequence alone, from
+    // the original 'one'.
     const { anomalies, firstSeq, lastSeq } = await log.list({});
-    expect(anomalies.map((a) => a.seq)).toEqual([1]);
-    expect(firstSeq).toBe(1);
-    expect(lastSeq).toBe(1);
+    expect(anomalies.map((a) => a.seq)).toEqual([3]);
+    expect(firstSeq).toBe(3);
+    expect(lastSeq).toBe(3);
+  });
+
+  it('keeps the post-clear floor durable across a restart, so a new process cannot reuse a number either', async () => {
+    const first = createAnomalyLog({ dataDir });
+    await first.append({ kind: 'ui-lag', severity: 'warn', summary: 'one' }, 'web');
+    await first.append({ kind: 'ui-lag', severity: 'warn', summary: 'two' }, 'web');
+    await first.clear();
+
+    // The floor lives outside the two generations `clear()` erases, so a new
+    // daemon process reading the same data root recovers it from disk rather
+    // than from this process's memory — the only way the promise survives a
+    // restart between the clear and the next append.
+    const restarted = createAnomalyLog({ dataDir });
+    await restarted.append({ kind: 'ui-lag', severity: 'warn', summary: 'after restart' }, 'web');
+
+    expect((await restarted.list({})).anomalies.map((a) => a.seq)).toEqual([3]);
+  });
+
+  it('reads both generations as one atomic snapshot, so a rotation squeezed in between cannot omit or duplicate a record', async () => {
+    const log = createAnomalyLog({ dataDir });
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'retained' }, 'web');
+    await fillPastCap(log.path);
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'current' }, 'web');
+
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    let releaseCurrentRead: (() => void) | null = null;
+    let pausedOnce = false;
+    readFileMock.mockImplementation(async (...args: unknown[]) => {
+      const [target] = args as [unknown];
+      if (target === log.path && !pausedOnce) {
+        pausedOnce = true;
+        // Pauses exactly where the finding names: after the retained-generation
+        // read has already been issued (`Promise.all` fires both together) and
+        // before the current-generation read returns, which is the window a
+        // concurrent rotation could previously slide into.
+        await new Promise<void>((resolve) => {
+          releaseCurrentRead = resolve;
+        });
+      }
+      return (actual.readFile as (...a: unknown[]) => Promise<string>)(...args);
+    });
+
+    const listPromise = log.list({});
+    await vi.waitFor(() => {
+      if (!pausedOnce) throw new Error('list() has not reached the paused read yet');
+    });
+
+    // The concurrent writer the finding describes: a second rotation squeezed
+    // into the paused window, racing the in-flight two-generation read.
+    await fillPastCap(log.path);
+    const appendPromise = log.append({ kind: 'ui-lag', severity: 'warn', summary: 'concurrent' }, 'web');
+
+    releaseCurrentRead?.();
+    const firstResult = await listPromise;
+    await appendPromise;
+
+    // Before the fix this either omits 'current' (the paused read returns
+    // 'concurrent' instead, once the rotation has already replaced the file
+    // out from under it) or, on the reverse race, returns it twice. Serialising
+    // the read behind the same chain append/rotate already uses means list()
+    // now runs entirely before the concurrent append or entirely after it.
+    expect(firstResult.anomalies.map((a) => a.summary).sort()).toEqual(['current', 'retained']);
+    expect(new Set(firstResult.anomalies.map((a) => a.id)).size).toBe(2);
+
+    // Once the queued append finally runs, its rotation is visible on its own
+    // terms: 'retained' has genuinely rolled off (only one previous generation
+    // is kept — an accepted limit, not the atomicity bug), and each live
+    // record is counted exactly once.
+    const secondResult = await log.list({});
+    expect(secondResult.total).toBe(2);
+    expect(secondResult.anomalies.map((a) => a.summary).sort()).toEqual(['concurrent', 'current']);
+    expect(new Set(secondResult.anomalies.map((a) => a.id)).size).toBe(2);
   });
 
   it('clears the log and reports how many records went away', async () => {
