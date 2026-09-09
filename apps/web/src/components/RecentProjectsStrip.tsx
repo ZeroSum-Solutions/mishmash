@@ -66,10 +66,19 @@ export function RecentProjectsStrip({
   useEffect(() => {
     if (limit !== undefined) return;
 
+    // Invariant: a 0-width row read must never change the limit. EntryShell
+    // keeps every inactive tab mounted behind `display:none`
+    // (inactiveViewProps) instead of unmounting it, so this row's principal
+    // box stops existing while Home is inactive -- the ResizeObserver below
+    // (and the window-resize fallback) still fires on that transition, and
+    // the read comes back 0x0. Treating a 0-width read as "narrow" flipped
+    // responsiveLimit on every activation/deactivation, which changed
+    // `recent`'s identity and re-fired the cover-fetch Promise.all further
+    // down for no visible reason (FU-49). A real narrow layout is never
+    // exactly 0px, so skipping 0 costs nothing on a genuinely visible row.
     const update = () => {
       const rowWidth = rowRef.current?.getBoundingClientRect().width;
-      if (rowWidth === undefined) {
-        setResponsiveLimit(DEFAULT_RECENT_PROJECT_LIMIT);
+      if (rowWidth === undefined || rowWidth === 0) {
         return;
       }
       setResponsiveLimit(
