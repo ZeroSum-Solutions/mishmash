@@ -184,6 +184,7 @@ export const en: Dict = {
   'library.composer.generate': 'Generate',
   'library.composer.generating': 'Generating…',
   'library.composer.error': 'Could not generate that image. Try again.',
+  'mediaTask.cancel': 'Cancel',
   'common.save': 'Save',
   'common.close': 'Close',
   'common.clear': 'Clear',

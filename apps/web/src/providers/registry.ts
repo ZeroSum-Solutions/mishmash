@@ -26,6 +26,8 @@ import type {
   SocialShareResponse,
 } from '@open-design/contracts';
 import { parseAgentRegistrySseEvent } from '@open-design/contracts';
+import type { MediaTaskListResponse } from '@open-design/contracts';
+import { isMediaTaskListResponse, isMediaTaskSnapshot } from '@open-design/contracts';
 import type {
   AgentInfo,
   AppVersionInfo,
@@ -3847,6 +3849,7 @@ export interface MediaTaskSnapshot {
   status: 'running' | 'done' | 'failed' | 'interrupted';
   nextSince?: number;
   progress?: string[];
+  fraction?: number;
   file?: { name?: string; size?: number; mime?: string };
   error?: { message?: string };
 }
@@ -3858,6 +3861,11 @@ export interface MediaTaskSnapshot {
  * there was no browser-side poll helper to reuse — this is deliberately a
  * thin mirror of the CLI's pollUntilDoneOrBudget (apps/daemon/src/cli.ts),
  * minus the process.exit calls a browser has no equivalent for.
+ *
+ * DEF-7.3 fix: the daemon's response is validated through the
+ * contracts-owned {@link isMediaTaskSnapshot} guard before it is trusted —
+ * a malformed body (missing `taskId`/`status`) rejects instead of being
+ * returned to the caller unchanged.
  */
 export async function waitForMediaTask(
   taskId: string,
@@ -3883,13 +3891,43 @@ export async function waitForMediaTask(
     if (!resp.ok) {
       return { status: 'failed', error: { message: await readStoryboardApiError(resp) } };
     }
-    const snap = (await resp.json()) as MediaTaskSnapshot;
+    const rawBody: unknown = await resp.json();
+    if (!isMediaTaskSnapshot(rawBody)) {
+      throw new Error('malformed media task snapshot received from the daemon');
+    }
+    const snap = rawBody as MediaTaskSnapshot;
     last = snap;
     if (Array.isArray(snap.progress) && snap.progress.length > 0) options.onProgress?.(snap.progress);
     if (typeof snap.nextSince === 'number') since = snap.nextSince;
     if (snap.status === 'done' || snap.status === 'failed' || snap.status === 'interrupted') return snap;
   }
   return last;
+}
+
+/** Cancels a running media task (encode/download job or generate task). */
+export async function cancelMediaTask(taskId: string): Promise<{ ok: boolean }> {
+  try {
+    const resp = await fetch(`/api/media/tasks/${encodeURIComponent(taskId)}/cancel`, { method: 'POST' });
+    return { ok: resp.ok };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/** Lists a project's media tasks (the same contracts-owned snapshot shape as waitForMediaTask). */
+export async function listMediaTasks(
+  projectId: string,
+  options: { includeDone?: boolean } = {},
+): Promise<MediaTaskListResponse | null> {
+  try {
+    const qs = options.includeDone ? '?includeDone=1' : '';
+    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/media/tasks${qs}`);
+    if (!resp.ok) return null;
+    const body: unknown = await resp.json();
+    return isMediaTaskListResponse(body) ? body : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface GenerateProjectMediaRequest {

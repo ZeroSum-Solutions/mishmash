@@ -116,6 +116,13 @@ const residualAllowedExactPaths = new Set([
   // integration tests. The Vitest test spawns it via `child_process.spawn`,
   // which needs a directly-executable file (shebang + .mjs).
   "apps/daemon/tests/fixtures/fake-vela.mjs",
+  // Frozen fake ffmpeg/ffprobe stand-in used ONLY by
+  // apps/daemon/tests/media/jobs.test.ts (W7C, INV-7.6/7.13). The test
+  // points OD_MEDIA_JOB_FFMPEG_BIN/OD_MEDIA_JOB_FFPROBE_BIN at this file and
+  // the daemon's media/jobs.ts spawns it directly via child_process.spawn
+  // (through Node when the resolved binary path ends .mjs/.js/.cjs) — same
+  // directly-executable-via-Node precedent as fake-vela.mjs above.
+  "apps/daemon/tests/fixtures/w7-media/fake-ffmpeg.mjs",
   "tools/dev/bin/tools-dev.mjs",
   "tools/dev/esbuild.config.mjs",
   "tools/pack/bin/tools-pack.mjs",

@@ -21,7 +21,6 @@
 // output" without guessing a fixed name.
 
 import { randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
 import { readdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AssembleStoryboardFinishOptions, Storyboard, StoryboardShot } from '@open-design/contracts';
@@ -98,6 +97,21 @@ export function getDoneShots(storyboard: Storyboard): StoryboardShot[] {
   return [...storyboard.shots].sort((a, b) => a.order - b.order).filter((shot) => shot.status === 'done' && shot.output);
 }
 
+/**
+ * The concat finish mode's encode job, injected the same way
+ * resolveWithinProjectDirReal / assertSafeWriteTarget already are (W7C,
+ * INV-7.6) — runConcatAssemble no longer spawns ffmpeg itself, it hands the
+ * already-built concat list off to this runner, which is expected to run
+ * the encode as a visible/cancellable media task (see routes/storyboard.ts's
+ * construction of it) and resolve once the task reaches a terminal state.
+ * Optional so callers that never reach the concat encode step (e.g. the
+ * unsafe-write-target hygiene test) don't have to supply one.
+ */
+export type RunConcatEncodeJob = (input: { listFile: string; outputFile: string }) => Promise<
+  | { ok: true; taskId: string }
+  | { ok: false; taskId: string; error?: { code: string; message: string } | undefined }
+>;
+
 export interface AssembleStoryboardInput {
   storyboard: Storyboard;
   /** Absolute path to the storyboard-media project directory. */
@@ -107,10 +121,11 @@ export interface AssembleStoryboardInput {
   finish?: AssembleStoryboardFinishOptions;
   resolveWithinProjectDirReal: (projectDir: string, rel: unknown) => Promise<string | null>;
   assertSafeWriteTarget: (projectDir: string, absoluteTarget: string) => Promise<boolean>;
+  runEncodeJob?: RunConcatEncodeJob;
 }
 
 export type AssembleStoryboardOutcome =
-  | { ok: true; output: string; finish: 'concat' | 'remotion' }
+  | { ok: true; output: string; finish: 'concat' | 'remotion'; taskId?: string }
   | { ok: false; status: number; code: string; message: string };
 
 const FINISH_AUDIO_DATA_URL_RE = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,(.*)$/i;
@@ -197,41 +212,38 @@ async function runConcatAssemble(resolvedOutputs: string[], input: AssembleStory
   const listBody = resolvedOutputs.map((resolved) => `file '${resolved.replace(/'/g, "'\\''")}'`).join('\n');
   await writeFile(listFile, listBody, 'utf8');
 
+  if (!input.runEncodeJob) {
+    await rm(listFile, { force: true });
+    return {
+      ok: false,
+      status: 501,
+      code: 'INTERNAL_ERROR',
+      message: 'no encode job runner configured for the concat finish mode',
+    };
+  }
+
   try {
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outputFile]);
-      let stderr = '';
-      child.stderr?.on('data', (chunk) => {
-        stderr += String(chunk);
-      });
-      child.on('error', (err: NodeJS.ErrnoException) => {
-        if (err?.code === 'ENOENT') {
-          reject(Object.assign(new Error('ffmpeg-not-found'), { code: 'ENOENT' }));
-        } else {
-          reject(err);
-        }
-      });
-      child.on('close', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(stderr.trim() || `ffmpeg exited with code ${code}`));
-      });
-    });
-  } catch (err: unknown) {
-    const code = (err as NodeJS.ErrnoException)?.code;
-    if (code === 'ENOENT') {
+    const result = await input.runEncodeJob({ listFile, outputFile });
+    if (!result.ok) {
+      if (result.error?.code === 'FFMPEG_NOT_FOUND') {
+        return {
+          ok: false,
+          status: 501,
+          code: 'INTERNAL_ERROR',
+          message: 'ffmpeg not found on this machine. Install it (e.g. `brew install ffmpeg` on macOS) and retry.',
+        };
+      }
       return {
         ok: false,
-        status: 501,
+        status: 500,
         code: 'INTERNAL_ERROR',
-        message: 'ffmpeg not found on this machine. Install it (e.g. `brew install ffmpeg` on macOS) and retry.',
+        message: result.error?.message ?? 'concat encode job failed',
       };
     }
-    return { ok: false, status: 500, code: 'INTERNAL_ERROR', message: String(err instanceof Error ? err.message : err) };
+    return { ok: true, output: outputName, finish: 'concat', taskId: result.taskId };
   } finally {
     await rm(listFile, { force: true });
   }
-
-  return { ok: true, output: outputName, finish: 'concat' };
 }
 
 async function runRemotionAssemble(
