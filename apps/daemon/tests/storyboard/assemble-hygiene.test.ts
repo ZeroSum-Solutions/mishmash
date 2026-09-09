@@ -54,6 +54,48 @@ describe('storyboard assemble scratch and output hygiene', () => {
     );
   });
 
+  it('maps a saturated concurrency limit from the encode job runner to HTTP 429 (INV-7.14)', async () => {
+    const projectDir = path.join(tmpdir(), `od-assemble-limit-${Date.now()}-${Math.random()}`);
+    roots.push(projectDir);
+    await mkdir(projectDir, { recursive: true });
+
+    // Proves assemble.ts's half of the fix: a `LIMIT_EXCEEDED` from the
+    // injected encode job runner (the same shape routes/storyboard.ts's
+    // runConcatEncodeJob returns when activeMediaJobCount() is already
+    // saturated) maps to HTTP 429 with the same code, not the generic 500
+    // `INTERNAL_ERROR` every other runEncodeJob failure used to map to.
+    // The concurrency CHECK itself lives in routes/storyboard.ts's
+    // runConcatEncodeJob closure, which is wired to the real daemon route
+    // rather than called directly here — see 7C-prereview-r1-response.md
+    // finding 2 for why that specific check has no dedicated automated
+    // test in this branch's owned test files.
+    const outcome = await assembleStoryboard({
+      storyboard: {
+        id: 'storyboard-1',
+        shots: [{ id: 'shot-1', order: 0, status: 'done', output: 'shot-1.mp4' }],
+      } as Parameters<typeof assembleStoryboard>[0]['storyboard'],
+      projectDir,
+      runtimeDataDir: '/runtime',
+      resolveWithinProjectDirReal: async () => path.join(projectDir, 'shot-1.mp4'),
+      assertSafeWriteTarget: async () => true,
+      runEncodeJob: async () => ({
+        ok: false,
+        taskId: 'task-fixture',
+        error: {
+          code: 'LIMIT_EXCEEDED',
+          message: 'maxConcurrent limit reached: 2 (OD_MEDIA_JOB_MAX_CONCURRENT)',
+        },
+      }),
+    });
+
+    expect(outcome).toEqual({
+      ok: false,
+      status: 429,
+      code: 'LIMIT_EXCEEDED',
+      message: 'maxConcurrent limit reached: 2 (OD_MEDIA_JOB_MAX_CONCURRENT)',
+    });
+  });
+
   it('keeps the current output plus only the newest retained outputs for one storyboard', async () => {
     const projectDir = path.join(tmpdir(), `od-assemble-hygiene-${Date.now()}-${Math.random()}`);
     roots.push(projectDir);

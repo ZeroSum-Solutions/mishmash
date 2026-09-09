@@ -16,6 +16,12 @@ import { parseDesignSystemRenameArgs } from './design-systems/rename-args.js';
 import { runLiveArtifactsToolCli } from './tools-live-artifacts-cli.js';
 import { splitResearchSubcommand } from './research/cli-args.js';
 import { resolveDaemonUrl, DaemonUrlDiscoveryError } from './daemon-url.js';
+import {
+  resolveMediaJobLimits,
+  DEFAULT_MEDIA_JOB_MAX_DURATION_MS,
+  DEFAULT_MEDIA_JOB_MAX_OUTPUT_BYTES,
+  DEFAULT_MEDIA_JOB_MAX_CONCURRENT,
+} from './media/jobs.js';
 import { formatRunFailureSummary } from './run-failure-summary.js';
 import { completionNotice } from './cli-run-notice.js';
 import { requestJsonIpc } from '@open-design/sidecar';
@@ -92,6 +98,36 @@ const MEDIA_GENERATE_BOOLEAN_FLAGS = new Set([
   'help',
   'h',
   'loop',
+]);
+
+// Same TDZ reason as MEDIA_GENERATE_*_FLAGS above: `od media job|status|list|
+// cancel` (work item 3, INV-7.6/7.14) dispatches through the top-of-file
+// SUBCOMMAND_MAP[first](rest) during module evaluation.
+const MEDIA_JOB_STRING_FLAGS = new Set([
+  'project',
+  'preset',
+  'input',
+  'output',
+  'url',
+  'frames',
+  'scale',
+  'daemon-url',
+]);
+const MEDIA_JOB_BOOLEAN_FLAGS = new Set([
+  'help',
+  'h',
+  'json',
+  'overwrite',
+  'wait',
+]);
+const MEDIA_TASK_STRING_FLAGS = new Set([
+  'project',
+  'daemon-url',
+]);
+const MEDIA_TASK_BOOLEAN_FLAGS = new Set([
+  'help',
+  'h',
+  'json',
 ]);
 
 const MCP_STRING_FLAGS = new Set([
@@ -2231,7 +2267,8 @@ async function runMedia(args) {
     printMediaHelp();
     return;
   }
-  if (sub !== 'generate' && sub !== 'wait') {
+  const KNOWN_MEDIA_SUBCOMMANDS = new Set(['generate', 'wait', 'job', 'status', 'list', 'cancel']);
+  if (!KNOWN_MEDIA_SUBCOMMANDS.has(sub)) {
     console.error(`unknown subcommand: od media ${sub}`);
     printMediaHelp();
     process.exit(1);
@@ -2240,7 +2277,248 @@ async function runMedia(args) {
   const idx = args.indexOf(sub);
   const subArgs = [...args.slice(0, idx), ...args.slice(idx + 1)];
   if (sub === 'wait') return runMediaWait(subArgs);
+  if (sub === 'job') return runMediaJob(subArgs);
+  if (sub === 'status') return runMediaStatus(subArgs);
+  if (sub === 'list') return runMediaList(subArgs);
+  if (sub === 'cancel') return runMediaCancel(subArgs);
   return runMediaGenerate(subArgs);
+}
+
+// ---------------------------------------------------------------------------
+// od media job encode|download / status / list / cancel (work item 3,
+// INV-7.6/7.14). All four talk to the SAME contracts-typed surfaces work
+// item 2 adds: POST /api/projects/:id/media/jobs, POST /api/media/tasks/:id/
+// wait|cancel, GET /api/projects/:id/media/tasks. `--wait` reuses
+// pollUntilDoneOrBudget exactly the way `od media wait` already does, so the
+// contracts move covers this caller too, not just the web.
+// ---------------------------------------------------------------------------
+
+async function runMediaJob(rawArgs) {
+  const kind = rawArgs.find((a) => a === 'encode' || a === 'download');
+  if (!kind) {
+    console.error('usage: od media job encode|download [opts]');
+    printMediaHelp();
+    process.exit(2);
+  }
+  const rest = rawArgs.filter((a) => a !== kind);
+  let flags;
+  try {
+    flags = parseFlags(rest, { string: MEDIA_JOB_STRING_FLAGS, boolean: MEDIA_JOB_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err.message);
+    printMediaHelp();
+    process.exit(2);
+  }
+  const daemonUrl = await cliDaemonUrl(flags);
+  const projectId = flags.project || process.env.OD_PROJECT_ID;
+  if (!projectId) {
+    console.error('project id required. Pass --project <id> or set OD_PROJECT_ID.');
+    process.exit(2);
+  }
+  if (!flags.output) {
+    console.error('--output required (project-relative path)');
+    process.exit(2);
+  }
+
+  let body;
+  if (kind === 'encode') {
+    if (!flags.preset) {
+      console.error('--preset required: h264-web | concat-copy | frames-to-mp4');
+      process.exit(2);
+    }
+    body = { kind: 'encode', preset: flags.preset, output: flags.output };
+    if (flags.input) body.input = flags.input;
+    if (flags.overwrite === true) body.overwrite = true;
+    if (flags.frames) {
+      try {
+        body.frames = JSON.parse(flags.frames);
+      } catch {
+        console.error('--frames must be a JSON array of {path, durationMs}');
+        process.exit(2);
+      }
+    }
+    if (flags.scale) {
+      const match = /^(\d+)x(\d+)$/.exec(flags.scale);
+      if (!match) {
+        console.error('--scale must be <width>x<height>, e.g. 1280x720');
+        process.exit(2);
+      }
+      body.scale = { width: Number(match[1]), height: Number(match[2]) };
+    }
+  } else {
+    if (!flags.url) {
+      console.error('--url required (https URL)');
+      process.exit(2);
+    }
+    body = { kind: 'download', url: flags.url, output: flags.output };
+    if (flags.overwrite === true) body.overwrite = true;
+  }
+
+  let resp;
+  try {
+    resp = await fetch(`${daemonUrl.replace(/\/$/, '')}/api/projects/${encodeURIComponent(projectId)}/media/jobs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    surfaceFetchError(err, daemonUrl);
+    process.exit(3);
+  }
+  const text = await resp.text();
+  if (!resp.ok) {
+    console.error(`daemon ${resp.status}: ${text}`);
+    process.exit(4);
+  }
+  let created;
+  try {
+    created = JSON.parse(text);
+  } catch {
+    console.error('daemon returned non-JSON for media job creation');
+    process.exit(4);
+  }
+  if (flags.json && !flags.wait) {
+    process.stdout.write(JSON.stringify(created) + '\n');
+    return;
+  }
+  console.error(`media job ${created.taskId} queued (${created.status || 'queued'})`);
+  if (!flags.wait) {
+    process.stdout.write(JSON.stringify(created) + '\n');
+    return;
+  }
+  await pollUntilDoneOrBudget(daemonUrl, created.taskId, 0, { stillRunningExitCode: 2, totalBudgetMs: 25 * 60 * 1000 });
+}
+
+async function runMediaStatus(rawArgs) {
+  const taskId = rawArgs.find((a) => a && !a.startsWith('--'));
+  if (!taskId) {
+    console.error('usage: od media status <taskId> [--json]');
+    process.exit(2);
+  }
+  let flags;
+  try {
+    flags = parseFlags(
+      rawArgs.filter((a) => a !== taskId),
+      { string: MEDIA_TASK_STRING_FLAGS, boolean: MEDIA_TASK_BOOLEAN_FLAGS },
+    );
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const daemonUrl = await cliDaemonUrl(flags);
+  let resp;
+  try {
+    resp = await fetch(`${daemonUrl.replace(/\/$/, '')}/api/media/tasks/${encodeURIComponent(taskId)}/wait`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ since: 0, timeoutMs: 0 }),
+    });
+  } catch (err) {
+    surfaceFetchError(err, daemonUrl);
+    process.exit(3);
+  }
+  if (resp.status === 404) {
+    console.error(`task ${taskId} not found (expired or never queued)`);
+    process.exit(4);
+  }
+  const text = await resp.text();
+  if (!resp.ok) {
+    console.error(`daemon ${resp.status}: ${text}`);
+    process.exit(4);
+  }
+  if (flags.json) {
+    process.stdout.write(text.trimEnd() + '\n');
+  } else {
+    let snap;
+    try {
+      snap = JSON.parse(text);
+    } catch {
+      snap = {};
+    }
+    console.error(`Media task ${taskId} finished: ${snap.status}`);
+    process.stdout.write(text.trimEnd() + '\n');
+  }
+}
+
+async function runMediaList(rawArgs) {
+  let flags;
+  try {
+    flags = parseFlags(rawArgs, { string: MEDIA_TASK_STRING_FLAGS, boolean: MEDIA_TASK_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const daemonUrl = await cliDaemonUrl(flags);
+  const projectId = flags.project || process.env.OD_PROJECT_ID;
+  if (!projectId) {
+    console.error('project id required. Pass --project <id> or set OD_PROJECT_ID.');
+    process.exit(2);
+  }
+  let resp;
+  try {
+    resp = await fetch(
+      `${daemonUrl.replace(/\/$/, '')}/api/projects/${encodeURIComponent(projectId)}/media/tasks?includeDone=1`,
+    );
+  } catch (err) {
+    surfaceFetchError(err, daemonUrl);
+    process.exit(3);
+  }
+  const text = await resp.text();
+  if (!resp.ok) {
+    console.error(`daemon ${resp.status}: ${text}`);
+    process.exit(4);
+  }
+  process.stdout.write(text.trimEnd() + '\n');
+}
+
+async function runMediaCancel(rawArgs) {
+  const taskId = rawArgs.find((a) => a && !a.startsWith('--'));
+  if (!taskId) {
+    console.error('usage: od media cancel <taskId>');
+    process.exit(2);
+  }
+  let flags;
+  try {
+    flags = parseFlags(
+      rawArgs.filter((a) => a !== taskId),
+      { string: MEDIA_TASK_STRING_FLAGS, boolean: MEDIA_TASK_BOOLEAN_FLAGS },
+    );
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const daemonUrl = await cliDaemonUrl(flags);
+  let resp;
+  try {
+    resp = await fetch(`${daemonUrl.replace(/\/$/, '')}/api/media/tasks/${encodeURIComponent(taskId)}/cancel`, {
+      method: 'POST',
+    });
+  } catch (err) {
+    surfaceFetchError(err, daemonUrl);
+    process.exit(3);
+  }
+  if (resp.status === 404) {
+    console.error(`task ${taskId} not found (expired or never queued)`);
+    process.exit(4);
+  }
+  const text = await resp.text();
+  if (!resp.ok) {
+    // A refused cancel (409 NOT_CANCELABLE: the task is real but is not a
+    // tracked encode/download job) still carries a typed reason in
+    // `error.message` — surface that instead of dumping the raw body, and
+    // never print "canceled" when the daemon says otherwise.
+    let reason = text;
+    try {
+      const body = JSON.parse(text);
+      if (typeof body?.error?.message === 'string') reason = body.error.message;
+    } catch {
+      // Non-JSON body: fall back to the raw text.
+    }
+    console.error(`media task ${taskId} not canceled: ${reason}`);
+    process.exit(4);
+  }
+  console.error(`media task ${taskId} canceled`);
+  process.stdout.write(text.trimEnd() + '\n');
 }
 
 async function runMediaGenerate(rawArgs) {
@@ -2514,10 +2792,30 @@ async function cliDaemonBaseUrl(flags) {
 }
 
 function printMediaHelp() {
+  const limits = resolveMediaJobLimits();
   console.log(`Usage: od media generate --surface <image|video|audio> --model <id> [opts]
        "$OD_NODE_BIN" "$OD_BIN" media generate --surface <image|video|audio> --model <id> [opts]
+       od media job encode --preset <h264-web|concat-copy|frames-to-mp4> --input <path> --output <path> [--overwrite] [--frames <json>] [--scale <w>x<h>] [--wait] [--json]
+       od media job download --url <https URL> --output <path> [--overwrite] [--wait] [--json]
+       od media status <taskId> [--json]
+       od media list [--project <id>] [--json]
+       od media cancel <taskId>
 
-Required:
+Heavy work belongs in a media job (INV-7.6): a skill or agent that needs an
+encode or a large download should call \`od media job encode|download …
+--wait\` and return to the turn, instead of shelling out to ffmpeg/curl
+directly inside the turn. Every job is bounded by three env-resolved limits
+(INV-7.14):
+
+  OD_MEDIA_JOB_MAX_DURATION_MS   default ${DEFAULT_MEDIA_JOB_MAX_DURATION_MS} (resolved: ${limits.maxDurationMs})
+  OD_MEDIA_JOB_MAX_OUTPUT_BYTES  default ${DEFAULT_MEDIA_JOB_MAX_OUTPUT_BYTES} (resolved: ${limits.maxOutputBytes})
+  OD_MEDIA_JOB_MAX_CONCURRENT    default ${DEFAULT_MEDIA_JOB_MAX_CONCURRENT} (resolved: ${limits.maxConcurrent})
+
+A breach ends the job \`failed\` with error.code LIMIT_EXCEEDED, naming the
+breached limit and its resolved value. GET /api/media/jobs/limits serves the
+same three resolved values.
+`);
+  console.log(`Required:
   --surface  image | video | audio
   --model    Model id from /api/media/models (e.g. gpt-image-2, seedance-2, suno-v5).
   --project  Project id. Auto-resolved from OD_PROJECT_ID when invoked by the daemon.

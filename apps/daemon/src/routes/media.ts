@@ -1,16 +1,31 @@
 import fs from 'node:fs';
 import type { Express } from 'express';
 import type {
+  CreateMediaJobRequest,
   MediaExecutionPolicy,
   MediaGenerationResultProps,
+  MediaTaskCancelRefusedResponse,
   PublicMediaProviderConfigResponse,
   RecentLinkedDirsResponse,
 } from '@open-design/contracts';
+import { MEDIA_ENCODE_PRESETS } from '@open-design/contracts';
 import type { AnalyticsContext } from '../analytics.js';
 import { defaultMediaExecutionPolicy, mediaPolicyDenial } from '../media/policy.js';
 import type { ImageGenerationRequestSummary } from '../media/image-generation-retry.js';
 import type { RouteDeps } from '../server-context.js';
 import { proxyDispatcherRequestInit } from '../connectionTest.js';
+import {
+  activeMediaJobCount,
+  cancelMediaJob,
+  mediaJobOutputExists,
+  registerActiveMediaJob,
+  resolveMediaJobLimits,
+  resolveMediaJobPath,
+  runMediaDownloadJob,
+  runMediaEncodeJob,
+  unregisterActiveMediaJob,
+} from '../media/jobs.js';
+import { resolveProjectDir } from '../projects.js';
 import {
   aihubmixCatalogUrl,
   parseAIHubMixCatalog,
@@ -19,6 +34,48 @@ import {
 } from '../integrations/aihubmix.js';
 import { isSandboxModeEnabled } from '../sandbox-mode.js';
 import type { ToolTokenGrant } from '../tool-tokens.js';
+
+/**
+ * Validates a `POST /api/projects/:id/media/jobs` request body against
+ * {@link CreateMediaJobRequest}'s discriminated shape (INV-7.6). A failure
+ * here is always synchronous and pre-child — the caller never gets a task
+ * row for a request this rejects.
+ */
+function validateMediaJobRequest(
+  body: unknown,
+): { ok: true; value: CreateMediaJobRequest } | { ok: false; message: string } {
+  if (!body || typeof body !== 'object') return { ok: false, message: 'request body is required' };
+  const b = body as Record<string, unknown>;
+  if (b.kind === 'encode') {
+    if (typeof b.output !== 'string' || !b.output) return { ok: false, message: 'output is required' };
+    if (typeof b.preset !== 'string' || !(MEDIA_ENCODE_PRESETS as readonly string[]).includes(b.preset)) {
+      return { ok: false, message: `preset must be one of ${MEDIA_ENCODE_PRESETS.join(', ')}` };
+    }
+    if (b.preset === 'h264-web' && (typeof b.input !== 'string' || !b.input)) {
+      return { ok: false, message: 'h264-web requires input' };
+    }
+    if (b.preset === 'concat-copy' && (!Array.isArray(b.inputs) || b.inputs.length === 0)) {
+      return { ok: false, message: 'concat-copy requires a non-empty inputs list' };
+    }
+    if (b.preset === 'frames-to-mp4' && (!Array.isArray(b.frames) || b.frames.length === 0)) {
+      return { ok: false, message: 'frames-to-mp4 requires a non-empty frames list' };
+    }
+    return { ok: true, value: b as unknown as CreateMediaJobRequest };
+  }
+  if (b.kind === 'download') {
+    if (typeof b.url !== 'string' || !b.url) return { ok: false, message: 'url is required' };
+    if (typeof b.output !== 'string' || !b.output) return { ok: false, message: 'output is required' };
+    let parsed: URL;
+    try {
+      parsed = new URL(b.url);
+    } catch {
+      return { ok: false, message: 'url must be a valid URL' };
+    }
+    if (parsed.protocol !== 'https:') return { ok: false, message: 'url must be https' };
+    return { ok: true, value: b as unknown as CreateMediaJobRequest };
+  }
+  return { ok: false, message: 'kind must be "encode" or "download"' };
+}
 
 const LONG_MEDIA_PROXY_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -758,6 +815,10 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
     res.on('close', wake);
   });
 
+  // Same MediaTaskSnapshot shape /wait returns (DEF-7.3, INV-7.6) — every
+  // row is hydrated into a LiveMediaTask (the same path getLiveMediaTask
+  // takes on a cache miss) and run through the SAME mediaTaskSnapshot()
+  // builder, so this can never drift into its own ad-hoc projection again.
   app.get('/api/projects/:id/media/tasks', (req, res) => {
     if (!isLocalSameOrigin(req, getResolvedPort())) {
       return res.status(403).json({ error: 'cross-origin request rejected' });
@@ -765,23 +826,176 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
     const projectId = req.params.id;
     const includeDone =
       req.query.includeDone === '1' || req.query.includeDone === 'true';
-    const tasks = listMediaTasksByProject(db, projectId, {
+    const rows = listMediaTasksByProject(db, projectId, {
       includeTerminal: includeDone,
-    }).map((t: any) => ({
-        taskId: t.id,
-        status: t.status,
-        startedAt: t.startedAt,
-        endedAt: t.endedAt,
-        elapsed: Math.round(((t.endedAt ?? Date.now()) - t.startedAt) / 1000),
-        surface: t.surface,
-        model: t.model,
-        progress: t.progress.slice(-3),
-        progressCount: t.progress.length,
-        ...(t.status === 'done' ? { file: t.file } : {}),
-        ...(t.status === 'failed' || t.status === 'interrupted' ? { error: t.error } : {}),
-      }));
+    });
+    const tasks = rows
+      .map((row: any) => {
+        const live = getLiveMediaTask(row.id);
+        return live ? mediaTaskSnapshot(live, 0) : null;
+      })
+      .filter((snap: any): snap is NonNullable<typeof snap> => snap !== null);
     tasks.sort((a: any, b: any) => b.startedAt - a.startedAt);
     res.json({ tasks });
+  });
+
+  app.post('/api/media/tasks/:id/cancel', (req, res) => {
+    if (!isLocalSameOrigin(req, getResolvedPort())) {
+      return res.status(403).json({ error: 'cross-origin request rejected' });
+    }
+    const task = getLiveMediaTask(req.params.id);
+    if (!task) return res.status(404).json({ error: 'task not found' });
+    // Only an encode/download job (task.kind set by the POST …/media/jobs
+    // route above) is ever registered in jobs.ts's activeJobs kill map.
+    // A media-generation task (`kind` unset) or a task another surface
+    // persisted to this same media_tasks table without registering a
+    // killable child (e.g. a video-import download) is NOT tracked there:
+    // cancelMediaJob would silently no-op and this route would still
+    // answer 200 with the current, unchanged, still-running snapshot —
+    // read by a caller as "canceled" while nothing was stopped
+    // (integration-grok-r1 round 1, finding 1). Refuse instead of lying
+    // about the outcome; the underlying job keeps running until its own
+    // owner tracks its abort on this or an equivalent kill map.
+    if (task.kind !== 'encode' && task.kind !== 'download') {
+      const refusal: MediaTaskCancelRefusedResponse = {
+        error: {
+          code: 'NOT_CANCELABLE',
+          message: `task ${req.params.id} is not a background encode/download job tracked by this route (kind: ${task.kind ?? 'generate'}); it cannot be canceled here`,
+        },
+        task: mediaTaskSnapshot(task, 0),
+      };
+      return res.status(409).json(refusal);
+    }
+    // cancelMediaJob is a no-op (returns false) for a task this route
+    // doesn't track an active child for — already terminal. Either way this
+    // answers with the current snapshot rather than 404 (work item 2).
+    cancelMediaJob(req.params.id);
+    res.json(mediaTaskSnapshot(task, 0));
+  });
+
+  app.get('/api/media/jobs/limits', (_req, res) => {
+    res.json(resolveMediaJobLimits());
+  });
+
+  app.post('/api/projects/:id/media/jobs', async (req, res) => {
+    if (!isLocalSameOrigin(req, getResolvedPort())) {
+      return res.status(403).json({
+        error: 'cross-origin request rejected: media jobs are restricted to the local UI / CLI',
+      });
+    }
+    const projectId = req.params.id;
+    const project = getProject(db, projectId);
+    if (!project) return res.status(404).json({ error: 'project not found' });
+
+    const parsed = validateMediaJobRequest(req.body);
+    if (!parsed.ok) {
+      return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: parsed.message } });
+    }
+    const request = parsed.value;
+
+    const limits = resolveMediaJobLimits();
+    if (activeMediaJobCount() >= limits.maxConcurrent) {
+      return res.status(429).json({
+        error: {
+          code: 'LIMIT_EXCEEDED',
+          message: `maxConcurrent limit reached: ${limits.maxConcurrent} (OD_MEDIA_JOB_MAX_CONCURRENT)`,
+        },
+      });
+    }
+
+    const projectDir = resolveProjectDir(PROJECTS_DIR, projectId, project.metadata);
+    const outputAbs = resolveMediaJobPath(projectDir, request.output);
+    if (!outputAbs) {
+      return res
+        .status(400)
+        .json({ error: { code: 'INVALID_REQUEST', message: `invalid output path: ${request.output}` } });
+    }
+    if (!request.overwrite && (await mediaJobOutputExists(outputAbs))) {
+      return res
+        .status(409)
+        .json({ error: { code: 'CONFLICT', message: `output already exists: ${request.output}` } });
+    }
+
+    // Re-check immediately before reserving the slot, with no `await`
+    // between this check and `registerActiveMediaJob` below: the earlier
+    // check (above, before `mediaJobOutputExists`) is only a fast-fail —
+    // that `await` yields the event loop, so a second near-simultaneous
+    // request for a DIFFERENT output could pass the earlier check too and
+    // race this one to registration. This second, synchronous-to-register
+    // check closes that window.
+    if (activeMediaJobCount() >= limits.maxConcurrent) {
+      return res.status(429).json({
+        error: {
+          code: 'LIMIT_EXCEEDED',
+          message: `maxConcurrent limit reached: ${limits.maxConcurrent} (OD_MEDIA_JOB_MAX_CONCURRENT)`,
+        },
+      });
+    }
+
+    const taskId = randomUUID();
+    const task = createMediaTask(taskId, projectId);
+    task.kind = request.kind;
+    task.limits = limits;
+    task.status = 'running';
+    persistMediaTask(task);
+    // Reserve the concurrency slot synchronously, before the child is
+    // actually spawned — a placeholder kill() is replaced once the real
+    // child exists (encode's onSpawned / download's onAbort below), but the
+    // slot itself must count from the moment the task is created so a
+    // third near-simultaneous create sees an accurate count (INV-7.14 (f)).
+    registerActiveMediaJob(taskId, () => {});
+
+    const onProgress = (line: string, fraction?: number) => {
+      if (typeof fraction === 'number') task.fraction = fraction;
+      appendTaskProgress(task, line);
+    };
+
+    const runPromise =
+      request.kind === 'encode'
+        ? runMediaEncodeJob({
+            projectDir,
+            request,
+            overwrite: request.overwrite === true,
+            maxDurationMs: limits.maxDurationMs,
+            onProgress,
+            onSpawned: (kill) => registerActiveMediaJob(taskId, kill),
+          })
+        : runMediaDownloadJob({
+            projectDir,
+            url: request.url,
+            outputRel: request.output,
+            maxOutputBytes: limits.maxOutputBytes,
+            maxDurationMs: limits.maxDurationMs,
+            onProgress,
+            onAbort: (abort) => registerActiveMediaJob(taskId, abort),
+          });
+
+    runPromise
+      .then((outcome) => {
+        unregisterActiveMediaJob(taskId);
+        if (outcome.ok) {
+          task.status = 'done';
+          task.file = outcome.file ?? null;
+        } else {
+          task.status = 'failed';
+          task.error = outcome.error
+            ? { message: outcome.error.message, code: outcome.error.code }
+            : { message: 'media job failed' };
+        }
+        task.endedAt = Date.now();
+        persistMediaTask(task);
+        notifyTaskWaiters(task);
+      })
+      .catch((err: unknown) => {
+        unregisterActiveMediaJob(taskId);
+        task.status = 'failed';
+        task.error = { message: String(err instanceof Error ? err.message : err), code: 'INVALID_REQUEST' };
+        task.endedAt = Date.now();
+        persistMediaTask(task);
+        notifyTaskWaiters(task);
+      });
+
+    res.status(202).json({ taskId, status: task.status, startedAt: task.startedAt });
   });
 
   // Multi-file upload that the chat composer uses for paste/drop/picker.

@@ -56,7 +56,19 @@ import {
 import { resolveProviderConfig } from '../media/config.js';
 import { modelsForSurface } from '../media/models.js';
 import { isSafeId, mimeFor } from '../projects.js';
-import { assembleStoryboard, getDoneShots, pruneStoryboardAssembleOutputs } from '../storyboards/assemble.js';
+import {
+  assembleStoryboard,
+  getDoneShots,
+  pruneStoryboardAssembleOutputs,
+  type RunConcatEncodeJob,
+} from '../storyboards/assemble.js';
+import {
+  activeMediaJobCount,
+  registerActiveMediaJob,
+  resolveMediaJobLimits,
+  runFfmpegEncodeChild,
+  unregisterActiveMediaJob,
+} from '../media/jobs.js';
 import {
   DRAFT_TEXT_PROVIDER_IDS,
   draftShotsFromBrief,
@@ -1474,6 +1486,68 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
     await ensureStoryboardMediaProject();
     const projectDir = resolveProjectDir(PROJECTS_DIR, STORYBOARD_MEDIA_PROJECT_ID);
 
+    // W7C (INV-7.6): the concat finish mode's ffmpeg call runs as a media
+    // task through the same job substrate `POST /api/projects/:id/media/jobs`
+    // uses, instead of a bare unbounded spawn — same env-var limits, same
+    // process-group SIGTERM/SIGKILL escalation, and visible/cancellable
+    // through the normal wait/cancel routes while it runs. This is additive:
+    // the route still awaits the job to a terminal state and returns
+    // synchronously, exactly as before this track.
+    const runConcatEncodeJob: RunConcatEncodeJob = ({ listFile, outputFile }) => {
+      const taskId = randomUUID();
+      const limits = resolveMediaJobLimits();
+      // Same concurrency ceiling the JSON `POST /api/projects/:id/media/jobs`
+      // route enforces (routes/media.ts) — checked, and rejected, BEFORE any
+      // task row is created or child spawned, so this call site cannot push
+      // the number of simultaneously running encode/download children past
+      // maxConcurrent (INV-7.14). No media_tasks row is persisted for a
+      // rejected request, matching the JSON route's behaviour.
+      if (activeMediaJobCount() >= limits.maxConcurrent) {
+        return Promise.resolve({
+          ok: false as const,
+          taskId,
+          error: {
+            code: 'LIMIT_EXCEEDED',
+            message: `maxConcurrent limit reached: ${limits.maxConcurrent} (OD_MEDIA_JOB_MAX_CONCURRENT)`,
+          },
+        });
+      }
+      const task = createMediaTask(taskId, STORYBOARD_MEDIA_PROJECT_ID);
+      task.kind = 'encode';
+      task.limits = limits;
+      task.status = 'running';
+      persistMediaTask(task);
+      registerActiveMediaJob(taskId, () => {});
+      const handle = runFfmpegEncodeChild({
+        ffmpegBin: process.env.OD_MEDIA_JOB_FFMPEG_BIN || 'ffmpeg',
+        ffprobeBin: process.env.OD_MEDIA_JOB_FFPROBE_BIN || 'ffprobe',
+        args: ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', '-progress', 'pipe:1', '-nostats', outputFile],
+        probeArgs: [
+          '-v', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1',
+        ],
+        maxDurationMs: limits.maxDurationMs,
+        onProgress: (line) => appendTaskProgress(task, line),
+      });
+      registerActiveMediaJob(taskId, handle.kill);
+      return handle.promise.then((outcome) => {
+        unregisterActiveMediaJob(taskId);
+        task.status = outcome.ok ? 'done' : 'failed';
+        // Project-relative path, matching jobs.ts's own encode/download
+        // runners (ProjectFile.path is never an absolute filesystem path
+        // elsewhere) — an absolute path here would leak local path/username
+        // layout to any client polling this task.
+        if (outcome.ok) {
+          task.file = { name: path.basename(outputFile), path: path.relative(projectDir, outputFile) };
+        } else {
+          task.error = outcome.error ? { message: outcome.error.message, code: outcome.error.code } : { message: 'concat encode failed' };
+        }
+        task.endedAt = Date.now();
+        persistMediaTask(task);
+        notifyTaskWaiters(task);
+        return outcome.ok ? { ok: true as const, taskId } : { ok: false as const, taskId, error: outcome.error };
+      });
+    };
+
     const outcome = await assembleStoryboard({
       storyboard,
       projectDir,
@@ -1481,6 +1555,7 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
       ...(parsedFinish.value ? { finish: parsedFinish.value } : {}),
       resolveWithinProjectDirReal: resolveWithinStoryboardMediaDirReal,
       assertSafeWriteTarget: assertSafeStoryboardWriteTarget,
+      runEncodeJob: runConcatEncodeJob,
     });
     if (!outcome.ok) return sendApiError(res, outcome.status, outcome.code, outcome.message);
 
@@ -1514,7 +1589,11 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
       console.warn(`[storyboard] could not prune old assembled outputs for ${req.params.id}`, err);
     }
 
-    res.json({ output: outcome.output, finish: outcome.finish });
+    res.json({
+      output: outcome.output,
+      finish: outcome.finish,
+      ...(outcome.taskId ? { taskId: outcome.taskId } : {}),
+    });
   });
 
   // Writes a self-contained slider.html: the ordered shot start/end frames

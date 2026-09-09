@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import type { MediaJobLimits } from '@open-design/contracts';
 import type { MediaTaskInsert, MediaTaskPatch, MediaTaskRow, MediaTaskStatus } from './tasks.js';
 import {
   deleteMediaTask,
@@ -20,6 +21,18 @@ export interface LiveMediaTask {
   endedAt: number | null;
   waiters: Set<() => void>;
   _gcScheduled?: boolean;
+  /**
+   * Distinguishes a media-generation task (unset, the pre-existing surface)
+   * from the two job kinds W7C adds. In-memory only — not persisted to the
+   * `media_tasks` row — so it does not survive a daemon restart; that is
+   * fine, since a restart always resolves the row to `interrupted` first
+   * (INV-7.6), and `kind` has no bearing on that path.
+   */
+  kind?: 'encode' | 'download';
+  /** Optional aggregate progress in [0, 1] for an encode/download job. In-memory only, same reasoning as `kind`. */
+  fraction?: number;
+  /** The resolved limits that governed this task, when it is an encode/download job. In-memory only, same reasoning as `kind`. */
+  limits?: MediaJobLimits;
 }
 
 export interface CreateMediaTaskInfo {
@@ -36,6 +49,9 @@ export interface MediaTaskSnapshot {
   nextSince: number;
   file?: unknown | null;
   error?: MediaTaskRow['error'];
+  fraction?: number;
+  kind?: 'generate' | 'encode' | 'download';
+  limits?: MediaJobLimits;
 }
 
 export const TASK_TTL_AFTER_DONE_MS = 10 * 60 * 1000;
@@ -165,6 +181,9 @@ export function createMediaTaskStore(db: Database.Database): {
     if (task.status === 'failed' || task.status === 'interrupted') {
       snapshot.error = task.error;
     }
+    if (typeof task.fraction === 'number') snapshot.fraction = task.fraction;
+    if (task.kind) snapshot.kind = task.kind;
+    if (task.limits) snapshot.limits = task.limits;
     return snapshot;
   }
 
