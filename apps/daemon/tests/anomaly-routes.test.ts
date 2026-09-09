@@ -250,4 +250,59 @@ describe('daemon HTTP observer', () => {
     expect(anomalies).toHaveLength(1);
     expect(anomalies[0]?.summary).toBe('one real record');
   });
+
+  it('carries the retained sequence range and generation count in the list envelope', async () => {
+    await start();
+
+    await post('/api/anomalies', { kind: 'ui-lag', severity: 'warn', summary: 'lag one' });
+    await post('/api/anomalies', { kind: 'white-screen', severity: 'error', summary: 'blank' });
+    await post('/api/anomalies', { kind: 'ui-lag', severity: 'warn', summary: 'lag two' });
+
+    const { json } = await get('/api/anomalies?kind=ui-lag');
+
+    // The 24 h capture that judges INV-3.10 polls this endpoint with a filter.
+    // The range therefore describes the LOG, not the filtered page: it is what
+    // lets consecutive polls prove they overlapped instead of straddling a
+    // rotation that took the records between them.
+    expect(json.anomalies.map((a: { seq?: number }) => a.seq)).toEqual([3, 1]);
+    expect(json.firstSeq).toBe(1);
+    expect(json.lastSeq).toBe(3);
+    expect(json.generations).toBe(1);
+  });
+
+  it('keeps highWaterSeq present and advancing across an empty -> record -> clear -> empty cycle of real envelopes', async () => {
+    // The exact scenario the capture's reconciler has to be able to catch: a
+    // record written and cleared entirely between two polls that both see an
+    // empty log. Every envelope below is the daemon's real HTTP JSON, not a
+    // hand-typed object — this is the "real daemon envelopes" pin the finding
+    // asked for, run over the actual route handlers rather than a unit call
+    // into `anomaly-log.ts` directly.
+    await start();
+
+    const openingEmpty = await get('/api/anomalies');
+    expect(openingEmpty.json.firstSeq).toBe(null);
+    expect(openingEmpty.json.lastSeq).toBe(null);
+    expect(openingEmpty.json.highWaterSeq, 'a virgin log has issued nothing yet').toBe(0);
+
+    await post('/api/anomalies', { kind: 'ui-lag', severity: 'warn', summary: 'about to be censored' });
+    const afterRecord = await get('/api/anomalies');
+    expect(afterRecord.json.firstSeq).toBe(1);
+    expect(afterRecord.json.lastSeq).toBe(1);
+    expect(afterRecord.json.highWaterSeq).toBe(1);
+
+    const cleared = await fetch(`${baseUrl}/api/anomalies`, { method: 'DELETE' });
+    expect(((await cleared.json()) as { cleared: number }).cleared).toBe(1);
+
+    const closingEmpty = await get('/api/anomalies');
+    expect(closingEmpty.json.firstSeq, 'the record is genuinely gone, not merely filtered out').toBe(null);
+    expect(closingEmpty.json.lastSeq).toBe(null);
+    // This is the field the two empty answers would otherwise agree on
+    // perfectly, making the cleared record invisible: the log now looks
+    // identical to one that was never used, except that highWaterSeq still
+    // names that a sequence was issued and is no longer accounted for.
+    expect(
+      closingEmpty.json.highWaterSeq,
+      'the persisted floor must still surface on the closing empty answer',
+    ).toBe(1);
+  });
 });

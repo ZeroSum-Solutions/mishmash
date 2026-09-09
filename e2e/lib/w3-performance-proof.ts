@@ -194,6 +194,22 @@ export interface W3UiLagSample {
 }
 
 /**
+ * A stretch of the anomaly log's record sequence that no poll ever read.
+ *
+ * The long-task half's counterpart to `W3ProofWindow.gaps`: the window had an
+ * observer throughout, but the log rotated faster than the capture polled it, so
+ * the records numbered in this range left the log unseen. Named by range rather
+ * than counted, because "three records went missing" is not actionable and
+ * "records 4 to 6 went missing between 11:00 and 12:40" is.
+ */
+export interface W3SequenceGap {
+  /** First anomaly-log sequence the polls never read. */
+  fromSeq: number;
+  /** Last anomaly-log sequence the polls never read. */
+  toSeq: number;
+}
+
+/**
  * What the capture SAW on a route, before any row was written.
  *
  * The reason this is separate from `samples`: a capture that drops its failures
@@ -297,6 +313,22 @@ export interface W3EndpointLatencyProof {
    */
   uiLagExportShortfall: number;
   /**
+   * Sequence ranges the capture's polls never covered.
+   *
+   * `uiLagExportShortfall` catches a single export that was a page of its own
+   * query. This catches the loss that happens BETWEEN exports: the anomaly log
+   * keeps one previous generation, so a window long enough to roll it twice
+   * removes records that no single answer was ever asked for. Every export
+   * involved is internally consistent, `uiLagRecordsRead` counts what arrived
+   * honestly, and the count INV-3.10 is judged on is simply smaller than the
+   * truth — the same censoring shape, one level up.
+   *
+   * Empty means consecutive polls overlapped and the population is whole.
+   * Absent must be refused rather than read as empty, for the reason
+   * `declaredLoss` states.
+   */
+  uiLagSequenceGaps: W3SequenceGap[];
+  /**
    * Timing-log lines the reader could not parse.
    *
    * The endpoint half's counterpart to `uiLagUnmeasurable`. A daemon killed
@@ -317,6 +349,7 @@ export type W3ViolationCode =
   | 'unmeasurable-ui-lag'
   | 'dropped-ui-lag'
   | 'truncated-ui-lag-export'
+  | 'ui-lag-gap'
   | 'unparseable-timing-line'
   | 'window-not-24h'
   | 'window-not-continuous'
@@ -536,8 +569,34 @@ function validateUiLag(proof: W3EndpointLatencyProof): W3Violation[] {
         `${count} ui-lag record(s) carried no readable duration; each may have been over the bar`,
     }),
     ...exportEnvelopeAgrees(proof.uiLagExportShortfall),
+    ...pollsCoverTheSequence(proof.uiLagSequenceGaps),
   );
   return violations;
+}
+
+/**
+ * The capture's polls must have covered the log's sequence without a break.
+ *
+ * Its own check rather than a `declaredLoss` count, because a range is the
+ * answer here and a number is not: a reader told "three records are missing"
+ * cannot say whether the window is still worth reporting, while a reader told
+ * which records went and when can. Absence is refused for the usual reason —
+ * treating a missing field as "no gaps" makes deleting the field cheaper than
+ * deleting the records it accounts for.
+ */
+function pollsCoverTheSequence(gaps: unknown): W3Violation[] {
+  if (!Array.isArray(gaps)) {
+    return [{
+      code: 'ui-lag-gap',
+      subject: 'uiLagSequenceGaps',
+      detail: 'the capture does not say whether its ui-lag polls covered the log without a break',
+    }];
+  }
+  return (gaps as W3SequenceGap[]).map((gap) => ({
+    code: 'ui-lag-gap' as const,
+    subject: `seq ${gap?.fromSeq}..${gap?.toSeq}`,
+    detail: `anomaly records ${gap?.fromSeq}..${gap?.toSeq} rotated out of the log before any poll read them; the long-task count is missing that range`,
+  }));
 }
 
 /**

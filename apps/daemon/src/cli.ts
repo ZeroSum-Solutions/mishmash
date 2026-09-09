@@ -10256,7 +10256,18 @@ Settings → About → Export diagnostics.`);
     return aError - bError || b[1].length - a[1].length;
   });
 
-  console.log(`${anomalies.length} of ${data?.total ?? anomalies.length} anomalies (newest first)\n`);
+  console.log(`${anomalies.length} of ${data?.total ?? anomalies.length} anomalies (newest first)`);
+  // The log is size-capped and keeps one previous generation, so a long session
+  // can roll records out of it. Say so, and name the range that survived: a
+  // reader counting how often something happened needs to know the count is of
+  // what the log still holds, not of everything that ever happened.
+  if (typeof data?.generations === 'number' && data.generations > 1) {
+    const range = typeof data.firstSeq === 'number' && typeof data.lastSeq === 'number'
+      ? `, records ${data.firstSeq}..${data.lastSeq}`
+      : '';
+    console.log(`The log has rotated; this answer spans ${data.generations} generations${range}.`);
+  }
+  console.log('');
   for (const [kind, records] of groups) {
     console.log(`${kind} — ${records.length}`);
     for (const record of records) {
