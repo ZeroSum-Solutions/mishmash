@@ -401,6 +401,22 @@ test('[P1] an involuntary create abort whose lookup cannot read the daemon settl
   // truthfully every probe, resetting the "unanswered" count `unreachable`
   // needs and leaving this case unable to reach the wording it tests.
   let createAborted = false;
+  // Sol r2 pinned `withLostRunCreateProbeTimeout` to tear the underlying
+  // fetch down on its own timeout (`controller.abort()`), not merely stop
+  // waiting on it — an abandoned probe read that stayed open would leak a
+  // live connection against the same per-host budget D-21 exhausted in the
+  // first place, one more on every later probe. A read the client actually
+  // cancelled shows up here as `requestfailed` with Chromium's
+  // `net::ERR_ABORTED`; a read merely ignored never fires that event at all,
+  // since this route's handler holds the request open forever regardless.
+  const cancelledLookupReads: string[] = [];
+  const onRequestFailed = (request: import('@playwright/test').Request) => {
+    if (!createAborted) return;
+    const url = request.url();
+    if (!url.includes('/api/runs') && !url.includes('/messages')) return;
+    if (request.failure()?.errorText === 'net::ERR_ABORTED') cancelledLookupReads.push(url);
+  };
+  page.on('requestfailed', onRequestFailed);
   await page.route('**/api/runs*', async (route) => {
     if (route.request().method() === 'POST') {
       createAborted = true;
@@ -411,7 +427,8 @@ test('[P1] an involuntary create abort whose lookup cannot read the daemon settl
       await route.fallback();
       return;
     }
-    // Never fulfilled, never aborted: the request simply hangs.
+    // Never fulfilled, never aborted BY THE ROUTE: the request simply hangs
+    // here until the client itself tears it down.
     await new Promise(() => {});
   });
   await page.route('**/conversations/*/messages*', async (route) => {
@@ -447,7 +464,11 @@ test('[P1] an involuntary create abort whose lookup cannot read the daemon settl
     // stays absent even once the daemon is named unreachable (B-02).
     await expect(checkingNotice.getByRole('button', { name: /retry/i })).toHaveCount(0);
     await expect(runErrorCard(page)).toHaveCount(0);
+    // Cancellation pin (task item 3): at least one abandoned probe read was
+    // actually torn down at the network layer, not merely ignored.
+    expect(cancelledLookupReads.length).toBeGreaterThan(0);
   } finally {
+    page.off('requestfailed', onRequestFailed);
     await page.unroute('**/api/runs*');
     await page.unroute('**/conversations/*/messages*');
     await putAppConfig(page, NEUTRAL_APP_CONFIG);
@@ -463,8 +484,15 @@ test('[P1] an involuntary create abort whose lookup cannot read the daemon settl
 // notice never said anything but "still checking" — the wall-clock deadline
 // below is the fix. Two directions, since either read could be the one that
 // stalls.
+//
+// Sol r3 MEDIUM / D-51 grok ruling item 4 (2026-09-08): the r2 fix landed the
+// two cases below on the SAME "MishMash is not answering" wording the
+// fully-silent case above reaches, which is false here — one of the two reads
+// is answering on every probe. They now assert the distinct, honest
+// "could not confirm" wording instead: still neutral, still Check again,
+// still no Retry (B-02), but no longer a claim that nothing is answering.
 
-test('[P1] a lookup whose active-runs read answers but whose message read never does still settles to not answering', async ({
+test('[P1] a lookup whose active-runs read answers but whose message read never does settles to could-not-confirm', async ({
   context,
   page,
 }, testInfo) => {
@@ -512,18 +540,23 @@ test('[P1] a lookup whose active-runs read answers but whose message read never 
     await sendButton.click();
 
     // The bar: a probe that reads ONE surface every time must not hold the
-    // notice on "still checking" forever — it must turn over to the honest
-    // "not answering" wording once the overall lookup deadline elapses, the
-    // same wording (and the same no-Retry state) the fully-silent case above
-    // reaches. Bounded at roughly the ten-second deadline plus one more
-    // concurrent-read probe cycle (~3s read + interval), not the indefinite
-    // hang a build that only tracks `unanswered` produces.
+    // notice on "still checking" forever, and it must NOT turn over to "not
+    // answering" either — the active-runs read is answering on every probe.
+    // Once the overall lookup deadline elapses it must turn to the honest,
+    // distinct "could not confirm" wording instead: same neutral, no-Retry
+    // state (B-02), Check again still offered. Bounded at roughly the
+    // ten-second deadline plus one more concurrent-read probe cycle (~3s read
+    // + interval), not the indefinite hang a build that only tracks
+    // `unanswered` produces.
     const checkingNotice = runCheckingNotice(page);
     await expect(checkingNotice).toBeVisible({ timeout: T.long });
-    await expect(checkingNotice).toContainText('MishMash is not answering', {
-      timeout: T.xlong,
-    });
+    await expect(checkingNotice).toContainText(
+      'MishMash could not confirm whether this run started',
+      { timeout: T.xlong },
+    );
+    await expect(checkingNotice).not.toContainText('MishMash is not answering');
     expect(Date.now() - sentAt).toBeLessThan(T.xlong);
+    await expect(checkingNotice.getByRole('button', { name: 'Check again' })).toHaveCount(1);
     await expect(checkingNotice.getByRole('button', { name: /retry/i })).toHaveCount(0);
     await expect(runErrorCard(page)).toHaveCount(0);
   } finally {
@@ -533,7 +566,7 @@ test('[P1] a lookup whose active-runs read answers but whose message read never 
   }
 });
 
-test('[P1] a lookup whose message read answers but whose active-runs read never does still settles to not answering', async ({
+test('[P1] a lookup whose message read answers but whose active-runs read never does settles to could-not-confirm', async ({
   context,
   page,
 }, testInfo) => {
@@ -581,12 +614,18 @@ test('[P1] a lookup whose message read answers but whose active-runs read never 
     const sentAt = Date.now();
     await sendButton.click();
 
+    // Mirror direction: the message read answers every probe, so this must
+    // also reach "could not confirm", never "not answering" — see the
+    // comment on the direction-A case above.
     const checkingNotice = runCheckingNotice(page);
     await expect(checkingNotice).toBeVisible({ timeout: T.long });
-    await expect(checkingNotice).toContainText('MishMash is not answering', {
-      timeout: T.xlong,
-    });
+    await expect(checkingNotice).toContainText(
+      'MishMash could not confirm whether this run started',
+      { timeout: T.xlong },
+    );
+    await expect(checkingNotice).not.toContainText('MishMash is not answering');
     expect(Date.now() - sentAt).toBeLessThan(T.xlong);
+    await expect(checkingNotice.getByRole('button', { name: 'Check again' })).toHaveCount(1);
     await expect(checkingNotice.getByRole('button', { name: /retry/i })).toHaveCount(0);
     await expect(runErrorCard(page)).toHaveCount(0);
   } finally {
@@ -654,13 +693,24 @@ test('[P1] a lookup whose reads answer just under the per-read bound still concl
     await input.fill('Design a landing page for a bakery');
     const sendButton = page.getByTestId('chat-send');
     await expect(sendButton).toBeEnabled();
+    const sentAt = Date.now();
     await sendButton.click();
 
     // The bar: slow-but-real answers still reach the correct, honest verdict
     // — a named "could not be started" failure with a working Retry — never
     // the "not answering" wording the two mixed-direction cases above are for.
+    //
+    // Sol r3 HIGH / D-51 grok ruling item 1 (2026-09-08): three of these
+    // ~2.5s-conclusive probes must clear the D-21 budget end-to-end, not just
+    // "eventually". The pre-fix build scheduled each next probe
+    // `LOST_RUN_CREATE_PROBE_INTERVAL_MS` AFTER the previous one FINISHED, so
+    // three probes compounded to ~13.65s past `D21_BUDGET_MS` — this had
+    // never been measured from send before. The fix schedules START-TO-START
+    // (next probe at this probe's own start plus the interval, never later),
+    // which keeps three probes under 9s.
     const card = runErrorCard(page);
     await expect(card).toBeVisible({ timeout: T.xlong });
+    expect(Date.now() - sentAt).toBeLessThan(D21_BUDGET_MS);
     await expect(card).toContainText(RUN_NOT_STARTED_TITLE);
     await expect(card).not.toContainText(GENERIC_FAILURE_TITLE);
     const retry = card.getByRole('button', { name: 'Retry' });
