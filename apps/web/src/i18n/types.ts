@@ -2074,6 +2074,26 @@ export interface Dict {
   'videoImport.disconnectError': string;
   'videoImport.youtubeName': string;
   'videoImport.youtubeComingSoon': string;
+  'videoImport.panelTitle': string;
+  'videoImport.projectLabel': string;
+  'videoImport.projectPlaceholder': string;
+  'videoImport.urlLabel': string;
+  'videoImport.urlPlaceholder': string;
+  'videoImport.providerLabel': string;
+  'videoImport.asLabel': string;
+  'videoImport.asPlaceholder': string;
+  'videoImport.submit': string;
+  'videoImport.submitting': string;
+  'videoImport.notConnectedHint': string;
+  'videoImport.projectRequired': string;
+  'videoImport.urlRequired': string;
+  'videoImport.progressWithPercent': string;
+  'videoImport.statusQueued': string;
+  'videoImport.statusRunning': string;
+  'videoImport.statusDone': string;
+  'videoImport.statusFailed': string;
+  'videoImport.doneMessage': string;
+  'videoImport.jobLoadError': string;
 
   // New project panel
   'newproj.tabPrototype': string;

@@ -156,6 +156,7 @@ import {
   type UpdaterRestartSafety,
 } from '../lib/updater';
 import { PetSettings } from './pet/PetSettings';
+import { VideoImportPanel } from './VideoImportPanel';
 // WR wave, Amendment 1: the RoutingPanel's mount point. Until this line the
 // component was built, tested, and completely unreachable from any real view
 // (t7 Sol HIGH-2) because SettingsDialog.tsx sat outside the wave's lease.
@@ -6001,6 +6002,8 @@ function VideoSourcesCard() {
           {error}
         </span>
       ) : null}
+
+      <VideoImportPanel vimeoConnected={Boolean(vimeo?.connected)} />
     </section>
   );
 }

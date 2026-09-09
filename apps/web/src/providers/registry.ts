@@ -28,9 +28,12 @@ import type {
 import { parseAgentRegistrySseEvent } from '@open-design/contracts';
 import type {
   VideoImportConnectResponse,
+  VideoImportJob,
   VideoImportProvider,
   VideoImportProvidersResponse,
+  VideoImportResponse,
 } from '@open-design/contracts';
+import { isVideoImportResponse } from '@open-design/contracts';
 import type {
   AgentInfo,
   AppVersionInfo,
@@ -3998,6 +4001,53 @@ export async function disconnectVideoImportProvider(
     });
     if (!resp.ok) return { ok: false, error: await decodeApiErrorMessage(resp) };
     return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+function decodeApiErrorMessageFromBody(body: unknown, status: number): string {
+  const candidate = body as { error?: { message?: string } | string } | null;
+  if (typeof candidate?.error === 'string') return candidate.error;
+  if (candidate?.error && typeof candidate.error === 'object' && candidate.error.message) return candidate.error.message;
+  return `HTTP ${status}`;
+}
+
+/** `VideoImportPanel`'s submit: `POST /api/projects/:id/video-imports`. */
+export async function createVideoImport(
+  projectId: string,
+  provider: VideoImportProvider,
+  url: string,
+  as?: string,
+): Promise<{ ok: true; job: VideoImportJob } | { ok: false; error: string }> {
+  try {
+    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/video-imports`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider, url, ...(as ? { as } : {}) }),
+    });
+    const json = (await resp.json().catch(() => null)) as VideoImportResponse | null;
+    if (!resp.ok || !json || !isVideoImportResponse(json)) {
+      return { ok: false, error: decodeApiErrorMessageFromBody(json, resp.status) };
+    }
+    return { ok: true, job: json.job };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** `VideoImportPanel`'s poll: `GET /api/projects/:id/video-imports/:jobId`. */
+export async function getVideoImportJob(
+  projectId: string,
+  jobId: string,
+): Promise<{ ok: true; job: VideoImportJob } | { ok: false; error: string }> {
+  try {
+    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/video-imports/${encodeURIComponent(jobId)}`);
+    const json = (await resp.json().catch(() => null)) as VideoImportResponse | null;
+    if (!resp.ok || !json || !isVideoImportResponse(json)) {
+      return { ok: false, error: decodeApiErrorMessageFromBody(json, resp.status) };
+    }
+    return { ok: true, job: json.job };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
