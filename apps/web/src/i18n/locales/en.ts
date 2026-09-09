@@ -4718,6 +4718,12 @@ export const en: Dict = {
   'storyboard.revisionEase': 'Easy to revise',
   'storyboard.reviewNotes': 'Notes',
   'storyboard.reviewFailed': 'Could not save this take decision.',
+  // F-01 (W7A) — staged project uploads
+  'uploadProgress.limitHint': 'Up to {size} per file',
+  'uploadProgress.uploading': 'Uploading {name}…',
+  'uploadProgress.completed': '{name} uploaded',
+  'uploadProgress.failed': '{name} failed: {message}',
+  'uploadProgress.tooLarge': '{name} is too large — the limit is {size}.',
   // F002 — client discovery interview
   'interview.back': 'Back to home',
   'interview.title': 'Client discovery interview',

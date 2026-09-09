@@ -4857,6 +4857,13 @@ export interface Dict {
   'storyboard.revisionEase': string;
   'storyboard.reviewNotes': string;
   'storyboard.reviewFailed': string;
+  // F-01 (W7A) — staged project uploads: per-file progress card and the
+  // before-selection limit copy read from `GET .../uploads/limits`.
+  'uploadProgress.limitHint': string;
+  'uploadProgress.uploading': string;
+  'uploadProgress.completed': string;
+  'uploadProgress.failed': string;
+  'uploadProgress.tooLarge': string;
   // F002 — client discovery interview
   'interview.back': string;
   'interview.title': string;
