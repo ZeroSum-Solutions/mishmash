@@ -120,6 +120,7 @@ export type RunFailureMessageKey =
   | 'chat.runError.stoppedBySystemMessage'
   | 'chat.runError.daemonRestartedMessage'
   | 'chat.runError.notStartedMessage'
+  | 'chat.runError.payloadTooLargeMessage'
   | null;
 
 // i18n keys for the unified error card's TITLE (the "error type" line above the
@@ -159,6 +160,7 @@ export type RunFailureTitleKey =
   | 'chat.runError.title.stopped'
   | 'chat.runError.title.daemonRestarted'
   | 'chat.runError.title.notStarted'
+  | 'chat.runError.title.payloadTooLarge'
   | 'chat.runError.title.generic';
 
 export interface RunFailureUi {
@@ -206,6 +208,14 @@ const AGENT_AGNOSTIC_FAILURE_UI: Record<string, RunFailureUi> = {
   RUN_NOT_STARTED: retryWithGuidance(
     'chat.runError.title.notStarted',
     'chat.runError.notStartedMessage',
+  ),
+  // The daemon refused the create request itself: the turn's body was over the
+  // global request limit, so no route ran and no run was made. Naming it is the
+  // only way a user can tell an oversized message from a random failure — the
+  // wire is an HTML error page, not an `ApiError` with a message to read.
+  PAYLOAD_TOO_LARGE: retryWithGuidance(
+    'chat.runError.title.payloadTooLarge',
+    'chat.runError.payloadTooLargeMessage',
   ),
   // The run completed but did not leave a deliverable file. Name the actual
   // missing outcome in the compact card and keep the raw reason in details.
