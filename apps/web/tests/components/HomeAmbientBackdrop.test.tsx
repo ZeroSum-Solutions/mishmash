@@ -194,9 +194,37 @@ describe('HomeAmbientBackdrop reveal cost (FU-51)', () => {
     expect(FRAGMENT_SHADER).toMatch(/\(color - 0\.5\) \* 1\.05 \+ 0\.5/);
   });
 
-  it('asks WebGL to preserve the drawing buffer so a hidden frame can be shown again without a draw', () => {
+  it('preserves the drawing buffer only for a static (reduced-motion) picture', () => {
+    window.matchMedia = (() => ({ matches: true, addEventListener() {}, removeEventListener() {} })) as any;
     mountVisible();
     expect(contextAttrs?.preserveDrawingBuffer).toBe(true);
+  });
+
+  it('does not preserve the drawing buffer when the loop animates (a copy per frame)', () => {
+    mountVisible();
+    expect(contextAttrs?.preserveDrawingBuffer).toBe(false);
+  });
+
+  it('redraws on reveal when motion turns off after mount (the buffer was never preserved)', () => {
+    let reduce = false;
+    const listeners: Array<() => void> = [];
+    window.matchMedia = (() => ({
+      get matches() { return reduce; },
+      addEventListener(_: string, fn: () => void) { listeners.push(fn); },
+      removeEventListener() {},
+    })) as any;
+    const { canvas } = mountVisible();
+    runFrames(2);
+    const drawnAnimated = drawCalls;
+    reduce = true;
+    act(() => { listeners.forEach((fn) => fn()); });
+    const drawnAtSwitch = drawCalls;
+    expect(drawnAtSwitch).toBeGreaterThanOrEqual(drawnAnimated);
+    act(() => {
+      intersectionCallback?.([{ target: canvas, isIntersecting: false } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+      intersectionCallback?.([{ target: canvas, isIntersecting: true } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+    });
+    expect(drawCalls).toBe(drawnAtSwitch + 1);
   });
 
   it('under reduced motion draws once per buffer size, not once per reveal', () => {

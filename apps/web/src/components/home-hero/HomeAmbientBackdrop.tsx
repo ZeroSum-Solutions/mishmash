@@ -128,15 +128,19 @@ export function HomeAmbientBackdrop() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || typeof WebGL2RenderingContext === 'undefined') return;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    // Preserve the drawing buffer only for a static picture: it lets a
+    // hide/reveal show the last frame again without a shader draw (FU-51).
+    // For the animated loop the same flag costs a buffer copy on every
+    // frame (measured: home switch 33 -> 41 ms median with motion on), so
+    // it stays off there and the loop simply keeps drawing.
+    const preservesFrame = reducedMotion.matches;
     const gl = canvas.getContext('webgl2', {
       alpha: true,
       antialias: false,
       powerPreference: 'low-power',
       premultipliedAlpha: false,
-      // Keep the last frame in the drawing buffer across a hide/reveal so a
-      // static (reduced-motion) picture is shown again without a shader
-      // draw (FU-51). The animated loop redraws every frame regardless.
-      preserveDrawingBuffer: true,
+      preserveDrawingBuffer: preservesFrame,
     });
     if (!gl) return;
 
@@ -155,7 +159,6 @@ export function HomeAmbientBackdrop() {
     const resolutionLocation = gl.getUniformLocation(program, 'uResolution');
     const timeLocation = gl.getUniformLocation(program, 'uTime');
     const pointerLocation = gl.getUniformLocation(program, 'uPointer');
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const pointer = { current: 0.5, target: 0.5 };
     let animationFrame = 0;
     let lastDrawAt = 0;
@@ -214,7 +217,9 @@ export function HomeAmbientBackdrop() {
       if (reducedMotion.matches || document.hidden) {
         // The static picture is already in the preserved buffer unless the
         // buffer was reallocated since: then one draw, never one per reveal.
-        if (!hasFrame) draw(performance.now());
+        // A buffer that is not preserved (motion was on at mount) may have
+        // been consumed by the compositor, so it is drawn again.
+        if (!hasFrame || !preservesFrame) draw(performance.now());
         return;
       }
       animationFrame = window.requestAnimationFrame(animate);
