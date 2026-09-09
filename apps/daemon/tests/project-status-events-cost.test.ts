@@ -15,6 +15,7 @@ import type Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  LATEST_PROJECT_RUN_ROWS_SQL,
   closeDatabase,
   insertConversation,
   insertProject,
@@ -105,16 +106,19 @@ describe('listLatestProjectRunStatuses event-payload cost (FU-50)', () => {
       });
     }
 
-    // Warm SQLite's page cache so the measurement is about what the query
-    // materialises, not about the first disk read.
-    listLatestProjectRunStatuses(db);
+    // The FIRST call after open is the one that used to pull every payload;
+    // it is timed cold, with nothing remembered from an earlier listing.
+    const coldStarted = performance.now();
+    const cold = listLatestProjectRunStatuses(db);
+    const coldMs = performance.now() - coldStarted;
 
     const started = performance.now();
     const calls = 3;
-    let statuses = listLatestProjectRunStatuses(db);
-    for (let i = 1; i < calls; i += 1) statuses = listLatestProjectRunStatuses(db);
+    let statuses = cold;
+    for (let i = 0; i < calls; i += 1) statuses = listLatestProjectRunStatuses(db);
     const perCallMs = (performance.now() - started) / calls;
 
+    expect(coldMs).toBeLessThan(MAX_MS_PER_CALL);
     for (let p = 0; p < PROJECTS; p += 1) {
       const status = statuses.get(`project-${p}`);
       expect(status?.runId).toBe(`project-${p}-latest-run`);
@@ -123,6 +127,19 @@ describe('listLatestProjectRunStatuses event-payload cost (FU-50)', () => {
     }
     expect(statuses.size).toBe(PROJECTS);
     expect(perCallMs).toBeLessThan(MAX_MS_PER_CALL);
+  });
+
+  it('answers the latest-row query from the covering index, never from table records', () => {
+    const db = createDb();
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${LATEST_PROJECT_RUN_ROWS_SQL}`).all() as Array<{
+      detail: string;
+    }>).map((row) => row.detail);
+    // Payloads live in the table records; the window query must not visit
+    // them at all. The only access to `messages` (alias `m`) is the scan of
+    // the covering index; a plain `SCAN m` / `SEARCH m` (table records) or a
+    // non-covering index use would read past the payloads again.
+    const messagesAccess = plan.filter((line) => /\b(SCAN|SEARCH) m\b/.test(line));
+    expect(messagesAccess).toEqual(['SCAN m USING COVERING INDEX idx_messages_run_rows']);
   });
 
   it('re-derives a project status when its latest run row is rewritten', () => {
@@ -140,12 +157,13 @@ describe('listLatestProjectRunStatuses event-payload cost (FU-50)', () => {
         events: [{ kind: 'tool_use', id: 'tw-1', name: 'TodoWrite', input: { todos } }],
       });
 
-    write([{ content: 'still open', status: 'in_progress' }], 10);
+    write([{ content: 'a', status: 'in_progress' }], 10);
     expect(listLatestProjectRunStatuses(db).get('p')?.value).toBe('incomplete');
 
-    // Same row id, same end time, new events: the remembered derivation must
-    // not survive the rewrite.
-    write([{ content: 'still open', status: 'completed' }], 10);
+    // Same row id, same end time, and a payload of the SAME byte length
+    // ('a'/'in_progress' -> 'aaa'/'completed'): the remembered derivation
+    // must not survive the rewrite.
+    write([{ content: 'aaa', status: 'completed' }], 10);
     expect(listLatestProjectRunStatuses(db).get('p')?.value).toBe('succeeded');
 
     // A newer run row for the same project takes over.
