@@ -136,7 +136,6 @@ import type { RunCheckState } from '../runtime/run-failure-reconcile';
 import {
   LOST_RUN_CREATE_PROBE_INTERVAL_MS,
   RUN_NOT_STARTED_ERROR_CODE,
-  lostRunCreateCheckWithDaemonReachability,
   matchLostRunCreate,
   nextLostRunCreateStep,
   pinnedRunIdForAssistantRow,
@@ -1679,7 +1678,14 @@ export function ProjectView({
   // is unresolved, so the pane says so in neutral words; `message` is the stream
   // error the follow falls back to if the run turns out to have really failed
   // and its stored row cannot be read.
-  const [runCheck, setRunCheck] = useState<(RunCheckState & { message: string }) | null>(null);
+  // `inconclusive` is a lost-create lookup only, set by its deadline override
+  // below — see `scheduleLostRunCreateLookup`'s `effectiveStep`. Defaulted
+  // `false` everywhere else so the ordinary follow (which never reaches that
+  // override) always renders the plain "still checking" or `unreachable`
+  // wording it always has.
+  const [runCheck, setRunCheck] = useState<
+    (RunCheckState & { message: string; inconclusive: boolean }) | null
+  >(null);
   // Residual 8: `error` is ONE slot, shared with errors no run raised (a
   // conversation-load failure, an audio error). Remember what a run put there so
   // the run can take back its own value and nothing else.
@@ -3667,12 +3673,24 @@ export function ProjectView({
       // See `LOST_RUN_CREATE_LOOKUP_DEADLINE_MS`: the wall-clock backstop for
       // an inconclusive lookup, independent of the probe/miss counters below.
       const startedAt = Date.now();
+      // When THIS attempt started — the anchor the reschedule below measures
+      // against. Sol r3 HIGH: the old build scheduled the next attempt
+      // `LOST_RUN_CREATE_PROBE_INTERVAL_MS` after THIS one FINISHED, so a run
+      // of slow-but-conclusive probes (each spending most of that interval on
+      // its own read) compounded read time and gap on every cycle — three ~2.5s
+      // conclusive probes landed around 13.65s, past `LOST_RUN_CREATE_LOOKUP_DEADLINE_MS`.
+      // Scheduling START-TO-START instead (next attempt at `attemptStartedAt +
+      // LOST_RUN_CREATE_PROBE_INTERVAL_MS`, never sooner) keeps the cadence to
+      // one interval per probe regardless of how much of it the read spent, so
+      // the same three probes land under 9s.
+      let attemptStartedAt = 0;
       const attempt = () => {
         if (superseded()) return;
         if (messagesConversationIdRef.current !== conversationId) {
           release();
           return;
         }
+        attemptStartedAt = Date.now();
         void (async () => {
           try {
             // Anything else that adopted this run first — a reattach pass over the
@@ -3737,23 +3755,48 @@ export function ProjectView({
             // other never does holds `answered` false and `unanswered` at
             // zero forever — `nextLostRunCreateStep` would return `'probe'`
             // on every future call, and the notice would never say anything
-            // but "still checking". Once the overall deadline has elapsed on
-            // a probe that is STILL inconclusive (`answered` false), tell the
-            // truth instead: the same `'unreachable'` wording a fully silent
-            // daemon already reaches. A probe where both reads keep landing
+            // but "still checking". A probe where both reads keep landing
             // (`answered` true) is untouched and runs its ordinary
             // `LOST_RUN_CREATE_MAX_PROBES` course to `'abandon'`.
             const overdue = Date.now() - startedAt >= LOST_RUN_CREATE_LOOKUP_DEADLINE_MS;
-            const effectiveStep = step === 'probe' && !answered && overdue ? 'unreachable' : step;
-            if (effectiveStep === 'probe' || effectiveStep === 'unreachable') {
-              setRunCheck((current) =>
-                lostRunCreateCheckWithDaemonReachability(
-                  current,
-                  identity.assistantMessageId,
-                  effectiveStep === 'probe',
-                ),
+            // Sol r3 MEDIUM / D-51 grok ruling item 4: once the deadline has
+            // elapsed on a probe still `!answered`, THIS probe's own
+            // `unanswered` value says whether the daemon is truly silent.
+            // `unanswered === 0` means a read landed just now — the daemon IS
+            // answering, so `'unreachable'`'s "not answering" wording would be
+            // false. That case gets a distinct, honest `'inconclusive'` step
+            // instead: neutral, Check again, no Retry, same as `'unreachable'`
+            // — never the claim that nothing is answering. Only a probe that
+            // read NOTHING at the deadline (`unanswered > 0`) reaches
+            // `'unreachable'` here.
+            const effectiveStep: typeof step | 'inconclusive' =
+              step === 'probe' && !answered && overdue
+                ? unanswered === 0
+                  ? 'inconclusive'
+                  : 'unreachable'
+                : step;
+            if (
+              effectiveStep === 'probe'
+              || effectiveStep === 'unreachable'
+              || effectiveStep === 'inconclusive'
+            ) {
+              setRunCheck((current) => {
+                if (!current || current.runId !== null) return current;
+                if (current.assistantMessageId !== identity.assistantMessageId) return current;
+                const nextUnreachable = effectiveStep === 'unreachable';
+                const nextInconclusive = effectiveStep === 'inconclusive';
+                if (
+                  current.unreachable === nextUnreachable
+                  && current.inconclusive === nextInconclusive
+                ) {
+                  return current;
+                }
+                return { ...current, unreachable: nextUnreachable, inconclusive: nextInconclusive };
+              });
+              scheduleProjectTimeout(
+                attempt,
+                Math.max(0, LOST_RUN_CREATE_PROBE_INTERVAL_MS - (Date.now() - attemptStartedAt)),
               );
-              scheduleProjectTimeout(attempt, LOST_RUN_CREATE_PROBE_INTERVAL_MS);
               return;
             }
             release();
@@ -3771,6 +3814,7 @@ export function ProjectView({
                 runId: adoptedRunId,
                 assistantMessageId: identity.assistantMessageId,
                 unreachable: false,
+                inconclusive: false,
                 message: streamMessage,
               });
               scheduleInferredRunFailureRecheck(conversationId, adoptedRunId, {
@@ -3797,7 +3841,10 @@ export function ProjectView({
             // inconclusive probe.
             console.warn('Failed to look up a run whose create response was lost', err);
             if (superseded()) return;
-            scheduleProjectTimeout(attempt, LOST_RUN_CREATE_PROBE_INTERVAL_MS);
+            scheduleProjectTimeout(
+              attempt,
+              Math.max(0, LOST_RUN_CREATE_PROBE_INTERVAL_MS - (Date.now() - attemptStartedAt)),
+            );
           }
         })();
       };
@@ -3830,12 +3877,12 @@ export function ProjectView({
     if (!pending.runId) {
       const lookup = lostRunCreateLookupsRef.current.get(pending.assistantMessageId);
       if (!lookup || lookup.conversationId !== conversationId) return;
-      setRunCheck({ ...pending, unreachable: false });
+      setRunCheck({ ...pending, unreachable: false, inconclusive: false });
       scheduleLostRunCreateLookup(lookup.conversationId, lookup.identity, lookup.message);
       return;
     }
     const pendingRunId = pending.runId;
-    setRunCheck({ ...pending, unreachable: false });
+    setRunCheck({ ...pending, unreachable: false, inconclusive: false });
     scheduleInferredRunFailureRecheck(conversationId, pendingRunId, {
       unresolved: true,
       message: pending.message,
@@ -4985,6 +5032,7 @@ export function ProjectView({
                   runId: unresolvedRunId,
                   assistantMessageId: message.id,
                   unreachable: false,
+                  inconclusive: false,
                   message: err.message,
                 });
               } else if (runMayFinalize) {
@@ -6522,6 +6570,7 @@ export function ProjectView({
               runId: unresolvedRunId,
               assistantMessageId: assistantId,
               unreachable: false,
+              inconclusive: false,
               message: err.message,
             });
           } else if (runMayFinalize && lostRunCreate) {
@@ -6529,6 +6578,7 @@ export function ProjectView({
               runId: null,
               assistantMessageId: assistantId,
               unreachable: false,
+              inconclusive: false,
               message: err.message,
             });
           } else if (runMayFinalize) {

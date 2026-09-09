@@ -96,6 +96,8 @@ export const en: Dict = {
   'chat.runChecking.message': 'Connection to the run was lost. Checking its result…',
   'chat.runChecking.unreachableTitle': 'MishMash is not answering',
   'chat.runChecking.unreachableMessage': 'The connection to the run was lost and MishMash has not answered since. The turn may still be running.',
+  'chat.runChecking.inconclusiveTitle': 'MishMash could not confirm whether this run started',
+  'chat.runChecking.inconclusiveMessage': 'One of the checks for this run answered, but not enough to confirm it started. The turn may still be running.',
   'chat.runChecking.checkAgainCta': 'Check again',
   'chat.sendPaused.unresolvedRun': 'Sending is paused until this run’s result is known.',
   'chat.runError.title.cliMissing': 'Agent not installed',

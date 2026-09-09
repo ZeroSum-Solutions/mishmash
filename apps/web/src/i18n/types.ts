@@ -2691,6 +2691,13 @@ export interface Dict {
   'chat.runChecking.message': string;
   'chat.runChecking.unreachableTitle': string;
   'chat.runChecking.unreachableMessage': string;
+  // A lost-create lookup that hit its wall-clock deadline with at least one
+  // probe read landing — the daemon IS answering, so `unreachableTitle`'s
+  // "not answering" wording would be false. Neutral, no Retry (B-02): the run
+  // may still be running. See the deadline override in
+  // `ProjectView.tsx`'s `scheduleLostRunCreateLookup`.
+  'chat.runChecking.inconclusiveTitle': string;
+  'chat.runChecking.inconclusiveMessage': string;
   'chat.runChecking.checkAgainCta': string;
   // Why the composer will not send while that state stands. Rendered by the
   // checking notice and repeated beside the disabled Send button; see

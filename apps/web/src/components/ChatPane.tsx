@@ -477,7 +477,13 @@ interface Props {
   // Set by the pane that owns a run whose event stream failed without the
   // daemon adjudicating it. The run is UNRESOLVED, not failed, so this is
   // rendered as a neutral notice and never as the failure card.
-  runCheck?: RunCheckState | null;
+  //
+  // `inconclusive` is a lost-create lookup only: its wall-clock deadline
+  // elapsed with at least one probe read landing, so the daemon IS answering
+  // and `unreachable`'s "not answering" wording would be false (Sol r3 / D-51
+  // grok ruling item 4). Mutually exclusive with `unreachable` in practice;
+  // absent (or false) is the ordinary "still checking" state.
+  runCheck?: (RunCheckState & { inconclusive?: boolean }) | null;
   // Re-runs the follow behind that notice. Only offered once the daemon has
   // stopped answering; a run that may still be running gets no action at all,
   // because re-sending it is the double-send hazard (B-02).
@@ -2492,17 +2498,21 @@ export function ChatPane({
                   icon="refresh"
                   tone="neutral"
                   title={t(
-                    activeRunCheck.unreachable
-                      ? 'chat.runChecking.unreachableTitle'
-                      : 'chat.runChecking.title',
+                    activeRunCheck.inconclusive
+                      ? 'chat.runChecking.inconclusiveTitle'
+                      : activeRunCheck.unreachable
+                        ? 'chat.runChecking.unreachableTitle'
+                        : 'chat.runChecking.title',
                   )}
                   status={
                     <>
                       <p>
                         {t(
-                          activeRunCheck.unreachable
-                            ? 'chat.runChecking.unreachableMessage'
-                            : 'chat.runChecking.message',
+                          activeRunCheck.inconclusive
+                            ? 'chat.runChecking.inconclusiveMessage'
+                            : activeRunCheck.unreachable
+                              ? 'chat.runChecking.unreachableMessage'
+                              : 'chat.runChecking.message',
                         )}
                       </p>
                       {/* The notice is the only thing on screen for as long as
@@ -2514,7 +2524,7 @@ export function ChatPane({
                     </>
                   }
                   footerActions={
-                    activeRunCheck.unreachable && onRunCheckAgain ? (
+                    (activeRunCheck.unreachable || activeRunCheck.inconclusive) && onRunCheckAgain ? (
                       <button
                         type="button"
                         className="chat-error-action"
