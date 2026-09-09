@@ -215,7 +215,6 @@ describe('project upload stream (HTTP)', () => {
       method: 'PUT',
       headers: { Authorization: `Bearer ${session.token}`, 'Content-Type': 'application/octet-stream' },
       body: slowBody,
-      // @ts-expect-error Node fetch requires duplex for a streamed body.
       duplex: 'half',
       signal: controller.signal,
     }).catch(() => {});
