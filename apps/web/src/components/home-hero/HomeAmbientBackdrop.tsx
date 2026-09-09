@@ -93,6 +93,13 @@ void main() {
 
   color += (hash(gl_FragCoord.xy + uTime) - 0.5) * 0.015;
 
+  // The lift the canvas used to get from the CSS filter saturate(1.15)
+  // contrast(1.05), applied here so the layer needs no filter re-raster on
+  // reveal (FU-51). Same formulas as the CSS filter functions.
+  float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+  color = mix(vec3(luma), color, 1.15);
+  color = (color - 0.5) * 1.05 + 0.5;
+
   float alpha = clamp(
     (leftRibbon + rightRibbon) * 0.34 + midRibbon * 0.2 + centerGlow * 0.18 + star * twinkle * starMask * 0.25,
     0.0,
@@ -126,6 +133,10 @@ export function HomeAmbientBackdrop() {
       antialias: false,
       powerPreference: 'low-power',
       premultipliedAlpha: false,
+      // Keep the last frame in the drawing buffer across a hide/reveal so a
+      // static (reduced-motion) picture is shown again without a shader
+      // draw (FU-51). The animated loop redraws every frame regardless.
+      preserveDrawingBuffer: true,
     });
     if (!gl) return;
 
@@ -158,6 +169,9 @@ export function HomeAmbientBackdrop() {
     // layout; the loop stops while the canvas is off screen.
     let bounds = { left: 0, width: 0, height: 0 };
     let onScreen = false;
+    // Whether the drawing buffer holds a frame for its current size. A
+    // resize reallocates (and clears) the buffer; a hide/reveal does not.
+    let hasFrame = false;
 
     const resize = () => {
       let ratio = Math.min(window.devicePixelRatio || 1, 1.25);
@@ -173,6 +187,7 @@ export function HomeAmbientBackdrop() {
       if (canvas.width === width && canvas.height === height) return;
       canvas.width = width;
       canvas.height = height;
+      hasFrame = false;
       gl.viewport(0, 0, width, height);
       // Resizing the drawing buffer clears it; when the frame loop is not
       // running (reduced motion, hidden tab) repaint the single frame.
@@ -184,6 +199,7 @@ export function HomeAmbientBackdrop() {
       gl.uniform1f(timeLocation, (now - startedAt) / 1000);
       gl.uniform2f(pointerLocation, pointer.current, 0.5);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+      hasFrame = true;
     };
     const animate = (now: number) => {
       if (now - lastDrawAt >= 32) {
@@ -196,7 +212,9 @@ export function HomeAmbientBackdrop() {
       window.cancelAnimationFrame(animationFrame);
       if (!onScreen) return;
       if (reducedMotion.matches || document.hidden) {
-        draw(performance.now());
+        // The static picture is already in the preserved buffer unless the
+        // buffer was reallocated since: then one draw, never one per reveal.
+        if (!hasFrame) draw(performance.now());
         return;
       }
       animationFrame = window.requestAnimationFrame(animate);
@@ -221,7 +239,7 @@ export function HomeAmbientBackdrop() {
     const handleWindowResize = () => {
       if (!resizeObserver) measure();
       resize();
-      if (onScreen) draw(performance.now());
+      if (onScreen && !hasFrame) draw(performance.now());
     };
     const resizeObserver =
       typeof ResizeObserver === 'undefined'
@@ -238,7 +256,9 @@ export function HomeAmbientBackdrop() {
             const rect = entry.target.getBoundingClientRect();
             bounds = { left: rect.left, width: entry.contentRect.width, height: entry.contentRect.height };
             resize();
-            if (onScreen) draw(performance.now());
+            // resize() already painted the static frame when it reallocated;
+            // draw here only when the buffer is empty at this size.
+            if (onScreen && !hasFrame) draw(performance.now());
           });
     const intersectionObserver =
       typeof IntersectionObserver === 'undefined'
