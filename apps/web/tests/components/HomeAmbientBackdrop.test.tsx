@@ -11,6 +11,9 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { HomeAmbientBackdrop } from '../../src/components/home-hero/HomeAmbientBackdrop';
 
 type Frame = (now: number) => void;
@@ -19,6 +22,7 @@ let now = 0;
 let resizeCallback: ResizeObserverCallback | null = null;
 let intersectionCallback: IntersectionObserverCallback | null = null;
 let drawCalls = 0;
+let contextAttrs: Record<string, unknown> | undefined;
 
 const originals = {
   raf: globalThis.requestAnimationFrame,
@@ -52,7 +56,8 @@ function runFrames(count: number, stepMs = 40) {
 beforeEach(() => {
   frames.length = 0; now = 0; drawCalls = 0; resizeCallback = null; intersectionCallback = null;
   (globalThis as any).WebGL2RenderingContext = class {};
-  HTMLCanvasElement.prototype.getContext = (() => fakeGl()) as any;
+  contextAttrs = undefined;
+  HTMLCanvasElement.prototype.getContext = ((_: string, attrs?: Record<string, unknown>) => { contextAttrs = attrs; return fakeGl(); }) as any;
   globalThis.requestAnimationFrame = ((fn: Frame) => { frames.push(fn); return frames.length; }) as any;
   globalThis.cancelAnimationFrame = ((id: number) => { frames.splice(id - 1, 1); }) as any;
   (globalThis as any).ResizeObserver = class { constructor(cb: ResizeObserverCallback) { resizeCallback = cb; } observe() {} disconnect() {} unobserve() {} };
@@ -158,5 +163,56 @@ describe('HomeAmbientBackdrop layout discipline', () => {
     } finally {
       Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: originalRatio });
     }
+  });
+});
+
+// FU-51: every route switch away from and back to Home hides and reveals
+// this canvas (EntryShell keeps the view behind display:none). Two costs
+// landed on the frames after the reveal, and on the NEXT route's frames
+// too, because the compositor was still busy with them: a CSS filter on the
+// WebGL canvas that forced the whole 1408x846 layer through a filter
+// re-raster (57 ms of raster + 15 ms of commit measured on the live app,
+// 2026-09-09), and a fresh shader draw under reduced motion even though the
+// picture is static. The look is baked into the shader instead, and a frame
+// already drawn survives a hide/reveal.
+describe('HomeAmbientBackdrop reveal cost (FU-51)', () => {
+  it('carries no CSS filter on the canvas; the look is in the shader', () => {
+    const css = fs.readFileSync(
+      path.join(__dirname, '../../src/components/home-hero/HomeAmbientBackdrop.module.css'),
+      'utf8',
+    );
+    const canvasRule = css.match(/\.canvas\s*\{[^}]*\}/g) ?? [];
+    expect(canvasRule.length).toBeGreaterThan(0);
+    for (const rule of canvasRule) expect(rule).not.toMatch(/\bfilter\s*:/);
+    expect(css).not.toMatch(/backdrop-filter/);
+  });
+
+  it('asks WebGL to preserve the drawing buffer so a hidden frame can be shown again without a draw', () => {
+    mountVisible();
+    expect(contextAttrs?.preserveDrawingBuffer).toBe(true);
+  });
+
+  it('under reduced motion draws once per buffer size, not once per reveal', () => {
+    window.matchMedia = (() => ({ matches: true, addEventListener() {}, removeEventListener() {} })) as any;
+    const { canvas } = mountVisible();
+    expect(drawCalls).toBe(1);
+
+    // Route switch away (hidden: 0x0 box, off screen) and back.
+    act(() => {
+      resizeCallback?.([{ target: canvas, contentRect: { width: 0, height: 0, left: 0, top: 0 } } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+      intersectionCallback?.([{ target: canvas, isIntersecting: false } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+    });
+    act(() => {
+      resizeCallback?.([{ target: canvas, contentRect: { width: 1200, height: 800, left: 0, top: 0 } } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+      intersectionCallback?.([{ target: canvas, isIntersecting: true } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+    });
+    expect(drawCalls).toBe(1);
+
+    // A real size change clears the buffer, so that reveal must draw again.
+    act(() => {
+      resizeCallback?.([{ target: canvas, contentRect: { width: 900, height: 700, left: 0, top: 0 } } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+    });
+    expect(canvas.width).toBe(900);
+    expect(drawCalls).toBe(2);
   });
 });
