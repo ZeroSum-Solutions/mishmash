@@ -285,19 +285,16 @@ export function HomeAmbientBackdrop() {
       onScreen = true;
       start();
     }
-    // A lost WebGL context takes the preserved frame with it: forget it so
-    // the next start() draws again instead of trusting an empty buffer.
-    // (Recreating the program after `webglcontextrestored` is not handled
-    // here; the component never was, and a lost context is rare on this
-    // low-power, single-program canvas.)
-    const handleContextLost = (event: Event) => {
-      event.preventDefault();
+    // A lost WebGL context takes the preserved frame with it: forget it and
+    // stop the loop. The event is not preventDefault-ed, so the browser does
+    // not attempt a restore into a program this effect never rebuilds (the
+    // component never handled restoration; a lost context on this
+    // low-power, single-program canvas means a blank aurora until reload).
+    const handleContextLost = () => {
       hasFrame = false;
       window.cancelAnimationFrame(animationFrame);
     };
-    const handleContextRestored = () => start();
     canvas.addEventListener('webglcontextlost', handleContextLost);
-    canvas.addEventListener('webglcontextrestored', handleContextRestored);
     window.addEventListener('resize', handleWindowResize);
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
     document.addEventListener('visibilitychange', start);
@@ -308,7 +305,6 @@ export function HomeAmbientBackdrop() {
       resizeObserver?.disconnect();
       intersectionObserver?.disconnect();
       canvas.removeEventListener('webglcontextlost', handleContextLost);
-      canvas.removeEventListener('webglcontextrestored', handleContextRestored);
       window.removeEventListener('resize', handleWindowResize);
       window.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('visibilitychange', start);

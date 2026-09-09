@@ -187,6 +187,7 @@ describe('HomeAmbientBackdrop reveal cost (FU-51)', () => {
     // No filter anywhere in the module: a filter on the wrapper would put the
     // same re-raster back one layer up.
     expect(css).not.toMatch(/(^|[^-])filter\s*:/m);
+    expect(css).not.toMatch(/backdrop-filter\s*:/);
     // The lift lives in the fragment shader: the CSS filter matrix luma
     // (0.213, 0.715, 0.072), saturate 1.15, contrast 1.05 around 0.5.
     expect(FRAGMENT_SHADER).toMatch(/dot\(color, vec3\(0\.213, 0\.715, 0\.072\)\)/);
