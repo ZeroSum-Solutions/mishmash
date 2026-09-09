@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installMockOpenDesignHost } from '@open-design/host/testing';
+import type { ApiErrorResponse } from '@open-design/contracts';
 
 import {
   cancelConnectorAuthorization,
@@ -853,16 +854,22 @@ describe('uploadProjectFiles', () => {
     expect(result.failed[0]).toMatchObject({ name: 'c.txt' });
   });
 
+  // Supersedes the previous version of this test, which fixtured a flat
+  // `{code, error: string}` body — a shape the daemon never actually sends.
+  // The real envelope (`ApiErrorResponse`, `api-errors.ts:20-29`) nests the
+  // code and message under `error`; the old flat fixture let a real 413/415
+  // response's message silently vanish into "upload failed (<status>)"
+  // (`registry.ts:2412-2420` on base). RED on base for that reason.
   it('marks every file failed with the daemon error code/message when the upload response is non-ok', async () => {
     const a = new File(['a'], 'a.txt', { type: 'text/plain' });
     const b = new File(['b'], 'b.txt', { type: 'text/plain' });
 
+    const envelope: ApiErrorResponse = {
+      error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'file type not allowed' },
+    };
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(
-        JSON.stringify({ code: 'UNSUPPORTED_MEDIA_TYPE', error: 'file type not allowed' }),
-        { status: 415 },
-      )),
+      vi.fn(async () => new Response(JSON.stringify(envelope), { status: 415 })),
     );
 
     const result = await uploadProjectFiles('project-1', [a, b]);

@@ -24,6 +24,7 @@ import type {
   RestoreProjectFileVersionResponse,
   SocialShareRequest,
   SocialShareResponse,
+  UploadLimitsResponse,
 } from '@open-design/contracts';
 import { parseAgentRegistrySseEvent } from '@open-design/contracts';
 import type {
@@ -2380,6 +2381,25 @@ export interface UploadProjectFilesResult {
   error?: string;
 }
 
+/** Reads a project-upload error response's real code/message. The daemon's
+ *  error envelope is `{ error: { code, message } }` (`api-errors.ts`); this
+ *  used to be read as a flat `{ code, error: string }`, which meant a 413's
+ *  real message ("File exceeds the 200 MiB limit …") never reached the UI —
+ *  mirrors `designLibraryPromotionError` above. */
+async function projectUploadError(resp: Response): Promise<{ code?: string; message: string }> {
+  const payload = (await resp.json().catch(() => null)) as
+    | { error?: string | { code?: string; message?: string } }
+    | null;
+  if (typeof payload?.error === 'string') return { message: payload.error };
+  if (payload?.error && typeof payload.error === 'object') {
+    return {
+      code: payload.error.code,
+      message: payload.error.message ?? `upload failed (${resp.status})`,
+    };
+  }
+  return { message: `upload failed (${resp.status})` };
+}
+
 export async function uploadProjectFiles(
   projectId: string,
   files: File[],
@@ -2409,15 +2429,13 @@ export async function uploadProjectFiles(
       );
 
       if (!resp.ok) {
-        const payload = (await resp.json().catch(() => null)) as
-          | { code?: string; error?: string }
-          | null;
-        error = payload?.error ?? `upload failed (${resp.status})`;
+        const { code, message } = await projectUploadError(resp);
+        error = message;
         for (const f of batch) {
-          failed.push({ name: f.name, code: payload?.code, error: error });
+          failed.push({ name: f.name, code, error });
         }
         for (const f of remaining) {
-          failed.push({ name: f.name, code: payload?.code, error: error });
+          failed.push({ name: f.name, code, error });
         }
         break;
       }
@@ -2457,6 +2475,20 @@ export async function uploadProjectFiles(
   }
 
   return { uploaded, failed, error };
+}
+
+// The one number every drop surface reads for its before-selection limit
+// copy (F-01 / INV-7.3) instead of a hardcoded figure that can drift out of
+// sync with what the daemon actually enforces
+// (`apps/daemon/src/uploads/staging.ts:resolveUploadLimits`).
+export async function fetchProjectUploadLimits(projectId: string): Promise<UploadLimitsResponse | null> {
+  try {
+    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/uploads/limits`);
+    if (!resp.ok) return null;
+    return (await resp.json()) as UploadLimitsResponse;
+  } catch {
+    return null;
+  }
 }
 
 // Stable URL that serves a project file with its original mime — for

@@ -1,0 +1,49 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle, var(--bg-panel));
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.statusPending {
+  color: var(--fg-muted, var(--fg-secondary));
+}
+
+.statusDone {
+  color: var(--success, #2f9e44);
+}
+
+.statusFailed {
+  color: var(--danger, #d9534f);
+}
