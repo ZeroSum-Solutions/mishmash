@@ -1165,20 +1165,29 @@ describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotat
     // half-null range that a sound daemon can never produce — `runCapture`
     // merely casts parsed JSON, so a malformed capture file reaches this
     // point unchecked.
-    const halfNull = uiLagExport([lagAt(10, 1)], { firstSeq: null });
+    //
+    // Sol r3 MEDIUM finding: a fixture with one non-empty record (`total: 1`)
+    // never actually exercises that branch — the reviewed head's separate
+    // non-empty/legacy guard rejects it first, for an unrelated reason, so a
+    // test built that way would pass even against the pre-fix loose check.
+    // `anomalies: []` / `total: 0` is what reaches the branch this pins: a
+    // genuinely empty answer whose range is null on only one side, which the
+    // pre-fix `firstSeq == null || lastSeq == null` check waved through as
+    // "empty" and the current `classifySequenceRange` refuses outright.
+    const halfNull = uiLagExport([], { lastSeq: 5 });
 
     expect(
       () => buildOrThrow([halfNull]),
-      why('firstSeq null with lastSeq non-null is not a shape a sound daemon produces'),
+      why('firstSeq null with lastSeq non-null is not a shape a sound daemon produces, even when the poll is otherwise empty'),
     ).toThrow(/malformed sequence range/);
   });
 
   it('refuses a sequence range that is null on the other side', () => {
-    const halfNull = uiLagExport([lagAt(10, 1)], { lastSeq: null });
+    const halfNull = uiLagExport([], { firstSeq: 5 });
 
     expect(
       () => buildOrThrow([halfNull]),
-      why('lastSeq null with firstSeq non-null is not a shape a sound daemon produces'),
+      why('lastSeq null with firstSeq non-null is not a shape a sound daemon produces, even when the poll is otherwise empty'),
     ).toThrow(/malformed sequence range/);
   });
 
@@ -1205,6 +1214,80 @@ describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotat
       gapViolationSubjects(built),
       why('the refusal must name the range, the same as an ordinary rotation gap'),
     ).toContain('1..1');
+  });
+
+  // Sol r3 HIGH finding (e2e/lib/w3-performance-capture.ts:544): the prior fix
+  // read `highWaterSeq` "defensively" — an absent or malformed value degraded
+  // to "cannot check censorship for this poll" and the reconciliation carried
+  // on as if nothing were wrong. That is fail-OPEN: a censored clear between
+  // two empty polls is exactly the case with no other evidence, so a poll
+  // that cannot supply a trustworthy `highWaterSeq` must refuse outright, not
+  // be read as benign. Legacy exports predating `highWaterSeq` are explicitly
+  // ineligible for INV-3.10 for the same reason.
+  describe('fails closed on an untrustworthy highWaterSeq', () => {
+    it('refuses a closing empty poll whose highWaterSeq is absent', () => {
+      const opening = uiLagExport([]);
+      const closing = uiLagExport([]) as Partial<ListAnomaliesResponse>;
+      delete closing.highWaterSeq;
+
+      expect(
+        () => buildOrThrow([opening, closing as ListAnomaliesResponse]),
+        why('a poll with no highWaterSeq cannot prove a censored clear did not happen between it and the next poll'),
+      ).toThrow(/no highWaterSeq/);
+    });
+
+    it('refuses a closing empty poll whose highWaterSeq is null', () => {
+      const opening = uiLagExport([]);
+      const closing = uiLagExport([], { highWaterSeq: null as unknown as number });
+
+      expect(
+        () => buildOrThrow([opening, closing]),
+        why('a null highWaterSeq is an absence dressed up as a value, not evidence'),
+      ).toThrow(/null highWaterSeq/);
+    });
+
+    it('refuses a closing empty poll whose highWaterSeq is fractional', () => {
+      const opening = uiLagExport([]);
+      const closing = uiLagExport([], { highWaterSeq: 1.5 });
+
+      expect(
+        () => buildOrThrow([opening, closing]),
+        why('a fractional mark cannot identify a whole sequence number'),
+      ).toThrow(/fractional/);
+    });
+
+    it('refuses a closing empty poll whose highWaterSeq is negative', () => {
+      const opening = uiLagExport([]);
+      const closing = uiLagExport([], { highWaterSeq: -1 });
+
+      expect(
+        () => buildOrThrow([opening, closing]),
+        why('a sequence high-water mark cannot fall below zero'),
+      ).toThrow(/negative highWaterSeq/);
+    });
+
+    it('refuses a closing empty poll whose highWaterSeq is stale, below a prior poll', () => {
+      const opening = uiLagExport([], { highWaterSeq: 5 });
+      const closing = uiLagExport([], { highWaterSeq: 3 });
+
+      expect(
+        () => buildOrThrow([opening, closing]),
+        why('highWaterSeq must never move backwards between polls, the same as an ordinary sequence range'),
+      ).toThrow(/highWaterSeq 3, below the 5/);
+    });
+
+    it('enforces highWaterSeq >= lastSeq against a poll\'s own retained range', () => {
+      // Not a two-empty-poll case: a single poll that DOES retain records, but
+      // whose highWaterSeq trails what it says it retains. That is a poll
+      // contradicting itself — the mark can never be behind the range it is
+      // reporting alongside it.
+      const poll = uiLagExport([lagAt(10, 1), lagAt(20, 2)], { highWaterSeq: 1 });
+
+      expect(
+        () => buildOrThrow([poll]),
+        why('highWaterSeq below the poll\'s own lastSeq is a self-contradictory envelope'),
+      ).toThrow(/below its own retained lastSeq/);
+    });
   });
 });
 
