@@ -336,6 +336,9 @@ const PROJECT_STRING_FLAGS = new Set([
   'agent', 'model', 'snapshot-id', 'inputs', 'grant-caps', 'editor',
   'title', 'label', 'against', 'seed-from', 'fork-after', 'mode',
   'source', 'root', 'out',
+  // `od project video-import <projectId> --provider vimeo --url <url>`
+  // (Part 8 F-05).
+  'provider', 'url',
   // `od project reference <targetId> --project <id> --intent "<text>"` —
   // the intent short flag mirrors `od feedback`'s `--note` + `--prompt-file`
   // pattern (readPromptFromFlags already reads `--prompt`/`--prompt-file`).
@@ -345,7 +348,7 @@ const PROJECT_STRING_FLAGS = new Set([
   // the same brief flags as `od design-library start-project`.
   'brief-file', 'screens', 'fidelity', 'iterations', 'pages', 'product', 'audience', 'use-case', 'direction',
 ]);
-const PROJECT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'follow', 'match-kit-look']);
+const PROJECT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'follow', 'match-kit-look', 'wait']);
 // `od templates …` mirrors NewProjectPanel / ExamplesTab. Same surface,
 // same /api/templates store. The CLI form is the embeddability contract:
 // external agents (hermes-agent, openclaw, ...) can snapshot, list, or
@@ -7600,6 +7603,12 @@ async function runProject(args) {
   od project handoff <id> --conversation <id> --api-key <key> --model <model>
                     [--base-url <url>] [--max-tokens <n>]
                     Synthesize a resume-conversation handoff prompt.
+  od project video-import <id> --provider vimeo --url <url> [--as <relpath>]
+                    [--wait] [--json]
+                    Import a Vimeo video the connected account owns into the
+                    project as a background job (Part 8 F-05). --provider
+                    youtube always exits 2 (declared, not enabled yet). Use
+                    \`od video-import connect --provider vimeo\` first.
 
 Common options:
   --daemon-url <url>   MishMash daemon HTTP base.
@@ -7930,10 +7939,84 @@ Common options:
       );
       return;
     }
+    // `od project video-import <projectId> --provider vimeo --url <url>
+    // [--as <relpath>] [--wait] [--json]` (Part 8 F-05). Mirrors `od media
+    // generate`'s taskId-then-poll shape (create -> print queued -> poll),
+    // but against this track's own job routes
+    // (POST/GET /api/projects/:id/video-imports[/:jobId]) rather than the
+    // generic /api/media/tasks/:id/wait endpoint, since a video-import job
+    // is polled by project + jobId, not a bare taskId.
+    case 'video-import': {
+      const projectId = positionalArgs(rest, PROJECT_STRING_FLAGS)[0];
+      const provider = typeof flags.provider === 'string' ? flags.provider : '';
+      if (!projectId || !provider) {
+        console.error('Usage: od project video-import <projectId> --provider vimeo --url <url> [--as <relpath>] [--wait] [--json]');
+        process.exit(2);
+      }
+      const url = typeof flags.url === 'string' ? flags.url : '';
+      if (provider !== 'youtube' && !url) {
+        console.error('--url is required (unless --provider youtube, which is always rejected)');
+        process.exit(2);
+      }
+      const body = { provider, url, ...(typeof flags.as === 'string' && flags.as ? { as: flags.as } : {}) };
+      const resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/video-imports`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        if (flags.json) process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+        else console.error(`video import rejected: ${data?.error?.message ?? `HTTP ${resp.status}`}`);
+        // youtube is always rejected this wave (DEF-7.4): a fixed exit code
+        // regardless of the specific ApiErrorCode the route answers with.
+        process.exit(provider === 'youtube' ? 2 : 1);
+      }
+      const job = data.job;
+      if (!flags.wait || (job && (job.status === 'done' || job.status === 'failed'))) {
+        if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+        console.log(`[video-import] job ${job?.jobId ?? '-'} ${job?.status ?? 'queued'} (provider ${provider})`);
+        return;
+      }
+      await pollVideoImportJob(base, projectId, job.jobId, flags.json === true);
+      return;
+    }
     default:
       console.error(`unknown subcommand: od project ${sub}`);
       process.exit(2);
   }
+}
+
+/** Poll `GET /api/projects/:id/video-imports/:jobId` until a terminal
+ * status or a fixed budget elapses -- `od project video-import --wait`'s
+ * poll half, mirroring `pollUntilDoneOrBudget`'s shape without reusing it
+ * (that helper is pinned to the /api/media/tasks/:id/wait long-poll
+ * contract, which this track's job route does not implement). */
+async function pollVideoImportJob(base, projectId, jobId, json) {
+  const totalBudgetMs = 120_000;
+  const intervalMs = 1_000;
+  const startedAt = Date.now();
+  let last = null;
+  while (Date.now() - startedAt < totalBudgetMs) {
+    const resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/video-imports/${encodeURIComponent(jobId)}`);
+    if (!resp.ok) {
+      console.error(`video import status check failed: HTTP ${resp.status}`);
+      process.exit(1);
+    }
+    const data = await resp.json();
+    last = data;
+    const job = data.job;
+    if (job && (job.status === 'done' || job.status === 'failed' || job.status === 'interrupted')) {
+      if (json) process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      else if (job.status === 'done') console.log(`[video-import] job ${job.jobId} done -> ${job.file?.path ?? job.file?.name ?? '-'}`);
+      else console.error(`[video-import] job ${job.jobId} ${job.status}: ${job.error?.message ?? 'unknown error'}`);
+      process.exit(job.status === 'done' ? 0 : 1);
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  if (json && last) process.stdout.write(JSON.stringify(last, null, 2) + '\n');
+  else console.error(`[video-import] job ${jobId} still running after ${totalBudgetMs}ms`);
+  process.exit(2);
 }
 
 async function runRun(args) {
