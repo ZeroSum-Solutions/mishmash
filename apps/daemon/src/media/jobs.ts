@@ -401,6 +401,8 @@ interface BuiltEncodeArgs {
   encodeArgs: string[];
   probeArgs: string[] | null;
   outputAbs: string;
+  /** A per-job scratch file (concat-copy/frames-to-mp4's list file) that must be removed once the child settles, win or lose. `null` for presets (h264-web) with no scratch file. */
+  scratchFile: string | null;
 }
 
 function ffmpegBinFromEnv(): string {
@@ -484,6 +486,7 @@ async function buildEncodeArgs(
           outputAbs,
         ],
         outputAbs,
+        scratchFile: null,
       },
     };
   }
@@ -510,6 +513,7 @@ async function buildEncodeArgs(
         probeArgs: ['-v', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1'],
         encodeArgs: ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', '-progress', 'pipe:1', '-nostats', outputAbs],
         outputAbs,
+        scratchFile: listFile,
       },
     };
   }
@@ -561,6 +565,7 @@ async function buildEncodeArgs(
         outputAbs,
       ],
       outputAbs,
+      scratchFile: listFile,
     },
   };
 }
@@ -579,33 +584,44 @@ export async function runMediaEncodeJob(input: RunMediaEncodeJobInput): Promise<
   const built = await buildEncodeArgs(input.projectDir, input.request, input.overwrite === true);
   if (!built.ok) return { ok: false, error: built.error };
 
-  const handle = runFfmpegEncodeChild({
-    ffmpegBin: ffmpegBinFromEnv(),
-    ffprobeBin: ffprobeBinFromEnv(),
-    args: built.built.encodeArgs,
-    probeArgs: built.built.probeArgs,
-    maxDurationMs: input.maxDurationMs,
-    onProgress: input.onProgress,
-  });
-  input.onSpawned?.(handle.kill);
+  // concat-copy/frames-to-mp4 write a per-job scratch list file
+  // (built.built.scratchFile) into the project directory; it must be
+  // removed once the child settles, win or lose — mirrors
+  // storyboards/assemble.ts's runConcatAssemble, which removes its own
+  // concat list file in a finally block.
+  try {
+    const handle = runFfmpegEncodeChild({
+      ffmpegBin: ffmpegBinFromEnv(),
+      ffprobeBin: ffprobeBinFromEnv(),
+      args: built.built.encodeArgs,
+      probeArgs: built.built.probeArgs,
+      maxDurationMs: input.maxDurationMs,
+      onProgress: input.onProgress,
+    });
+    input.onSpawned?.(handle.kill);
 
-  const outcome = await handle.promise;
-  if (!outcome.ok) {
-    await rm(built.built.outputAbs, { force: true }).catch(() => {});
-    return outcome;
+    const outcome = await handle.promise;
+    if (!outcome.ok) {
+      await rm(built.built.outputAbs, { force: true }).catch(() => {});
+      return outcome;
+    }
+    const stats = await stat(built.built.outputAbs);
+    return {
+      ok: true,
+      file: {
+        name: path.basename(built.built.outputAbs),
+        path: input.request.output,
+        size: stats.size,
+        mtime: stats.mtimeMs,
+        kind: 'video',
+        mime: 'video/mp4',
+      },
+    };
+  } finally {
+    if (built.built.scratchFile) {
+      await rm(built.built.scratchFile, { force: true }).catch(() => {});
+    }
   }
-  const stats = await stat(built.built.outputAbs);
-  return {
-    ok: true,
-    file: {
-      name: path.basename(built.built.outputAbs),
-      path: input.request.output,
-      size: stats.size,
-      mtime: stats.mtimeMs,
-      kind: 'video',
-      mime: 'video/mp4',
-    },
-  };
 }
 
 // ---------------------------------------------------------------------------

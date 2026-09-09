@@ -37,7 +37,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -391,6 +391,73 @@ describe('media jobs — encode', () => {
         docsValue,
       );
     }
+  });
+
+  it('(h) concat-copy and frames-to-mp4 jobs remove their scratch list file after reaching a terminal state, success or failure', async () => {
+    const { baseUrl, projectId, projectDir } = await boot();
+    writeFileSync(path.join(projectDir, 'in2.mp4'), 'second fixture input');
+
+    function scratchFileNames(): string[] {
+      return readdirSync(projectDir).filter(
+        (name) => name.startsWith('.media-job-concat-') || name.startsWith('.media-job-frames-'),
+      );
+    }
+
+    async function createAndAwait(body: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+      const createResp = await fetch(`${baseUrl}/api/projects/${encodeURIComponent(projectId)}/media/jobs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      expect(createResp.status, `${body.preset} preset must be accepted`).not.toBe(404);
+      const created = (await createResp.json()) as { taskId?: string };
+      const taskId = created.taskId as string;
+      let last: Record<string, unknown> | null = null;
+      let since = 0;
+      for (let i = 0; i < 30; i += 1) {
+        const waitResp = await fetch(`${baseUrl}/api/media/tasks/${encodeURIComponent(taskId)}/wait`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ since, timeoutMs: 1500 }),
+        });
+        last = (await waitResp.json()) as Record<string, unknown>;
+        if (typeof last.nextSince === 'number') since = last.nextSince as number;
+        if (last.status === 'done' || last.status === 'failed') break;
+      }
+      return last;
+    }
+
+    // concat-copy, success path.
+    const concatLast = await createAndAwait({
+      kind: 'encode',
+      inputs: ['in.mp4', 'in2.mp4'],
+      output: 'out-concat.mp4',
+      preset: 'concat-copy',
+    });
+    expect(concatLast?.status, 'concat-copy must reach done against the fixture ffmpeg').toBe('done');
+    expect(
+      scratchFileNames(),
+      'the concat-copy scratch list file must be gone once the job reaches a terminal state',
+    ).toHaveLength(0);
+
+    // frames-to-mp4, forced-failure path (same duration-ceiling fixture as
+    // test (b)) — proves the scratch file is removed on the failure branch
+    // too, not only on success.
+    process.env.OD_MEDIA_JOB_MAX_DURATION_MS = '200';
+    const framesLast = await createAndAwait({
+      kind: 'encode',
+      frames: [
+        { path: 'in.mp4', durationMs: 100 },
+        { path: 'in2.mp4', durationMs: 100 },
+      ],
+      output: 'out-frames.mp4',
+      preset: 'frames-to-mp4',
+    });
+    expect(framesLast?.status, 'frames-to-mp4 must fail against a tight duration ceiling').toBe('failed');
+    expect(
+      scratchFileNames(),
+      'the frames-to-mp4 scratch list file must be gone even when the job fails',
+    ).toHaveLength(0);
   });
 });
 
