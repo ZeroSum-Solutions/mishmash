@@ -761,3 +761,46 @@ describe("DesignFilesPanel persisted (empty) folders", () => {
     expect(nestedDirs).toContain("icons");
   });
 });
+
+// F-01 (W7A) — the drop UI names the real, daemon-published limit BEFORE any
+// file is selected (INV-7.3), never a hardcoded figure. RED on base: no
+// fetch to `.../uploads/limits` exists and no hint is rendered.
+describe("DesignFilesPanel upload limit hint", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders the limit from GET .../uploads/limits before any drop", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        expect(url).toBe("/api/projects/test-project/uploads/limits");
+        return new Response(
+          JSON.stringify({
+            maxFileBytes: 200 * 1024 * 1024,
+            maxFilesPerRequest: 12,
+            maxTotalBytes: 200 * 1024 * 1024 * 12,
+            acceptedKinds: [],
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    renderPanel([]);
+
+    const hint = await waitFor(() => screen.getByTestId("upload-limit-hint"));
+    expect(hint.textContent).toBe("Up to 200.0 MB per file");
+  });
+
+  it("renders no limit hint when the limits fetch fails, and never throws", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("not found", { status: 404 })));
+
+    renderPanel([]);
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-testid="upload-limit-hint"]')).toBeNull();
+    });
+  });
+});

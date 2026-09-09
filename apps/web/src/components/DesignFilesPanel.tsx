@@ -1,4 +1,4 @@
-import type { PreviewInfo } from '@open-design/contracts';
+import type { PreviewInfo, UploadLimitsResponse } from '@open-design/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAnalytics } from '../analytics/provider';
 import { trackFileManagerClick } from '../analytics/events';
@@ -6,7 +6,14 @@ import { useT } from '../i18n';
 import { LIBRARY_UI_VISIBLE } from '../features/libraryUi';
 import type { Dict } from '../i18n/types';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
-import { listProjectPreviews, openPreviewInChrome, projectFileUrl, projectRawUrl } from '../providers/registry';
+import { formatBytes } from './LibraryAssetMeta';
+import {
+  fetchProjectUploadLimits,
+  listProjectPreviews,
+  openPreviewInChrome,
+  projectFileUrl,
+  projectRawUrl,
+} from '../providers/registry';
 import { buildSrcdoc } from '../runtime/srcdoc';
 import type { LiveArtifactWorkspaceEntry, ProjectFile, ProjectFileKind, ProjectFolder } from '../types';
 import {
@@ -324,6 +331,22 @@ export function DesignFilesPanel({
   const analytics = useAnalytics();
   const [draggingFiles, setDraggingFiles] = useState(false);
   const [dropReadError, setDropReadError] = useState<string | null>(null);
+  // The published limit, read once per project so the drop hint names a
+  // real number BEFORE any file is picked (F-01 / INV-7.3) instead of a
+  // hardcoded figure that can drift from what the daemon enforces.
+  const [uploadLimits, setUploadLimits] = useState<UploadLimitsResponse | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchProjectUploadLimits(projectId).then((limits) => {
+      if (!cancelled) setUploadLimits(limits);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+  const uploadLimitHint = uploadLimits
+    ? t('uploadProgress.limitHint', { size: formatBytes(uploadLimits.maxFileBytes) ?? `${uploadLimits.maxFileBytes} B` })
+    : null;
   const dragDepthRef = useRef(0);
   const [hover, setHover] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ name: string; top: number; left: number } | null>(null);
@@ -1310,6 +1333,9 @@ export function DesignFilesPanel({
                   {t('designFiles.dropLabel')}
                 </span>
                 <span className="df-drop-hint-desc">{t('designFiles.dropDesc')}</span>
+                {uploadLimitHint ? (
+                  <span className="df-drop-hint-desc" data-testid="upload-limit-hint">{uploadLimitHint}</span>
+                ) : null}
               </div>
             )}
           </div>
@@ -1320,6 +1346,7 @@ export function DesignFilesPanel({
               <Icon name="upload" size={22} />
               <span className="label">{t('designFiles.dropTitle')}</span>
               <span className="desc">{t('designFiles.dropDesc')}</span>
+              {uploadLimitHint ? <span className="desc">{uploadLimitHint}</span> : null}
             </div>
           </div>
         ) : null}

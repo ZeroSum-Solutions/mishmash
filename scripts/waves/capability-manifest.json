@@ -428,6 +428,7 @@
       "GET /api/projects/:param/files/:param/versions",
       "GET /api/projects/:param/files/:param/versions/:param",
       "GET /api/projects/:param/plugin-candidates:param",
+      "GET /api/projects/:param/uploads/:param/events",
       "POST /api/import/folder",
       "POST /api/projects",
       "POST /api/projects/:param/:param",
@@ -440,7 +441,9 @@
       "POST /api/projects/:param/open-in",
       "POST /api/projects/:param/plugin-candidates/:param/dismiss",
       "POST /api/projects/:param/plugin-candidates/:param/draft",
-      "POST /api/projects/:param/terminals"
+      "POST /api/projects/:param/terminals",
+      "POST /api/projects/:param/uploads",
+      "PUT /api/projects/:param/uploads/:param/files/:param"
     ]
   },
   {

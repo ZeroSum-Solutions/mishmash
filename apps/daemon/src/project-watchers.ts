@@ -38,6 +38,14 @@ interface WatcherEntry {
 }
 type WatcherFactory = (dir: string, opts: Required<Pick<ProjectWatcherOptions, 'ignored' | 'awaitWriteFinish'>>) => WatcherEntry;
 
+// Destination-side temp name a staged upload promotes through
+// (`.od-upload-<uploadId>-<index>.part`, `routes/project/uploads.ts`'s
+// `promote()`) before its final rename. Staging itself lives outside the
+// project root, so this is the ONE moment partial upload bytes ever touch a
+// watched directory; excluding the name here means chokidar never reports it
+// and no phantom panel entry can appear (F-01 / INV-7.1).
+const UPLOAD_TEMP_NAME_RE = /^\.od-upload-.*\.part$/;
+
 export function makeIgnored(rootDir: string): ProjectWatchIgnored {
   return (absPath: string, stats?: Stats): boolean => {
     const rel = path.relative(rootDir, absPath);
@@ -48,7 +56,11 @@ export function makeIgnored(rootDir: string): ProjectWatchIgnored {
     if (stats?.isSymbolicLink()) return true;
     return rel.split(/[\\/]/).some((seg) => {
       const normalized = seg.toLowerCase();
-      return WATCHER_ONLY_IGNORE_NAMES.has(normalized) || isIgnoredProjectDirName(normalized);
+      return (
+        WATCHER_ONLY_IGNORE_NAMES.has(normalized) ||
+        isIgnoredProjectDirName(normalized) ||
+        UPLOAD_TEMP_NAME_RE.test(seg)
+      );
     });
   };
 }
