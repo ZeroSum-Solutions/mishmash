@@ -441,7 +441,7 @@ export interface AppConfig {
   pet?: PetConfig;
   // Optional task-completion sound + browser notification settings. Older
   // configs that pre-date the feature land at `undefined`, which the loader
-  // normalizes to a safe default (everything off).
+  // normalizes to a safe default (sound on, desktop opt-in).
   notifications?: NotificationsConfig;
   // Daily connector activity digest. When enabled, the daemon runs this once
   // per day at the configured local time; defaults to 08:00.

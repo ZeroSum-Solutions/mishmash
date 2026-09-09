@@ -10,7 +10,7 @@ import {
 // on this branch, so this file's first run fails only because the module
 // does not exist yet — an import-only failure, not a behavioural one. The
 // track's actual behavioural reds are the CLI stderr-notice test
-// (`apps/daemon/tests/run-cli-notice.test.ts`) and the config-default test
+// (`apps/daemon/tests/run-cli.test.ts`) and the config-default test
 // (`apps/web/tests/state/config.test.ts`). This file pins the helper's
 // INV-7.4 contract so a future refactor of `notifyCompletedRun` cannot
 // silently change sound/desktop cardinality.
