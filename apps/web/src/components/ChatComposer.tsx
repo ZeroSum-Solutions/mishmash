@@ -38,6 +38,7 @@ import type {
 import { sessionModeToTracking } from '@open-design/contracts/analytics';
 import { deriveUploadCohort } from '../analytics/upload-tracking';
 import { projectRawUrl, uploadProjectFiles, fetchProjectUploadLimits, openFolderDialog, fetchRecentLinkedDirs, pushRecentLinkedDir, dirExists, applyLibraryAsset, fetchLibraryAssetElementHtml } from "../providers/registry";
+import type { ProjectUploadFailure } from "../providers/registry";
 import { formatBytes } from "./LibraryAssetMeta";
 import { WorkingDirPicker } from './WorkingDirPicker';
 import { duplicatePluginAsProject, patchProject, referenceProject } from "../state/projects";
@@ -114,6 +115,35 @@ type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => 
 interface TrackedWorkspaceLinkedDir {
   dir: string;
   previousLinkedDirs: string[];
+}
+
+/** Splits `files` into what may be sent to `uploadProjectFiles` and what is
+ *  rejected locally, against the daemon's own published per-file limit
+ *  (`uploadLimits`, from `fetchProjectUploadLimits`) — so an over-limit file
+ *  never leaves the browser (INV-7.3's "before upload" clause). `limits` is
+ *  `null` until the hint fetch resolves; skip the check rather than block a
+ *  drop on a slow/failed limits read — the server still enforces the real
+ *  limit either way. Message text mirrors the daemon's own 413
+ *  (`apps/daemon/src/routes/project/uploads.ts`) so the two never disagree. */
+function partitionFilesByUploadLimit(
+  files: File[],
+  limits: UploadLimitsResponse | null,
+): { accepted: File[]; failed: ProjectUploadFailure[] } {
+  if (!limits) return { accepted: files, failed: [] };
+  const accepted: File[] = [];
+  const failed: ProjectUploadFailure[] = [];
+  for (const file of files) {
+    if (file.size > limits.maxFileBytes) {
+      failed.push({
+        name: file.name,
+        code: 'PAYLOAD_TOO_LARGE',
+        error: `"${file.name}" (${file.size} bytes) exceeds the ${limits.maxFileBytes} byte limit`,
+      });
+    } else {
+      accepted.push(file);
+    }
+  }
+  return { accepted, failed };
 }
 
 function dedupeWorkspaceContextItems(items: WorkspaceContextItem[]): WorkspaceContextItem[] {
@@ -1788,29 +1818,39 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       if (!id) return;
       setUploading(true);
       setUploadError(null);
+      // Reject an over-limit file against the daemon's own published
+      // number BEFORE any bytes leave the browser (r2 review finding:
+      // `uploadLimits` was fetched only to render `uploadLimitHint` and
+      // never actually enforced). `accepted` is what reaches the network;
+      // `preflightFailed` never does.
+      const { accepted, failed: preflightFailed } = partitionFilesByUploadLimit(files, uploadLimits);
       // Cohort math is identical to the Design Files Upload button; see
       // `analytics/upload-tracking.ts`. v2 doc fires one
       // file_upload_result per surface so this path reports
       // `page_name='chat_panel'` / `area='chat_composer'`.
       const cohort = deriveUploadCohort(files);
-      const orderStart = reserveAttachmentOrders(files.length);
+      const orderStart = reserveAttachmentOrders(accepted.length);
       try {
-        const result = await uploadProjectFiles(id, files);
+        const result = accepted.length > 0
+          ? await uploadProjectFiles(id, accepted)
+          : { uploaded: [], failed: [] as ProjectUploadFailure[], error: undefined };
+        const combinedFailed = [...preflightFailed, ...result.failed];
         if (result.uploaded.length > 0) {
           const orderedUploaded = assignChatAttachmentOrders(result.uploaded, orderStart);
           appendOrderedStagedAttachments(orderedUploaded);
         }
-        const partial = result.failed.length > 0;
+        const partial = combinedFailed.length > 0;
         if (partial) {
-          const failedCount = result.failed.length;
+          const failedCount = combinedFailed.length;
           const uploadedCount = result.uploaded.length;
-          const detail = result.error ? ` (${result.error})` : '';
+          const detail = result.error ?? preflightFailed[0]?.error;
+          const detailSuffix = detail ? ` (${detail})` : '';
           setUploadError(
             uploadedCount > 0
-              ? `Attached ${uploadedCount} file(s), but ${failedCount} failed${detail}.`
-              : `Attachment upload failed for ${failedCount} file(s)${detail}.`,
+              ? `Attached ${uploadedCount} file(s), but ${failedCount} failed${detailSuffix}.`
+              : `Attachment upload failed for ${failedCount} file(s)${detailSuffix}.`,
           );
-          console.warn('Some attachments failed to upload', result.failed);
+          console.warn('Some attachments failed to upload', combinedFailed);
         }
         trackFileUploadResult(analytics.track, {
           page_name: 'chat_panel',
@@ -1818,7 +1858,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
           project_id: id,
           ...cohort,
           result: partial ? 'failed' : 'success',
-          ...(partial && result.error ? { error_code: result.error } : {}),
+          ...(partial && (result.error ?? preflightFailed[0]?.error) ? { error_code: result.error ?? preflightFailed[0]!.error } : {}),
         });
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
@@ -1944,20 +1984,28 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
               (f): f is File => Boolean(f),
             );
             if (annotationFiles.length > 0) {
-              const orderStart = reserveAttachmentOrders(annotationFiles.length);
+              // Same pre-flight the plain composer drop uses: reject an
+              // over-limit file against `uploadLimits` before it ever
+              // leaves the browser, rather than only after a 413 round trip.
+              const { accepted, failed: preflightFailed } = partitionFilesByUploadLimit(annotationFiles, uploadLimits);
+              const orderStart = reserveAttachmentOrders(accepted.length);
               const id = await ensureProject();
               if (!id) {
                 ack({ ok: false, message: t('chat.annotationProjectCreateFailed') });
                 return;
               }
               setUploading(true);
-              const result = await uploadProjectFiles(id, annotationFiles);
+              const result = accepted.length > 0
+                ? await uploadProjectFiles(id, accepted)
+                : { uploaded: [], failed: [] as ProjectUploadFailure[], error: undefined };
+              const combinedFailed = [...preflightFailed, ...result.failed];
               if (result.uploaded.length > 0) {
                 uploaded = assignChatAttachmentOrders(result.uploaded, orderStart);
               }
-              if (result.failed.length > 0) {
-                const detailText = result.error ? ` (${result.error})` : '';
-                setUploadError(`Attachment upload failed for ${result.failed.length} file(s)${detailText}.`);
+              if (combinedFailed.length > 0) {
+                const detail = result.error ?? preflightFailed[0]?.error;
+                const detailText = detail ? ` (${detail})` : '';
+                setUploadError(`Attachment upload failed for ${combinedFailed.length} file(s)${detailText}.`);
                 if (uploaded.length === 0) {
                   ack({ ok: false, message: t('chat.annotationUploadFailed') });
                   return;
