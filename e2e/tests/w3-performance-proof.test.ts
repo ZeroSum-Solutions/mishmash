@@ -1174,19 +1174,27 @@ describe('W3 endpoint-latency proof — ui-lag polls across an anomaly-log rotat
     // genuinely empty answer whose range is null on only one side, which the
     // pre-fix `firstSeq == null || lastSeq == null` check waved through as
     // "empty" and the current `classifySequenceRange` refuses outright.
+    //
+    // A SECOND poll is required so this reaches reconciliation at all on the
+    // reviewed head (60418e6c5): its poll-coverage check ran ahead of
+    // reconciliation and refused a lone poll before the sequence-range branch
+    // was ever reached, which a single-poll fixture would have mistaken for
+    // this defect being pinned.
     const halfNull = uiLagExport([], { lastSeq: 5 });
+    const closing = uiLagExport([]);
 
     expect(
-      () => buildOrThrow([halfNull]),
+      () => buildOrThrow([halfNull, closing]),
       why('firstSeq null with lastSeq non-null is not a shape a sound daemon produces, even when the poll is otherwise empty'),
     ).toThrow(/malformed sequence range/);
   });
 
   it('refuses a sequence range that is null on the other side', () => {
     const halfNull = uiLagExport([], { firstSeq: 5 });
+    const closing = uiLagExport([]);
 
     expect(
-      () => buildOrThrow([halfNull]),
+      () => buildOrThrow([halfNull, closing]),
       why('lastSeq null with firstSeq non-null is not a shape a sound daemon produces, even when the poll is otherwise empty'),
     ).toThrow(/malformed sequence range/);
   });
