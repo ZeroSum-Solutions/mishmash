@@ -18,6 +18,7 @@ import {
   type AnomalyRecord,
   type AnomalySource,
   type ListAnomaliesQuery,
+  type ListAnomaliesResponse,
   type ReportAnomalyRequest,
   isAnomalyKind,
   isAnomalySeverity,
@@ -68,12 +69,15 @@ export interface AnomalyLog {
   readonly path: string;
   /** Appends one record and returns its id. Never throws. */
   append(input: ReportAnomalyRequest, source: AnomalySource): Promise<string>;
-  /** Reads records newest-first, with the matched total alongside the page. */
-  list(query: ListAnomaliesQuery): Promise<{
-    anomalies: AnomalyRecord[];
-    total: number;
-    path: string;
-  }>;
+  /**
+   * Reads records newest-first, with the matched total alongside the page and
+   * the retained sequence range beside both.
+   *
+   * The range and the generation count describe the LOG, not the page: they are
+   * what lets a reader polling over a long window tell a quiet log from one that
+   * rotated between two reads.
+   */
+  list(query: ListAnomaliesQuery): Promise<ListAnomaliesResponse>;
   /** Discards every record, returning how many went away. */
   clear(): Promise<number>;
 }
@@ -138,6 +142,43 @@ function redactRecord(record: AnomalyRecord): AnomalyRecord {
   };
 }
 
+/** One stored line, or null when it is blank, torn, or not a record at all. */
+function parseRecordLine(line: string): AnomalyRecord | null {
+  if (line.trim() === '') return null;
+  let parsed: AnomalyRecord;
+  try {
+    parsed = JSON.parse(line) as AnomalyRecord;
+  } catch {
+    // A truncated tail (killed process, full disk) must not make every earlier
+    // record unreadable.
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object' || typeof parsed.at !== 'string') return null;
+  return parsed;
+}
+
+/** A record's stored sequence, or null when it predates the sequence. */
+function storedSequence(record: AnomalyRecord): number | null {
+  return typeof record.seq === 'number' && Number.isFinite(record.seq) ? record.seq : null;
+}
+
+/**
+ * Reads a log generation, or null when that generation does not exist.
+ *
+ * Only absence is swallowed. A generation that exists and cannot be read is
+ * raised, because the alternative is the failure this module exists to prevent:
+ * an answer that is quietly smaller than the log, with nothing in it to say a
+ * whole generation was skipped.
+ */
+async function readGeneration(file: string): Promise<string | null> {
+  try {
+    return await readFile(file, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
 function matchesQuery(record: AnomalyRecord, query: ListAnomaliesQuery): boolean {
   if (query.kind != null && record.kind !== query.kind) return false;
   if (query.severity != null && record.severity !== query.severity) return false;
@@ -150,6 +191,12 @@ function matchesQuery(record: AnomalyRecord, query: ListAnomaliesQuery): boolean
 
 export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
   const path = join(options.dataDir, 'anomalies', 'anomalies.jsonl');
+  const retainedPath = `${path}.1`;
+  // Survives `clear()`, which erases both generations above. Without a record
+  // outside them, a cleared log would have nothing left to be monotonic
+  // against, and "never reused" at packages/contracts/src/api/anomalies.ts:68
+  // would depend on the process never restarting.
+  const floorPath = join(dirname(path), 'sequence-floor.json');
 
   // Every mutation goes through the filesystem write gateway rather than
   // `node:fs` directly, so the log is subject to the same containment and audit
@@ -186,7 +233,137 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
     }
     // Keep exactly one previous generation. Rotating rather than truncating
     // means a rotation mid-session does not destroy what was already caught.
-    await gateway.rename(capability, path, `${path}.1`).catch(() => undefined);
+    await gateway.rename(capability, path, retainedPath).catch(() => undefined);
+  }
+
+  /**
+   * Reads the log's whole retained history, oldest generation first.
+   *
+   * The invariant: a read returns every record the log still holds, not every
+   * record in one file. Rotation moves records into the retained generation
+   * rather than deleting them, so a reader that opened only the current file
+   * would report a smaller answer with nothing in it to say records had moved —
+   * data loss that looks exactly like a quiet log. `generations` says how many
+   * files the answer came from, which is how a rotation becomes visible to the
+   * caller rather than only to whoever reads the directory.
+   *
+   * Every caller reaches this through `serialise()`, never directly. The two
+   * reads below are not atomic with each other, and `append`'s rotate-then-
+   * write is not atomic with them either: `Promise.all` issues both reads
+   * together, but nothing stops a rotation from completing between the moment
+   * they are issued and the moment either resolves. A rename can slide in
+   * after the retained-generation read has already captured the old `.1` and
+   * before the current-generation read captures what rotation is about to
+   * move into it, silently omitting that generation — or the reverse ordering
+   * can capture it twice. Running this inside the same chain `append`'s
+   * rotate-and-write already serialises through makes the two mutually
+   * exclusive: a `list()` either completes entirely before a concurrent
+   * rotation starts or entirely after it, never mid-way.
+   */
+  async function readRetainedHistory(): Promise<{ records: AnomalyRecord[]; generations: number }> {
+    const contents = await Promise.all([readGeneration(retainedPath), readGeneration(path)]);
+    const records: AnomalyRecord[] = [];
+    let generations = 0;
+    for (const generation of contents) {
+      if (generation == null) continue;
+      generations += 1;
+      for (const line of generation.split('\n')) {
+        const record = parseRecordLine(line);
+        if (record != null) records.push(record);
+      }
+    }
+    return { records, generations };
+  }
+
+  /**
+   * One consistent snapshot of everything a reconciling caller needs: the
+   * retained records, how many generations they came from, and the highest
+   * sequence this log has ever issued — the floor included, so the number
+   * survives even a snapshot taken the instant after a clear left both
+   * generations empty.
+   *
+   * Both `list()` and `clear()` read through this rather than composing the
+   * two disk reads themselves. That is what makes `clear()`'s count and its
+   * erasure agree with each other: the snapshot both act on is taken once,
+   * inside the same `serialise()` call that goes on to mutate, so nothing
+   * concurrent can land between "what does the log hold" and "erase it."
+   */
+  async function readSnapshot(): Promise<{ records: AnomalyRecord[]; generations: number; highWaterSeq: number }> {
+    const { records, generations } = await readRetainedHistory();
+    const floor = await sequenceFloor();
+    let highWaterSeq = floor;
+    for (const record of records) {
+      const sequence = storedSequence(record);
+      if (sequence != null && sequence > highWaterSeq) highWaterSeq = sequence;
+    }
+    return { records, generations, highWaterSeq };
+  }
+
+  /**
+   * Hands out the next sequence, recovered from disk on first use.
+   *
+   * What must hold: every appended record carries a number one higher than the
+   * record appended before it, for the life of the log and across daemon
+   * restarts. A counter that restarted at one after a restart would read to a
+   * poller as a rotation that took everything, so the starting point is taken
+   * from what is already stored rather than assumed. A number is consumed even
+   * if the write that follows fails; the range a reader reconciles against is
+   * computed from what is actually on disk, so a burnt number is invisible.
+   */
+  let nextSequence: number | null = null;
+  async function reserveSequence(): Promise<number> {
+    nextSequence ??= (await highestStoredSequence()) + 1;
+    const reserved = nextSequence;
+    nextSequence += 1;
+    return reserved;
+  }
+
+  /**
+   * The floor `clear()` persisted, or 0 when the log has never been cleared.
+   *
+   * Read on its own rather than folded into `highestStoredSequence`'s disk
+   * scan: the floor lives outside the two generations that scan reads, so it
+   * has to be consulted regardless of what those generations currently hold.
+   */
+  async function sequenceFloor(): Promise<number> {
+    const stored = await readGeneration(floorPath);
+    if (stored == null) return 0;
+    try {
+      const parsed = JSON.parse(stored) as { seq?: unknown };
+      return typeof parsed.seq === 'number' && Number.isFinite(parsed.seq) ? parsed.seq : 0;
+    } catch {
+      // A corrupt floor file must not crash sequencing; disk records below
+      // still win if they are higher.
+      return 0;
+    }
+  }
+
+  /**
+   * The highest sequence a new record must exceed: whichever is greater of
+   * what is still on disk and the floor a previous `clear()` persisted.
+   *
+   * The floor matters exactly when the generations hold nothing higher than
+   * it — a fresh process recovering after a clear, before anything has been
+   * appended since. Once a generation holds a record above the floor, that
+   * record is definitionally the true high-water mark, so the disk scan below
+   * keeps its early return.
+   */
+  async function highestStoredSequence(): Promise<number> {
+    const floor = await sequenceFloor();
+    for (const file of [path, retainedPath]) {
+      const generation = await readGeneration(file);
+      if (generation == null) continue;
+      const lines = generation.split('\n');
+      // Records are appended in order, so the last sequenced line of the newest
+      // generation carries the highest number; reading from the end keeps a
+      // full-size log from being parsed line by line on the first append.
+      for (let index = lines.length - 1; index >= 0; index -= 1) {
+        const record = parseRecordLine(lines[index] ?? '');
+        const sequence = record == null ? null : storedSequence(record);
+        if (sequence != null) return Math.max(sequence, floor);
+      }
+    }
+    return floor;
   }
 
   return {
@@ -211,9 +388,12 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
           return detail ? { detail } : {};
         })(),
       };
-      const line = `${JSON.stringify(redactRecord(record))}\n`;
-
       await serialise(async () => {
+        // Numbered inside the serialised chain, so the order records are written
+        // in is the order they are numbered in. `at` stays the moment the caller
+        // observed the anomaly, not the moment the queue reached it.
+        const sequenced: AnomalyRecord = { ...record, seq: await reserveSequence() };
+        const line = `${JSON.stringify(redactRecord(sequenced))}\n`;
         try {
           const capability = await writeCapability();
           await gateway.mkdir(capability, dirname(path), { recursive: true });
@@ -229,25 +409,23 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
     },
 
     async list(query) {
-      let raw: string;
-      try {
-        raw = await readFile(path, 'utf8');
-      } catch {
-        return { anomalies: [], total: 0, path };
-      }
+      // Chained through the same primitive `append`'s rotate-and-write uses,
+      // so the snapshot below is atomic with respect to a concurrent rotation
+      // or clear rather than racing either — see the docblock on
+      // `readSnapshot`.
+      const { records, generations, highWaterSeq } = await serialise(readSnapshot);
       const matched: AnomalyRecord[] = [];
-      for (const line of raw.split('\n')) {
-        if (line.trim() === '') continue;
-        let parsed: AnomalyRecord;
-        try {
-          parsed = JSON.parse(line) as AnomalyRecord;
-        } catch {
-          // A truncated tail (killed process, full disk) must not make every
-          // earlier record unreadable.
-          continue;
+      let firstSeq: number | null = null;
+      let lastSeq: number | null = null;
+      for (const record of records) {
+        // Measured over every retained record, not over the matches: a filtered
+        // read still has to tell its caller what the log could have shown it.
+        const sequence = storedSequence(record);
+        if (sequence != null) {
+          if (firstSeq == null || sequence < firstSeq) firstSeq = sequence;
+          if (lastSeq == null || sequence > lastSeq) lastSeq = sequence;
         }
-        if (!parsed || typeof parsed !== 'object' || typeof parsed.at !== 'string') continue;
-        if (matchesQuery(parsed, query)) matched.push(parsed);
+        if (matchesQuery(record, query)) matched.push(record);
       }
       // Newest first: the most recent problem is what a reader wants first.
       matched.reverse();
@@ -258,22 +436,57 @@ export function createAnomalyLog(options: AnomalyLogOptions): AnomalyLog {
         anomalies: limit == null ? matched : matched.slice(0, limit),
         total: matched.length,
         path,
+        firstSeq,
+        lastSeq,
+        generations,
+        // Present even when firstSeq/lastSeq come back null: a clear can leave
+        // both generations empty while this still names what was issued
+        // before it ran, which is exactly what an empty answer otherwise
+        // cannot distinguish from a log nobody ever wrote to.
+        highWaterSeq,
       };
     },
 
     async clear() {
-      const { total } = await this.list({});
-      await serialise(async () => {
+      // Read, count, persist the floor, and erase both generations inside
+      // ONE serialise() call rather than two. A prior version read the
+      // snapshot through a separate `list()` call, returned to the caller,
+      // and only then opened a second serialise() call to erase — leaving a
+      // gap between the two where a concurrent append could be queued,
+      // counted by neither: not present in the snapshot clear() reported,
+      // and erased anyway once it wrote. Doing both inside the same callback
+      // makes the two outcomes exhaustive: an append queued before this
+      // callback's turn on the chain is part of the snapshot and gets
+      // erased with it; one queued after runs only once this callback has
+      // returned, so it survives untouched.
+      return serialise(async () => {
+        const { records, highWaterSeq } = await readSnapshot();
+        const total = records.length;
         try {
           const capability = await writeCapability();
+          // The two generations this call is about to erase are the only place
+          // a sequence number lives, so the highest one issued has to be
+          // written somewhere they cannot take it with them — otherwise the
+          // "never reused" promise at
+          // packages/contracts/src/api/anomalies.ts:68 would hold only until
+          // the next `clear()`, and a poller that had already read up to it
+          // would see a later answer start over from 1 with nothing to say the
+          // two runs of numbers are different.
           await gateway.mkdir(capability, dirname(path), { recursive: true });
+          if (highWaterSeq > 0) {
+            await gateway.writeFile(capability, floorPath, JSON.stringify({ seq: highWaterSeq }), 'utf8');
+          }
           await gateway.writeFile(capability, path, '', 'utf8');
-          await gateway.rm(capability, `${path}.1`, { force: true });
+          await gateway.rm(capability, retainedPath, { force: true });
+          // Continues from the floor rather than restarting at one: a reused
+          // number would let this reset hide behind a later answer that looks,
+          // on its sequence range alone, like an unbroken continuation.
+          nextSequence = highWaterSeq + 1;
         } catch (err) {
           console.warn('[anomaly-log] could not clear:', err);
         }
+        return total;
       });
-      return total;
     },
   };
 }
