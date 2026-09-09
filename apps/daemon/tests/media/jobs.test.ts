@@ -396,6 +396,13 @@ describe('media jobs — encode', () => {
   it('(h) concat-copy and frames-to-mp4 jobs remove their scratch list file after reaching a terminal state, success or failure', async () => {
     const { baseUrl, projectId, projectDir } = await boot();
     writeFileSync(path.join(projectDir, 'in2.mp4'), 'second fixture input');
+    // Tests (f)/(f2) fire jobs without awaiting their fixture ffmpeg child
+    // to finish, so a still-running job from an earlier test in this file
+    // can still hold an active-job slot here (the registry is process-wide,
+    // not per-test). Raise the ceiling well above that so this test's own
+    // two sequential jobs are never rejected by stale concurrency from a
+    // prior test — it is not what this test exercises.
+    process.env.OD_MEDIA_JOB_MAX_CONCURRENT = '10';
 
     function scratchFileNames(): string[] {
       return readdirSync(projectDir).filter(
