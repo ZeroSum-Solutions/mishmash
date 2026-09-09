@@ -17,7 +17,7 @@ import type { CreateProjectUploadRequest } from '@open-design/contracts';
 
 import { sendApiError } from '../../http/api-errors.js';
 import { getProject } from '../../db.js';
-import { applyProjectFileWatchEvent, resolveProjectDir, sanitizeName } from '../../projects.js';
+import { applyProjectFileWatchEvent, isSafeId, resolveProjectDir, sanitizeName } from '../../projects.js';
 import {
   UploadSessionError,
   UploadStagingStore,
@@ -67,6 +67,14 @@ export function registerProjectStagedUploadRoutes(app: Express, deps: RegisterPr
 
   app.post('/api/projects/:id/uploads', async (req, res) => {
     const projectId = req.params.id;
+    // `createSession` joins `projectId` straight onto `stagingRoot`
+    // (staging.ts); reject a hostile/unknown id at this boundary, the same
+    // way every other project-scoped route in this codebase guards
+    // `req.params.id` before it reaches a path.join (see e.g.
+    // routes/covers.ts's `isSafeId(projectId) || !getProject(...)` check).
+    if (!isSafeId(projectId) || !getProject(db, projectId)) {
+      return sendApiError(res, 404, 'NOT_FOUND', 'project not found');
+    }
     const body = req.body as CreateProjectUploadRequest | undefined;
     if (!body || !Array.isArray(body.files) || body.files.length === 0) {
       return sendApiError(res, 400, 'VALIDATION_FAILED', 'files is required and must be non-empty');

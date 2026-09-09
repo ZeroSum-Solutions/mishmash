@@ -281,6 +281,29 @@ describe('project upload stream (HTTP)', () => {
     expect(statuses).toEqual([200, 409]);
   });
 
+  it('rejects a session create whose project id decodes to a path-traversal segment, and never touches disk outside the staging root', async () => {
+    // `createSession` joins `projectId` straight onto `stagingRoot`
+    // (staging.ts). Express matches a route param on the RAW pathname, then
+    // decodes the captured segment with decodeURIComponent — so a URL
+    // segment with no literal "/" (here, "%2f") still matches the single
+    // `:id` slot but arrives at the handler as `req.params.id ===
+    // '../../../<marker>'`. Encoding it directly (not via encodeURIComponent,
+    // which would re-escape the "%") reproduces that exact quirk.
+    const marker = `pwned-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const hostileId = `..%2f..%2f..%2f${marker}`;
+    const resp = await createSession(hostileId, [{ name: 'x.txt', size: 5, mime: 'text/plain' }]);
+    expect(resp.status).toBe(404);
+    const body = (await resp.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe('NOT_FOUND');
+
+    // The escape target is three levels above the staging root (past
+    // `uploads/` and OD_DATA_DIR itself) — confirm nothing was ever created
+    // there under the marker name.
+    const stagingRoot = path.join(process.env.OD_DATA_DIR!, 'uploads', 'staging');
+    const escapedDir = path.join(stagingRoot, '..', '..', '..', marker);
+    expect(fs.existsSync(escapedDir)).toBe(false);
+  });
+
   const hostileHeaders = { Origin: 'https://evil.example.com', Host: '127.0.0.1' };
 
   it('rejects a hostile-origin request against limits, create, transfer, events, and cancel', async () => {
