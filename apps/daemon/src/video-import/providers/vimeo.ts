@@ -151,17 +151,21 @@ export async function fetchVimeoVideoMetadata(input: {
  * `assertAndFetchExternalAsset` precedent (connectionTest.ts) validates only
  * the literal URL and forces `redirect:'error'`, which cannot follow the
  * legitimate CDN redirect hop Vimeo's own download links use, so this
- * re-validates manually instead (`brands/safe-fetch.ts` precedent).
+ * re-validates manually instead (`brands/safe-fetch.ts` precedent). `signal`
+ * is the caller's timeout `AbortController.signal` (`downloadVimeoVideoToStaging`)
+ * threaded into every hop's `fetch()`, so a stalled upstream connection is
+ * cancelled at the timeout instead of hanging past it.
  */
 async function fetchContainedFollowingRedirects(
   initialUrl: string,
   maxRedirects: number,
+  signal: AbortSignal,
 ): Promise<Response> {
   let target = initialUrl;
   for (let hop = 0; ; hop += 1) {
     const check = await assertExternalAssetUrl(target);
     if (!check.ok) throw new VideoImportContainmentError(check.error);
-    const response = await fetch(target, { redirect: 'manual' });
+    const response = await fetch(target, { redirect: 'manual', signal });
     const location = response.status >= 300 && response.status < 400 ? response.headers.get('location') : null;
     if (!location) return response;
     if (response.body) {
@@ -219,7 +223,7 @@ export async function downloadVimeoVideoToStaging(input: {
   };
 
   try {
-    const response = await fetchContainedFollowingRedirects(input.downloadUrl, MAX_DOWNLOAD_REDIRECTS);
+    const response = await fetchContainedFollowingRedirects(input.downloadUrl, MAX_DOWNLOAD_REDIRECTS, controller.signal);
     if (!response.ok || !response.body) {
       throw new Error(`vimeo download request failed with status ${response.status}`);
     }
