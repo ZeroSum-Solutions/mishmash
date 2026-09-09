@@ -1,9 +1,10 @@
 // Video import — Vimeo OAuth source pulling first, YouTube declared but
-// disabled (Part 8 F-05). Only the provider/connect surface lives here;
-// the import-job wire (CreateVideoImportRequest, VideoImportJob,
-// VideoImportResponse) is added once packages/contracts/src/api/media.ts
-// carries MediaTaskStatus/MediaTaskSnapshot — this file never defines a
-// local status union while that lands.
+// disabled (Part 8 F-05). Provider/connect surface plus the create-import
+// job wire. `MediaTaskStatus` comes from ./media.js (7C, cherry-picked
+// 488a925e) — this file never defines a local status union.
+
+import type { ProjectFile } from './files.js';
+import type { MediaTaskStatus } from './media.js';
 
 export const VIDEO_IMPORT_PROVIDERS = ['vimeo', 'youtube'] as const;
 
@@ -71,4 +72,76 @@ export function isVideoImportProvidersResponse(value: unknown): value is VideoIm
 export function isVideoImportConnectResponse(value: unknown): value is VideoImportConnectResponse {
   if (value === null || typeof value !== 'object') return false;
   return typeof (value as Record<string, unknown>).authorizeUrl === 'string';
+}
+
+// ---------------------------------------------------------------------------
+// Create-import job wire (`POST /api/projects/:id/video-imports`,
+// `GET /api/projects/:id/video-imports/:jobId`). The job is a media task
+// (kind: 'download'): no new DB table, `jobId` is that task's `taskId`.
+// ---------------------------------------------------------------------------
+
+/**
+ * `POST /api/projects/:id/video-imports` request body. `as` is an optional
+ * project-relative destination path; when omitted the daemon derives one
+ * from the provider's video name.
+ */
+export interface CreateVideoImportRequest {
+  provider: VideoImportProvider;
+  url: string;
+  as?: string;
+}
+
+export interface VideoImportJob {
+  jobId: string;
+  taskId: string;
+  provider: VideoImportProvider;
+  status: MediaTaskStatus;
+  /** Human-readable progress lines, append-only (mirrors MediaTaskSnapshot). */
+  progress: string[];
+  /** Aggregate progress in [0, 1], when known (declared Content-Length / bytes so far). */
+  fraction?: number;
+  /** Present once `status` is `'done'`. */
+  file?: ProjectFile;
+  error?: { code: string; message: string };
+}
+
+export interface VideoImportResponse {
+  job: VideoImportJob;
+}
+
+function isProjectFileLike(value: unknown): value is ProjectFile {
+  if (value === null || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.name === 'string'
+    && typeof candidate.size === 'number'
+    && typeof candidate.mtime === 'number'
+    && typeof candidate.kind === 'string'
+    && typeof candidate.mime === 'string'
+  );
+}
+
+export function isVideoImportJob(value: unknown): value is VideoImportJob {
+  if (value === null || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.jobId !== 'string') return false;
+  if (typeof candidate.taskId !== 'string') return false;
+  if (!isVideoImportProvider(candidate.provider)) return false;
+  if (typeof candidate.status !== 'string') return false;
+  if (!Array.isArray(candidate.progress) || !candidate.progress.every((line) => typeof line === 'string')) {
+    return false;
+  }
+  if (candidate.fraction !== undefined && typeof candidate.fraction !== 'number') return false;
+  if (candidate.file !== undefined && !isProjectFileLike(candidate.file)) return false;
+  if (candidate.error !== undefined) {
+    if (candidate.error === null || typeof candidate.error !== 'object') return false;
+    const error = candidate.error as Record<string, unknown>;
+    if (typeof error.code !== 'string' || typeof error.message !== 'string') return false;
+  }
+  return true;
+}
+
+export function isVideoImportResponse(value: unknown): value is VideoImportResponse {
+  if (value === null || typeof value !== 'object') return false;
+  return isVideoImportJob((value as Record<string, unknown>).job);
 }
