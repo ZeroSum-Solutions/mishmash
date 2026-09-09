@@ -12,7 +12,12 @@ import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve as pathResolve } from 'node:path';
 import { promisify } from 'node:util';
-import { describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import type http from 'node:http';
+import { afterEach, describe, expect, it } from 'vitest';
+import { closeDatabase, insertProject, openDatabase } from '../src/db.js';
+import { insertMediaTask } from '../src/media/tasks.js';
+import { startServer } from '../src/server.js';
 
 const execFileP = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -89,5 +94,65 @@ describe('od media job / status / list / cancel (CLI, work item 3)', () => {
   it('`od media cancel <taskId>` ends the task instead of "unknown subcommand"', async () => {
     const result = await runCli(['media', 'cancel', 'task_fixture', '--project', 'proj_test']);
     expect(result.stderr).not.toMatch(/unknown subcommand/);
+  });
+});
+
+// Behavioural, against a real booted daemon: `od media cancel` must print the
+// daemon's refusal reason and exit non-zero when the target task is real but
+// is not one of THIS route's tracked encode/download jobs (a media_tasks row
+// another surface persisted directly — e.g. a video-import download — never
+// registers a killable child, so cancel must refuse rather than lying that it
+// canceled something it never touched; integration-grok-r1 finding 1).
+describe('od media cancel — refused against an untracked live task (real daemon)', () => {
+  let server: http.Server | null = null;
+
+  afterEach(async () => {
+    if (server) {
+      await new Promise<void>((resolve) => server?.close(() => resolve()));
+      server = null;
+    }
+    closeDatabase();
+  });
+
+  it('prints the reason instead of "canceled" and exits non-zero', async () => {
+    const dataDir = process.env.OD_DATA_DIR;
+    if (!dataDir) throw new Error('OD_DATA_DIR is required for daemon route tests');
+    const db = openDatabase(process.cwd(), { dataDir });
+    const projectId = `project_${randomUUID()}`;
+    const now = Date.now();
+    insertProject(db, { id: projectId, name: 'cli untracked-task project', createdAt: now, updatedAt: now });
+    const taskId = `task_${randomUUID()}`;
+    insertMediaTask(db, {
+      id: taskId,
+      projectId,
+      status: 'running',
+      surface: 'video-import',
+      progress: ['downloading from Vimeo'],
+      startedAt: now,
+      updatedAt: now,
+    });
+
+    const started = (await startServer({ port: 0, returnServer: true })) as {
+      url: string;
+      server: http.Server;
+    };
+    server = started.server;
+
+    const result = await runCli([
+      'media',
+      'cancel',
+      taskId,
+      '--project',
+      projectId,
+      '--daemon-url',
+      started.url,
+    ]);
+
+    expect(result.code, 'a refused cancel must exit non-zero').not.toBe(0);
+    expect(result.stderr, 'must not claim the task was canceled').not.toMatch(/media task .* canceled$/m);
+    expect(result.stderr, 'must print the daemon-supplied reason').toMatch(/not canceled/i);
+    expect(result.stderr, 'must surface the typed refusal, not a generic HTTP dump').toMatch(
+      /not a background encode\/download job/i,
+    );
   });
 });

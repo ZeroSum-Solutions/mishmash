@@ -235,6 +235,7 @@ describe('media jobs — encode', () => {
       method: 'POST',
     });
     expect(cancelResp.status, 'POST /api/media/tasks/:id/cancel must exist (work item 2)').not.toBe(404);
+    expect(cancelResp.status, 'a tracked encode/download job must still cancel, not be refused as NOT_CANCELABLE').toBe(200);
 
     // `since` is compared against the task's progress-entry count, not a
     // timestamp — passing 0 here (instead of `sinceBeforeCancel`, the
@@ -253,6 +254,51 @@ describe('media jobs — encode', () => {
 
     const killReceipt = path.join(projectDir, 'out-cancel.mp4.killed');
     expect(existsSync(killReceipt), 'cancel must SIGTERM the child, not just mark the row failed').toBe(true);
+  });
+
+  it('(d3) cancel refuses a live media_tasks row that is not a tracked encode/download job (integration-grok-r1 finding 1)', async () => {
+    // A `media_tasks` row another surface persisted directly (e.g. a
+    // video-import download, or the pre-existing media-generate surface)
+    // never sets `LiveMediaTask.kind` and is never registered in jobs.ts's
+    // `activeJobs` kill map. Cancel must refuse rather than answering 200
+    // with the current, unchanged snapshot while the underlying work keeps
+    // running.
+    const envDataDir = process.env.OD_DATA_DIR;
+    if (!envDataDir) throw new Error('OD_DATA_DIR is required for daemon route tests');
+    const { baseUrl } = await boot();
+    const db = openDatabase(process.cwd(), { dataDir: envDataDir });
+    const projectId = `project_${randomUUID()}`;
+    const now = Date.now();
+    insertProject(db, { id: projectId, name: 'untracked-task project', createdAt: now, updatedAt: now });
+    const taskId = `task_${randomUUID()}`;
+    insertMediaTask(db, {
+      id: taskId,
+      projectId,
+      status: 'running',
+      surface: 'video-import',
+      progress: ['downloading from Vimeo'],
+      startedAt: now,
+      updatedAt: now,
+    });
+
+    const cancelResp = await fetch(`${baseUrl}/api/media/tasks/${encodeURIComponent(taskId)}/cancel`, {
+      method: 'POST',
+    });
+    expect(cancelResp.status).toBe(409);
+    const body = (await cancelResp.json()) as { error?: { code?: string; message?: string }; task?: { status?: string } };
+    expect(body.error?.code).toBe('NOT_CANCELABLE');
+    expect(body.error?.message ?? '').toMatch(/not.*cancel/i);
+    // The refusal must not have touched the task: still `running`, no
+    // CANCELED error attached.
+    expect(body.task?.status).toBe('running');
+
+    const statusResp = await fetch(`${baseUrl}/api/media/tasks/${encodeURIComponent(taskId)}/wait`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ since: 0, timeoutMs: 500 }),
+    });
+    const snap = (await statusResp.json()) as { status?: string };
+    expect(snap.status, 'a refused cancel must not mark the untracked task CANCELED/failed').toBe('running');
   });
 
   it('(b2) a hung ffprobe is killed by the duration limit without ffmpeg ever spawning', async () => {

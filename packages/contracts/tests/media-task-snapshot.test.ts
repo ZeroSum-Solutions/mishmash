@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MEDIA_TASK_ERROR_CODES,
   isMediaJobLimits,
+  isMediaTaskCancelRefusedResponse,
   isMediaTaskListResponse,
   isMediaTaskSnapshot,
   type CreateMediaJobRequest,
+  type MediaTaskCancelRefusedResponse,
   type MediaTaskSnapshot,
 } from '../src/api/media.js';
 
@@ -77,6 +80,43 @@ describe('isMediaJobLimits', () => {
       isMediaJobLimits({ maxDurationMs: 1_800_000, maxOutputBytes: 2 * 1024 ** 3, maxConcurrent: 2 }),
     ).toBe(true);
     expect(isMediaJobLimits({ maxDurationMs: 1_800_000 })).toBe(false);
+  });
+});
+
+describe('MediaTaskCancelRefusedResponse (POST /api/media/tasks/:id/cancel, 409)', () => {
+  it('includes NOT_CANCELABLE in the closed error-code set', () => {
+    expect(MEDIA_TASK_ERROR_CODES).toContain('NOT_CANCELABLE');
+  });
+
+  it('accepts a well-formed refusal carrying the current snapshot', () => {
+    const refusal: MediaTaskCancelRefusedResponse = {
+      error: { code: 'NOT_CANCELABLE', message: 'task task_1 is not a background encode/download job' },
+      task: {
+        taskId: 'task_1',
+        status: 'running',
+        startedAt: 1_000,
+        endedAt: null,
+        progress: ['downloading from Vimeo'],
+        nextSince: 1,
+        file: null,
+      },
+    };
+    expect(isMediaTaskCancelRefusedResponse(refusal)).toBe(true);
+  });
+
+  it('rejects a wrong error code and a task that fails the snapshot guard', () => {
+    expect(
+      isMediaTaskCancelRefusedResponse({
+        error: { code: 'CANCELED', message: 'x' },
+        task: { taskId: 't', status: 'running', startedAt: 0, endedAt: null, progress: [], nextSince: 0 },
+      }),
+    ).toBe(false);
+    expect(
+      isMediaTaskCancelRefusedResponse({
+        error: { code: 'NOT_CANCELABLE', message: 'x' },
+        task: { status: 'running' },
+      }),
+    ).toBe(false);
   });
 });
 
