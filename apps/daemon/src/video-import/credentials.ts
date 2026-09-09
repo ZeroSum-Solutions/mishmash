@@ -8,8 +8,10 @@
 //
 // The token is the credential boundary INV-7.8 draws: it lives only in this
 // file, never in contracts, SQLite, project files, logs, SSE/task
-// responses, or browser storage. `disconnect()` removes the file entirely
-// rather than trimming a key — nothing else needs to survive a disconnect.
+// responses, or browser storage. `delete(provider)` removes only that
+// provider's record and rewrites the file, so disconnecting one provider
+// (e.g. the never-connected youtube) can never wipe another provider's
+// (vimeo's) token; it unlinks the file only once no record remains.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -55,13 +57,24 @@ export class FileVideoImportCredentialStore {
     this.writeRecords(records);
   }
 
-  /** Disconnect removes the whole file — see the file-header note above. */
-  delete(): void {
-    try {
-      fs.unlinkSync(this.filePath);
-    } catch (error) {
-      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
+  /**
+   * Remove only `provider`'s record — see the file-header note above.
+   * Unlinks the file once no record remains (the common case today, since
+   * only vimeo is ever connected), rather than leaving an empty `{}` file.
+   */
+  delete(provider: VideoImportProvider): void {
+    const records = this.readRecords();
+    if (!(provider in records)) return;
+    delete records[provider];
+    if (Object.keys(records).length === 0) {
+      try {
+        fs.unlinkSync(this.filePath);
+      } catch (error) {
+        if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
+      }
+      return;
     }
+    this.writeRecords(records);
   }
 
   private readRecords(): StoredRecords {

@@ -192,7 +192,7 @@ export function registerVideoImportRoutes(app: Express, ctx: RegisterVideoImport
     if (!isVideoImportProvider(provider)) {
       return sendApiError(res, 404, 'NOT_FOUND', `unknown video import provider: ${provider}`);
     }
-    credentialStore.delete();
+    credentialStore.delete(provider);
     console.log(`[video-import] disconnect ok: ${provider}`);
     res.json({ ok: true });
   });

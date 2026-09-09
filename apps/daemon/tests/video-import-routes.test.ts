@@ -182,6 +182,22 @@ describe('video import routes: disconnect', () => {
     expect(res.status).toBe(200);
     expect(fs.existsSync(credentialsFilePath())).toBe(false);
   });
+
+  it('never has a connected vimeo credential to remove, so disconnecting it leaves a stored vimeo token alone', async () => {
+    seedStoredVimeoCredential();
+    expect(readStoredVimeoCredential()).toBeDefined();
+
+    const res = await jsonFetch(`${baseUrl}/api/video-import/youtube/disconnect`, { method: 'POST' });
+    expect(res.status).toBe(200);
+    expect(fs.existsSync(credentialsFilePath())).toBe(true);
+    expect(readStoredVimeoCredential()).toMatchObject({ provider: 'vimeo', accessToken: 'pretend-access-token' });
+
+    // Clean up the seeded vimeo credential (the shared data dir survives
+    // across tests in this file) via the real vimeo disconnect, so a later
+    // test's "no credential file exists yet" assumption still holds.
+    await jsonFetch(`${baseUrl}/api/video-import/vimeo/disconnect`, { method: 'POST' });
+    expect(fs.existsSync(credentialsFilePath())).toBe(false);
+  });
 });
 
 describe('video import routing does not collide with the Composio connector callback', () => {
