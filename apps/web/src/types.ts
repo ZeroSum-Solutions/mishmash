@@ -349,14 +349,16 @@ export interface PetCustom {
 }
 
 export interface NotificationsConfig {
-  // Master switch for the completion sound. Default false — first-run users
-  // hear nothing until they opt in.
+  // Master switch for the completion sound. Default true — first-run users
+  // hear the "run finished" cue; the Settings toggle is the mute.
   soundEnabled: boolean;
   // Sound id played when a turn ends with `runStatus === 'succeeded'`.
   successSoundId: string;
   // Sound id played when a turn ends with `runStatus === 'failed'`.
   failureSoundId: string;
-  // Master switch for the browser Notification API banner. Default false.
+  // Master switch for the browser Notification API banner. Default false —
+  // showing one needs a browser permission grant the user makes from
+  // Settings, so it stays opt-in.
   desktopEnabled: boolean;
 }
 

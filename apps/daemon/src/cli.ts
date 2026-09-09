@@ -17,6 +17,7 @@ import { runLiveArtifactsToolCli } from './tools-live-artifacts-cli.js';
 import { splitResearchSubcommand } from './research/cli-args.js';
 import { resolveDaemonUrl, DaemonUrlDiscoveryError } from './daemon-url.js';
 import { formatRunFailureSummary } from './run-failure-summary.js';
+import { completionNotice } from './cli-run-notice.js';
 import { requestJsonIpc } from '@open-design/sidecar';
 import { SIDECAR_ENV, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
 import {
@@ -4109,12 +4110,12 @@ async function runPluginRun(rest) {
   }
   if (flags.json) {
     process.stdout.write(JSON.stringify({ apply: applyData, run: runData }, null, 2) + '\n');
-    if (flags.follow) await streamRunEvents(base, runData.runId);
+    if (flags.follow) await streamRunEvents(base, runData.runId, Boolean(flags.json));
     return;
   }
   console.log(`[run] started run ${runData.runId} (snapshot ${runData.appliedPluginSnapshotId ?? applyData?.appliedPlugin?.snapshotId ?? 'n/a'})`);
   if (flags.follow) {
-    await streamRunEvents(base, runData.runId);
+    await streamRunEvents(base, runData.runId, Boolean(flags.json));
   }
 }
 
@@ -7949,6 +7950,11 @@ async function runRun(args) {
   od run result-package <runId> [--json]    Inspect run outputs and workspace
                                             provenance without applying them.
 
+A following command (--follow, or 'watch') writes stdout ND-JSON unchanged
+and, on the run's terminal frame, writes exactly one "Run finished:
+<status>" line to stderr — prefixed with a bell (BEL) only on an
+interactive stderr TTY with --json off.
+
 Common options:
   --daemon-url <url>   MishMash daemon HTTP base.
   --json               Emit raw JSON.`);
@@ -8087,7 +8093,7 @@ Common options:
         }, null, 2) + '\n');
       }
       console.log(`[run] continued ${id} as ${data.runId}`);
-      if (flags.follow) await streamRunEvents(base, data.runId);
+      if (flags.follow) await streamRunEvents(base, data.runId, Boolean(flags.json));
       return;
     }
     case 'watch': {
@@ -8096,7 +8102,7 @@ Common options:
         console.error('Usage: od run watch <runId>');
         process.exit(2);
       }
-      await streamRunEvents(base, id);
+      await streamRunEvents(base, id, Boolean(flags.json));
       return;
     }
     case 'redesign': {
@@ -8153,7 +8159,7 @@ Common options:
         }, null, 2) + '\n');
       }
       console.log(`[run] started ${data.runId}`);
-      if (flags.follow) await streamRunEvents(base, data.runId);
+      if (flags.follow) await streamRunEvents(base, data.runId, Boolean(flags.json));
       return;
     }
     case 'start': {
@@ -8208,7 +8214,7 @@ Common options:
         return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       }
       console.log(`[run] started ${data.runId}`);
-      if (flags.follow) await streamRunEvents(base, data.runId);
+      if (flags.follow) await streamRunEvents(base, data.runId, Boolean(flags.json));
       return;
     }
     default:
@@ -8219,8 +8225,10 @@ Common options:
 
 // Stream the SSE events at /api/runs/:id/events as ND-JSON on stdout.
 // Each line is one event: { event, data } so a code agent can parse it
-// without needing an SSE library.
-async function streamRunEvents(base, runId) {
+// without needing an SSE library. `json` is the invocation's `--json` flag
+// (INV-7.15): stdout's ND-JSON frames are identical either way, but it also
+// gates the BEL prefix on the stderr completion notice below.
+async function streamRunEvents(base, runId, json = false) {
   const resp = await fetch(`${base}/api/runs/${encodeURIComponent(runId)}/events`, {
     headers: { accept: 'text/event-stream' },
   });
@@ -8257,6 +8265,19 @@ async function streamRunEvents(base, runId) {
         if (parsed && typeof parsed === 'object' && parsed.status === 'failed') {
           process.exitCode = 1;
         }
+        // INV-7.15 (wave 7): stderr gets exactly one "Run finished: <status>"
+        // line on the terminal frame, unconditionally, so a caller who is
+        // not scripting stdout still learns the run ended. BEL only fires on
+        // an interactive stderr TTY with `--json` false; the non-TTY and
+        // `--json` cases get the same line without the prefix.
+        const status = parsed && typeof parsed === 'object' && typeof parsed.status === 'string'
+          ? parsed.status
+          : 'unknown';
+        process.stderr.write(completionNotice({
+          isTTY: Boolean(process.stderr.isTTY),
+          json,
+          status,
+        }));
         return;
       }
     }
