@@ -18,6 +18,9 @@
 // construction.
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve as pathResolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -121,6 +124,25 @@ vi.mock('../../src/providers/registry', () => ({
 vi.mock('../../src/router', () => ({
   navigate: vi.fn(),
 }));
+
+// INV-7.13 F-02 fixture (wave 7, spec-audit-r2 disposition SC 7B): the fixed
+// visibility/permission/replay case this suite's canonical background-success
+// case and its replay-guard case are driven from, per the fixture's own
+// `_comment` and the disposition doc. Reused verbatim, not restated inline.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const { webDecisionScenario } = JSON.parse(
+  readFileSync(
+    pathResolve(__dirname, '../../../daemon/tests/fixtures/w7-run/terminal-end-event.json'),
+    'utf8',
+  ),
+) as {
+  webDecisionScenario: {
+    documentHidden: boolean;
+    documentFocused: boolean;
+    desktopPermission: NotificationPermission;
+    replayDeliveryCount: number;
+  };
+};
 
 vi.mock('../../src/state/projects', () => ({
   createConversation: (...args: unknown[]) => createConversation(...args),
@@ -419,7 +441,8 @@ function withNotifications(overrides: Partial<NotificationsConfig>): AppConfig {
 }
 
   it('plays sound and shows a desktop notification exactly once for a background terminal success', async () => {
-    setVisibility(true, false);
+    FakeNotification.permission = webDecisionScenario.desktopPermission;
+    setVisibility(webDecisionScenario.documentHidden, webDecisionScenario.documentFocused);
     await deliverTerminalMessage(
       withNotifications({ desktopEnabled: true }),
       succeededAssistant,
@@ -430,18 +453,24 @@ function withNotifications(overrides: Partial<NotificationsConfig>): AppConfig {
   });
 
   it('does not show a second desktop notification when the same terminal message replays', async () => {
-    setVisibility(true, false);
+    FakeNotification.permission = webDecisionScenario.desktopPermission;
+    setVisibility(webDecisionScenario.documentHidden, webDecisionScenario.documentFocused);
     const renderConfig = withNotifications({ desktopEnabled: true });
     await deliverTerminalMessage(renderConfig, succeededAssistant);
     await waitFor(() => expect(desktopShownCount()).toBe(1));
 
     // Redeliver the identical terminal message (same runId/message id) —
     // simulates the daemon or a reload replaying the same terminal frame.
-    fireEvent.click(screen.getByTestId('conversation-select-conv-b'));
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-b'));
-    conversationAMessages = [succeededAssistant];
-    fireEvent.click(screen.getByTestId('conversation-select-conv-a'));
-    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
+    // `webDecisionScenario.replayDeliveryCount` counts the initial delivery
+    // above plus every redelivery below, so a fixture value of 2 redelivers
+    // once.
+    for (let delivered = 1; delivered < webDecisionScenario.replayDeliveryCount; delivered += 1) {
+      fireEvent.click(screen.getByTestId('conversation-select-conv-b'));
+      await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-b'));
+      conversationAMessages = [succeededAssistant];
+      fireEvent.click(screen.getByTestId('conversation-select-conv-a'));
+      await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
+    }
 
     await act(async () => {
       await Promise.resolve();

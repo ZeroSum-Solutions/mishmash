@@ -7,9 +7,11 @@ import { runCli, startRunStubServer, type StubServer } from './helpers/run-cli-s
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // W7B / INV-7.13 F-02 fixture: one frozen, contracts-shaped terminal `end`
-// event, reused by `run-cli-notice.test.ts` and by
-// `apps/web/tests/components/ProjectView.notifications.test.tsx`. See
-// `fixtures/w7-run/terminal-end-event.json` for the generator note.
+// event, also reused by
+// `apps/web/tests/components/ProjectView.notifications.test.tsx` (reads
+// `webDecisionScenario`). `run-cli-notice.test.ts` pins `completionNotice`'s
+// BEL/TTY/json contract with inline literals and does not read this fixture.
+// See `fixtures/w7-run/terminal-end-event.json` for the generator note.
 const RUN_END_EVENT_FIXTURE = (
   JSON.parse(
     readFileSync(pathResolve(__dirname, 'fixtures/w7-run/terminal-end-event.json'), 'utf8'),
