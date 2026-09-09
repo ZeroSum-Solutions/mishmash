@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @ts-nocheck
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, statSync } from 'node:fs';
 import { basename } from 'node:path';
 import { parseFlags, positionalArgs } from './cli-args.js';
 import { runDaemonCliStartup, startDaemonRuntime } from './daemon-startup.js';
@@ -24,7 +24,9 @@ import {
   EXPORT_IMAGE_FORMATS,
   PROJECT_COVER_PLACEHOLDER_HEADER,
   nativeSessionRecoveryNotice,
+  isProjectUploadSseEvent,
 } from '@open-design/contracts';
+import { findAcceptedKind } from './uploads/staging.js';
 import { buildExportCliRequestBody, buildExportCliResultEnvelope, resolveExportCliDeckMode } from './export-cli-request.js';
 import { exportRoutePath } from './export-cli-routing.js';
 import {
@@ -7590,6 +7592,15 @@ async function runProject(args) {
                     ("the bento cards", "the scrolling animations and the
                     WebGL hero") so future runs know what to take from it.
                     Mirrors the composer's "Reference project" action.
+  od project upload <id> <path>... [--as <relpath>] [--json]
+                    Upload one or more local files into project <id> through
+                    the staged upload session (Part 2.17 / F-01): subscribes
+                    to byte-progress events BEFORE sending any bytes, prints
+                    progress lines to stderr, and exits non-zero with the
+                    daemon's own message on an over-limit or disallowed file.
+                    --as renames a single uploaded file; ignored for more
+                    than one path. Current limits: run with no args (or
+                    --help) to print them from the daemon.
   od project handoff <id> --conversation <id> --api-key <key> --model <model>
                     [--base-url <url>] [--max-tokens <n>]
                     Synthesize a resume-conversation handoff prompt.
@@ -7890,6 +7901,107 @@ Common options:
       }
       if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       console.log(`[project] opened ${id} in ${editor} (${data.path ?? ''})`);
+      return;
+    }
+    case 'upload': {
+      // `od project upload` mirrors the web client's staged flow (Part
+      // 2.17 / F-01): create a session, subscribe to its byte-progress
+      // events BEFORE issuing any PUT, then stream each file's bytes. A
+      // client must never watch the same request that carries the bytes
+      // it is watching (r2 W7-R2-08), so create/events/PUT are three
+      // separate calls, exactly like the daemon's own contract.
+      const positional = positionalArgs(rest, PROJECT_STRING_FLAGS);
+      const [id, ...localPaths] = positional;
+      if (!id || localPaths.length === 0) {
+        console.error('Usage: od project upload <projectId> <path>... [--as <relpath>] [--json]');
+        process.exit(2);
+      }
+      const filesMeta = localPaths.map((localPath) => {
+        const stat = statSync(localPath);
+        const desiredName = localPaths.length === 1 && typeof flags.as === 'string' && flags.as.length > 0
+          ? flags.as
+          : basename(localPath);
+        return {
+          localPath,
+          name: desiredName,
+          size: stat.size,
+          mime: findAcceptedKind(desiredName)?.mime ?? 'application/octet-stream',
+        };
+      });
+
+      const createResp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}/uploads`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ files: filesMeta.map(({ name, size, mime }) => ({ name, size, mime })) }),
+      });
+      if (!createResp.ok) return structuredHttpFailure(createResp);
+      const session = await createResp.json();
+      const { uploadId, token } = session;
+
+      // Subscribe to events BEFORE any PUT — no progress byte is ever missed.
+      let terminalEvent = null;
+      let resolveTerminal;
+      const terminalPromise = new Promise((resolve) => { resolveTerminal = resolve; });
+      const eventsResp = await fetch(
+        `${base}/api/projects/${encodeURIComponent(id)}/uploads/${uploadId}/events`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const reader = eventsResp.body?.getReader?.();
+      (async () => {
+        if (!reader) { resolveTerminal(); return; }
+        const decoder = new TextDecoder();
+        let buf = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let idx;
+          while ((idx = buf.indexOf('\n\n')) !== -1) {
+            const frame = buf.slice(0, idx);
+            buf = buf.slice(idx + 2);
+            const dataLine = frame.split('\n').find((l) => l.startsWith('data: '));
+            if (!dataLine) continue;
+            let evt;
+            try { evt = JSON.parse(dataLine.slice('data: '.length)); } catch { continue; }
+            if (!isProjectUploadSseEvent(evt)) continue;
+            if (evt.type === 'upload-progress' && !flags.json) {
+              const line = `[upload] ${evt.name}: ${evt.bytesReceived}/${evt.totalBytes} bytes`;
+              if (process.stderr.isTTY) process.stderr.write(`\r${line}`);
+              else process.stderr.write(`${line}\n`);
+            }
+            if (evt.type === 'upload-completed' || evt.type === 'upload-failed') {
+              terminalEvent = evt;
+              resolveTerminal();
+            }
+          }
+        }
+        resolveTerminal();
+      })();
+
+      for (let i = 0; i < filesMeta.length; i += 1) {
+        const f = filesMeta[i];
+        const bytes = readFileSync(f.localPath);
+        const putResp = await fetch(
+          `${base}/api/projects/${encodeURIComponent(id)}/uploads/${uploadId}/files/${i}`,
+          {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/octet-stream' },
+            body: bytes,
+          },
+        );
+        if (!putResp.ok) break; // the daemon emits the terminal `upload-failed` event; awaited below
+      }
+
+      await terminalPromise;
+      if (!flags.json && process.stderr.isTTY) process.stderr.write('\n');
+      if (flags.json) {
+        process.stdout.write(JSON.stringify(terminalEvent ?? { type: 'upload-failed', code: 'INTERNAL_ERROR', message: 'no terminal event received' }, null, 2) + '\n');
+      } else if (terminalEvent?.type === 'upload-completed') {
+        console.log(`[project] uploaded ${terminalEvent.files.length} file(s) to ${id}`);
+      } else {
+        console.error(`[project] upload failed: ${terminalEvent?.code ?? 'INTERNAL_ERROR'} ${terminalEvent?.message ?? 'no terminal event received'}`);
+      }
+      if (terminalEvent?.type !== 'upload-completed') process.exit(1);
       return;
     }
     case 'reference': {
