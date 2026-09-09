@@ -3,6 +3,7 @@ import {
   buildMediaProvidersForDaemonSave,
   BYOK_PROVIDER_PRESETS,
   DEFAULT_CONFIG,
+  DEFAULT_NOTIFICATIONS,
   defaultKnownProviderModel,
   fetchMediaProvidersFromDaemon,
   isStoredMediaProviderEntryEmpty,
@@ -928,6 +929,44 @@ describe('buildMediaProvidersForDaemonSave', () => {
 
 afterEach(() => {
   store.clear();
+});
+
+// W7B / DEF-7.15 (Sol reword, r2): the completion sound is a "setting to
+// mute" — it defaults ON so first-run users hear the existing Settings
+// toggle work rather than discovering a silent no-op. Desktop notifications
+// stay off by default because they need a browser permission grant the user
+// makes from Settings; that half of the default is unchanged.
+describe('notifications defaults', () => {
+  it('defaults the completion sound to on', () => {
+    expect(DEFAULT_NOTIFICATIONS.soundEnabled).toBe(true);
+  });
+
+  it('defaults the desktop notification to off', () => {
+    expect(DEFAULT_NOTIFICATIONS.desktopEnabled).toBe(false);
+  });
+
+  it('keeps a stored soundEnabled:false override after loadConfig normalizes it', () => {
+    store.set(
+      'open-design:config',
+      JSON.stringify({
+        mode: 'daemon',
+        apiKey: '',
+        baseUrl: '',
+        model: '',
+        agentId: null,
+        skillId: null,
+        designSystemId: null,
+        notifications: { soundEnabled: false },
+      }),
+    );
+
+    const config = loadConfig();
+
+    expect(config.notifications?.soundEnabled).toBe(false);
+    // The rest of the shape still normalizes onto the (now sound-on) default.
+    expect(config.notifications?.desktopEnabled).toBe(false);
+    expect(config.notifications?.successSoundId).toBe(DEFAULT_NOTIFICATIONS.successSoundId);
+  });
 });
 
 describe('loadConfig', () => {
