@@ -507,10 +507,12 @@ export async function deleteConversation(
 export async function fetchMessages(
   projectId: string,
   conversationId: string,
+  signal?: AbortSignal,
 ): Promise<ChatMessage[] | null> {
   try {
     const resp = await fetch(
       `/api/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/messages`,
+      { signal },
     );
     if (!resp.ok) return null;
     const json = (await resp.json()) as { messages: ChatMessage[] };

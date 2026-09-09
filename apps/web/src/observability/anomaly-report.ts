@@ -292,6 +292,9 @@ export function anomalyForPreviewDocumentError(
  */
 const IMAGE_EXPORT_ERROR_CAUSE_LABELS: Record<string, string> = {
   CAPTURE_FAILED: 'snapshot capture produced no image',
+  CAPTURE_TIMEOUT: 'snapshot capture timed out',
+  CAPTURE_EMPTY_RENDER: 'snapshot canvas rendered blank',
+  CAPTURE_TAINTED: 'snapshot canvas was tainted by cross-origin resources',
   EMPTY_IMAGE: 'captured image was empty',
 };
 
@@ -310,6 +313,7 @@ export interface ImageExportFailureInput {
   stage?: ImageExportStage;
   projectId?: string;
   durationMs?: number;
+  scope?: string;
 }
 
 /**
@@ -336,6 +340,7 @@ export function anomalyForImageExportFailure(
       fileName: input.fileName,
       ...(input.stage ? { stage: input.stage } : {}),
       ...(input.durationMs != null ? { durationMs: input.durationMs } : {}),
+      ...(input.scope ? { scope: input.scope } : {}),
     },
   };
 }

@@ -1,15 +1,40 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ANOMALY_LOG_MAX_BYTES, createAnomalyLog } from '../src/anomaly-log.js';
+
+// Controllable only for the atomicity test below. `readFileMock` pauses one
+// specific `readFile` call mid-flight to force a rotation into the window
+// between the log's two generation reads; `renameMock` reports when a
+// concurrent rotation's `rename` has actually landed on disk, which is what
+// lets that test tell a real interleave apart from a queued append that
+// simply has not run yet. Every other test's calls — including the ones this
+// file makes directly — pass straight through, so both mocks are invisible
+// to them.
+const readFileMock = vi.fn();
+const renameMock = vi.fn();
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    ...actual,
+    readFile: (...args: unknown[]) => readFileMock(...args),
+    rename: (...args: unknown[]) => renameMock(...args),
+  };
+});
 
 let dataDir = '';
 
 beforeEach(async () => {
   dataDir = await mkdtemp(join(tmpdir(), 'od-anomaly-log-'));
+  const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+  readFileMock.mockImplementation((...args: unknown[]) =>
+    (actual.readFile as (...a: unknown[]) => Promise<string>)(...args));
+  renameMock.mockImplementation((...args: unknown[]) =>
+    (actual.rename as (...a: unknown[]) => Promise<void>)(...args));
 });
 
 afterEach(async () => {
@@ -163,15 +188,291 @@ describe('anomaly log', () => {
     expect(await readFile(`${log.path}.1`, 'utf8')).toContain('x');
   });
 
+  // A rotation is the one event that removes records nobody deleted. The 24 h
+  // capture behind INV-3.10 polls this log for a whole day, which is long enough
+  // to roll it, so a reader has to be able to tell a quiet window from a rolled
+  // one. The cases below pin what makes that possible: a number on every
+  // record, a read that covers both generations, and an envelope that says so.
+
+  /** Pushes the current generation past its cap so the next append has to rotate. */
+  async function fillPastCap(path: string): Promise<void> {
+    // Padding the reader skips, so the rotated generation still holds only real
+    // records — the point is what survives the roll, not what pads it.
+    await appendFile(path, `${' '.repeat(ANOMALY_LOG_MAX_BYTES)}\n`, 'utf8');
+  }
+
+  it('stamps a monotonic sequence that keeps counting across a rotation', async () => {
+    const log = createAnomalyLog({ dataDir });
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'one' }, 'web');
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'two' }, 'web');
+    await fillPastCap(log.path);
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'three' }, 'web');
+
+    const { anomalies, firstSeq, lastSeq } = await log.list({});
+
+    // Ids are random and timestamps repeat, so only an ordered number lets a
+    // reader count the records a rotation took away.
+    expect(anomalies.map((a) => a.seq)).toEqual([3, 2, 1]);
+    expect(firstSeq).toBe(1);
+    expect(lastSeq).toBe(3);
+  });
+
+  it('recovers the sequence from disk so a restart does not reuse a number', async () => {
+    const first = createAnomalyLog({ dataDir });
+    await first.append({ kind: 'ui-lag', severity: 'warn', summary: 'one' }, 'web');
+    await first.append({ kind: 'ui-lag', severity: 'warn', summary: 'two' }, 'web');
+
+    // A new daemon process reading the same data root continues the count; a
+    // sequence that restarted at one would look to a poller like a rotation.
+    const restarted = createAnomalyLog({ dataDir });
+    await restarted.append({ kind: 'ui-lag', severity: 'warn', summary: 'three' }, 'web');
+
+    expect((await restarted.list({})).anomalies.map((a) => a.seq)).toEqual([3, 2, 1]);
+  });
+
+  it('reads the retained generation, so a rotation does not censor an interval export', async () => {
+    const log = createAnomalyLog({ dataDir });
+    const before = new Date(Date.now() - 60_000).toISOString();
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'before the roll' }, 'web');
+    await fillPastCap(log.path);
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'after the roll' }, 'web');
+
+    const result = await log.list({ since: before });
+
+    // Both records are still on disk. A read that covers only the current file
+    // returns the newer one and says nothing about the older, which is data loss
+    // no field of the answer reveals.
+    expect(result.anomalies.map((a) => a.summary)).toEqual(['after the roll', 'before the roll']);
+    expect(result.total).toBe(2);
+    expect(result.generations).toBe(2);
+  });
+
+  it('reports one generation and a one-record range after the first append', async () => {
+    const log = createAnomalyLog({ dataDir });
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'only one' }, 'web');
+
+    const result = await log.list({});
+
+    expect(result.generations).toBe(1);
+    expect(result.firstSeq).toBe(1);
+    expect(result.lastSeq).toBe(1);
+  });
+
+  it('reports zero generations and no sequence range for a log that has never been written', async () => {
+    const log = createAnomalyLog({ dataDir });
+
+    const result = await log.list({});
+
+    expect(result.generations).toBe(0);
+    expect(result.firstSeq).toBe(null);
+    expect(result.lastSeq).toBe(null);
+    expect(result.total).toBe(0);
+    expect(result.anomalies).toEqual([]);
+  });
+
+  it('continues the sequence after a clear, so a cleared log never reuses a number', async () => {
+    const log = createAnomalyLog({ dataDir });
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'one' }, 'web');
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'two' }, 'web');
+
+    await log.clear();
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'after the clear' }, 'web');
+
+    // A poller that already read seq 1..2 before the clear has to be able to
+    // tell "the log was cleared and rebuilt" from "the log reset and reused
+    // seq 1" — which only holds if the next number after a clear is never one
+    // an earlier poll already read. Resetting to 1 here is exactly the defect:
+    // it would make this record indistinguishable, on sequence alone, from
+    // the original 'one'.
+    const { anomalies, firstSeq, lastSeq } = await log.list({});
+    expect(anomalies.map((a) => a.seq)).toEqual([3]);
+    expect(firstSeq).toBe(3);
+    expect(lastSeq).toBe(3);
+  });
+
+  it('keeps the post-clear floor durable across a restart, so a new process cannot reuse a number either', async () => {
+    const first = createAnomalyLog({ dataDir });
+    await first.append({ kind: 'ui-lag', severity: 'warn', summary: 'one' }, 'web');
+    await first.append({ kind: 'ui-lag', severity: 'warn', summary: 'two' }, 'web');
+    await first.clear();
+
+    // The floor lives outside the two generations `clear()` erases, so a new
+    // daemon process reading the same data root recovers it from disk rather
+    // than from this process's memory — the only way the promise survives a
+    // restart between the clear and the next append.
+    const restarted = createAnomalyLog({ dataDir });
+    await restarted.append({ kind: 'ui-lag', severity: 'warn', summary: 'after restart' }, 'web');
+
+    expect((await restarted.list({})).anomalies.map((a) => a.seq)).toEqual([3]);
+  });
+
+  it('reads both generations as one atomic snapshot, so a rotation squeezed in between cannot omit or duplicate a record', async () => {
+    const log = createAnomalyLog({ dataDir });
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'retained' }, 'web');
+    await fillPastCap(log.path);
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'current' }, 'web');
+
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    let releaseCurrentRead: (() => void) | null = null as (() => void) | null;
+    let pausedOnce = false;
+    readFileMock.mockImplementation(async (...args: unknown[]) => {
+      const [target] = args as [unknown];
+      if (target === log.path && !pausedOnce) {
+        pausedOnce = true;
+        // Pauses exactly where the finding names: after the retained-generation
+        // read has already been issued (`Promise.all` fires both together) and
+        // before the current-generation read returns, which is the window a
+        // concurrent rotation could previously slide into.
+        await new Promise<void>((resolve) => {
+          releaseCurrentRead = resolve;
+        });
+      }
+      return (actual.readFile as (...a: unknown[]) => Promise<string>)(...args);
+    });
+
+    let resolveRenameHappened: (() => void) | null = null;
+    const renameHappenedPromise = new Promise<void>((resolve) => {
+      resolveRenameHappened = resolve;
+    });
+    renameMock.mockImplementation(async (...args: unknown[]) => {
+      const result = await (actual.rename as (...a: unknown[]) => Promise<void>)(...args);
+      resolveRenameHappened?.();
+      return result;
+    });
+
+    const listPromise = log.list({});
+    await vi.waitFor(() => {
+      if (!pausedOnce) throw new Error('list() has not reached the paused read yet');
+    });
+
+    // The concurrent writer the finding describes: a second rotation squeezed
+    // into the paused window, racing the in-flight two-generation read.
+    await fillPastCap(log.path);
+    const appendPromise = log.append({ kind: 'ui-lag', severity: 'warn', summary: 'concurrent' }, 'web');
+
+    // Whether the fix holds turns on WHEN this rotation actually reaches disk
+    // relative to the paused read, not on how quickly it is scheduled — an
+    // unserialised bug lets it complete almost immediately, while the fix
+    // holds it queued behind the still-in-flight list(). Racing against a
+    // short timeout distinguishes the two deterministically instead of
+    // guessing how many microtask ticks a real rename takes: on the buggy
+    // path the rename wins the race; on the fixed path nothing before the
+    // timeout can make it happen, because it has not even started.
+    await Promise.race([
+      renameHappenedPromise,
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, 100);
+      }),
+    ]);
+
+    releaseCurrentRead?.();
+    const firstResult = await listPromise;
+    await appendPromise;
+
+    // Before the fix this either omits 'current' (the paused read returns
+    // 'concurrent' instead, once the rotation has already replaced the file
+    // out from under it) or, on the reverse race, returns it twice. Serialising
+    // the read behind the same chain append/rotate already uses means list()
+    // now runs entirely before the concurrent append or entirely after it.
+    expect(firstResult.anomalies.map((a) => a.summary).sort()).toEqual(['current', 'retained']);
+    expect(new Set(firstResult.anomalies.map((a) => a.id)).size).toBe(2);
+
+    // Once the queued append finally runs, its rotation is visible on its own
+    // terms: 'retained' has genuinely rolled off (only one previous generation
+    // is kept — an accepted limit, not the atomicity bug), and each live
+    // record is counted exactly once.
+    const secondResult = await log.list({});
+    expect(secondResult.total).toBe(2);
+    expect(secondResult.anomalies.map((a) => a.summary).sort()).toEqual(['concurrent', 'current']);
+    expect(new Set(secondResult.anomalies.map((a) => a.id)).size).toBe(2);
+  });
+
   it('clears the log and reports how many records went away', async () => {
     const log = createAnomalyLog({ dataDir });
     await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'a' }, 'web');
+    await fillPastCap(log.path);
     await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'b' }, 'web');
 
+    // The cleared count must include the retained generation (.1), which
+    // readRetainedHistory() provides, and clearing removes both generations.
     expect(await log.clear()).toBe(2);
     expect((await log.list({})).total).toBe(0);
     // Clearing an already-empty log is not an error.
     expect(await log.clear()).toBe(0);
+  });
+
+  it('reports a positive highWaterSeq on an EMPTY answer once a clear has run, so a censored clear is not invisible', async () => {
+    const log = createAnomalyLog({ dataDir });
+
+    // A virgin log reports a zero high-water mark — there is nothing to be
+    // silent about yet.
+    expect((await log.list({})).highWaterSeq).toBe(0);
+
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'one' }, 'web');
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'two' }, 'web');
+    await log.clear();
+
+    // firstSeq/lastSeq come back null — the log genuinely retains nothing —
+    // but highWaterSeq still names that two sequences were issued before the
+    // clear. Without it, this answer is byte-for-byte identical to a log
+    // that was never written to, which is exactly what lets a clear censor a
+    // measurement window undetected.
+    const result = await log.list({});
+    expect(result.firstSeq).toBe(null);
+    expect(result.lastSeq).toBe(null);
+    expect(result.highWaterSeq, 'the floor a clear persisted must still surface on an empty answer').toBe(2);
+  });
+
+  it('performs its snapshot and its erasure as one atomic step, so a concurrent append is neither miscounted nor lost', async () => {
+    const log = createAnomalyLog({ dataDir });
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'a' }, 'web');
+    await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'b' }, 'web');
+
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    let releaseSnapshotRead: (() => void) | null = null as (() => void) | null;
+    let pausedOnce = false;
+    readFileMock.mockImplementation(async (...args: unknown[]) => {
+      const [target] = args as [unknown];
+      if (target === log.path && !pausedOnce) {
+        pausedOnce = true;
+        // Pauses clear()'s own snapshot read mid-flight — the exact window
+        // the finding names: a prior version read this snapshot through a
+        // separate `list()` call, returned control to the caller, and only
+        // afterwards opened a second `serialise()` call to erase. A
+        // concurrent append queued in that gap was counted by neither: not
+        // in the snapshot clear() reported, and erased anyway once it
+        // wrote.
+        await new Promise<void>((resolve) => {
+          releaseSnapshotRead = resolve;
+        });
+      }
+      return (actual.readFile as (...a: unknown[]) => Promise<string>)(...args);
+    });
+
+    const clearPromise = log.clear();
+    await vi.waitFor(() => {
+      if (!pausedOnce) throw new Error('clear() has not reached the paused snapshot read yet');
+    });
+
+    // Queued while clear()'s snapshot read is still in flight. `clear()` has
+    // already claimed its place on the `serialise()` chain by this point (it
+    // did so synchronously, before its first `await`), so this append cannot
+    // be interleaved into the middle of clear()'s work — the fix makes that
+    // structurally impossible rather than merely unlikely.
+    const appendPromise = log.append({ kind: 'ui-lag', severity: 'warn', summary: 'concurrent' }, 'web');
+
+    releaseSnapshotRead?.();
+    const cleared = await clearPromise;
+    await appendPromise;
+
+    // Exactly one of the two honest outcomes holds: here, the append is
+    // chained strictly after clear()'s single atomic step, so it survives
+    // untouched and clear()'s count reflects only the two records that
+    // existed before it was ever called.
+    expect(cleared).toBe(2);
+    const after = await log.list({});
+    expect(after.total).toBe(1);
+    expect(after.anomalies.map((a) => a.summary)).toEqual(['concurrent']);
   });
 
   it('keeps concurrent appends from interleaving into corrupt lines', async () => {

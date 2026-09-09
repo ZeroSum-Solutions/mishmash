@@ -2710,10 +2710,27 @@ export interface Dict {
   // verdict. Not a failure: the run is unresolved until it answers for itself.
   'chat.runError.title.notStarted': string;
   'chat.runError.notStartedMessage': string;
+  // The daemon refused the create request because the turn's body was over the
+  // global request limit. No route ran, so no run exists and Retry is safe.
+  'chat.runError.title.payloadTooLarge': string;
+  'chat.runError.payloadTooLargeMessage': string;
+  // The bound on the Loading pane: a conversation read that never answered.
+  // Shown with the Retry that re-issues the read. The title is the card's own
+  // visible line — `chat.conversationLoad.timedOut` sits in the collapsed
+  // details, same as every other named failure's message half.
+  'chat.conversationLoad.timedOutTitle': string;
+  'chat.conversationLoad.timedOut': string;
   'chat.runChecking.title': string;
   'chat.runChecking.message': string;
   'chat.runChecking.unreachableTitle': string;
   'chat.runChecking.unreachableMessage': string;
+  // A lost-create lookup that hit its wall-clock deadline with at least one
+  // probe read landing — the daemon IS answering, so `unreachableTitle`'s
+  // "not answering" wording would be false. Neutral, no Retry (B-02): the run
+  // may still be running. See the deadline override in
+  // `ProjectView.tsx`'s `scheduleLostRunCreateLookup`.
+  'chat.runChecking.inconclusiveTitle': string;
+  'chat.runChecking.inconclusiveMessage': string;
   'chat.runChecking.checkAgainCta': string;
   // Why the composer will not send while that state stands. Rendered by the
   // checking notice and repeated beside the disabled Send button; see
@@ -3882,6 +3899,7 @@ export interface Dict {
   'fileViewer.exportImageSaved': string;
   'fileViewer.exportImageDownloadStarted': string;
   'fileViewer.exportImageDownloadDetails': string;
+  'fileViewer.exportImageCurrentSlideOnly': string;
   'fileViewer.exportJsx': string;
   'fileViewer.exportReactHtml': string;
   'fileViewer.exportStarted': string;
