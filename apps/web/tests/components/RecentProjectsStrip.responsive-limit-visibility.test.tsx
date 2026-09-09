@@ -29,7 +29,9 @@ vi.mock('../../src/providers/registry', () => ({
 }));
 
 let resizeCallback: ResizeObserverCallback | null = null;
-let rowWidth = 1332; // wide enough for 7 cards
+// `undefined` stands in for a row whose box cannot be read at all
+// (rowRef.current gone): the effect must then keep the current limit.
+let rowWidth: number | undefined = 1332; // wide enough for 7 cards
 const originalResizeObserver = globalThis.ResizeObserver;
 
 function project(id: string, updatedAt: number): Project {
@@ -67,7 +69,7 @@ describe('RecentProjectsStrip responsive-limit visibility', () => {
       return {
         x: 0,
         y: 0,
-        width: this.classList.contains('recent-projects__row') ? rowWidth : 180,
+        width: this.classList.contains('recent-projects__row') ? (rowWidth as number) : 180,
         height: 100,
         top: 0,
         right: 0,
@@ -105,6 +107,67 @@ describe('RecentProjectsStrip responsive-limit visibility', () => {
 
     // A hidden read must not permanently narrow the row, and must not
     // re-run the cover-fetch Promise.all for a different card set.
+    expect(container.querySelectorAll('.recent-projects__card')).toHaveLength(7);
+    expect(fetchProjectFiles.mock.calls.length).toBe(fetchesAfterMount);
+  });
+
+  it('still narrows a genuinely narrow visible row and fetches covers for the new card set', async () => {
+    rowWidth = 800;
+    const { container } = render(
+      <RecentProjectsStrip projects={projects(8)} onOpen={() => {}} onViewAll={() => {}} />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('.recent-projects__card')).toHaveLength(6);
+    });
+    expect(fetchProjectFiles.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it('follows real resizes in both directions (wide -> narrow -> wide)', async () => {
+    const { container } = render(
+      <RecentProjectsStrip projects={projects(8)} onOpen={() => {}} onViewAll={() => {}} />,
+    );
+    await waitFor(() => {
+      expect(container.querySelectorAll('.recent-projects__card')).toHaveLength(7);
+    });
+    const fetchesAfterMount = fetchProjectFiles.mock.calls.length;
+
+    // A real narrow layout has a nonzero width: the limit must still drop
+    // and the cover fetch must run again for the new card set.
+    rowWidth = 800;
+    await act(async () => {
+      resizeCallback?.([] as unknown as ResizeObserverEntry[], {} as ResizeObserver);
+    });
+    await waitFor(() => {
+      expect(container.querySelectorAll('.recent-projects__card')).toHaveLength(6);
+    });
+    expect(fetchProjectFiles.mock.calls.length).toBeGreaterThan(fetchesAfterMount);
+
+    rowWidth = 1332;
+    await act(async () => {
+      resizeCallback?.([] as unknown as ResizeObserverEntry[], {} as ResizeObserver);
+    });
+    await waitFor(() => {
+      expect(container.querySelectorAll('.recent-projects__card')).toHaveLength(7);
+    });
+  });
+
+  it('keeps the current limit when the row box cannot be read at all', async () => {
+    const { container } = render(
+      <RecentProjectsStrip projects={projects(8)} onOpen={() => {}} onViewAll={() => {}} />,
+    );
+    await waitFor(() => {
+      expect(container.querySelectorAll('.recent-projects__card')).toHaveLength(7);
+    });
+    const fetchesAfterMount = fetchProjectFiles.mock.calls.length;
+
+    // Before FU-49 an unreadable box forced the limit back to the narrow
+    // default (6); now it must leave the wide limit (7) untouched.
+    rowWidth = undefined;
+    await act(async () => {
+      resizeCallback?.([] as unknown as ResizeObserverEntry[], {} as ResizeObserver);
+    });
+
     expect(container.querySelectorAll('.recent-projects__card')).toHaveLength(7);
     expect(fetchProjectFiles.mock.calls.length).toBe(fetchesAfterMount);
   });
