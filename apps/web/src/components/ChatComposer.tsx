@@ -37,7 +37,8 @@ import type {
 } from '@open-design/contracts/analytics';
 import { sessionModeToTracking } from '@open-design/contracts/analytics';
 import { deriveUploadCohort } from '../analytics/upload-tracking';
-import { projectRawUrl, uploadProjectFiles, openFolderDialog, fetchRecentLinkedDirs, pushRecentLinkedDir, dirExists, applyLibraryAsset, fetchLibraryAssetElementHtml } from "../providers/registry";
+import { projectRawUrl, uploadProjectFiles, fetchProjectUploadLimits, openFolderDialog, fetchRecentLinkedDirs, pushRecentLinkedDir, dirExists, applyLibraryAsset, fetchLibraryAssetElementHtml } from "../providers/registry";
+import { formatBytes } from "./LibraryAssetMeta";
 import { WorkingDirPicker } from './WorkingDirPicker';
 import { duplicatePluginAsProject, patchProject, referenceProject } from "../state/projects";
 import { navigate } from '../router';
@@ -55,6 +56,7 @@ import type {
   PluginSourceKind,
   ResearchOptions,
   RunContextSelection,
+  UploadLimitsResponse,
   WorkspaceContextItem,
 } from '@open-design/contracts';
 import { buildVisualAnnotationAttachment, commentTargetDisplayName } from '../comments';
@@ -520,6 +522,26 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     const activeWorkspaceContextId = activeWorkspaceContext?.id ?? null;
     const previousWorkspaceContextIdRef = useRef<string | null>(activeWorkspaceContextId);
     const [dragActive, setDragActive] = useState(false);
+    // The published limit, read once per project so a drag-over names the
+    // real per-file ceiling BEFORE any file is dropped (F-01 / INV-7.3)
+    // instead of a hardcoded figure that can drift from the daemon.
+    const [uploadLimits, setUploadLimits] = useState<UploadLimitsResponse | null>(null);
+    useEffect(() => {
+      if (!projectId) {
+        setUploadLimits(null);
+        return;
+      }
+      let cancelled = false;
+      void fetchProjectUploadLimits(projectId).then((limits) => {
+        if (!cancelled) setUploadLimits(limits);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [projectId]);
+    const uploadLimitHint = uploadLimits
+      ? t('uploadProgress.limitHint', { size: formatBytes(uploadLimits.maxFileBytes) ?? `${uploadLimits.maxFileBytes} B` })
+      : null;
     // Lexical owns the caret, so the mention/slash trigger state only carries
     // the typed query — no cursor offset.
     const [mention, setMention] = useState<{ q: string } | null>(null);
@@ -2670,6 +2692,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         onDragLeave={() => setDragActive(false)}
         onDrop={handleDrop}
       >
+        {dragActive && uploadLimitHint ? (
+          <div className="composer-drop-limit-hint" data-testid="upload-limit-hint" aria-hidden>
+            {uploadLimitHint}
+          </div>
+        ) : null}
         <div className="composer-shell">
           {/*
             Spec §8.4 — context bar above the composer input. The
