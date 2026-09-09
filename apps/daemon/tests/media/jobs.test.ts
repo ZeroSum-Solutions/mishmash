@@ -155,7 +155,7 @@ describe('media jobs — encode', () => {
 
     expect(last?.status).toBe('done');
     for (let i = 1; i < fractions.length; i += 1) {
-      expect(fractions[i]).toBeGreaterThanOrEqual(fractions[i - 1]);
+      expect(fractions[i]!).toBeGreaterThanOrEqual(fractions[i - 1]!);
     }
 
     const outputPath = path.join(projectDir, 'out.mp4');
