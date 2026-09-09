@@ -3270,8 +3270,10 @@ export async function startServer({
 
   registerVideoImportRoutes(app, {
     http: { sendApiError },
-    paths: { RUNTIME_DATA_DIR },
+    paths: { RUNTIME_DATA_DIR, PROJECTS_DIR },
     resolvedPortRef,
+    db,
+    projectStore: { getProject },
   });
 
   // Gate the diagnostics export behind requireLocalDaemonRequest so it stays

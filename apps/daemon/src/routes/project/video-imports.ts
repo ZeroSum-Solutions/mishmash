@@ -1,12 +1,8 @@
-// Video import provider surface: list/status, connect, OAuth callback, and
-// disconnect. Lives in its own module tree (apps/daemon/src/video-import/),
-// not inside connectors/service.ts, because that store is Composio-bound
-// (brief §Work item 2) — Vimeo never goes through Composio.
-//
-// The create-import job route and its status route land once
-// MediaTaskStatus/MediaTaskSnapshot are available from
-// `@open-design/contracts` (packages/contracts/src/api/media.ts, 7C); this
-// file intentionally does not define them yet.
+// Video import provider surface: list/status, connect, OAuth callback,
+// disconnect, and the create-import job route. Lives in its own module tree
+// (apps/daemon/src/video-import/), not inside connectors/service.ts,
+// because that store is Composio-bound (brief §Work item 2) — Vimeo never
+// goes through Composio.
 //
 // Cross-origin mutation protection: the daemon's global `/api`
 // origin-validation middleware (server.ts, `app.use('/api', ...)`) already
@@ -22,13 +18,16 @@
 import { randomBytes } from 'node:crypto';
 
 import type { Express, Request, Response } from 'express';
+import type Database from 'better-sqlite3';
 
 import {
   VIDEO_IMPORT_PROVIDERS,
   isVideoImportProvider,
+  type CreateVideoImportRequest,
   type VideoImportProvider,
   type VideoImportProviderStatus,
   type VideoImportProvidersResponse,
+  type VideoImportResponse,
 } from '@open-design/contracts';
 
 import { FileVideoImportCredentialStore } from '../../video-import/credentials.js';
@@ -39,6 +38,7 @@ import {
   exchangeVimeoAuthorizationCode,
 } from '../../video-import/oauth.js';
 import { YOUTUBE_DISABLED_REASON } from '../../video-import/providers/youtube.js';
+import { VideoImportService } from '../../video-import/service.js';
 
 interface SendApiError {
   (res: Response, status: number, code: string, message: string, init?: Record<string, unknown>): Response;
@@ -46,8 +46,10 @@ interface SendApiError {
 
 export interface RegisterVideoImportRoutesDeps {
   http: { sendApiError: SendApiError };
-  paths: { RUNTIME_DATA_DIR: string };
+  paths: { RUNTIME_DATA_DIR: string; PROJECTS_DIR: string };
   resolvedPortRef: { readonly current: number | string | null };
+  db: Database.Database;
+  projectStore: { getProject: (db: Database.Database, id: string) => { id: string } | undefined | null };
 }
 
 const VIMEO_SCOPE = 'public private video_files';
@@ -69,6 +71,10 @@ export function registerVideoImportRoutes(app: Express, ctx: RegisterVideoImport
   const { sendApiError } = ctx.http;
   const credentialStore = new FileVideoImportCredentialStore(ctx.paths.RUNTIME_DATA_DIR);
   const pendingAuth = new VideoImportPendingAuthCache();
+  const videoImportService = new VideoImportService(ctx.db, {
+    projectsRoot: ctx.paths.PROJECTS_DIR,
+    runtimeDataDir: ctx.paths.RUNTIME_DATA_DIR,
+  });
 
   function providerStatus(provider: VideoImportProvider): VideoImportProviderStatus {
     if (provider === 'youtube') {
@@ -189,5 +195,47 @@ export function registerVideoImportRoutes(app: Express, ctx: RegisterVideoImport
     credentialStore.delete();
     console.log(`[video-import] disconnect ok: ${provider}`);
     res.json({ ok: true });
+  });
+
+  app.post('/api/projects/:id/video-imports', async (req: Request<{ id: string }>, res: Response) => {
+    const projectId = req.params.id;
+    const project = ctx.projectStore.getProject(ctx.db, projectId);
+    if (!project) {
+      return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+    }
+
+    const body = (req.body ?? {}) as Partial<CreateVideoImportRequest>;
+    const provider = body.provider;
+    if (!isVideoImportProvider(provider)) {
+      return sendApiError(res, 400, 'VALIDATION_FAILED', 'provider must be vimeo or youtube');
+    }
+    const url = typeof body.url === 'string' ? body.url.trim() : '';
+    if (provider !== 'youtube' && !url) {
+      return sendApiError(res, 400, 'VALIDATION_FAILED', 'url is required');
+    }
+    const as = typeof body.as === 'string' && body.as.trim() ? body.as.trim() : undefined;
+
+    const result = await videoImportService.createImport({ projectId, provider, url, ...(as ? { as } : {}) });
+    if (!result.ok) {
+      console.log(`[video-import] create failed: ${result.code} ${result.message}`);
+      return sendApiError(res, result.status, result.code, result.message);
+    }
+    console.log(`[video-import] create ok: job ${result.job.jobId} (${provider})`);
+    const responseBody: VideoImportResponse = { job: result.job };
+    res.status(202).json(responseBody);
+  });
+
+  app.get('/api/projects/:id/video-imports/:jobId', (req: Request<{ id: string; jobId: string }>, res: Response) => {
+    const projectId = req.params.id;
+    const project = ctx.projectStore.getProject(ctx.db, projectId);
+    if (!project) {
+      return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+    }
+    const job = videoImportService.getJob(req.params.jobId);
+    if (!job) {
+      return sendApiError(res, 404, 'NOT_FOUND', 'video import job not found');
+    }
+    const responseBody: VideoImportResponse = { job };
+    res.json(responseBody);
   });
 }

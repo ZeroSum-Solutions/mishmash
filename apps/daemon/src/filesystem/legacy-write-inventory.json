@@ -174,5 +174,8 @@
   "apps/daemon/src/tools-connectors-cli.ts#writePackageFileIfMissing": "writeFile:2",
   "apps/daemon/src/transcript-export.ts#exportProjectTranscript": "mkdirSync:1,renameSync:1,unlinkSync:2,writeFileSync:1",
   "apps/daemon/src/video-import/credentials.ts#delete": "unlinkSync:1",
-  "apps/daemon/src/video-import/credentials.ts#writeRecords": "chmodSync:1,mkdirSync:1,renameSync:1,unlinkSync:1,writeFileSync:1"
+  "apps/daemon/src/video-import/credentials.ts#writeRecords": "chmodSync:1,mkdirSync:1,renameSync:1,unlinkSync:1,writeFileSync:1",
+  "apps/daemon/src/video-import/providers/vimeo.ts#cleanupStaging": "unlink:1",
+  "apps/daemon/src/video-import/providers/vimeo.ts#downloadVimeoVideoToStaging": "mkdir:1",
+  "apps/daemon/src/video-import/service.ts#runVimeoDownload": "unlink:2"
 }

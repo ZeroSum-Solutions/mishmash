@@ -55,3 +55,24 @@ export function resolveVimeoConfig(): VimeoEnvConfig {
 export function resolveVideoImportPublicBaseUrl(): string {
   return (process.env.OD_VIDEO_IMPORT_PUBLIC_BASE_URL || '').trim();
 }
+
+// Download job limits (docs/subprocess-limits.md carries the same names and
+// defaults). A breach ends the task `failed`, naming the limit in the
+// message, never a silent truncation.
+export const DEFAULT_VIDEO_IMPORT_MAX_BYTES = 2 * 1024 * 1024 * 1024; // 2 GiB
+export const DEFAULT_VIDEO_IMPORT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+function positiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+export function resolveVideoImportMaxBytes(): number {
+  return positiveIntEnv('OD_VIDEO_IMPORT_MAX_BYTES', DEFAULT_VIDEO_IMPORT_MAX_BYTES);
+}
+
+export function resolveVideoImportTimeoutMs(): number {
+  return positiveIntEnv('OD_VIDEO_IMPORT_TIMEOUT_MS', DEFAULT_VIDEO_IMPORT_TIMEOUT_MS);
+}
