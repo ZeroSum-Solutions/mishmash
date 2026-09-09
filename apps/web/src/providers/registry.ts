@@ -30,6 +30,14 @@ import { parseAgentRegistrySseEvent } from '@open-design/contracts';
 import type { MediaTaskListResponse, MediaTaskSnapshot } from '@open-design/contracts';
 import { isMediaTaskListResponse, isMediaTaskSnapshot } from '@open-design/contracts';
 import type {
+  VideoImportConnectResponse,
+  VideoImportJob,
+  VideoImportProvider,
+  VideoImportProvidersResponse,
+  VideoImportResponse,
+} from '@open-design/contracts';
+import { isVideoImportResponse } from '@open-design/contracts';
+import type {
   AgentInfo,
   AppVersionInfo,
   AppVersionResponse,
@@ -4013,4 +4021,127 @@ export async function generateProjectMedia(
   } catch {
     return null;
   }
+}
+
+// --- video import ---
+// Part 8 F-05: Vimeo account status/connect/disconnect for the Settings
+// "Video sources" card. The create-import job client (submit a URL, poll
+// progress) lands once the contracts it needs (VideoImportJob /
+// VideoImportResponse, which carry MediaTaskStatus) are available.
+
+export async function fetchVideoImportProviders(): Promise<VideoImportProvidersResponse['providers']> {
+  try {
+    const resp = await fetch('/api/video-import/providers');
+    if (!resp.ok) return [];
+    const json = (await resp.json()) as VideoImportProvidersResponse;
+    return json.providers ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Start connecting a video-import provider. Opens a blank popup
+ * synchronously (before the `await`) so the browser's popup blocker sees it
+ * as a direct response to the user's click, then navigates it to the
+ * authorize URL once the daemon returns one — same shape as
+ * `connectConnector`'s auth-window handling above, without that flow's
+ * Composio auth-config prepare step (Vimeo needs none).
+ */
+export async function connectVideoImportProvider(
+  provider: VideoImportProvider,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const authWindow = window.open('about:blank', '_blank');
+  try {
+    const resp = await fetch(`/api/video-import/${encodeURIComponent(provider)}/connect`, {
+      method: 'POST',
+    });
+    if (!resp.ok) {
+      authWindow?.close();
+      const message = await decodeApiErrorMessage(resp);
+      return { ok: false, error: message };
+    }
+    const json = (await resp.json()) as VideoImportConnectResponse;
+    if (authWindow) {
+      authWindow.location.href = json.authorizeUrl;
+    } else {
+      window.open(json.authorizeUrl, '_blank');
+    }
+    return { ok: true };
+  } catch (err) {
+    authWindow?.close();
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function disconnectVideoImportProvider(
+  provider: VideoImportProvider,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const resp = await fetch(`/api/video-import/${encodeURIComponent(provider)}/disconnect`, {
+      method: 'POST',
+    });
+    if (!resp.ok) return { ok: false, error: await decodeApiErrorMessage(resp) };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+function decodeApiErrorMessageFromBody(body: unknown, status: number): string {
+  const candidate = body as { error?: { message?: string } | string } | null;
+  if (typeof candidate?.error === 'string') return candidate.error;
+  if (candidate?.error && typeof candidate.error === 'object' && candidate.error.message) return candidate.error.message;
+  return `HTTP ${status}`;
+}
+
+/** `VideoImportPanel`'s submit: `POST /api/projects/:id/video-imports`. */
+export async function createVideoImport(
+  projectId: string,
+  provider: VideoImportProvider,
+  url: string,
+  as?: string,
+): Promise<{ ok: true; job: VideoImportJob } | { ok: false; error: string }> {
+  try {
+    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/video-imports`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider, url, ...(as ? { as } : {}) }),
+    });
+    const json = (await resp.json().catch(() => null)) as VideoImportResponse | null;
+    if (!resp.ok || !json || !isVideoImportResponse(json)) {
+      return { ok: false, error: decodeApiErrorMessageFromBody(json, resp.status) };
+    }
+    return { ok: true, job: json.job };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** `VideoImportPanel`'s poll: `GET /api/projects/:id/video-imports/:jobId`. */
+export async function getVideoImportJob(
+  projectId: string,
+  jobId: string,
+): Promise<{ ok: true; job: VideoImportJob } | { ok: false; error: string }> {
+  try {
+    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/video-imports/${encodeURIComponent(jobId)}`);
+    const json = (await resp.json().catch(() => null)) as VideoImportResponse | null;
+    if (!resp.ok || !json || !isVideoImportResponse(json)) {
+      return { ok: false, error: decodeApiErrorMessageFromBody(json, resp.status) };
+    }
+    return { ok: true, job: json.job };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function decodeApiErrorMessage(resp: Response): Promise<string> {
+  try {
+    const json = (await resp.json()) as { error?: { message?: string } | string };
+    if (typeof json.error === 'string') return json.error;
+    if (json.error?.message) return json.error.message;
+  } catch {
+    // fall through to the generic status-based message below
+  }
+  return `HTTP ${resp.status}`;
 }

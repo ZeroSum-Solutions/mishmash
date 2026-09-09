@@ -645,6 +645,7 @@ import {
 } from './filesystem/write-gateway.js';
 import { registerStoryboardRoutes } from './routes/storyboard.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes } from './routes/project/index.js';
+import { registerVideoImportRoutes } from './routes/project/video-imports.js';
 import { registerProjectStagedUploadRoutes } from './routes/project/uploads.js';
 import { resolveUploadLimits } from './uploads/staging.js';
 import { registerCoverRoutes } from './routes/covers.js';
@@ -3280,6 +3281,14 @@ export async function startServer({
     projectsRoot: PROJECTS_DIR,
     requireLocalDaemonRequest,
     composio: composioConnectorProvider,
+  });
+
+  registerVideoImportRoutes(app, {
+    http: { sendApiError },
+    paths: { RUNTIME_DATA_DIR, PROJECTS_DIR },
+    resolvedPortRef,
+    db,
+    projectStore: { getProject },
   });
 
   // Gate the diagnostics export behind requireLocalDaemonRequest so it stays
