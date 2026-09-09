@@ -3,7 +3,7 @@
 // W7A — F-01: a real tools-dev daemon, staged uploads, and the F-01
 // acceptance line: upload progress is a contract-typed byte stream, a panel
 // entry appears only after bytes are on disk, and an over-limit file is
-// rejected naming the limit. Consumes `e2e/resources/w7/manifest.json`
+// rejected naming the limit. Consumes `e2e/resources/w7-upload-manifest.ts`
 // (owned by 7A); bytes are generated at test time, never committed as
 // binaries.
 //
@@ -16,9 +16,6 @@
 // project root (INV-7.1) fixes here.
 
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'vitest';
 
@@ -34,27 +31,11 @@ import type {
 import { requestJson } from '@/vitest/http';
 import { createSmokeSuite } from '@/vitest/suite';
 
-import { generateUploadFixtureBytes } from '../resources/w7/generate-upload-fixture.ts';
+import { generateUploadFixtureBytes } from '../resources/w7-upload-fixture-bytes.js';
+import { w7UploadManifest, type W7UploadManifestRow } from '../resources/w7-upload-manifest.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-interface ManifestRow {
-  id: string;
-  sizeBytes: number;
-  sha256: string;
-}
-interface Manifest {
-  testLimitOverrideBytes: number;
-  testLimitOverrideEnvVar: string;
-  rows: ManifestRow[];
-}
-
-const manifest = JSON.parse(
-  await readFile(join(__dirname, '../resources/w7/manifest.json'), 'utf8'),
-) as Manifest;
-
-function rowOf(id: string): ManifestRow {
-  const row = manifest.rows.find((r) => r.id === id);
+function rowOf(id: string): W7UploadManifestRow {
+  const row = w7UploadManifest.rows.find((r) => r.id === id);
   if (!row) throw new Error(`manifest row not found: ${id}`);
   return row;
 }
@@ -133,7 +114,7 @@ describe('W7A staged upload progress', () => {
         const projectId = await createProject(daemonUrl);
 
         const limits = await requestJson<UploadLimitsResponse>(daemonUrl, `/api/projects/${projectId}/uploads/limits`);
-        expect(limits.maxFileBytes).toBe(manifest.testLimitOverrideBytes);
+        expect(limits.maxFileBytes).toBe(w7UploadManifest.testLimitOverrideBytes);
 
         // --- over-limit row: rejected up front, naming the limit ---
         const overLimit = rowOf('over-limit');
@@ -147,8 +128,8 @@ describe('W7A staged upload progress', () => {
           error: { code: string; message: string; details?: { limitBytes?: number } };
         };
         expect(overLimitBody.error.code).toBe('PAYLOAD_TOO_LARGE');
-        expect(overLimitBody.error.message).toContain(String(manifest.testLimitOverrideBytes));
-        expect(overLimitBody.error.details?.limitBytes).toBe(manifest.testLimitOverrideBytes);
+        expect(overLimitBody.error.message).toContain(String(w7UploadManifest.testLimitOverrideBytes));
+        expect(overLimitBody.error.details?.limitBytes).toBe(w7UploadManifest.testLimitOverrideBytes);
 
         // --- at-limit row: accepted exactly at the boundary ---
         const atLimit = rowOf('at-limit');
@@ -172,7 +153,7 @@ describe('W7A staged upload progress', () => {
           overLimitBytes: overLimit.sizeBytes,
         });
       },
-      { env: { [manifest.testLimitOverrideEnvVar]: String(manifest.testLimitOverrideBytes) } },
+      { env: { [w7UploadManifest.testLimitOverrideEnvVar]: String(w7UploadManifest.testLimitOverrideBytes) } },
     );
   }, 600_000);
 

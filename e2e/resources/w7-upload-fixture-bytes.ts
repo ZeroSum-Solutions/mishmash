@@ -1,6 +1,6 @@
-// Deterministic fixture-byte generator for `e2e/resources/w7/manifest.json`
-// (F-01 upload progress/limit e2e spec). D-18: bytes are never committed as
-// a binary — this script regenerates the exact same content at any size, so
+// Deterministic fixture-byte generator for `w7-upload-manifest.ts` (F-01
+// upload progress/limit e2e spec). D-18: bytes are never committed as a
+// binary — this script regenerates the exact same content at any size, so
 // the manifest's recorded SHA-256 is reproducible from source alone.
 //
 // Content is pure ASCII (a repeating 16-byte pattern), which satisfies the
@@ -8,9 +8,9 @@
 // number) regardless of size.
 //
 // Capture command for a manifest row of `sizeBytes` N (also recorded per-row
-// in manifest.json):
+// in w7-upload-manifest.ts):
 //   node --experimental-strip-types -e \
-//     "import('./generate-upload-fixture.ts').then(m => { \
+//     "import('./w7-upload-fixture-bytes.ts').then(m => { \
 //        const b = m.generateUploadFixtureBytes(N); \
 //        console.log(require('node:crypto').createHash('sha256').update(b).digest('hex')); \
 //      })"
