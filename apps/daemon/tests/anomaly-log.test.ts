@@ -313,7 +313,7 @@ describe('anomaly log', () => {
     await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'current' }, 'web');
 
     const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
-    let releaseCurrentRead: (() => void) | null = null;
+    let releaseCurrentRead: (() => void) | null = null as (() => void) | null;
     let pausedOnce = false;
     readFileMock.mockImplementation(async (...args: unknown[]) => {
       const [target] = args as [unknown];
@@ -429,7 +429,7 @@ describe('anomaly log', () => {
     await log.append({ kind: 'ui-lag', severity: 'warn', summary: 'b' }, 'web');
 
     const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
-    let releaseSnapshotRead: (() => void) | null = null;
+    let releaseSnapshotRead: (() => void) | null = null as (() => void) | null;
     let pausedOnce = false;
     readFileMock.mockImplementation(async (...args: unknown[]) => {
       const [target] = args as [unknown];
