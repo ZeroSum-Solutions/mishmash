@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OpenDesignHostUpdaterStatusSnapshot } from '@open-design/host';
 import { installMockOpenDesignHost } from '@open-design/host/testing';
+import type { VideoImportProviderStatus } from '@open-design/contracts';
 import { en } from '../../src/i18n/locales/en';
 
 function optionNames(container: HTMLElement): string[] {
@@ -4043,7 +4044,7 @@ describe('SettingsDialog video sources card', () => {
     vi.unstubAllGlobals();
   });
 
-  function mockVideoImportProviders(providers: Array<Record<string, unknown>>) {
+  function mockVideoImportProviders(providers: VideoImportProviderStatus[]) {
     return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input.toString();
       if (url === '/api/video-import/providers') {
@@ -4102,15 +4103,14 @@ describe('SettingsDialog video sources card', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input.toString();
       if (url === '/api/video-import/providers') {
+        const providers = [
+          connected
+            ? { provider: 'vimeo', enabled: true, configured: true, connected: true, credentialSource: 'env', account: { name: 'Fixture Account' } }
+            : { provider: 'vimeo', enabled: true, configured: true, connected: false, credentialSource: 'env' },
+          { provider: 'youtube', enabled: false, configured: false, connected: false, credentialSource: 'unset' },
+        ] satisfies VideoImportProviderStatus[];
         return new Response(
-          JSON.stringify({
-            providers: [
-              connected
-                ? { provider: 'vimeo', enabled: true, configured: true, connected: true, credentialSource: 'env', account: { name: 'Fixture Account' } }
-                : { provider: 'vimeo', enabled: true, configured: true, connected: false, credentialSource: 'env' },
-              { provider: 'youtube', enabled: false, configured: false, connected: false, credentialSource: 'unset' },
-            ],
-          }),
+          JSON.stringify({ providers }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         );
       }
