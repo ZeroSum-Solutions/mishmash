@@ -1124,6 +1124,16 @@
   border-color: var(--accent);
   background: var(--accent-tint);
 }
+/* F-01 (W7A): the per-file limit, named before any file is dropped
+   (INV-7.3) — read from `GET .../uploads/limits`, not a hardcoded number. */
+.composer-drop-limit-hint {
+  position: absolute;
+  top: -22px;
+  left: 16px;
+  font-size: 11px;
+  color: var(--text-tertiary, var(--text-secondary));
+  pointer-events: none;
+}
 .composer-active-file {
   display: flex;
   align-items: center;

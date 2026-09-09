@@ -4319,21 +4319,28 @@ describe('SettingsDialog notifications interactions', () => {
     cleanup();
   });
 
-  it('renders notifications offline by default and only reveals sound pickers when enabled', () => {
+  // W7B (F-02): this used to claim the completion sound rendered "offline"
+  // (aria-pressed false) until the user opted in, and that the sound
+  // pickers only appeared after that click. The default flipped to on —
+  // the Settings toggle is the mute, not the opt-in — so this now pins the
+  // opposite shape: sound active and its pickers visible from render, with
+  // the toggle able to mute them away. Desktop stays off by default, still
+  // the sole "offline" button on first render.
+  it('renders the completion sound on by default and hides its pickers once muted', () => {
     renderSettingsDialog(
       { mode: 'daemon', agentId: 'codex' },
       { initialSection: 'notifications' },
     );
 
     expect(screen.getByRole('group', { name: 'Completion sound' })).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: 'offline' })[0]?.getAttribute('aria-pressed')).toBe('false');
-    expect(screen.queryByRole('group', { name: 'Success sound' })).toBeNull();
-    expect(screen.queryByRole('group', { name: 'Failure sound' })).toBeNull();
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'offline' })[0] as HTMLButtonElement);
-    expect(playSoundMock).toHaveBeenCalledWith('ding');
+    expect(screen.getAllByRole('button', { name: 'active' })[0]?.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getAllByRole('button', { name: 'offline' })).toHaveLength(1);
     expect(screen.getByRole('group', { name: 'Success sound' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Failure sound' })).toBeTruthy();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'active' })[0] as HTMLButtonElement);
+    expect(screen.queryByRole('group', { name: 'Success sound' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Failure sound' })).toBeNull();
   });
 
   it('updates completion success and failure sounds and autosaves the edited notification config', async () => {
@@ -4381,13 +4388,18 @@ describe('SettingsDialog notifications interactions', () => {
       { initialSection: 'notifications' },
     );
 
-    const desktopToggle = screen.getAllByRole('button', { name: 'offline' })[1] as HTMLButtonElement;
+    // W7B (F-02): sound now defaults on, so desktop is the only "offline"
+    // toggle on first render — index [0], not [1].
+    const desktopToggle = screen.getAllByRole('button', { name: 'offline' })[0] as HTMLButtonElement;
     fireEvent.click(desktopToggle);
 
     await waitFor(() => {
       expect(requestNotificationPermissionMock).toHaveBeenCalledTimes(1);
     });
-    expect(screen.getByRole('button', { name: 'active' }).getAttribute('aria-pressed')).toBe('true');
+    // Sound also renders "active" by default now, so assert on the
+    // specific toggle this test already holds a reference to rather than
+    // `getByRole` (which would match both and throw).
+    expect(desktopToggle.getAttribute('aria-pressed')).toBe('true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Send test' }));
     await waitFor(() => {
@@ -4407,7 +4419,9 @@ describe('SettingsDialog notifications interactions', () => {
       { initialSection: 'notifications' },
     );
 
-    const desktopToggle = screen.getAllByRole('button', { name: 'offline' })[1] as HTMLButtonElement;
+    // W7B (F-02): sound now defaults on, so desktop is the only "offline"
+    // toggle on first render — index [0], not [1].
+    const desktopToggle = screen.getAllByRole('button', { name: 'offline' })[0] as HTMLButtonElement;
     fireEvent.click(desktopToggle);
 
     await waitFor(() => {

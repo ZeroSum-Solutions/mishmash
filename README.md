@@ -158,6 +158,14 @@ address ranges by default; opt an internally-hosted gateway out with
 `OD_ALLOWED_INTERNAL_HOSTS=<host1>,<host2>,...` (see
 [`docs/architecture.md`](docs/architecture.md) for the full allowlist rules).
 
+**Uploads.** `GET /api/projects/:id/uploads/limits` (and `od project upload
+--help`) publishes the numbers every upload surface enforces:
+`OD_UPLOAD_MAX_FILE_BYTES` (default 209715200, 200 MiB) is the per-file
+ceiling, and `OD_UPLOAD_MAX_FILES` (default 12) is the per-request file
+count; the total-bytes ceiling is their product. A file is additionally
+checked against a closed set of extension/MIME/magic-byte kinds and, for
+`.zip`, a bounded central-directory inspection that never extracts.
+
 ## Skills and design templates
 
 **Functional skills ship in [`skills/`](skills/)**. Each follows the Agent

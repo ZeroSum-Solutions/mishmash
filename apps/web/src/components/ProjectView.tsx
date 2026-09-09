@@ -101,9 +101,14 @@ import {
   apiProtocolModelLabel,
   usesAnthropicProxy,
 } from '../utils/apiProtocol';
-import { playSound, showCompletionNotification } from '../utils/notifications';
+import {
+  notificationPermission,
+  playSound,
+  showCompletionNotification,
+} from '../utils/notifications';
 import { randomUUID } from '../utils/uuid';
 import { DEFAULT_NOTIFICATIONS } from '../state/config';
+import { decideCompletionNotifications } from '../runtime/notification-decision';
 import type { TodoItem } from '../runtime/todos';
 import {
   appendErrorStatusEvent,
@@ -2356,34 +2361,42 @@ export function ProjectView({
     if (status !== 'succeeded' && status !== 'failed') return;
 
     const cfg = config.notifications ?? DEFAULT_NOTIFICATIONS;
-    if (cfg.soundEnabled) {
+    // The firing effect below already resolved the active/replay dedupe
+    // (activeCompletionNotificationRunsRef / completedNotificationRunsRef)
+    // before calling this function, so this run is always previously-active
+    // and not-yet-notified here (INV-7.4, `runtime/notification-decision.ts`).
+    const decision = decideCompletionNotifications({
+      status,
+      soundEnabled: cfg.soundEnabled,
+      desktopEnabled: cfg.desktopEnabled,
+      desktopPermission: notificationPermission(),
+      documentHidden: typeof document !== 'undefined' && document.hidden,
+      documentFocused: typeof document === 'undefined' ? true : document.hasFocus(),
+      wasPreviouslyActive: true,
+      alreadyNotified: false,
+    });
+
+    if (decision.playSound) {
       playSound(status === 'succeeded' ? cfg.successSoundId : cfg.failureSoundId);
     }
 
-    if (cfg.desktopEnabled) {
-      // Successes only interrupt when the user is on another tab/window.
-      // Failures alert regardless — losing a long agent run silently is
-      // worse than a small interruption when the page is in focus.
-      const isHidden = typeof document !== 'undefined' && document.hidden;
-      const isFocused = typeof document === 'undefined' ? true : document.hasFocus();
-      if (status === 'failed' || isHidden || !isFocused) {
-        const title = status === 'succeeded'
-          ? t('notify.successTitle')
-          : t('notify.failureTitle');
-        const fallbackBody = status === 'succeeded'
-          ? t('notify.successBody')
-          : t('notify.failureBody');
-        const trimmed = (last.content ?? '').trim();
-        const body = trimmed ? trimmed.slice(0, 80) : fallbackBody;
-        void showCompletionNotification({
-          status,
-          title,
-          body,
-          onClick: () => {
-            if (typeof window !== 'undefined') window.focus();
-          },
-        });
-      }
+    if (decision.showDesktop) {
+      const title = status === 'succeeded'
+        ? t('notify.successTitle')
+        : t('notify.failureTitle');
+      const fallbackBody = status === 'succeeded'
+        ? t('notify.successBody')
+        : t('notify.failureBody');
+      const trimmed = (last.content ?? '').trim();
+      const body = trimmed ? trimmed.slice(0, 80) : fallbackBody;
+      void showCompletionNotification({
+        status,
+        title,
+        body,
+        onClick: () => {
+          if (typeof window !== 'undefined') window.focus();
+        },
+      });
     }
   }, [config.notifications, t]);
 

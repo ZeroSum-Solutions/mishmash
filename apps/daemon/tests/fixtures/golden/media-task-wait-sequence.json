@@ -1,0 +1,32 @@
+{
+  "_capture": {
+    "note": "Real POST /api/media/tasks/:id/wait response bodies, one per media-task lifecycle stage (INV-7.13 F-04 golden). No job-runner exists yet on base to drive one task through queued -> running -> done naturally, so each stage is a distinct task id seeded directly in media_tasks and read once through the live route (source of the wire shape, not a fabricated one). The 'interrupted' entry is the one exception that IS a single task observed across a real boot: seeded as 'running' with a past startedAt, then read again after a genuine daemon restart, exercising reconcileMediaTasksOnBoot for real.",
+    "command": "OD_DATA_DIR=<scratch> pnpm tools-dev run web --namespace gauntlet-w7-7c --daemon-port 20731 --web-port 20732   # then, per entry:   node -e \"require('better-sqlite3')(DB).prepare('INSERT INTO media_tasks (...) VALUES (...)').run(...)\"   followed by   curl -s -X POST http://127.0.0.1:20731/api/media/tasks/<id>/wait -H 'content-type: application/json' -d '{\"since\":0,\"timeoutMs\":0}'   ; the interrupted entry additionally runs `pnpm tools-dev stop --namespace gauntlet-w7-7c` then restarts the same command before the curl.",
+    "recordedAt": "2026-09-08",
+    "daemonSha": "8487362f0cf383c5ca5d34e1a80ccb51b2ae0f41",
+    "projectId": "proj_ad115c489e02",
+    "normalization": "Verbatim daemon JSON responses. No field was added, dropped, or retyped; task ids and timestamps are the real seeded/observed values."
+  },
+  "sequence": [
+    {
+      "label": "queued",
+      "response": {"taskId":"gold-queued","status":"queued","startedAt":1788912912112,"endedAt":null,"progress":[],"nextSince":0}
+    },
+    {
+      "label": "running",
+      "response": {"taskId":"gold-running","status":"running","startedAt":1788912910112,"endedAt":null,"progress":["probing input duration","encoding: 42% (out_time_ms=4200000)"],"nextSince":2}
+    },
+    {
+      "label": "done",
+      "response": {"taskId":"gold-done","status":"done","startedAt":1788912905112,"endedAt":1788912907112,"progress":["probing input duration","encoding: 100%","encode finished"],"nextSince":3,"file":{"name":"clip-h264-web.mp4","path":"clip-h264-web.mp4","size":1048576,"mtime":1788912927233,"kind":"video","mime":"video/mp4"}}
+    },
+    {
+      "label": "failed",
+      "response": {"taskId":"gold-failed","status":"failed","startedAt":1788912908112,"endedAt":1788912910112,"progress":["probing input duration","encoding: 12%"],"nextSince":2,"error":{"message":"output exceeded the 2147483648-byte OD_MEDIA_JOB_MAX_OUTPUT_BYTES limit","status":8,"code":"LIMIT_EXCEEDED"}}
+    },
+    {
+      "label": "interrupted",
+      "response": {"taskId":"gold-interrupt-me","status":"interrupted","startedAt":1788912918438,"endedAt":1788912949102,"progress":["probing input duration","encoding: 8%"],"nextSince":2,"error":{"message":"media task interrupted by daemon restart","status":5,"code":"DAEMON_RESTART"}}
+    }
+  ]
+}

@@ -24,8 +24,11 @@ import type {
   RestoreProjectFileVersionResponse,
   SocialShareRequest,
   SocialShareResponse,
+  UploadLimitsResponse,
 } from '@open-design/contracts';
 import { parseAgentRegistrySseEvent } from '@open-design/contracts';
+import type { MediaTaskListResponse, MediaTaskSnapshot } from '@open-design/contracts';
+import { isMediaTaskListResponse, isMediaTaskSnapshot } from '@open-design/contracts';
 import type {
   VideoImportConnectResponse,
   VideoImportJob,
@@ -2388,6 +2391,25 @@ export interface UploadProjectFilesResult {
   error?: string;
 }
 
+/** Reads a project-upload error response's real code/message. The daemon's
+ *  error envelope is `{ error: { code, message } }` (`api-errors.ts`); this
+ *  used to be read as a flat `{ code, error: string }`, which meant a 413's
+ *  real message ("File exceeds the 200 MiB limit …") never reached the UI —
+ *  mirrors `designLibraryPromotionError` above. */
+async function projectUploadError(resp: Response): Promise<{ code?: string; message: string }> {
+  const payload = (await resp.json().catch(() => null)) as
+    | { error?: string | { code?: string; message?: string } }
+    | null;
+  if (typeof payload?.error === 'string') return { message: payload.error };
+  if (payload?.error && typeof payload.error === 'object') {
+    return {
+      code: payload.error.code,
+      message: payload.error.message ?? `upload failed (${resp.status})`,
+    };
+  }
+  return { message: `upload failed (${resp.status})` };
+}
+
 export async function uploadProjectFiles(
   projectId: string,
   files: File[],
@@ -2417,15 +2439,13 @@ export async function uploadProjectFiles(
       );
 
       if (!resp.ok) {
-        const payload = (await resp.json().catch(() => null)) as
-          | { code?: string; error?: string }
-          | null;
-        error = payload?.error ?? `upload failed (${resp.status})`;
+        const { code, message } = await projectUploadError(resp);
+        error = message;
         for (const f of batch) {
-          failed.push({ name: f.name, code: payload?.code, error: error });
+          failed.push({ name: f.name, code, error });
         }
         for (const f of remaining) {
-          failed.push({ name: f.name, code: payload?.code, error: error });
+          failed.push({ name: f.name, code, error });
         }
         break;
       }
@@ -2465,6 +2485,20 @@ export async function uploadProjectFiles(
   }
 
   return { uploaded, failed, error };
+}
+
+// The one number every drop surface reads for its before-selection limit
+// copy (F-01 / INV-7.3) instead of a hardcoded figure that can drift out of
+// sync with what the daemon actually enforces
+// (`apps/daemon/src/uploads/staging.ts:resolveUploadLimits`).
+export async function fetchProjectUploadLimits(projectId: string): Promise<UploadLimitsResponse | null> {
+  try {
+    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/uploads/limits`);
+    if (!resp.ok) return null;
+    return (await resp.json()) as UploadLimitsResponse;
+  } catch {
+    return null;
+  }
 }
 
 // Stable URL that serves a project file with its original mime — for
@@ -3851,14 +3885,6 @@ export async function exportStoryboardSlider(id: string): Promise<StoryboardApiR
   }
 }
 
-export interface MediaTaskSnapshot {
-  status: 'running' | 'done' | 'failed' | 'interrupted';
-  nextSince?: number;
-  progress?: string[];
-  file?: { name?: string; size?: number; mime?: string };
-  error?: { message?: string };
-}
-
 /**
  * Polls the EXISTING POST /api/media/tasks/:id/wait long-poll endpoint to
  * completion. No web caller drove media generation directly before the
@@ -3866,6 +3892,14 @@ export interface MediaTaskSnapshot {
  * there was no browser-side poll helper to reuse — this is deliberately a
  * thin mirror of the CLI's pollUntilDoneOrBudget (apps/daemon/src/cli.ts),
  * minus the process.exit calls a browser has no equivalent for.
+ *
+ * DEF-7.3 fix: the daemon's response is validated through the
+ * contracts-owned {@link isMediaTaskSnapshot} guard before it is trusted —
+ * a malformed body (missing `taskId`/`status`) rejects instead of being
+ * returned to the caller unchanged. The return type is the contracts
+ * {@link MediaTaskSnapshot} itself (not a narrower local copy), so a
+ * caller can see `taskId`/`kind`/`limits` through the type system exactly
+ * as the runtime object has them.
  */
 export async function waitForMediaTask(
   taskId: string,
@@ -3874,7 +3908,25 @@ export async function waitForMediaTask(
   const totalBudgetMs = options.totalBudgetMs ?? 15 * 60 * 1000;
   const startedAt = Date.now();
   let since = 0;
-  let last: MediaTaskSnapshot = { status: 'running' };
+  let last: MediaTaskSnapshot = {
+    taskId,
+    status: 'running',
+    startedAt,
+    endedAt: null,
+    progress: [],
+    nextSince: 0,
+    file: null,
+  };
+  const networkFailure = (message: string): MediaTaskSnapshot => ({
+    taskId,
+    status: 'failed',
+    startedAt,
+    endedAt: Date.now(),
+    progress: [],
+    nextSince: since,
+    file: null,
+    error: { code: 'UPSTREAM_ERROR', message },
+  });
   while (Date.now() - startedAt < totalBudgetMs) {
     const remaining = totalBudgetMs - (Date.now() - startedAt);
     const timeoutMs = Math.max(500, Math.min(20_000, remaining));
@@ -3886,18 +3938,48 @@ export async function waitForMediaTask(
         body: JSON.stringify({ since, timeoutMs }),
       });
     } catch (err) {
-      return { status: 'failed', error: { message: err instanceof Error ? err.message : 'Network error' } };
+      return networkFailure(err instanceof Error ? err.message : 'Network error');
     }
     if (!resp.ok) {
-      return { status: 'failed', error: { message: await readStoryboardApiError(resp) } };
+      return networkFailure(await readStoryboardApiError(resp));
     }
-    const snap = (await resp.json()) as MediaTaskSnapshot;
+    const rawBody: unknown = await resp.json();
+    if (!isMediaTaskSnapshot(rawBody)) {
+      throw new Error('malformed media task snapshot received from the daemon');
+    }
+    const snap = rawBody;
     last = snap;
     if (Array.isArray(snap.progress) && snap.progress.length > 0) options.onProgress?.(snap.progress);
     if (typeof snap.nextSince === 'number') since = snap.nextSince;
     if (snap.status === 'done' || snap.status === 'failed' || snap.status === 'interrupted') return snap;
   }
   return last;
+}
+
+/** Cancels a running media task (encode/download job or generate task). */
+export async function cancelMediaTask(taskId: string): Promise<{ ok: boolean }> {
+  try {
+    const resp = await fetch(`/api/media/tasks/${encodeURIComponent(taskId)}/cancel`, { method: 'POST' });
+    return { ok: resp.ok };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/** Lists a project's media tasks (the same contracts-owned snapshot shape as waitForMediaTask). */
+export async function listMediaTasks(
+  projectId: string,
+  options: { includeDone?: boolean } = {},
+): Promise<MediaTaskListResponse | null> {
+  try {
+    const qs = options.includeDone ? '?includeDone=1' : '';
+    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/media/tasks${qs}`);
+    if (!resp.ok) return null;
+    const body: unknown = await resp.json();
+    return isMediaTaskListResponse(body) ? body : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface GenerateProjectMediaRequest {

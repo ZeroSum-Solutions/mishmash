@@ -206,6 +206,14 @@ export const MEDIA_TASK_ERROR_CODES = [
   'UPSTREAM_ERROR',
   'FFMPEG_NOT_FOUND',
   'DAEMON_RESTART',
+  // The task exists but is not one of THIS route's tracked encode/download
+  // jobs (a media-generation task, or a task another surface persisted to
+  // the shared media_tasks table without registering it as a killable
+  // encode/download job — e.g. a video-import download). `POST
+  // /api/media/tasks/:id/cancel` answers 409 with this code rather than
+  // silently no-op-ing and reporting `canceled` while the underlying work
+  // keeps running (integration-grok-r1 finding 1).
+  'NOT_CANCELABLE',
 ] as const;
 
 export type MediaTaskErrorCode = (typeof MEDIA_TASK_ERROR_CODES)[number];
@@ -307,6 +315,17 @@ export interface CreateMediaJobResponse {
   startedAt: number;
 }
 
+/**
+ * `POST /api/media/tasks/:id/cancel` response when the task is real but is
+ * not one of this route's tracked encode/download jobs. 409, not 404: the
+ * task itself exists, only the cancel request is refused. `task` carries the
+ * current, unchanged snapshot so the caller can see what is still running.
+ */
+export interface MediaTaskCancelRefusedResponse {
+  error: { code: 'NOT_CANCELABLE'; message: string };
+  task: MediaTaskSnapshot;
+}
+
 function isMediaRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -370,4 +389,15 @@ export function isMediaJobLimits(value: unknown): value is MediaJobLimits {
     typeof value.maxOutputBytes === 'number' &&
     typeof value.maxConcurrent === 'number'
   );
+}
+
+export function isMediaTaskCancelRefusedResponse(
+  value: unknown,
+): value is MediaTaskCancelRefusedResponse {
+  if (!isMediaRecord(value)) return false;
+  const { error, task } = value;
+  if (!isMediaRecord(error) || error.code !== 'NOT_CANCELABLE' || typeof error.message !== 'string') {
+    return false;
+  }
+  return isMediaTaskSnapshot(task);
 }
