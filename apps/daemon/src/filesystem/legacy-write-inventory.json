@@ -172,5 +172,9 @@
   "apps/daemon/src/tools-connectors-cli.ts#writeGithubDesignEvidence": "writeFile:3",
   "apps/daemon/src/tools-connectors-cli.ts#writeLocalDesignEvidence": "writeFile:3",
   "apps/daemon/src/tools-connectors-cli.ts#writePackageFileIfMissing": "writeFile:2",
-  "apps/daemon/src/transcript-export.ts#exportProjectTranscript": "mkdirSync:1,renameSync:1,unlinkSync:2,writeFileSync:1"
+  "apps/daemon/src/transcript-export.ts#exportProjectTranscript": "mkdirSync:1,renameSync:1,unlinkSync:2,writeFileSync:1",
+  "apps/daemon/src/uploads/staging.ts#cleanupStage": "rm:1",
+  "apps/daemon/src/uploads/staging.ts#createSession": "mkdir:1",
+  "apps/daemon/src/uploads/staging.ts#promote": "mkdir:1,rename:1",
+  "apps/daemon/src/uploads/staging.ts#writeFileStream": "createWriteStream:1,rm:3"
 }
