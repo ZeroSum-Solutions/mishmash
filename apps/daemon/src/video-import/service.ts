@@ -124,9 +124,9 @@ export class VideoImportService {
     return { ok: true, job: this.snapshot(task, 'vimeo') };
   }
 
-  getJob(jobId: string): VideoImportJob | null {
+  getJob(projectId: string, jobId: string): VideoImportJob | null {
     const task = this.mediaTaskStore.getLiveMediaTask(jobId);
-    if (!task) return null;
+    if (!task || task.projectId !== projectId) return null;
     return this.snapshot(task, 'vimeo');
   }
 

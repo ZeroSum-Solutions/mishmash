@@ -231,7 +231,7 @@ export function registerVideoImportRoutes(app: Express, ctx: RegisterVideoImport
     if (!project) {
       return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
     }
-    const job = videoImportService.getJob(req.params.jobId);
+    const job = videoImportService.getJob(projectId, req.params.jobId);
     if (!job) {
       return sendApiError(res, 404, 'NOT_FOUND', 'video import job not found');
     }
