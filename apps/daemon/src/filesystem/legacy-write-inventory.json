@@ -107,7 +107,7 @@
   "apps/daemon/src/media/index.ts#renderHyperFramesViaCli": "mkdtemp:1,rm:1",
   "apps/daemon/src/media/jobs.ts#buildEncodeArgs": "mkdir:2",
   "apps/daemon/src/media/jobs.ts#runMediaDownloadJob": "mkdir:1,rename:1,rm:2",
-  "apps/daemon/src/media/jobs.ts#runMediaEncodeJob": "rm:1",
+  "apps/daemon/src/media/jobs.ts#runMediaEncodeJob": "rm:2",
   "apps/daemon/src/media/jobs.ts#streamResponseToFile": "createWriteStream:1",
   "apps/daemon/src/migration/legacy-data-migrator.ts#migrateLegacyDataDirSync": "mkdirSync:1,rmSync:3",
   "apps/daemon/src/migration/legacy-data-migrator.ts#promoteStaged": "cpSync:1,mkdirSync:1,renameSync:1,rmSync:2",
