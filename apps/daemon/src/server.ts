@@ -645,6 +645,8 @@ import {
 } from './filesystem/write-gateway.js';
 import { registerStoryboardRoutes } from './routes/storyboard.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes } from './routes/project/index.js';
+import { registerProjectStagedUploadRoutes } from './routes/project/uploads.js';
+import { resolveUploadLimits } from './uploads/staging.js';
 import { registerCoverRoutes } from './routes/covers.js';
 import { registerTypefaceRoutes } from './routes/typefaces.js';
 import { sweepOrphanedRenderProcesses } from './covers/render-pid-registry.js';
@@ -1965,8 +1967,16 @@ const projectUpload = multer({
       cb(null, uniqueUploadFileName(uploadDir, safe, reserved));
     },
   }),
-  limits: { fileSize: 200 * 1024 * 1024 },  // 200MB — covers the largest design assets we expect (PPTX/PDF/raw images)
+  // Same published ceiling the staged upload route enforces
+  // (`resolveUploadLimits`, `OD_UPLOAD_MAX_FILE_BYTES`, default 200 MiB) so
+  // `GET /api/projects/:id/uploads/limits` never disagrees with what this
+  // legacy route actually accepts.
+  limits: { fileSize: resolveUploadLimits(process.env).maxFileBytes },
 });
+
+function formatMebibytes(bytes: number): string {
+  return `${Math.round((bytes / (1024 * 1024)) * 100) / 100} MiB`;
+}
 
 function uniqueUploadFileName(uploadDir, safeName, reserved) {
   const parsed = path.parse(safeName);
@@ -2007,7 +2017,7 @@ function sendMulterError(res, err) {
       MISSING_FIELD_NAME: 400,
     };
     const errorByCode = {
-      LIMIT_FILE_SIZE: 'file too large',
+      LIMIT_FILE_SIZE: null, // built below, names the actual limit
       LIMIT_FILE_COUNT: 'too many files',
       LIMIT_UNEXPECTED_FILE: 'unexpected file field',
       LIMIT_PART_COUNT: 'too many form parts',
@@ -2017,13 +2027,18 @@ function sendMulterError(res, err) {
       MISSING_FIELD_NAME: 'missing field name',
     };
     const status = statusByCode[code] ?? 400;
-    const message = errorByCode[code] ?? 'upload failed';
+    const limitBytes = resolveUploadLimits(process.env).maxFileBytes;
+    const message = code === 'LIMIT_FILE_SIZE'
+      ? `File exceeds the ${formatMebibytes(limitBytes)} limit (${limitBytes} bytes)`
+      : (errorByCode[code] ?? 'upload failed');
     return sendApiError(
       res,
       status,
       code === 'LIMIT_FILE_SIZE' ? 'PAYLOAD_TOO_LARGE' : 'BAD_REQUEST',
       message,
-      { details: { legacyCode: code } },
+      code === 'LIMIT_FILE_SIZE'
+        ? { details: { legacyCode: code, limitBytes } }
+        : { details: { legacyCode: code } },
     );
   }
 
@@ -4185,6 +4200,15 @@ export async function startServer({
     paths: { PROJECTS_DIR },
     projectStore: projectStoreDeps,
     projectFiles: projectFileDeps,
+  });
+  // Staged upload session routes (Part 2 item 2.17 / F-01). The staging root
+  // MUST live outside every project root so a partial upload is never
+  // visible to a project's file watcher or file listing before it is
+  // validated and promoted.
+  registerProjectStagedUploadRoutes(app, {
+    db,
+    PROJECTS_DIR,
+    stagingRoot: path.join(RUNTIME_DATA_DIR, 'uploads', 'staging'),
   });
 
   const composeDaemonSystemPrompt = async ({
