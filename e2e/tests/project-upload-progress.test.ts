@@ -162,7 +162,7 @@ describe('W7A staged upload progress', () => {
           {
             method: 'PUT',
             headers: { Authorization: `Bearer ${atLimitSession.token}`, 'content-type': 'application/octet-stream' },
-            body: atLimitBytes,
+            body: Uint8Array.from(atLimitBytes),
           },
         );
         expect(atLimitPut.status).toBe(200);
@@ -205,7 +205,10 @@ describe('W7A staged upload progress', () => {
       );
       expect(uploadEventsResp.status).toBe(200);
       const progressEvents: { bytesReceived: number }[] = [];
-      let terminal: ProjectUploadSseEvent | null = null;
+      // An object wrapper, not a reassigned `let`, so its declared type
+      // (`ProjectUploadSseEvent | null`) stays intact when read back outside
+      // the pumpSse callback that sets it.
+      const outcome: { terminal: ProjectUploadSseEvent | null } = { terminal: null };
       let resolveTerminal: () => void = () => {};
       const terminalPromise = new Promise<void>((resolve) => {
         resolveTerminal = resolve;
@@ -214,7 +217,7 @@ describe('W7A staged upload progress', () => {
         if (!isProjectUploadSseEvent(data)) return;
         if (data.type === 'upload-progress') progressEvents.push({ bytesReceived: data.bytesReceived });
         if (data.type === 'upload-completed' || data.type === 'upload-failed') {
-          terminal = data;
+          outcome.terminal = data;
           resolveTerminal();
         }
       }).then(resolveTerminal);
@@ -260,9 +263,9 @@ describe('W7A staged upload progress', () => {
 
       await putPromise;
       await terminalPromise;
-      expect(terminal?.type).toBe('upload-completed');
-      if (terminal?.type === 'upload-completed') {
-        expect(terminal.files[0]).toMatchObject({ name: midsizeName, size: midsize.sizeBytes });
+      expect(outcome.terminal?.type).toBe('upload-completed');
+      if (outcome.terminal?.type === 'upload-completed') {
+        expect(outcome.terminal.files[0]).toMatchObject({ name: midsizeName, size: midsize.sizeBytes });
       }
       expect(progressEvents.length).toBeGreaterThan(1);
       // Monotonic: byte progress never decreases across events for the
