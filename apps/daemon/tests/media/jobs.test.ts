@@ -16,18 +16,26 @@
 //
 // The download sub-tests need the internal `lookup` DI seam the brief
 // describes (mirroring connectionTest.ts's DnsLookupFn): a hostname that
-// resolves to this test's local fixture server without being rejected by
-// the private/loopback/link-local check that applies to every
-// user-supplied download URL. That seam is a parameter of the job runner
-// module, not reachable through any HTTP field, so those sub-tests import
-// the module directly rather than going through the route. Until
-// media/jobs.ts exists, they fail on a clear, readable assertion
-// (`expect.fail(...)`) instead of crashing the whole suite on import —
-// the red spec's first failure stays behavioural, per builder-protocol.md.
+// resolves to a NON-blocked, public-looking address so the real,
+// unmocked private/loopback/link-local check runs and allows it (the
+// "success" case), plus a `httpGetSpy` transport seam that separately
+// redirects the resulting connection to the local fixture server — a
+// hostname resolving to loopback is REJECTED by that same check (see
+// test "(c2)"), matching production, where the check never carves out
+// loopback for a caller-supplied download URL. Both seams are parameters
+// of the job runner module, not reachable through any HTTP field, so
+// those sub-tests import the module directly rather than going through
+// the route. Until media/jobs.ts exists, they fail on a clear, readable
+// assertion (`expect.fail(...)`) instead of crashing the whole suite on
+// import — the red spec's first failure stays behavioural, per
+// builder-protocol.md.
 
 import type http from 'node:http';
 import { createServer as createHttpServer } from 'node:http';
-import { afterEach, describe, expect, it } from 'vitest';
+import httpNode from 'node:http';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -41,6 +49,11 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = path.join(HERE, '../fixtures/w7-media');
 const FAKE_FFMPEG = path.join(FIXTURE_DIR, 'fake-ffmpeg.mjs');
 const FAKE_FFMPEG_SHA256 = readFileSync(path.join(FIXTURE_DIR, 'fake-ffmpeg-output.sha256'), 'utf8').trim();
+const execFileP = promisify(execFile);
+const DAEMON_ROOT = path.resolve(HERE, '../..');
+const REPO_ROOT = path.resolve(HERE, '../../../..');
+const CLI_SRC = path.resolve(DAEMON_ROOT, 'src/cli.ts');
+const TSX_CLI = path.resolve(REPO_ROOT, 'node_modules/tsx/dist/cli.mjs');
 
 const LIMIT_ENV_VARS = [
   'OD_MEDIA_JOB_MAX_DURATION_MS',
@@ -274,28 +287,110 @@ describe('media jobs — encode', () => {
     expect(second.status).not.toBe(404);
     // The chosen observable shape (brief work item, red-spec item f): the
     // THIRD create request itself answers 429 when maxConcurrent is
-    // already saturated — same shape asserted in cli-media-jobs.test.ts.
+    // already saturated. (cli-media-jobs.test.ts does not assert this
+    // shape today — it only covers the CLI's other sub-verbs.)
     expect(third.status).toBe(429);
     const body = (await third.json()) as { error?: { code?: string; message?: string } };
     expect(body.error?.code).toBe('LIMIT_EXCEEDED');
     expect(body.error?.message ?? '').toMatch(/maxConcurrent/);
   });
 
-  it('(g) GET /api/media/jobs/limits, `od media --help`, and docs/subprocess-limits.md name the same limits', async () => {
+  it('(f2) near-simultaneous creates for DIFFERENT outputs never exceed maxConcurrent (no TOCTOU)', async () => {
+    const { baseUrl, projectId } = await boot();
+    process.env.OD_MEDIA_JOB_MAX_CONCURRENT = '2';
+
+    const createOne = (n: number) =>
+      fetch(`${baseUrl}/api/projects/${encodeURIComponent(projectId)}/media/jobs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'encode',
+          input: 'in.mp4',
+          output: `race-${n}-${randomUUID()}.mp4`,
+          preset: 'h264-web',
+        }),
+      });
+
+    // Fired WITHOUT awaiting each other, unlike test (f)'s three
+    // sequential `await createOne()` calls: the concurrency check reads
+    // `activeMediaJobCount()` and the reservation (`registerActiveMediaJob`)
+    // happen at different points in the handler, separated by an `await
+    // mediaJobOutputExists(...)`; three DIFFERENT outputs racing that
+    // `await` is exactly the shape that can slip more than maxConcurrent
+    // past a check-then-later-reserve implementation.
+    const responses = await Promise.all([createOne(1), createOne(2), createOne(3)]);
+    const statuses = responses.map((r) => r.status);
+    const accepted = statuses.filter((status) => status !== 429).length;
+    expect(
+      accepted,
+      `at most maxConcurrent (2) of 3 near-simultaneous creates for different outputs may be accepted; got statuses ${statuses.join(',')}`,
+    ).toBeLessThanOrEqual(2);
+    for (const response of responses) {
+      if (response.status !== 429) continue;
+      const rejectedBody = (await response.json()) as { error?: { code?: string } };
+      expect(rejectedBody.error?.code).toBe('LIMIT_EXCEEDED');
+    }
+  });
+
+  it('(g) GET /api/media/jobs/limits, `od media --help`, and docs/subprocess-limits.md agree on the SAME resolved value for each limit', async () => {
     const { baseUrl } = await boot();
 
     const limitsResp = await fetch(`${baseUrl}/api/media/jobs/limits`);
     expect(limitsResp.status, 'GET /api/media/jobs/limits must exist (INV-7.14)').not.toBe(404);
     const limits = (await limitsResp.json()) as Record<string, unknown>;
+    expect(limits).toHaveProperty('maxDurationMs');
+    expect(limits).toHaveProperty('maxOutputBytes');
+    expect(limits).toHaveProperty('maxConcurrent');
 
     const docsPath = path.join(HERE, '../../../../docs/subprocess-limits.md');
     const docsText = readFileSync(docsPath, 'utf8');
     for (const envVar of LIMIT_ENV_VARS) {
       expect(docsText, `docs/subprocess-limits.md must name ${envVar}`).toMatch(envVar);
     }
-    expect(limits).toHaveProperty('maxDurationMs');
-    expect(limits).toHaveProperty('maxOutputBytes');
-    expect(limits).toHaveProperty('maxConcurrent');
+
+    // Not just name presence: `od media --help` must print the same
+    // RESOLVED NUMBER for each limit as the JSON endpoint and the docs
+    // table, so a future default change in one place without updating the
+    // other two is caught here instead of only being true by coincidence.
+    const helpEnv = { ...process.env };
+    delete helpEnv.NODE_OPTIONS;
+    const { stdout, stderr } = await execFileP(process.execPath, [TSX_CLI, CLI_SRC, 'media', '--help'], {
+      cwd: DAEMON_ROOT,
+      env: helpEnv,
+      timeout: 15_000,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    const helpText = `${stdout}${stderr}`;
+
+    const LIMIT_JSON_KEYS: Record<(typeof LIMIT_ENV_VARS)[number], keyof typeof limits> = {
+      OD_MEDIA_JOB_MAX_DURATION_MS: 'maxDurationMs',
+      OD_MEDIA_JOB_MAX_OUTPUT_BYTES: 'maxOutputBytes',
+      OD_MEDIA_JOB_MAX_CONCURRENT: 'maxConcurrent',
+    };
+
+    for (const envVar of LIMIT_ENV_VARS) {
+      const docsMatch = new RegExp(`\`${envVar}\`\\s*\\|\\s*(\\d+)`).exec(docsText);
+      expect(docsMatch, `docs/subprocess-limits.md must state a numeric default for ${envVar}`).not.toBeNull();
+      const docsValue = Number(docsMatch?.[1]);
+
+      const helpMatch = new RegExp(`${envVar}\\s+default\\s+(\\d+)\\s+\\(resolved:\\s*(\\d+)\\)`).exec(helpText);
+      expect(helpMatch, `\`od media --help\` must print a resolved value for ${envVar}`).not.toBeNull();
+      const helpDefault = Number(helpMatch?.[1]);
+      const helpResolved = Number(helpMatch?.[2]);
+
+      const jsonValue = Number(limits[LIMIT_JSON_KEYS[envVar]]);
+
+      expect(helpResolved, `${envVar}: od media --help resolved value must equal GET /api/media/jobs/limits`).toBe(
+        jsonValue,
+      );
+      expect(
+        helpDefault,
+        `${envVar}: od media --help default must equal docs/subprocess-limits.md's default`,
+      ).toBe(docsValue);
+      expect(jsonValue, `${envVar}: GET /api/media/jobs/limits must equal docs/subprocess-limits.md's default`).toBe(
+        docsValue,
+      );
+    }
   });
 });
 
@@ -331,6 +426,16 @@ describe('media jobs — download', () => {
         res.end(body);
         return;
       }
+      if (req.url === '/oversized-streamed') {
+        // Deliberately NO content-length header: this response streams as
+        // chunked transfer-encoding, so the byte ceiling can only be
+        // enforced by the STREAMED check in streamResponseToFile, never
+        // the pre-read declared-length check (which requires a header
+        // this response omits).
+        res.writeHead(200, { 'content-type': 'application/octet-stream' });
+        res.end(body);
+        return;
+      }
       if (req.url === '/redirect-1') {
         res.writeHead(302, { location: '/redirect-2' });
         res.end();
@@ -354,15 +459,37 @@ describe('media jobs — download', () => {
     if (!addr || typeof addr === 'string') throw new Error('fixture server has no address');
     const fixturePort = addr.port;
 
-    // A stub `lookup` that resolves the test hostname to this fixture
-    // server. The private/loopback/link-local check runs against THIS
-    // result (same seam, same DnsLookupFn shape as connectionTest.ts), not
-    // against a real DNS answer for a hostname that doesn't exist.
+    // A stub `lookup` that resolves the test hostname to a PUBLIC-looking,
+    // non-blocked address (an RFC 5737-style example unicast address, not
+    // loopback/private/link-local/CGNAT) — the same private/loopback check
+    // that runs in production runs against THIS result (same seam, same
+    // DnsLookupFn shape as connectionTest.ts). It deliberately does NOT
+    // resolve to the fixture server's real loopback bind address: the
+    // guard must reject a hostname that resolves to loopback (see test
+    // "(c2)" below), so a "success" fixture cannot rely on that being
+    // permitted. The `httpGetSpy` below is the test-only transport seam
+    // that actually reaches the local fixture server once the (real,
+    // unmocked) classification above has already allowed the resolved
+    // address.
+    const ALLOWED_RESOLVED_ADDRESS = '93.184.216.34';
     const lookup = (
       _hostname: string,
       _options: unknown,
       callback: (err: Error | null, address: string, family: number) => void,
-    ) => callback(null, '127.0.0.1', 4);
+    ) => callback(null, ALLOWED_RESOLVED_ADDRESS, 4);
+
+    // Redirects the ACTUAL TCP connection to the real local fixture server
+    // regardless of which (already-validated) address the job runner
+    // thinks it is connecting to. This is a transport-level test seam —
+    // `assertDownloadHostAllowed`'s classification above still runs for
+    // real, unmocked, against `ALLOWED_RESOLVED_ADDRESS`; only the socket
+    // this spy hands back is redirected, so the guard's verdict is
+    // genuinely exercised rather than bypassed.
+    const realHttpGet = httpNode.get.bind(httpNode);
+    const httpGetSpy = vi
+      .spyOn(httpNode, 'get')
+      .mockImplementation(((options: Record<string, unknown>, callback: unknown) =>
+        realHttpGet({ ...options, hostname: '127.0.0.1' } as never, callback as never)) as typeof httpNode.get);
 
     try {
       const outputRel = 'downloaded.bin';
@@ -389,6 +516,25 @@ describe('media jobs — download', () => {
       expect(overResult?.error?.code).toBe('LIMIT_EXCEEDED');
       expect(existsSync(path.join(projectDir, 'oversized.bin'))).toBe(false);
 
+      // Same byte ceiling, but the response has no Content-Length at all
+      // (chunked transfer-encoding) — this can only be caught by the
+      // STREAMED check in streamResponseToFile, not the pre-read
+      // declared-length branch the case above exercises.
+      const streamedOverResult = await (jobs as any).runMediaDownloadJob({
+        projectDir,
+        url: `http://w7c-fixture.test:${fixturePort}/oversized-streamed`,
+        outputRel: 'oversized-streamed.bin',
+        maxOutputBytes: 4,
+        maxDurationMs: 30_000,
+        lookup,
+      });
+      expect(
+        streamedOverResult?.ok,
+        'a body over the byte ceiling with no declared Content-Length must be rejected by the streamed check',
+      ).toBe(false);
+      expect(streamedOverResult?.error?.code).toBe('LIMIT_EXCEEDED');
+      expect(existsSync(path.join(projectDir, 'oversized-streamed.bin'))).toBe(false);
+
       const redirectResult = await (jobs as any).runMediaDownloadJob({
         projectDir,
         url: `http://w7c-fixture.test:${fixturePort}/redirect-1`,
@@ -411,7 +557,53 @@ describe('media jobs — download', () => {
       expect(privateResult?.ok, 'a loopback target must be rejected before any connection is attempted').toBe(false);
       expect(existsSync(path.join(projectDir, 'private.bin'))).toBe(false);
     } finally {
+      httpGetSpy.mockRestore();
       await new Promise<void>((resolve) => fixtureServer.close(() => resolve()));
     }
+  });
+
+  it('(c2) a hostname that resolves to a loopback address is rejected before any connection is attempted (SSRF)', async () => {
+    const jobs = await importJobsModuleOrFail();
+    if (!jobs) {
+      expect.fail('apps/daemon/src/media/jobs.ts must exist before this test can run (work item 2, INV-7.6).');
+      return;
+    }
+
+    const envDataDir = process.env.OD_DATA_DIR;
+    if (!envDataDir) throw new Error('OD_DATA_DIR is required for daemon route tests');
+    const db = openDatabase(process.cwd(), { dataDir: envDataDir });
+    const projectId = `project_${randomUUID()}`;
+    const now = Date.now();
+    insertProject(db, { id: projectId, name: 'download project loopback', createdAt: now, updatedAt: now });
+    const projectDir = path.join(envDataDir, 'projects', projectId);
+    mkdirSync(projectDir, { recursive: true });
+
+    // The module's own docblock (jobs.ts:14-22) states the exact threat
+    // this guards against: an attacker-controlled DNS name that merely
+    // RESOLVES to the daemon's own loopback interface must be rejected the
+    // same way a literal `127.0.0.1` URL is (test "(c)" above), not
+    // allowed through because the hostname string itself isn't an IP
+    // literal. `lookup` is this module's documented test-only DI seam
+    // (mirroring connectionTest.ts's DnsLookupFn) — no HTTP field reaches
+    // it in production, where the real `dns.lookup` is used.
+    const lookupToLoopback = (
+      _hostname: string,
+      _options: unknown,
+      callback: (err: Error | null, address: string, family: number) => void,
+    ) => callback(null, '127.0.0.1', 4);
+
+    const result = await (jobs as any).runMediaDownloadJob({
+      projectDir,
+      url: 'http://attacker-controlled.w7c-fixture.test:1/unreachable',
+      outputRel: 'loopback-via-dns.bin',
+      maxOutputBytes: 10_000,
+      maxDurationMs: 30_000,
+      lookup: lookupToLoopback,
+    });
+    expect(
+      result?.ok,
+      'a hostname that DNS-resolves to a loopback address must be rejected before any connection is attempted',
+    ).toBe(false);
+    expect(existsSync(path.join(projectDir, 'loopback-via-dns.bin'))).toBe(false);
   });
 });
