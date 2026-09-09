@@ -477,11 +477,21 @@ interface Props {
   // Set by the pane that owns a run whose event stream failed without the
   // daemon adjudicating it. The run is UNRESOLVED, not failed, so this is
   // rendered as a neutral notice and never as the failure card.
-  runCheck?: RunCheckState | null;
+  //
+  // `inconclusive` is a lost-create lookup only: its wall-clock deadline
+  // elapsed with at least one probe read landing, so the daemon IS answering
+  // and `unreachable`'s "not answering" wording would be false (Sol r3 / D-51
+  // grok ruling item 4). Mutually exclusive with `unreachable` in practice;
+  // absent (or false) is the ordinary "still checking" state.
+  runCheck?: (RunCheckState & { inconclusive?: boolean }) | null;
   // Re-runs the follow behind that notice. Only offered once the daemon has
   // stopped answering; a run that may still be running gets no action at all,
   // because re-sending it is the double-send hazard (B-02).
   onRunCheckAgain?: () => void;
+  // Re-issues the conversation read that this pane's owner gave up on. Set only
+  // while the read has actually failed, so the error card's Retry appears for
+  // that cause and for no other error sharing the same slot.
+  onRetryLoad?: () => void;
   projectId: string | null;
   sessionMode?: ChatSessionMode;
   onSessionModeChange?: (mode: ChatSessionMode) => void;
@@ -816,6 +826,7 @@ export function ChatPane({
   error,
   runCheck = null,
   onRunCheckAgain,
+  onRetryLoad,
   projectId,
   sessionMode = 'design',
   onSessionModeChange,
@@ -1383,7 +1394,12 @@ export function ChatPane({
   // classifier asks for it, alongside a case-specific retry when applicable.
   const showByokRecoveryCta =
     showByokRecoveryAction && Boolean(onSwitchToLocalCli) && !runFailureHasAction;
-  const showErrorActions = showByokRecoveryCta || runFailureHasAction;
+  // A conversation read that never answered leaves no failed row to retry, so
+  // the card would otherwise carry no action at all — the same dead end the
+  // unbounded Loading pane was, with different words. Its Retry re-issues the
+  // read; it never appears next to a run's own recovery actions.
+  const showLoadRetry = Boolean(displayError && onRetryLoad && !runFailureHasAction);
+  const showErrorActions = showByokRecoveryCta || runFailureHasAction || showLoadRetry;
   const showAmrGuidance = Boolean(amrSwitchPayload);
   useEffect(() => {
     if (!displayError || !failedRunErrorEvent?.code || !retryAssistant) return;
@@ -2482,17 +2498,21 @@ export function ChatPane({
                   icon="refresh"
                   tone="neutral"
                   title={t(
-                    activeRunCheck.unreachable
-                      ? 'chat.runChecking.unreachableTitle'
-                      : 'chat.runChecking.title',
+                    activeRunCheck.inconclusive
+                      ? 'chat.runChecking.inconclusiveTitle'
+                      : activeRunCheck.unreachable
+                        ? 'chat.runChecking.unreachableTitle'
+                        : 'chat.runChecking.title',
                   )}
                   status={
                     <>
                       <p>
                         {t(
-                          activeRunCheck.unreachable
-                            ? 'chat.runChecking.unreachableMessage'
-                            : 'chat.runChecking.message',
+                          activeRunCheck.inconclusive
+                            ? 'chat.runChecking.inconclusiveMessage'
+                            : activeRunCheck.unreachable
+                              ? 'chat.runChecking.unreachableMessage'
+                              : 'chat.runChecking.message',
                         )}
                       </p>
                       {/* The notice is the only thing on screen for as long as
@@ -2504,7 +2524,7 @@ export function ChatPane({
                     </>
                   }
                   footerActions={
-                    activeRunCheck.unreachable && onRunCheckAgain ? (
+                    (activeRunCheck.unreachable || activeRunCheck.inconclusive) && onRunCheckAgain ? (
                       <button
                         type="button"
                         className="chat-error-action"
@@ -2524,7 +2544,15 @@ export function ChatPane({
                   title={
                     runFailureUi
                       ? t(runFailureUi.titleKey)
-                      : t('chat.runError.title.generic')
+                      // A conversation load that timed out has no run row and so
+                      // no `runFailureUi`, which otherwise falls back to the
+                      // generic title — the same "Task failed" a run failure
+                      // shows, over a cause the user never asked about. Name it
+                      // instead: `showLoadRetry` is already the one signal that
+                      // means exactly this state (see its own definition).
+                      : showLoadRetry
+                        ? t('chat.conversationLoad.timedOutTitle')
+                        : t('chat.runError.title.generic')
                   }
                   open={errorSourceOpen}
                   onOpenChange={setErrorSourceOpen}
@@ -2586,6 +2614,15 @@ export function ChatPane({
                           onClick={onSwitchToLocalCli}
                         >
                           {t('avatar.useLocal')}
+                        </button>
+                      ) : null}
+                      {showLoadRetry && onRetryLoad ? (
+                        <button
+                          type="button"
+                          className="chat-error-action chat-error-retry"
+                          onClick={onRetryLoad}
+                        >
+                          {t('promptTemplates.retry')}
                         </button>
                       ) : null}
                       {retryAssistant && onRetry && runFailureUi ? (
