@@ -197,7 +197,11 @@ export function registerProjectStagedUploadRoutes(app: Express, deps: RegisterPr
         res.end();
       }
     });
-    if (session.lastEvent) sendSseEvent(res, session.lastEvent.type, session.lastEvent);
+    // subscribe() already replayed the terminal event above (and ended the
+    // response) when the session was already terminal — only send a
+    // non-terminal catch-up frame here, or a late subscriber would see the
+    // terminal event twice (INV-7.1: exactly one terminal event).
+    if (session.lastEvent && !session.terminal) sendSseEvent(res, session.lastEvent.type, session.lastEvent);
 
     req.on('close', unsubscribe);
   });

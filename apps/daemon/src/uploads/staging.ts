@@ -154,7 +154,7 @@ export interface UploadSession {
 export class UploadSessionError extends Error {
   constructor(
     readonly status: number,
-    readonly code: 'CONFLICT' | 'NOT_FOUND' | 'VALIDATION_FAILED' | 'UNAUTHORIZED',
+    readonly code: 'CONFLICT' | 'NOT_FOUND' | 'VALIDATION_FAILED' | 'UNAUTHORIZED' | 'PAYLOAD_TOO_LARGE',
     message: string,
     readonly limitBytes?: number,
   ) {
@@ -342,7 +342,7 @@ export class UploadStagingStore {
             (body as NodeJS.ReadableStream & { unpipe?: (dest: unknown) => void; resume?: () => void }).unpipe?.(writeStream);
             writeStream.destroy();
             (body as NodeJS.ReadableStream & { resume?: () => void }).resume?.();
-            reject(new UploadSessionError(413, 'VALIDATION_FAILED', `"${file.name}" exceeds the ${limits.maxFileBytes} byte limit`, limits.maxFileBytes));
+            reject(new UploadSessionError(413, 'PAYLOAD_TOO_LARGE', `"${file.name}" exceeds the ${limits.maxFileBytes} byte limit`, limits.maxFileBytes));
             return;
           }
           if (sessionTotalBefore + file.bytesReceived > limits.maxTotalBytes) {
@@ -350,10 +350,10 @@ export class UploadStagingStore {
             (body as NodeJS.ReadableStream & { unpipe?: (dest: unknown) => void; resume?: () => void }).unpipe?.(writeStream);
             writeStream.destroy();
             (body as NodeJS.ReadableStream & { resume?: () => void }).resume?.();
-            reject(new UploadSessionError(413, 'VALIDATION_FAILED', `upload session exceeds the ${limits.maxTotalBytes} byte total limit`, limits.maxTotalBytes));
+            reject(new UploadSessionError(413, 'PAYLOAD_TOO_LARGE', `upload session exceeds the ${limits.maxTotalBytes} byte total limit`, limits.maxTotalBytes));
             return;
           }
-          if (!sniffed && headBytes >= 4) {
+          if (!sniffed && headBytes >= 64) {
             sniffed = true;
             const head = Buffer.concat(headChunks, headBytes);
             const mismatch = sniffMismatchReason(kind, head);
@@ -393,8 +393,11 @@ export class UploadStagingStore {
       throw err;
     }
 
-    // Zero-byte or sub-4-byte files never hit the inline sniff above; check
-    // once the stream is fully staged.
+    // Files whose total size never reaches the 64-byte sniff window (a
+    // short PNG/WebP/MP4/MOV/WAV needs up to 12 bytes of magic, so the
+    // inline check above waits for a full window rather than firing on a
+    // short first chunk) never hit the inline sniff above; check once the
+    // stream is fully staged.
     if (!sniffed) {
       const head = await readHead(file.tempPath, 64);
       const mismatch = sniffMismatchReason(kind, head);
