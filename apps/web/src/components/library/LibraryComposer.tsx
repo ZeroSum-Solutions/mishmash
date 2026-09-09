@@ -20,13 +20,29 @@ export interface LibraryComposerGenerateInput {
   attachment: File | null;
 }
 
+/**
+ * Minimal snapshot shape the composer needs to show live progress (W7C,
+ * work item 4) — a subset of the daemon's contracts-owned
+ * `MediaTaskSnapshot`, kept local so this component doesn't need to import
+ * the whole daemon-facing type just to read three fields.
+ */
+export interface LibraryComposerTaskSnapshot {
+  status: 'queued' | 'running' | 'done' | 'failed' | 'interrupted';
+  progress: string[];
+  fraction?: number;
+}
+
 export interface LibraryComposerProps {
   onGenerate: (input: LibraryComposerGenerateInput) => Promise<{ ok: boolean; message?: string }>;
+  /** The in-flight media task's live snapshot, when the current generation is backed by one. */
+  taskSnapshot?: LibraryComposerTaskSnapshot | null;
+  /** Cancels the in-flight task. Only rendered as a button while `taskSnapshot` is queued/running. */
+  onCancelTask?: () => void;
 }
 
 type ChipMenu = 'model' | 'aspect' | null;
 
-export function LibraryComposer({ onGenerate }: LibraryComposerProps) {
+export function LibraryComposer({ onGenerate, taskSnapshot, onCancelTask }: LibraryComposerProps) {
   const t = useT();
   const [prompt, setPrompt] = useState('');
   const [model, setModel] = useState(DEFAULT_IMAGE_MODEL);
@@ -60,9 +76,26 @@ export function LibraryComposer({ onGenerate }: LibraryComposerProps) {
     }
   }, [prompt, model, aspect, attachment, busy, onGenerate, t]);
 
+  const taskInFlight =
+    taskSnapshot != null && (taskSnapshot.status === 'queued' || taskSnapshot.status === 'running');
+  const latestProgressLine = taskSnapshot?.progress[taskSnapshot.progress.length - 1] ?? '';
+  const fractionSuffix =
+    typeof taskSnapshot?.fraction === 'number' ? ` (${Math.round(taskSnapshot.fraction * 100)}%)` : '';
+
   return (
     <div className={styles.wrap}>
       {error ? <p className={styles.error}>{error}</p> : null}
+      {taskInFlight ? (
+        <div className={styles.taskProgress}>
+          <p className={styles.taskProgressLine}>
+            {latestProgressLine}
+            {fractionSuffix}
+          </p>
+          <button type="button" className={styles.taskCancelBtn} onClick={() => onCancelTask?.()}>
+            {t('mediaTask.cancel')}
+          </button>
+        </div>
+      ) : null}
       <form
         className={styles.pill}
         onSubmit={(e) => {
