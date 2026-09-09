@@ -531,6 +531,7 @@ export interface ArtifactExportResultProps {
   export_duration_ms: number;
   project_id: string;
   project_kind: TrackingProjectKind | null;
+  scope?: string;
 }
 
 // Fired when the user explicitly clicks "Save" in the Excalidraw sketch editor

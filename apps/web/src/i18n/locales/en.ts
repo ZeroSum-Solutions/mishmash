@@ -3081,6 +3081,7 @@ export const en: Dict = {
   'fileViewer.exportImageSaved': 'Image saved',
   'fileViewer.exportImageDownloadStarted': 'Download started',
   'fileViewer.exportImageDownloadDetails': '{filename} is in your browser downloads if no Save As dialog appeared.',
+  'fileViewer.exportImageCurrentSlideOnly': 'Exported current slide only',
   'fileViewer.exportJsx': 'Export as JSX',
   'fileViewer.exportReactHtml': 'Export preview as HTML',
   'fileViewer.exportStarted': 'Export started',

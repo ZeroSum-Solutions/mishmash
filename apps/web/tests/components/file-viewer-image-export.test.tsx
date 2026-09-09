@@ -7,6 +7,8 @@ import { exportErrorCode } from '../../src/analytics/export-error-code';
 import type { ProjectFile } from '../../src/types';
 
 const {
+  analyticsTrackMock,
+  canRequestOffscreenImageRenderMock,
   captureHostIframeSnapshotMock,
   downloadImageDataUrlMock,
   exportProjectImageDataUrlMock,
@@ -16,6 +18,8 @@ const {
   requestPreviewSnapshotMock,
   saveImageBlobMock,
 } = vi.hoisted(() => ({
+  analyticsTrackMock: vi.fn(),
+  canRequestOffscreenImageRenderMock: vi.fn(async () => true),
   captureHostIframeSnapshotMock: vi.fn(),
   downloadImageDataUrlMock: vi.fn(),
   exportProjectImageDataUrlMock: vi.fn(),
@@ -28,12 +32,32 @@ const {
   saveImageBlobMock: vi.fn(),
 }));
 
+vi.mock('../../src/analytics/provider', async () => {
+  const actual = await vi.importActual<typeof import('../../src/analytics/provider')>(
+    '../../src/analytics/provider',
+  );
+  return {
+    ...actual,
+    useAnalytics: () => ({
+      track: analyticsTrackMock,
+      setConsent: () => undefined,
+      setIdentity: () => undefined,
+      setConfigureGlobals: () => undefined,
+      setUserId: () => undefined,
+      anonymousId: 'test-anon',
+      sessionId: 'test-session',
+      newRequestId: () => 'test-request',
+    }),
+  };
+});
+
 vi.mock('../../src/runtime/exports', async () => {
   const actual = await vi.importActual<typeof import('../../src/runtime/exports')>(
     '../../src/runtime/exports',
   );
   return {
     ...actual,
+    canRequestOffscreenImageRender: canRequestOffscreenImageRenderMock,
     captureHostIframeSnapshot: captureHostIframeSnapshotMock,
     downloadImageDataUrl: downloadImageDataUrlMock,
     exportProjectImageDataUrl: exportProjectImageDataUrlMock,
@@ -64,6 +88,23 @@ function htmlFile(): ProjectFile {
       title: 'Workspace',
       entry: 'workspace.html',
       renderer: 'html',
+      exports: ['html'],
+    },
+  };
+}
+
+function deckFile(): ProjectFile {
+  return {
+    ...htmlFile(),
+    name: 'pitch.deck.html',
+    path: 'pitch.deck.html',
+    kind: 'presentation',
+    artifactManifest: {
+      version: 1,
+      kind: 'deck',
+      title: 'Pitch Deck',
+      entry: 'pitch.deck.html',
+      renderer: 'deck-html',
       exports: ['html'],
     },
   };
@@ -120,6 +161,7 @@ describe('FileViewer image export', () => {
     // meaning what they say: they pin the fallback chain that runs when the
     // renderer is unavailable, not a claim that the renderer is never asked.
     exportProjectImageDataUrlMock.mockResolvedValue({ ok: false, unavailable: true });
+    canRequestOffscreenImageRenderMock.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -207,7 +249,7 @@ describe('FileViewer image export', () => {
     await clickSave();
 
     await waitFor(() => {
-      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(activeFrame, 1500, undefined);
+      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(activeFrame, 1500, undefined, expect.any(Function));
       expect(imageDataUrlToBlobMock).toHaveBeenCalledWith('data:image/png;base64,ok', 'jpeg');
       expect(prepareImageExportTargetMock).toHaveBeenCalledWith('workspace', 'jpeg', { useNativePicker: false });
     });
@@ -258,8 +300,8 @@ describe('FileViewer image export', () => {
     await clickSave();
 
     await waitFor(() => {
-      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(srcDocFrame, 1500, undefined);
-      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(srcDocFrame, 3000, undefined);
+      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(srcDocFrame, 1500, undefined, expect.any(Function));
+      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(srcDocFrame, 3000, undefined, expect.any(Function));
       expect(imageDataUrlToBlobMock).toHaveBeenCalledWith('data:image/png;base64,recovered', 'png');
     }, { timeout: 4000 });
   });
@@ -283,10 +325,10 @@ describe('FileViewer image export', () => {
     await clickSave();
 
     await waitFor(() => {
-      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(activeFrame, 1500, undefined);
+      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(activeFrame, 1500, undefined, expect.any(Function));
       expect(imageDataUrlToBlobMock).toHaveBeenCalledWith('data:image/png;base64,visible', 'png');
     });
-    expect(requestPreviewSnapshotMock).not.toHaveBeenCalledWith(srcDocFrame, 1500, undefined);
+    expect(requestPreviewSnapshotMock).not.toHaveBeenCalledWith(srcDocFrame, 1500, undefined, expect.any(Function));
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -530,6 +572,53 @@ describe('FileViewer image export', () => {
     expect(captureHostIframeSnapshotMock).not.toHaveBeenCalled();
   });
 
+  it('exports current slide only and names current-slide scope when deck export has no offscreen renderer', async () => {
+    canRequestOffscreenImageRenderMock.mockResolvedValue(false);
+    requestPreviewSnapshotMock.mockResolvedValueOnce({
+      dataUrl: 'data:image/png;base64,current-slide',
+      w: 800,
+      h: 600,
+    });
+    imageDataUrlToBlobMock.mockResolvedValueOnce(new Blob(['png'], { type: 'image/png' }));
+    prepareImageExportTargetMock.mockResolvedValueOnce({
+      filename: 'pitch.png',
+      method: 'picker',
+      save: saveImageBlobMock,
+    });
+
+    const view = render(
+      <FileViewer
+        projectId="project-1"
+        projectKind="slide_deck"
+        file={deckFile()}
+        isDeck
+        liveHtml='<html><body><div class="deck"><section class="slide">Cover</section><section class="slide">Details</section></div></body></html>'
+      />,
+    );
+    const srcDocFrame = view.container.querySelector<HTMLIFrameElement>('iframe[data-od-render-mode="srcdoc"]');
+    if (srcDocFrame) fireEvent.load(srcDocFrame);
+
+    await openImageExportDialog();
+    await clickSave();
+
+    await waitFor(() => {
+      expect(requestPreviewSnapshotMock).toHaveBeenCalled();
+    });
+    expect(exportProjectImageDataUrlMock).not.toHaveBeenCalled();
+
+    expect(await screen.findByText('Exported current slide only')).toBeTruthy();
+
+    expect(analyticsTrackMock).toHaveBeenCalledWith(
+      'artifact_export_result',
+      expect.objectContaining({
+        result: 'success',
+        export_format: 'image',
+        scope: 'current-slide',
+      }),
+      expect.anything(),
+    );
+  });
+
   describe('failed export anomaly reporting', () => {
     const anomalyPosts: any[] = [];
     let originalFetch: typeof globalThis.fetch;
@@ -713,9 +802,341 @@ describe('FileViewer image export', () => {
       expect(typeof report.detail?.durationMs).toBe('number');
     });
 
+    it('keeps a save-stage SecurityError distinct from a capture-stage CAPTURE_TAINTED code', async () => {
+      // Nothing was captured here — the bridge already returned a snapshot and
+      // encoding succeeded — so a `SecurityError` thrown by the save target
+      // itself (e.g. a file-system permission denial) must NOT read as the
+      // bridge's "tainted canvas" capture failure. `exportErrorCode` maps any
+      // `SecurityError` to `CAPTURE_TAINTED` regardless of caller; the export
+      // flow has to gate that classification on `stage === 'capture'` to avoid
+      // misattributing a save failure as a capture one.
+      requestPreviewSnapshotMock.mockResolvedValueOnce({
+        dataUrl: 'data:image/png;base64,ok',
+        w: 800,
+        h: 600,
+      });
+      imageDataUrlToBlobMock.mockResolvedValueOnce(new Blob(['png'], { type: 'image/png' }));
+      const saveError = new Error('permission denied writing to the target folder');
+      saveError.name = 'SecurityError';
+      const failingSave = vi.fn().mockRejectedValueOnce(saveError);
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'workspace.png',
+        method: 'picker',
+        save: failingSave,
+      });
+
+      renderHtmlPreview();
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe('permission denied writing to the target folder');
+      }, { timeout: 4000 });
+      // The generic capture-failure toast must not appear for a save-stage error.
+      expect(screen.getByRole('alert').textContent).not.toBe(CAPTURE_FAILED_TEXT);
+
+      expect(anomalyPosts).toHaveLength(1);
+      const [report] = anomalyPosts;
+      expect(report.kind).toBe('export-failed');
+      expect(report.summary).toContain('workspace.html');
+      expect(report.summary).toMatch(/saving the image failed/);
+      expect(report.summary).not.toMatch(/tainted/i);
+      expect(report.detail).toEqual(expect.objectContaining({
+        exportFormat: 'image',
+        errorCode: 'SecurityError',
+        fileName: 'workspace.html',
+        stage: 'save',
+      }));
+      expect(report.detail?.errorCode).not.toBe('CAPTURE_TAINTED');
+      expect(typeof report.detail?.durationMs).toBe('number');
+    });
+
+    it('reports one export-failed anomaly with CAPTURE_TIMEOUT when snapshot bridge times out', async () => {
+      // The real bridge (`requestPreviewSnapshotResult` in runtime/exports.ts)
+      // never rejects: every branch, including its own 1.5/3/6s timeout,
+      // RESOLVES `{ ok: false, reason: 'timeout' }` and `requestPreviewSnapshot`
+      // reports that reason through its `onFailure` callback before resolving
+      // `null`. Mocking a rejection here would exercise a path production
+      // traffic can never take.
+      requestPreviewSnapshotMock.mockImplementation(
+        async (
+          _iframe: HTMLIFrameElement,
+          _timeout: number,
+          _options: unknown,
+          onFailure?: (failure: { reason: string; error?: string }) => void,
+        ) => {
+          onFailure?.({ reason: 'timeout' });
+          return null;
+        },
+      );
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'workspace.png',
+        method: 'picker',
+        save: saveImageBlobMock,
+      });
+
+      renderHtmlPreview();
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe(CAPTURE_FAILED_TEXT);
+      }, { timeout: 4000 });
+
+      expect(anomalyPosts).toHaveLength(1);
+      const [report] = anomalyPosts;
+      expect(report.kind).toBe('export-failed');
+      expect(report.severity).toBe('warn');
+      expect(report.summary).toContain('workspace.html');
+      expect(report.summary).toMatch(/timed out/i);
+      expect(report.projectId).toBe('project-1');
+      expect(report.detail).toEqual(expect.objectContaining({
+        exportFormat: 'image',
+        errorCode: 'CAPTURE_TIMEOUT',
+        fileName: 'workspace.html',
+        stage: 'capture',
+      }));
+      expect(typeof report.detail?.durationMs).toBe('number');
+    });
+
+    it('reports one export-failed anomaly with CAPTURE_EMPTY_RENDER when canvas paints blank', async () => {
+      // A blank foreignObject rasterization is caught by `canvasLooksBlank` in
+      // srcdoc.ts's captureSnapshot, which rejects the in-iframe promise with
+      // `new Error('empty-render')` — but that promise never crosses the
+      // postMessage boundary as a rejection. The host's `od:snapshot:result`
+      // handler serializes it to `{ error: 'empty-render' }` and
+      // `requestPreviewSnapshotResult` resolves `{ ok: false, reason:
+      // 'render-error', error: 'empty-render' }`, matching this mock.
+      requestPreviewSnapshotMock.mockImplementation(
+        async (
+          _iframe: HTMLIFrameElement,
+          _timeout: number,
+          _options: unknown,
+          onFailure?: (failure: { reason: string; error?: string }) => void,
+        ) => {
+          onFailure?.({ reason: 'render-error', error: 'empty-render' });
+          return null;
+        },
+      );
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'workspace.png',
+        method: 'picker',
+        save: saveImageBlobMock,
+      });
+
+      renderHtmlPreview();
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe(CAPTURE_FAILED_TEXT);
+      }, { timeout: 4000 });
+
+      expect(anomalyPosts).toHaveLength(1);
+      const [report] = anomalyPosts;
+      expect(report.kind).toBe('export-failed');
+      expect(report.severity).toBe('warn');
+      expect(report.summary).toContain('workspace.html');
+      expect(report.summary).toMatch(/blank/i);
+      expect(report.projectId).toBe('project-1');
+      expect(report.detail).toEqual(expect.objectContaining({
+        exportFormat: 'image',
+        errorCode: 'CAPTURE_EMPTY_RENDER',
+        fileName: 'workspace.html',
+        stage: 'capture',
+      }));
+      expect(typeof report.detail?.durationMs).toBe('number');
+    });
+
+    it('reports one export-failed anomaly with CAPTURE_FAILED and current-slide scope when deck export without renderer returns null', async () => {
+      canRequestOffscreenImageRenderMock.mockResolvedValue(false);
+      requestPreviewSnapshotMock.mockResolvedValue(null);
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'pitch.png',
+        method: 'picker',
+        save: saveImageBlobMock,
+      });
+
+      const view = render(
+        <FileViewer
+          projectId="project-1"
+          projectKind="slide_deck"
+          file={deckFile()}
+          isDeck
+          liveHtml='<html><body><div class="deck"><section class="slide">Cover</section><section class="slide">Details</section></div></body></html>'
+        />,
+      );
+      const srcDocFrame = view.container.querySelector<HTMLIFrameElement>('iframe[data-od-render-mode="srcdoc"]');
+      if (srcDocFrame) fireEvent.load(srcDocFrame);
+
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe(CAPTURE_FAILED_TEXT);
+      }, { timeout: 4000 });
+
+      expect(anomalyPosts).toHaveLength(1);
+      const [report] = anomalyPosts;
+      expect(report.kind).toBe('export-failed');
+      expect(report.severity).toBe('warn');
+      expect(report.summary).toContain('pitch.deck.html');
+      expect(report.projectId).toBe('project-1');
+      expect(report.detail).toEqual(expect.objectContaining({
+        exportFormat: 'image',
+        errorCode: 'CAPTURE_FAILED',
+        fileName: 'pitch.deck.html',
+        stage: 'capture',
+        scope: 'current-slide',
+      }));
+      expect(typeof report.detail?.durationMs).toBe('number');
+    });
+
+    it('reports one export-failed anomaly with CAPTURE_TAINTED when the canvas is tainted', async () => {
+      // `canvas.toDataURL()` throws a real SecurityError inside the iframe
+      // (a cross-origin resource painted into the foreignObject taints the
+      // canvas), but the `.name` never survives the postMessage boundary —
+      // srcdoc.ts's message handler serializes only `err.message` to the
+      // host. The message text itself (Chromium's own wording) is what
+      // `exportErrorCode`'s `/tainted/i` check has to key on, so this mock
+      // resolves the same `{ reason: 'render-error', error: <message> }`
+      // shape the real bridge produces, not a rejection carrying `.name`.
+      requestPreviewSnapshotMock.mockImplementation(
+        async (
+          _iframe: HTMLIFrameElement,
+          _timeout: number,
+          _options: unknown,
+          onFailure?: (failure: { reason: string; error?: string }) => void,
+        ) => {
+          onFailure?.({
+            reason: 'render-error',
+            error: "Failed to execute 'toDataURL' on 'HTMLCanvasElement': Tainted canvases may not be exported.",
+          });
+          return null;
+        },
+      );
+      prepareImageExportTargetMock.mockResolvedValueOnce({
+        filename: 'workspace.png',
+        method: 'picker',
+        save: saveImageBlobMock,
+      });
+
+      renderHtmlPreview();
+      await openImageExportDialog();
+      await clickSave();
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert').textContent).toBe(CAPTURE_FAILED_TEXT);
+      }, { timeout: 4000 });
+
+      expect(anomalyPosts).toHaveLength(1);
+      const [report] = anomalyPosts;
+      expect(report.kind).toBe('export-failed');
+      expect(report.severity).toBe('warn');
+      expect(report.summary).toContain('workspace.html');
+      expect(report.summary).toMatch(/tainted/i);
+      expect(report.projectId).toBe('project-1');
+      expect(report.detail).toEqual(expect.objectContaining({
+        exportFormat: 'image',
+        errorCode: 'CAPTURE_TAINTED',
+        fileName: 'workspace.html',
+        stage: 'capture',
+      }));
+      expect(typeof report.detail?.durationMs).toBe('number');
+    });
+
     it('contracts recognises export-failed as a valid anomaly kind', () => {
       expect(isAnomalyKind('export-failed')).toBe(true);
     });
+  });
+});
+
+// The suite above mocks `requestPreviewSnapshot` itself at the module
+// boundary (see the `vi.mock('../../src/runtime/exports', ...)` above), so it
+// exercises the classification/toast/anomaly logic downstream of the bridge
+// but never proves the REAL `requestPreviewSnapshotResult` -> `onFailure`
+// wiring inside runtime/exports.ts actually fires. `vi.importActual` bypasses
+// this file's own mock to load the genuine, unmocked module so these specs
+// drive that boundary directly: a real `od:snapshot:result` postMessage
+// payload in, the exact `onFailure` callback payload out.
+describe('requestPreviewSnapshot real onFailure wiring (runtime/exports.ts)', () => {
+  // Mirrors the window stub in tests/runtime/exports.test.ts's own
+  // `requestPreviewSnapshot` suite: a plain listener registry sidesteps
+  // jsdom's stricter `MessageEvent.source` typing (Window | MessagePort |
+  // ServiceWorker) so a plain stand-in object can stand in for
+  // `iframe.contentWindow` and still satisfy the bridge's `ev.source === win`
+  // check.
+  function stubWindowMessaging() {
+    const listeners = new Map<string, Set<(ev: unknown) => void>>();
+    const fakeWindow = {
+      addEventListener: (type: string, fn: (ev: unknown) => void) => {
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type)!.add(fn);
+      },
+      removeEventListener: (type: string, fn: (ev: unknown) => void) => {
+        listeners.get(type)?.delete(fn);
+      },
+      dispatchEvent: (ev: { type: string }) => {
+        for (const fn of listeners.get(ev.type) ?? []) fn(ev);
+      },
+    };
+    vi.stubGlobal('window', fakeWindow);
+    return {
+      dispatch: (data: unknown, source: unknown) => {
+        fakeWindow.dispatchEvent({ type: 'message', source, data } as unknown as { type: string });
+      },
+      cleanup: () => vi.unstubAllGlobals(),
+    };
+  }
+
+  it('surfaces a real od:snapshot:result failure through the onFailure callback', async () => {
+    const { requestPreviewSnapshot: realRequestPreviewSnapshot } = await vi.importActual<
+      typeof import('../../src/runtime/exports')
+    >('../../src/runtime/exports');
+    const { dispatch, cleanup } = stubWindowMessaging();
+    try {
+      const postMessageMock = vi.fn();
+      const contentWindow = { postMessage: postMessageMock };
+      const iframe = { contentWindow } as unknown as HTMLIFrameElement;
+      const onFailure = vi.fn();
+
+      const promise = realRequestPreviewSnapshot(iframe, 8000, {}, onFailure);
+
+      expect(postMessageMock).toHaveBeenCalledOnce();
+      const { id } = postMessageMock.mock.calls[0]![0] as { type: string; id: string };
+
+      dispatch({ type: 'od:snapshot:result', id, error: 'empty-render' }, contentWindow);
+
+      const result = await promise;
+      expect(result).toBeNull();
+      expect(onFailure).toHaveBeenCalledTimes(1);
+      expect(onFailure).toHaveBeenCalledWith({ reason: 'render-error', error: 'empty-render' });
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('surfaces a real bridge timeout through the onFailure callback (fake timers)', async () => {
+    const { requestPreviewSnapshot: realRequestPreviewSnapshot } = await vi.importActual<
+      typeof import('../../src/runtime/exports')
+    >('../../src/runtime/exports');
+    const { cleanup } = stubWindowMessaging();
+    vi.useFakeTimers();
+    try {
+      const iframe = { contentWindow: { postMessage: vi.fn() } } as unknown as HTMLIFrameElement;
+      const onFailure = vi.fn();
+
+      const promise = realRequestPreviewSnapshot(iframe, 100, {}, onFailure);
+      await vi.advanceTimersByTimeAsync(150);
+
+      const result = await promise;
+      expect(result).toBeNull();
+      expect(onFailure).toHaveBeenCalledTimes(1);
+      expect(onFailure).toHaveBeenCalledWith({ reason: 'timeout', error: undefined });
+    } finally {
+      vi.useRealTimers();
+      cleanup();
+    }
   });
 });
 

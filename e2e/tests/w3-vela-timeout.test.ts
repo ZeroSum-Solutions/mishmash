@@ -42,6 +42,28 @@ const NEVER_ANSWERED_AFTER_MS = 25_000;
 /** How long to watch the heartbeat file for proof the stuck child is gone. */
 const KILL_OBSERVATION_MS = 1_500;
 
+/**
+ * `AMR_BILLING_PROCESS_CEILING_MS` (`apps/daemon/src/runtimes/defs/amr.ts`) —
+ * the limit that governs when the stuck child is killed.
+ *
+ * Superseded assertion (W3D.2). This spec used to sample the heartbeat as soon
+ * as the route had answered, which asserted that the stuck child dies inside
+ * the 2,000 ms ANSWER budget. That claim was wrong: it read the response bound
+ * and the process bound as one limit. They are two. The answer budget bounds
+ * the RESPONSE and deliberately leaves the billing process running, because
+ * that is how a healthy multi-second read warms the live-account cache for the
+ * next poll; the process ceiling bounds the WORK and sits above the answer
+ * budget on purpose. Pinning the kill to the answer budget is what made the
+ * daemon kill every healthy 1.5-to-10 s billing command.
+ *
+ * The assertion itself is unchanged — the stuck child must be killed, never
+ * left to outlive its bound. Only the window moved to the limit that owns it.
+ */
+const BILLING_PROCESS_CEILING_MS = 10_000;
+
+/** Slack over the ceiling for spawn and signal delivery. */
+const KILL_OBSERVATION_SLACK_MS = 2_000;
+
 type RouteAnswer<T> = {
   /** Milliseconds until the route answered, or null when it never did. */
   elapsedMs: number | null;
@@ -140,6 +162,18 @@ async function readHeartbeat(path: string): Promise<string[]> {
     .catch(() => []);
 }
 
+/**
+ * Epoch milliseconds of the stuck child's first `alive` line — the clock the
+ * process ceiling runs on, read from the child itself rather than from the
+ * test's own timing so a slow spawn cannot make the wait too short.
+ */
+function heartbeatFirstAliveMs(lines: string[]): number | null {
+  const line = lines.find((entry) => entry.startsWith('alive '));
+  if (!line) return null;
+  const at = Number.parseInt(line.slice(6), 10);
+  return Number.isFinite(at) ? at : null;
+}
+
 function heartbeatPid(lines: string[]): number | null {
   const line = lines.find((entry) => entry.startsWith('pid '));
   if (!line) return null;
@@ -223,8 +257,18 @@ describe('W3D — Vela routes answer inside the budget or say so', () => {
             expect(status.body.account).toBeUndefined();
 
             // The stuck child must be killed, not left running past the bound it
-            // blew through. Sample the heartbeat twice: a live child keeps
-            // appending at 100ms, a killed one cannot.
+            // blew through. That bound is the PROCESS ceiling, not the answer
+            // budget the route already met above, so wait for it to lapse
+            // before judging. Then sample the heartbeat twice: a live child
+            // keeps appending at 100ms, a killed one cannot.
+            const firstAliveMs = heartbeatFirstAliveMs(await readHeartbeat(heartbeatPath));
+            expect(
+              firstAliveMs,
+              'the stuck vela child never wrote a heartbeat — the kill check would pass vacuously',
+            ).not.toBeNull();
+            const judgeAt =
+              (firstAliveMs ?? Date.now()) + BILLING_PROCESS_CEILING_MS + KILL_OBSERVATION_SLACK_MS;
+            await new Promise((resolve) => setTimeout(resolve, Math.max(0, judgeAt - Date.now())));
             const beforeWait = await readHeartbeat(heartbeatPath);
             await new Promise((resolve) => setTimeout(resolve, KILL_OBSERVATION_MS));
             const afterWait = await readHeartbeat(heartbeatPath);

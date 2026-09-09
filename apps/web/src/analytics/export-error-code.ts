@@ -27,5 +27,8 @@ export function exportErrorCode(err: unknown): string {
   // so the raw text matches both patterns.
   if (/unknown \w+ sidecar message/i.test(message)) return 'DESKTOP_SIDECAR_UNKNOWN_MESSAGE';
   if (/renderer (?:is )?unavailable/i.test(message)) return 'DESKTOP_RENDERER_UNAVAILABLE';
+  if (/timeout/i.test(message) || err.name === 'TimeoutError') return 'CAPTURE_TIMEOUT';
+  if (/empty-render/i.test(message)) return 'CAPTURE_EMPTY_RENDER';
+  if (err.name === 'SecurityError' || /tainted/i.test(message)) return 'CAPTURE_TAINTED';
   return err.name || 'UNKNOWN';
 }

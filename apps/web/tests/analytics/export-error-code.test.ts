@@ -19,6 +19,15 @@ describe('exportErrorCode', () => {
     );
   });
 
+  it('classifies snapshot bridge failure reasons', () => {
+    expect(exportErrorCode(new Error('timeout'))).toBe('CAPTURE_TIMEOUT');
+    expect(exportErrorCode(new Error('empty-render'))).toBe('CAPTURE_EMPTY_RENDER');
+    expect(exportErrorCode(new Error('tainted-canvas'))).toBe('CAPTURE_TAINTED');
+    const securityErr = new Error('The operation is insecure.');
+    securityErr.name = 'SecurityError';
+    expect(exportErrorCode(securityErr)).toBe('CAPTURE_TAINTED');
+  });
+
   it('prefers a structured .code over message classification', () => {
     const err = Object.assign(new Error('desktop renderer unavailable: unknown desktop sidecar message: render-slides'), {
       code: 'UPSTREAM_UNAVAILABLE',
