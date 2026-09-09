@@ -680,7 +680,8 @@ async function assertDownloadHostAllowed(
     return { ok: false, message: `could not resolve download host: ${hostname}` };
   }
   for (const addr of addresses) {
-    if (isBlockedExternalApiHostname(addr.toLowerCase())) {
+    const lowerAddr = addr.toLowerCase();
+    if (isLoopbackApiHost(lowerAddr) || isBlockedExternalApiHostname(lowerAddr)) {
       return { ok: false, message: `blocked download host: ${hostname} resolves to ${addr}` };
     }
   }
