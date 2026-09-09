@@ -22,12 +22,12 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProjectView } from '../../src/components/ProjectView';
-import type { SettingsSection } from '../../src/components/SettingsDialog';
 import type {
   AgentInfo,
   AppConfig,
   ChatMessage,
   Conversation,
+  NotificationsConfig,
   PreviewComment,
   Project,
 } from '../../src/types';
@@ -411,10 +411,17 @@ describe('ProjectView completion notifications (INV-7.4)', () => {
     await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
   }
 
+function withNotifications(overrides: Partial<NotificationsConfig>): AppConfig {
+  return {
+    ...config,
+    notifications: { ...(config.notifications as NotificationsConfig), ...overrides },
+  };
+}
+
   it('plays sound and shows a desktop notification exactly once for a background terminal success', async () => {
     setVisibility(true, false);
     await deliverTerminalMessage(
-      { ...config, notifications: { ...config.notifications, desktopEnabled: true } },
+      withNotifications({ desktopEnabled: true }),
       succeededAssistant,
     );
 
@@ -424,7 +431,7 @@ describe('ProjectView completion notifications (INV-7.4)', () => {
 
   it('does not show a second desktop notification when the same terminal message replays', async () => {
     setVisibility(true, false);
-    const renderConfig = { ...config, notifications: { ...config.notifications, desktopEnabled: true } };
+    const renderConfig = withNotifications({ desktopEnabled: true });
     await deliverTerminalMessage(renderConfig, succeededAssistant);
     await waitFor(() => expect(desktopShownCount()).toBe(1));
 
@@ -446,7 +453,7 @@ describe('ProjectView completion notifications (INV-7.4)', () => {
   it('does not show a desktop notification for a focused success', async () => {
     setVisibility(false, true);
     await deliverTerminalMessage(
-      { ...config, notifications: { ...config.notifications, desktopEnabled: true } },
+      withNotifications({ desktopEnabled: true }),
       succeededAssistant,
     );
 
@@ -460,7 +467,7 @@ describe('ProjectView completion notifications (INV-7.4)', () => {
   it('shows a desktop notification for a foreground failure (the deliberate clause)', async () => {
     setVisibility(false, true);
     await deliverTerminalMessage(
-      { ...config, notifications: { ...config.notifications, desktopEnabled: true } },
+      withNotifications({ desktopEnabled: true }),
       failedAssistant,
     );
 
@@ -472,7 +479,7 @@ describe('ProjectView completion notifications (INV-7.4)', () => {
     FakeNotification.permission = 'denied';
     setVisibility(true, false);
     await deliverTerminalMessage(
-      { ...config, notifications: { ...config.notifications, desktopEnabled: true } },
+      withNotifications({ desktopEnabled: true }),
       succeededAssistant,
     );
 
@@ -486,7 +493,7 @@ describe('ProjectView completion notifications (INV-7.4)', () => {
   it('does not show a desktop notification when the desktop setting is disabled', async () => {
     setVisibility(true, false);
     await deliverTerminalMessage(
-      { ...config, notifications: { ...config.notifications, desktopEnabled: false } },
+      withNotifications({ desktopEnabled: false }),
       succeededAssistant,
     );
 
