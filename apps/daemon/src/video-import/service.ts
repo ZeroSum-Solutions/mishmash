@@ -28,6 +28,7 @@ import { FileVideoImportCredentialStore } from './credentials.js';
 import { resolveVideoImportMaxBytes, resolveVideoImportTimeoutMs, resolveVimeoConfig } from './config.js';
 import {
   VideoImportLimitExceededError,
+  VideoImportTimeoutError,
   downloadVimeoVideoToStaging,
   fetchVimeoVideoMetadata,
   parseVimeoVideoId,
@@ -166,10 +167,11 @@ export class VideoImportService {
     } catch (err) {
       if (stagingPath) await fs.promises.unlink(stagingPath).catch(() => {});
       const limitBreach = err instanceof VideoImportLimitExceededError;
+      const timeoutBreach = err instanceof VideoImportTimeoutError;
       task.status = 'failed';
       task.error = {
         message: err instanceof Error ? err.message : String(err),
-        code: limitBreach ? 'LIMIT_EXCEEDED' : 'UPSTREAM_ERROR',
+        code: limitBreach ? 'LIMIT_EXCEEDED' : timeoutBreach ? 'TIMEOUT' : 'UPSTREAM_ERROR',
       };
       task.endedAt = Date.now();
       this.mediaTaskStore.persistMediaTask(task);

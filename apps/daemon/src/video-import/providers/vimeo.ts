@@ -42,6 +42,23 @@ export class VideoImportContainmentError extends Error {
 }
 
 /**
+ * A stalled connect or stalled read past `OD_VIDEO_IMPORT_TIMEOUT_MS` (Grok
+ * r1 MEDIUM finding: this used to surface as a generic `UPSTREAM_ERROR`,
+ * which does not name the limit that was actually hit, unlike
+ * `VideoImportLimitExceededError` for the byte limit). Thrown from
+ * `downloadVimeoVideoToStaging`'s catch whenever the timeout
+ * `AbortController` is the reason the download stopped, so
+ * `VideoImportService.runVimeoDownload` can map it to its own named error
+ * code the same way it already does for the byte limit.
+ */
+export class VideoImportTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'VideoImportTimeoutError';
+  }
+}
+
+/**
  * Parse a video id out of the URL shapes Vimeo's own share/player/API links
  * use: `vimeo.com/<id>`, `vimeo.com/channels/x/<id>`, `player.vimeo.com/video/<id>`,
  * `api.vimeo.com/videos/<id>`, and a bare id typed directly. Real Vimeo video
@@ -260,6 +277,19 @@ export async function downloadVimeoVideoToStaging(input: {
     return { stagingPath, bytes: bytesRead };
   } catch (err) {
     await cleanupStaging();
+    if (err instanceof VideoImportLimitExceededError || err instanceof VideoImportContainmentError) {
+      throw err;
+    }
+    // A stalled connect or stalled read surfaces here either as the manual
+    // `controller.signal.aborted` check above (thrown as a plain `Error`)
+    // or as `fetch`'s own `AbortError` when the timeout fires while `fetch`
+    // or `reader.read()` is still waiting -- both are the SAME timeout,
+    // never a real upstream failure, so both get the same named error.
+    if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
+      throw new VideoImportTimeoutError(
+        `video import download exceeded OD_VIDEO_IMPORT_TIMEOUT_MS (${input.timeoutMs}ms)`,
+      );
+    }
     throw err;
   } finally {
     clearTimeout(timer);
