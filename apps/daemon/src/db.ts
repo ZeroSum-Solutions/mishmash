@@ -54,6 +54,7 @@ export function openDatabase(projectRoot: string, { dataDir }: { dataDir?: strin
 }
 
 export function closeDatabase() {
+  resetLatestRunStatusMemo();
   if (!dbInstance) return;
   dbInstance.close();
   dbInstance = null;
@@ -294,6 +295,17 @@ function migrate(db: SqliteDb): void {
   if (!messageCols.some((c: DbRow) => c.name === 'run_status')) {
     db.exec(`ALTER TABLE messages ADD COLUMN run_status TEXT`);
   }
+  // Covering index for the latest-run-per-project listing (FU-50). It lives
+  // after the run_id/run_status migrations because it names both columns. A
+  // run row's status/time columns sit BEHIND the multi-megabyte events_json
+  // in the record, so a table scan had to walk every payload's overflow
+  // chain just to read them; this index answers the listing without touching
+  // the table at all.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_messages_run_rows
+      ON messages(conversation_id, ended_at, started_at, created_at, position, run_id, run_status, id)
+      WHERE run_status IS NOT NULL
+  `);
   if (!messageCols.some((c: DbRow) => c.name === 'result_delivery_state')) {
     db.exec(`ALTER TABLE messages ADD COLUMN result_delivery_state TEXT`);
   }
@@ -629,31 +641,99 @@ export function listProjects(db: SqliteDb) {
   return rows.map(normalizeProject);
 }
 
+/**
+ * Latest run row per project, WITHOUT the events payload. Exported so a test
+ * can EXPLAIN it: it must be answered from `idx_messages_run_rows` alone,
+ * because the table records carry multi-megabyte `events_json` values in
+ * front of the columns this query needs (FU-50).
+ */
+export const LATEST_PROJECT_RUN_ROWS_SQL = `SELECT projectId, messageId, runId, status, updatedAt
+         FROM (
+           SELECT c.project_id AS projectId,
+                  m.id AS messageId,
+                  m.run_id AS runId,
+                  m.run_status AS status,
+                  COALESCE(m.ended_at, m.started_at, m.created_at) AS updatedAt,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY c.project_id
+                    ORDER BY COALESCE(m.ended_at, m.started_at, m.created_at) DESC,
+                             m.position DESC
+                  ) AS rowNum
+             FROM messages m
+             JOIN conversations c ON c.id = m.conversation_id
+            WHERE m.run_status IS NOT NULL
+         ) latest
+        WHERE latest.rowNum = 1
+        ORDER BY updatedAt DESC`;
+
 export function listLatestProjectRunStatuses(db: SqliteDb) {
-  const rows = db
-    .prepare(
-      `SELECT c.project_id AS projectId,
-              m.run_id AS runId,
-              m.run_status AS status,
-              m.events_json AS eventsJson,
-              COALESCE(m.ended_at, m.started_at, m.created_at) AS updatedAt
-         FROM messages m
-         JOIN conversations c ON c.id = m.conversation_id
-        WHERE m.run_status IS NOT NULL
-        ORDER BY updatedAt DESC`,
-    )
-    .all() as DbRow[];
+  // Invariant (FU-50): persisted run events are read for the LATEST run row
+  // of each project and for no other row. `events_json` is the largest
+  // column in the database (tens of megabytes across a team's run history),
+  // and this listing backs `GET /api/projects`, which every home activation
+  // calls. Selecting the payload for every run row and discarding all but one
+  // per project materialised the whole history in Node on each call and
+  // blocked the event loop for hundreds of milliseconds, stalling every other
+  // route's API wait behind it. So: pick the latest row per project without
+  // the payload, then fetch the payload for exactly those rows.
+  const latestRows = db.prepare(LATEST_PROJECT_RUN_ROWS_SQL).all() as DbRow[];
+  const readEvents = db.prepare(`SELECT events_json AS eventsJson FROM messages WHERE id = ?`);
+
+  // A latest row's payload is parsed once and then remembered, because the
+  // same row is asked for on every home activation and a multi-megabyte
+  // parse per call is the cost this listing must not pay. The memo is valid
+  // for one database state: `total_changes()` moves on every write this
+  // connection makes (all daemon writers go through this connection) and
+  // `data_version` moves on every commit by any other connection, so ANY
+  // change to any row -- including a same-length rewrite of a run's events --
+  // drops the whole memo before it can serve a stale status.
+  const stamp = `${dbFile ?? ''}|${String(
+    (db.prepare(`SELECT total_changes() AS changes`).get() as DbRow).changes,
+  )}|${String(db.pragma('data_version', { simple: true }))}`;
+  if (latestRunStatusMemo.stamp !== stamp) {
+    latestRunStatusMemo.stamp = stamp;
+    latestRunStatusMemo.byMessageId.clear();
+  }
+
   const latestByProject = new Map<string, DbRow>();
-  for (const row of rows) {
-    if (!latestByProject.has(row.projectId)) {
-      latestByProject.set(row.projectId, {
-        value: projectDisplayStatusForRunRow(row.status, row.eventsJson),
-        updatedAt: Number(row.updatedAt),
-        runId: row.runId ?? undefined,
-      });
+  for (const row of latestRows) {
+    // Only a `succeeded` run consults its events (to project `incomplete`);
+    // every other status is decided without touching the payload.
+    let value: string;
+    if (normalizeProjectRunStatus(row.status) === 'succeeded') {
+      const cached = latestRunStatusMemo.byMessageId.get(row.messageId);
+      if (cached !== undefined) {
+        value = cached;
+      } else {
+        const eventsJson = (readEvents.get(row.messageId) as DbRow | undefined)?.eventsJson;
+        value = projectDisplayStatusForRunRow(row.status, eventsJson);
+        latestRunStatusMemo.byMessageId.set(row.messageId, value);
+      }
+    } else {
+      value = projectDisplayStatusForRunRow(row.status, undefined);
     }
+    latestByProject.set(row.projectId, {
+      value,
+      updatedAt: Number(row.updatedAt),
+      runId: row.runId ?? undefined,
+    });
   }
   return latestByProject;
+}
+
+/**
+ * Derived display status of each project's latest run row, keyed by message
+ * id and valid for exactly one database state (`stamp`); see
+ * `listLatestProjectRunStatuses`. Cleared on `closeDatabase`.
+ */
+const latestRunStatusMemo: { stamp: string; byMessageId: Map<string, string> } = {
+  stamp: '',
+  byMessageId: new Map(),
+};
+
+function resetLatestRunStatusMemo() {
+  latestRunStatusMemo.stamp = '';
+  latestRunStatusMemo.byMessageId.clear();
 }
 
 // A terminal `succeeded` run whose PERSISTED events show unfinished declared
