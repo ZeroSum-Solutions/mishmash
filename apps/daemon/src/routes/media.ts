@@ -895,6 +895,22 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
         .json({ error: { code: 'CONFLICT', message: `output already exists: ${request.output}` } });
     }
 
+    // Re-check immediately before reserving the slot, with no `await`
+    // between this check and `registerActiveMediaJob` below: the earlier
+    // check (above, before `mediaJobOutputExists`) is only a fast-fail —
+    // that `await` yields the event loop, so a second near-simultaneous
+    // request for a DIFFERENT output could pass the earlier check too and
+    // race this one to registration. This second, synchronous-to-register
+    // check closes that window.
+    if (activeMediaJobCount() >= limits.maxConcurrent) {
+      return res.status(429).json({
+        error: {
+          code: 'LIMIT_EXCEEDED',
+          message: `maxConcurrent limit reached: ${limits.maxConcurrent} (OD_MEDIA_JOB_MAX_CONCURRENT)`,
+        },
+      });
+    }
+
     const taskId = randomUUID();
     const task = createMediaTask(taskId, projectId);
     task.kind = request.kind;
