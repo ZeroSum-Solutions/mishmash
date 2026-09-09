@@ -35,6 +35,7 @@ import { createServer as createHttpServer } from 'node:http';
 import httpNode from 'node:http';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -48,6 +49,7 @@ import { startServer } from '../../src/server.js';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = path.join(HERE, '../fixtures/w7-media');
 const FAKE_FFMPEG = path.join(FIXTURE_DIR, 'fake-ffmpeg.mjs');
+const FAKE_FFPROBE_HANG = path.join(FIXTURE_DIR, 'fake-ffprobe-hang.mjs');
 const FAKE_FFMPEG_SHA256 = readFileSync(path.join(FIXTURE_DIR, 'fake-ffmpeg-output.sha256'), 'utf8').trim();
 const execFileP = promisify(execFile);
 const DAEMON_ROOT = path.resolve(HERE, '../..');
@@ -212,15 +214,38 @@ describe('media jobs — encode', () => {
     const created = (await createResp.json()) as { taskId?: string };
     const taskId = created.taskId as string;
 
+    // Wait for the encode child itself to be emitting progress (a numeric
+    // `fraction`, which only ever comes from ffmpeg's `-progress` output)
+    // before canceling, so this test exercises "cancel while running" the
+    // ENCODE phase specifically — cancel during the PROBE phase is its own,
+    // faster-resolving path that never spawns ffmpeg at all (see "(d2)").
+    let sinceBeforeCancel = 0;
+    for (let i = 0; i < 30; i += 1) {
+      const pollResp = await fetch(`${baseUrl}/api/media/tasks/${encodeURIComponent(taskId)}/wait`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ since: sinceBeforeCancel, timeoutMs: 1500 }),
+      });
+      const poll = (await pollResp.json()) as Record<string, unknown>;
+      if (typeof poll.nextSince === 'number') sinceBeforeCancel = poll.nextSince as number;
+      if (typeof poll.fraction === 'number' || poll.status === 'done' || poll.status === 'failed') break;
+    }
+
     const cancelResp = await fetch(`${baseUrl}/api/media/tasks/${encodeURIComponent(taskId)}/cancel`, {
       method: 'POST',
     });
     expect(cancelResp.status, 'POST /api/media/tasks/:id/cancel must exist (work item 2)').not.toBe(404);
 
+    // `since` is compared against the task's progress-entry count, not a
+    // timestamp — passing 0 here (instead of `sinceBeforeCancel`, the
+    // count already observed above) would short-circuit `/wait` into
+    // returning the CURRENT snapshot immediately (progress.length > 0
+    // already), racing the cancel's async kill instead of actually
+    // waiting for the terminal update it produces.
     const waitResp = await fetch(`${baseUrl}/api/media/tasks/${encodeURIComponent(taskId)}/wait`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ since: 0, timeoutMs: 2000 }),
+      body: JSON.stringify({ since: sinceBeforeCancel, timeoutMs: 2000 }),
     });
     const snap = (await waitResp.json()) as { status?: string; error?: { code?: string } };
     expect(snap.status).toBe('failed');
@@ -228,6 +253,61 @@ describe('media jobs — encode', () => {
 
     const killReceipt = path.join(projectDir, 'out-cancel.mp4.killed');
     expect(existsSync(killReceipt), 'cancel must SIGTERM the child, not just mark the row failed').toBe(true);
+  });
+
+  it('(b2) a hung ffprobe is killed by the duration limit without ffmpeg ever spawning', async () => {
+    const jobs = await importJobsModuleOrFail();
+    if (!jobs) {
+      expect.fail('apps/daemon/src/media/jobs.ts must exist and export runFfmpegEncodeChild (work item 2).');
+      return;
+    }
+    const receiptPath = path.join(tmpdir(), `w7c-probe-limit-${randomUUID()}`);
+    const handle = (jobs as any).runFfmpegEncodeChild({
+      // Intentionally not a real binary: if ffmpeg were ever spawned in
+      // this path, the outcome would come back FFMPEG_NOT_FOUND instead of
+      // LIMIT_EXCEEDED, and this assertion would catch it.
+      ffmpegBin: '/nonexistent/w7c-should-never-spawn-ffmpeg',
+      ffprobeBin: FAKE_FFPROBE_HANG,
+      args: ['-progress', 'pipe:1', 'out.mp4'],
+      probeArgs: [receiptPath, '-show_entries'],
+      maxDurationMs: 200,
+    });
+    const outcome = (await handle.promise) as { ok: boolean; error?: { code?: string; message?: string } };
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.code).toBe('LIMIT_EXCEEDED');
+    expect(outcome.error?.message ?? '').toMatch(/OD_MEDIA_JOB_MAX_DURATION_MS/);
+    for (let i = 0; i < 50 && !existsSync(`${receiptPath}.killed`); i += 1) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(existsSync(`${receiptPath}.killed`), 'the duration limit must SIGTERM the hung ffprobe child').toBe(true);
+  });
+
+  it('(d2) cancel during ffprobe kills the probe and never spawns ffmpeg', async () => {
+    const jobs = await importJobsModuleOrFail();
+    if (!jobs) {
+      expect.fail('apps/daemon/src/media/jobs.ts must exist and export runFfmpegEncodeChild (work item 2).');
+      return;
+    }
+    const receiptPath = path.join(tmpdir(), `w7c-probe-cancel-${randomUUID()}`);
+    const handle = (jobs as any).runFfmpegEncodeChild({
+      ffmpegBin: '/nonexistent/w7c-should-never-spawn-ffmpeg',
+      ffprobeBin: FAKE_FFPROBE_HANG,
+      args: ['-progress', 'pipe:1', 'out.mp4'],
+      probeArgs: [receiptPath, '-show_entries'],
+      maxDurationMs: 30_000,
+    });
+    // Give the probe a moment to actually spawn before canceling, so this
+    // exercises "cancel while the probe is running" rather than the
+    // separate pre-spawn race the module already handles.
+    await new Promise((r) => setTimeout(r, 100));
+    handle.kill();
+    const outcome = (await handle.promise) as { ok: boolean; error?: { code?: string } };
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error?.code).toBe('CANCELED');
+    for (let i = 0; i < 50 && !existsSync(`${receiptPath}.killed`); i += 1) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(existsSync(`${receiptPath}.killed`), 'cancel must SIGTERM the probe child, not just wait for it').toBe(true);
   });
 
   it('(e) a task already running when the daemon restarts comes back interrupted (existing reconcile path)', async () => {
@@ -679,5 +759,81 @@ describe('media jobs — download', () => {
       'a hostname that DNS-resolves to a loopback address must be rejected before any connection is attempted',
     ).toBe(false);
     expect(existsSync(path.join(projectDir, 'loopback-via-dns.bin'))).toBe(false);
+  });
+
+  it('(c3) canceling before response headers arrive aborts immediately instead of waiting for a response', async () => {
+    const jobs = await importJobsModuleOrFail();
+    if (!jobs) {
+      expect.fail('apps/daemon/src/media/jobs.ts must exist before this test can run (work item 2, INV-7.6).');
+      return;
+    }
+
+    const envDataDir = process.env.OD_DATA_DIR;
+    if (!envDataDir) throw new Error('OD_DATA_DIR is required for daemon route tests');
+    const db = openDatabase(process.cwd(), { dataDir: envDataDir });
+    const projectId = `project_${randomUUID()}`;
+    const now = Date.now();
+    insertProject(db, { id: projectId, name: 'download-cancel project', createdAt: now, updatedAt: now });
+    const projectDir = path.join(envDataDir, 'projects', projectId);
+    mkdirSync(projectDir, { recursive: true });
+
+    // Never responds — the request sits waiting for headers for the whole
+    // test. If cancel only took effect once a response arrived (the r1
+    // gap), this download would hang until maxDurationMs instead of
+    // settling as soon as `abortFn` runs.
+    let gotRequest = false;
+    const stallServer = createHttpServer((req) => {
+      gotRequest = true;
+      void req;
+    });
+    await new Promise<void>((resolve) => stallServer.listen(0, '127.0.0.1', resolve));
+    const addr = stallServer.address();
+    if (!addr || typeof addr === 'string') throw new Error('fixture server has no address');
+    const stallPort = addr.port;
+
+    const ALLOWED_RESOLVED_ADDRESS = '93.184.216.34';
+    const lookup = (
+      _hostname: string,
+      _options: unknown,
+      callback: (err: Error | null, address: string, family: number) => void,
+    ) => callback(null, ALLOWED_RESOLVED_ADDRESS, 4);
+    const realHttpGet = httpNode.get.bind(httpNode);
+    const httpGetSpy = vi
+      .spyOn(httpNode, 'get')
+      .mockImplementation(((options: Record<string, unknown>, callback: unknown) =>
+        realHttpGet({ ...options, hostname: '127.0.0.1' } as never, callback as never)) as typeof httpNode.get);
+
+    try {
+      let abortFn: (() => void) | undefined;
+      const started = Date.now();
+      const resultPromise = (jobs as any).runMediaDownloadJob({
+        projectDir,
+        url: `http://w7c-stall.test:${stallPort}/slow`,
+        outputRel: 'never.bin',
+        maxOutputBytes: 1024,
+        maxDurationMs: 10_000,
+        lookup,
+        onAbort: (abort: () => void) => {
+          abortFn = abort;
+        },
+      });
+      // onAbort now registers synchronously when the request is created
+      // (before any response), so this only needs to wait for THAT
+      // registration — the server never answers.
+      for (let i = 0; i < 100 && !abortFn; i += 1) {
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      expect(typeof abortFn, 'onAbort must fire before headers arrive, not only after').toBe('function');
+      abortFn!();
+      const result = (await resultPromise) as { ok: boolean; error?: { code?: string } };
+      const elapsedMs = Date.now() - started;
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe('CANCELED');
+      expect(elapsedMs, 'cancel must not wait for the 10s duration limit').toBeLessThan(5_000);
+      expect(gotRequest).toBe(true);
+    } finally {
+      httpGetSpy.mockRestore();
+      await new Promise<void>((resolve) => stallServer.close(() => resolve()));
+    }
   });
 });

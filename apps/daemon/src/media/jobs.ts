@@ -190,15 +190,20 @@ function scriptAwareSpawn(
   return spawn(bin, args, opts);
 }
 
-async function probeDurationSeconds(ffprobeBin: string, probeArgs: string[]): Promise<number | null> {
+async function probeDurationSeconds(
+  ffprobeBin: string,
+  probeArgs: string[],
+  onSpawned: (child: ChildProcess) => void,
+): Promise<number | null> {
   return new Promise((resolve) => {
     let child: ChildProcess;
     try {
-      child = scriptAwareSpawn(ffprobeBin, probeArgs, undefined);
+      child = scriptAwareSpawn(ffprobeBin, probeArgs, { detached: process.platform !== 'win32' });
     } catch {
       resolve(null);
       return;
     }
+    onSpawned(child);
     let stdout = '';
     child.stdout?.on('data', (chunk: Buffer) => {
       stdout += String(chunk);
@@ -254,9 +259,60 @@ export function runFfmpegEncodeChild(input: RunFfmpegEncodeInput): RunFfmpegEnco
 
   const promise = new Promise<MediaJobOutcome>((resolve) => {
     (async () => {
+      // A cancel (or a limit) can arrive while this function was still
+      // awaiting probeDurationSeconds/the ffmpeg spawn itself — `child` was
+      // null then, so doKill() above was a no-op even though killReason
+      // got set. Once a real child exists, honor that decision — but not
+      // in the same tick: a freshly spawned process has not finished
+      // loading (registering its own SIGTERM handler) yet, and a signal
+      // sent before that point kills it via the default disposition
+      // instead of the graceful path a real ffmpeg/ffprobe (or this
+      // fixture) uses to clean up. A short grace delay lets that finish
+      // first; this path is the pre-spawn race only — a cancel/limit that
+      // arrives after the child is already running signals it immediately
+      // below (via beginKill's own doKill call).
+      const armPreSpawnKillIfNeeded = () => {
+        if (!killReason) return;
+        const preSpawnKillGraceTimer = setTimeout(() => doKill('SIGTERM'), PRE_SPAWN_KILL_GRACE_MS);
+        preSpawnKillGraceTimer.unref?.();
+        killTimer = setTimeout(() => doKill('SIGKILL'), PRE_SPAWN_KILL_GRACE_MS + KILL_ESCALATION_MS);
+        killTimer.unref?.();
+      };
+
+      // The duration budget covers the WHOLE job, probe phase included —
+      // armed before probing starts so a hung ffprobe is limit-killed the
+      // same as a hung ffmpeg (INV-7.6/7.14), instead of only counting
+      // down once the encode child spawns.
+      if (Number.isFinite(input.maxDurationMs) && input.maxDurationMs > 0) {
+        termTimer = setTimeout(() => beginKill('limit'), input.maxDurationMs);
+        termTimer.unref?.();
+      }
+
       const durationSeconds = input.probeArgs
-        ? await probeDurationSeconds(input.ffprobeBin, input.probeArgs)
+        ? await probeDurationSeconds(input.ffprobeBin, input.probeArgs, (probeChild) => {
+            child = probeChild;
+            armPreSpawnKillIfNeeded();
+          })
         : null;
+
+      if (killReason) {
+        // Canceled or limit-exceeded during the probe phase: fail here
+        // without ever spawning ffmpeg, instead of leaving the probe's
+        // beginKill a no-op while `child` was still null.
+        clearTimeout(termTimer);
+        resolve(
+          killReason === 'limit'
+            ? {
+                ok: false,
+                error: {
+                  code: 'LIMIT_EXCEEDED',
+                  message: `OD_MEDIA_JOB_MAX_DURATION_MS exceeded (limit ${input.maxDurationMs}ms)`,
+                },
+              }
+            : { ok: false, error: { code: 'CANCELED', message: 'media job canceled' } },
+        );
+        return;
+      }
 
       let spawned: ChildProcess;
       try {
@@ -272,29 +328,7 @@ export function runFfmpegEncodeChild(input: RunFfmpegEncodeInput): RunFfmpegEnco
         return;
       }
       child = spawned;
-
-      // A cancel (or, in principle, a limit) can arrive while this
-      // function was still awaiting probeDurationSeconds — `child` was
-      // null then, so doKill() above was a no-op even though killReason
-      // got set. Now that the real child exists, honor that decision — but
-      // not in the same tick: a freshly spawned process has not finished
-      // loading (registering its own SIGTERM handler) yet, and a signal
-      // sent before that point kills it via the default disposition
-      // instead of the graceful path a real ffmpeg (or this fixture) uses
-      // to clean up. A short grace delay lets that finish first; this
-      // path is the pre-spawn race only — a cancel/limit that arrives
-      // after the child is already running signals it immediately below.
-      if (killReason) {
-        const preSpawnKillGraceTimer = setTimeout(() => doKill('SIGTERM'), PRE_SPAWN_KILL_GRACE_MS);
-        preSpawnKillGraceTimer.unref?.();
-        killTimer = setTimeout(() => doKill('SIGKILL'), PRE_SPAWN_KILL_GRACE_MS + KILL_ESCALATION_MS);
-        killTimer.unref?.();
-      }
-
-      if (Number.isFinite(input.maxDurationMs) && input.maxDurationMs > 0) {
-        termTimer = setTimeout(() => beginKill('limit'), input.maxDurationMs);
-        termTimer.unref?.();
-      }
+      armPreSpawnKillIfNeeded();
 
       let stdoutBuf = '';
       let stderrBuf = '';
@@ -709,6 +743,8 @@ async function assertDownloadHostAllowed(
 interface SingleGetResult {
   res?: http.IncomingMessage;
   error?: string;
+  /** Set when `error` is present because a registered abort fired, not a genuine transport failure. */
+  canceled?: boolean;
 }
 
 /**
@@ -721,7 +757,12 @@ interface SingleGetResult {
  * validated instead of a second, independent resolution. `servername` keeps
  * TLS SNI correct for an `https:` URL connected to by IP.
  */
-function httpGetOnce(urlStr: string, connectHost: string, timeoutMs: number): Promise<SingleGetResult> {
+function httpGetOnce(
+  urlStr: string,
+  connectHost: string,
+  timeoutMs: number,
+  registerAbort?: (abort: () => void) => void,
+): Promise<SingleGetResult> {
   return new Promise((resolve) => {
     let parsed: URL;
     try {
@@ -752,6 +793,17 @@ function httpGetOnce(urlStr: string, connectHost: string, timeoutMs: number): Pr
         resolve({ res });
       },
     );
+    // Registered synchronously right after the request is created — BEFORE
+    // any `await` back in the caller — so a cancel that arrives during
+    // DNS/connect or while still waiting for headers can abort this
+    // request immediately, instead of the caller only being able to wire
+    // an abort once `res` already exists.
+    registerAbort?.(() => {
+      req.destroy();
+      if (settled) return;
+      settled = true;
+      resolve({ error: 'media job canceled', canceled: true });
+    });
     req.on('error', (err) => {
       if (settled) return;
       settled = true;
@@ -818,16 +870,32 @@ export async function runMediaDownloadJob(input: RunMediaDownloadJobInput): Prom
         };
       }
 
-      const attempt = await httpGetOnce(currentUrl, hostCheck.connectHost, remaining);
+      // Set the moment the abort this hop registered with `input.onAbort`
+      // actually fires — whether that happens before `res` exists (below)
+      // or later, mid-transfer (read by `isCanceled` on the stream call
+      // further down). Registering through `httpGetOnce`'s `registerAbort`
+      // param (rather than only after it resolves) means a cancel is never
+      // a no-op for the DNS/connect/headers window.
+      let hopCanceled = false;
+      const attempt = await httpGetOnce(
+        currentUrl,
+        hostCheck.connectHost,
+        remaining,
+        input.onAbort
+          ? (abort) =>
+              input.onAbort!(() => {
+                hopCanceled = true;
+                abort();
+              })
+          : undefined,
+      );
       if (!attempt.res) {
+        if (attempt.canceled) {
+          return { ok: false, error: { code: 'CANCELED', message: 'media job canceled' } };
+        }
         return { ok: false, error: { code: 'UPSTREAM_ERROR', message: attempt.error ?? 'download request failed' } };
       }
       const res = attempt.res;
-      let aborted = false;
-      input.onAbort?.(() => {
-        aborted = true;
-        res.destroy();
-      });
       const status = res.statusCode ?? 0;
 
       if (status >= 300 && status < 400 && typeof res.headers.location === 'string') {
@@ -860,7 +928,7 @@ export async function runMediaDownloadJob(input: RunMediaDownloadJobInput): Prom
         deadline,
         declaredLength: Number.isFinite(declaredLength) ? declaredLength : undefined,
         onProgress: input.onProgress,
-        isCanceled: () => aborted,
+        isCanceled: () => hopCanceled,
       });
       if (!streamed.ok) {
         await rm(tmpAbs, { force: true }).catch(() => {});

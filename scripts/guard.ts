@@ -123,6 +123,10 @@ const residualAllowedExactPaths = new Set([
   // (through Node when the resolved binary path ends .mjs/.js/.cjs) — same
   // directly-executable-via-Node precedent as fake-vela.mjs above.
   "apps/daemon/tests/fixtures/w7-media/fake-ffmpeg.mjs",
+  // Same precedent as fake-ffmpeg.mjs above: a hung-ffprobe test double
+  // (W7C jobs.test.ts "(b2)"/"(d2)") that `runFfmpegEncodeChild` spawns
+  // directly via child_process.spawn through Node.
+  "apps/daemon/tests/fixtures/w7-media/fake-ffprobe-hang.mjs",
   "tools/dev/bin/tools-dev.mjs",
   "tools/dev/esbuild.config.mjs",
   "tools/pack/bin/tools-pack.mjs",
