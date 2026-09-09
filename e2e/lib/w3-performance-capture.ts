@@ -469,6 +469,80 @@ function classifySequenceRange(
 }
 
 /**
+ * Reads a poll's `highWaterSeq` (`packages/contracts/src/api/anomalies.ts`),
+ * or names exactly why it cannot be trusted.
+ *
+ * Required on EVERY poll this reconciles, not only empty ones: it is the only
+ * evidence that a clear happened between two polls that both find the log
+ * empty (see `reconcileUiLagExports`), so a poll that cannot supply it must be
+ * refused rather than read as "unknown, carry on" — that degraded to fail-open
+ * exactly where there is nothing else to check against (Sol r3 HIGH finding).
+ * A legacy export predating `highWaterSeq` therefore does not get to
+ * participate in INV-3.10 at all; it is refused here by name, the same as a
+ * legacy export predating `seq` is refused by the empty-range branch above.
+ */
+function readHighWaterSeq(
+  poll: ListAnomaliesResponse,
+  index: number,
+  total: number,
+): number {
+  const raw = (poll as { highWaterSeq?: unknown } | null | undefined)?.highWaterSeq;
+  if (raw === undefined) {
+    throw new Error(
+      `ui-lag export ${index + 1} of ${total} carries no highWaterSeq; a legacy export predating the `
+      + 'high-water mark cannot support the INV-3.10 censorship check and is refused, not treated as benign',
+    );
+  }
+  if (raw === null) {
+    throw new Error(
+      `ui-lag export ${index + 1} of ${total} carries a null highWaterSeq; INV-3.10 needs the actual mark, `
+      + 'not an absence dressed up as a value',
+    );
+  }
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || !Number.isInteger(raw)) {
+    throw new Error(
+      `ui-lag export ${index + 1} of ${total} carries a fractional or non-numeric highWaterSeq `
+      + `(${JSON.stringify(raw)}); a sequence high-water mark is a whole number or it proves nothing`,
+    );
+  }
+  if (!Number.isSafeInteger(raw)) {
+    throw new Error(
+      `ui-lag export ${index + 1} of ${total} carries a highWaterSeq (${raw}) outside the safe integer `
+      + 'range; a corrupted mark cannot be trusted to detect a censored clear',
+    );
+  }
+  if (raw < 0) {
+    throw new Error(
+      `ui-lag export ${index + 1} of ${total} carries a negative highWaterSeq (${raw}); a sequence mark `
+      + 'cannot fall below zero',
+    );
+  }
+  return raw;
+}
+
+/**
+ * `highWaterSeq` survives a clear and only ever counts up, so it must never
+ * report lower than an earlier poll already reported — the same "polls
+ * handed over out of order" failure the ordinary sequence-range check refuses
+ * (see `reconcileUiLagExports`), checked against the one running high-water
+ * value both branches share so the two checks cannot disagree.
+ */
+function requireHighWaterAdvances(
+  highWater: number,
+  knownHighWater: number,
+  index: number,
+  total: number,
+): void {
+  if (highWater < knownHighWater) {
+    throw new Error(
+      `ui-lag export ${index + 1} of ${total} reports highWaterSeq ${highWater}, below the `
+      + `${knownHighWater} an earlier poll already reported; the polls were handed over out of order `
+      + 'for reconciliation',
+    );
+  }
+}
+
+/**
  * Merges the ordered exports one capture polled into a single ui-lag population.
  *
  * What must hold: consecutive polls OVERLAP. The anomaly log keeps one previous
@@ -499,9 +573,15 @@ function classifySequenceRange(
  * answer from a daemon that does not number its records — distinct from a
  * `null` range, which declares an empty log and reconciles fine), a range that
  * is `null` on one side only or otherwise malformed (see `classifySequenceRange`),
- * or a `highWaterSeq` that runs backwards between polls — every one of these
- * means either the polls were handed over out of order or the file reporting
- * them was corrupted, and neither is reconcilable by guessing.
+ * a `highWaterSeq` that is missing, non-integer, or negative (see
+ * `readHighWaterSeq`), one that runs backwards between polls, or one that
+ * trails the very range the same poll reports retaining — every one of these
+ * means either the polls were handed over out of order, the file reporting
+ * them was corrupted, or the export predates `highWaterSeq` altogether and is
+ * therefore ineligible for INV-3.10 (Sol r3 HIGH finding, this file's prior
+ * revision at line 544: reading the field "defensively" and degrading a
+ * missing or malformed mark to merely unknown was fail-OPEN — a censored
+ * clear between two empty polls has no other evidence to fall back on).
  */
 export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): UiLagReconciliation {
   const byId = new Map<string, AnomalyRecord>();
@@ -541,32 +621,16 @@ export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): 
       );
     }
 
-    // `highWaterSeq` is read defensively rather than trusted off the type: a
-    // pre-fix or otherwise legacy envelope simply does not carry it, and that
-    // has to degrade to "cannot check censorship for this poll" rather than a
-    // crash — `runCapture` only casts parsed JSON, so a captured file from an
-    // older daemon reaches here unchecked.
-    const rawHighWater = (poll as { highWaterSeq?: unknown } | null | undefined)?.highWaterSeq;
-    const highWaterKnown = typeof rawHighWater === 'number' && Number.isSafeInteger(rawHighWater) && rawHighWater >= 0;
-    if (highWaterKnown) {
-      const highWater = rawHighWater as number;
-      if (highWater < knownHighWater) {
-        throw new Error(
-          `ui-lag export ${index + 1} of ${polls.length} reports highWaterSeq ${highWater}, below the `
-          + `${knownHighWater} an earlier poll already reported; the polls were handed over out of order `
-          + 'for reconciliation',
-        );
-      }
-      knownHighWater = highWater;
-    }
-
     // A log that retains nothing has nothing to reconcile against, and must not
     // reset what earlier polls already proved was read. But a null range is
     // only honest when the export really is empty: a legacy record written
     // before the daemon stamped `seq` has no sequence at all, so `firstSeq`/
     // `lastSeq` come back null even though `total` and the delivered array are
     // not. Waving that through as "the log holds nothing" would let those
-    // records vanish from every check below rather than being refused.
+    // records vanish from every check below rather than being refused. This
+    // has to run BEFORE `highWaterSeq` is required below: a genuinely legacy
+    // envelope (pre-`seq`) also predates `highWaterSeq`, and it is this check
+    // that names it correctly as "legacy records", not the field it never had.
     if (range.kind === 'empty') {
       const trulyEmpty = poll?.total === 0 && (delivered?.length ?? 0) === 0;
       if (!trulyEmpty) {
@@ -576,26 +640,47 @@ export function reconcileUiLagExports(polls: readonly ListAnomaliesResponse[]): 
           + 'before the daemon numbered them cannot be reconciled across a rotation',
         );
       }
+
       // The censorship check: an empty answer delivers nothing, so the only
       // way to see a clear that happened here is `highWaterSeq` itself moving
-      // past what an earlier poll already accounted for. Same exemption as
-      // the ordinary range check below — the very first poll defines the
-      // floor rather than being flagged, because nothing precedes it to
-      // disagree with.
-      if (highWaterKnown) {
-        const highWater = rawHighWater as number;
-        if (covered == null && polledBefore && highWater > 0) {
-          gaps.push({ fromSeq: 1, toSeq: highWater });
-        } else if (covered != null && highWater > covered) {
-          gaps.push({ fromSeq: covered + 1, toSeq: highWater });
-        }
-        covered = covered == null ? (highWater > 0 ? highWater : null) : Math.max(covered, highWater);
+      // past what an earlier poll already accounted for. That makes
+      // `highWaterSeq` REQUIRED here, not optional evidence — a poll that
+      // cannot supply a trustworthy one is refused outright below, the same
+      // as any other envelope this function cannot honestly read.
+      const highWater = readHighWaterSeq(poll, index, polls.length);
+      requireHighWaterAdvances(highWater, knownHighWater, index, polls.length);
+      knownHighWater = highWater;
+
+      // Same exemption as the ordinary range check below — the very first
+      // poll defines the floor rather than being flagged, because nothing
+      // precedes it to disagree with.
+      if (covered == null && polledBefore && highWater > 0) {
+        gaps.push({ fromSeq: 1, toSeq: highWater });
+      } else if (covered != null && highWater > covered) {
+        gaps.push({ fromSeq: covered + 1, toSeq: highWater });
       }
+      covered = covered == null ? (highWater > 0 ? highWater : null) : Math.max(covered, highWater);
       polledBefore = true;
       return;
     }
 
     const { firstSeq: rangeFirst, lastSeq: rangeLast } = range;
+
+    // Required on a retained (non-empty) poll too, and checked against the
+    // range this same poll just reported: `highWaterSeq` can never trail
+    // `lastSeq` — it is defined as the highest sequence ever issued, and this
+    // poll is proof a higher one already exists. A poll reporting otherwise is
+    // self-contradictory, not merely uninformative.
+    const highWater = readHighWaterSeq(poll, index, polls.length);
+    requireHighWaterAdvances(highWater, knownHighWater, index, polls.length);
+    if (highWater < rangeLast) {
+      throw new Error(
+        `ui-lag export ${index + 1} of ${polls.length} reports highWaterSeq ${highWater} below its own `
+        + `retained lastSeq ${rangeLast}; the high-water mark can never trail what the same poll says the `
+        + 'log currently retains',
+      );
+    }
+    knownHighWater = highWater;
     if (covered != null && rangeLast < covered) {
       throw new Error(
         `ui-lag export ${index + 1} of ${polls.length} ends at sequence ${rangeLast}, below the `
