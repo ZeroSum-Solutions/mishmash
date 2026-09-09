@@ -264,6 +264,30 @@ describe('video import OAuth: redirect-URI derivation', () => {
     expect(res.status).toBe(400);
     expect(res.body).toContain('redirect port does not match');
   });
+
+  // Express always hands `deriveVideoImportRedirectUri` a real 'http' or
+  // 'https' `req.protocol` (there is no HTTP header that forges it without
+  // `trust proxy`, which this daemon does not set), so the
+  // protocol!=='http'&&protocol!=='https' branch has no reachable path over
+  // HTTP. Call the function directly, dynamically imported per this file's
+  // header note (a static import of the not-yet-built module tree would
+  // fail load-time on base).
+  it('rejects a bogus (non-http/https) scheme even with an otherwise-valid loopback host', async () => {
+    const { deriveVideoImportRedirectUri } = await import('../src/video-import/oauth.js');
+    const result = deriveVideoImportRedirectUri({
+      provider: 'vimeo',
+      hostHeader: `127.0.0.1:${daemonPort}`,
+      protocol: 'ftp',
+      resolvedPort: daemonPort,
+      publicBaseUrl: '',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(400);
+      expect(result.code).toBe('VALIDATION_FAILED');
+      expect(result.message).toContain('unsupported video import callback protocol');
+    }
+  });
 });
 
 describe('video import OAuth: credential file mode and atomicity', () => {
