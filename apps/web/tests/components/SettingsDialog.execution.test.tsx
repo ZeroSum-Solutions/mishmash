@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OpenDesignHostUpdaterStatusSnapshot } from '@open-design/host';
 import { installMockOpenDesignHost } from '@open-design/host/testing';
+import type { VideoImportProviderStatus } from '@open-design/contracts';
 import { en } from '../../src/i18n/locales/en';
 
 function optionNames(container: HTMLElement): string[] {
@@ -4034,6 +4035,101 @@ describe('SettingsDialog connectors interactions', () => {
     });
     fireEvent.click(document.querySelector('.modal-backdrop') as HTMLElement);
     expect(second.onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SettingsDialog video sources card', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  function mockVideoImportProviders(providers: VideoImportProviderStatus[]) {
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString();
+      if (url === '/api/video-import/providers') {
+        return new Response(
+          JSON.stringify({ providers }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url === '/api/video-import/vimeo/connect' && init?.method === 'POST') {
+        return new Response(
+          JSON.stringify({ authorizeUrl: 'https://api.vimeo.com/oauth/authorize?state=fixture' }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url === '/api/video-import/vimeo/disconnect' && init?.method === 'POST') {
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      throw new Error(`unexpected fetch in video sources test: ${init?.method ?? 'GET'} ${url}`);
+    });
+  }
+
+  it('shows Vimeo as not configured and YouTube as not enabled yet', async () => {
+    vi.stubGlobal('fetch', mockVideoImportProviders([
+      { provider: 'vimeo', enabled: true, configured: false, connected: false, credentialSource: 'unset' },
+      { provider: 'youtube', enabled: false, configured: false, connected: false, credentialSource: 'unset' },
+    ]));
+
+    renderSettingsDialog({ mode: 'daemon', agentId: 'codex' }, { initialSection: 'composio' });
+
+    expect(await screen.findByText('Video sources')).toBeTruthy();
+    expect(screen.getByText('Not configured')).toBeTruthy();
+    expect(screen.getByText('Next, not enabled yet')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('connects a configured Vimeo account and opens the authorize URL', async () => {
+    const openSpy = vi.fn(() => ({ location: { href: '' } }) as unknown as Window);
+    vi.stubGlobal('open', openSpy);
+    vi.stubGlobal('fetch', mockVideoImportProviders([
+      { provider: 'vimeo', enabled: true, configured: true, connected: false, credentialSource: 'env' },
+      { provider: 'youtube', enabled: false, configured: false, connected: false, credentialSource: 'unset' },
+    ]));
+
+    renderSettingsDialog({ mode: 'daemon', agentId: 'codex' }, { initialSection: 'composio' });
+
+    const connectButton = await screen.findByRole('button', { name: 'Connect' });
+    expect((connectButton as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(connectButton);
+
+    await waitFor(() => expect(openSpy).toHaveBeenCalledWith('about:blank', '_blank'));
+    await waitFor(() => expect(openSpy.mock.results[0]?.value.location.href).toBe('https://api.vimeo.com/oauth/authorize?state=fixture'));
+  });
+
+  it('shows a connected account and disconnects it', async () => {
+    let connected = true;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString();
+      if (url === '/api/video-import/providers') {
+        const providers = [
+          connected
+            ? { provider: 'vimeo', enabled: true, configured: true, connected: true, credentialSource: 'env', account: { name: 'Fixture Account' } }
+            : { provider: 'vimeo', enabled: true, configured: true, connected: false, credentialSource: 'env' },
+          { provider: 'youtube', enabled: false, configured: false, connected: false, credentialSource: 'unset' },
+        ] satisfies VideoImportProviderStatus[];
+        return new Response(
+          JSON.stringify({ providers }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url === '/api/video-import/vimeo/disconnect' && init?.method === 'POST') {
+        connected = false;
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      throw new Error(`unexpected fetch in video sources test: ${init?.method ?? 'GET'} ${url}`);
+    }));
+
+    renderSettingsDialog({ mode: 'daemon', agentId: 'codex' }, { initialSection: 'composio' });
+
+    expect(await screen.findByText('Connected as Fixture Account')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+
+    // Disconnect removes the stored token, not the env-configured app
+    // credentials, so the status falls back to "Available" (configured,
+    // not connected) rather than "Not configured".
+    await waitFor(() => expect(screen.getByText('Available')).toBeTruthy());
   });
 });
 

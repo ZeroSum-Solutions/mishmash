@@ -346,6 +346,12 @@ const DIAGNOSTICS_STRING_FLAGS = new Set(['daemon-url', 'output']);
 const DIAGNOSTICS_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const ANOMALIES_STRING_FLAGS = new Set(['daemon-url', 'limit', 'kind', 'severity', 'since']);
 const ANOMALIES_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'clear']);
+// `od video-import status|connect|disconnect` (Part 8 F-05). Provider
+// account status/connect/disconnect only -- the create-import job command
+// (`od project video-import`) lives in `runProject` and lands once the
+// media-task contracts it needs are available.
+const VIDEO_IMPORT_STRING_FLAGS = new Set(['daemon-url', 'provider']);
+const VIDEO_IMPORT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const COMPOSITION_METRICS_STRING_FLAGS = new Set(['daemon-url', 'project', 'file']);
 const COMPOSITION_METRICS_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const TYPEFACES_STRING_FLAGS = new Set(['daemon-url', 'query', 'project', 'dir']);
@@ -369,6 +375,9 @@ const PROJECT_STRING_FLAGS = new Set([
   'agent', 'model', 'snapshot-id', 'inputs', 'grant-caps', 'editor',
   'title', 'label', 'against', 'seed-from', 'fork-after', 'mode',
   'source', 'root', 'out',
+  // `od project video-import <projectId> --provider vimeo --url <url>`
+  // (Part 8 F-05).
+  'provider', 'url',
   // `od project reference <targetId> --project <id> --intent "<text>"` —
   // the intent short flag mirrors `od feedback`'s `--note` + `--prompt-file`
   // pattern (readPromptFromFlags already reads `--prompt`/`--prompt-file`).
@@ -378,7 +387,7 @@ const PROJECT_STRING_FLAGS = new Set([
   // the same brief flags as `od design-library start-project`.
   'brief-file', 'screens', 'fidelity', 'iterations', 'pages', 'product', 'audience', 'use-case', 'direction',
 ]);
-const PROJECT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'follow', 'match-kit-look']);
+const PROJECT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'follow', 'match-kit-look', 'wait']);
 // `od templates …` mirrors NewProjectPanel / ExamplesTab. Same surface,
 // same /api/templates store. The CLI form is the embeddability contract:
 // external agents (hermes-agent, openclaw, ...) can snapshot, list, or
@@ -1056,6 +1065,7 @@ const SUBCOMMAND_MAP = {
   backup: runBackup,
   restore: runRestore,
   usage: runUsage,
+  'video-import': runVideoImport,
   cover: runCover,
   route: runRoute,
   // `runShell` shipped complete but unregistered, so `od shell` reported an
@@ -7892,6 +7902,12 @@ async function runProject(args) {
   od project handoff <id> --conversation <id> --api-key <key> --model <model>
                     [--base-url <url>] [--max-tokens <n>]
                     Synthesize a resume-conversation handoff prompt.
+  od project video-import <id> --provider vimeo --url <url> [--as <relpath>]
+                    [--wait] [--json]
+                    Import a Vimeo video the connected account owns into the
+                    project as a background job (Part 8 F-05). --provider
+                    youtube always exits 2 (declared, not enabled yet). Use
+                    \`od video-import connect --provider vimeo\` first.
 
 Common options:
   --daemon-url <url>   MishMash daemon HTTP base.
@@ -8323,10 +8339,84 @@ Common options:
       );
       return;
     }
+    // `od project video-import <projectId> --provider vimeo --url <url>
+    // [--as <relpath>] [--wait] [--json]` (Part 8 F-05). Mirrors `od media
+    // generate`'s taskId-then-poll shape (create -> print queued -> poll),
+    // but against this track's own job routes
+    // (POST/GET /api/projects/:id/video-imports[/:jobId]) rather than the
+    // generic /api/media/tasks/:id/wait endpoint, since a video-import job
+    // is polled by project + jobId, not a bare taskId.
+    case 'video-import': {
+      const projectId = positionalArgs(rest, PROJECT_STRING_FLAGS)[0];
+      const provider = typeof flags.provider === 'string' ? flags.provider : '';
+      if (!projectId || !provider) {
+        console.error('Usage: od project video-import <projectId> --provider vimeo --url <url> [--as <relpath>] [--wait] [--json]');
+        process.exit(2);
+      }
+      const url = typeof flags.url === 'string' ? flags.url : '';
+      if (provider !== 'youtube' && !url) {
+        console.error('--url is required (unless --provider youtube, which is always rejected)');
+        process.exit(2);
+      }
+      const body = { provider, url, ...(typeof flags.as === 'string' && flags.as ? { as: flags.as } : {}) };
+      const resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/video-imports`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        if (flags.json) process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+        else console.error(`video import rejected: ${data?.error?.message ?? `HTTP ${resp.status}`}`);
+        // youtube is always rejected this wave (DEF-7.4): a fixed exit code
+        // regardless of the specific ApiErrorCode the route answers with.
+        process.exit(provider === 'youtube' ? 2 : 1);
+      }
+      const job = data.job;
+      if (!flags.wait || (job && (job.status === 'done' || job.status === 'failed'))) {
+        if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+        console.log(`[video-import] job ${job?.jobId ?? '-'} ${job?.status ?? 'queued'} (provider ${provider})`);
+        return;
+      }
+      await pollVideoImportJob(base, projectId, job.jobId, flags.json === true);
+      return;
+    }
     default:
       console.error(`unknown subcommand: od project ${sub}`);
       process.exit(2);
   }
+}
+
+/** Poll `GET /api/projects/:id/video-imports/:jobId` until a terminal
+ * status or a fixed budget elapses -- `od project video-import --wait`'s
+ * poll half, mirroring `pollUntilDoneOrBudget`'s shape without reusing it
+ * (that helper is pinned to the /api/media/tasks/:id/wait long-poll
+ * contract, which this track's job route does not implement). */
+async function pollVideoImportJob(base, projectId, jobId, json) {
+  const totalBudgetMs = 120_000;
+  const intervalMs = 1_000;
+  const startedAt = Date.now();
+  let last = null;
+  while (Date.now() - startedAt < totalBudgetMs) {
+    const resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/video-imports/${encodeURIComponent(jobId)}`);
+    if (!resp.ok) {
+      console.error(`video import status check failed: HTTP ${resp.status}`);
+      process.exit(1);
+    }
+    const data = await resp.json();
+    last = data;
+    const job = data.job;
+    if (job && (job.status === 'done' || job.status === 'failed' || job.status === 'interrupted')) {
+      if (json) process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      else if (job.status === 'done') console.log(`[video-import] job ${job.jobId} done -> ${job.file?.path ?? job.file?.name ?? '-'}`);
+      else console.error(`[video-import] job ${job.jobId} ${job.status}: ${job.error?.message ?? 'unknown error'}`);
+      process.exit(job.status === 'done' ? 0 : 1);
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  if (json && last) process.stdout.write(JSON.stringify(last, null, 2) + '\n');
+  else console.error(`[video-import] job ${jobId} still running after ${totalBudgetMs}ms`);
+  process.exit(2);
 }
 
 async function runRun(args) {
@@ -11038,6 +11128,95 @@ async function runUsage(args) {
     const cost = typeof run.costUsd === 'number' ? `$${run.costUsd.toFixed(4)}` : 'unavailable';
     console.log(`  ${run.runId}  ${run.model ?? 'unknown model'}  ${cost}`);
   }
+}
+
+// `od video-import status|connect|disconnect` — CLI mirror of the Settings
+// "Video sources" card's provider list/connect/disconnect (Part 8 F-05).
+// Same GET /api/video-import/providers, POST /api/video-import/:provider/
+// {connect,disconnect} endpoints the web card reads and calls (AGENTS.md's
+// UI/CLI dual-track rule). "connect" cannot complete the OAuth handshake
+// itself -- it prints the authorize URL and the browser finishes it.
+function printVideoImportHelp() {
+  console.log(`Usage:
+  od video-import status [--json] [--daemon-url <url>]
+  od video-import connect --provider <name> [--json] [--daemon-url <url>]
+  od video-import disconnect --provider <name> [--json] [--daemon-url <url>]
+
+Manage a video-source connection for importing videos into a project.
+Vimeo is independently connectable; YouTube is declared but not enabled
+yet (Part 8 F-05). "connect" prints an authorize URL -- open it in a
+browser to finish the OAuth handshake; the daemon stores the resulting
+token, never this CLI.
+
+  --provider <name>    vimeo or youtube. Required for connect/disconnect.
+  --json                Emit the raw response envelope.
+  --daemon-url <url>    Override the daemon HTTP base URL.`);
+}
+
+async function runVideoImport(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    printVideoImportHelp();
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  const sub = args[0];
+  const rest = args.slice(1);
+  const flags = parseFlags(rest, { string: VIDEO_IMPORT_STRING_FLAGS, boolean: VIDEO_IMPORT_BOOLEAN_FLAGS });
+  const base = await cliDaemonBaseUrl(flags);
+
+  if (sub === 'status') {
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/video-import/providers`);
+    } catch (err) {
+      return exitWithStructuredError({
+        code:    'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return process.stdout.write(JSON.stringify(data) + '\n');
+    for (const provider of Array.isArray(data?.providers) ? data.providers : []) {
+      if (!provider.enabled) {
+        console.log(`${provider.provider}: not enabled yet`);
+        continue;
+      }
+      const bits = [provider.configured ? 'configured' : 'not configured', provider.connected ? 'connected' : 'not connected'];
+      const account = provider.account?.name ? ` as ${provider.account.name}` : '';
+      console.log(`${provider.provider}: ${bits.join(', ')}${account}`);
+    }
+    return;
+  }
+
+  if (sub === 'connect' || sub === 'disconnect') {
+    const provider = typeof flags.provider === 'string' ? flags.provider : '';
+    if (!provider) {
+      return exitWithStructuredError({ code: 'validation-failed', message: '--provider is required (vimeo or youtube)' });
+    }
+    let resp;
+    try {
+      resp = sub === 'connect'
+        ? await fetch(`${base}/api/video-import/${encodeURIComponent(provider)}/connect`, { method: 'POST' })
+        : await fetch(`${base}/api/video-import/${encodeURIComponent(provider)}/disconnect`, { method: 'POST' });
+    } catch (err) {
+      return exitWithStructuredError({
+        code:    'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return process.stdout.write(JSON.stringify(data) + '\n');
+    if (sub === 'connect') {
+      console.log(`Open this URL in a browser to finish connecting ${provider}:\n${data.authorizeUrl}`);
+    } else {
+      console.log(`Disconnected ${provider}.`);
+    }
+    return;
+  }
+
+  printVideoImportHelp();
+  process.exit(2);
 }
 
 // `od whats-new` — CLI mirror of the home-surface post-update highlights

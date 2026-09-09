@@ -180,5 +180,10 @@
   "apps/daemon/src/uploads/staging.ts#cleanupStage": "rm:1",
   "apps/daemon/src/uploads/staging.ts#createSession": "mkdir:1",
   "apps/daemon/src/uploads/staging.ts#promote": "mkdir:1,rename:1",
-  "apps/daemon/src/uploads/staging.ts#writeFileStream": "createWriteStream:1,rm:3"
+  "apps/daemon/src/uploads/staging.ts#writeFileStream": "createWriteStream:1,rm:3",
+  "apps/daemon/src/video-import/credentials.ts#delete": "unlinkSync:1",
+  "apps/daemon/src/video-import/credentials.ts#writeRecords": "chmodSync:1,mkdirSync:1,renameSync:1,unlinkSync:1,writeFileSync:1",
+  "apps/daemon/src/video-import/providers/vimeo.ts#cleanupStaging": "unlink:1",
+  "apps/daemon/src/video-import/providers/vimeo.ts#downloadVimeoVideoToStaging": "mkdir:1",
+  "apps/daemon/src/video-import/service.ts#runVimeoDownload": "unlink:2"
 }

@@ -2063,6 +2063,39 @@ export interface Dict {
   'connectors.emptyNoMatchBody': string;
   'connectors.emptyNoMatchAction': string;
 
+  // Video sources (Settings > connectors > Video sources card, Part 8 F-05)
+  'videoImport.title': string;
+  'videoImport.subtitle': string;
+  'videoImport.vimeoName': string;
+  'videoImport.statusNotConfigured': string;
+  'videoImport.statusConnectedAs': string;
+  'videoImport.connecting': string;
+  'videoImport.disconnecting': string;
+  'videoImport.connectError': string;
+  'videoImport.disconnectError': string;
+  'videoImport.youtubeName': string;
+  'videoImport.youtubeComingSoon': string;
+  'videoImport.panelTitle': string;
+  'videoImport.projectLabel': string;
+  'videoImport.projectPlaceholder': string;
+  'videoImport.urlLabel': string;
+  'videoImport.urlPlaceholder': string;
+  'videoImport.providerLabel': string;
+  'videoImport.asLabel': string;
+  'videoImport.asPlaceholder': string;
+  'videoImport.submit': string;
+  'videoImport.submitting': string;
+  'videoImport.notConnectedHint': string;
+  'videoImport.projectRequired': string;
+  'videoImport.urlRequired': string;
+  'videoImport.progressWithPercent': string;
+  'videoImport.statusQueued': string;
+  'videoImport.statusRunning': string;
+  'videoImport.statusDone': string;
+  'videoImport.statusFailed': string;
+  'videoImport.doneMessage': string;
+  'videoImport.jobLoadError': string;
+
   // New project panel
   'newproj.tabPrototype': string;
   'newproj.tabLiveArtifact': string;

@@ -62,6 +62,7 @@ export * from './api/typefaces.js';
 export * from './api/uploads.js';
 export * from './api/vela.js';
 export * from './api/version.js';
+export * from './api/video-import.js';
 export * from './api/whats-new.js';
 export * from './api/workspace-usage.js';
 export * from './api/workspaces.js';

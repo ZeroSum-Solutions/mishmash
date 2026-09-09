@@ -1383,5 +1383,23 @@
       "GET /api/typefaces/:param",
       "POST /api/typefaces/:param/install"
     ]
+  },
+  {
+    "capability": "video-import",
+    "uiEntryPoint": "Settings > Video sources card",
+    "cliArgs": ["video-import", "status", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/video-import/providers",
+    "outputSchema": "{ providers: VideoImportProviderStatus[] }",
+    "parityApplicable": true,
+    "reason": "Part 8 F-05 (W7D): Vimeo account status/connect/disconnect plus the create-import job route, now that the media-task contracts they need (packages/contracts/src/api/media.ts, 7C) are cherry-picked onto this branch. `od project video-import` (runProject's own case, not this row's cliArgs) reaches the two /api/projects/:id/video-imports* routes; they are listed here since this is the row that owns the video-import capability's call sites.",
+    "knownNamespaceRoutes": [
+      "GET /api/video-import/oauth/callback/:param",
+      "GET /api/video-import/providers",
+      "POST /api/video-import/:param/connect",
+      "POST /api/video-import/:param/disconnect",
+      "GET /api/projects/:param/video-imports/:param",
+      "POST /api/projects/:param/video-imports"
+    ]
   }
 ]
