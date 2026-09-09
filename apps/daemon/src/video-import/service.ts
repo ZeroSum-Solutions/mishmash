@@ -11,8 +11,11 @@
 // route, which is the only consumer this track's red spec requires.
 //
 // Progress fraction is tracked in a side map keyed by taskId rather than on
-// the `LiveMediaTask` object itself: that type (media/tasks.ts, 7C-owned)
-// has no `fraction` field, and this track must not edit that file.
+// the `LiveMediaTask` object itself: on this branch that type
+// (media/task-store.ts, 7C-owned) has no `fraction` field, and this track
+// must not edit that file. Once 7C's task-store change lands `fraction?:
+// number` on `LiveMediaTask`, this map can be folded into `task.fraction`
+// directly.
 
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
