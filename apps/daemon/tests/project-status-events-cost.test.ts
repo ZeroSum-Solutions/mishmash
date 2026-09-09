@@ -124,4 +124,41 @@ describe('listLatestProjectRunStatuses event-payload cost (FU-50)', () => {
     expect(statuses.size).toBe(PROJECTS);
     expect(perCallMs).toBeLessThan(MAX_MS_PER_CALL);
   });
+
+  it('re-derives a project status when its latest run row is rewritten', () => {
+    const db = createDb();
+    insertProject(db, { id: 'p', name: 'p', createdAt: 1, updatedAt: 1 });
+    insertConversation(db, { id: 'p-conv', projectId: 'p', title: null, createdAt: 1, updatedAt: 1 });
+    const write = (todos: Array<{ content: string; status: string }>, endedAt: number) =>
+      upsertMessage(db, 'p-conv', {
+        id: 'p-latest',
+        role: 'assistant',
+        content: 'latest run',
+        runId: 'p-run',
+        runStatus: 'succeeded',
+        endedAt,
+        events: [{ kind: 'tool_use', id: 'tw-1', name: 'TodoWrite', input: { todos } }],
+      });
+
+    write([{ content: 'still open', status: 'in_progress' }], 10);
+    expect(listLatestProjectRunStatuses(db).get('p')?.value).toBe('incomplete');
+
+    // Same row id, same end time, new events: the remembered derivation must
+    // not survive the rewrite.
+    write([{ content: 'still open', status: 'completed' }], 10);
+    expect(listLatestProjectRunStatuses(db).get('p')?.value).toBe('succeeded');
+
+    // A newer run row for the same project takes over.
+    upsertMessage(db, 'p-conv', {
+      id: 'p-newer',
+      role: 'assistant',
+      content: 'newer run',
+      runId: 'p-run-2',
+      runStatus: 'failed',
+      endedAt: 20,
+    });
+    const newer = listLatestProjectRunStatuses(db).get('p');
+    expect(newer?.value).toBe('failed');
+    expect(newer?.runId).toBe('p-run-2');
+  });
 });
