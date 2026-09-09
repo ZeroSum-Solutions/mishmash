@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve as pathResolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { runCli, startRunStubServer, type StubServer } from './helpers/run-cli-stub';
+import { runCli, startRunStubServer, type StubServer } from './helpers/run-cli-stub.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

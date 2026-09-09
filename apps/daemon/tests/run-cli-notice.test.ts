@@ -16,7 +16,7 @@
 // fails on base because `streamRunEvents` writes nothing to stderr today.
 import { describe, expect, it } from 'vitest';
 
-import { completionNotice } from '../src/cli-run-notice';
+import { completionNotice } from '../src/cli-run-notice.js';
 
 describe('completionNotice (pure helper, INV-7.15)', () => {
   it('writes the notice with a BEL prefix only on an interactive stderr TTY with --json false', () => {
