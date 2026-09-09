@@ -11,7 +11,7 @@ void main() {
   gl_Position = vec4(position * 2.0 - 1.0, 0.0, 1.0);
 }`;
 
-const FRAGMENT_SHADER = `#version 300 es
+export const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 out vec4 outColor;
 uniform vec2 uResolution;
@@ -93,6 +93,13 @@ void main() {
 
   color += (hash(gl_FragCoord.xy + uTime) - 0.5) * 0.015;
 
+  // The lift the canvas used to get from the CSS filter saturate(1.15)
+  // contrast(1.05), applied here so the layer needs no filter re-raster on
+  // reveal (FU-51). Same formulas as the CSS filter functions.
+  float luma = dot(color, vec3(0.213, 0.715, 0.072));
+  color = mix(vec3(luma), color, 1.15);
+  color = (color - 0.5) * 1.05 + 0.5;
+
   float alpha = clamp(
     (leftRibbon + rightRibbon) * 0.34 + midRibbon * 0.2 + centerGlow * 0.18 + star * twinkle * starMask * 0.25,
     0.0,
@@ -121,11 +128,19 @@ export function HomeAmbientBackdrop() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || typeof WebGL2RenderingContext === 'undefined') return;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    // Preserve the drawing buffer only for a static picture: it lets a
+    // hide/reveal show the last frame again without a shader draw (FU-51).
+    // For the animated loop the same flag costs a buffer copy on every
+    // frame (measured: home switch 33 -> 41 ms median with motion on), so
+    // it stays off there and the loop simply keeps drawing.
+    const preservesFrame = reducedMotion.matches;
     const gl = canvas.getContext('webgl2', {
       alpha: true,
       antialias: false,
       powerPreference: 'low-power',
       premultipliedAlpha: false,
+      preserveDrawingBuffer: preservesFrame,
     });
     if (!gl) return;
 
@@ -144,7 +159,6 @@ export function HomeAmbientBackdrop() {
     const resolutionLocation = gl.getUniformLocation(program, 'uResolution');
     const timeLocation = gl.getUniformLocation(program, 'uTime');
     const pointerLocation = gl.getUniformLocation(program, 'uPointer');
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const pointer = { current: 0.5, target: 0.5 };
     let animationFrame = 0;
     let lastDrawAt = 0;
@@ -158,6 +172,9 @@ export function HomeAmbientBackdrop() {
     // layout; the loop stops while the canvas is off screen.
     let bounds = { left: 0, width: 0, height: 0 };
     let onScreen = false;
+    // Whether the drawing buffer holds a frame for its current size. A
+    // resize reallocates (and clears) the buffer; a hide/reveal does not.
+    let hasFrame = false;
 
     const resize = () => {
       let ratio = Math.min(window.devicePixelRatio || 1, 1.25);
@@ -173,6 +190,7 @@ export function HomeAmbientBackdrop() {
       if (canvas.width === width && canvas.height === height) return;
       canvas.width = width;
       canvas.height = height;
+      hasFrame = false;
       gl.viewport(0, 0, width, height);
       // Resizing the drawing buffer clears it; when the frame loop is not
       // running (reduced motion, hidden tab) repaint the single frame.
@@ -184,6 +202,7 @@ export function HomeAmbientBackdrop() {
       gl.uniform1f(timeLocation, (now - startedAt) / 1000);
       gl.uniform2f(pointerLocation, pointer.current, 0.5);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+      hasFrame = true;
     };
     const animate = (now: number) => {
       if (now - lastDrawAt >= 32) {
@@ -196,7 +215,11 @@ export function HomeAmbientBackdrop() {
       window.cancelAnimationFrame(animationFrame);
       if (!onScreen) return;
       if (reducedMotion.matches || document.hidden) {
-        draw(performance.now());
+        // The static picture is already in the preserved buffer unless the
+        // buffer was reallocated since: then one draw, never one per reveal.
+        // A buffer that is not preserved (motion was on at mount) may have
+        // been consumed by the compositor, so it is drawn again.
+        if (!hasFrame || !preservesFrame) draw(performance.now());
         return;
       }
       animationFrame = window.requestAnimationFrame(animate);
@@ -221,7 +244,7 @@ export function HomeAmbientBackdrop() {
     const handleWindowResize = () => {
       if (!resizeObserver) measure();
       resize();
-      if (onScreen) draw(performance.now());
+      if (onScreen && !hasFrame) draw(performance.now());
     };
     const resizeObserver =
       typeof ResizeObserver === 'undefined'
@@ -238,7 +261,9 @@ export function HomeAmbientBackdrop() {
             const rect = entry.target.getBoundingClientRect();
             bounds = { left: rect.left, width: entry.contentRect.width, height: entry.contentRect.height };
             resize();
-            if (onScreen) draw(performance.now());
+            // resize() already painted the static frame when it reallocated;
+            // draw here only when the buffer is empty at this size.
+            if (onScreen && !hasFrame) draw(performance.now());
           });
     const intersectionObserver =
       typeof IntersectionObserver === 'undefined'
@@ -260,6 +285,16 @@ export function HomeAmbientBackdrop() {
       onScreen = true;
       start();
     }
+    // A lost WebGL context takes the preserved frame with it: forget it and
+    // stop the loop. The event is not preventDefault-ed, so the browser does
+    // not attempt a restore into a program this effect never rebuilds (the
+    // component never handled restoration; a lost context on this
+    // low-power, single-program canvas means a blank aurora until reload).
+    const handleContextLost = () => {
+      hasFrame = false;
+      window.cancelAnimationFrame(animationFrame);
+    };
+    canvas.addEventListener('webglcontextlost', handleContextLost);
     window.addEventListener('resize', handleWindowResize);
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
     document.addEventListener('visibilitychange', start);
@@ -269,6 +304,7 @@ export function HomeAmbientBackdrop() {
       window.cancelAnimationFrame(animationFrame);
       resizeObserver?.disconnect();
       intersectionObserver?.disconnect();
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
       window.removeEventListener('resize', handleWindowResize);
       window.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('visibilitychange', start);

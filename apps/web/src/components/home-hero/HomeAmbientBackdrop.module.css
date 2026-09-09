@@ -45,7 +45,10 @@
   width: 100%;
   height: 100%;
   opacity: 0.5;
-  filter: saturate(1.15) contrast(1.05);
+  /* No CSS filter here (FU-51): a filter on a WebGL canvas makes the
+     compositor re-raster the whole full-viewport layer through the filter on
+     every reveal, and the home view is revealed on every route switch back to
+     Home. The saturate/contrast lift lives in the fragment shader instead. */
 }
 
 @media (max-width: 700px) {
