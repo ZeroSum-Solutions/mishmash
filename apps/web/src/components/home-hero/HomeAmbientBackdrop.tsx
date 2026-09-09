@@ -11,7 +11,7 @@ void main() {
   gl_Position = vec4(position * 2.0 - 1.0, 0.0, 1.0);
 }`;
 
-const FRAGMENT_SHADER = `#version 300 es
+export const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 out vec4 outColor;
 uniform vec2 uResolution;
@@ -96,7 +96,7 @@ void main() {
   // The lift the canvas used to get from the CSS filter saturate(1.15)
   // contrast(1.05), applied here so the layer needs no filter re-raster on
   // reveal (FU-51). Same formulas as the CSS filter functions.
-  float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+  float luma = dot(color, vec3(0.213, 0.715, 0.072));
   color = mix(vec3(luma), color, 1.15);
   color = (color - 0.5) * 1.05 + 0.5;
 
@@ -280,6 +280,19 @@ export function HomeAmbientBackdrop() {
       onScreen = true;
       start();
     }
+    // A lost WebGL context takes the preserved frame with it: forget it so
+    // the next start() draws again instead of trusting an empty buffer.
+    // (Recreating the program after `webglcontextrestored` is not handled
+    // here; the component never was, and a lost context is rare on this
+    // low-power, single-program canvas.)
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      hasFrame = false;
+      window.cancelAnimationFrame(animationFrame);
+    };
+    const handleContextRestored = () => start();
+    canvas.addEventListener('webglcontextlost', handleContextLost);
+    canvas.addEventListener('webglcontextrestored', handleContextRestored);
     window.addEventListener('resize', handleWindowResize);
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
     document.addEventListener('visibilitychange', start);
@@ -289,6 +302,8 @@ export function HomeAmbientBackdrop() {
       window.cancelAnimationFrame(animationFrame);
       resizeObserver?.disconnect();
       intersectionObserver?.disconnect();
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
+      canvas.removeEventListener('webglcontextrestored', handleContextRestored);
       window.removeEventListener('resize', handleWindowResize);
       window.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('visibilitychange', start);

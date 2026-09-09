@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { HomeAmbientBackdrop } from '../../src/components/home-hero/HomeAmbientBackdrop';
+import { FRAGMENT_SHADER, HomeAmbientBackdrop } from '../../src/components/home-hero/HomeAmbientBackdrop';
 
 type Frame = (now: number) => void;
 const frames: Frame[] = [];
@@ -184,7 +184,14 @@ describe('HomeAmbientBackdrop reveal cost (FU-51)', () => {
     const canvasRule = css.match(/\.canvas\s*\{[^}]*\}/g) ?? [];
     expect(canvasRule.length).toBeGreaterThan(0);
     for (const rule of canvasRule) expect(rule).not.toMatch(/\bfilter\s*:/);
-    expect(css).not.toMatch(/backdrop-filter/);
+    // No filter anywhere in the module: a filter on the wrapper would put the
+    // same re-raster back one layer up.
+    expect(css).not.toMatch(/(^|[^-])filter\s*:/m);
+    // The lift lives in the fragment shader: the CSS filter matrix luma
+    // (0.213, 0.715, 0.072), saturate 1.15, contrast 1.05 around 0.5.
+    expect(FRAGMENT_SHADER).toMatch(/dot\(color, vec3\(0\.213, 0\.715, 0\.072\)\)/);
+    expect(FRAGMENT_SHADER).toMatch(/mix\(vec3\(luma\), color, 1\.15\)/);
+    expect(FRAGMENT_SHADER).toMatch(/\(color - 0\.5\) \* 1\.05 \+ 0\.5/);
   });
 
   it('asks WebGL to preserve the drawing buffer so a hidden frame can be shown again without a draw', () => {
@@ -195,7 +202,10 @@ describe('HomeAmbientBackdrop reveal cost (FU-51)', () => {
   it('under reduced motion draws once per buffer size, not once per reveal', () => {
     window.matchMedia = (() => ({ matches: true, addEventListener() {}, removeEventListener() {} })) as any;
     const { canvas } = mountVisible();
-    expect(drawCalls).toBe(1);
+    // Mount paints the static frame (on main it painted it twice: once in
+    // resize(), once in start()); what this case pins is the reveal below.
+    expect(drawCalls).toBeGreaterThan(0);
+    const drawnAfterMount = drawCalls;
 
     // Route switch away (hidden: 0x0 box, off screen) and back.
     act(() => {
@@ -206,13 +216,22 @@ describe('HomeAmbientBackdrop reveal cost (FU-51)', () => {
       resizeCallback?.([{ target: canvas, contentRect: { width: 1200, height: 800, left: 0, top: 0 } } as unknown as ResizeObserverEntry], {} as ResizeObserver);
       intersectionCallback?.([{ target: canvas, isIntersecting: true } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
     });
-    expect(drawCalls).toBe(1);
+    expect(drawCalls).toBe(drawnAfterMount);
 
     // A real size change clears the buffer, so that reveal must draw again.
     act(() => {
       resizeCallback?.([{ target: canvas, contentRect: { width: 900, height: 700, left: 0, top: 0 } } as unknown as ResizeObserverEntry], {} as ResizeObserver);
     });
     expect(canvas.width).toBe(900);
-    expect(drawCalls).toBe(2);
+    expect(drawCalls).toBe(drawnAfterMount + 1);
+
+    // A lost context takes the preserved frame with it: the next reveal
+    // must draw again rather than trust an empty buffer.
+    act(() => { canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true })); });
+    act(() => {
+      intersectionCallback?.([{ target: canvas, isIntersecting: false } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+      intersectionCallback?.([{ target: canvas, isIntersecting: true } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+    });
+    expect(drawCalls).toBe(drawnAfterMount + 2);
   });
 });
