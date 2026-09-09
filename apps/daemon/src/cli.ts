@@ -2500,7 +2500,18 @@ async function runMediaCancel(rawArgs) {
   }
   const text = await resp.text();
   if (!resp.ok) {
-    console.error(`daemon ${resp.status}: ${text}`);
+    // A refused cancel (409 NOT_CANCELABLE: the task is real but is not a
+    // tracked encode/download job) still carries a typed reason in
+    // `error.message` — surface that instead of dumping the raw body, and
+    // never print "canceled" when the daemon says otherwise.
+    let reason = text;
+    try {
+      const body = JSON.parse(text);
+      if (typeof body?.error?.message === 'string') reason = body.error.message;
+    } catch {
+      // Non-JSON body: fall back to the raw text.
+    }
+    console.error(`media task ${taskId} not canceled: ${reason}`);
     process.exit(4);
   }
   console.error(`media task ${taskId} canceled`);

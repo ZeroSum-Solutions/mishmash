@@ -4,6 +4,7 @@ import type {
   CreateMediaJobRequest,
   MediaExecutionPolicy,
   MediaGenerationResultProps,
+  MediaTaskCancelRefusedResponse,
   PublicMediaProviderConfigResponse,
   RecentLinkedDirsResponse,
 } from '@open-design/contracts';
@@ -844,9 +845,29 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
     }
     const task = getLiveMediaTask(req.params.id);
     if (!task) return res.status(404).json({ error: 'task not found' });
+    // Only an encode/download job (task.kind set by the POST …/media/jobs
+    // route above) is ever registered in jobs.ts's activeJobs kill map.
+    // A media-generation task (`kind` unset) or a task another surface
+    // persisted to this same media_tasks table without registering a
+    // killable child (e.g. a video-import download) is NOT tracked there:
+    // cancelMediaJob would silently no-op and this route would still
+    // answer 200 with the current, unchanged, still-running snapshot —
+    // read by a caller as "canceled" while nothing was stopped
+    // (integration-grok-r1 round 1, finding 1). Refuse instead of lying
+    // about the outcome; the underlying job keeps running until its own
+    // owner tracks its abort on this or an equivalent kill map.
+    if (task.kind !== 'encode' && task.kind !== 'download') {
+      const refusal: MediaTaskCancelRefusedResponse = {
+        error: {
+          code: 'NOT_CANCELABLE',
+          message: `task ${req.params.id} is not a background encode/download job tracked by this route (kind: ${task.kind ?? 'generate'}); it cannot be canceled here`,
+        },
+        task: mediaTaskSnapshot(task, 0),
+      };
+      return res.status(409).json(refusal);
+    }
     // cancelMediaJob is a no-op (returns false) for a task this route
-    // doesn't track an active child for — already terminal, or a
-    // media-generate task with no cancellable subprocess. Either way this
+    // doesn't track an active child for — already terminal. Either way this
     // answers with the current snapshot rather than 404 (work item 2).
     cancelMediaJob(req.params.id);
     res.json(mediaTaskSnapshot(task, 0));
