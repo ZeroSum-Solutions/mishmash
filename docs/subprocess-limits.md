@@ -25,7 +25,8 @@ Values are milliseconds.
 | Remotion finishing pass | `OD_REMOTION_FINISH_MAX_MS` | 900000 (15 min), floor 60000 | One budget shared by every stage of a storyboard finish: audio probe/convert, whisper install and transcribe, bundle, `selectComposition`, `renderMedia`. Each stage draws from the same remaining pool. |
 | Codex image generation | `OD_CODEX_IMAGEGEN_TIMEOUT_MS` | 300000 (5 min) | One `codex` image-generation subprocess. |
 | Critique round / total | `OD_CRITIQUE_PER_ROUND_TIMEOUT_MS`, `OD_CRITIQUE_TOTAL_TIMEOUT_MS` | per call site | The critique loop. |
-| Video import size / duration | `OD_VIDEO_IMPORT_MAX_BYTES`, `OD_VIDEO_IMPORT_TIMEOUT_MS` | 2147483648 (2 GiB), 1800000 (30 min) | A Vimeo video-import download (Part 8 F-05). Both the declared `Content-Length` and the streamed byte count are checked against the byte limit; a breach or a timeout ends the job `failed`, naming the limit, and removes the staging temp file. |
+| Video import size limit | `OD_VIDEO_IMPORT_MAX_BYTES` | 2147483648 bytes (2 GiB) | A Vimeo video-import download (Part 8 F-05). Both the declared `Content-Length` and the streamed byte count are checked against this byte limit; a breach ends the job `failed`, naming the limit, and removes the staging temp file. |
+| Video import timeout | `OD_VIDEO_IMPORT_TIMEOUT_MS` | 1800000 ms (30 min) | A Vimeo video-import download (Part 8 F-05). A timeout ends the job `failed`, naming the limit, and removes the staging temp file. |
 
 `ffprobe` and `ffmpeg` children of the Remotion finishing pass are spawned
 through `apps/daemon/src/storyboards/remotion/spawn-with-timeout.ts`. On expiry
