@@ -45,6 +45,13 @@ export interface CreateVideoImportInput {
 export type CreateVideoImportFailure = { ok: false; status: number; code: string; message: string };
 export type CreateVideoImportResult = { ok: true; job: VideoImportJob } | CreateVideoImportFailure;
 
+// `LiveMediaTask.surface` (media/task-store.ts, 7C-owned but freely settable
+// at creation) doubles as this service's own-job marker: a generic
+// `media_tasks` row inserted by another feature (e.g. `od media generate`)
+// never carries this value, so `getJob` can refuse to hand it back
+// mislabeled as a Vimeo import (Grok r1 MEDIUM finding: cross-kind read).
+const VIDEO_IMPORT_TASK_SURFACE = 'video-import';
+
 function defaultDestName(videoName: string, videoId: string): string {
   const slug = videoName
     .toLowerCase()
@@ -104,7 +111,7 @@ export class VideoImportService {
     }
 
     const taskId = randomUUID();
-    const task = this.mediaTaskStore.createMediaTask(taskId, input.projectId, {});
+    const task = this.mediaTaskStore.createMediaTask(taskId, input.projectId, { surface: VIDEO_IMPORT_TASK_SURFACE });
     task.status = 'running';
     this.mediaTaskStore.persistMediaTask(task);
     this.mediaTaskStore.appendTaskProgress(task, `resolved "${metaResult.metadata.name}" (${metaResult.metadata.downloadSize} bytes)`);
@@ -127,7 +134,7 @@ export class VideoImportService {
 
   getJob(projectId: string, jobId: string): VideoImportJob | null {
     const task = this.mediaTaskStore.getLiveMediaTask(jobId);
-    if (!task || task.projectId !== projectId) return null;
+    if (!task || task.projectId !== projectId || task.surface !== VIDEO_IMPORT_TASK_SURFACE) return null;
     return this.snapshot(task, 'vimeo');
   }
 
