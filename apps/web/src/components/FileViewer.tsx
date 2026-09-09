@@ -129,6 +129,7 @@ import {
   sourceLooksLikeExportableDeck,
   type ExportProgress,
   type ImageExportFormat,
+  type PreviewSnapshotFailure,
 } from '../runtime/exports';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
 import { buildReactComponentSrcdoc } from '../runtime/react-component';
@@ -1336,14 +1337,53 @@ function temporarilyExposeIframeForSnapshot(iframe: HTMLIFrameElement): () => vo
 async function requestPreviewSnapshotWithRetry(
   iframe: HTMLIFrameElement,
   options?: { full?: boolean },
+  // Passed through to `requestPreviewSnapshot` on every attempt; called at
+  // most once, with the LAST attempt's failure, only if every attempt in the
+  // cascade fails. An earlier attempt's failure is discarded once a later one
+  // supersedes it — the final reason is the one worth reporting.
+  onFailure?: (failure: PreviewSnapshotFailure) => void,
 ): Promise<Awaited<ReturnType<typeof requestPreviewSnapshot>>> {
   const timeouts = [1500, 3000, 6000];
+  let lastFailure: PreviewSnapshotFailure | undefined;
   for (const timeout of timeouts) {
-    const snapshot = await requestPreviewSnapshot(iframe, timeout, options);
+    const snapshot = await requestPreviewSnapshot(iframe, timeout, options, (failure) => {
+      lastFailure = failure;
+    });
     if (snapshot) return snapshot;
     await waitForAnimationFrame();
   }
+  if (lastFailure) onFailure?.(lastFailure);
   return null;
+}
+
+// Classifies a bridge capture failure the SAME way `exportErrorCode` already
+// classifies a thrown export error (timeout / empty-render / tainted regexes
+// against the message text) so the two don't drift into separate mappings.
+// `exportErrorCode`'s own fallback for an unrecognised `Error` is the error's
+// `.name` (typically the generic `'Error'`), which is not a real analytics
+// code for this call site — an unrecognised or absent bridge reason keeps the
+// existing flat `CAPTURE_FAILED` instead.
+function bridgeCaptureFailureErrorCode(failure: PreviewSnapshotFailure): string {
+  const message = failure.reason === 'timeout' ? 'timeout' : failure.error;
+  if (!message) return 'CAPTURE_FAILED';
+  const code = exportErrorCode(new Error(message));
+  return code === 'Error' ? 'CAPTURE_FAILED' : code;
+}
+
+// `exportErrorCode`'s CAPTURE_TIMEOUT / CAPTURE_EMPTY_RENDER / CAPTURE_TAINTED
+// mapping exists to classify the client-bridge capture failure path (see
+// `bridgeCaptureFailureErrorCode` above). Reusing it unconditionally for a
+// throw caught later in `handleImageExportSave` (encode / target / save)
+// would misattribute an unrelated failure as a capture failure — e.g. a
+// `SecurityError` from `target.save(blob)` would read as `CAPTURE_TAINTED`
+// ("snapshot canvas was tainted") even though nothing was captured. Trust the
+// CAPTURE_* classification only when the failure actually happened during
+// capture; otherwise fall back to the error's own name, matching what
+// `exportErrorCode` returns for a code it doesn't recognise.
+function stageAwareExportErrorCode(err: unknown, stage: ImageExportStage): string {
+  const code = exportErrorCode(err);
+  if (stage === 'capture' || !code.startsWith('CAPTURE_')) return code;
+  return err instanceof Error ? err.name || 'UNKNOWN' : 'UNKNOWN';
 }
 
 function previewViewportStateKey(projectId: string, file: Pick<ProjectFile, 'name' | 'path'>): string {
@@ -6906,6 +6946,13 @@ function HtmlViewer({
   const [pptxExportModalOpen, setPptxExportModalOpen] = useState(false);
   const [pptxExportMode, setPptxExportMode] = useState<'editable' | 'screenshot'>('editable');
   const imageExportSnapshotDataUrlRef = useRef<string | null>(null);
+  // The in-iframe foreignObject/canvas bridge's reason for the LAST failed
+  // attempt in `captureExportImageSnapshot`'s retry cascade, so a caller that
+  // needs to tell a timeout apart from a blank canvas or a tainted one
+  // (handleImageExportSave's failure classification) can, instead of seeing
+  // only the bridge chain's collapsed `null`. Reset at the start of every
+  // capture; stale from a prior attempt only if nothing overwrote it.
+  const lastBridgeCaptureFailureRef = useRef<PreviewSnapshotFailure | null>(null);
   // Threads the share-popover click → artifact_export_result(image) pair, the
   // same correlation other export formats get via fireShareExport. The image
   // export is a separate modal flow, so it owns its own request id / start.
@@ -11140,6 +11187,13 @@ function HtmlViewer({
       viewportClip?: boolean;
     },
   ) => {
+    // A stale reason from a previous capture must never survive into this
+    // one: only a bridge failure THIS call observes should reach the
+    // classification in handleImageExportSave's `if (!snap)` branch.
+    lastBridgeCaptureFailureRef.current = null;
+    const recordBridgeFailure = (failure: PreviewSnapshotFailure) => {
+      lastBridgeCaptureFailureRef.current = failure;
+    };
     const exportContext = options?.context ?? null;
     const imageDeckSignal = deckExportSignalForContext(exportContext);
     // The host compositor grabs on-screen pixels, so any transient hover chrome
@@ -11267,14 +11321,14 @@ function HtmlViewer({
       if (!activeIframe) return null;
       await waitForIframeLoadOrTimeout(activeIframe, 250);
       await waitForAnimationFrame();
-      return requestPreviewSnapshotWithRetry(activeIframe);
+      return requestPreviewSnapshotWithRetry(activeIframe, undefined, recordBridgeFailure);
     }
 
     const urlIframe = iframeRef.current ?? urlPreviewIframeRef.current;
     if (urlIframe) {
       await waitForIframeLoadOrTimeout(urlIframe, 250);
       await waitForAnimationFrame();
-      const urlSnapshot = await requestPreviewSnapshotWithRetry(urlIframe);
+      const urlSnapshot = await requestPreviewSnapshotWithRetry(urlIframe, undefined, recordBridgeFailure);
       if (urlSnapshot) return urlSnapshot;
     }
 
@@ -11282,7 +11336,7 @@ function HtmlViewer({
     if (!srcDocIframe) {
       const activeIframe = iframeRef.current;
       if (!activeIframe) return null;
-      return requestPreviewSnapshotWithRetry(activeIframe);
+      return requestPreviewSnapshotWithRetry(activeIframe, undefined, recordBridgeFailure);
     }
 
     if (useLazySrcDocTransport && !srcDocShellReady) {
@@ -11294,7 +11348,7 @@ function HtmlViewer({
     const restoreVisibility = temporarilyExposeIframeForSnapshot(srcDocIframe);
     try {
       await waitForAnimationFrame();
-      return requestPreviewSnapshotWithRetry(srcDocIframe);
+      return requestPreviewSnapshotWithRetry(srcDocIframe, undefined, recordBridgeFailure);
     } finally {
       restoreVisibility();
     }
@@ -11497,8 +11551,15 @@ function HtmlViewer({
   // emit the one terminal result for an image export session.
   const fireImageExportResult = (
     result: 'success' | 'failed' | 'cancelled',
-    errorCode?: string,
-    stage?: ImageExportStage,
+    {
+      errorCode,
+      stage,
+      scope,
+    }: {
+      errorCode?: string;
+      stage?: ImageExportStage;
+      scope?: string;
+    } = {},
   ) => {
     if (imageExportResolvedRef.current) return;
     imageExportResolvedRef.current = true;
@@ -11518,6 +11579,7 @@ function HtmlViewer({
         export_duration_ms: durationMs,
         project_id: projectId,
         project_kind: projectKind,
+        ...(scope ? { scope } : {}),
       },
       { requestId },
     );
@@ -11529,6 +11591,7 @@ function HtmlViewer({
           stage,
           projectId,
           durationMs,
+          scope,
         }),
       );
     }
@@ -11556,8 +11619,14 @@ function HtmlViewer({
     await waitForAnimationFrame();
     await waitForAnimationFrame();
     let stage: ImageExportStage = 'capture';
+    const context = imageExportContext;
+    const isDeck = deckExportSignalForContext(context);
+    let isCurrentSlideFallback = false;
+    let scope: string | undefined;
     try {
-      const context = imageExportContext;
+      const canOffscreen = await canRequestOffscreenImageRender();
+      isCurrentSlideFallback = isDeck && !canOffscreen;
+      scope = isCurrentSlideFallback ? 'current-slide' : undefined;
       const targetTitle = context?.title ?? exportTitle;
       let dataUrl = imageExportSnapshotDataUrlRef.current;
       if (!dataUrl) {
@@ -11570,14 +11639,27 @@ function HtmlViewer({
         // renderer cannot serve (it answers 501 → `unavailable`) still falls
         // through to the bridge chain below, which is what the precedence specs
         // in `file-viewer-image-export.test.tsx` pin.
+        // When the off-screen renderer is unavailable, a deck cannot be stitched
+        // by the client bridge: capture the current slide alone and state that
+        // in the success toast and telemetry, never asking the bridge for wholeDeck.
         const snap = await captureExportImageSnapshot({
-          wholeDeck: true,
+          wholeDeck: !isCurrentSlideFallback,
           context,
           allowOffscreenRender: true,
         });
         if (!snap) {
+          // The bridge chain always resolves `null`/`undefined` on failure —
+          // it never rejects — so the ONLY way to tell a timeout, a blank
+          // canvas, and a tainted one apart is the reason `captureExportImageSnapshot`
+          // recorded on its way here, not the shape of `snap` itself.
+          const bridgeFailure = lastBridgeCaptureFailureRef.current;
+          const errorCode = bridgeFailure ? bridgeCaptureFailureErrorCode(bridgeFailure) : 'CAPTURE_FAILED';
           setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
-          fireImageExportResult('failed', 'CAPTURE_FAILED', 'capture');
+          fireImageExportResult('failed', {
+            errorCode,
+            stage: 'capture',
+            scope,
+          });
           return;
         }
         dataUrl = snap.dataUrl;
@@ -11587,7 +11669,11 @@ function HtmlViewer({
       const blob = await imageDataUrlToBlob(dataUrl, imageExportFormat);
       if (blob.size <= 0) {
         setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
-        fireImageExportResult('failed', 'EMPTY_IMAGE', 'encode');
+        fireImageExportResult('failed', {
+          errorCode: 'EMPTY_IMAGE',
+          stage: 'encode',
+          scope,
+        });
         return;
       }
       stage = 'target';
@@ -11604,19 +11690,28 @@ function HtmlViewer({
       } else {
         await target.save(blob);
       }
-      fireImageExportResult('success');
+      fireImageExportResult('success', { scope });
       setExportToast({
-        message:
-          target.method === 'picker'
+        message: isCurrentSlideFallback
+          ? t('fileViewer.exportImageCurrentSlideOnly')
+          : target.method === 'picker'
             ? t('fileViewer.exportImageSaved')
             : t('fileViewer.exportImageDownloadStarted'),
         tone: 'success',
       });
     } catch (err) {
       console.warn('[exportAsImage] failed to save snapshot:', err);
-      const message = err instanceof Error && err.message ? err.message : t('fileViewer.exportImageFailed');
+      const code = stageAwareExportErrorCode(err, stage);
+      const isCaptureFailure = stage === 'capture';
+      const message = isCaptureFailure
+        ? t('fileViewer.exportImageFailed')
+        : (err instanceof Error && err.message ? err.message : t('fileViewer.exportImageFailed'));
       setExportToast({ message, tone: 'error' });
-      fireImageExportResult('failed', exportErrorCode(err), stage);
+      fireImageExportResult('failed', {
+        errorCode: code,
+        stage,
+        scope,
+      });
     } finally {
       imageExportInFlightRef.current = false;
     }
@@ -13766,7 +13861,7 @@ function HtmlViewer({
                 onClick={() => {
                   // User dismissed the image export modal without saving —
                   // close the ui_click(image)→result funnel as cancelled.
-                  fireImageExportResult('cancelled', 'MODAL_DISMISSED');
+                  fireImageExportResult('cancelled', { errorCode: 'MODAL_DISMISSED' });
                   setImageExportModalOpen(false);
                   setImageExportError(null);
                 }}

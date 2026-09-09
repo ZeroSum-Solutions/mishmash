@@ -3849,6 +3849,7 @@ export interface Dict {
   'fileViewer.exportImageSaved': string;
   'fileViewer.exportImageDownloadStarted': string;
   'fileViewer.exportImageDownloadDetails': string;
+  'fileViewer.exportImageCurrentSlideOnly': string;
   'fileViewer.exportJsx': string;
   'fileViewer.exportReactHtml': string;
   'fileViewer.exportStarted': string;
