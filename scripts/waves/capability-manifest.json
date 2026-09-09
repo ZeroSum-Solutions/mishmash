@@ -1376,5 +1376,21 @@
       "GET /api/typefaces/:param",
       "POST /api/typefaces/:param/install"
     ]
+  },
+  {
+    "capability": "video-import",
+    "uiEntryPoint": "Settings > Video sources card",
+    "cliArgs": ["video-import", "status", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/video-import/providers",
+    "outputSchema": "{ providers: VideoImportProviderStatus[] }",
+    "parityApplicable": true,
+    "reason": "Part 8 F-05 (W7D): Vimeo account status/connect/disconnect only. The create-import job route/CLI case land once the media-task contracts they need are available (packages/contracts/src/api/media.ts, 7C); this row and its knownNamespaceRoutes snapshot cover the OAuth-account surface only, not /api/projects/:id/video-imports.",
+    "knownNamespaceRoutes": [
+      "GET /api/video-import/oauth/callback/:param",
+      "GET /api/video-import/providers",
+      "POST /api/video-import/:param/connect",
+      "POST /api/video-import/:param/disconnect"
+    ]
   }
 ]

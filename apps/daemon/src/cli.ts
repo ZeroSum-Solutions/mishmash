@@ -307,6 +307,12 @@ const DIAGNOSTICS_STRING_FLAGS = new Set(['daemon-url', 'output']);
 const DIAGNOSTICS_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const ANOMALIES_STRING_FLAGS = new Set(['daemon-url', 'limit', 'kind', 'severity', 'since']);
 const ANOMALIES_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'clear']);
+// `od video-import status|connect|disconnect` (Part 8 F-05). Provider
+// account status/connect/disconnect only -- the create-import job command
+// (`od project video-import`) lives in `runProject` and lands once the
+// media-task contracts it needs are available.
+const VIDEO_IMPORT_STRING_FLAGS = new Set(['daemon-url', 'provider']);
+const VIDEO_IMPORT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const COMPOSITION_METRICS_STRING_FLAGS = new Set(['daemon-url', 'project', 'file']);
 const COMPOSITION_METRICS_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const TYPEFACES_STRING_FLAGS = new Set(['daemon-url', 'query', 'project', 'dir']);
@@ -1017,6 +1023,7 @@ const SUBCOMMAND_MAP = {
   backup: runBackup,
   restore: runRestore,
   usage: runUsage,
+  'video-import': runVideoImport,
   cover: runCover,
   route: runRoute,
   // `runShell` shipped complete but unregistered, so `od shell` reported an
@@ -10607,6 +10614,95 @@ async function runUsage(args) {
     const cost = typeof run.costUsd === 'number' ? `$${run.costUsd.toFixed(4)}` : 'unavailable';
     console.log(`  ${run.runId}  ${run.model ?? 'unknown model'}  ${cost}`);
   }
+}
+
+// `od video-import status|connect|disconnect` — CLI mirror of the Settings
+// "Video sources" card's provider list/connect/disconnect (Part 8 F-05).
+// Same GET /api/video-import/providers, POST /api/video-import/:provider/
+// {connect,disconnect} endpoints the web card reads and calls (AGENTS.md's
+// UI/CLI dual-track rule). "connect" cannot complete the OAuth handshake
+// itself -- it prints the authorize URL and the browser finishes it.
+function printVideoImportHelp() {
+  console.log(`Usage:
+  od video-import status [--json] [--daemon-url <url>]
+  od video-import connect --provider <name> [--json] [--daemon-url <url>]
+  od video-import disconnect --provider <name> [--json] [--daemon-url <url>]
+
+Manage a video-source connection for importing videos into a project.
+Vimeo is independently connectable; YouTube is declared but not enabled
+yet (Part 8 F-05). "connect" prints an authorize URL -- open it in a
+browser to finish the OAuth handshake; the daemon stores the resulting
+token, never this CLI.
+
+  --provider <name>    vimeo or youtube. Required for connect/disconnect.
+  --json                Emit the raw response envelope.
+  --daemon-url <url>    Override the daemon HTTP base URL.`);
+}
+
+async function runVideoImport(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    printVideoImportHelp();
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  const sub = args[0];
+  const rest = args.slice(1);
+  const flags = parseFlags(rest, { string: VIDEO_IMPORT_STRING_FLAGS, boolean: VIDEO_IMPORT_BOOLEAN_FLAGS });
+  const base = await cliDaemonBaseUrl(flags);
+
+  if (sub === 'status') {
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/video-import/providers`);
+    } catch (err) {
+      return exitWithStructuredError({
+        code:    'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return process.stdout.write(JSON.stringify(data) + '\n');
+    for (const provider of Array.isArray(data?.providers) ? data.providers : []) {
+      if (!provider.enabled) {
+        console.log(`${provider.provider}: not enabled yet`);
+        continue;
+      }
+      const bits = [provider.configured ? 'configured' : 'not configured', provider.connected ? 'connected' : 'not connected'];
+      const account = provider.account?.name ? ` as ${provider.account.name}` : '';
+      console.log(`${provider.provider}: ${bits.join(', ')}${account}`);
+    }
+    return;
+  }
+
+  if (sub === 'connect' || sub === 'disconnect') {
+    const provider = typeof flags.provider === 'string' ? flags.provider : '';
+    if (!provider) {
+      return exitWithStructuredError({ code: 'validation-failed', message: '--provider is required (vimeo or youtube)' });
+    }
+    let resp;
+    try {
+      resp = sub === 'connect'
+        ? await fetch(`${base}/api/video-import/${encodeURIComponent(provider)}/connect`, { method: 'POST' })
+        : await fetch(`${base}/api/video-import/${encodeURIComponent(provider)}/disconnect`, { method: 'POST' });
+    } catch (err) {
+      return exitWithStructuredError({
+        code:    'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return process.stdout.write(JSON.stringify(data) + '\n');
+    if (sub === 'connect') {
+      console.log(`Open this URL in a browser to finish connecting ${provider}:\n${data.authorizeUrl}`);
+    } else {
+      console.log(`Disconnected ${provider}.`);
+    }
+    return;
+  }
+
+  printVideoImportHelp();
+  process.exit(2);
 }
 
 // `od whats-new` — CLI mirror of the home-surface post-update highlights
