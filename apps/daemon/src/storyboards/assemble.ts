@@ -233,6 +233,14 @@ async function runConcatAssemble(resolvedOutputs: string[], input: AssembleStory
           message: 'ffmpeg not found on this machine. Install it (e.g. `brew install ffmpeg` on macOS) and retry.',
         };
       }
+      if (result.error?.code === 'LIMIT_EXCEEDED') {
+        return {
+          ok: false,
+          status: 429,
+          code: 'LIMIT_EXCEEDED',
+          message: result.error.message,
+        };
+      }
       return {
         ok: false,
         status: 500,

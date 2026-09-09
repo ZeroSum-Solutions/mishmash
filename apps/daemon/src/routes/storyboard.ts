@@ -63,6 +63,7 @@ import {
   type RunConcatEncodeJob,
 } from '../storyboards/assemble.js';
 import {
+  activeMediaJobCount,
   registerActiveMediaJob,
   resolveMediaJobLimits,
   runFfmpegEncodeChild,
@@ -1494,9 +1495,25 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
     // synchronously, exactly as before this track.
     const runConcatEncodeJob: RunConcatEncodeJob = ({ listFile, outputFile }) => {
       const taskId = randomUUID();
+      const limits = resolveMediaJobLimits();
+      // Same concurrency ceiling the JSON `POST /api/projects/:id/media/jobs`
+      // route enforces (routes/media.ts) — checked, and rejected, BEFORE any
+      // task row is created or child spawned, so this call site cannot push
+      // the number of simultaneously running encode/download children past
+      // maxConcurrent (INV-7.14). No media_tasks row is persisted for a
+      // rejected request, matching the JSON route's behaviour.
+      if (activeMediaJobCount() >= limits.maxConcurrent) {
+        return Promise.resolve({
+          ok: false as const,
+          taskId,
+          error: {
+            code: 'LIMIT_EXCEEDED',
+            message: `maxConcurrent limit reached: ${limits.maxConcurrent} (OD_MEDIA_JOB_MAX_CONCURRENT)`,
+          },
+        });
+      }
       const task = createMediaTask(taskId, STORYBOARD_MEDIA_PROJECT_ID);
       task.kind = 'encode';
-      const limits = resolveMediaJobLimits();
       task.limits = limits;
       task.status = 'running';
       persistMediaTask(task);
@@ -1515,8 +1532,15 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
       return handle.promise.then((outcome) => {
         unregisterActiveMediaJob(taskId);
         task.status = outcome.ok ? 'done' : 'failed';
-        if (outcome.ok) task.file = { name: outputFile.split('/').pop(), path: outputFile };
-        else task.error = outcome.error ? { message: outcome.error.message, code: outcome.error.code } : { message: 'concat encode failed' };
+        // Project-relative path, matching jobs.ts's own encode/download
+        // runners (ProjectFile.path is never an absolute filesystem path
+        // elsewhere) — an absolute path here would leak local path/username
+        // layout to any client polling this task.
+        if (outcome.ok) {
+          task.file = { name: path.basename(outputFile), path: path.relative(projectDir, outputFile) };
+        } else {
+          task.error = outcome.error ? { message: outcome.error.message, code: outcome.error.code } : { message: 'concat encode failed' };
+        }
         task.endedAt = Date.now();
         persistMediaTask(task);
         notifyTaskWaiters(task);
