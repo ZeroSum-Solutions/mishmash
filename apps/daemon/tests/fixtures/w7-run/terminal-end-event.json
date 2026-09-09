@@ -1,0 +1,20 @@
+{
+  "_comment": "INV-7.13 F-02 fixture (wave 7, spec-audit-r2 disposition SC 7B): one frozen terminal `end` SSE event, shaped against packages/contracts/src/sse/chat.ts's ChatSseEndPayload (`code`, `status`, `resumable`, `endedWithUnfinishedWork`, `failureCategory`, `failureDetail`, `failureStage` — every field the real daemon's `runs.ts:finish()` sets on `emit(run, 'end', ...)`). Reused verbatim by both apps/daemon/tests/run-cli.test.ts (builds the stub SSE frame from `event`) and apps/web/tests/components/ProjectView.notifications.test.tsx (reads `webDecisionScenario` for the fixed visibility/permission/replay case). `run-cli-notice.test.ts` pins `completionNotice`'s pure BEL/TTY/json contract directly with inline literals and is not a consumer of this fixture. Do not hand-edit without updating both real consumers.",
+  "event": {
+    "code": 0,
+    "signal": null,
+    "status": "succeeded",
+    "resumable": false,
+    "endedWithUnfinishedWork": false,
+    "artifactCount": 1,
+    "failureCategory": null,
+    "failureDetail": null,
+    "failureStage": null
+  },
+  "webDecisionScenario": {
+    "documentHidden": true,
+    "documentFocused": false,
+    "desktopPermission": "granted",
+    "replayDeliveryCount": 2
+  }
+}

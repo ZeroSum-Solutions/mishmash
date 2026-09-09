@@ -32,11 +32,14 @@ const CONFIG_MIGRATION_VERSION = 2;
 // Hatched out of the box, but tucked away — the user has to go through
 // either the entry-view "adopt a pet" callout or Settings → Pets to
 // summon them. Keeps the workspace quiet for first-run users.
-// Both switches default off so first-run users are not greeted by a
-// surprise sound or a permission prompt; they can opt in from Settings →
-// Notifications when they want it.
+// F-02 (wave 7): the completion sound defaults ON — a user who never opens
+// Settings still gets the "run finished" cue the setting exists to provide;
+// the Settings toggle is the mute. Desktop notifications stay off by default
+// because showing one needs a browser permission grant the user makes from
+// Settings; a user who stored `soundEnabled: false` before this change keeps
+// it (`normalizeNotifications` merges stored values over these defaults).
 export const DEFAULT_NOTIFICATIONS: NotificationsConfig = {
-  soundEnabled: false,
+  soundEnabled: true,
   successSoundId: DEFAULT_SUCCESS_SOUND_ID,
   failureSoundId: DEFAULT_FAILURE_SOUND_ID,
   desktopEnabled: false,
