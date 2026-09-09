@@ -2062,6 +2062,19 @@ export interface Dict {
   'connectors.emptyNoMatchBody': string;
   'connectors.emptyNoMatchAction': string;
 
+  // Video sources (Settings > connectors > Video sources card, Part 8 F-05)
+  'videoImport.title': string;
+  'videoImport.subtitle': string;
+  'videoImport.vimeoName': string;
+  'videoImport.statusNotConfigured': string;
+  'videoImport.statusConnectedAs': string;
+  'videoImport.connecting': string;
+  'videoImport.disconnecting': string;
+  'videoImport.connectError': string;
+  'videoImport.disconnectError': string;
+  'videoImport.youtubeName': string;
+  'videoImport.youtubeComingSoon': string;
+
   // New project panel
   'newproj.tabPrototype': string;
   'newproj.tabLiveArtifact': string;

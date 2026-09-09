@@ -129,7 +129,11 @@ import {
   fetchConnectors,
   fetchDesignTemplates,
   openExternalUrl,
+  fetchVideoImportProviders,
+  connectVideoImportProvider,
+  disconnectVideoImportProvider,
 } from '../providers/registry';
+import type { VideoImportProviderStatus } from '@open-design/contracts';
 import { MEDIA_PROVIDERS } from '../media/models';
 import { useByokImageModelOptions, useByokVideoModelOptions, useByokSpeechModelOptions } from '../media/aihubmix-image-models';
 import { isVisualStabilityMode } from '../utils/visualStability';
@@ -5902,6 +5906,105 @@ export function deriveComposioCredentialState(
   return 'empty';
 }
 
+/**
+ * Settings > connectors > "Video sources" card (Part 8 F-05). Independent
+ * of the Composio credential gate above it: Vimeo is a directly-connectable
+ * account, not a Composio-brokered tool connector. Vimeo shows live
+ * configured/connected status with connect/disconnect; YouTube renders as
+ * "next, not enabled" with no interactive control (INV-7.7 — its create
+ * route rejects every request, so there is nothing here to connect to).
+ */
+function VideoSourcesCard() {
+  const { t } = useI18n();
+  const [providers, setProviders] = useState<VideoImportProviderStatus[]>([]);
+  const [pending, setPending] = useState<'connect' | 'disconnect' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadProviders = useCallback(async () => {
+    const next = await fetchVideoImportProviders();
+    setProviders(next);
+  }, []);
+
+  useEffect(() => {
+    void loadProviders();
+  }, [loadProviders]);
+
+  const vimeo = providers.find((p) => p.provider === 'vimeo');
+
+  const handleConnect = async () => {
+    if (pending) return;
+    setError(null);
+    setPending('connect');
+    try {
+      const result = await connectVideoImportProvider('vimeo');
+      if (!result.ok) setError(t('videoImport.connectError'));
+      await loadProviders();
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (pending) return;
+    setError(null);
+    setPending('disconnect');
+    try {
+      const result = await disconnectVideoImportProvider('vimeo');
+      if (!result.ok) setError(t('videoImport.disconnectError'));
+      await loadProviders();
+    } finally {
+      setPending(null);
+    }
+  };
+
+  return (
+    <section className="settings-video-sources" aria-labelledby="video-sources-title">
+      <h3 id="video-sources-title">{t('videoImport.title')}</h3>
+      <p className="hint">{t('videoImport.subtitle')}</p>
+
+      <div className="settings-video-sources-row">
+        <div className="settings-video-sources-provider">
+          <span className="settings-video-sources-name">{t('videoImport.vimeoName')}</span>
+          <span className="settings-video-sources-status">
+            {vimeo?.connected
+              ? t('videoImport.statusConnectedAs', { name: vimeo.account?.name ?? t('connectors.noAccount') })
+              : vimeo?.configured
+                ? t('connectors.statusAvailable')
+                : t('videoImport.statusNotConfigured')}
+          </span>
+        </div>
+        {vimeo?.connected ? (
+          <button type="button" className="ghost" onClick={handleDisconnect} disabled={pending !== null}>
+            {pending === 'disconnect' ? t('videoImport.disconnecting') : t('connectors.disconnect')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="ghost"
+            onClick={handleConnect}
+            disabled={pending !== null || !vimeo?.configured}
+          >
+            {pending === 'connect' ? t('videoImport.connecting') : t('connectors.connect')}
+          </button>
+        )}
+      </div>
+
+      <div className="settings-video-sources-row settings-video-sources-row-disabled">
+        <div className="settings-video-sources-provider">
+          <span className="settings-video-sources-name">{t('videoImport.youtubeName')}</span>
+          <span className="settings-video-sources-status">{t('videoImport.youtubeComingSoon')}</span>
+        </div>
+      </div>
+
+      {error ? (
+        <span className="hint" role="alert">
+          {error}
+        </span>
+      ) : null}
+    </section>
+  );
+}
+
 export function ConnectorSection({
   cfg,
   setCfg,
@@ -6354,6 +6457,8 @@ export function ConnectorSection({
         {...(onConnectorsTabClick ? { onConnectorsTabClick } : {})}
         {...(onConnectorAuthResult ? { onConnectorAuthResult } : {})}
       />
+
+      <VideoSourcesCard />
     </section>
   );
 }
