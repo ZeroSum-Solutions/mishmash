@@ -22,7 +22,7 @@ import {
   type TrackingDeployProvider,
 } from '@open-design/contracts/analytics';
 import { useAnalytics } from '../analytics/provider';
-import { exportErrorCode } from '../analytics/export-error-code';
+import { captureErrorCode, exportErrorCode } from '../analytics/export-error-code';
 import { deployErrorCode } from '../analytics/deploy-error-code';
 import {
   anomalyForImageExportFailure,
@@ -1356,34 +1356,31 @@ async function requestPreviewSnapshotWithRetry(
   return null;
 }
 
-// Classifies a bridge capture failure the SAME way `exportErrorCode` already
-// classifies a thrown export error (timeout / empty-render / tainted regexes
-// against the message text) so the two don't drift into separate mappings.
-// `exportErrorCode`'s own fallback for an unrecognised `Error` is the error's
+// Classifies a bridge capture failure with `captureErrorCode` (timeout /
+// empty-render / tainted regexes against the message text) so this and the
+// image-export capture stage below share one capture-only mapping.
+// `captureErrorCode`'s own fallback for an unrecognised `Error` is the error's
 // `.name` (typically the generic `'Error'`), which is not a real analytics
 // code for this call site — an unrecognised or absent bridge reason keeps the
 // existing flat `CAPTURE_FAILED` instead.
 function bridgeCaptureFailureErrorCode(failure: PreviewSnapshotFailure): string {
   const message = failure.reason === 'timeout' ? 'timeout' : failure.error;
   if (!message) return 'CAPTURE_FAILED';
-  const code = exportErrorCode(new Error(message));
+  const code = captureErrorCode(new Error(message));
   return code === 'Error' ? 'CAPTURE_FAILED' : code;
 }
 
-// `exportErrorCode`'s CAPTURE_TIMEOUT / CAPTURE_EMPTY_RENDER / CAPTURE_TAINTED
+// `captureErrorCode`'s CAPTURE_TIMEOUT / CAPTURE_EMPTY_RENDER / CAPTURE_TAINTED
 // mapping exists to classify the client-bridge capture failure path (see
-// `bridgeCaptureFailureErrorCode` above). Reusing it unconditionally for a
-// throw caught later in `handleImageExportSave` (encode / target / save)
-// would misattribute an unrelated failure as a capture failure — e.g. a
-// `SecurityError` from `target.save(blob)` would read as `CAPTURE_TAINTED`
-// ("snapshot canvas was tainted") even though nothing was captured. Trust the
-// CAPTURE_* classification only when the failure actually happened during
-// capture; otherwise fall back to the error's own name, matching what
-// `exportErrorCode` returns for a code it doesn't recognise.
+// `bridgeCaptureFailureErrorCode` above). Applying it to a throw caught later
+// in `handleImageExportSave` (encode / target / save) would misattribute an
+// unrelated failure as a capture failure — e.g. a `SecurityError` from
+// `target.save(blob)` would read as `CAPTURE_TAINTED` ("snapshot canvas was
+// tainted") even though nothing was captured. Only the capture stage uses the
+// capture-only classifier; every other stage uses the plain `exportErrorCode`,
+// which can never return a CAPTURE_* code.
 function stageAwareExportErrorCode(err: unknown, stage: ImageExportStage): string {
-  const code = exportErrorCode(err);
-  if (stage === 'capture' || !code.startsWith('CAPTURE_')) return code;
-  return err instanceof Error ? err.name || 'UNKNOWN' : 'UNKNOWN';
+  return stage === 'capture' ? captureErrorCode(err) : exportErrorCode(err);
 }
 
 function previewViewportStateKey(projectId: string, file: Pick<ProjectFile, 'name' | 'path'>): string {
