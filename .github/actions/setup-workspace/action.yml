@@ -62,8 +62,28 @@ runs:
       shell: bash
       run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
 
+    - name: Detect Blacksmith runner
+      id: blacksmith
+      shell: bash
+      env:
+        RUNNER_LABELS_JSON: ${{ inputs.runner-labels }}
+      run: |
+        case "$RUNNER_LABELS_JSON" in
+          *'"blacksmith-'*) echo "enabled=true" >> "$GITHUB_OUTPUT" ;;
+          *) echo "enabled=false" >> "$GITHUB_OUTPUT" ;;
+        esac
+
+    # Blacksmith jobs restore the pnpm store from Blacksmith's colocated cache (same key/path contract as actions/cache,
+    # served next to the runner); everything else keeps actions/cache. Mirrors setup-playwright.
+    - name: Cache pnpm store (Blacksmith)
+      if: ${{ steps.persistent-pnpm-store.outputs.enabled != 'true' && steps.blacksmith.outputs.enabled == 'true' }}
+      uses: useblacksmith/cache@v5
+      with:
+        path: ${{ steps.pnpm-store.outputs.path }}
+        key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
     - name: Cache pnpm store
-      if: ${{ steps.persistent-pnpm-store.outputs.enabled != 'true' }}
+      if: ${{ steps.persistent-pnpm-store.outputs.enabled != 'true' && steps.blacksmith.outputs.enabled != 'true' }}
       uses: actions/cache@v5.0.5
       with:
         path: ${{ steps.pnpm-store.outputs.path }}
