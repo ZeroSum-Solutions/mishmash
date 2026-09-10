@@ -17,7 +17,8 @@ import type { CreateProjectUploadRequest } from '@open-design/contracts';
 
 import { sendApiError } from '../../http/api-errors.js';
 import { getProject } from '../../db.js';
-import { applyProjectFileWatchEvent, ensureProjectSubdir, isSafeId, sanitizeName } from '../../projects.js';
+import { ensureCurrentProjectFileVersion } from '../../project-file-versions.js';
+import { applyProjectFileWatchEvent, ensureProjectSubdir, isSafeId, readProjectFile, sanitizeName } from '../../projects.js';
 import {
   UploadSessionError,
   UploadStagingStore,
@@ -194,6 +195,29 @@ export function registerProjectStagedUploadRoutes(app: Express, deps: RegisterPr
               { type: 'file-changed', path: file.path, kind: 'add' },
               project?.metadata,
             );
+            // Parity with the legacy multipart route
+            // (routes/project/index.ts:4520-4536): an uploaded .html file
+            // gets its first `.file-versions` snapshot here. Every web
+            // upload now rides this route, so without it a web .html
+            // upload would silently lose the version history the legacy
+            // route created. Per-file try/catch for the same reason the
+            // legacy route has one: a snapshot failure must never break
+            // the promotion of the remaining files.
+            if (project && /\.html?$/i.test(file.path)) {
+              try {
+                const savedFile = await readProjectFile(PROJECTS_DIR, session.projectId, file.path, project.metadata);
+                await ensureCurrentProjectFileVersion(
+                  PROJECTS_DIR,
+                  project.id,
+                  savedFile.name,
+                  savedFile.buffer.toString('utf8'),
+                  { source: 'manual', promptSource: 'manual' },
+                  project.metadata,
+                );
+              } catch {
+                // skip a file that vanished or could not be snapshotted
+              }
+            }
           }
         } catch {
           // promote() already emitted the terminal failed event on error.
