@@ -1,6 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installMockOpenDesignHost } from '@open-design/host/testing';
-import type { ApiErrorResponse } from '@open-design/contracts';
+import type {
+  ApiErrorResponse,
+  CreateProjectUploadRequest,
+  CreateProjectUploadResponse,
+  ProjectUploadCompleted,
+  ProjectUploadFailed,
+  ProjectUploadFailureCode,
+  ProjectUploadProgress,
+  ProjectUploadSseEvent,
+  ProjectUploadStarted,
+  UploadLimitsResponse,
+} from '@open-design/contracts';
+import { isProjectUploadSseEvent } from '@open-design/contracts';
 
 import {
   cancelConnectorAuthorization,
@@ -943,6 +955,249 @@ describe('uploadProjectFiles', () => {
     expect(result.uploaded).toHaveLength(13);
     expect(result.uploaded.map((u) => u.name)).toEqual(files.map((f) => f.name));
     expect(result.failed).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W8A — `uploadProjectFiles` rides the staged transport: JSON session create
+// at `POST .../uploads`, an SSE subscription at `GET .../uploads/:id/events`
+// opened BEFORE any PUT (r2 W7-R2-08), then one `PUT .../uploads/:id/files/:i`
+// per file, resolved on the typed terminal event. Every frame the fixture
+// daemon emits is built from the contracts types and validated through
+// `isProjectUploadSseEvent` (D-18); the stream only advances as PUTs arrive,
+// so a frame the real daemon could not emit at that point (a terminal before
+// any PUT) never appears. RED on base d7ff39a36: base POSTs `FormData` to
+// `/api/projects/:id/upload` and never calls any of the three endpoints.
+// ---------------------------------------------------------------------------
+
+const STAGED_LIMITS: UploadLimitsResponse = {
+  maxFileBytes: 1000,
+  maxFilesPerRequest: 12,
+  maxTotalBytes: 12_000,
+  acceptedKinds: [
+    { extensions: ['txt'], mime: 'text/plain', sniff: 'text' },
+    { extensions: ['pdf'], mime: 'application/pdf', sniff: 'magic' },
+    { extensions: ['png'], mime: 'image/png', sniff: 'magic' },
+  ],
+};
+
+interface StagedCall {
+  method: string;
+  url: string;
+  init?: RequestInit;
+}
+
+interface StagedSession {
+  uploadId: string;
+  token: string;
+  files: CreateProjectUploadRequest['files'];
+  dir?: string;
+  putCount: number;
+  stream: ReadableStreamDefaultController<Uint8Array> | null;
+  subscribedBeforeFirstPut: boolean | null;
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+}
+
+function sseFrame(evt: ProjectUploadSseEvent): Uint8Array {
+  if (!isProjectUploadSseEvent(evt)) throw new Error(`fixture is not a contract upload event: ${JSON.stringify(evt)}`);
+  return new TextEncoder().encode(`event: ${evt.type}\ndata: ${JSON.stringify(evt)}\n\n`);
+}
+
+/** A fixture daemon for the staged session protocol. `create` overrides the
+ *  session-create answer (an error envelope, a non-JSON body); `failAt` makes
+ *  that file's PUT answer with the daemon's error envelope and the stream
+ *  end on `upload-failed` (nothing committed). `originalNameFor` lets the
+ *  committed `originalName` drift from the request name, as multer's
+ *  latin1 round-trip does on the legacy route. */
+function stagedDaemon(opts: {
+  limits?: UploadLimitsResponse | null;
+  create?: { status: number; body: string | ApiErrorResponse };
+  failAt?: { index: number; status: number; code: ProjectUploadFailureCode; message: string; limitBytes?: number };
+  originalNameFor?: (name: string) => string;
+} = {}) {
+  const limits = opts.limits === undefined ? STAGED_LIMITS : opts.limits;
+  const calls: StagedCall[] = [];
+  const sessions = new Map<string, StagedSession>();
+  const bearer = (init?: RequestInit): string | null => {
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    const raw = headers.Authorization ?? headers.authorization ?? '';
+    return raw.startsWith('Bearer ') ? raw.slice('Bearer '.length) : null;
+  };
+  const emit = (session: StagedSession, evt: ProjectUploadSseEvent) => {
+    session.stream?.enqueue(sseFrame(evt));
+  };
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit): Promise<Response> => {
+    calls.push({ method: init?.method ?? 'GET', url, init });
+    if (/\/uploads\/limits$/.test(url)) {
+      return limits ? jsonResponse(limits) : new Response('boom', { status: 500 });
+    }
+    if (/\/uploads$/.test(url) && init?.method === 'POST') {
+      if (opts.create) {
+        const body = typeof opts.create.body === 'string' ? opts.create.body : JSON.stringify(opts.create.body);
+        return new Response(body, { status: opts.create.status });
+      }
+      const body = JSON.parse(String(init.body)) as CreateProjectUploadRequest;
+      const n = sessions.size + 1;
+      const session: StagedSession = {
+        uploadId: `upload-${n}`,
+        token: `token-${n}`,
+        files: body.files,
+        dir: body.dir,
+        putCount: 0,
+        stream: null,
+        subscribedBeforeFirstPut: null,
+      };
+      sessions.set(session.uploadId, session);
+      const resp: CreateProjectUploadResponse = {
+        uploadId: session.uploadId,
+        token: session.token,
+        expiresAt: Date.now() + 60_000,
+        limits: limits ?? STAGED_LIMITS,
+      };
+      return jsonResponse(resp);
+    }
+    const events = /\/uploads\/([^/]+)\/events$/.exec(url);
+    if (events) {
+      const session = sessions.get(events[1]!);
+      if (!session) return jsonResponse({ error: { code: 'NOT_FOUND', message: 'upload session not found' } }, 404);
+      if (bearer(init) !== session.token) return jsonResponse({ error: { code: 'UNAUTHORIZED', message: 'bad token' } }, 401);
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          session.stream = controller;
+          // The daemon replays the non-terminal `upload-started` as the
+          // catch-up frame on subscribe (routes/project/uploads.ts).
+          const started: ProjectUploadStarted = {
+            type: 'upload-started',
+            uploadId: session.uploadId,
+            files: session.files.map((f, index) => ({ index, name: f.name, size: f.size })),
+          };
+          emit(session, started);
+        },
+      });
+      return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    }
+    const put = /\/uploads\/([^/]+)\/files\/(\d+)$/.exec(url);
+    if (put && init?.method === 'PUT') {
+      const session = sessions.get(put[1]!);
+      if (!session) return jsonResponse({ error: { code: 'NOT_FOUND', message: 'upload session not found' } }, 404);
+      if (bearer(init) !== session.token) return jsonResponse({ error: { code: 'UNAUTHORIZED', message: 'bad token' } }, 401);
+      if (session.subscribedBeforeFirstPut === null) session.subscribedBeforeFirstPut = session.stream !== null;
+      const index = Number(put[2]);
+      const file = session.files[index]!;
+      if (opts.failAt && opts.failAt.index === index) {
+        const failed: ProjectUploadFailed = {
+          type: 'upload-failed',
+          uploadId: session.uploadId,
+          code: opts.failAt.code,
+          message: opts.failAt.message,
+          ...(opts.failAt.limitBytes !== undefined ? { limitBytes: opts.failAt.limitBytes } : {}),
+          file: file.name,
+        };
+        emit(session, failed);
+        session.stream?.close();
+        const envelope: ApiErrorResponse = { error: { code: opts.failAt.code, message: opts.failAt.message } };
+        return jsonResponse(envelope, opts.failAt.status);
+      }
+      const progress: ProjectUploadProgress = {
+        type: 'upload-progress',
+        uploadId: session.uploadId,
+        index,
+        name: file.name,
+        bytesReceived: file.size,
+        totalBytes: file.size,
+      };
+      emit(session, progress);
+      session.putCount += 1;
+      if (session.putCount === session.files.length) {
+        const completed: ProjectUploadCompleted = {
+          type: 'upload-completed',
+          uploadId: session.uploadId,
+          files: session.files.map((f) => {
+            const rel = session.dir ? `${session.dir}/${f.name}` : f.name;
+            return { name: rel, path: rel, size: f.size, mtime: 1_700_000_000_000, originalName: opts.originalNameFor?.(f.name) ?? f.name };
+          }),
+        };
+        emit(session, completed);
+        session.stream?.close();
+      }
+      return jsonResponse({ ok: true, index });
+    }
+    return new Response('not found', { status: 404 });
+  });
+  return { fetchMock, calls, sessions };
+}
+
+function createBodies(calls: StagedCall[]): CreateProjectUploadRequest[] {
+  return calls
+    .filter((c) => c.method === 'POST' && /\/uploads$/.test(c.url))
+    .map((c) => JSON.parse(String(c.init?.body)) as CreateProjectUploadRequest);
+}
+
+function putBodies(calls: StagedCall[]): unknown[] {
+  return calls.filter((c) => c.method === 'PUT').map((c) => c.init?.body);
+}
+
+describe('uploadProjectFiles (staged transport, W8A)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('rejects a disallowed extension locally with UNSUPPORTED_MEDIA_TYPE and never sends its bytes; the accepted file still uploads', async () => {
+    const exe = new File(['MZ'], 'setup.exe', { type: 'application/octet-stream' });
+    const note = new File(['hello'], 'note.txt', { type: 'text/plain' });
+    const { fetchMock, calls } = stagedDaemon();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await uploadProjectFiles('project-1', [exe, note], undefined, { limits: STAGED_LIMITS });
+
+    expect(result.failed).toEqual([
+      { name: 'setup.exe', code: 'UNSUPPORTED_MEDIA_TYPE', error: '"setup.exe" is not an accepted file type' },
+    ]);
+    expect(result.uploaded).toHaveLength(1);
+    expect(result.uploaded[0]).toMatchObject({ path: 'note.txt', name: 'note.txt', kind: 'file', size: 5 });
+    // No request of any kind carried the rejected file: not in a session
+    // create body, not as a PUT body, and no legacy multipart POST at all.
+    expect(createBodies(calls).flatMap((b) => b.files.map((f) => f.name))).toEqual(['note.txt']);
+    expect(putBodies(calls)).toEqual([note]);
+    expect(calls.some((c) => /\/upload$/.test(c.url))).toBe(false);
+  });
+
+  it('rejects an over-limit file locally with PAYLOAD_TOO_LARGE naming the limit, before any request', async () => {
+    const big = new File(['x'.repeat(STAGED_LIMITS.maxFileBytes + 1)], 'big.txt', { type: 'text/plain' });
+    const { fetchMock, calls } = stagedDaemon();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await uploadProjectFiles('project-1', [big], undefined, { limits: STAGED_LIMITS });
+
+    expect(result.uploaded).toEqual([]);
+    expect(result.failed).toEqual([
+      { name: 'big.txt', code: 'PAYLOAD_TOO_LARGE', error: `"big.txt" (${big.size} bytes) exceeds the ${STAGED_LIMITS.maxFileBytes} byte limit` },
+    ]);
+    expect(calls).toEqual([]);
+  });
+
+  it('fetches the published limits once when the caller has none, sends dir in the session-create body, subscribes before the first PUT, and reports every typed event', async () => {
+    const note = new File(['hello'], 'note.txt', { type: 'text/plain' });
+    const { fetchMock, calls, sessions } = stagedDaemon();
+    vi.stubGlobal('fetch', fetchMock);
+    const onEvents = vi.fn();
+
+    const result = await uploadProjectFiles('project-1', [note], 'assets/refs', { onEvents });
+
+    expect(calls.filter((c) => /\/uploads\/limits$/.test(c.url))).toHaveLength(1);
+    expect(createBodies(calls)).toEqual([{ files: [{ name: 'note.txt', size: 5, mime: 'text/plain' }], dir: 'assets/refs' }]);
+    const session = [...sessions.values()][0]!;
+    expect(session.subscribedBeforeFirstPut).toBe(true);
+    expect(result.uploaded).toEqual([{ path: 'assets/refs/note.txt', name: 'note.txt', kind: 'file', size: 5 }]);
+    // `onEvents` receives the accumulated, guard-validated event history; the
+    // last call carries started → progress → completed in daemon order.
+    const last = onEvents.mock.calls.at(-1)?.[0] as ProjectUploadSseEvent[];
+    expect(last.every((e) => isProjectUploadSseEvent(e))).toBe(true);
+    expect(last.map((e) => e.type)).toEqual(['upload-started', 'upload-progress', 'upload-completed']);
   });
 });
 
