@@ -17,7 +17,14 @@ vi.mock('../../src/analytics/events', async (importOriginal) => {
 import { ChatComposer, type ChatComposerHandle } from '../../src/components/ChatComposer';
 import { I18nProvider } from '../../src/i18n';
 import type { Locale } from '../../src/i18n/types';
-import type { AppliedPluginSnapshot, ConnectorDetail, ProjectMetadata } from '@open-design/contracts';
+import type {
+  AppliedPluginSnapshot,
+  ConnectorDetail,
+  ProjectMetadata,
+  ProjectUploadSseEvent,
+  UploadLimitsResponse,
+} from '@open-design/contracts';
+import { isProjectUploadSseEvent } from '@open-design/contracts';
 import { composerText, pressEnter, typeAndSettle } from '../helpers/lexical-composer';
 
 const COMMUNITY_PLUGIN = {
@@ -1541,6 +1548,25 @@ describe('ChatComposer context pickers', () => {
 
   it('clears an attachment upload error after a later retry succeeds', async () => {
     let uploadAttempts = 0;
+    // W8A moved every web upload onto the staged session transport: a JSON
+    // session create at `POST .../uploads`, an SSE subscription at
+    // `GET .../uploads/:id/events` opened before any byte, then one
+    // `PUT .../uploads/:id/files/:i` resolved by the typed terminal event.
+    // The fixture daemon speaks that protocol; the composer's user-visible
+    // contract is unchanged, so the assertions below are untouched — a 503
+    // on the create still surfaces the daemon's own `storage offline` text,
+    // and a later success still clears it.
+    let uploadStream: ReadableStreamDefaultController<Uint8Array> | null = null;
+    const sseFrame = (event: ProjectUploadSseEvent): Uint8Array => {
+      if (!isProjectUploadSseEvent(event)) throw new Error('fixture is not a contract upload event');
+      return new TextEncoder().encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    };
+    const limits: UploadLimitsResponse = {
+      maxFileBytes: 1_000_000,
+      maxFilesPerRequest: 12,
+      maxTotalBytes: 12_000_000,
+      acceptedKinds: [{ extensions: ['txt'], mime: 'text/plain', sniff: 'text' }],
+    };
     fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === '/api/mcp/servers') {
         return new Response(JSON.stringify({ servers, templates: [] }), {
@@ -1560,7 +1586,13 @@ describe('ChatComposer context pickers', () => {
           headers: { 'content-type': 'application/json' },
         });
       }
-      if (url === '/api/projects/project-1/upload' && init?.method === 'POST') {
+      if (url === '/api/projects/project-1/uploads/limits') {
+        return new Response(JSON.stringify(limits), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url === '/api/projects/project-1/uploads' && init?.method === 'POST') {
         uploadAttempts += 1;
         if (uploadAttempts === 1) {
           return new Response(JSON.stringify({ error: 'storage offline' }), {
@@ -1569,8 +1601,45 @@ describe('ChatComposer context pickers', () => {
           });
         }
         return new Response(JSON.stringify({
-          files: [{ name: 'recovered.txt', path: 'uploads/recovered.txt', size: 24 }],
+          uploadId: 'upload-1',
+          token: 'token-1',
+          expiresAt: Date.now() + 60_000,
+          limits,
         }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url === '/api/projects/project-1/uploads/upload-1/events') {
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            uploadStream = controller;
+            controller.enqueue(sseFrame({
+              type: 'upload-started',
+              uploadId: 'upload-1',
+              files: [{ index: 0, name: 'recovered.txt', size: 24 }],
+            }));
+          },
+        });
+        return new Response(stream, {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      }
+      if (url === '/api/projects/project-1/uploads/upload-1/files/0' && init?.method === 'PUT') {
+        uploadStream?.enqueue(sseFrame({
+          type: 'upload-completed',
+          uploadId: 'upload-1',
+          files: [{
+            name: 'recovered.txt',
+            path: 'uploads/recovered.txt',
+            size: 24,
+            mtime: 1_700_000_000_000,
+            originalName: 'recovered.txt',
+          }],
+        }));
+        uploadStream?.close();
+        return new Response(JSON.stringify({ ok: true, index: 0 }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
