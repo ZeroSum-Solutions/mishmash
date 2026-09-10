@@ -833,6 +833,9 @@ interface StagedCall {
   init?: RequestInit;
 }
 
+/** A PUT can only fail with a code the daemon's error envelope can carry. */
+type StagedPutFailureCode = Extract<ProjectUploadFailureCode, ApiErrorResponse['error']['code']>;
+
 interface StagedSession {
   uploadId: string;
   token: string;
@@ -861,7 +864,7 @@ function sseFrame(evt: ProjectUploadSseEvent): Uint8Array {
 function stagedDaemon(opts: {
   limits?: UploadLimitsResponse | null;
   create?: { status: number; body: string | ApiErrorResponse };
-  failAt?: { index: number; status: number; code: ProjectUploadFailureCode; message: string; limitBytes?: number };
+  failAt?: { index: number; status: number; code: StagedPutFailureCode; message: string; limitBytes?: number };
   originalNameFor?: (name: string) => string;
 } = {}) {
   const limits = opts.limits === undefined ? STAGED_LIMITS : opts.limits;
