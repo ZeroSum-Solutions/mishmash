@@ -2834,6 +2834,15 @@ describe('ProjectView daemon cleanup', () => {
       options.handlers.onError(genericDisconnect);
     });
 
+    // The production backoff is a fixed 3s `setTimeout` (see
+    // `scheduleProjectTimeout` calls guarding `genericDisconnectBackoffUntilRef`
+    // in ProjectView). Driving that with real timers made this test race CI
+    // load: a real-time `waitFor` window has to budget for both the 3s backoff
+    // AND however long the CI host takes to schedule the timer callback, and
+    // under load those can collide. Fake timers make the 3s boundary exact
+    // regardless of host speed.
+    vi.useFakeTimers();
+
     render(
       <ProjectView
         project={{ id: 'project-null-status-retry', name: 'Project', skillId: null, designSystemId: null } as never}
@@ -2857,16 +2866,28 @@ describe('ProjectView daemon cleanup', () => {
       />,
     );
 
-    await waitFor(() => expect(reattachDaemonRun.mock.calls.length).toBeGreaterThanOrEqual(2), {
-      timeout: 2_000,
+    // Let the mount effect run its two initial reattach attempts: the first
+    // generic disconnect is below the retry cap and retries immediately: the
+    // second trips the cap, probes status (which resolves null), and arms the
+    // 3s backoff. None of this depends on a real timer firing, so flushing the
+    // microtask queue (advancing fake time by 0ms) is enough to settle it.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
     });
     expect(reattachDaemonRun.mock.calls.length).toBe(2);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(reattachDaemonRun.mock.calls.length).toBe(2);
-    await waitFor(() => expect(reattachDaemonRun.mock.calls.length).toBeGreaterThanOrEqual(3), {
-      timeout: 4_500,
+
+    // Just under the 3s backoff: still capped at 2 attempts.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_999);
     });
-  }, 12_000);
+    expect(reattachDaemonRun.mock.calls.length).toBe(2);
+
+    // Crossing the backoff boundary fires the retry.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(reattachDaemonRun.mock.calls.length).toBe(3);
+  });
 
   // SUPERSEDED IN PART (W1J.1). This is the case the W1J.1 spec names at
   // ~:2867-2973 on 29a2a7703. What it pins is unchanged and still true: a
