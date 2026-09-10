@@ -536,6 +536,13 @@ export interface ChatRunStatusResponse {
    *  lost run — but without this id the list cannot be matched back to the
    *  request. Null for callers that send none (CLI / MCP / SDK). */
   clientRequestId?: string | null;
+  /**
+   * Who asked for this run (F-03 / D-2): the `x-od-actor` value the create
+   * request carried, normalized. `null` when unattributed. Client-asserted,
+   * never authenticated -- `od run info`/`od run list` and the chat both
+   * render it as provenance, never as an authorization.
+   */
+  actorName?: string | null;
   agentId: string | null;
   /** Design system whose prompt context was actually injected for this run. */
   designSystemId?: string | null;

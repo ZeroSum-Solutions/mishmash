@@ -330,6 +330,9 @@ export function createChatRunService({
     // response holds only this id and `assistantMessageId`, so both must come
     // back out of every run read-back or its run cannot be looked up at all.
     clientRequestId: run.clientRequestId ?? null,
+    // F-03: who asked. Read by `od run info`/`od run list` and by the chat's
+    // attribution caption; null means unattributed, never a fabricated name.
+    actorName: run.actorName ?? null,
     agentId: run.agentId,
     designSystemId: run.designSystemId ?? null,
     designSystemRequestedId: run.designSystemRequestedId ?? null,

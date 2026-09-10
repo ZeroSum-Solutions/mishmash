@@ -206,6 +206,81 @@ describe('W8D: od resolves the actor and sends it as x-od-actor', () => {
     }
   });
 
+  it('prints the actor on `od run info` and `od run list`', async () => {
+    // The run status body is where both commands read attribution from; a
+    // daemon that stamps the header but never echoes it back leaves both
+    // surfaces printing '-' forever, which is what this pins.
+    const statusStub = http.createServer((req, res) => {
+      req.resume();
+      req.on('end', () => {
+        res.setHeader('content-type', 'application/json');
+        res.statusCode = 200;
+        if (req.url === '/api/runs') {
+          res.end(JSON.stringify({
+            runs: [{ id: 'run-1', status: 'succeeded', projectId: 'p1', actorName: 'devin' }],
+          }));
+          return;
+        }
+        res.end(JSON.stringify({
+          id: 'run-1',
+          status: 'succeeded',
+          projectId: 'p1',
+          conversationId: 'c1',
+          agentId: 'claude',
+          actorName: 'devin',
+        }));
+      });
+    });
+    await new Promise<void>((r) => statusStub.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(statusStub.address() as { port: number }).port}`;
+    try {
+      const info = await runCli(['run', 'info', 'run-1', '--daemon-url', base], {
+        OD_USER_STATE_DIR: stateDir,
+      });
+      expect(info.code, info.stderr).toBe(0);
+      expect(info.stdout).toMatch(/^actor\tdevin$/m);
+
+      const list = await runCli(['run', 'list', '--daemon-url', base], {
+        OD_USER_STATE_DIR: stateDir,
+      });
+      expect(list.code, list.stderr).toBe(0);
+      expect(list.stdout).toContain('actor=devin');
+    } finally {
+      await new Promise<void>((r) => statusStub.close(() => r()));
+    }
+  });
+
+  it('prints a dash for an unattributed run instead of undefined', async () => {
+    const statusStub = http.createServer((req, res) => {
+      req.resume();
+      req.on('end', () => {
+        res.setHeader('content-type', 'application/json');
+        res.statusCode = 200;
+        if (req.url === '/api/runs') {
+          res.end(JSON.stringify({ runs: [{ id: 'run-1', status: 'succeeded', projectId: 'p1' }] }));
+          return;
+        }
+        res.end(JSON.stringify({ id: 'run-1', status: 'succeeded', projectId: 'p1', agentId: 'claude' }));
+      });
+    });
+    await new Promise<void>((r) => statusStub.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(statusStub.address() as { port: number }).port}`;
+    try {
+      const info = await runCli(['run', 'info', 'run-1', '--daemon-url', base], {
+        OD_USER_STATE_DIR: stateDir,
+      });
+      expect(info.stdout).toMatch(/^actor\t-$/m);
+      expect(info.stdout).not.toContain('undefined');
+      const list = await runCli(['run', 'list', '--daemon-url', base], {
+        OD_USER_STATE_DIR: stateDir,
+      });
+      expect(list.stdout).toContain('actor=-');
+      expect(list.stdout).not.toContain('undefined');
+    } finally {
+      await new Promise<void>((r) => statusStub.close(() => r()));
+    }
+  });
+
   it('runs `od run diff` against the daemon and prints the before/after text', async () => {
     // A stub that answers the new route with a contracts-shaped body.
     const diffStub = http.createServer((req, res) => {
