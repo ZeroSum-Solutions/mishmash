@@ -22,7 +22,7 @@
 // implementation passes the first case and fails this one.
 
 import type http from 'node:http';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { register } from 'prom-client';
@@ -133,6 +133,9 @@ async function seedRunWithTwoVersions(actor: string | null): Promise<Fixture> {
   const projectsRoot = path.join(dataDir, 'projects');
   const projectRoot = path.join(projectsRoot, projectId);
   const filePath = path.join(projectRoot, FILE_NAME);
+  // POST /api/projects records the row; the directory is created lazily by the
+  // first write. An agent run would have created it, so create it here.
+  await mkdir(projectRoot, { recursive: true });
 
   const snapshots = await import('../src/run-html-version-snapshots.js');
   // Prior version: an ordinary save with no run behind it. This is what

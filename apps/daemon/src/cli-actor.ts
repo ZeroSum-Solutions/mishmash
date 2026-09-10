@@ -113,10 +113,16 @@ function originOf(rawUrl: string | null | undefined): string | null {
  * endpoints, and leaking a teammate's name into a vendor's request log would be
  * a privacy regression with no upside.
  *
- * The allow-set is therefore closed and synchronous: the origin the caller
- * explicitly addressed (`--daemon-url`), the origin `OD_DAEMON_URL` names, and
- * loopback — exactly the three sources `resolveDaemonUrl`
- * (`daemon-url.ts:71-79`) can produce. Anything else is foreign by default.
+ * The allow-set narrows as the caller gets more specific, mirroring
+ * `resolveDaemonUrl` (`daemon-url.ts:71-79`):
+ *
+ *   - The caller named a daemon (`--daemon-url`, or `OD_DAEMON_URL`): ONLY that
+ *     origin. Loopback is not implied — another process listening on another
+ *     local port is a different server, and this invocation did not address it.
+ *   - The caller named nothing: discovery will land on a loopback port that is
+ *     not known yet, so loopback is allowed and nothing else is.
+ *
+ * Either way a public host is foreign, which is the case that matters.
  */
 export function isDaemonRequestUrl(
   rawUrl: string,
@@ -129,7 +135,7 @@ export function isDaemonRequestUrl(
     return false;
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
-  if (allowedOrigins.has(parsed.origin)) return true;
+  if (allowedOrigins.size > 0) return allowedOrigins.has(parsed.origin);
   return LOOPBACK_HOSTS.has(parsed.hostname);
 }
 
