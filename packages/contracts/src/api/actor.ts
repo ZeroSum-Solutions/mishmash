@@ -8,9 +8,9 @@
  *
  * D-2's ceiling is deliberate and is NOT a defect: attribution here is
  * client-asserted, not authenticated. Anyone on the tailnet can send any name.
- * Every consumer therefore treats a missing, empty, over-long, or malformed
- * value as "unattributed" and continues — it never rejects a request and never
- * gates a capability.
+ * Every consumer therefore treats a missing, empty, or malformed value as
+ * "unattributed", and caps an over-long value at MAX_ACTOR_NAME_LENGTH, and
+ * continues — it never rejects a request and never gates a capability.
  */
 
 /**

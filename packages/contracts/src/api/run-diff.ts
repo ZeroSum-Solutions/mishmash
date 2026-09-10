@@ -15,7 +15,7 @@ export interface RunFileDiffVersion extends ProjectFileVersion {
 export interface RunFileDiffEntry {
   fileName: string;
   kind: ProjectFileKind;
-  /** The version immediately preceding the run's write, or `null` when the run created the file. */
+  /** The version immediately preceding the run's FIRST write of the file; `after` is the run's LAST write. `null` when the run created the file. */
   before: RunFileDiffVersion | null;
   after: RunFileDiffVersion;
   /** Who asked for the run, per D-2's client-asserted attribution. `null` when unattributed. */
