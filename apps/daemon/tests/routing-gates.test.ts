@@ -11,7 +11,7 @@
 // rejection, 400 shapes), and CLI dispatch.
 
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -1431,7 +1431,8 @@ describe('GET /api/routing/gates and POST /api/routing/gates/run', () => {
           const body = (await resp.json()) as { error: { code: string; message: string } };
           expect(body.error.message).toMatch(/project root/i);
         } finally {
-          rmSync(symlinkPath, { force: true });
+          // unlinkSync, not rmSync: Node 24.13 rmSync throws ERR_FS_EISDIR on a directory symlink.
+          unlinkSync(symlinkPath);
         }
       } finally {
         rmSync(outsideDir, { recursive: true, force: true });
@@ -1452,7 +1453,8 @@ describe('GET /api/routing/gates and POST /api/routing/gates/run', () => {
           });
           expect(resp.status).toBe(400);
         } finally {
-          rmSync(symlinkPath, { force: true });
+          // unlinkSync, not rmSync: Node 24.13 rmSync throws ERR_FS_EISDIR on a directory symlink.
+          unlinkSync(symlinkPath);
         }
       } finally {
         rmSync(outsideDir, { recursive: true, force: true });
