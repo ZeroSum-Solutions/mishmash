@@ -30,6 +30,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ChatAttachment, DesignSystemSummary, LibraryAsset } from '@open-design/contracts';
 import {
   applyLibraryAsset,
+  cancelMediaTask,
   deleteLibraryAsset,
   editLibraryAssetAsPage,
   fetchDesignSystem,
@@ -57,7 +58,11 @@ import { LibraryUploadModal } from './LibraryUploadModal';
 import { LibraryCard } from './library/LibraryCard';
 import { LibraryRail } from './library/LibraryRail';
 import { LibraryGrid } from './library/LibraryGrid';
-import { LibraryComposer, type LibraryComposerGenerateInput } from './library/LibraryComposer';
+import {
+  LibraryComposer,
+  type LibraryComposerGenerateInput,
+  type LibraryComposerTaskSnapshot,
+} from './library/LibraryComposer';
 import {
   cardIdsInBand,
   computeRailCounts,
@@ -704,6 +709,12 @@ export function LibrarySection({ active, onOpenProject }: Props) {
   // fidelity gap this reuse carries: the resulting asset syncs into the
   // Library as `manual-upload`, not `generated`, because that classification
   // is driven by chat-conversation attribution a direct API call has none of.
+  // The in-flight generation's live snapshot, mirrored into the composer so a
+  // user sees real progress and can stop it — the child has rendered both
+  // since wave 7, this parent simply never fed it (INV-7.12).
+  const [composerTask, setComposerTask] = useState<LibraryComposerTaskSnapshot | null>(null);
+  const composerTaskIdRef = useRef<string | null>(null);
+
   const generateFromComposer = useCallback(
     async (input: LibraryComposerGenerateInput): Promise<{ ok: boolean; message?: string }> => {
       try {
@@ -721,19 +732,46 @@ export function LibrarySection({ active, onOpenProject }: Props) {
           ...(image ? { image } : {}),
         });
         if (!task) return { ok: false, message: 'Could not start generation.' };
-        const snap = await waitForMediaTask(task.taskId, { totalBudgetMs: 5 * 60 * 1000 });
-        if (snap.status !== 'done') {
-          return { ok: false, message: snap.error?.message || 'Generation failed.' };
+        composerTaskIdRef.current = task.taskId;
+        try {
+          const snap = await waitForMediaTask(task.taskId, {
+            totalBudgetMs: 5 * 60 * 1000,
+            onSnapshot: (tick) =>
+              // `/wait` returns progress as a DELTA since `nextSince`, so an
+              // empty list on a later tick means "nothing new", not "no
+              // progress" — keep the last non-empty lines rather than
+              // blanking the card.
+              setComposerTask((prev) => ({
+                status: tick.status,
+                progress: tick.progress.length > 0 ? tick.progress : (prev?.progress ?? []),
+                ...(tick.fraction !== undefined ? { fraction: tick.fraction } : {}),
+              })),
+          });
+          if (snap.status !== 'done') {
+            return { ok: false, message: snap.error?.message || 'Generation failed.' };
+          }
+          await syncLibrary();
+          await load();
+          return { ok: true };
+        } finally {
+          // Every exit path — done, failed, and the throw the outer catch
+          // handles — clears the in-flight card and its cancel target.
+          composerTaskIdRef.current = null;
+          setComposerTask(null);
         }
-        await syncLibrary();
-        await load();
-        return { ok: true };
       } catch (err) {
         return { ok: false, message: err instanceof Error ? err.message : 'Could not generate that image.' };
       }
     },
     [load],
   );
+
+  /** Cancels the generation the composer is currently showing, through the
+   *  same media-task route `od media cancel <taskId>` drives. */
+  const cancelComposerTask = useCallback(() => {
+    const id = composerTaskIdRef.current;
+    if (id) void cancelMediaTask(id);
+  }, []);
 
   // --- file upload (drop-anywhere + Upload button) -------------------------
   const openUpload = useCallback((files?: File[]) => {
@@ -1199,7 +1237,11 @@ export function LibrarySection({ active, onOpenProject }: Props) {
           {/* Always available, even on an empty library — generating the
               first asset is a legitimate entry point, not just a follow-up
               action once assets already exist. */}
-          <LibraryComposer onGenerate={generateFromComposer} />
+          <LibraryComposer
+            onGenerate={generateFromComposer}
+            taskSnapshot={composerTask}
+            onCancelTask={cancelComposerTask}
+          />
         </div>
       </div>
 

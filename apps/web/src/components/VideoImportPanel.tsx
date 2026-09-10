@@ -13,7 +13,7 @@ import { useI18n } from '../i18n';
 import type { VideoImportJob, VideoImportProvider } from '@open-design/contracts';
 import { listProjects } from '../state/projects';
 import type { Project } from '../types';
-import { createVideoImport, getVideoImportJob } from '../providers/registry';
+import { cancelMediaTask, createVideoImport, getVideoImportJob } from '../providers/registry';
 import styles from './VideoImportPanel.module.css';
 
 const POLL_INTERVAL_MS = 1500;
@@ -49,6 +49,7 @@ export function VideoImportPanel({ vimeoConnected }: VideoImportPanelProps) {
   const [submitting, setSubmitting] = useState(false);
   const [job, setJob] = useState<VideoImportJob | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [canceling, setCanceling] = useState(false);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -113,6 +114,25 @@ export function VideoImportPanel({ vimeoConnected }: VideoImportPanelProps) {
   };
 
   const fractionPercent = job?.fraction != null ? Math.round(job.fraction * 100) : null;
+
+  /** A queued or running import is the only state the daemon can still stop. */
+  const jobInFlight = job != null && (job.status === 'queued' || job.status === 'running');
+
+  // The generic media-task cancel route, the same one `od media cancel
+  // <taskId>` drives (INV-7.6/7.12): a video import IS a media task, so it
+  // needs no cancel endpoint of its own. The poll keeps running afterwards
+  // and carries the terminal `failed` / `CANCELED` state into the block
+  // below, so nothing here has to guess the outcome.
+  const cancelImport = useCallback(async () => {
+    if (!job) return;
+    setCanceling(true);
+    try {
+      const result = await cancelMediaTask(job.taskId);
+      if (!result.ok) setError(t('videoImport.cancelError'));
+    } finally {
+      setCanceling(false);
+    }
+  }, [job, t]);
 
   return (
     <form className={styles.panel} onSubmit={handleSubmit} aria-labelledby="video-import-panel-title">
@@ -183,6 +203,11 @@ export function VideoImportPanel({ vimeoConnected }: VideoImportPanelProps) {
               ? t('videoImport.progressWithPercent', { status: statusLabel(t, job.status), percent: fractionPercent })
               : statusLabel(t, job.status)}
           </span>
+          {jobInFlight ? (
+            <button type="button" className="ghost" onClick={cancelImport} disabled={canceling}>
+              {t('videoImport.cancel')}
+            </button>
+          ) : null}
           {job.status === 'done' && job.file ? (
             <span>{t('videoImport.doneMessage', { name: job.file.path ?? job.file.name })}</span>
           ) : null}

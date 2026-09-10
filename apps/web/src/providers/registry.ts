@@ -3903,7 +3903,18 @@ export async function exportStoryboardSlider(id: string): Promise<StoryboardApiR
  */
 export async function waitForMediaTask(
   taskId: string,
-  options: { totalBudgetMs?: number; onProgress?: (lines: string[]) => void } = {},
+  options: {
+    totalBudgetMs?: number;
+    onProgress?: (lines: string[]) => void;
+    /**
+     * Called once per poll tick with the FULL snapshot, so a caller that
+     * needs status/fraction as well as the progress lines (the Library
+     * composer's in-flight card) does not have to re-fetch what this loop
+     * already has. Purely additive: `onProgress` keeps its lines-only shape
+     * and every existing call site omits both.
+     */
+    onSnapshot?: (snapshot: MediaTaskSnapshot) => void;
+  } = {},
 ): Promise<MediaTaskSnapshot> {
   const totalBudgetMs = options.totalBudgetMs ?? 15 * 60 * 1000;
   const startedAt = Date.now();
@@ -3949,6 +3960,7 @@ export async function waitForMediaTask(
     }
     const snap = rawBody;
     last = snap;
+    options.onSnapshot?.(snap);
     if (Array.isArray(snap.progress) && snap.progress.length > 0) options.onProgress?.(snap.progress);
     if (typeof snap.nextSince === 'number') since = snap.nextSince;
     if (snap.status === 'done' || snap.status === 'failed' || snap.status === 'interrupted') return snap;

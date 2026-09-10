@@ -107,6 +107,7 @@ const MEDIA_JOB_STRING_FLAGS = new Set([
   'project',
   'preset',
   'input',
+  'inputs',
   'output',
   'url',
   'frames',
@@ -2347,6 +2348,17 @@ async function runMediaJob(rawArgs) {
         process.exit(2);
       }
     }
+    // `concat-copy` is the one preset the daemon validates on `inputs`
+    // (routes/media.ts) rather than `input`; without this the preset
+    // printMediaHelp advertises could never be sent from the CLI.
+    if (flags.inputs) {
+      try {
+        body.inputs = JSON.parse(flags.inputs);
+      } catch {
+        console.error('--inputs must be a JSON array of project-relative paths');
+        process.exit(2);
+      }
+    }
     if (flags.scale) {
       const match = /^(\d+)x(\d+)$/.exec(flags.scale);
       if (!match) {
@@ -2805,7 +2817,7 @@ function printMediaHelp() {
   const limits = resolveMediaJobLimits();
   console.log(`Usage: od media generate --surface <image|video|audio> --model <id> [opts]
        "$OD_NODE_BIN" "$OD_BIN" media generate --surface <image|video|audio> --model <id> [opts]
-       od media job encode --preset <h264-web|concat-copy|frames-to-mp4> --input <path> --output <path> [--overwrite] [--frames <json>] [--scale <w>x<h>] [--wait] [--json]
+       od media job encode --preset <h264-web|concat-copy|frames-to-mp4> --input <path> --output <path> [--overwrite] [--inputs <json>] [--frames <json>] [--scale <w>x<h>] [--wait] [--json]
        od media job download --url <https URL> --output <path> [--overwrite] [--wait] [--json]
        od media status <taskId> [--json]
        od media list [--project <id>] [--json]

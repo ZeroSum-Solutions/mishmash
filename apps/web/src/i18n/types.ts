@@ -2085,6 +2085,8 @@ export interface Dict {
   'videoImport.asPlaceholder': string;
   'videoImport.submit': string;
   'videoImport.submitting': string;
+  'videoImport.cancel': string;
+  'videoImport.cancelError': string;
   'videoImport.notConnectedHint': string;
   'videoImport.projectRequired': string;
   'videoImport.urlRequired': string;

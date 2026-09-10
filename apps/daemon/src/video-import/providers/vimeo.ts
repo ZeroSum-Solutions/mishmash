@@ -59,6 +59,20 @@ export class VideoImportTimeoutError extends Error {
 }
 
 /**
+ * The caller asked for this download to stop (`cancelSignal` fired) before it
+ * finished. Distinct from {@link VideoImportTimeoutError} even though both
+ * abort the SAME internal controller: the download's own deadline is a limit
+ * breach the user should see named, while a cancel is the user's own request
+ * and maps to `CANCELED` (INV-7.6).
+ */
+export class VideoImportCanceledError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'VideoImportCanceledError';
+  }
+}
+
+/**
  * Parse a video id out of the URL shapes Vimeo's own share/player/API links
  * use: `vimeo.com/<id>`, `vimeo.com/channels/x/<id>`, `player.vimeo.com/video/<id>`,
  * `api.vimeo.com/videos/<id>`, and a bare id typed directly. Real Vimeo video
@@ -206,9 +220,15 @@ const MAX_DOWNLOAD_REDIRECTS = 3;
  * under `stagingDir`, checking both the declared `Content-Length` and the
  * streamed byte count against `maxBytes` as bytes arrive (never trusting
  * only the declared header), and aborting past `timeoutMs`. The staging
- * temp is always removed on any failure path (limit breach, timeout,
+ * temp is always removed on any failure path (limit breach, timeout, cancel,
  * network error) — only the caller, after this resolves successfully, is
  * responsible for moving the bytes into the project.
+ *
+ * `cancelSignal` lets the caller stop an in-flight download (INV-7.6): it
+ * aborts the SAME internal controller the timeout path already uses, so the
+ * fetch and the reader loop need no second cancellation mechanism, and the
+ * catch below reports it as {@link VideoImportCanceledError} rather than a
+ * timeout the user never hit.
  */
 export async function downloadVimeoVideoToStaging(input: {
   downloadUrl: string;
@@ -216,12 +236,24 @@ export async function downloadVimeoVideoToStaging(input: {
   timeoutMs: number;
   stagingDir: string;
   onProgress?: (bytesRead: number, declaredTotal: number | null) => void;
+  cancelSignal?: AbortSignal;
 }): Promise<{ stagingPath: string; bytes: number }> {
   await fs.promises.mkdir(input.stagingDir, { recursive: true });
   const stagingPath = path.join(input.stagingDir, `video-import-${process.pid}-${Date.now()}.tmp`);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), input.timeoutMs);
+  // Recorded before the abort so the catch can tell a caller-driven cancel
+  // apart from the deadline; both reach the same `controller.signal`.
+  let canceledByCaller = false;
+  const onCancel = () => {
+    canceledByCaller = true;
+    controller.abort();
+  };
+  if (input.cancelSignal) {
+    if (input.cancelSignal.aborted) onCancel();
+    else input.cancelSignal.addEventListener('abort', onCancel, { once: true });
+  }
   let bytesRead = 0;
   let declaredTotal: number | null = null;
   let handle: FileHandle | null = null;
@@ -277,6 +309,9 @@ export async function downloadVimeoVideoToStaging(input: {
     return { stagingPath, bytes: bytesRead };
   } catch (err) {
     await cleanupStaging();
+    if (canceledByCaller) {
+      throw new VideoImportCanceledError('video import download canceled');
+    }
     if (err instanceof VideoImportLimitExceededError || err instanceof VideoImportContainmentError) {
       throw err;
     }
@@ -293,5 +328,6 @@ export async function downloadVimeoVideoToStaging(input: {
     throw err;
   } finally {
     clearTimeout(timer);
+    input.cancelSignal?.removeEventListener('abort', onCancel);
   }
 }

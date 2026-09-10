@@ -288,8 +288,13 @@ export interface MediaEncodeFrameInput {
 export type CreateMediaJobRequest =
   | {
       kind: 'encode';
-      /** Project-relative input path. */
-      input: string;
+      /**
+       * Project-relative input path. Required by `h264-web` only — the
+       * daemon's validator requires `inputs` for `concat-copy` and `frames`
+       * for `frames-to-mp4` instead, and the encode runner already treats a
+       * missing `input` as a rejection for the one preset that needs it.
+       */
+      input?: string;
       /** Project-relative output path. */
       output: string;
       preset: MediaEncodePreset;
