@@ -73,6 +73,41 @@ describe('ActorPromptDialog', () => {
     expect(screen.queryByTestId('actor-prompt-dialog')).toBeNull();
   });
 
+  // W8D fix r0 — the integration wave-8 P0 Playwright run failed 14 times in
+  // e2e/ui/app-design-files.test.ts with
+  //   <div role="presentation" class="dialog_backdrop__… modal-backdrop"> intercepts
+  //   pointer events
+  // because the prompt rendered through the shared modal Dialog, which always
+  // wraps its panel in a full-viewport backdrop (packages/components/src/dialog.tsx).
+  // Every browser profile that has not answered yet — which is every Playwright
+  // test — had the whole page sealed behind it. The prompt's own docblock says it
+  // "never blocks anything"; this pins that invariant.
+  it('never blocks the page behind it', () => {
+    const clickedBehind = vi.fn();
+    render(
+      <I18nProvider>
+        <>
+          <button type="button" data-testid="page-behind" onClick={clickedBehind}>
+            behind
+          </button>
+          <ActorPromptDialog />
+        </>
+      </I18nProvider>,
+    );
+
+    const prompt = screen.getByTestId('actor-prompt-dialog');
+    // No modal chrome anywhere in the document: no backdrop layer to intercept
+    // pointer events, and no aria-modal telling assistive tech the rest of the
+    // page is inert.
+    expect(document.querySelector('.modal-backdrop')).toBeNull();
+    expect(document.querySelector('[role="presentation"]')).toBeNull();
+    expect(prompt.getAttribute('aria-modal')).toBeNull();
+
+    // And the page behind it stays operable.
+    fireEvent.click(screen.getByTestId('page-behind'));
+    expect(clickedBehind).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses to store an empty name', () => {
     renderPrompt();
     fireEvent.click(screen.getByTestId('actor-prompt-submit'));
