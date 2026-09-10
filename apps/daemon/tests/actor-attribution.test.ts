@@ -155,18 +155,23 @@ describe('W8D: x-od-actor stamps actorName on the run and its messages', () => {
     expect(pinned?.actorName ?? null).toBeNull();
   });
 
-  it('degrades an over-long actor header to unattributed instead of rejecting it', async () => {
-    const tooLong = 'D'.repeat(MAX_ACTOR_NAME_LENGTH + 40);
+  it('caps an over-long actor header at the contract length instead of rejecting it', async () => {
+    // ONE outcome, not a choice of two: `packages/contracts/src/api/actor.ts`
+    // documents the cap ("a longer value is trimmed to this length, never
+    // rejected"), so the stamped name is the trimmed header sliced to
+    // MAX_ACTOR_NAME_LENGTH. The header below starts with distinguishable text
+    // so the assertion also pins WHICH 60 characters survive -- the first ones.
+    const tooLong = `Devin ${'x'.repeat(MAX_ACTOR_NAME_LENGTH + 40)}`;
+    const expected = tooLong.slice(0, MAX_ACTOR_NAME_LENGTH);
     const fixture = await startRun({ [ACTOR_HEADER_NAME]: tooLong });
     expect(fixture.status).toBe(202);
 
     const messages = await readMessages(fixture.projectId, fixture.conversationId);
     const pinned = messages.find((m) => m.id === fixture.assistantMessageId);
     const stamped = pinned?.actorName ?? null;
-    // Either dropped entirely or capped -- never the raw over-long value, and
-    // never a 4xx.
-    expect(stamped === null || (typeof stamped === 'string' && stamped.length <= MAX_ACTOR_NAME_LENGTH))
-      .toBe(true);
+    expect(stamped).not.toBeNull();
+    expect(stamped).toBe(expected);
+    expect(stamped?.length).toBe(MAX_ACTOR_NAME_LENGTH);
   });
 
   it('degrades a control-character actor header to unattributed instead of crashing', async () => {
