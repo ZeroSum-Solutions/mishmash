@@ -9,6 +9,7 @@ GITHUB_HOSTED = ["ubuntu-24.04"]
 WINDOWS_HOSTED = ["windows-latest"]
 CONTABO_CONTROL = ["self-hosted", "Linux", "X64", "od-persistent-ci", "od-ci-hot-poc"]
 BLACKSMITH_4V = ["blacksmith-4vcpu-ubuntu-2404"]
+BLACKSMITH_8V = ["blacksmith-8vcpu-ubuntu-2404"]
 
 
 def compact_json(value):
@@ -26,14 +27,19 @@ def resolve_contract(mode):
     general_medium = BLACKSMITH_4V if mode == "performance" else GITHUB_HOSTED
     hot_path = GITHUB_HOSTED if mode == "economic" else BLACKSMITH_4V
     control = CONTABO_CONTROL if mode == "default" else GITHUB_HOSTED
+    # performance: the serial daemon shards and the workspace unit job leave GitHub-hosted for Blacksmith 4vcpu,
+    # and the file-parallel E2E Vitest job gets 8 vcpu (configure-ci-parallelism derives workers = nproc/2).
+    workspace_unit = BLACKSMITH_4V if mode == "performance" else GITHUB_HOSTED
+    js_large = BLACKSMITH_8V if mode == "performance" else hot_path
 
     return {
         "runs_on": {
             "control": control,
             "general_medium": general_medium,
-            "workspace_unit": GITHUB_HOSTED,
+            "workspace_unit": workspace_unit,
             "windows_tools": WINDOWS_HOSTED,
             "js_hot": hot_path,
+            "js_large": js_large,
             "ui_hot": hot_path,
             "visual_hot": hot_path,
         },

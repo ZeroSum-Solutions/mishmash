@@ -1322,10 +1322,10 @@ async function checkCiTopology(): Promise<boolean> {
   const daemonErrors = !daemonJob
     ? [".github/workflows/ci.yml daemon_full_tests job block not found"]
     : [
-        "name: Daemon full tests (${{ matrix.shard }}/4)",
+        "name: Daemon full tests (${{ matrix.shard }}/6)",
         "fail-fast: false",
-        "shard: [1, 2, 3, 4]",
-        "vitest run -c vitest.config.ts --shard ${{ matrix.shard }}/4",
+        "shard: [1, 2, 3, 4, 5, 6]",
+        "vitest run -c vitest.config.ts --shard ${{ matrix.shard }}/6",
       ]
         .filter((needle) => !daemonJob.includes(needle))
         .map((needle) => `.github/workflows/ci.yml daemon_full_tests is missing ${needle}`);

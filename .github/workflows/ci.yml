@@ -312,7 +312,7 @@ jobs:
   # --shard splits files by hash count, not by duration, so the per-shard wall
   # clock is whatever the first live runs show. Files stay serial inside each shard.
   daemon_full_tests:
-    name: Daemon full tests (${{ matrix.shard }}/4)
+    name: Daemon full tests (${{ matrix.shard }}/6)
     needs: [scopes, runners]
     if: ${{ needs.scopes.outputs.daemon_tests_required == 'true' }}
     runs-on: ${{ fromJSON(needs.runners.outputs.runs_on).workspace_unit }}
@@ -320,7 +320,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6]
 
     steps:
       - name: Checkout
@@ -373,7 +373,7 @@ jobs:
       - name: Daemon full tests
         env:
           OD_WATCHER_TEST_DEBUG: "1"
-        run: pnpm --filter @open-design/daemon exec vitest run -c vitest.config.ts --shard ${{ matrix.shard }}/4
+        run: pnpm --filter @open-design/daemon exec vitest run -c vitest.config.ts --shard ${{ matrix.shard }}/6
 
   windows_tools_pack_payload_tests:
     name: Windows tools-pack payload tests
@@ -423,7 +423,7 @@ jobs:
     name: E2E Vitest
     needs: [scopes, runners]
     if: ${{ needs.scopes.outputs.run_e2e_vitest == 'true' }}
-    runs-on: ${{ fromJSON(needs.runners.outputs.runs_on).js_hot }}
+    runs-on: ${{ fromJSON(needs.runners.outputs.runs_on).js_large }}
     timeout-minutes: 20
 
     steps:
@@ -436,14 +436,14 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
         with:
-          runner-labels: ${{ toJSON(fromJSON(needs.runners.outputs.runs_on).js_hot) }}
+          runner-labels: ${{ toJSON(fromJSON(needs.runners.outputs.runs_on).js_large) }}
 
       - name: Setup Playwright
         uses: ./.github/actions/setup-playwright
         with:
           package-json-path: e2e/package.json
           install-command: pnpm -C e2e exec playwright install --with-deps chromium
-          runner-labels: ${{ toJSON(fromJSON(needs.runners.outputs.runs_on).js_hot) }}
+          runner-labels: ${{ toJSON(fromJSON(needs.runners.outputs.runs_on).js_large) }}
 
       - name: Prebuild workspace type declarations
         run: |

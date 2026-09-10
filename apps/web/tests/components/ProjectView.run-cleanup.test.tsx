@@ -2566,6 +2566,17 @@ describe('ProjectView daemon cleanup', () => {
       options.onRunCreated?.('run-live-flaky');
       options.handlers.onError(genericDisconnect);
     });
+    // The live send's own disconnect (above) is the first of the "two generic
+    // disconnects" this test is named for; the reattach that follows it must
+    // disconnect a second time to trip MAX_TRANSIENT_RETRIES and arm the
+    // backoff. Without this the reattach call just hangs (the default mock
+    // never resolves it), which stalls the test on a call count that can
+    // never arrive rather than on the backoff this test is pinning.
+    reattachDaemonRun.mockImplementation(async (options: {
+      handlers: { onError: (error: Error) => void };
+    }) => {
+      options.handlers.onError(genericDisconnect);
+    });
 
     chatPaneSpy.mockClear();
 
@@ -2592,20 +2603,38 @@ describe('ProjectView daemon cleanup', () => {
       />,
     );
 
+    // waitForReadyChatPaneProps polls with real timers (testing-library's
+    // waitFor), so resolve it before switching to fake timers below.
     const sendProps = await waitForReadyChatPaneProps();
-    await sendProps!.onSend!('flaky stream', [], []);
 
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(reattachDaemonRun.mock.calls.length).toBeGreaterThanOrEqual(1), {
-      timeout: 2_000,
+    // Same fake-timer technique as the null-status-probe backoff test: the
+    // production backoff is a fixed 3s `setTimeout` guarded by
+    // `genericDisconnectBackoffUntilRef`. Real timers made this race CI load
+    // (see git history on this test); fake timers make the boundary exact.
+    vi.useFakeTimers();
+
+    await act(async () => {
+      await sendProps!.onSend!('flaky stream', [], []);
+      // Flush the send's synchronous disconnect, the resulting reattach
+      // attempt, and that reattach's own disconnect (which trips the retry
+      // cap and arms the backoff) — none of this depends on a real timer.
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(streamViaDaemon).toHaveBeenCalledTimes(1);
+    expect(reattachDaemonRun.mock.calls.length).toBe(1);
+
+    // Just under the 3s backoff: still capped at 1 attempt.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_999);
     });
     expect(reattachDaemonRun.mock.calls.length).toBe(1);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(reattachDaemonRun.mock.calls.length).toBe(1);
-    await waitFor(() => expect(reattachDaemonRun.mock.calls.length).toBeGreaterThanOrEqual(2), {
-      timeout: 4_500,
+
+    // Crossing the backoff boundary fires the next retry.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
     });
-  }, 12_000);
+    expect(reattachDaemonRun.mock.calls.length).toBe(2);
+  });
 
   it('keeps a partial live generic disconnect recoverable after the first failure', async () => {
     const runCreatedAt = Date.now();
@@ -2753,27 +2782,57 @@ describe('ProjectView daemon cleanup', () => {
       />,
     );
 
+    // waitForReadyChatPaneProps polls with real timers (testing-library's
+    // waitFor), so resolve it before switching to fake timers below.
     const sendProps = await waitForReadyChatPaneProps();
-    await sendProps!.onSend!('slow live status probe', [], []);
 
-    await waitFor(() => {
-      expect(fetchChatRunStatus).toHaveBeenCalledTimes(1);
+    // Same fake-timer technique as the two backoff tests above: the
+    // production backoff is a fixed 3s `setTimeout` guarded by
+    // `genericDisconnectBackoffUntilRef`, armed synchronously (before the
+    // status probe is awaited). Real timers made the "not yet" / "now"
+    // window race CI load; fake timers make the 3s boundary exact regardless
+    // of whether the slow probe below has answered yet.
+    vi.useFakeTimers();
+
+    await act(async () => {
+      await sendProps!.onSend!('slow live status probe', [], []);
+      // Flush the send's first (awaited) disconnect and the second
+      // (fire-and-forget) disconnect that trips the retry cap, arms the
+      // backoff, and kicks off the slow status probe — none of that depends
+      // on a real timer.
+      await vi.advanceTimersByTimeAsync(0);
     });
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(fetchChatRunStatus).toHaveBeenCalledTimes(1);
     expect(reattachDaemonRun).not.toHaveBeenCalled();
 
-    resolveStatusProbe({
-      id: 'run-live-slow-status-probe',
-      status: 'running',
-      createdAt: runCreatedAt,
-      updatedAt: runCreatedAt + 1,
-      exitCode: null,
-      signal: null,
+    // Just under the 3s backoff, with the status probe still unresolved:
+    // still not called. This is the "backoff installed before the slow probe
+    // can trigger reattach" the test is named for.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_999);
     });
+    expect(reattachDaemonRun).not.toHaveBeenCalled();
 
-    await waitFor(() => expect(reattachDaemonRun).toHaveBeenCalledTimes(1), {
-      timeout: 4_000,
+    // The slow probe finally answers, well before the backoff timer's own
+    // callback runs.
+    await act(async () => {
+      resolveStatusProbe({
+        id: 'run-live-slow-status-probe',
+        status: 'running',
+        createdAt: runCreatedAt,
+        updatedAt: runCreatedAt + 1,
+        exitCode: null,
+        signal: null,
+      });
+      await vi.advanceTimersByTimeAsync(0);
     });
+    expect(reattachDaemonRun).not.toHaveBeenCalled();
+
+    // Crossing the backoff boundary fires the reattach.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(reattachDaemonRun).toHaveBeenCalledTimes(1);
   });
 
   it('keeps generic-disconnect cap retryable when the follow-up status probe returns null, but backs off before retrying', async () => {
@@ -2834,6 +2893,15 @@ describe('ProjectView daemon cleanup', () => {
       options.handlers.onError(genericDisconnect);
     });
 
+    // The production backoff is a fixed 3s `setTimeout` (see
+    // `scheduleProjectTimeout` calls guarding `genericDisconnectBackoffUntilRef`
+    // in ProjectView). Driving that with real timers made this test race CI
+    // load: a real-time `waitFor` window has to budget for both the 3s backoff
+    // AND however long the CI host takes to schedule the timer callback, and
+    // under load those can collide. Fake timers make the 3s boundary exact
+    // regardless of host speed.
+    vi.useFakeTimers();
+
     render(
       <ProjectView
         project={{ id: 'project-null-status-retry', name: 'Project', skillId: null, designSystemId: null } as never}
@@ -2857,16 +2925,28 @@ describe('ProjectView daemon cleanup', () => {
       />,
     );
 
-    await waitFor(() => expect(reattachDaemonRun.mock.calls.length).toBeGreaterThanOrEqual(2), {
-      timeout: 2_000,
+    // Let the mount effect run its two initial reattach attempts: the first
+    // generic disconnect is below the retry cap and retries immediately: the
+    // second trips the cap, probes status (which resolves null), and arms the
+    // 3s backoff. None of this depends on a real timer firing, so flushing the
+    // microtask queue (advancing fake time by 0ms) is enough to settle it.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
     });
     expect(reattachDaemonRun.mock.calls.length).toBe(2);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(reattachDaemonRun.mock.calls.length).toBe(2);
-    await waitFor(() => expect(reattachDaemonRun.mock.calls.length).toBeGreaterThanOrEqual(3), {
-      timeout: 4_500,
+
+    // Just under the 3s backoff: still capped at 2 attempts.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_999);
     });
-  }, 12_000);
+    expect(reattachDaemonRun.mock.calls.length).toBe(2);
+
+    // Crossing the backoff boundary fires the retry.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(reattachDaemonRun.mock.calls.length).toBe(3);
+  });
 
   // SUPERSEDED IN PART (W1J.1). This is the case the W1J.1 spec names at
   // ~:2867-2973 on 29a2a7703. What it pins is unchanged and still true: a
