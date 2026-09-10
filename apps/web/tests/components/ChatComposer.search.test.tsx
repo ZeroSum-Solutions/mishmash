@@ -253,9 +253,16 @@ describe('ChatComposer /search command', () => {
     }));
 
     await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
-    expect(mockedUploadProjectFiles).toHaveBeenCalledWith('project-1', [
-      expect.objectContaining({ name: 'drawing.png', type: 'image/png' }),
-    ]);
+    // W8A: the annotation upload rides the same staged transport as every
+    // other web surface, so the shared client also takes the project root
+    // (`dir` undefined) and the session options that drive
+    // `UploadProgressCard`. The file it sends is unchanged.
+    expect(mockedUploadProjectFiles).toHaveBeenCalledWith(
+      'project-1',
+      [expect.objectContaining({ name: 'drawing.png', type: 'image/png' })],
+      undefined,
+      expect.objectContaining({ onEvents: expect.any(Function) }),
+    );
     expect(onSend).toHaveBeenCalledWith(
       'please update this spot',
       [{ path: 'uploads/drawing.png', name: 'drawing.png', kind: 'image', order: 0 }],
