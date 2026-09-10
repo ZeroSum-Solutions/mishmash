@@ -1261,8 +1261,15 @@ test('[P0] home design-system picker carries explicit and cleared selections int
 
   await selectHomeDesignSystem(page, 'agentic');
   await page.getByTestId('home-hero-template-trigger').click();
-  await page.getByTestId('home-hero-template-card-deck').click();
-  await page.getByTestId('home-hero-input').fill('Create a design-system aware deck.');
+  // Superseded target: this picker case used to name `deck` / `prototype`.
+  // The Template picker lists `create`-group scenario chips only
+  // (`TemplatePicker`'s `templateChips` = `orderedCreateChips()` filtered to
+  // `apply-scenario`), and both ids moved to the `migrate` group in the
+  // 2026-08-09 Home restructure, so no card with those ids can exist here any
+  // more. `hyperframes` / `web-clone` are real cards in that list, so the case
+  // still proves the same thing about the picker.
+  await page.getByTestId('home-hero-template-card-hyperframes').click();
+  await page.getByTestId('home-hero-input').fill('Create a design-system aware artifact.');
 
   const selectedRequestPromise = page.waitForRequest((request) =>
     request.method() === 'POST' && new URL(request.url()).pathname === '/api/projects',
@@ -1292,7 +1299,7 @@ test('[P1] home Brand Kit chip opens design-system creation and starts brand ext
   await routeBrandExtraction(page, brandRequests);
 
   await gotoEntryHome(page);
-  await page.getByTestId('home-hero-rail-create-brand-kit').click();
+  await clickHeroRailChip(page, 'create-brand-kit');
 
   await expect(page).toHaveURL(/\/design-systems\/create$/);
   await expect(page.getByRole('heading', { name: /Design a system, in minutes/i })).toBeVisible();
@@ -1403,7 +1410,14 @@ test('[P2] home template picker supports no-results, clear, Escape, and outside 
   await gotoEntryHome(page);
 
   await page.getByTestId('home-hero-template-trigger').click();
-  await page.getByTestId('home-hero-template-card-deck').click();
+  // Superseded target: this picker case used to name `deck` / `prototype`.
+  // The Template picker lists `create`-group scenario chips only
+  // (`TemplatePicker`'s `templateChips` = `orderedCreateChips()` filtered to
+  // `apply-scenario`), and both ids moved to the `migrate` group in the
+  // 2026-08-09 Home restructure, so no card with those ids can exist here any
+  // more. `hyperframes` / `web-clone` are real cards in that list, so the case
+  // still proves the same thing about the picker.
+  await page.getByTestId('home-hero-template-card-hyperframes').click();
   await expect(page.getByTestId('home-hero-template-reset')).toBeVisible();
 
   await page.getByTestId('home-hero-template-trigger').click();
@@ -1427,14 +1441,21 @@ test('[P1] home template picker selects a starter template and can clear it', as
   await page.getByTestId('home-hero-template-trigger').click();
   const menu = page.getByTestId('home-hero-template-menu');
   await expect(menu).toBeVisible();
-  await expect(page.getByTestId('home-hero-template-card-prototype')).toBeVisible();
-  await expect(page.getByTestId('home-hero-template-card-deck')).toBeVisible();
+  // Superseded target: this picker case used to name `deck` / `prototype`.
+  // The Template picker lists `create`-group scenario chips only
+  // (`TemplatePicker`'s `templateChips` = `orderedCreateChips()` filtered to
+  // `apply-scenario`), and both ids moved to the `migrate` group in the
+  // 2026-08-09 Home restructure, so no card with those ids can exist here any
+  // more. `hyperframes` / `web-clone` are real cards in that list, so the case
+  // still proves the same thing about the picker.
+  await expect(page.getByTestId('home-hero-template-card-web-clone')).toBeVisible();
+  await expect(page.getByTestId('home-hero-template-card-hyperframes')).toBeVisible();
 
-  await page.getByTestId('home-hero-template-search').fill('deck');
-  await expect(page.getByTestId('home-hero-template-card-deck')).toBeVisible();
-  await page.getByTestId('home-hero-template-card-deck').click();
+  await page.getByTestId('home-hero-template-search').fill('hyper');
+  await expect(page.getByTestId('home-hero-template-card-hyperframes')).toBeVisible();
+  await page.getByTestId('home-hero-template-card-hyperframes').click();
 
-  await expect(page.getByTestId('home-hero-template-trigger')).toContainText(/Slide deck/i);
+  await expect(page.getByTestId('home-hero-template-trigger')).toContainText(/HyperFrames/i);
 
   await page.getByTestId('home-hero-template-reset').click();
   await expect(page.getByTestId('home-hero-footer-option-speakerNotes')).toHaveCount(0);
@@ -1567,7 +1588,7 @@ test('[P1] home hero example presets update the composer input for prototype and
   const input = page.getByTestId('home-hero-input');
   await expect(input).toHaveText('');
 
-  await page.getByTestId('home-hero-rail-prototype').click();
+  await clickHeroRailChip(page, 'prototype');
   await expect(page.getByTestId('home-hero-plugin-presets')).toBeVisible();
   await useExamplePreset(page, 'example-web-prototype');
   await expect(input).toHaveText(
@@ -1587,7 +1608,7 @@ test('[P1] home hero example preset Use button applies the template without rely
   const input = page.getByTestId('home-hero-input');
   await expect(input).toHaveText('');
 
-  await page.getByTestId('home-hero-rail-prototype').click();
+  await clickHeroRailChip(page, 'prototype');
   await expect(page.getByTestId('home-hero-plugin-presets')).toBeVisible();
   await useExamplePreset(page, 'example-web-prototype');
 
@@ -1651,7 +1672,7 @@ test('[P1] home hero example preset Copy creates a project from the template pre
   });
 
   await gotoEntryHome(page);
-  await page.getByTestId('home-hero-rail-prototype').click();
+  await clickHeroRailChip(page, 'prototype');
   await expect(page.locator('[data-testid="home-hero-plugin-preset"][data-plugin-id="example-web-prototype"]')).toBeVisible();
   const preset = page.locator('[data-testid="home-hero-plugin-preset"][data-plugin-id="example-web-prototype"]');
   await preset.hover();
@@ -1689,7 +1710,7 @@ test('[P1] home hero example preset Copy failure keeps Home retryable', async ({
   });
 
   await gotoEntryHome(page);
-  await page.getByTestId('home-hero-rail-prototype').click();
+  await clickHeroRailChip(page, 'prototype');
   const duplicateButton = page.getByTestId('home-hero-plugin-preset-duplicate-example-web-prototype');
   await page.locator('[data-testid="home-hero-plugin-preset"][data-plugin-id="example-web-prototype"]').hover();
   await expect(duplicateButton).toBeVisible();
@@ -1753,7 +1774,7 @@ test('[P1] home hero preset inline Use and Duplicate actions work from the templ
   });
 
   await gotoEntryHome(page);
-  await page.getByTestId('home-hero-rail-prototype').click();
+  await clickHeroRailChip(page, 'prototype');
   const card = page.locator('[data-testid="home-hero-plugin-preset"][data-plugin-id="example-web-prototype"]');
   await card.hover();
 
@@ -1776,7 +1797,7 @@ test('[P1] home hero deck example preset updates the composer input', async ({ p
   const input = page.getByTestId('home-hero-input');
   await expect(input).toHaveText('');
 
-  await page.getByTestId('home-hero-rail-deck').click();
+  await clickHeroRailChip(page, 'deck');
   await expect(page.getByTestId('home-hero-plugin-presets')).toBeVisible();
   await useExamplePreset(page, 'example-simple-deck');
   await expect(input).toHaveText(
@@ -1788,7 +1809,7 @@ test('[P1] home hero prompt example cards fill the composer for fallback modes',
   await gotoEntryHome(page);
 
   const input = page.getByTestId('home-hero-input');
-  await page.getByTestId('home-hero-rail-audio').click();
+  await clickHeroRailChip(page, 'audio');
   await expect(page.getByTestId('home-hero-prompt-examples')).toBeVisible();
   await expect(page.getByTestId('home-hero-plugin-presets')).toHaveCount(0);
 
@@ -1803,7 +1824,7 @@ test('[P1] home hero prompt example cards fill the composer for fallback modes',
 test('[P2] clearing the selected hero template restores the rail and clears preset chrome', async ({ page }) => {
   await gotoEntryHome(page);
 
-  await page.getByTestId('home-hero-rail-prototype').click();
+  await clickHeroRailChip(page, 'prototype');
   await expect(page.getByTestId('home-hero-plugin-presets')).toBeVisible();
   await expect(page.getByTestId('home-hero-template-reset')).toBeVisible();
   await expect(page.getByTestId('home-hero-design-system-trigger')).toBeVisible();
@@ -1823,7 +1844,7 @@ test('[P1] after clearing one mode, selecting another example updates the compos
 
   const input = page.getByTestId('home-hero-input');
 
-  await page.getByTestId('home-hero-rail-prototype').click();
+  await clickHeroRailChip(page, 'prototype');
   await expect(page.getByTestId('home-hero-plugin-presets')).toBeVisible();
   await useExamplePreset(page, 'example-web-prototype');
   await expect(input).toHaveText(
@@ -1853,10 +1874,36 @@ test('[P1] selecting another example updates the composer input', async ({ page 
   await expect(input).toHaveText('Create refreshable, auditable MishMash artifacts.');
 });
 
+// Resolve a hero rail chip on whichever surface currently renders it, then
+// click it.
+//
+// The 2026-08-09 Home restructure split the catalogue: `create`-group chips
+// render inline in the `home-hero-type-tabs` rail, while the chips that moved
+// to the `migrate` group (Slide deck, Prototype, Image, Video, Audio, Create
+// Brand Kit, …) render only as menu items inside the "More" ShortcutsMenu
+// portal, which mounts while that menu is open. Both surfaces publish the same
+// `home-hero-rail-<id>` test id and both call the same `handlePickTaskChip`
+// handler, so a call site only has to open "More" first when the inline tab is
+// not there. This mirrors the pattern already proven by
+// `[P2] home hero exposes the template picker, starter cards, blank project,
+// and More shortcuts`.
+async function clickHeroRailChip(page: Page, chipId: string) {
+  const inline = page.getByTestId(`home-hero-rail-${chipId}`);
+  if (await inline.isVisible()) {
+    await expect(inline).toBeEnabled();
+    await inline.click();
+    return;
+  }
+  await page.getByTestId('home-hero-shortcuts-trigger').click();
+  const menu = page.getByTestId('home-hero-shortcuts-menu');
+  await expect(menu).toBeVisible();
+  const item = menu.getByTestId(`home-hero-rail-${chipId}`);
+  await expect(item).toBeEnabled();
+  await item.click();
+}
+
 async function expectChipSelection(page: Page, chipId: string, _label: string) {
-  const chip = page.getByTestId(`home-hero-rail-${chipId}`);
-  await expect(chip).toBeEnabled();
-  await chip.click();
+  await clickHeroRailChip(page, chipId);
   await expect(page.getByTestId('home-hero-template-reset')).toBeVisible();
 }
 
