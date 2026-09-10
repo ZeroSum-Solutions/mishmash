@@ -2354,6 +2354,39 @@ describe('reportRunCompleted', () => {
       langfuse_delivery_status: 'accepted',
     });
   });
+
+  // W8C item 2: the missing-sink warning must fire exactly once per daemon
+  // process (guard: `missingTelemetrySinkWarned`, langfuse-trace.ts:55) and
+  // its text must say so, so an operator reading the log knows the single
+  // line is not a sign the condition stopped. `missingTelemetrySinkWarned`
+  // is module-level state that this describe block's earlier tests may
+  // already have flipped to `true` (e.g. "does nothing when no Langfuse
+  // config is available", above) -- `vi.resetModules()` plus a fresh dynamic
+  // import gets a clean module instance so this test's "exactly once" claim
+  // does not depend on suite execution order.
+  //
+  // RED on base: the message text lacks the "(logged once per daemon
+  // process; ...)" suffix -- a real string mismatch, not an import/compile
+  // failure; the once-per-process COUNT already holds on base by
+  // construction (investigated per the brief's item 2; no multi-warn path
+  // was found under this construction -- see 8C-proof.md).
+  it('warns exactly once across two reportRunCompleted calls in one process, and says logging is once-per-process', async () => {
+    vi.resetModules();
+    const fresh = await import('../src/langfuse-trace.js');
+    // `warnSpy` (this describe block's `beforeEach`) is already watching the
+    // real `console.warn`; `vi.resetModules()` gives `fresh` a clean
+    // `missingTelemetrySinkWarned = false` without disturbing that spy.
+
+    const ctx = makeCtx({ prefs: { metrics: true, content: true, artifactManifest: false } });
+    await fresh.reportRunCompleted(ctx, { config: null });
+    await fresh.reportRunCompleted(ctx, { config: null });
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]![0]).toBe(
+      '[langfuse-trace] Telemetry metrics are enabled but no relay or Langfuse credentials are configured '
+        + '(logged once per daemon process; configure a relay or Langfuse key to silence)',
+    );
+  });
 });
 
 function makeFeedbackCtx(
