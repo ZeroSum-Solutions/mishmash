@@ -16,13 +16,14 @@ import { ActorPromptDialog } from '../../src/components/ActorPromptDialog';
 import { I18nProvider } from '../../src/i18n';
 import {
   getStoredActorName,
+  hasSeenActorPrompt,
   setStoredActorName,
 } from '../../src/runtime/actor-identity';
 
-function renderPrompt() {
+function renderPrompt(homeVisible = true) {
   return render(
     <I18nProvider>
-      <ActorPromptDialog />
+      <ActorPromptDialog homeVisible={homeVisible} />
     </I18nProvider>,
   );
 }
@@ -90,7 +91,7 @@ describe('ActorPromptDialog', () => {
           <button type="button" data-testid="page-behind" onClick={clickedBehind}>
             behind
           </button>
-          <ActorPromptDialog />
+          <ActorPromptDialog homeVisible />
         </>
       </I18nProvider>,
     );
@@ -106,6 +107,79 @@ describe('ActorPromptDialog', () => {
     // And the page behind it stays operable.
     fireEvent.click(screen.getByTestId('page-behind'));
     expect(clickedBehind).toHaveBeenCalledTimes(1);
+  });
+
+  // W8D fix r1 — the wave-8 integration P0 Playwright run failed 15 cases on
+  // this card. Four of them (e2e/ui/entry-chrome-flows.test.ts:129, :567, :686,
+  // :879) died the moment a real dialog opened:
+  //   locator('page.getByRole('dialog')') resolved to 2 elements
+  // because the corner card carried role="dialog" too. A non-blocking nudge is
+  // not a dialog: it takes no focus, traps nothing, and must never be counted
+  // among the page's dialogs.
+  it('is not a dialog, so a real dialog stays the only one on the page', () => {
+    render(
+      <I18nProvider>
+        <>
+          <div role="dialog" aria-label="Settings" data-testid="real-dialog" />
+          <ActorPromptDialog homeVisible />
+        </>
+      </I18nProvider>,
+    );
+
+    const prompt = screen.getByTestId('actor-prompt-dialog');
+    expect(prompt.getAttribute('role')).not.toBe('dialog');
+    // Playwright's page.getByRole('dialog') is strict-mode: a second dialog on
+    // the page fails every test that opens a real one.
+    const dialogs = screen.getAllByRole('dialog');
+    expect(dialogs).toHaveLength(1);
+    expect(dialogs[0]?.getAttribute('data-testid')).toBe('real-dialog');
+  });
+
+  // The other eleven failures were "subtree intercepts pointer events" over
+  // controls the card sat on top of — a deck's Next slide button, the HTML
+  // preview toolbar, a plugin details modal's Use button. A fixed corner card
+  // cannot promise it will miss every control on every surface, so it is
+  // scoped to the one surface it belongs on: the Home view, with no project
+  // open and no sub-view (Plugins, Projects, Tasks…) in front of it.
+  it('stays off every surface except Home, without spending the one-time gate', () => {
+    const { rerender } = render(
+      <I18nProvider>
+        <ActorPromptDialog homeVisible={false} />
+      </I18nProvider>,
+    );
+
+    expect(screen.queryByTestId('actor-prompt-dialog')).toBeNull();
+    // Not asked is not answered: the once-per-profile gate is still unspent.
+    expect(hasSeenActorPrompt()).toBe(false);
+    expect(getStoredActorName()).toBeNull();
+
+    rerender(
+      <I18nProvider>
+        <ActorPromptDialog homeVisible />
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId('actor-prompt-dialog')).toBeTruthy();
+  });
+
+  // Scoping it to Home was not enough: on Home itself the fixed corner card
+  // still sat on the create rail's "More" shortcuts trigger
+  // (e2e/ui/entry-chrome-flows.test.ts:129 -> home-hero-shortcuts-trigger,
+  // "<aside …> intercepts pointer events"). No corner of a viewport is
+  // reliably free of controls, so the card stops floating: it renders in the
+  // Home surface's own flow, where it can only ever push content, never cover
+  // it.
+  it('renders inside the Home surface instead of floating over it', () => {
+    const { container } = render(
+      <I18nProvider>
+        <ActorPromptDialog homeVisible />
+      </I18nProvider>,
+    );
+
+    const prompt = screen.getByTestId('actor-prompt-dialog');
+    expect(container.contains(prompt)).toBe(true);
+    // Not portalled onto document.body, which is what put it on top of the
+    // page in the first place.
+    expect(prompt.parentElement).not.toBe(document.body);
   });
 
   it('refuses to store an empty name', () => {

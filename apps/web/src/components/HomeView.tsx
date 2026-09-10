@@ -45,6 +45,7 @@ import {
   renderPluginBriefTemplate,
   resolvePluginQueryFallback,
 } from '../state/projects';
+import { ActorPromptDialog } from './ActorPromptDialog';
 import { FigmaImportModal } from './FigmaImportModal';
 import { fetchMcpServers } from '../state/mcp';
 import { takeHomeComposerAssetSeed } from '../state/libraryHandoff';
@@ -2117,6 +2118,12 @@ export function HomeView({
   return (
     <div className="home-view" data-testid="home-view" ref={homeViewRef}>
       <HomeAmbientBackdrop />
+      {/* F-03: the one-time "who are you" prompt. It lives in this column
+          rather than in the app shell because every overlay placement it was
+          given ended up on top of a control; in flow it can only push the
+          page down. `isActive` keeps it from spending its one question while
+          Home is the hidden, inert view behind another tab. */}
+      <ActorPromptDialog homeVisible={isActive} />
       <HomeHero
         ref={inputRef}
         active={isActive}
