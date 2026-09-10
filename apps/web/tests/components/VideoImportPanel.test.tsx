@@ -6,10 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project } from '../../src/types';
 import type { VideoImportJob } from '@open-design/contracts';
 
-const { listProjectsMock, createVideoImportMock, getVideoImportJobMock } = vi.hoisted(() => ({
+const { listProjectsMock, createVideoImportMock, getVideoImportJobMock, cancelMediaTaskMock } = vi.hoisted(() => ({
   listProjectsMock: vi.fn(),
   createVideoImportMock: vi.fn(),
   getVideoImportJobMock: vi.fn(),
+  cancelMediaTaskMock: vi.fn(),
 }));
 
 vi.mock('../../src/state/projects', () => ({
@@ -19,6 +20,7 @@ vi.mock('../../src/state/projects', () => ({
 vi.mock('../../src/providers/registry', () => ({
   createVideoImport: createVideoImportMock,
   getVideoImportJob: getVideoImportJobMock,
+  cancelMediaTask: cancelMediaTaskMock,
 }));
 
 import { VideoImportPanel } from '../../src/components/VideoImportPanel';
@@ -47,7 +49,20 @@ afterEach(() => {
 
 beforeEach(() => {
   listProjectsMock.mockResolvedValue(PROJECTS);
+  cancelMediaTaskMock.mockResolvedValue({ ok: true });
 });
+
+async function submitRunningImport(): Promise<void> {
+  createVideoImportMock.mockResolvedValue({ ok: true, job: runningJob() });
+  getVideoImportJobMock.mockReturnValue(new Promise(() => {}));
+  render(<VideoImportPanel vimeoConnected />);
+  await waitFor(() => expect(listProjectsMock).toHaveBeenCalled());
+  fireEvent.change(screen.getByLabelText(/Project/), { target: { value: 'proj-1' } });
+  fireEvent.change(screen.getByLabelText(/Vimeo link/), { target: { value: 'https://vimeo.com/123456789' } });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+  });
+}
 
 describe('VideoImportPanel', () => {
   it('loads the project list and lists YouTube as a disabled option', async () => {
@@ -145,5 +160,49 @@ describe('VideoImportPanel', () => {
 
     expect(await screen.findByText('Vimeo is not connected')).toBeTruthy();
     expect(getVideoImportJobMock).not.toHaveBeenCalled();
+  });
+});
+
+// W8B work item 4, UI half: a running Vimeo import has no Cancel affordance
+// at all — VideoImportPanel.tsx:179-189 renders status/fraction/done/failed
+// text only. `cancelMediaTask` (providers/registry.ts:3960-3967) exists and
+// has zero callers anywhere in apps/web/src on base.
+//
+// RED on base: there is no Cancel button to query or click — a missing
+// element, not an import error (the panel itself renders fine, as every case
+// above shows).
+describe('VideoImportPanel — cancelling a running import (W8B work item 4)', () => {
+  it('cancels the in-flight import through the shared media-task route', async () => {
+    await submitRunningImport();
+
+    const cancelButton = screen.queryByRole('button', { name: /cancel/i });
+    expect(cancelButton, 'a Cancel button must render while the import is running').not.toBeNull();
+
+    await act(async () => {
+      fireEvent.click(cancelButton as HTMLElement);
+    });
+    expect(cancelMediaTaskMock).toHaveBeenCalledWith('task-1');
+  });
+
+  it('shows no Cancel button once the import is terminal', async () => {
+    createVideoImportMock.mockResolvedValue({
+      ok: true,
+      job: runningJob({
+        status: 'done',
+        fraction: 1,
+        file: { name: 'clip.mp4', path: 'clip.mp4', size: 10, mtime: 0, kind: 'video', mime: 'video/mp4' },
+      }),
+    });
+
+    render(<VideoImportPanel vimeoConnected />);
+    await waitFor(() => expect(listProjectsMock).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText(/Project/), { target: { value: 'proj-1' } });
+    fireEvent.change(screen.getByLabelText(/Vimeo link/), { target: { value: 'https://vimeo.com/123456789' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+    });
+
+    expect(screen.queryByRole('button', { name: /cancel/i })).toBeNull();
+    expect(cancelMediaTaskMock).not.toHaveBeenCalled();
   });
 });

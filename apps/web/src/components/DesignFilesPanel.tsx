@@ -1,5 +1,5 @@
-import type { PreviewInfo, UploadLimitsResponse } from '@open-design/contracts';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import type { PreviewInfo, ProjectUploadSseEvent, UploadLimitsResponse } from '@open-design/contracts';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAnalytics } from '../analytics/provider';
 import { trackFileManagerClick } from '../analytics/events';
 import { useT } from '../i18n';
@@ -13,7 +13,9 @@ import {
   openPreviewInChrome,
   projectFileUrl,
   projectRawUrl,
+  rejectLocally,
 } from '../providers/registry';
+import { UploadProgressCard } from './UploadProgressCard';
 import { buildSrcdoc } from '../runtime/srcdoc';
 import type { LiveArtifactWorkspaceEntry, ProjectFile, ProjectFileKind, ProjectFolder } from '../types';
 import {
@@ -84,6 +86,10 @@ interface Props {
   onCurrentDirChange?: (dir: string) => void;
   uploadError?: string | null;
   onClearUploadError?: () => void;
+  /** The in-flight staged upload's typed event history (owned by the parent
+   *  that calls `uploadProjectFiles`); the panel only renders it, through
+   *  `UploadProgressCard`, while non-empty (INV-7.16). */
+  uploadProgressEvents?: ProjectUploadSseEvent[];
   preferredPreviewFile?: string | null;
   autoPreviewDesignArtifacts?: boolean;
   onPluginFolderAgentAction?: (
@@ -318,6 +324,7 @@ export function DesignFilesPanel({
   onSelectFromLibrary,
   uploadError = null,
   onClearUploadError,
+  uploadProgressEvents = [],
   preferredPreviewFile = null,
   autoPreviewDesignArtifacts = false,
   onCurrentDirChange,
@@ -347,6 +354,31 @@ export function DesignFilesPanel({
   const uploadLimitHint = uploadLimits
     ? t('uploadProgress.limitHint', { size: formatBytes(uploadLimits.maxFileBytes) ?? `${uploadLimits.maxFileBytes} B` })
     : null;
+  // Files the panel refused before they ever reached the parent's upload
+  // (INV-7.3's "loud, before any request"), named inline in the banner.
+  const [localRejectError, setLocalRejectError] = useState<string | null>(null);
+  /** INV-7.3 for the drop and paste paths: every file is checked against
+   *  the daemon's PUBLISHED limits through the shared `rejectLocally` (size
+   *  AND type) BEFORE `onUploadFiles` — a refused file never reaches the
+   *  parent's `uploadProjectFiles`, and is named inline with the limit or
+   *  the accepted-type verdict. The Upload-button picker path is checked by
+   *  the shared client itself, before any request. */
+  const forwardAcceptedUploads = useCallback((incoming: File[]) => {
+    const accepted: File[] = [];
+    const messages: string[] = [];
+    for (const file of incoming) {
+      const rejection = uploadLimits ? rejectLocally(file, uploadLimits) : null;
+      if (!rejection) {
+        accepted.push(file);
+      } else if (rejection.code === 'PAYLOAD_TOO_LARGE') {
+        messages.push(t('uploadProgress.tooLarge', { name: file.name, size: formatBytes(uploadLimits!.maxFileBytes) ?? `${uploadLimits!.maxFileBytes} B` }));
+      } else {
+        messages.push(t('uploadProgress.unsupportedType', { name: file.name }));
+      }
+    }
+    setLocalRejectError(messages.length > 0 ? messages.join(' ') : null);
+    if (accepted.length > 0) onUploadFiles(accepted);
+  }, [onUploadFiles, t, uploadLimits]);
   const dragDepthRef = useRef(0);
   const [hover, setHover] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ name: string; top: number; left: number } | null>(null);
@@ -532,11 +564,11 @@ export function DesignFilesPanel({
       event.preventDefault();
       setDropReadError(null);
       onClearUploadError?.();
-      onUploadFiles(pastedFiles);
+      forwardAcceptedUploads(pastedFiles);
     };
     window.addEventListener('paste', onClipboardPaste);
     return () => window.removeEventListener('paste', onClipboardPaste);
-  }, [onClearUploadError, onUploadFiles]);
+  }, [forwardAcceptedUploads, onClearUploadError]);
   useEffect(() => {
     if (!projectMenuOpen) return;
     function handlePointerDown(event: PointerEvent) {
@@ -871,7 +903,7 @@ export function DesignFilesPanel({
     setDropReadError(null);
     try {
       const dropped = await filesFromDataTransfer(ev.dataTransfer);
-      if (dropped.length > 0) onUploadFiles(dropped);
+      if (dropped.length > 0) forwardAcceptedUploads(dropped);
     } catch (error) {
       if (!isFileSystemReadError(error)) throw error;
       setDropReadError(FILE_SYSTEM_READ_ERROR_MESSAGE);
@@ -1053,7 +1085,7 @@ export function DesignFilesPanel({
     </nav>
   );
 
-  const visibleUploadError = uploadError ?? dropReadError;
+  const visibleUploadError = uploadError ?? localRejectError ?? dropReadError;
   const hasSelection = selected.size > 0;
 
   return (
@@ -1096,12 +1128,13 @@ export function DesignFilesPanel({
           {visibleUploadError && !preview ? (
             <div className="df-upload-banner" data-testid="upload-error-banner">
               <span>{visibleUploadError}</span>
-              {onClearUploadError || dropReadError ? (
+              {onClearUploadError || dropReadError || localRejectError ? (
                 <button
                   type="button"
                   data-testid="upload-error-dismiss"
                   onClick={() => {
                     setDropReadError(null);
+                    setLocalRejectError(null);
                     onClearUploadError?.();
                   }}
                 >
@@ -1324,6 +1357,7 @@ export function DesignFilesPanel({
             </>
           )}
           <div className="df-footer-info">
+            {uploadProgressEvents.length > 0 ? <UploadProgressCard events={uploadProgressEvents} /> : null}
             {running ? (
               <RotatingTip auxiliary />
             ) : (

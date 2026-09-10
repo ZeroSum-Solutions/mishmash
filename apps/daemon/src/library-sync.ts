@@ -478,7 +478,7 @@ export async function reconcileLibrary(
   // counts without a direct DB query (see the PR report for MM-021).
   if (result.markedBroken > 0 || result.cleared > 0) {
     console.warn(
-      `[library-sync] reconcile marked ${result.markedBroken} referenced asset(s) broken (gone origin project or missing bytes), cleared ${result.cleared}`,
+      `[library-sync] reconcile marked ${result.markedBroken} referenced asset(s) broken (gone origin project or missing bytes), cleared ${result.cleared} (run \`od library broken\` to list them)`,
     );
   }
   return result;

@@ -336,6 +336,12 @@ function migrate(db: SqliteDb): void {
   if (!messageCols.some((c: DbRow) => c.name === 'telemetry_finalized_at')) {
     db.exec(`ALTER TABLE messages ADD COLUMN telemetry_finalized_at INTEGER`);
   }
+  // F-03: who asked for the turn. Nullable and never backfilled -- a row
+  // written before this migration is genuinely unattributed, and every reader
+  // renders that as such rather than inventing a name.
+  if (!messageCols.some((c: DbRow) => c.name === 'actor_name')) {
+    db.exec(`ALTER TABLE messages ADD COLUMN actor_name TEXT`);
+  }
   const routineRunCols = db.prepare(`PRAGMA table_info(routine_runs)`).all() as DbRow[];
   if (!routineRunCols.some((c: DbRow) => c.name === 'error_code')) {
     db.exec(`ALTER TABLE routine_runs ADD COLUMN error_code TEXT`);
@@ -1634,6 +1640,7 @@ export function listMessages(db: SqliteDb, conversationId: string) {
   return (db
     .prepare(
       `SELECT id, role, content, agent_id AS agentId, agent_name AS agentName,
+              actor_name AS actorName,
               run_id AS runId, run_status AS runStatus,
               result_delivery_state AS resultDeliveryState,
               last_run_event_id AS lastRunEventId,
@@ -1694,7 +1701,7 @@ export function upsertMessage(db: SqliteDb, conversationId: string, m: DbRow) {
   if (existing) {
     db.prepare(
       `UPDATE messages
-          SET role = ?, content = ?, agent_id = ?, agent_name = ?,
+          SET role = ?, content = ?, agent_id = ?, agent_name = ?, actor_name = ?,
               run_id = ?, run_status = ?, result_delivery_state = ?, last_run_event_id = ?,
               events_json = ?, attachments_json = ?, comment_attachments_json = ?,
               produced_files_json = ?, trace_object_files_json = ?, feedback_json = ?,
@@ -1711,6 +1718,7 @@ export function upsertMessage(db: SqliteDb, conversationId: string, m: DbRow) {
       m.content,
       m.agentId ?? null,
       m.agentName ?? null,
+      m.actorName ?? null,
       m.runId ?? null,
       m.runStatus ?? null,
       normalizeResultDeliveryStateForStorage(m.resultDeliveryState),
@@ -1741,21 +1749,22 @@ export function upsertMessage(db: SqliteDb, conversationId: string, m: DbRow) {
     const createdAt = typeof m.createdAt === 'number' && Number.isFinite(m.createdAt)
       ? m.createdAt
       : now;
-    // 25 values: id, conversation_id, role, content, agent_id, agent_name,
-    // run_id, run_status, result_delivery_state, last_run_event_id, events_json, attachments_json,
+    // 26 values: id, conversation_id, role, content, agent_id, agent_name,
+    // actor_name, run_id, run_status, result_delivery_state, last_run_event_id,
+    // events_json, attachments_json,
     // comment_attachments_json, produced_files_json, trace_object_files_json,
     // feedback_json, pre_turn_file_names_json, session_mode, run_context_json,
     // applied_plugin_snapshot_json, telemetry_finalized_at, started_at,
     // ended_at, position, created_at.
     db.prepare(
       `INSERT INTO messages
-         (id, conversation_id, role, content, agent_id, agent_name,
+         (id, conversation_id, role, content, agent_id, agent_name, actor_name,
           run_id, run_status, result_delivery_state, last_run_event_id, events_json,
           attachments_json, comment_attachments_json, produced_files_json,
           trace_object_files_json, feedback_json, pre_turn_file_names_json,
           session_mode, run_context_json, applied_plugin_snapshot_json,
           telemetry_finalized_at, started_at, ended_at, position, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       m.id,
       conversationId,
@@ -1763,6 +1772,7 @@ export function upsertMessage(db: SqliteDb, conversationId: string, m: DbRow) {
       m.content,
       m.agentId ?? null,
       m.agentName ?? null,
+      m.actorName ?? null,
       m.runId ?? null,
       m.runStatus ?? null,
       normalizeResultDeliveryStateForStorage(m.resultDeliveryState),
@@ -1792,6 +1802,7 @@ export function upsertMessage(db: SqliteDb, conversationId: string, m: DbRow) {
   const row = db
     .prepare(
       `SELECT id, role, content, agent_id AS agentId, agent_name AS agentName,
+              actor_name AS actorName,
               run_id AS runId, run_status AS runStatus,
               result_delivery_state AS resultDeliveryState,
               last_run_event_id AS lastRunEventId,
@@ -2171,6 +2182,7 @@ function normalizeMessage(row: DbRow) {
     content: row.content,
     agentId: row.agentId ?? undefined,
     agentName: row.agentName ?? undefined,
+    actorName: row.actorName ?? undefined,
     runId: row.runId ?? undefined,
     runStatus: row.runStatus ?? undefined,
     resultDeliveryState: normalizeResultDeliveryState(row.resultDeliveryState),

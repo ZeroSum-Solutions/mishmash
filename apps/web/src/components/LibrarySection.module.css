@@ -221,6 +221,19 @@
   color: var(--text-muted);
 }
 
+/* A cancel the shared media-task route refused, shown above the composer.
+   Matches LibraryComposer's own .error so the two read as one surface. */
+.composerCancelError {
+  align-self: center;
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--red) 12%, var(--bg-panel));
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 /* --- multi-select --------------------------------------------------------- */
 
 /* Rubber-band rectangle drawn while box-selecting (viewport-fixed coords). */

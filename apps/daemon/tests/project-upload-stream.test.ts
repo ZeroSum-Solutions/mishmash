@@ -19,7 +19,8 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { isProjectUploadSseEvent, type ProjectUploadSseEvent } from '@open-design/contracts';
+import { isProjectUploadSseEvent, type ProjectFileVersion, type ProjectUploadSseEvent } from '@open-design/contracts';
+import { listProjectFileVersions } from '../src/project-file-versions.js';
 import { startServer } from '../src/server.js';
 import { UploadSessionError, UploadStagingStore } from '../src/uploads/staging.js';
 
@@ -336,6 +337,122 @@ describe('project upload stream (HTTP)', () => {
       headers: { ...hostileHeaders, Authorization: 'Bearer fake' },
     });
     expect(cancelRes.status).toBe(403);
+  });
+
+  // W8A — a `dir`-targeted session must land the file at its real subfolder
+  // path (the legacy multipart route already honours a `dir` form field; the
+  // staged route must, or switching the web client silently relocates every
+  // subfolder-targeted upload to the project root). RED on base d7ff39a36:
+  // `CreateProjectUploadRequest` has no `dir` field and `promote()` always
+  // writes to the bare project root, so `files[0].path` comes back as the
+  // bare basename and the nested path does not exist on disk.
+  it('a session created with dir lands the committed file at <dir>/<name> and reports that project-relative path', async () => {
+    const projectId = await createProject();
+    const bytes = Buffer.from('nested upload body');
+    const createResp = await fetch(`${baseUrl}/api/projects/${projectId}/uploads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: [{ name: 'note.txt', size: bytes.length, mime: 'text/plain' }], dir: 'assets/refs' }),
+    });
+    expect(createResp.status).toBe(200);
+    const session = (await createResp.json()) as { uploadId: string; token: string };
+
+    const eventsPromise = fetch(`${baseUrl}/api/projects/${projectId}/uploads/${session.uploadId}/events`, {
+      headers: { Authorization: `Bearer ${session.token}`, Accept: 'text/event-stream' },
+    }).then((resp) => readSseEvents(resp));
+    await new Promise((r) => setTimeout(r, 20));
+
+    const putResp = await fetch(`${baseUrl}/api/projects/${projectId}/uploads/${session.uploadId}/files/0`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${session.token}`, 'Content-Type': 'text/plain' },
+      body: bytes,
+    });
+    expect(putResp.status).toBe(200);
+
+    const events = await eventsPromise;
+    const terminals = events.filter((e) => e.type === 'upload-completed' || e.type === 'upload-failed');
+    expect(terminals).toHaveLength(1);
+    const completed = terminals[0] as Extract<ProjectUploadSseEvent, { type: 'upload-completed' }>;
+    expect(completed.type).toBe('upload-completed');
+    expect(completed.files[0]!.path).toBe('assets/refs/note.txt');
+
+    // The bytes are on disk at the nested path under the project root, not
+    // at the root (PROJECTS_DIR = <OD_DATA_DIR>/projects, server.ts).
+    const projectRoot = path.join(process.env.OD_DATA_DIR!, 'projects', projectId);
+    expect(fs.existsSync(path.join(projectRoot, 'assets', 'refs', 'note.txt'))).toBe(true);
+    expect(fs.existsSync(path.join(projectRoot, 'note.txt'))).toBe(false);
+  });
+
+  it('a traversal dir is rejected VALIDATION_FAILED at session-create time, before any PUT', async () => {
+    const projectId = await createProject();
+    const createResp = await fetch(`${baseUrl}/api/projects/${projectId}/uploads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: [{ name: 'x.txt', size: 1, mime: 'text/plain' }], dir: '../../etc' }),
+    });
+    expect(createResp.status).toBe(400);
+    const body = (await createResp.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe('VALIDATION_FAILED');
+    const projectRoot = path.join(process.env.OD_DATA_DIR!, 'projects', projectId);
+    expect(fs.existsSync(path.join(projectRoot, '..', '..', 'etc', 'x.txt'))).toBe(false);
+  });
+
+  // W8A fix round — parity with the legacy multipart route. The legacy
+  // route snapshots an uploaded .html file into `.file-versions` through
+  // `ensureCurrentProjectFileVersion`
+  // (apps/daemon/src/routes/project/index.ts:4520-4536); the staged
+  // promotion path (apps/daemon/src/routes/project/uploads.ts:182-201) did
+  // not. Because 8A now sends every web upload through the staged route, a
+  // web .html upload silently lost the snapshot the legacy route created.
+  // RED before the fix: the staged project has no `.file-versions` store
+  // and `listProjectFileVersions` returns [] while the legacy project's
+  // returns one version.
+  it('a staged .html upload snapshots the file into .file-versions exactly as the legacy route does', async () => {
+    const html = '<!doctype html><html><body><h1>staged upload</h1></body></html>';
+    const bytes = Buffer.from(html, 'utf8');
+    const projectsRoot = path.join(process.env.OD_DATA_DIR!, 'projects');
+    const stripVolatile = ({ id: _id, createdAt: _createdAt, ...rest }: ProjectFileVersion) => rest;
+
+    // Reference behaviour: the legacy multipart route.
+    const legacyProjectId = await createProject();
+    const form = new FormData();
+    form.append('files', new Blob([html], { type: 'text/html' }), 'page.html');
+    const legacyResp = await fetch(`${baseUrl}/api/projects/${legacyProjectId}/upload`, { method: 'POST', body: form });
+    expect(legacyResp.status).toBe(200);
+    const legacyVersions = await listProjectFileVersions(projectsRoot, legacyProjectId, 'page.html');
+    expect(legacyVersions).toHaveLength(1);
+
+    // The staged route must produce the same snapshot for the same file.
+    const stagedProjectId = await createProject();
+    const createResp = await createSession(stagedProjectId, [{ name: 'page.html', size: bytes.length, mime: 'text/html' }]);
+    expect(createResp.status).toBe(200);
+    const session = (await createResp.json()) as { uploadId: string; token: string };
+
+    const eventsPromise = fetch(`${baseUrl}/api/projects/${stagedProjectId}/uploads/${session.uploadId}/events`, {
+      headers: { Authorization: `Bearer ${session.token}`, Accept: 'text/event-stream' },
+    }).then((resp) => readSseEvents(resp));
+    await new Promise((r) => setTimeout(r, 20));
+
+    const putResp = await fetch(`${baseUrl}/api/projects/${stagedProjectId}/uploads/${session.uploadId}/files/0`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${session.token}`, 'Content-Type': 'text/html' },
+      body: bytes,
+    });
+    expect(putResp.status).toBe(200);
+    const terminals = (await eventsPromise).filter((e) => e.type === 'upload-completed' || e.type === 'upload-failed');
+    expect(terminals).toHaveLength(1);
+    expect(terminals[0]!.type).toBe('upload-completed');
+    expect(fs.existsSync(path.join(projectsRoot, stagedProjectId, 'page.html'))).toBe(true);
+
+    // The completed event is emitted inside promote(), before the route
+    // finishes its post-promotion work — poll briefly for the snapshot.
+    await waitFor(() => fs.existsSync(path.join(projectsRoot, stagedProjectId, '.file-versions')));
+    expect(fs.existsSync(path.join(projectsRoot, stagedProjectId, '.file-versions'))).toBe(true);
+
+    const stagedVersions = await listProjectFileVersions(projectsRoot, stagedProjectId, 'page.html');
+    expect(stagedVersions).toHaveLength(1);
+    expect(stagedVersions[0]!.size).toBe(bytes.length);
+    expect(stripVolatile(stagedVersions[0]!)).toEqual(stripVolatile(legacyVersions[0]!));
   });
 
   it('legacy route symptom: a partial file IS visible under the project root while multer streams it (the defect this design eliminates)', async () => {

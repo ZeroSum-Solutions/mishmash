@@ -1160,6 +1160,17 @@
 .app .msg.assistant .role .role-name {
   font-weight: 600;
 }
+/* F-03: who asked for the turn, beside which agent ran it. Deliberately
+   quieter than .role-name -- it is provenance, not the speaker. */
+.app .msg.assistant .role .role-actor {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .app .msg.assistant .role .role-agent-icon {
   flex: 0 0 auto;
   border-radius: var(--radius-sm);

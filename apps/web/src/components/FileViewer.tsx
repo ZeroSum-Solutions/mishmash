@@ -2816,6 +2816,21 @@ function fileVersionSourceLabel(version: ProjectFileVersion, t: TranslateFn): st
   return t('fileViewer.versions.sourceAi');
 }
 
+/**
+ * Who wrote a version (F-03 / D-2).
+ *
+ * INVARIANT: always returns a rendered string. A version created before the
+ * actor migration, or by a request that sent no `x-od-actor` header, is
+ * genuinely unattributed and says so — it never renders `undefined`, an empty
+ * badge, or a fabricated name.
+ */
+export function fileVersionActorLabel(version: ProjectFileVersion, t: TranslateFn): string {
+  const actorName = version.actorName?.trim();
+  return actorName
+    ? t('fileViewer.versions.byActor', { name: actorName })
+    : t('fileViewer.versions.unattributed');
+}
+
 function fileVersionSourceClassName(version: ProjectFileVersion): string {
   if (version.source === 'manual') return 'manual';
   if (version.source === 'restore') return 'restore';
@@ -3041,6 +3056,7 @@ function FileVersionManagerModal({
         version.prompt ?? '',
         version.label ?? '',
         fileVersionSourceLabel(version, t),
+        fileVersionActorLabel(version, t),
         formatVersionDateTime(version.createdAt, locale),
         restoredFrom ? `v${restoredFrom.version}` : '',
       ]
@@ -3586,6 +3602,9 @@ function FileVersionManagerModal({
                         ) : null}
                         <span className={`file-version-source-badge ${fileVersionSourceClassName(version)}`}>
                           {fileVersionSourceLabel(version, t)}
+                        </span>
+                        <span className="file-version-actor">
+                          {fileVersionActorLabel(version, t)}
                         </span>
                         <span className="file-version-time">
                           {formatVersionDateTime(version.createdAt, locale)}

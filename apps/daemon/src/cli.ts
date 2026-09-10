@@ -36,6 +36,8 @@ import {
 import { findAcceptedKind } from './uploads/staging.js';
 import { buildExportCliRequestBody, buildExportCliResultEnvelope, resolveExportCliDeckMode } from './export-cli-request.js';
 import { exportRoutePath } from './export-cli-routing.js';
+import { readCurrentAppVersionInfo } from './app-version.js';
+import { readBuildStamp } from './build-stamp.js';
 import {
   AGENT_SLUGS,
   isAgentSlug,
@@ -43,6 +45,8 @@ import {
   applyJsonInstall,
   removeJsonInstall,
 } from './mcp-agent-install.js';
+import { bootstrapCliActor } from './cli-actor.js';
+import { unifiedDiffLines } from './run-diff-format.js';
 
 const argv = process.argv.slice(2);
 
@@ -107,6 +111,7 @@ const MEDIA_JOB_STRING_FLAGS = new Set([
   'project',
   'preset',
   'input',
+  'inputs',
   'output',
   'url',
   'frames',
@@ -1250,6 +1255,24 @@ async function runExport(args) {
   console.log(`wrote ${out} (${buffer.length} bytes)`);
 }
 
+if (argv[0] === '--version') {
+  const versionInfo = await readCurrentAppVersionInfo();
+  const buildStamp = readBuildStamp();
+  const wantJson = argv.includes('--json');
+  const payload = {
+    version: versionInfo.version,
+    channel: versionInfo.channel,
+    commit: buildStamp.commit,
+    builtAt: buildStamp.builtAt,
+  };
+  if (wantJson) {
+    process.stdout.write(JSON.stringify(payload) + '\n');
+  } else {
+    console.log(`od ${payload.version} (${payload.channel}) commit=${payload.commit} builtAt=${payload.builtAt}`);
+  }
+  process.exit(0);
+}
+
 if (argv[0] === 'mcp' && argv[1] === 'live-artifacts') {
   try {
     const { exitCode } = await runLiveArtifactsMcpServer();
@@ -1261,10 +1284,17 @@ if (argv[0] === 'mcp' && argv[1] === 'live-artifacts') {
   }
 }
 
-const first = argv.find((a) => !a.startsWith('-'));
+// F-03: `--actor <name>` is a GLOBAL option, so it is consumed here rather
+// than declared on every subcommand -- `parseFlags` refuses an undeclared
+// option, so a flag left in argv would break whichever command received it.
+// This also installs the fetch wrap that stamps `x-od-actor` on daemon
+// requests (and only on daemon requests). `--version` short-circuits above.
+const dispatchArgv = bootstrapCliActor(argv);
+
+const first = dispatchArgv.find((a) => !a.startsWith('-'));
 if (first && SUBCOMMAND_MAP[first]) {
-  const idx = argv.indexOf(first);
-  const rest = [...argv.slice(0, idx), ...argv.slice(idx + 1)];
+  const idx = dispatchArgv.indexOf(first);
+  const rest = [...dispatchArgv.slice(0, idx), ...dispatchArgv.slice(idx + 1)];
   await SUBCOMMAND_MAP[first](rest);
   // Not process.exit(0): that tears down the event loop in the same tick,
   // before a pending stdout write drains. Handlers that end with a bare
@@ -1389,6 +1419,10 @@ function printRootHelp() {
   console.log(`Usage:
   od [--port <n>] [--host <addr>] [--no-open]
       Start the local daemon and open the web UI.
+
+  od --version [--json]
+      Print the app version, channel, and the commit/build time the running
+      dist was built from.
 
   od tools live-artifacts <create|list|update|refresh> [options]
       Manage live artifacts through daemon wrapper commands.
@@ -2347,6 +2381,17 @@ async function runMediaJob(rawArgs) {
         process.exit(2);
       }
     }
+    // `concat-copy` is the one preset the daemon validates on `inputs`
+    // (routes/media.ts) rather than `input`; without this the preset
+    // printMediaHelp advertises could never be sent from the CLI.
+    if (flags.inputs) {
+      try {
+        body.inputs = JSON.parse(flags.inputs);
+      } catch {
+        console.error('--inputs must be a JSON array of project-relative paths');
+        process.exit(2);
+      }
+    }
     if (flags.scale) {
       const match = /^(\d+)x(\d+)$/.exec(flags.scale);
       if (!match) {
@@ -2805,7 +2850,7 @@ function printMediaHelp() {
   const limits = resolveMediaJobLimits();
   console.log(`Usage: od media generate --surface <image|video|audio> --model <id> [opts]
        "$OD_NODE_BIN" "$OD_BIN" media generate --surface <image|video|audio> --model <id> [opts]
-       od media job encode --preset <h264-web|concat-copy|frames-to-mp4> --input <path> --output <path> [--overwrite] [--frames <json>] [--scale <w>x<h>] [--wait] [--json]
+       od media job encode --preset <h264-web|concat-copy|frames-to-mp4> --input <path> --output <path> [--overwrite] [--inputs <json>] [--frames <json>] [--scale <w>x<h>] [--wait] [--json]
        od media job download --url <https URL> --output <path> [--overwrite] [--wait] [--json]
        od media status <taskId> [--json]
        od media list [--project <id>] [--json]
@@ -8449,6 +8494,9 @@ async function runRun(args) {
                                             resume.
   od run result-package <runId> [--json]    Inspect run outputs and workspace
                                             provenance without applying them.
+  od run diff   <runId> [--json]            What the run changed: each touched
+                                            file's before/after text and who
+                                            asked for the run.
 
 A following command (--follow, or 'watch') writes stdout ND-JSON unchanged
 and, on the run's terminal frame, writes exactly one "Run finished:
@@ -8457,6 +8505,8 @@ interactive stderr TTY with --json off.
 
 Common options:
   --daemon-url <url>   MishMash daemon HTTP base.
+  --actor <name>       Attribute this request to a person. Set OD_ACTOR in
+                       your shell to stop repeating it.
   --json               Emit raw JSON.`);
     process.exit(args.length === 0 ? 2 : 0);
   }
@@ -8475,7 +8525,10 @@ Common options:
       if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       const runs = data?.runs ?? [];
       for (const r of runs) {
-        console.log(`${r.id}\t${r.status}\tproject=${r.projectId ?? '-'}\tplugin=${r.pluginId ?? '-'}`);
+        console.log(
+          `${r.id}\t${r.status}\tproject=${r.projectId ?? '-'}\tplugin=${r.pluginId ?? '-'}`
+          + `\tactor=${r.actorName ?? '-'}`,
+        );
       }
       return;
     }
@@ -8504,11 +8557,54 @@ Common options:
       for (const line of runLines) console.log(line);
       console.log(`project\t${data?.projectId ?? '-'}\tconversation=${data?.conversationId ?? '-'}`);
       console.log(`agent\t${data?.agentId ?? '-'}\tresumable=${data?.resumable === true}`);
+      // F-03: which PERSON asked, next to which AGENT ran it. An unattributed
+      // run prints no `actor` line at all -- that is a normal state, and this
+      // command's stdout is pinned line-for-line, so an empty placeholder line
+      // would change what every unattributed run reports.
+      const actorName = typeof data?.actorName === 'string' ? data.actorName.trim() : '';
+      if (actorName !== '') console.log(`actor\t${actorName}`);
       console.log(
         `session-recovery\t${recovery?.state ?? '-'}`
         + `\trecovered=${nativeSessionRecoveryNotice(recovery) ? 'yes' : 'no'}`
         + `\tcontinuation=${recovery?.continuation ?? '-'}`,
       );
+      return;
+    }
+    case 'diff': {
+      const id = rest.find((a) => !a.startsWith('-'));
+      if (!id) {
+        console.error('Usage: od run diff <runId> [--json]');
+        process.exit(2);
+      }
+      const resp = await fetch(`${base}/api/runs/${encodeURIComponent(id)}/diff`);
+      if (!resp.ok) return structuredHttpFailure(resp, 'run-not-found');
+      const data = await resp.json();
+      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      const files = data?.files ?? [];
+      if (files.length === 0) {
+        console.log(`run ${data?.runId ?? id} changed no versioned file`);
+        return;
+      }
+      for (const file of files) {
+        console.log(
+          `${file.fileName}\tactor=${file.actorName ?? '-'}`
+          + `\tat=${new Date(Number(file.at) || 0).toISOString()}`,
+        );
+        const afterText = file.after?.content;
+        if (typeof afterText !== 'string') {
+          // Wave 8 versions text and HTML only; anything else has no stored
+          // text to compare, and a byte dump in a terminal helps nobody.
+          console.log(`  diff not available for ${file.kind}`);
+          continue;
+        }
+        const beforeText = file.before?.content;
+        if (typeof beforeText !== 'string') {
+          console.log('  no prior version');
+          for (const line of afterText.split('\n')) console.log(`  + ${line}`);
+          continue;
+        }
+        for (const line of unifiedDiffLines(beforeText, afterText)) console.log(`  ${line}`);
+      }
       return;
     }
     case 'result-package': {
@@ -9957,6 +10053,7 @@ Commands:
   edit-as-page <id>         Turn a captured html asset into a new editable OD project (prints projectId).
   figma <id>                Export an html asset's OD Figma capture IR (clipper-captured pages).
   sync                      Pull design systems + agent-generated project artifacts into the Library.
+  broken                    List referenced assets marked broken by the last sync (gone origin project or missing bytes).
   pair                      Mint a browser-extension pairing code.
 
 Options:
@@ -10046,6 +10143,18 @@ async function runLibrary(args) {
             `(showing ${shown} of ${data.total} matching assets — pass --offset ${nextOffset} for the next page, ` +
               `a higher --limit, or narrow the filter)`,
           );
+        }
+        return;
+      }
+      case 'broken': {
+        const resp = await fetch(`${base}/api/library/assets/broken`);
+        if (!resp.ok) return structuredHttpFailure(resp);
+        const data = await resp.json();
+        if (flags.json) return writeJson(data);
+        for (const asset of data.assets ?? []) {
+          const dims = asset.width && asset.height ? `${asset.width}x${asset.height}` : '';
+          const label = asset.sourceTitle || asset.sourceUrl || asset.caption || '';
+          console.log(`${asset.id}\t${asset.kind}\t${dims}\t${label}`);
         }
         return;
       }

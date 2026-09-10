@@ -22,6 +22,8 @@ import {
   fetchProjectFolders,
 } from '../../src/providers/registry';
 import type { ChatMessage, ProjectFile, ProjectFolder } from '../../src/types';
+import { isProjectUploadSseEvent } from '@open-design/contracts';
+import type { ProjectUploadProgress, ProjectUploadSseEvent, ProjectUploadStarted } from '@open-design/contracts';
 
 vi.mock('../../src/providers/registry', async () => {
   const actual = await vi.importActual<typeof import('../../src/providers/registry')>(
@@ -3250,5 +3252,71 @@ describe('FileWorkspace project archive download', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Download project (.zip)' }));
 
     expect(await screen.findByText("Couldn't download the project archive.")).toBeTruthy();
+  });
+});
+
+// W8A — `uploadFiles` threads the staged transport's typed events into the
+// rendered Design Files panel. RED on base d7ff39a36: `uploadFiles`
+// (FileWorkspace.tsx:2008-2064) calls `uploadProjectFiles(projectId, picked,
+// uploadDir)` with exactly three arguments — no `opts.onEvents` exists to
+// feed, so the card never renders.
+describe('FileWorkspace upload progress plumbing (W8A)', () => {
+  it('passes opts.onEvents to uploadProjectFiles and renders the events in the Design Files panel until the upload settles', async () => {
+    const started: ProjectUploadStarted = {
+      type: 'upload-started',
+      uploadId: 'upload-1',
+      files: [{ index: 0, name: 'hero.png', size: 100 }],
+    };
+    const progress: ProjectUploadProgress = {
+      type: 'upload-progress',
+      uploadId: 'upload-1',
+      index: 0,
+      name: 'hero.png',
+      bytesReceived: 60,
+      totalBytes: 100,
+    };
+    const events: ProjectUploadSseEvent[] = [started, progress];
+    expect(events.every((e) => isProjectUploadSseEvent(e))).toBe(true);
+
+    let settle!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    mockedUploadProjectFiles.mockImplementationOnce(async (_projectId, _files, _dir, opts) => {
+      opts?.onEvents?.(events);
+      await pending;
+      return { uploaded: [], failed: [] };
+    });
+
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[baseFile()]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: [], active: null }}
+        onTabsStateChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId('design-files-upload-input'), {
+      target: { files: [new File(['hero'], 'hero.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(mockedUploadProjectFiles).toHaveBeenCalledWith(
+        'project-1',
+        expect.any(Array),
+        '',
+        expect.objectContaining({ onEvents: expect.any(Function) }),
+      );
+    });
+    const card = await waitFor(() => screen.getByTestId('upload-progress-card'));
+    expect(card.querySelector('[data-testid="upload-progress-row-0"]')?.getAttribute('data-status')).toBe('uploading');
+
+    settle();
+    await waitFor(() => expect(screen.queryByTestId('upload-progress-card')).toBeNull());
   });
 });

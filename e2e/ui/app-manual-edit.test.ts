@@ -349,8 +349,14 @@ test('[P1] HTML preview toolbar exposes screenshot, comments, mark, and edit wor
   await expect(artifactPreviewFrame(page).getByRole('heading', { name: 'Original Hero' })).toBeVisible();
 
   await page.getByTestId('screenshot-copy-button').click();
+  // "Screenshot added to chat" is the fifth alternative and, in this fixture,
+  // the one that actually renders: since 2026-08-16 `handleCopyScreenshot`
+  // stages the capture into the chat composer first and reports that path's
+  // success; the clipboard-only messages below it now only fire when staging
+  // is rejected or no composer claims the capture. The composer is mounted
+  // here, so the regex was matching a message the product no longer shows.
   await expect(
-    page.getByText(/Screenshot copied to clipboard|Browser blocked clipboard access|Could not capture the preview|Preview is still loading/),
+    page.getByText(/Screenshot added to chat|Screenshot copied to clipboard|Browser blocked clipboard access|Could not capture the preview|Preview is still loading/),
   ).toBeVisible();
 
   await page.getByTestId('board-mode-toggle').click();

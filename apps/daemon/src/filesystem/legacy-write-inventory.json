@@ -149,6 +149,7 @@
   "apps/daemon/src/runtimes/runs.ts#drop": "unlinkSync:1",
   "apps/daemon/src/runtimes/runs.ts#ensureLogStream": "createWriteStream:1,mkdirSync:1",
   "apps/daemon/src/sandbox-mode.ts#ensureSandboxRuntimeDirs": "mkdirSync:1",
+  "apps/daemon/src/scripts/write-build-stamp.ts#<module>": "writeFileSync:1",
   "apps/daemon/src/server.ts#<module>": "mkdirSync:5",
   "apps/daemon/src/server.ts#startChatRun": "mkdir:1,unlink:2,writeFile:1",
   "apps/daemon/src/services/plugin-installation.ts#extractPluginZipToFolder": "mkdir:1,writeFile:1",

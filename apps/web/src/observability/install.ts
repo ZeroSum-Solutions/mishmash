@@ -17,6 +17,7 @@ import { installResourceErrorObserver } from './resource-error';
 import { installBootTimingObserver } from './boot-timing';
 import { installVisibilityObserver } from './visibility';
 import { installWhiteScreenDetector } from './white-screen';
+import { installActorRequestHeader } from '../runtime/actor-request-header';
 
 let installed = false;
 
@@ -34,6 +35,10 @@ export function installWebObservability(): () => void {
     installBootTimingObserver(),
     installVisibilityObserver(),
     installWhiteScreenDetector(),
+    // F-03: stamps `x-od-actor` on same-origin /api calls. Last of the
+    // fetch-wrapping installers on purpose -- the health observer above must
+    // still wrap the native implementation, and this one only adds a header.
+    installActorRequestHeader(),
   ];
 
   return () => {

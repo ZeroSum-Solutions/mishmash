@@ -45,6 +45,7 @@ import {
   renderPluginBriefTemplate,
   resolvePluginQueryFallback,
 } from '../state/projects';
+import { ActorPromptDialog } from './ActorPromptDialog';
 import { FigmaImportModal } from './FigmaImportModal';
 import { fetchMcpServers } from '../state/mcp';
 import { takeHomeComposerAssetSeed } from '../state/libraryHandoff';
@@ -249,6 +250,8 @@ interface Props {
   onBrowseRegistry?: () => void;
   onOpenIntegrations?: () => void;
   onOpenMcp?: () => void;
+  /** Opens the Settings dialog. F-03's prompt uses it to reach the name row. */
+  onOpenSettings?: (section?: 'appearance') => void;
   // Stage B: optional callbacks the rail's migration chips need.
   // HomeView itself never imports them; EntryShell threads them
   // through so the dispatcher can stay declarative.
@@ -334,6 +337,7 @@ export function HomeView({
   onBrowseRegistry,
   onOpenIntegrations,
   onOpenMcp,
+  onOpenSettings,
   onOpenNewProject,
   onStartBlankProject,
   promptHandoff,
@@ -2117,6 +2121,17 @@ export function HomeView({
   return (
     <div className="home-view" data-testid="home-view" ref={homeViewRef}>
       <HomeAmbientBackdrop />
+      {/* F-03: the one-time "who are you" prompt. It renders here so it is
+          scoped to Home, but it takes no row in this column -- it is raised as
+          the app's transient toast, fixed to the bottom of the viewport. An
+          in-flow block here displaced the create rail and pushed its portalled
+          "More" menu below the fold; see ActorPromptDialog's docblock.
+          `isActive` keeps it from spending its one question while Home is the
+          hidden, inert view behind another tab. */}
+      <ActorPromptDialog
+        homeVisible={isActive}
+        onOpenActorNameSettings={() => onOpenSettings?.('appearance')}
+      />
       <HomeHero
         ref={inputRef}
         active={isActive}

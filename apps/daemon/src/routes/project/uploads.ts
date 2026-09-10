@@ -17,7 +17,8 @@ import type { CreateProjectUploadRequest } from '@open-design/contracts';
 
 import { sendApiError } from '../../http/api-errors.js';
 import { getProject } from '../../db.js';
-import { applyProjectFileWatchEvent, isSafeId, resolveProjectDir, sanitizeName } from '../../projects.js';
+import { ensureCurrentProjectFileVersion } from '../../project-file-versions.js';
+import { applyProjectFileWatchEvent, ensureProjectSubdir, isSafeId, readProjectFile, sanitizeName } from '../../projects.js';
 import {
   UploadSessionError,
   UploadStagingStore,
@@ -43,8 +44,30 @@ function bearerToken(req: { headers: Record<string, unknown> }): string | null {
 function canonicalRequestHash(body: CreateProjectUploadRequest): string {
   const canonical = JSON.stringify({
     files: (body.files ?? []).map((f) => ({ name: f.name, size: f.size, mime: f.mime })),
+    dir: typeof body.dir === 'string' ? body.dir.trim() : '',
   });
   return createHash('sha256').update(canonical).digest('hex');
+}
+
+/** INV-7.2 for a `dir`-targeted session: the destination folder is
+ *  resolved, confined to the project sandbox, and sanitized exactly ONCE —
+ *  at session creation, before any byte is accepted — through the same
+ *  `ensureProjectSubdir` the legacy multipart route uses. A hostile or
+ *  traversal-escaping `dir` therefore fails the session create with
+ *  VALIDATION_FAILED and never reaches promotion; promotion re-derives the
+ *  absolute folder from the stored, already-sanitized `session.destSubdir`
+ *  through the same helper, so the two can never disagree. */
+async function resolveUploadDestination(
+  projectsDir: string,
+  projectId: string,
+  dir: string | undefined,
+  metadata: unknown,
+): Promise<{ absDir: string; relDir: string }> {
+  try {
+    return await ensureProjectSubdir(projectsDir, projectId, dir ?? '', metadata);
+  } catch (err) {
+    throw new UploadSessionError(400, 'VALIDATION_FAILED', `invalid dir: ${String((err as Error)?.message ?? err)}`);
+  }
 }
 
 function sendSseEvent(res: import('express').Response, eventType: string, data: unknown): void {
@@ -98,12 +121,18 @@ export function registerProjectStagedUploadRoutes(app: Express, deps: RegisterPr
       }
     }
 
+    if (body.dir !== undefined && typeof body.dir !== 'string') {
+      return sendApiError(res, 400, 'VALIDATION_FAILED', 'dir must be a string');
+    }
+
     const idempotencyKeyRaw = req.headers['idempotency-key'];
     const idempotencyKey = typeof idempotencyKeyRaw === 'string' && idempotencyKeyRaw.trim() ? idempotencyKeyRaw.trim() : null;
     const requestHash = canonicalRequestHash(body);
 
     try {
-      const session = await store.createSession(projectId, body.files, { idempotencyKey, requestHash });
+      const project = getProject(db, projectId);
+      const { relDir } = await resolveUploadDestination(PROJECTS_DIR, projectId, body.dir, project?.metadata);
+      const session = await store.createSession(projectId, body.files, { idempotencyKey, requestHash, destSubdir: relDir });
       const limitsForSession = resolveUploadLimits(process.env);
       res.json({
         uploadId: session.uploadId,
@@ -142,7 +171,15 @@ export function registerProjectStagedUploadRoutes(app: Express, deps: RegisterPr
       // through metadata.baseDir, same as every other project write).
       if (session.files.every((f) => f.status === 'validated')) {
         const project = getProject(db, session.projectId);
-        const destAbsDir = resolveProjectDir(PROJECTS_DIR, session.projectId, project?.metadata);
+        let destAbsDir: string;
+        try {
+          ({ absDir: destAbsDir } = await resolveUploadDestination(PROJECTS_DIR, session.projectId, session.destSubdir, project?.metadata));
+        } catch (err) {
+          // Validated at creation; if the folder can no longer be resolved
+          // the session still ends with its one terminal event.
+          store.failSession(session, 'VALIDATION_FAILED', String((err as Error)?.message ?? err));
+          return;
+        }
         try {
           const committed = await store.promote(session, destAbsDir, (name, reserved) => uniqueName(destAbsDir, sanitizeName(name), reserved));
           // promote() writes straight to disk, bypassing the chokidar-fed
@@ -158,6 +195,29 @@ export function registerProjectStagedUploadRoutes(app: Express, deps: RegisterPr
               { type: 'file-changed', path: file.path, kind: 'add' },
               project?.metadata,
             );
+            // Parity with the legacy multipart route
+            // (routes/project/index.ts:4520-4536): an uploaded .html file
+            // gets its first `.file-versions` snapshot here. Every web
+            // upload now rides this route, so without it a web .html
+            // upload would silently lose the version history the legacy
+            // route created. Per-file try/catch for the same reason the
+            // legacy route has one: a snapshot failure must never break
+            // the promotion of the remaining files.
+            if (project && /\.html?$/i.test(file.path)) {
+              try {
+                const savedFile = await readProjectFile(PROJECTS_DIR, session.projectId, file.path, project.metadata);
+                await ensureCurrentProjectFileVersion(
+                  PROJECTS_DIR,
+                  project.id,
+                  savedFile.name,
+                  savedFile.buffer.toString('utf8'),
+                  { source: 'manual', promptSource: 'manual' },
+                  project.metadata,
+                );
+              } catch {
+                // skip a file that vanished or could not be snapshotted
+              }
+            }
           }
         } catch {
           // promote() already emitted the terminal failed event on error.

@@ -24,6 +24,7 @@ import { isTodoWriteToolName, stopReasonIsTruncation, todoItemsFromTodoWriteInpu
 // `routingOverride` field before it ever reaches resolveDispatchRouting.
 import { isRoutingOverrideRequest } from '@open-design/contracts';
 import type { DaemonHealthResponse } from '@open-design/contracts';
+import { readBuildStamp } from './build-stamp.js';
 import {
   composeSystemPrompt,
   detectDeckIntentSignal,
@@ -3208,10 +3209,13 @@ export async function startServer({
 
   app.get('/api/health', async (_req, res) => {
     const versionInfo = await readCurrentAppVersionInfo();
+    const buildStamp = readBuildStamp();
     const body: DaemonHealthResponse = {
       ok: true,
       version: versionInfo.version,
       bootId: daemonBootId,
+      commit: buildStamp.commit,
+      builtAt: buildStamp.builtAt,
     };
     res.json(body);
   });
@@ -5660,6 +5664,10 @@ export async function startServer({
         diff: outcome.diff,
         prompt: promptInfo.prompt,
         ...(promptInfo.promptSource ? { promptSource: promptInfo.promptSource } : {}),
+        // F-03: tags every version this run wrote so GET /api/runs/:id/diff can
+        // find them from disk alone, long after the run object is gone.
+        runId: run.id,
+        actorName: run.actorName ?? null,
         metadata: projectRecord?.metadata,
       });
     };

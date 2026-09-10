@@ -139,7 +139,13 @@ export interface UploadSession {
   uploadId: string;
   token: string;
   projectId: string;
+  /** The session's own STAGING directory (outside every project root). */
   dir: string;
+  /** Project-relative destination folder ('' = project root), already
+   *  sanitized and confined by the route at session creation (never
+   *  re-derived per file). `promote()` prefixes every committed
+   *  `name`/`path` with it, the way the legacy multipart route does. */
+  destSubdir: string;
   files: UploadFileState[];
   createdAt: number;
   expiresAt: number;
@@ -207,11 +213,13 @@ export class UploadStagingStore {
 
   /** Creates (or, under an idempotency key + matching request hash, reuses)
    *  a staging session for `projectId`. Rejects a re-used idempotency key
-   *  bound to a DIFFERENT request body with 409 CONFLICT. */
+   *  bound to a DIFFERENT request body with 409 CONFLICT. `destSubdir` is
+   *  the route-resolved, sanitized project-relative destination folder
+   *  ('' or omitted = project root). */
   async createSession(
     projectId: string,
     files: { name: string; size: number; mime: string }[],
-    opts: { idempotencyKey?: string | null; requestHash: string },
+    opts: { idempotencyKey?: string | null; requestHash: string; destSubdir?: string },
   ): Promise<UploadSession> {
     if (opts.idempotencyKey) {
       for (const session of this.sessions.values()) {
@@ -245,6 +253,7 @@ export class UploadStagingStore {
       token,
       projectId,
       dir,
+      destSubdir: opts.destSubdir ?? '',
       createdAt,
       expiresAt: createdAt + UPLOAD_SESSION_TTL_MS,
       idempotencyKey: opts.idempotencyKey ?? null,
@@ -514,9 +523,12 @@ export class UploadStagingStore {
       await outHandle.close();
       await fsp.rename(tempFinal, finalPath);
       const stat = await fsp.stat(finalPath);
+      // Project-relative path including the destination folder, mirroring
+      // the legacy route's `rel = relDir ? `${relDir}/${name}` : name`.
+      const rel = session.destSubdir ? `${session.destSubdir}/${finalName}` : finalName;
       committed.push({
-        name: finalName,
-        path: finalName,
+        name: rel,
+        path: rel,
         size: stat.size,
         mtime: stat.mtimeMs,
         originalName: file.name,

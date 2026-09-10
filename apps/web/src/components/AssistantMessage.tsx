@@ -737,6 +737,7 @@ function AssistantMessageImpl({
     | Extract<AgentEvent, { kind: "usage" }>
     | undefined;
   const roleName = assistantRoleName(message, t);
+  const actorCaption = assistantActorCaption(message, t);
   // One GET /api/runs/:id per message; both readings below come off it.
   const runStatus = useRunStatusForRun(message.runId, !streaming);
   const modelRouting = modelRoutingFromRunStatus(runStatus);
@@ -913,6 +914,11 @@ function AssistantMessageImpl({
         <div className="role">
           <AgentIcon id={roleIconId} size={20} className="role-agent-icon" />
           <span className="role-name">{roleName}</span>
+          {actorCaption ? (
+            <span className="role-actor" data-testid="assistant-actor-caption">
+              {actorCaption}
+            </span>
+          ) : null}
         </div>
       ) : null}
       {modelRouting ? <ModelRoutingStatus routing={modelRouting} /> : null}
@@ -1509,6 +1515,23 @@ export function assistantRoleName(
     (e) => e.kind === "status" && e.label === "starting" && e.detail
   ) as Extract<AgentEvent, { kind: "status" }> | undefined;
   return agentDisplayName(starting?.detail) ?? t("assistant.role");
+}
+
+/**
+ * Who ASKED for a turn (F-03 / D-2), as opposed to which agent ran it.
+ *
+ * A sibling of `assistantRoleName`, not a change to it: the role header answers
+ * "what produced this", and this answers "who wanted it". Returns `null` for an
+ * unattributed message — a pre-migration row, or a request that sent no
+ * `x-od-actor` header — so the caller renders nothing at all rather than an
+ * empty caption.
+ */
+export function assistantActorCaption(
+  message: ChatMessage,
+  t: TranslateFn
+): string | null {
+  const actorName = message.actorName?.trim();
+  return actorName ? t("assistant.askedBy", { name: actorName }) : null;
 }
 
 export function assistantRoleLabel(

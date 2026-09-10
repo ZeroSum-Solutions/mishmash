@@ -1,5 +1,6 @@
 import type { Server } from 'node:http';
 
+import { installUtcLogTimestamps } from './log-timestamp.js';
 import type { StartServerOptions } from './server.js';
 
 type StartedServer = {
@@ -116,6 +117,11 @@ export async function closeHttpServer(
 }
 
 export async function startDaemonRuntime(options: DaemonRuntimeOptions = {}): Promise<StartedDaemonRuntime> {
+  // Every real daemon boot converges here (bare `od`, `od daemon start`, and
+  // the packaged sidecar entry) before the server module is even imported,
+  // so this is the one place that covers every line the long-running server
+  // process ever prints -- see `log-timestamp.ts` for what must hold.
+  installUtcLogTimestamps();
   const { openBrowser: shouldOpenBrowser = false, logListening = false, ...serverOptions } = options;
   const { startServer } = await import('./server.js');
   const started = await startServer({

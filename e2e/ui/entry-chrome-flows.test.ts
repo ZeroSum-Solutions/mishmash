@@ -359,7 +359,14 @@ test('[P1] entry top navigation matches the current home tab structure', async (
   await expect(page.getByTestId('home-hero-template-section')).toBeVisible();
   await expect(page.getByTestId('home-hero-type-tabs')).toBeVisible();
   await expect(page.getByTestId('home-hero-active-type-chip')).toHaveCount(0);
-  await expect(page.getByTestId('home-hero-rail-prototype')).toHaveAttribute('aria-selected', 'false');
+  // Superseded target: this line used to assert `home-hero-rail-prototype`.
+  // The Prototype chip moved from the `create` group to `migrate` in the
+  // 2026-08-09 Home restructure (`home-hero/chips.ts`), and the
+  // `home-hero-type-tabs` rail renders `create` chips only, so that test id
+  // resolved to zero elements. The claim under test is unchanged — the rail
+  // opens with no chip pre-selected — so it now names a chip the rail still
+  // renders as a tab (`template`, first in `CREATE_RAIL_ORDER`).
+  await expect(page.getByTestId('home-hero-rail-template')).toHaveAttribute('aria-selected', 'false');
   await expect(page.getByTestId('home-hero-footer-options')).toHaveCount(0);
   await expect(page.getByTestId('home-hero-plugin-presets')).toHaveCount(0);
   await expect(page.getByTestId('plugins-home-row-subcategory-prototype')).toHaveCount(0);
@@ -452,10 +459,15 @@ test('[P1] design systems page is reachable from entry nav and supports search, 
   await expect(page.getByTestId('design-systems-empty')).toBeVisible();
   await page.getByTestId('design-systems-search').fill('');
 
-  await page.getByTestId('design-systems-surface-video').click();
+  // Superseded control: the surface filter used to be a pill row
+  // (`design-systems-surface-video` / `-all`, clicked). `DesignSystemsTab`
+  // moved it to the shared `FilterSelect` primitive on 2026-08-19, which
+  // renders one native <select> (`design-systems-surface-select`), so the
+  // pill test ids resolved to zero elements. Same filter, same values.
+  await page.getByTestId('design-systems-surface-select').selectOption('video');
   await expect(page.getByTestId('design-system-card-motion-poster')).toBeVisible();
   await expect(page.getByTestId('design-system-card-agentic')).toHaveCount(0);
-  await page.getByTestId('design-systems-surface-all').click();
+  await page.getByTestId('design-systems-surface-select').selectOption('all');
 
   // Master-detail: selecting a list row renders that system in the right
   // detail pane, where secondary actions live in the header overflow menu.
@@ -720,6 +732,14 @@ test('[P1] Settings About reads desktop updater status and runs a manual update 
         install: async () => checkedStatus,
         quit: async () => ({ ok: true }),
         subscribe: () => () => {},
+        // `isOpenDesignHostBridge` (packages/host/src/detection.ts) validates
+        // the updater channel structurally: a bridge missing ANY required
+        // method is rejected whole, so the About panel fell back to
+        // "does not support in-app updates" instead of reading this mock.
+        // These two joined the protocol on 2026-07-20 and the mock never
+        // caught up; the shapes match `packages/host/src/testing.ts`.
+        setMenuLabels: async () => ({ ok: true }),
+        subscribeOpenDialog: () => () => {},
       },
     };
   });
@@ -2261,10 +2281,13 @@ test('[P0] @critical home hero attachment input stages files, enables submit, an
 test('[P0] @critical home hero attachment-only submit uploads the file and sends it with the first message', async ({ page }) => {
   await gotoEntryHome(page);
 
+  // Used to wait for the legacy POST /api/projects/:id/upload; the Home hero no
+  // longer sends that request now that every web upload goes through the staged
+  // transport, so wait for the staged byte transfer (PUT .../uploads/:id/files/:n).
   const uploadResponse = page.waitForResponse(
     (resp) =>
-      /\/api\/projects\/[^/]+\/upload$/.test(new URL(resp.url()).pathname) &&
-      resp.request().method() === 'POST',
+      /\/api\/projects\/[^/]+\/uploads\/[^/]+\/files\/\d+$/.test(new URL(resp.url()).pathname) &&
+      resp.request().method() === 'PUT',
   );
 
   await page.getByTestId('home-hero-file-input').setInputFiles({

@@ -17,6 +17,7 @@ import {
   type TrackingAmrEntrySource,
 } from '../analytics/amr-attribution';
 import { getResolvedDeviceId } from '../analytics/client';
+import { getStoredActorName, setStoredActorName } from '../runtime/actor-identity';
 import {
   trackSettingsAppearanceClick,
   trackByokPreflightBlocked,
@@ -8495,7 +8496,42 @@ function AppearanceSection({
           />
         </div>
       </div>
+      {/* F-03: the only UI path to CHANGE the name after the one-time prompt
+          (including for someone who skipped it). Appended block -- it reads and
+          writes localStorage directly, not `cfg`, because the actor name is
+          per-browser by design and `cfg` is synced to the shared daemon. */}
+      <ActorNameField />
     </section>
+  );
+}
+
+/**
+ * "Display name" row (F-03 / D-2).
+ *
+ * INVARIANT: this writes ONLY to browser storage. Routing it through app config
+ * would sync it to the daemon, and the daemon is shared by the whole team -- the
+ * next teammate to load the app would inherit this name and every run they
+ * started would be attributed to the wrong person.
+ */
+function ActorNameField() {
+  const { t } = useI18n();
+  const [name, setName] = useState(() => getStoredActorName() ?? '');
+  return (
+    <div className="settings-field">
+      <label htmlFor="settings-actor-name">{t('settings.actorNameLabel')}</label>
+      <input
+        id="settings-actor-name"
+        type="text"
+        value={name}
+        maxLength={60}
+        data-testid="settings-actor-name"
+        onChange={(event) => {
+          setName(event.target.value);
+          setStoredActorName(event.target.value);
+        }}
+      />
+      <p className="hint">{t('settings.actorNameHint')}</p>
+    </div>
   );
 }
 

@@ -26,6 +26,7 @@ import {
   unregisterActiveMediaJob,
 } from '../media/jobs.js';
 import { resolveProjectDir } from '../projects.js';
+import { VIDEO_IMPORT_TASK_SURFACE } from '../video-import/service.js';
 import {
   aihubmixCatalogUrl,
   parseAIHubMixCatalog,
@@ -75,6 +76,47 @@ function validateMediaJobRequest(
     return { ok: true, value: b as unknown as CreateMediaJobRequest };
   }
   return { ok: false, message: 'kind must be "encode" or "download"' };
+}
+
+/** The one media-task shape `POST /api/media/tasks/:id/cancel` reasons about. */
+interface CancelableMediaTaskFacts {
+  /** In-memory only (media/task-store.ts:24-31); set by `POST …/media/jobs`. */
+  kind?: 'encode' | 'download';
+  /** Persisted on the `media_tasks` row; set by video-import at task creation. */
+  surface?: string | undefined;
+}
+
+/**
+ * INVARIANT: this route answers 200 only for a task it actually signaled.
+ *
+ * Two different `LiveMediaTask` store instances feed this route and they never
+ * share `kind`: `POST …/media/jobs` (above) sets `kind` on the daemon's ONE
+ * shared store, while video-import runs its own `createMediaTaskStore(db)`
+ * instance (video-import/service.ts) whose rows hydrate here with `kind:
+ * undefined` but a persisted `surface: 'video-import'`. Both register their
+ * kill on jobs.ts's module-level `activeJobs` map, which is keyed by taskId
+ * alone — so `kind` and `surface` together are the only signal this route has
+ * that a task is a background job at all.
+ *
+ * Recognizing the surface is necessary but not sufficient. A `running`
+ * video-import row left behind by a PREVIOUS process hydrates here with the
+ * right surface and no killable child in this one; answering 200 for it would
+ * report a cancel that never happened (integration-grok-r1 finding 1). So a
+ * video-import task is canceled only when `cancelMediaJob` actually found its
+ * kill. An encode/download task, by contrast, reaches this route through the
+ * shared store's own live object, which is itself proof this process owns the
+ * job: a `false` there means the job already reached a terminal state, and
+ * answering with the current snapshot is honest.
+ *
+ * @returns `true` when the caller may be told the task was canceled.
+ */
+function cancelLiveMediaTask(task: CancelableMediaTaskFacts, taskId: string): boolean {
+  if (task.kind === 'encode' || task.kind === 'download') {
+    cancelMediaJob(taskId);
+    return true;
+  }
+  if (task.surface === VIDEO_IMPORT_TASK_SURFACE) return cancelMediaJob(taskId);
+  return false;
 }
 
 const LONG_MEDIA_PROXY_TIMEOUT_MS = 10 * 60 * 1000;
@@ -845,35 +887,23 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
     }
     const task = getLiveMediaTask(req.params.id);
     if (!task) return res.status(404).json({ error: 'task not found' });
-    // Only an encode/download job (task.kind set by the POST …/media/jobs
-    // route above) is ever registered in jobs.ts's activeJobs kill map.
-    // A media-generation task (`kind` unset) or a task another surface
-    // persisted to this same media_tasks table without registering a
-    // killable child (e.g. a video-import download) is NOT tracked there:
-    // cancelMediaJob would silently no-op and this route would still
-    // answer 200 with the current, unchanged, still-running snapshot —
-    // read by a caller as "canceled" while nothing was stopped
-    // (integration-grok-r1 round 1, finding 1). Refuse instead of lying
-    // about the outcome; the underlying job keeps running until its own
-    // owner tracks its abort on this or an equivalent kill map.
-    if (task.kind !== 'encode' && task.kind !== 'download') {
+    if (!cancelLiveMediaTask(task, req.params.id)) {
       const refusal: MediaTaskCancelRefusedResponse = {
         error: {
           code: 'NOT_CANCELABLE',
-          message: `task ${req.params.id} is not a background encode/download job tracked by this route (kind: ${task.kind ?? 'generate'}); it cannot be canceled here`,
+          message: `task ${req.params.id} is not a background encode/download job tracked by this route (kind: ${task.kind ?? 'generate'}, surface: ${task.surface ?? 'none'}); it cannot be canceled here`,
         },
         task: mediaTaskSnapshot(task, 0),
       };
       return res.status(409).json(refusal);
     }
-    // cancelMediaJob is a no-op (returns false) for a task this route
-    // doesn't track an active child for — already terminal. Either way this
-    // answers with the current snapshot rather than 404 (work item 2).
-    cancelMediaJob(req.params.id);
     res.json(mediaTaskSnapshot(task, 0));
   });
 
-  app.get('/api/media/jobs/limits', (_req, res) => {
+  app.get('/api/media/jobs/limits', (req, res) => {
+    if (!isLocalSameOrigin(req, getResolvedPort())) {
+      return res.status(403).json({ error: 'cross-origin request rejected' });
+    }
     res.json(resolveMediaJobLimits());
   });
 
