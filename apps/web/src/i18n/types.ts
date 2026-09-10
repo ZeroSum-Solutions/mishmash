@@ -4916,6 +4916,7 @@ export interface Dict {
   'uploadProgress.completed': string;
   'uploadProgress.failed': string;
   'uploadProgress.tooLarge': string;
+  'uploadProgress.unsupportedType': string;
   // F002 — client discovery interview
   'interview.back': string;
   'interview.title': string;

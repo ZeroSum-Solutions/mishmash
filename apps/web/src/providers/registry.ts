@@ -24,9 +24,12 @@ import type {
   RestoreProjectFileVersionResponse,
   SocialShareRequest,
   SocialShareResponse,
+  CreateProjectUploadRequest,
+  CreateProjectUploadResponse,
+  ProjectUploadSseEvent,
   UploadLimitsResponse,
 } from '@open-design/contracts';
-import { parseAgentRegistrySseEvent } from '@open-design/contracts';
+import { isProjectUploadSseEvent, matchAcceptedKind, parseAgentRegistrySseEvent } from '@open-design/contracts';
 import type { MediaTaskListResponse, MediaTaskSnapshot } from '@open-design/contracts';
 import { isMediaTaskListResponse, isMediaTaskSnapshot } from '@open-design/contracts';
 import type {
@@ -2373,11 +2376,13 @@ export async function importProjectFigma(
   }
 }
 
-// Multi-file project upload used by the chat composer's paste / drop /
-// picker. Each file lands flat in the project folder; the response is
-// reshaped into ChatAttachments so the composer can stage them without a
-// follow-up listFiles round-trip.
-const PROJECT_UPLOAD_BATCH_SIZE = 12;
+// Multi-file project upload used by every web upload surface (composer
+// paste / drop / picker, Design Files, Home hero, question-form answers,
+// preview comments, markdown image paste, manual-edit image pick). Rides the
+// staged session transport (F-01 / Part 2 item 2.17): a JSON session create,
+// an SSE subscription opened BEFORE any byte is sent (r2 W7-R2-08), one PUT
+// per file, and the typed terminal event. The result is reshaped into
+// ChatAttachments so callers can stage them without a listFiles round-trip.
 
 export interface ProjectUploadFailure {
   name: string;
@@ -2389,6 +2394,42 @@ export interface UploadProjectFilesResult {
   uploaded: ChatAttachment[];
   failed: ProjectUploadFailure[];
   error?: string;
+}
+
+export interface UploadProjectFilesOptions {
+  /** Limits the caller already fetched for its own hint — passed so the
+   *  client never fetches them twice; otherwise fetched once per call. */
+  limits?: UploadLimitsResponse;
+  /** Called after every guard-validated SSE frame with the session's full
+   *  event history so far — the sole plumbing `UploadProgressCard` needs. */
+  onEvents?: (events: ProjectUploadSseEvent[]) => void;
+}
+
+/** INV-7.3's "before any request": a file that the daemon's PUBLISHED limits
+ *  would reject is refused here, in the browser, and never reaches the
+ *  network. Must hold for BOTH axes the daemon enforces — `maxFileBytes`
+ *  (PAYLOAD_TOO_LARGE) and the extension policy in `acceptedKinds`
+ *  (UNSUPPORTED_MEDIA_TYPE, via the contracts' `matchAcceptedKind`, the same
+ *  match the daemon runs). Message text mirrors the daemon's own 413 so the
+ *  two never disagree. An empty published `acceptedKinds` means the policy
+ *  is unknown to the client; only the size axis is checked and the daemon's
+ *  own check remains the backstop. */
+export function rejectLocally(file: File, limits: UploadLimitsResponse): ProjectUploadFailure | null {
+  if (file.size > limits.maxFileBytes) {
+    return {
+      name: file.name,
+      code: 'PAYLOAD_TOO_LARGE',
+      error: `"${file.name}" (${file.size} bytes) exceeds the ${limits.maxFileBytes} byte limit`,
+    };
+  }
+  if (limits.acceptedKinds.length > 0 && !matchAcceptedKind(file.name, limits.acceptedKinds)) {
+    return {
+      name: file.name,
+      code: 'UNSUPPORTED_MEDIA_TYPE',
+      error: `"${file.name}" is not an accepted file type`,
+    };
+  }
+  return null;
 }
 
 /** Reads a project-upload error response's real code/message. The daemon's
@@ -2410,10 +2451,56 @@ async function projectUploadError(resp: Response): Promise<{ code?: string; mess
   return { message: `upload failed (${resp.status})` };
 }
 
+type ProjectUploadTerminal = Extract<ProjectUploadSseEvent, { type: 'upload-completed' | 'upload-failed' }>;
+
+/** Reads `GET .../uploads/:id/events` frame by frame, validating every body
+ *  through the contracts guard (never trusting an unparsed frame, D-18),
+ *  reporting the accumulated history to `onEvents`, and resolving on the
+ *  one terminal event — or `null` when the stream ends without one. */
+async function readProjectUploadEvents(
+  body: ReadableStream<Uint8Array>,
+  onEvents: ((events: ProjectUploadSseEvent[]) => void) | undefined,
+): Promise<ProjectUploadTerminal | null> {
+  const events: ProjectUploadSseEvent[] = [];
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) return null;
+    buffer += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = buffer.indexOf('\n\n')) !== -1) {
+      const frame = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      const dataLine = frame.split('\n').find((line) => line.startsWith('data:'));
+      if (!dataLine) continue;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(dataLine.slice(5).trim());
+      } catch {
+        continue;
+      }
+      if (!isProjectUploadSseEvent(parsed)) continue;
+      events.push(parsed);
+      onEvents?.([...events]);
+      if (parsed.type === 'upload-completed' || parsed.type === 'upload-failed') {
+        try {
+          await reader.cancel();
+        } catch {
+          /* the stream is already closing */
+        }
+        return parsed;
+      }
+    }
+  }
+}
+
 export async function uploadProjectFiles(
   projectId: string,
   files: File[],
   dir?: string,
+  opts?: UploadProjectFilesOptions,
 ): Promise<UploadProjectFilesResult> {
   if (files.length === 0) return { uploaded: [], failed: [] };
 
@@ -2421,65 +2508,89 @@ export async function uploadProjectFiles(
   const failed: ProjectUploadFailure[] = [];
   let error: string | undefined;
   const targetDir = dir?.trim() ?? '';
+  const base = `/api/projects/${encodeURIComponent(projectId)}/uploads`;
 
-  for (let i = 0; i < files.length; i += PROJECT_UPLOAD_BATCH_SIZE) {
-    const batch = files.slice(i, i + PROJECT_UPLOAD_BATCH_SIZE);
-    const remaining = files.slice(i + PROJECT_UPLOAD_BATCH_SIZE);
-    const form = new FormData();
-    // The `dir` field MUST be appended before the file parts: the daemon's
-    // multer destination resolver reads req.body.dir as each file streams in,
-    // and busboy only exposes fields parsed earlier in the multipart body.
-    if (targetDir) form.append('dir', targetDir);
-    for (const f of batch) form.append('files', f);
+  // The published limits are the one source for the local pre-check and the
+  // per-session chunk size — never a client-side copy of the daemon's
+  // number. A failed limits read skips the local check and sends one
+  // session; the daemon still enforces the real limits either way.
+  const limits = opts?.limits ?? (await fetchProjectUploadLimits(projectId));
+  const accepted: File[] = [];
+  for (const file of files) {
+    const rejection = limits ? rejectLocally(file, limits) : null;
+    if (rejection) failed.push(rejection);
+    else accepted.push(file);
+  }
+  const chunkSize = limits?.maxFilesPerRequest ?? accepted.length;
+
+  for (let i = 0; i < accepted.length; i += chunkSize) {
+    const batch = accepted.slice(i, i + chunkSize);
+    const remaining = accepted.slice(i + chunkSize);
+    const failBatchAndRemaining = (code: string | undefined, message: string) => {
+      error = message;
+      for (const f of [...batch, ...remaining]) failed.push(code === undefined ? { name: f.name, error: message } : { name: f.name, code, error: message });
+    };
 
     try {
-      const resp = await fetch(
-        `/api/projects/${encodeURIComponent(projectId)}/upload`,
-        { method: 'POST', body: form },
-      );
-
-      if (!resp.ok) {
-        const { code, message } = await projectUploadError(resp);
-        error = message;
-        for (const f of batch) {
-          failed.push({ name: f.name, code, error });
-        }
-        for (const f of remaining) {
-          failed.push({ name: f.name, code, error });
-        }
+      const createBody: CreateProjectUploadRequest = {
+        files: batch.map((f) => ({
+          name: f.name,
+          size: f.size,
+          mime: f.type || (limits ? matchAcceptedKind(f.name, limits.acceptedKinds)?.mime : undefined) || 'application/octet-stream',
+        })),
+        ...(targetDir ? { dir: targetDir } : {}),
+      };
+      const createResp = await fetch(base, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(createBody),
+      });
+      if (!createResp.ok) {
+        const { code, message } = await projectUploadError(createResp);
+        failBatchAndRemaining(code, message);
         break;
       }
+      const session = (await createResp.json()) as CreateProjectUploadResponse;
+      const auth = { Authorization: `Bearer ${session.token}` };
 
-      const json = (await resp.json()) as {
-        files: { name: string; path: string; size?: number; originalName?: string }[];
-      };
-      const responseFiles = json.files ?? [];
+      // Subscribe BEFORE the first PUT so no progress byte is ever missed.
+      const eventsResp = await fetch(`${base}/${encodeURIComponent(session.uploadId)}/events`, { headers: auth });
+      if (!eventsResp.ok || !eventsResp.body) {
+        const { code, message } = await projectUploadError(eventsResp);
+        failBatchAndRemaining(code, message);
+        break;
+      }
+      const terminalPromise = readProjectUploadEvents(eventsResp.body, opts?.onEvents);
+
+      for (let index = 0; index < batch.length; index += 1) {
+        const putResp = await fetch(`${base}/${encodeURIComponent(session.uploadId)}/files/${index}`, {
+          method: 'PUT',
+          headers: { ...auth, 'Content-Type': batch[index]!.type || 'application/octet-stream' },
+          body: batch[index]!,
+        });
+        // The daemon emits the terminal `upload-failed` event; awaited below.
+        if (!putResp.ok) break;
+      }
+
+      const terminal = await terminalPromise;
+      if (!terminal) {
+        failBatchAndRemaining(undefined, 'upload stream ended without a terminal event');
+        break;
+      }
+      if (terminal.type === 'upload-failed') {
+        failBatchAndRemaining(terminal.code, terminal.message);
+        break;
+      }
       uploaded.push(
-        ...responseFiles.map((f) => ({
+        ...terminal.files.map((f) => ({
           path: f.path,
           name: f.originalName ?? f.name,
           kind: looksLikeImage(f.name) ? ('image' as const) : ('file' as const),
           size: f.size,
         })),
       );
-      // Server preserves request order; any dropped files are unmatched at the batch tail.
-      if (responseFiles.length < batch.length) {
-        error ??= 'some files could not be stored';
-        for (const f of batch.slice(responseFiles.length)) {
-          failed.push({
-            name: f.name,
-            error: error ?? 'some files could not be stored',
-          });
-        }
-      }
     } catch {
-      error = 'upload request failed';
-      for (const f of batch) {
-        failed.push({ name: f.name, error });
-      }
-      for (const f of remaining) {
-        failed.push({ name: f.name, error });
-      }
+      failBatchAndRemaining(undefined, 'upload request failed');
       break;
     }
   }

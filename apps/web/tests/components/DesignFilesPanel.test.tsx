@@ -20,6 +20,13 @@ import type {
   ProjectFolder,
 } from "../../src/types";
 import { VISUAL_STABILITY_STORAGE_KEY } from "../../src/utils/visualStability";
+import { isProjectUploadSseEvent } from "@open-design/contracts";
+import type {
+  ProjectUploadProgress,
+  ProjectUploadSseEvent,
+  ProjectUploadStarted,
+  UploadLimitsResponse,
+} from "@open-design/contracts";
 
 function folder(path: string): ProjectFolder {
   return {
@@ -802,5 +809,107 @@ describe("DesignFilesPanel upload limit hint", () => {
     await waitFor(() => {
       expect(document.querySelector('[data-testid="upload-limit-hint"]')).toBeNull();
     });
+  });
+});
+
+// W8A — Design Files gets the loud pre-request check it never had and
+// renders the typed progress card it never imported. RED on base d7ff39a36:
+// `handleDrop` (DesignFilesPanel.tsx:867-879) calls `onUploadFiles(dropped)`
+// unconditionally, so the oversize / wrong-type file reaches the parent's
+// upload; and the panel never renders `UploadProgressCard`.
+describe("DesignFilesPanel upload pre-check and progress (W8A)", () => {
+  const limits: UploadLimitsResponse = {
+    maxFileBytes: 10,
+    maxFilesPerRequest: 12,
+    maxTotalBytes: 120,
+    acceptedKinds: [{ extensions: ["png"], mime: "image/png", sniff: "magic" }],
+  };
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    // `unstubAllGlobals` also drops the module-level localStorage stub above;
+    // re-install it so the later tests keep their in-memory store.
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => lsStore.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        lsStore.set(key, value);
+      },
+      removeItem: (key: string) => {
+        lsStore.delete(key);
+      },
+      clear: () => {
+        lsStore.clear();
+      },
+    });
+  });
+
+  function stubLimits() {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/projects/test-project/uploads/limits") {
+        return new Response(JSON.stringify(limits), { status: 200 });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("never forwards an over-limit dropped file to onUploadFiles and names the limit inline", async () => {
+    stubLimits();
+    const onUploadFiles = vi.fn();
+    const { container } = renderPanel([], { onUploadFiles });
+    await waitFor(() => expect(screen.getByTestId("upload-limit-hint")).toBeTruthy());
+
+    const big = new File(["x".repeat(limits.maxFileBytes + 1)], "big.png", { type: "image/png" });
+    fireEvent.drop(container.querySelector(".df-body")!, {
+      dataTransfer: { files: [big], items: [], types: ["Files"] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("upload-error-banner").textContent).toContain("big.png is too large — the limit is 10 B.");
+    });
+    expect(onUploadFiles).not.toHaveBeenCalled();
+  });
+
+  it("never forwards a disallowed-type dropped file, forwards the accepted one, and names the rejected file inline", async () => {
+    stubLimits();
+    const onUploadFiles = vi.fn();
+    const { container } = renderPanel([], { onUploadFiles });
+    await waitFor(() => expect(screen.getByTestId("upload-limit-hint")).toBeTruthy());
+
+    const exe = new File(["MZ"], "setup.exe", { type: "application/octet-stream" });
+    const ok = new File(["ok"], "ok.png", { type: "image/png" });
+    fireEvent.drop(container.querySelector(".df-body")!, {
+      dataTransfer: { files: [exe, ok], items: [], types: ["Files"] },
+    });
+
+    await waitFor(() => expect(onUploadFiles).toHaveBeenCalledWith([ok]));
+    expect(screen.getByTestId("upload-error-banner").textContent).toContain('"setup.exe" is not an accepted file type');
+  });
+
+  it("renders the typed progress card from uploadProgressEvents", () => {
+    const started: ProjectUploadStarted = {
+      type: "upload-started",
+      uploadId: "upload-1",
+      files: [{ index: 0, name: "hero.png", size: 100 }],
+    };
+    const progress: ProjectUploadProgress = {
+      type: "upload-progress",
+      uploadId: "upload-1",
+      index: 0,
+      name: "hero.png",
+      bytesReceived: 40,
+      totalBytes: 100,
+    };
+    const events: ProjectUploadSseEvent[] = [started, progress];
+    expect(events.every((e) => isProjectUploadSseEvent(e))).toBe(true);
+
+    renderPanel([], { uploadProgressEvents: events });
+
+    const card = screen.getByTestId("upload-progress-card");
+    const row = card.querySelector('[data-testid="upload-progress-row-0"]');
+    expect(row?.getAttribute("data-status")).toBe("uploading");
+    expect(row?.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("40");
   });
 });

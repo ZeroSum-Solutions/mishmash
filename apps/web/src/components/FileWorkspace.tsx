@@ -106,6 +106,7 @@ import {
   type LocalizedText,
   type WorkspaceContextItem,
 } from '@open-design/contracts';
+import type { ProjectUploadSseEvent } from '@open-design/contracts';
 import { createTerminal, killTerminal, listPlugins } from '../state/projects';
 import { DesignFilesPanel, type DesignFilesNavState } from './DesignFilesPanel';
 import {
@@ -1999,6 +2000,12 @@ export function FileWorkspace({
     setDragOverTab(null);
   }
 
+  // The in-flight staged upload's typed event history, as the shared client
+  // receives it from `GET .../uploads/:id/events`; handed to the Design
+  // Files panel's `UploadProgressCard` while non-empty (INV-7.16) and
+  // cleared once `uploadFiles` settles.
+  const [uploadProgressEvents, setUploadProgressEvents] = useState<ProjectUploadSseEvent[]>([]);
+
   async function handleFilePicked(ev: React.ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(ev.target.files ?? []);
     ev.target.value = '';
@@ -2009,13 +2016,18 @@ export function FileWorkspace({
     if (picked.length === 0) return;
 
     setUploadError(null);
+    setUploadProgressEvents([]);
     // Cohort math is shared across all three upload surfaces; see
     // `analytics/upload-tracking.ts` for the per-file → batch reduction.
     const cohort = deriveUploadCohort(picked);
     let result: UploadProjectFilesResult;
     try {
-      result = await uploadProjectFiles(projectId, picked, uploadDir);
+      // `uploadDir` is the folder the panel is viewing; the shared client
+      // sends it as the session's `dir` so the file lands there, not at
+      // the project root.
+      result = await uploadProjectFiles(projectId, picked, uploadDir, { onEvents: setUploadProgressEvents });
     } catch (err) {
+      setUploadProgressEvents([]);
       const detail = err instanceof Error ? err.message : String(err);
       setUploadError(`Upload failed for ${picked.length} file(s) (${detail}).`);
       trackFileUploadResult(analytics.track, {
@@ -2028,6 +2040,7 @@ export function FileWorkspace({
       });
       return;
     }
+    setUploadProgressEvents([]);
     if (result.uploaded.length > 0) {
       await onRefreshFiles();
       const lastUploaded = result.uploaded[result.uploaded.length - 1];
@@ -3612,6 +3625,7 @@ export function FileWorkspace({
               fileInputRef.current?.click();
             }}
             onUploadFiles={(picked) => void uploadFiles(picked)}
+            uploadProgressEvents={uploadProgressEvents}
             onPaste={() => {
               trackFileManagerClick(analytics.track, {
                 page_name: 'file_manager',

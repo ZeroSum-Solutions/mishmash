@@ -37,8 +37,10 @@ import type {
 } from '@open-design/contracts/analytics';
 import { sessionModeToTracking } from '@open-design/contracts/analytics';
 import { deriveUploadCohort } from '../analytics/upload-tracking';
-import { projectRawUrl, uploadProjectFiles, fetchProjectUploadLimits, openFolderDialog, fetchRecentLinkedDirs, pushRecentLinkedDir, dirExists, applyLibraryAsset, fetchLibraryAssetElementHtml } from "../providers/registry";
+import { projectRawUrl, uploadProjectFiles, fetchProjectUploadLimits, rejectLocally, openFolderDialog, fetchRecentLinkedDirs, pushRecentLinkedDir, dirExists, applyLibraryAsset, fetchLibraryAssetElementHtml } from "../providers/registry";
 import type { ProjectUploadFailure } from "../providers/registry";
+import type { ProjectUploadSseEvent } from '@open-design/contracts';
+import { UploadProgressCard } from './UploadProgressCard';
 import { formatBytes } from "./LibraryAssetMeta";
 import { WorkingDirPicker } from './WorkingDirPicker';
 import { duplicatePluginAsProject, patchProject, referenceProject } from "../state/projects";
@@ -118,13 +120,14 @@ interface TrackedWorkspaceLinkedDir {
 }
 
 /** Splits `files` into what may be sent to `uploadProjectFiles` and what is
- *  rejected locally, against the daemon's own published per-file limit
- *  (`uploadLimits`, from `fetchProjectUploadLimits`) — so an over-limit file
- *  never leaves the browser (INV-7.3's "before upload" clause). `limits` is
- *  `null` until the hint fetch resolves; skip the check rather than block a
- *  drop on a slow/failed limits read — the server still enforces the real
- *  limit either way. Message text mirrors the daemon's own 413
- *  (`apps/daemon/src/routes/project/uploads.ts`) so the two never disagree. */
+ *  rejected locally, against the daemon's own published limits
+ *  (`uploadLimits`, from `fetchProjectUploadLimits`) — so an over-limit OR
+ *  disallowed-type file never leaves the browser (INV-7.3's "before upload"
+ *  clause). A thin wrapper over the shared client's `rejectLocally`, which
+ *  is the one place the size and type checks live for every surface.
+ *  `limits` is `null` until the hint fetch resolves; skip the check rather
+ *  than block a drop on a slow/failed limits read — the server still
+ *  enforces the real limits either way. */
 function partitionFilesByUploadLimit(
   files: File[],
   limits: UploadLimitsResponse | null,
@@ -133,15 +136,9 @@ function partitionFilesByUploadLimit(
   const accepted: File[] = [];
   const failed: ProjectUploadFailure[] = [];
   for (const file of files) {
-    if (file.size > limits.maxFileBytes) {
-      failed.push({
-        name: file.name,
-        code: 'PAYLOAD_TOO_LARGE',
-        error: `"${file.name}" (${file.size} bytes) exceeds the ${limits.maxFileBytes} byte limit`,
-      });
-    } else {
-      accepted.push(file);
-    }
+    const rejection = rejectLocally(file, limits);
+    if (rejection) failed.push(rejection);
+    else accepted.push(file);
   }
   return { accepted, failed };
 }
@@ -591,6 +588,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     const [slashIndex, setSlashIndex] = useState(0);
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
+    // The in-flight staged upload's typed event history, exactly as the
+    // shared client receives it from `GET .../uploads/:id/events`; drives
+    // `UploadProgressCard` while non-empty (INV-7.16) and is cleared once
+    // the terminal event resolves or a new upload starts.
+    const [uploadProgressEvents, setUploadProgressEvents] = useState<ProjectUploadSseEvent[]>([]);
     // External MCP servers configured by the user. Fetched lazily on mount;
     // shown in the slash-command palette so `/mcp <id>` inserts a hint into
     // the prompt that nudges the model to use that server's tools.
@@ -1830,9 +1832,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       // `page_name='chat_panel'` / `area='chat_composer'`.
       const cohort = deriveUploadCohort(files);
       const orderStart = reserveAttachmentOrders(accepted.length);
+      setUploadProgressEvents([]);
       try {
         const result = accepted.length > 0
-          ? await uploadProjectFiles(id, accepted)
+          ? await uploadProjectFiles(id, accepted, undefined, { limits: uploadLimits ?? undefined, onEvents: setUploadProgressEvents })
           : { uploaded: [], failed: [] as ProjectUploadFailure[], error: undefined };
         const combinedFailed = [...preflightFailed, ...result.failed];
         if (result.uploaded.length > 0) {
@@ -1872,6 +1875,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
           error_code: detail,
         });
       } finally {
+        setUploadProgressEvents([]);
         setUploading(false);
       }
     }
@@ -1995,9 +1999,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                 return;
               }
               setUploading(true);
+              setUploadProgressEvents([]);
               const result = accepted.length > 0
-                ? await uploadProjectFiles(id, accepted)
+                ? await uploadProjectFiles(id, accepted, undefined, { limits: uploadLimits ?? undefined, onEvents: setUploadProgressEvents })
                 : { uploaded: [], failed: [] as ProjectUploadFailure[], error: undefined };
+              setUploadProgressEvents([]);
               const combinedFailed = [...preflightFailed, ...result.failed];
               if (result.uploaded.length > 0) {
                 uploaded = assignChatAttachmentOrders(result.uploaded, orderStart);
@@ -2745,6 +2751,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
             {uploadLimitHint}
           </div>
         ) : null}
+        {uploadProgressEvents.length > 0 ? <UploadProgressCard events={uploadProgressEvents} /> : null}
         <div className="composer-shell">
           {/*
             Spec §8.4 — context bar above the composer input. The

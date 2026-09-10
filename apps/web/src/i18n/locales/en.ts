@@ -4763,6 +4763,7 @@ export const en: Dict = {
   'uploadProgress.completed': '{name} uploaded',
   'uploadProgress.failed': '{name} failed: {message}',
   'uploadProgress.tooLarge': '{name} is too large — the limit is {size}.',
+  'uploadProgress.unsupportedType': '"{name}" is not an accepted file type',
   // F002 — client discovery interview
   'interview.back': 'Back to home',
   'interview.title': 'Client discovery interview',
