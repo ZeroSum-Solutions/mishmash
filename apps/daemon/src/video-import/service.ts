@@ -10,12 +10,12 @@
 // /wait`'s waiter notifications) stay independent of this module's own job
 // route, which is the only consumer this track's red spec requires.
 //
-// Progress fraction is tracked in a side map keyed by taskId rather than on
-// the `LiveMediaTask` object itself: on this branch that type
-// (media/task-store.ts, 7C-owned) has no `fraction` field, and this track
-// must not edit that file. Once 7C's task-store change lands `fraction?:
-// number` on `LiveMediaTask`, this map can be folded into `task.fraction`
-// directly.
+// The two stores DO share one thing that matters for cancellation:
+// `media/jobs.ts`'s module-level `activeJobs` kill map is keyed by taskId
+// alone, not by store instance. Registering this service's own abort there
+// (`registerActiveMediaJob`) is what makes `POST /api/media/tasks/:id/cancel`
+// — which reads the OTHER store — able to stop a download running here
+// (INV-7.6).
 
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -26,10 +26,12 @@ import type { ProjectFile, VideoImportJob, VideoImportProvider } from '@open-des
 
 import { readProjectFileEntry, writeProjectFile } from '../projects.js';
 import { createMediaTaskStore } from '../media/task-store.js';
+import { registerActiveMediaJob, unregisterActiveMediaJob } from '../media/jobs.js';
 
 import { FileVideoImportCredentialStore } from './credentials.js';
 import { resolveVideoImportMaxBytes, resolveVideoImportTimeoutMs, resolveVimeoConfig } from './config.js';
 import {
+  VideoImportCanceledError,
   VideoImportLimitExceededError,
   VideoImportTimeoutError,
   downloadVimeoVideoToStaging,
@@ -53,7 +55,11 @@ export type CreateVideoImportResult = { ok: true; job: VideoImportJob } | Create
 // `media_tasks` row inserted by another feature (e.g. `od media generate`)
 // never carries this value, so `getJob` can refuse to hand it back
 // mislabeled as a Vimeo import (Grok r1 MEDIUM finding: cross-kind read).
-const VIDEO_IMPORT_TASK_SURFACE = 'video-import';
+// Exported so `routes/media.ts`'s cancel route names the same constant
+// instead of repeating the literal: `surface` is the ONLY thing a
+// video-import task carries across the two store instances (`kind` is
+// in-memory only and never persisted).
+export const VIDEO_IMPORT_TASK_SURFACE = 'video-import';
 
 function defaultDestName(videoName: string, videoId: string): string {
   const slug = videoName
@@ -67,7 +73,6 @@ function defaultDestName(videoName: string, videoId: string): string {
 export class VideoImportService {
   private readonly mediaTaskStore: ReturnType<typeof createMediaTaskStore>;
   private readonly credentialStore: FileVideoImportCredentialStore;
-  private readonly fractions = new Map<string, number>();
 
   constructor(
     _db: Database.Database,
@@ -115,6 +120,13 @@ export class VideoImportService {
 
     const taskId = randomUUID();
     const task = this.mediaTaskStore.createMediaTask(taskId, input.projectId, { surface: VIDEO_IMPORT_TASK_SURFACE });
+    // Reserve the kill-map slot synchronously, the same placeholder pattern
+    // media/jobs.ts documents (jobs.ts:85-96) and routes/media.ts already
+    // uses: a cancel that arrives before `runVimeoDownload` has its own
+    // controller is remembered rather than lost, and re-fires against the
+    // real abort the moment that registration replaces this one
+    // (`registerActiveMediaJob`'s re-registration branch, jobs.ts:97-105).
+    registerActiveMediaJob(taskId, () => {});
     task.status = 'running';
     this.mediaTaskStore.persistMediaTask(task);
     this.mediaTaskStore.appendTaskProgress(task, `resolved "${metaResult.metadata.name}" (${metaResult.metadata.downloadSize} bytes)`);
@@ -147,15 +159,22 @@ export class VideoImportService {
   ): Promise<void> {
     const stagingDir = path.join(this.deps.runtimeDataDir, 'video-import', 'staging');
     let stagingPath: string | null = null;
+    // The real kill for this task, replacing createImport's placeholder. It
+    // is the ONE thing that makes `POST /api/media/tasks/:id/cancel` able to
+    // stop this download (INV-7.6): that route reads the daemon's other
+    // media-task store, but jobs.ts's activeJobs map is keyed by taskId.
+    const cancelController = new AbortController();
+    registerActiveMediaJob(task.id, () => cancelController.abort());
     try {
       const staged = await downloadVimeoVideoToStaging({
         downloadUrl: opts.downloadUrl,
         maxBytes: opts.maxBytes,
         timeoutMs: opts.timeoutMs,
         stagingDir,
+        cancelSignal: cancelController.signal,
         onProgress: (bytesRead, declaredTotal) => {
           if (declaredTotal && declaredTotal > 0) {
-            this.fractions.set(task.id, Math.min(1, bytesRead / declaredTotal));
+            task.fraction = Math.min(1, bytesRead / declaredTotal);
           }
         },
       });
@@ -170,22 +189,34 @@ export class VideoImportService {
       task.status = 'done';
       task.file = entry;
       task.endedAt = Date.now();
-      this.fractions.set(task.id, 1);
+      task.fraction = 1;
       this.mediaTaskStore.appendTaskProgress(task, `wrote ${opts.destName} (${staged.bytes} bytes)`);
       this.mediaTaskStore.persistMediaTask(task);
       this.mediaTaskStore.notifyTaskWaiters(task);
     } catch (err) {
       if (stagingPath) await fs.promises.unlink(stagingPath).catch(() => {});
+      // A cancel is checked FIRST: it aborts the same controller the deadline
+      // does, so a caller-driven stop would otherwise be reported as the
+      // timeout the user never hit.
+      const canceled = err instanceof VideoImportCanceledError;
       const limitBreach = err instanceof VideoImportLimitExceededError;
       const timeoutBreach = err instanceof VideoImportTimeoutError;
       task.status = 'failed';
       task.error = {
         message: err instanceof Error ? err.message : String(err),
-        code: limitBreach ? 'LIMIT_EXCEEDED' : timeoutBreach ? 'TIMEOUT' : 'UPSTREAM_ERROR',
+        code: canceled
+          ? 'CANCELED'
+          : limitBreach
+            ? 'LIMIT_EXCEEDED'
+            : timeoutBreach
+              ? 'TIMEOUT'
+              : 'UPSTREAM_ERROR',
       };
       task.endedAt = Date.now();
       this.mediaTaskStore.persistMediaTask(task);
       this.mediaTaskStore.notifyTaskWaiters(task);
+    } finally {
+      unregisterActiveMediaJob(task.id);
     }
   }
 
@@ -194,7 +225,7 @@ export class VideoImportService {
     provider: VideoImportProvider,
   ): VideoImportJob {
     const base = this.mediaTaskStore.mediaTaskSnapshot(task);
-    const fraction = this.fractions.get(task.id);
+    const fraction = base.fraction;
     const job: VideoImportJob = {
       jobId: task.id,
       taskId: task.id,

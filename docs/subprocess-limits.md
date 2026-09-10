@@ -15,7 +15,7 @@ user-facing name lives in `apps/web/src/runtime/amr-guidance.ts`.
 ## MishMash budgets
 
 Every budget below is read from the daemon's process environment at use time.
-Values are milliseconds.
+Values are milliseconds unless a row's Default cell names another unit.
 
 | Bound | Env var | Default | What it covers |
 | --- | --- | --- | --- |

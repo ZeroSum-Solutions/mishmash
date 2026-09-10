@@ -1629,6 +1629,8 @@ export const en: Dict = {
   'videoImport.asPlaceholder': 'e.g. clips/interview.mp4',
   'videoImport.submit': 'Import',
   'videoImport.submitting': 'Importing…',
+  'videoImport.cancel': 'Cancel',
+  'videoImport.cancelError': 'Could not cancel that import. It may have already finished.',
   'videoImport.notConnectedHint': 'Connect a Vimeo account above before importing.',
   'videoImport.projectRequired': 'Choose a project first.',
   'videoImport.urlRequired': 'Enter a Vimeo video link.',
