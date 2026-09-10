@@ -2281,10 +2281,13 @@ test('[P0] @critical home hero attachment input stages files, enables submit, an
 test('[P0] @critical home hero attachment-only submit uploads the file and sends it with the first message', async ({ page }) => {
   await gotoEntryHome(page);
 
+  // Used to wait for the legacy POST /api/projects/:id/upload; the Home hero no
+  // longer sends that request now that every web upload goes through the staged
+  // transport, so wait for the staged byte transfer (PUT .../uploads/:id/files/:n).
   const uploadResponse = page.waitForResponse(
     (resp) =>
-      /\/api\/projects\/[^/]+\/upload$/.test(new URL(resp.url()).pathname) &&
-      resp.request().method() === 'POST',
+      /\/api\/projects\/[^/]+\/uploads\/[^/]+\/files\/\d+$/.test(new URL(resp.url()).pathname) &&
+      resp.request().method() === 'PUT',
   );
 
   await page.getByTestId('home-hero-file-input').setInputFiles({
