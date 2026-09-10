@@ -13,6 +13,10 @@ export interface AiHtmlVersionSnapshotInput {
   diff: Pick<RunArtifactDiff, 'touchedPaths'>;
   prompt: string | null;
   promptSource?: ProjectFileVersionPromptSource;
+  /** Run that produced these writes (F-03). Tags each version so `GET /api/runs/:id/diff` can find them. */
+  runId?: string;
+  /** Who asked for that run (F-03 / D-2). `null` when unattributed. */
+  actorName?: string | null;
   metadata?: unknown;
 }
 
@@ -68,6 +72,8 @@ export async function snapshotAiHtmlVersionsForRun(input: AiHtmlVersionSnapshotI
         source: 'ai',
         prompt: input.prompt,
         ...(input.promptSource ? { promptSource: input.promptSource } : {}),
+        ...(input.runId ? { runId: input.runId } : {}),
+        ...(input.actorName != null ? { actorName: input.actorName } : {}),
       },
       input.metadata,
     );

@@ -73,6 +73,14 @@ export interface ProjectFileVersion {
   mime: string;
   kind: ProjectFileKind;
   current: boolean;
+  /** Run that produced this version (F-03). Absent for a manual save or a pre-W8D entry. */
+  runId?: string;
+  /**
+   * Who asked for the run that produced this version (F-03 / D-2).
+   * `null`/absent means unattributed: a pre-W8D entry, a manual save, or a
+   * request that sent no `x-od-actor` header. Never a fabricated name.
+   */
+  actorName?: string | null;
 }
 
 export interface ProjectFileVersionsResponse {
