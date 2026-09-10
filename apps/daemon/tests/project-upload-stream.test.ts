@@ -19,7 +19,8 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { isProjectUploadSseEvent, type ProjectUploadSseEvent } from '@open-design/contracts';
+import { isProjectUploadSseEvent, type ProjectFileVersion, type ProjectUploadSseEvent } from '@open-design/contracts';
+import { listProjectFileVersions } from '../src/project-file-versions.js';
 import { startServer } from '../src/server.js';
 import { UploadSessionError, UploadStagingStore } from '../src/uploads/staging.js';
 
@@ -394,6 +395,64 @@ describe('project upload stream (HTTP)', () => {
     expect(body.error?.code).toBe('VALIDATION_FAILED');
     const projectRoot = path.join(process.env.OD_DATA_DIR!, 'projects', projectId);
     expect(fs.existsSync(path.join(projectRoot, '..', '..', 'etc', 'x.txt'))).toBe(false);
+  });
+
+  // W8A fix round — parity with the legacy multipart route. The legacy
+  // route snapshots an uploaded .html file into `.file-versions` through
+  // `ensureCurrentProjectFileVersion`
+  // (apps/daemon/src/routes/project/index.ts:4520-4536); the staged
+  // promotion path (apps/daemon/src/routes/project/uploads.ts:182-201) did
+  // not. Because 8A now sends every web upload through the staged route, a
+  // web .html upload silently lost the snapshot the legacy route created.
+  // RED before the fix: the staged project has no `.file-versions` store
+  // and `listProjectFileVersions` returns [] while the legacy project's
+  // returns one version.
+  it('a staged .html upload snapshots the file into .file-versions exactly as the legacy route does', async () => {
+    const html = '<!doctype html><html><body><h1>staged upload</h1></body></html>';
+    const bytes = Buffer.from(html, 'utf8');
+    const projectsRoot = path.join(process.env.OD_DATA_DIR!, 'projects');
+    const stripVolatile = ({ id: _id, createdAt: _createdAt, ...rest }: ProjectFileVersion) => rest;
+
+    // Reference behaviour: the legacy multipart route.
+    const legacyProjectId = await createProject();
+    const form = new FormData();
+    form.append('files', new Blob([html], { type: 'text/html' }), 'page.html');
+    const legacyResp = await fetch(`${baseUrl}/api/projects/${legacyProjectId}/upload`, { method: 'POST', body: form });
+    expect(legacyResp.status).toBe(200);
+    const legacyVersions = await listProjectFileVersions(projectsRoot, legacyProjectId, 'page.html');
+    expect(legacyVersions).toHaveLength(1);
+
+    // The staged route must produce the same snapshot for the same file.
+    const stagedProjectId = await createProject();
+    const createResp = await createSession(stagedProjectId, [{ name: 'page.html', size: bytes.length, mime: 'text/html' }]);
+    expect(createResp.status).toBe(200);
+    const session = (await createResp.json()) as { uploadId: string; token: string };
+
+    const eventsPromise = fetch(`${baseUrl}/api/projects/${stagedProjectId}/uploads/${session.uploadId}/events`, {
+      headers: { Authorization: `Bearer ${session.token}`, Accept: 'text/event-stream' },
+    }).then((resp) => readSseEvents(resp));
+    await new Promise((r) => setTimeout(r, 20));
+
+    const putResp = await fetch(`${baseUrl}/api/projects/${stagedProjectId}/uploads/${session.uploadId}/files/0`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${session.token}`, 'Content-Type': 'text/html' },
+      body: bytes,
+    });
+    expect(putResp.status).toBe(200);
+    const terminals = (await eventsPromise).filter((e) => e.type === 'upload-completed' || e.type === 'upload-failed');
+    expect(terminals).toHaveLength(1);
+    expect(terminals[0]!.type).toBe('upload-completed');
+    expect(fs.existsSync(path.join(projectsRoot, stagedProjectId, 'page.html'))).toBe(true);
+
+    // The completed event is emitted inside promote(), before the route
+    // finishes its post-promotion work — poll briefly for the snapshot.
+    await waitFor(() => fs.existsSync(path.join(projectsRoot, stagedProjectId, '.file-versions')));
+    expect(fs.existsSync(path.join(projectsRoot, stagedProjectId, '.file-versions'))).toBe(true);
+
+    const stagedVersions = await listProjectFileVersions(projectsRoot, stagedProjectId, 'page.html');
+    expect(stagedVersions).toHaveLength(1);
+    expect(stagedVersions[0]!.size).toBe(bytes.length);
+    expect(stripVolatile(stagedVersions[0]!)).toEqual(stripVolatile(legacyVersions[0]!));
   });
 
   it('legacy route symptom: a partial file IS visible under the project root while multer streams it (the defect this design eliminates)', async () => {
