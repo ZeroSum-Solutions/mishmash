@@ -294,9 +294,10 @@ const APPLY_RESPONSES: Record<string, unknown> = {
   // now that Slide deck and Prototype live in the `migrate` group and cannot
   // appear as picker cards. Home refuses to enable Send until the pick resolves
   // against this route, so the card cases need an apply response here just as
-  // the deck case always has. Recorded from a real daemon
-  // (`POST /api/plugins/example-hyperframes/apply` on a tools-dev runtime) and
-  // trimmed to the fields Home reads, exactly like the deck entry below.
+  // the deck case always has. The shape and the values Home reads come from a
+  // real daemon recording (`POST /api/plugins/example-hyperframes/apply` on a
+  // tools-dev runtime); the snapshot id and digest are placeholders, and the
+  // whole entry is trimmed the same way the deck entry below is.
   'example-hyperframes': {
     query: 'Create a premium product-studio HyperFrames composition.',
     contextItems: [],
