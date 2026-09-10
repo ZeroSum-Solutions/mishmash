@@ -75,6 +75,7 @@ export interface Dict {
   'library.composer.generate': string;
   'library.composer.generating': string;
   'library.composer.error': string;
+  'library.composer.cancelError': string;
   'mediaTask.cancel': string;
   'common.save': string;
   'common.close': string;
