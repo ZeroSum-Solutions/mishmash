@@ -1,40 +1,9 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-
 import { ACTOR_HEADER_NAME, normalizeActorName } from '@open-design/contracts';
 
-const ACTOR_FILE = 'actor.json';
 const ACTOR_FLAG = '--actor';
 
 /** Hosts that are always the local daemon, whatever discovery decided. */
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
-
-/** Where `--actor` persists the chosen name. Mirrors `deploy.ts`'s `deployConfigPath` base. */
-export function actorStatePath(env: NodeJS.ProcessEnv = process.env): string {
-  const base = env.OD_USER_STATE_DIR || path.join(os.homedir(), '.open-design');
-  return path.join(base, ACTOR_FILE);
-}
-
-function readStoredActorName(env: NodeJS.ProcessEnv): string | null {
-  try {
-    const raw = fs.readFileSync(actorStatePath(env), 'utf8');
-    return normalizeActorName((JSON.parse(raw) as { actorName?: unknown }).actorName);
-  } catch {
-    // No file, unreadable file, or corrupt JSON: unattributed, never fatal.
-    return null;
-  }
-}
-
-function writeStoredActorName(env: NodeJS.ProcessEnv, actorName: string): void {
-  try {
-    const file = actorStatePath(env);
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, `${JSON.stringify({ actorName }, null, 2)}\n`);
-  } catch {
-    // Persisting is a convenience. A read-only home must not break the command.
-  }
-}
 
 export interface ResolveCliActorOptions {
   argv?: readonly string[];
@@ -48,8 +17,7 @@ export interface ResolvedCliActor {
 }
 
 /**
- * Resolves who is running `od`, in priority order: `--actor <name>`, then
- * `OD_ACTOR`, then the name a previous `--actor` invocation stored.
+ * Resolves who is running `od`: `--actor <name>` first, then `OD_ACTOR`.
  *
  * INVARIANT: `--actor` is a GLOBAL option consumed here, at the entry point,
  * and stripped from the returned argv. Every subcommand's `parseFlags` refuses
@@ -57,8 +25,14 @@ export interface ResolvedCliActor {
  * argv would break every command it was passed to. Consuming it once is what
  * lets one flag work across all of them without touching a single subcommand.
  *
- * Passing `--actor` also persists the name, so the next invocation needs no
- * flag. There is no way to make this authoritative and no attempt to: per D-2
+ * INVARIANT: resolution is READ-ONLY. `od` remembers nothing between
+ * invocations -- `OD_ACTOR` in a shell profile is the "set it once" path, and
+ * an explicit flag is the per-call override. A stored file would be a second
+ * source of truth to keep in step with the browser's own stored name, and
+ * writing one would add a daemon-source filesystem write this track is not
+ * permitted to inventory (see the PR body's needsOwner note).
+ *
+ * There is no way to make any of this authoritative and no attempt to: per D-2
  * the name is a label the caller chose, not a credential.
  */
 export function resolveCliActor(options: ResolveCliActorOptions = {}): ResolvedCliActor {
@@ -87,13 +61,8 @@ export function resolveCliActor(options: ResolveCliActorOptions = {}): ResolvedC
   }
 
   const fromFlag = normalizeActorName(flagValue);
-  if (fromFlag) {
-    writeStoredActorName(env, fromFlag);
-    return { actorName: fromFlag, argv: kept };
-  }
-  const fromEnv = normalizeActorName(env.OD_ACTOR);
-  if (fromEnv) return { actorName: fromEnv, argv: kept };
-  return { actorName: readStoredActorName(env), argv: kept };
+  if (fromFlag) return { actorName: fromFlag, argv: kept };
+  return { actorName: normalizeActorName(env.OD_ACTOR), argv: kept };
 }
 
 function originOf(rawUrl: string | null | undefined): string | null {

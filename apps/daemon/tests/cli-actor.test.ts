@@ -133,21 +133,31 @@ describe('W8D: od resolves the actor and sends it as x-od-actor', () => {
     expect(actorHeadersSeen()).toContain('devin');
   });
 
-  it('reuses the name a previous --actor invocation stored', async () => {
+  // SUPERSEDED (same commit series, per D-18). This case used to assert that a
+  // prior `od ... --actor devin` invocation persisted the name to
+  // `$OD_USER_STATE_DIR/actor.json`, so a later flagless invocation still sent
+  // the header. That behaviour was cut: it needed a new filesystem write inside
+  // `apps/daemon/src`, and every such write must be recorded in
+  // `filesystem/legacy-write-inventory.json`, a file this track is explicitly
+  // forbidden to touch (brief "Never touched by this track"). The equivalent
+  // assertion below pins what replaced it -- `od` is stateless about identity,
+  // and `OD_ACTOR` is the set-it-once path -- so the removed claim is replaced,
+  // not dropped.
+  it('remembers nothing between invocations, so a flagless call is unattributed', async () => {
     const first = await runCli(
       ['run', 'list', '--daemon-url', stub!.baseUrl, '--actor', 'devin'],
       { OD_USER_STATE_DIR: stateDir },
     );
     expect(first.code, first.stderr).toBe(0);
 
-    // Second invocation: no flag, no env. The stored value must carry over.
     const second = await runCli(['run', 'list', '--daemon-url', stub!.baseUrl], {
       OD_USER_STATE_DIR: stateDir,
       OD_ACTOR: '',
     });
     expect(second.code, second.stderr).toBe(0);
     expect(stub!.requests.length).toBe(2);
-    expect(actorHeadersSeen()[1]).toBe('devin');
+    expect(actorHeadersSeen()[0]).toBe('devin');
+    expect(actorHeadersSeen()[1]).toBeUndefined();
   });
 
   it('prefers the flag over the env value', async () => {

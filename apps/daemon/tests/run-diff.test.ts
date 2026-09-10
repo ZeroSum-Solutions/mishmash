@@ -240,7 +240,7 @@ describe('W8D: GET /api/runs/:id/diff returns disk-backed before/after content',
     const body = (await resp.json()) as Record<string, unknown>;
     // Falsifiable property-set check: a hand-built body with extra keys fails.
     expect(Object.keys(body).sort()).toEqual(['files', 'runId']);
-    const entry = (body.files as Array<Record<string, unknown>>)[0];
+    const entry = (body.files as Array<Record<string, unknown>>)[0] ?? {};
     expect(Object.keys(entry).sort()).toEqual(['actorName', 'after', 'at', 'before', 'fileName', 'kind']);
   });
 });

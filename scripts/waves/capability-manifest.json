@@ -553,6 +553,7 @@
     "parityApplicable": true,
     "knownNamespaceRoutes": [
       "GET /api/runs/:param",
+      "GET /api/runs/:param/diff",
       "GET /api/runs/:param/events",
       "GET /api/runs/:param/result-package",
       "POST /api/runs",

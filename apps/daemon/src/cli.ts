@@ -8469,8 +8469,8 @@ interactive stderr TTY with --json off.
 
 Common options:
   --daemon-url <url>   MishMash daemon HTTP base.
-  --actor <name>       Attribute this request to a person; remembered for the
-                       next invocation. Also settable with OD_ACTOR.
+  --actor <name>       Attribute this request to a person. Set OD_ACTOR in
+                       your shell to stop repeating it.
   --json               Emit raw JSON.`);
     process.exit(args.length === 0 ? 2 : 0);
   }
