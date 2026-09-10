@@ -250,7 +250,12 @@ describe('W8D: od resolves the actor and sends it as x-od-actor', () => {
     }
   });
 
-  it('prints a dash for an unattributed run instead of undefined', async () => {
+  // W8 CI: `od run info` pins its whole stdout in `tests/run-cli.test.ts`
+  // ("both surfaces print, and nothing else does"). An unattributed run must
+  // therefore print exactly what it printed before this wave -- no `actor`
+  // line at all -- while `od run list`, whose row is one line per run, keeps
+  // the '-' placeholder in its `actor=` field.
+  it('omits the actor line on `od run info` for an unattributed run', async () => {
     const statusStub = http.createServer((req, res) => {
       req.resume();
       req.on('end', () => {
@@ -269,7 +274,8 @@ describe('W8D: od resolves the actor and sends it as x-od-actor', () => {
       const info = await runCli(['run', 'info', 'run-1', '--daemon-url', base], {
         OD_USER_STATE_DIR: stateDir,
       });
-      expect(info.stdout).toMatch(/^actor\t-$/m);
+      expect(info.code, info.stderr).toBe(0);
+      expect(info.stdout).not.toMatch(/^actor\t/m);
       expect(info.stdout).not.toContain('undefined');
       const list = await runCli(['run', 'list', '--daemon-url', base], {
         OD_USER_STATE_DIR: stateDir,
