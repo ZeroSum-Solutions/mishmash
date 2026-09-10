@@ -269,12 +269,13 @@ test('[P1] Plan mode daemon run creates, opens, and restores an editable markdow
   await expect(page.getByTestId('chat-composer')).toBeVisible();
 });
 
-// Red spec for "Plan 模式生成 HTML 后没有自动打开生成的文件": after the user
-// reviews the plan and asks for the final deliverable, the generation turn
+// Regression cover for "Plan 模式生成 HTML 后没有自动打开生成的文件": after the
+// user reviews the plan and asks for the final deliverable, the generation turn
 // writes the HTML as a project file (Write tool, no inline artifact echo) and
-// then touches the plan document again. The viewer must auto-open the
-// generated HTML instead of staying on the markdown plan.
-test('[P1] Plan mode generation turn auto-opens the generated HTML file', async ({ page }) => {
+// then touches the plan document again. The user keeps the plan document they
+// were reading, and the generated HTML reaches them as this turn's
+// produced-file row — one click from the viewport.
+test('[P1] Plan mode generation turn keeps the plan in view and offers the generated HTML file', async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto('/');
   await createProject(page, 'Plan mode html auto-open smoke', 'claude');
@@ -299,18 +300,33 @@ test('[P1] Plan mode generation turn auto-opens the generated HTML file', async 
 
   await sendPrompt(page, 'Generate the deterministic artifact from the plan document');
   await expectProjectFilesToContain(page, projectId, ['index.html', 'plan.md']);
+  // Superseded oracle. These assertions used to claim "the index.html tab opens
+  // on the agent write" — that the generation turn's HTML takes the viewport
+  // away from plan.md. B-09 (8d9428609, PR #176, 2026-09-03) made the opposite
+  // deliberate: agentWriteMayFocusFile
+  // (apps/web/src/components/agent-write-viewport.ts:29-35) lets an
+  // agent-written file take focus only when the user has no active tab to lose,
+  // so with plan.md active the write is background work. Assert what the product
+  // now guarantees: the user's view does not move, and the file is still handed
+  // to them.
+  const openGeneratedHtml = page.getByTestId('file-ops-row-open-index.html');
+  await expect(openGeneratedHtml).toBeVisible({ timeout: 15_000 });
   const htmlTab = page.getByTestId('file-workspace').getByRole('tab', { name: /index\.html/i });
+  await expect(htmlTab).toHaveCount(0);
+  await expect(planTab).toHaveAttribute('aria-selected', 'true');
+
+  // ...and the user who wants the deliverable is one click from it.
+  await openGeneratedHtml.click();
   await expect(htmlTab).toBeVisible({ timeout: 15_000 });
   await expect(htmlTab).toHaveAttribute('aria-selected', 'true');
 });
 
-// Red spec, regeneration loop: Plan mode's core iteration is
-// plan → generate → edit the plan → generate AGAIN. On the second generation
+// Regeneration loop: Plan mode's core iteration is plan → generate → open the
+// deliverable → go back to the plan → generate AGAIN. On the second generation
 // the HTML file already exists, so a pre/post file-name diff sees no "new"
-// file — the viewer must still re-focus the regenerated HTML. Uses the codex
-// fake runtime (no tool_use events, like most CLI protocols) so the per-write
-// auto-open path cannot mask the turn-end selection.
-test('[P1] Plan mode regeneration re-opens the existing generated HTML file', async ({ page }) => {
+// file. Uses the codex fake runtime (no tool_use events, like most CLI
+// protocols) so only the turn-end selection path can move the viewport.
+test('[P1] Plan mode regeneration keeps the plan in view and re-offers the generated HTML file', async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto('/');
   await createProject(page, 'Plan mode html regen smoke');
@@ -326,15 +342,30 @@ test('[P1] Plan mode regeneration re-opens the existing generated HTML file', as
   await sendPrompt(page, 'Generate the deterministic artifact from the plan document');
   await expectProjectFilesToContain(page, projectId, ['index.html', 'plan.md']);
   const htmlTab = workspace.getByRole('tab', { name: /index\.html/i });
+  const planTab = workspace.getByRole('tab', { name: /plan\.md/i });
+  // Superseded oracle. These assertions used to claim "the index.html tab opens
+  // on the agent write". B-09 (8d9428609, PR #176, 2026-09-03) made staying put
+  // deliberate — agentWriteMayFocusFile
+  // (apps/web/src/components/agent-write-viewport.ts:29-35) — so the write
+  // leaves plan.md in the viewport and hands the HTML over as a produced-file
+  // row the user opens themselves.
+  const openGeneratedHtml = page.getByTestId('file-ops-row-open-index.html');
+  await expect(openGeneratedHtml).toBeVisible({ timeout: 15_000 });
+  await expect(htmlTab).toHaveCount(0);
+  await expect(planTab).toHaveAttribute('aria-selected', 'true');
+  await openGeneratedHtml.click();
   await expect(htmlTab).toBeVisible({ timeout: 15_000 });
   await expect(htmlTab).toHaveAttribute('aria-selected', 'true');
 
   // The user goes back to the plan document to revise it...
-  await workspace.getByRole('tab', { name: /plan\.md/i }).click();
-  await expect(workspace.getByRole('tab', { name: /plan\.md/i })).toHaveAttribute('aria-selected', 'true');
+  await planTab.click();
+  await expect(planTab).toHaveAttribute('aria-selected', 'true');
 
-  // ...and asks for another generation. index.html is rewritten in place —
-  // no new file name appears, but the fresh deliverable must take focus.
+  // ...and asks for another generation. index.html is rewritten in place — no
+  // new file name appears. Superseded oracle: the last assertion used to claim
+  // "the fresh deliverable must take focus". Per B-09 the user's plan.md view
+  // survives the rewrite as well, and the regenerated file is re-offered by the
+  // new turn's produced-file row.
   await sendPrompt(page, 'Generate the deterministic artifact from the plan document');
   await expect
     .poll(async () => {
@@ -342,6 +373,11 @@ test('[P1] Plan mode regeneration re-opens the existing generated HTML file', as
       return messages.filter((m) => m.role === 'assistant' && m.runStatus === 'succeeded').length;
     }, { timeout: 30_000 })
     .toBeGreaterThanOrEqual(3);
+  const reopenGeneratedHtml = page.getByTestId('file-ops-row-open-index.html').last();
+  await expect(reopenGeneratedHtml).toBeVisible({ timeout: 15_000 });
+  await expect(planTab).toHaveAttribute('aria-selected', 'true');
+  await expect(htmlTab).toHaveAttribute('aria-selected', 'false');
+  await reopenGeneratedHtml.click();
   await expect(htmlTab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 });
 });
 
