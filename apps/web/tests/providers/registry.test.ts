@@ -810,34 +810,6 @@ describe('uploadProjectFiles', () => {
     vi.unstubAllGlobals();
   });
 
-  // Supersedes the previous version of this test, which fixtured a flat
-  // `{code, error: string}` body — a shape the daemon never actually sends.
-  // The real envelope (`ApiErrorResponse`, `api-errors.ts:20-29`) nests the
-  // code and message under `error`; the old flat fixture let a real 413/415
-  // response's message silently vanish into "upload failed (<status>)"
-  // (`registry.ts:2412-2420` on base). RED on base for that reason.
-  it('marks every file failed with the daemon error code/message when the upload response is non-ok', async () => {
-    const a = new File(['a'], 'a.txt', { type: 'text/plain' });
-    const b = new File(['b'], 'b.txt', { type: 'text/plain' });
-
-    const envelope: ApiErrorResponse = {
-      error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'file type not allowed' },
-    };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(JSON.stringify(envelope), { status: 415 })),
-    );
-
-    const result = await uploadProjectFiles('project-1', [a, b]);
-
-    expect(result.uploaded).toEqual([]);
-    expect(result.error).toBe('file type not allowed');
-    expect(result.failed).toEqual([
-      { name: 'a.txt', code: 'UNSUPPORTED_MEDIA_TYPE', error: 'file type not allowed' },
-      { name: 'b.txt', code: 'UNSUPPORTED_MEDIA_TYPE', error: 'file type not allowed' },
-    ]);
-  });
-
   it('falls back to a status-derived message when the error response has no JSON body', async () => {
     const a = new File(['a'], 'a.txt', { type: 'text/plain' });
 
@@ -1192,6 +1164,32 @@ describe('uploadProjectFiles (staged transport, W8A)', () => {
       { name: 'c.txt', code: 'UNSUPPORTED_MEDIA_TYPE', error: 'file contents are not valid UTF-8 text' },
     ]);
     expect(putBodies(calls)).toEqual([a, b, c]);
+  });
+
+  // Supersedes "marks every file failed with the daemon error code/message
+  // when the upload response is non-ok" (legacy transport). That test
+  // fixtured a 415 envelope on the multipart `POST /upload`; the staged
+  // client's first (and only pre-byte) request is the JSON session create,
+  // so the envelope now arrives there — and no PUT or events subscription
+  // is ever attempted.
+  it('marks every file failed with the daemon error code/message when the session create is non-ok, sending no bytes', async () => {
+    const a = new File(['a'], 'a.txt', { type: 'text/plain' });
+    const b = new File(['b'], 'b.txt', { type: 'text/plain' });
+    const envelope: ApiErrorResponse = {
+      error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'file type not allowed' },
+    };
+    const { fetchMock, calls } = stagedDaemon({ create: { status: 415, body: envelope } });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await uploadProjectFiles('project-1', [a, b], undefined, { limits: STAGED_LIMITS });
+
+    expect(result.uploaded).toEqual([]);
+    expect(result.error).toBe('file type not allowed');
+    expect(result.failed).toEqual([
+      { name: 'a.txt', code: 'UNSUPPORTED_MEDIA_TYPE', error: 'file type not allowed' },
+      { name: 'b.txt', code: 'UNSUPPORTED_MEDIA_TYPE', error: 'file type not allowed' },
+    ]);
+    expect(calls.map((c) => c.method)).toEqual(['POST']);
   });
 });
 
