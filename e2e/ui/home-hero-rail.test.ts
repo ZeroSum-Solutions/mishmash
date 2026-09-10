@@ -290,6 +290,42 @@ const HOME_PLUGINS = [
 ];
 
 const APPLY_RESPONSES: Record<string, unknown> = {
+  // HyperFrames is the `create`-group scenario the Template picker cases drive
+  // now that Slide deck and Prototype live in the `migrate` group and cannot
+  // appear as picker cards. Home refuses to enable Send until the pick resolves
+  // against this route, so the card cases need an apply response here just as
+  // the deck case always has. The shape and the values Home reads come from a
+  // real daemon recording (`POST /api/plugins/example-hyperframes/apply` on a
+  // tools-dev runtime); the snapshot id and digest are placeholders, and the
+  // whole entry is trimmed the same way the deck entry below is.
+  'example-hyperframes': {
+    query: 'Create a premium product-studio HyperFrames composition.',
+    contextItems: [],
+    inputs: [],
+    assets: [],
+    mcpServers: [],
+    trust: 'bundled',
+    capabilitiesGranted: ['prompt:inject'],
+    capabilitiesRequired: ['prompt:inject'],
+    appliedPlugin: {
+      snapshotId: 'snap-hyperframes',
+      pluginId: 'example-hyperframes',
+      pluginVersion: '0.1.0',
+      manifestSourceDigest: 'c'.repeat(64),
+      inputs: {},
+      resolvedContext: { items: [] },
+      capabilitiesGranted: ['prompt:inject'],
+      capabilitiesRequired: ['prompt:inject'],
+      assetsStaged: [],
+      taskKind: 'new-generation',
+      appliedAt: 0,
+      connectorsRequired: [],
+      connectorsResolved: [],
+      mcpServers: [],
+      status: 'fresh',
+    },
+    projectMetadata: {},
+  },
   'example-simple-deck': {
     query: 'Draft a quarterly review deck.',
     contextItems: [],
@@ -790,6 +826,16 @@ test('[P1] home Figma import uploads a .fig file into a new project and opens it
   await expect.poll(() => importBodies.length, { timeout: 10_000 }).toBe(1);
   expect(importBodies[0]).toContain('marketing-home.fig');
   expect(importBodies[0]).toContain('Use bold sections.');
+
+  // "Import & build" only decodes the .fig now. The 2026-08-04 multi-page
+  // detection turned this into a two-step flow: the decode summary renders
+  // with its own confirm button, and only that button hands the result back to
+  // Home (`onImported`), which is what patches the project's pending prompt.
+  // Without the second click `patchBodies` stayed empty forever.
+  const buildAllPages = figmaImport.getByRole('button', { name: 'Build all pages' });
+  await expect(buildAllPages).toBeVisible();
+  await buildAllPages.click();
+
   await expect.poll(() => patchBodies.length, { timeout: 10_000 }).toBe(1);
   expect(createBodies[0]?.name).toBe('Imported from Figma');
   expect(createBodies[0]?.pendingPrompt ?? null).toBeNull();
@@ -1251,8 +1297,15 @@ test('[P0] home design-system picker carries explicit and cleared selections int
 
   await selectHomeDesignSystem(page, 'agentic');
   await page.getByTestId('home-hero-template-trigger').click();
-  await page.getByTestId('home-hero-template-card-deck').click();
-  await page.getByTestId('home-hero-input').fill('Create a design-system aware deck.');
+  // Superseded target: this picker case used to name `deck` / `prototype`.
+  // The Template picker lists `create`-group scenario chips only
+  // (`TemplatePicker`'s `templateChips` = `orderedCreateChips()` filtered to
+  // `apply-scenario`), and both ids moved to the `migrate` group in the
+  // 2026-08-09 Home restructure, so no card with those ids can exist here any
+  // more. `hyperframes` / `web-clone` are real cards in that list, so the case
+  // still proves the same thing about the picker.
+  await page.getByTestId('home-hero-template-card-hyperframes').click();
+  await page.getByTestId('home-hero-input').fill('Create a design-system aware artifact.');
 
   const selectedRequestPromise = page.waitForRequest((request) =>
     request.method() === 'POST' && new URL(request.url()).pathname === '/api/projects',
@@ -1282,7 +1335,7 @@ test('[P1] home Brand Kit chip opens design-system creation and starts brand ext
   await routeBrandExtraction(page, brandRequests);
 
   await gotoEntryHome(page);
-  await page.getByTestId('home-hero-rail-create-brand-kit').click();
+  await clickHeroRailChip(page, 'create-brand-kit');
 
   await expect(page).toHaveURL(/\/design-systems\/create$/);
   await expect(page.getByRole('heading', { name: /Design a system, in minutes/i })).toBeVisible();
@@ -1393,7 +1446,14 @@ test('[P2] home template picker supports no-results, clear, Escape, and outside 
   await gotoEntryHome(page);
 
   await page.getByTestId('home-hero-template-trigger').click();
-  await page.getByTestId('home-hero-template-card-deck').click();
+  // Superseded target: this picker case used to name `deck` / `prototype`.
+  // The Template picker lists `create`-group scenario chips only
+  // (`TemplatePicker`'s `templateChips` = `orderedCreateChips()` filtered to
+  // `apply-scenario`), and both ids moved to the `migrate` group in the
+  // 2026-08-09 Home restructure, so no card with those ids can exist here any
+  // more. `hyperframes` / `web-clone` are real cards in that list, so the case
+  // still proves the same thing about the picker.
+  await page.getByTestId('home-hero-template-card-hyperframes').click();
   await expect(page.getByTestId('home-hero-template-reset')).toBeVisible();
 
   await page.getByTestId('home-hero-template-trigger').click();
@@ -1417,14 +1477,21 @@ test('[P1] home template picker selects a starter template and can clear it', as
   await page.getByTestId('home-hero-template-trigger').click();
   const menu = page.getByTestId('home-hero-template-menu');
   await expect(menu).toBeVisible();
-  await expect(page.getByTestId('home-hero-template-card-prototype')).toBeVisible();
-  await expect(page.getByTestId('home-hero-template-card-deck')).toBeVisible();
+  // Superseded target: this picker case used to name `deck` / `prototype`.
+  // The Template picker lists `create`-group scenario chips only
+  // (`TemplatePicker`'s `templateChips` = `orderedCreateChips()` filtered to
+  // `apply-scenario`), and both ids moved to the `migrate` group in the
+  // 2026-08-09 Home restructure, so no card with those ids can exist here any
+  // more. `hyperframes` / `web-clone` are real cards in that list, so the case
+  // still proves the same thing about the picker.
+  await expect(page.getByTestId('home-hero-template-card-web-clone')).toBeVisible();
+  await expect(page.getByTestId('home-hero-template-card-hyperframes')).toBeVisible();
 
-  await page.getByTestId('home-hero-template-search').fill('deck');
-  await expect(page.getByTestId('home-hero-template-card-deck')).toBeVisible();
-  await page.getByTestId('home-hero-template-card-deck').click();
+  await page.getByTestId('home-hero-template-search').fill('hyper');
+  await expect(page.getByTestId('home-hero-template-card-hyperframes')).toBeVisible();
+  await page.getByTestId('home-hero-template-card-hyperframes').click();
 
-  await expect(page.getByTestId('home-hero-template-trigger')).toContainText(/Slide deck/i);
+  await expect(page.getByTestId('home-hero-template-trigger')).toContainText(/HyperFrames/i);
 
   await page.getByTestId('home-hero-template-reset').click();
   await expect(page.getByTestId('home-hero-footer-option-speakerNotes')).toHaveCount(0);
@@ -1557,7 +1624,7 @@ test('[P1] home hero example presets update the composer input for prototype and
   const input = page.getByTestId('home-hero-input');
   await expect(input).toHaveText('');
 
-  await page.getByTestId('home-hero-rail-prototype').click();
+  await clickHeroRailChip(page, 'prototype');
   await expect(page.getByTestId('home-hero-plugin-presets')).toBeVisible();
   await useExamplePreset(page, 'example-web-prototype');
   await expect(input).toHaveText(
@@ -1577,7 +1644,7 @@ test('[P1] home hero example preset Use button applies the template without rely
   const input = page.getByTestId('home-hero-input');
   await expect(input).toHaveText('');
 
-  await page.getByTestId('home-hero-rail-prototype').click();
+  await clickHeroRailChip(page, 'prototype');
   await expect(page.getByTestId('home-hero-plugin-presets')).toBeVisible();
   await useExamplePreset(page, 'example-web-prototype');
 
@@ -1641,7 +1708,7 @@ test('[P1] home hero example preset Copy creates a project from the template pre
   });
 
   await gotoEntryHome(page);
-  await page.getByTestId('home-hero-rail-prototype').click();
+  await clickHeroRailChip(page, 'prototype');
   await expect(page.locator('[data-testid="home-hero-plugin-preset"][data-plugin-id="example-web-prototype"]')).toBeVisible();
   const preset = page.locator('[data-testid="home-hero-plugin-preset"][data-plugin-id="example-web-prototype"]');
   await preset.hover();
@@ -1679,7 +1746,7 @@ test('[P1] home hero example preset Copy failure keeps Home retryable', async ({
   });
 
   await gotoEntryHome(page);
-  await page.getByTestId('home-hero-rail-prototype').click();
+  await clickHeroRailChip(page, 'prototype');
   const duplicateButton = page.getByTestId('home-hero-plugin-preset-duplicate-example-web-prototype');
   await page.locator('[data-testid="home-hero-plugin-preset"][data-plugin-id="example-web-prototype"]').hover();
   await expect(duplicateButton).toBeVisible();
@@ -1743,7 +1810,7 @@ test('[P1] home hero preset inline Use and Duplicate actions work from the templ
   });
 
   await gotoEntryHome(page);
-  await page.getByTestId('home-hero-rail-prototype').click();
+  await clickHeroRailChip(page, 'prototype');
   const card = page.locator('[data-testid="home-hero-plugin-preset"][data-plugin-id="example-web-prototype"]');
   await card.hover();
 
@@ -1766,7 +1833,7 @@ test('[P1] home hero deck example preset updates the composer input', async ({ p
   const input = page.getByTestId('home-hero-input');
   await expect(input).toHaveText('');
 
-  await page.getByTestId('home-hero-rail-deck').click();
+  await clickHeroRailChip(page, 'deck');
   await expect(page.getByTestId('home-hero-plugin-presets')).toBeVisible();
   await useExamplePreset(page, 'example-simple-deck');
   await expect(input).toHaveText(
@@ -1778,7 +1845,7 @@ test('[P1] home hero prompt example cards fill the composer for fallback modes',
   await gotoEntryHome(page);
 
   const input = page.getByTestId('home-hero-input');
-  await page.getByTestId('home-hero-rail-audio').click();
+  await clickHeroRailChip(page, 'audio');
   await expect(page.getByTestId('home-hero-prompt-examples')).toBeVisible();
   await expect(page.getByTestId('home-hero-plugin-presets')).toHaveCount(0);
 
@@ -1793,9 +1860,16 @@ test('[P1] home hero prompt example cards fill the composer for fallback modes',
 test('[P2] clearing the selected hero template restores the rail and clears preset chrome', async ({ page }) => {
   await gotoEntryHome(page);
 
-  await page.getByTestId('home-hero-rail-prototype').click();
+  // Was `prototype`. Home clears a selected chip through the Template picker's
+  // reset, and that control only exists for chips the picker lists — Prototype
+  // moved to the `migrate` group in the 2026-08-09 restructure and no longer
+  // has one (see Adjacent issues in the PR body). `live-artifact` is a `create`
+  // chip with its own example presets, so the case still proves what it was
+  // written to prove: selecting a hero template shows preset chrome, and
+  // clearing it restores the rail and takes the chrome away.
+  await clickHeroRailChip(page, 'live-artifact');
   await expect(page.getByTestId('home-hero-plugin-presets')).toBeVisible();
-  await expect(page.getByTestId('home-hero-template-reset')).toBeVisible();
+  await expectChipMarkedActive(page);
   await expect(page.getByTestId('home-hero-design-system-trigger')).toBeVisible();
 
   await clearActiveChip(page);
@@ -1813,7 +1887,7 @@ test('[P1] after clearing one mode, selecting another example updates the compos
 
   const input = page.getByTestId('home-hero-input');
 
-  await page.getByTestId('home-hero-rail-prototype').click();
+  await clickHeroRailChip(page, 'prototype');
   await expect(page.getByTestId('home-hero-plugin-presets')).toBeVisible();
   await useExamplePreset(page, 'example-web-prototype');
   await expect(input).toHaveText(
@@ -1843,11 +1917,71 @@ test('[P1] selecting another example updates the composer input', async ({ page 
   await expect(input).toHaveText('Create refreshable, auditable MishMash artifacts.');
 });
 
+// Resolve a hero rail chip on whichever surface currently renders it, then
+// click it.
+//
+// The 2026-08-09 Home restructure split the catalogue: `create`-group chips
+// render inline in the `home-hero-type-tabs` rail, while the chips that moved
+// to the `migrate` group (Slide deck, Prototype, Image, Video, Audio, Create
+// Brand Kit, …) render only as menu items inside the "More" ShortcutsMenu
+// portal, which mounts while that menu is open. Both surfaces publish the same
+// `home-hero-rail-<id>` test id and both call the same `handlePickTaskChip`
+// handler, so a call site only has to open "More" first when the inline tab is
+// not there. This mirrors the pattern already proven by
+// `[P2] home hero exposes the template picker, starter cards, blank project,
+// and More shortcuts`.
+async function clickHeroRailChip(page: Page, chipId: string) {
+  const inline = page.getByTestId(`home-hero-rail-${chipId}`);
+  if (await inline.isVisible()) {
+    await expect(inline).toBeEnabled();
+    await inline.click();
+    return;
+  }
+  // The panel lists every `migrate` chip and is portaled to <body> with
+  // `position: fixed` at the trigger's bottom edge (HomeHero.tsx
+  // `ShortcutsMenu`), so at the default 720px-tall viewport its lower items
+  // land below the fold. Playwright reports them visible but "outside of the
+  // viewport" and retries the click until the test times out. Give the page the
+  // height the panel needs — the same remedy the execution-pill P0 case in
+  // `entry-chrome-flows.test.ts` documents for the InlineModelSwitcher popover.
+  // Force-clicking is not an option: `e2e/AGENTS.md` forbids it.
+  const viewport = page.viewportSize();
+  if (viewport && viewport.height < 1000) {
+    await page.setViewportSize({ width: Math.max(viewport.width, 1280), height: 1000 });
+  }
+  const trigger = page.getByTestId('home-hero-shortcuts-trigger');
+  // The panel is portaled to <body> with `position: fixed` at
+  // `trigger.getBoundingClientRect().bottom + 6` (HomeHero.tsx `ShortcutsMenu`),
+  // so a trigger sitting low in the viewport puts its eleven menu items below
+  // the fold. They are still "visible" to Playwright but not clickable, and the
+  // click retries until the test times out. Bring the trigger to the top first
+  // so the panel has the full viewport height to open into.
+  await trigger.evaluate((el) => el.scrollIntoView({ block: 'start', inline: 'nearest' }));
+  await trigger.click();
+  const menu = page.getByTestId('home-hero-shortcuts-menu');
+  await expect(menu).toBeVisible();
+  const item = menu.getByTestId(`home-hero-rail-${chipId}`);
+  await expect(item).toBeEnabled();
+  await item.click();
+}
+
+// A pick lands on one of two controls, and which one depends on the chip's
+// group. A chip the Template picker lists (`create` + `apply-scenario`, see
+// `TemplatePicker`'s `active`) lights the picker's reset; a `migrate` chip
+// never can, and marks the "More" trigger active instead
+// (`ShortcutsMenu`'s `hasActiveShortcut`). The two are mutually exclusive —
+// selecting a `create` chip unmounts the whole rail section, trigger included.
+async function expectChipMarkedActive(page: Page) {
+  await expect(
+    page
+      .getByTestId('home-hero-template-reset')
+      .or(page.locator('[data-testid="home-hero-shortcuts-trigger"].is-active')),
+  ).toBeVisible();
+}
+
 async function expectChipSelection(page: Page, chipId: string, _label: string) {
-  const chip = page.getByTestId(`home-hero-rail-${chipId}`);
-  await expect(chip).toBeEnabled();
-  await chip.click();
-  await expect(page.getByTestId('home-hero-template-reset')).toBeVisible();
+  await clickHeroRailChip(page, chipId);
+  await expectChipMarkedActive(page);
 }
 
 async function useExamplePreset(page: Page, pluginId: string) {
