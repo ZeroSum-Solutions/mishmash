@@ -290,6 +290,41 @@ const HOME_PLUGINS = [
 ];
 
 const APPLY_RESPONSES: Record<string, unknown> = {
+  // HyperFrames is the `create`-group scenario the Template picker cases drive
+  // now that Slide deck and Prototype live in the `migrate` group and cannot
+  // appear as picker cards. Home refuses to enable Send until the pick resolves
+  // against this route, so the card cases need an apply response here just as
+  // the deck case always has. Recorded from a real daemon
+  // (`POST /api/plugins/example-hyperframes/apply` on a tools-dev runtime) and
+  // trimmed to the fields Home reads, exactly like the deck entry below.
+  'example-hyperframes': {
+    query: 'Create a premium product-studio HyperFrames composition.',
+    contextItems: [],
+    inputs: [],
+    assets: [],
+    mcpServers: [],
+    trust: 'bundled',
+    capabilitiesGranted: ['prompt:inject'],
+    capabilitiesRequired: ['prompt:inject'],
+    appliedPlugin: {
+      snapshotId: 'snap-hyperframes',
+      pluginId: 'example-hyperframes',
+      pluginVersion: '0.1.0',
+      manifestSourceDigest: 'c'.repeat(64),
+      inputs: {},
+      resolvedContext: { items: [] },
+      capabilitiesGranted: ['prompt:inject'],
+      capabilitiesRequired: ['prompt:inject'],
+      assetsStaged: [],
+      taskKind: 'new-generation',
+      appliedAt: 0,
+      connectorsRequired: [],
+      connectorsResolved: [],
+      mcpServers: [],
+      status: 'fresh',
+    },
+    projectMetadata: {},
+  },
   'example-simple-deck': {
     query: 'Draft a quarterly review deck.',
     contextItems: [],
@@ -1824,9 +1859,16 @@ test('[P1] home hero prompt example cards fill the composer for fallback modes',
 test('[P2] clearing the selected hero template restores the rail and clears preset chrome', async ({ page }) => {
   await gotoEntryHome(page);
 
-  await clickHeroRailChip(page, 'prototype');
+  // Was `prototype`. Home clears a selected chip through the Template picker's
+  // reset, and that control only exists for chips the picker lists — Prototype
+  // moved to the `migrate` group in the 2026-08-09 restructure and no longer
+  // has one (see Adjacent issues in the PR body). `live-artifact` is a `create`
+  // chip with its own example presets, so the case still proves what it was
+  // written to prove: selecting a hero template shows preset chrome, and
+  // clearing it restores the rail and takes the chrome away.
+  await clickHeroRailChip(page, 'live-artifact');
   await expect(page.getByTestId('home-hero-plugin-presets')).toBeVisible();
-  await expect(page.getByTestId('home-hero-template-reset')).toBeVisible();
+  await expectChipMarkedActive(page);
   await expect(page.getByTestId('home-hero-design-system-trigger')).toBeVisible();
 
   await clearActiveChip(page);
@@ -1894,7 +1936,27 @@ async function clickHeroRailChip(page: Page, chipId: string) {
     await inline.click();
     return;
   }
-  await page.getByTestId('home-hero-shortcuts-trigger').click();
+  // The panel lists every `migrate` chip and is portaled to <body> with
+  // `position: fixed` at the trigger's bottom edge (HomeHero.tsx
+  // `ShortcutsMenu`), so at the default 720px-tall viewport its lower items
+  // land below the fold. Playwright reports them visible but "outside of the
+  // viewport" and retries the click until the test times out. Give the page the
+  // height the panel needs — the same remedy the execution-pill P0 case in
+  // `entry-chrome-flows.test.ts` documents for the InlineModelSwitcher popover.
+  // Force-clicking is not an option: `e2e/AGENTS.md` forbids it.
+  const viewport = page.viewportSize();
+  if (viewport && viewport.height < 1000) {
+    await page.setViewportSize({ width: Math.max(viewport.width, 1280), height: 1000 });
+  }
+  const trigger = page.getByTestId('home-hero-shortcuts-trigger');
+  // The panel is portaled to <body> with `position: fixed` at
+  // `trigger.getBoundingClientRect().bottom + 6` (HomeHero.tsx `ShortcutsMenu`),
+  // so a trigger sitting low in the viewport puts its eleven menu items below
+  // the fold. They are still "visible" to Playwright but not clickable, and the
+  // click retries until the test times out. Bring the trigger to the top first
+  // so the panel has the full viewport height to open into.
+  await trigger.evaluate((el) => el.scrollIntoView({ block: 'start', inline: 'nearest' }));
+  await trigger.click();
   const menu = page.getByTestId('home-hero-shortcuts-menu');
   await expect(menu).toBeVisible();
   const item = menu.getByTestId(`home-hero-rail-${chipId}`);
@@ -1902,9 +1964,23 @@ async function clickHeroRailChip(page: Page, chipId: string) {
   await item.click();
 }
 
+// A pick lands on one of two controls, and which one depends on the chip's
+// group. A chip the Template picker lists (`create` + `apply-scenario`, see
+// `TemplatePicker`'s `active`) lights the picker's reset; a `migrate` chip
+// never can, and marks the "More" trigger active instead
+// (`ShortcutsMenu`'s `hasActiveShortcut`). The two are mutually exclusive —
+// selecting a `create` chip unmounts the whole rail section, trigger included.
+async function expectChipMarkedActive(page: Page) {
+  await expect(
+    page
+      .getByTestId('home-hero-template-reset')
+      .or(page.locator('[data-testid="home-hero-shortcuts-trigger"].is-active')),
+  ).toBeVisible();
+}
+
 async function expectChipSelection(page: Page, chipId: string, _label: string) {
   await clickHeroRailChip(page, chipId);
-  await expect(page.getByTestId('home-hero-template-reset')).toBeVisible();
+  await expectChipMarkedActive(page);
 }
 
 async function useExamplePreset(page: Page, pluginId: string) {
