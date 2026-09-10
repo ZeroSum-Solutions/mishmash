@@ -608,6 +608,11 @@ export interface ProjectFileVersionsForRunEntry {
 /**
  * Answers "which file versions did this run write, and what was there before".
  *
+ * Per file the run touched, `after` is the LAST version the run tagged and
+ * `before` is the version immediately preceding the FIRST version it tagged, so
+ * one entry reads "what the run found" -> "what the run left" even when the run
+ * wrote the same file several times.
+ *
  * INVARIANT: this reads only the on-disk version manifests. It never consults
  * the in-memory run map, so it answers identically for a run that finished
  * three restarts ago -- which is the whole point of the route built on it.
@@ -648,10 +653,22 @@ export async function listProjectFileVersionsForRun(
       : null;
     if (!fileName) continue;
     const entries = normalizeManifest(parsed, fileName);
-    const index = entries.findIndex((entry) => entry.runId === wanted);
-    if (index < 0) continue;
-    const after = entries[index];
-    const before = index > 0 ? entries[index - 1] : null;
+    const firstIndex = entries.findIndex((entry) => entry.runId === wanted);
+    if (firstIndex < 0) continue;
+    // A run may snapshot the same file more than once, tagging every entry with
+    // the same run id. `after` is the LAST of them -- what the run left -- while
+    // `before` stays the entry immediately preceding the FIRST of them -- what
+    // the run found. Stopping at the first tag would report a mid-run state as
+    // the result.
+    let lastIndex = firstIndex;
+    for (let i = entries.length - 1; i > firstIndex; i -= 1) {
+      if (entries[i]?.runId === wanted) {
+        lastIndex = i;
+        break;
+      }
+    }
+    const after = entries[lastIndex];
+    const before = firstIndex > 0 ? entries[firstIndex - 1] : null;
     if (!after) continue;
     const currentId = currentVersionId(entries);
     const root = path.join(versionsRoot, dirName);
