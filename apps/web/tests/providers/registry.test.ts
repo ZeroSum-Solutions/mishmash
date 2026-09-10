@@ -804,40 +804,6 @@ describe('cancelConnectorAuthorization', () => {
   });
 });
 
-describe('uploadProjectFiles', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
-
-  it('splits more than PROJECT_UPLOAD_BATCH_SIZE files across multiple upload requests, preserving order', async () => {
-    const files = Array.from({ length: 13 }, (_, i) => new File([`f${i}`], `f${i}.txt`, { type: 'text/plain' }));
-    const calls: FormData[] = [];
-
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (_url: string, init: RequestInit) => {
-        const form = init.body as FormData;
-        calls.push(form);
-        const batchFiles = form.getAll('files') as File[];
-        return new Response(JSON.stringify({
-          files: batchFiles.map((f) => ({ name: f.name, path: f.name, size: f.size, originalName: f.name })),
-        }), { status: 200 });
-      }),
-    );
-
-    const result = await uploadProjectFiles('project-1', files);
-
-    // 13 files at a 12-file batch size means two requests: 12 + 1.
-    expect(calls).toHaveLength(2);
-    expect((calls[0]!.getAll('files') as File[]).length).toBe(12);
-    expect((calls[1]!.getAll('files') as File[]).length).toBe(1);
-    expect(result.uploaded).toHaveLength(13);
-    expect(result.uploaded.map((u) => u.name)).toEqual(files.map((f) => f.name));
-    expect(result.failed).toEqual([]);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // W8A — `uploadProjectFiles` rides the staged transport: JSON session create
 // at `POST .../uploads`, an SSE subscription at `GET .../uploads/:id/events`
@@ -1192,6 +1158,29 @@ describe('uploadProjectFiles (staged transport, W8A)', () => {
       { name: 'a.txt', error: 'upload request failed' },
       { name: 'b.txt', error: 'upload request failed' },
     ]);
+  });
+
+  // Supersedes "splits more than PROJECT_UPLOAD_BATCH_SIZE files across
+  // multiple upload requests, preserving order" (legacy transport). That
+  // test pinned a client-side constant (`PROJECT_UPLOAD_BATCH_SIZE = 12`,
+  // registry.ts:2380) counted in `FormData.getAll('files')` — a copy of the
+  // daemon's number that could drift from what the daemon enforces. The
+  // chunk size is now the published `limits.maxFilesPerRequest`, counted in
+  // staged session creates.
+  it('splits more than limits.maxFilesPerRequest files across multiple sessions, preserving order', async () => {
+    const files = Array.from({ length: 13 }, (_, i) => new File([`f${i}`], `f${i}.txt`, { type: 'text/plain' }));
+    const { fetchMock, calls } = stagedDaemon();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await uploadProjectFiles('project-1', files, undefined, { limits: STAGED_LIMITS });
+
+    const creates = createBodies(calls);
+    expect(creates).toHaveLength(2);
+    expect(creates[0]!.files).toHaveLength(12);
+    expect(creates[1]!.files).toHaveLength(1);
+    expect(result.uploaded).toHaveLength(13);
+    expect(result.uploaded.map((u) => u.name)).toEqual(files.map((f) => f.name));
+    expect(result.failed).toEqual([]);
   });
 });
 
