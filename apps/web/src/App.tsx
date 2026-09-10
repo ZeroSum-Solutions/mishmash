@@ -2727,9 +2727,10 @@ function AppInner() {
       )}
       <TooltipLayer />
       <UpdateDialog />
-      {/* F-03: the one-time "who are you" prompt is not mounted here. It is an
-          in-flow block in the Home surface's own column (`HomeView`), because
-          any shell-level overlay eventually lands on a control. */}
+      {/* F-03: the one-time "who are you" prompt is not mounted here. It is
+          raised on the Home surface itself (`HomeView`), as the app's own
+          transient toast -- a shell-level overlay eventually lands on a
+          control, and a permanent one never stops. */}
       <AmrArtifactUpgradeGate
         homeVisible={route.kind === 'home' && route.view === 'home'}
         activeProjectId={route.kind === 'project' ? route.projectId : null}

@@ -16,6 +16,8 @@ import { Icon } from './Icon';
 export interface ToastProps {
   message: string;
   className?: string;
+  /** Test id stamped on the toast's root element. */
+  testId?: string;
   details?: string | null;
   actionLabel?: string | null;
   actionAriaLabel?: string;
@@ -60,6 +62,7 @@ const TONE_ICON: Record<
 export function Toast({
   message,
   className,
+  testId,
   details,
   actionLabel,
   actionAriaLabel,
@@ -122,6 +125,7 @@ export function Toast({
   return (
     <div
       className={`od-toast tone-${tone} placement-${placement}${className ? ` ${className}` : ''}${leaving ? ' leaving' : ''}`}
+      {...(testId ? { 'data-testid': testId } : {})}
       role={role}
       aria-live={role === 'alert' ? 'assertive' : 'polite'}
     >

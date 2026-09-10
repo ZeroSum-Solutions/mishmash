@@ -3745,9 +3745,7 @@ export interface Dict {
   'assistant.askedBy': string;
   'actorPrompt.title': string;
   'actorPrompt.description': string;
-  'actorPrompt.placeholder': string;
-  'actorPrompt.submit': string;
-  'actorPrompt.skip': string;
+  'actorPrompt.action': string;
   'settings.actorNameLabel': string;
   'settings.actorNameHint': string;
   'fileViewer.versions.restoredFrom': string;

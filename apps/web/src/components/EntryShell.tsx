@@ -1381,6 +1381,7 @@ export function EntryShell({
                 onBrowseRegistry={browseRegistry}
                 onOpenIntegrations={openConnectorsTab}
                 onOpenMcp={openMcpTab}
+                onOpenSettings={onOpenSettings}
                 onOpenNewProject={openNewProjectFromHome}
                 onStartBlankProject={startBlankProject}
                 promptHandoff={homePromptHandoff}
