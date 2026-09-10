@@ -810,27 +810,6 @@ describe('uploadProjectFiles', () => {
     vi.unstubAllGlobals();
   });
 
-  it('marks every file failed when the upload request itself throws (network error)', async () => {
-    const a = new File(['a'], 'a.txt', { type: 'text/plain' });
-    const b = new File(['b'], 'b.txt', { type: 'text/plain' });
-
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        throw new TypeError('Failed to fetch');
-      }),
-    );
-
-    const result = await uploadProjectFiles('project-1', [a, b]);
-
-    expect(result.uploaded).toEqual([]);
-    expect(result.error).toBe('upload request failed');
-    expect(result.failed).toEqual([
-      { name: 'a.txt', error: 'upload request failed' },
-      { name: 'b.txt', error: 'upload request failed' },
-    ]);
-  });
-
   it('splits more than PROJECT_UPLOAD_BATCH_SIZE files across multiple upload requests, preserving order', async () => {
     const files = Array.from({ length: 13 }, (_, i) => new File([`f${i}`], `f${i}.txt`, { type: 'text/plain' }));
     const calls: FormData[] = [];
@@ -1190,6 +1169,29 @@ describe('uploadProjectFiles (staged transport, W8A)', () => {
     expect(result.uploaded).toEqual([]);
     expect(result.error).toBe('upload failed (500)');
     expect(result.failed).toEqual([{ name: 'a.txt', code: undefined, error: 'upload failed (500)' }]);
+  });
+
+  // Supersedes "marks every file failed when the upload request itself
+  // throws (network error)" (legacy transport): identical outcome, the
+  // throwing request is now the session create.
+  it('marks every file failed when the session-create request itself throws (network error)', async () => {
+    const a = new File(['a'], 'a.txt', { type: 'text/plain' });
+    const b = new File(['b'], 'b.txt', { type: 'text/plain' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      }),
+    );
+
+    const result = await uploadProjectFiles('project-1', [a, b], undefined, { limits: STAGED_LIMITS });
+
+    expect(result.uploaded).toEqual([]);
+    expect(result.error).toBe('upload request failed');
+    expect(result.failed).toEqual([
+      { name: 'a.txt', error: 'upload request failed' },
+      { name: 'b.txt', error: 'upload request failed' },
+    ]);
   });
 });
 
