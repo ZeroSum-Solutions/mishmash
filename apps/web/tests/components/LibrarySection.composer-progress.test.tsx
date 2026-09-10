@@ -32,7 +32,12 @@ const fetchLibraryAssetsPage = vi.fn(
 const fetchLibraryAsset = vi.fn(async (): Promise<LibraryAsset | null> => null);
 const generateProjectMedia = vi.fn();
 const waitForMediaTask = vi.fn();
-const cancelMediaTask = vi.fn(async () => ({ ok: true }));
+/** `providers/registry`'s `cancelMediaTask` collapses the daemon's response to
+ *  `{ ok }`, but the refusal fixture below carries the 409 body's `error` too
+ *  (D-18: no invented wire), so the mock's type has to admit it. */
+const cancelMediaTask = vi.fn(
+  async (): Promise<{ ok: boolean; error?: { code: string; message: string } }> => ({ ok: true }),
+);
 const syncLibrary = vi.fn(async () => null);
 const readFileAsDataUrl = vi.fn(async () => 'data:image/png;base64,AAAA');
 
@@ -167,5 +172,38 @@ describe('LibrarySection — composer progress and cancel (W8B work item 5)', ()
       fireEvent.click(cancelButton as HTMLElement);
     });
     expect(cancelMediaTask).toHaveBeenCalledWith('task-1');
+  });
+
+  it('tells the user when the daemon refuses to cancel the task', async () => {
+    // The real refusal: `POST /api/media/tasks/:id/cancel` answers 409 with
+    // `MediaTaskCancelRefusedResponse` for a generate task, because
+    // `cancelLiveMediaTask` only admits encode/download jobs and video
+    // imports. That is the ONLY task this composer creates, so the Cancel
+    // button's honest outcome today is a refusal — and a refusal the UI
+    // swallows is a button that does nothing.
+    cancelMediaTask.mockResolvedValue({
+      ok: false,
+      error: {
+        code: 'NOT_CANCELABLE',
+        message:
+          'task task-1 is not a background encode/download job tracked by this route (kind: generate, surface: image); it cannot be canceled here',
+      },
+    });
+    await startStalledGeneration();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // RED on base: `cancelComposerTask` is `void cancelMediaTask(id)`, so the
+    // refusal never reaches the screen and the task keeps running silently.
+    await waitFor(() =>
+      expect(
+        screen.queryAllByText(/could not cancel that generation/i).length,
+        'a refused cancel must be surfaced, the way VideoImportPanel surfaces videoImport.cancelError',
+      ).toBeGreaterThan(0),
+    );
   });
 });
