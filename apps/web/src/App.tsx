@@ -27,7 +27,6 @@ import { InterviewView } from './components/interview/InterviewView';
 import { PluginDetailView } from './components/PluginDetailView';
 import type { CreateInput, ImportClaudeDesignOutcome } from './components/NewProjectPanel';
 import { MemoryToast } from './components/MemoryToast';
-import { ActorPromptDialog } from './components/ActorPromptDialog';
 import { UpdateDialog } from './components/UpdateDialog';
 import { Toast } from './components/Toast';
 import { CenteredLoader } from './components/Loading';
@@ -2728,14 +2727,9 @@ function AppInner() {
       )}
       <TooltipLayer />
       <UpdateDialog />
-      {/* F-03: the one-time "who are you" prompt. Self-gating on localStorage,
-          so mounting it unconditionally costs nothing after the first answer.
-          Scoped to the Home view like its neighbour below: it is a fixed corner
-          card, and on any other surface it would sit over that surface's own
-          controls. */}
-      <ActorPromptDialog
-        homeVisible={route.kind === 'home' && route.view === 'home'}
-      />
+      {/* F-03: the one-time "who are you" prompt is not mounted here. It is an
+          in-flow block in the Home surface's own column (`HomeView`), because
+          any shell-level overlay eventually lands on a control. */}
       <AmrArtifactUpgradeGate
         homeVisible={route.kind === 'home' && route.view === 'home'}
         activeProjectId={route.kind === 'project' ? route.projectId : null}

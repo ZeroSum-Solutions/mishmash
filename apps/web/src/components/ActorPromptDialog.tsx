@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Button } from '@open-design/components';
 
 import { useT } from '../i18n';
@@ -36,16 +35,19 @@ import styles from './ActorPromptDialog.module.css';
  *    elements as soon as Settings opened (wave-8 integration Playwright,
  *    `e2e/ui/entry-chrome-flows.test.ts:129,:567,:686,:879`).
  *
- * 2. Scoped to Home. "Never blocks anything" is a promise about pointer events
- *    too, and a fixed corner card cannot keep it on every surface: on project
- *    and sub-view surfaces it sat over a deck's Next slide button, the HTML
- *    preview toolbar and a plugin details modal's Use button (11 more failures
- *    in the same run). So the caller decides where it may appear, and passes
- *    `homeVisible` for the one surface it belongs on — the Home view, no
- *    project open and no sub-view in front of it — the same gate its neighbour
- *    `AmrArtifactUpgradeGate` already takes in `App.tsx`. Being held back by
- *    that gate is not an answer: the once-per-profile flag stays unspent, so
- *    the user is still asked the first time they are actually home.
+ * 2. In the Home surface's flow, not on top of it. "Never blocks anything" is
+ *    a promise about pointer events too, and a floating card cannot keep it:
+ *    as a fixed corner card it sat over a deck's Next slide button, the HTML
+ *    preview toolbar, a plugin details modal's Use button and — once scoped to
+ *    Home — the create rail's own "More" shortcuts trigger (11 more failures in
+ *    the same run). No viewport corner is reliably free of controls, so the
+ *    card stopped floating: `HomeView` renders it in its own column, where it
+ *    can only ever push content down, never cover it. `homeVisible` is that
+ *    caller's statement that Home is the surface in front of the user
+ *    (`isActive`), so the card does not sit in a `display: none` view spending
+ *    its one question on nobody. Being held back by that gate is not an
+ *    answer: the once-per-profile flag stays unspent, so the user is still
+ *    asked the first time they are actually home.
  *
  * Escape dismisses it while focus is inside the card; a global Escape listener
  * would steal the key from whatever surface the user is actually working in.
@@ -82,7 +84,7 @@ export function ActorPromptDialog({
     dismiss();
   };
 
-  const card = (
+  return (
     <aside
       aria-label={t('actorPrompt.title')}
       className={styles.card}
@@ -116,7 +118,4 @@ export function ActorPromptDialog({
       </div>
     </aside>
   );
-
-  if (typeof document === 'undefined') return card;
-  return createPortal(card, document.body);
 }
