@@ -168,7 +168,9 @@ describe('W8D: x-od-actor stamps actorName on the run and its messages', () => {
 
     const messages = await readMessages(fixture.projectId, fixture.conversationId);
     const pinned = messages.find((m) => m.id === fixture.assistantMessageId);
-    const stamped = pinned?.actorName ?? null;
+    // The row is a Record<string, unknown>, so name the type the assertions
+    // below read; `?? null` alone widens to `{}` and fails tsconfig.tests.
+    const stamped = (pinned?.actorName ?? null) as string | null;
     expect(stamped).not.toBeNull();
     expect(stamped).toBe(expected);
     expect(stamped?.length).toBe(MAX_ACTOR_NAME_LENGTH);
