@@ -161,6 +161,27 @@ describe('ActorPromptDialog', () => {
     expect(screen.getByTestId('actor-prompt-dialog')).toBeTruthy();
   });
 
+  // Scoping it to Home was not enough: on Home itself the fixed corner card
+  // still sat on the create rail's "More" shortcuts trigger
+  // (e2e/ui/entry-chrome-flows.test.ts:129 -> home-hero-shortcuts-trigger,
+  // "<aside …> intercepts pointer events"). No corner of a viewport is
+  // reliably free of controls, so the card stops floating: it renders in the
+  // Home surface's own flow, where it can only ever push content, never cover
+  // it.
+  it('renders inside the Home surface instead of floating over it', () => {
+    const { container } = render(
+      <I18nProvider>
+        <ActorPromptDialog homeVisible />
+      </I18nProvider>,
+    );
+
+    const prompt = screen.getByTestId('actor-prompt-dialog');
+    expect(container.contains(prompt)).toBe(true);
+    // Not portalled onto document.body, which is what put it on top of the
+    // page in the first place.
+    expect(prompt.parentElement).not.toBe(document.body);
+  });
+
   it('refuses to store an empty name', () => {
     renderPrompt();
     fireEvent.click(screen.getByTestId('actor-prompt-submit'));
