@@ -2729,8 +2729,13 @@ function AppInner() {
       <TooltipLayer />
       <UpdateDialog />
       {/* F-03: the one-time "who are you" prompt. Self-gating on localStorage,
-          so mounting it unconditionally costs nothing after the first answer. */}
-      <ActorPromptDialog />
+          so mounting it unconditionally costs nothing after the first answer.
+          Scoped to the Home view like its neighbour below: it is a fixed corner
+          card, and on any other surface it would sit over that surface's own
+          controls. */}
+      <ActorPromptDialog
+        homeVisible={route.kind === 'home' && route.view === 'home'}
+      />
       <AmrArtifactUpgradeGate
         homeVisible={route.kind === 'home' && route.view === 'home'}
         activeProjectId={route.kind === 'project' ? route.projectId : null}
