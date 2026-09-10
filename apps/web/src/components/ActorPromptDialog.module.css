@@ -3,12 +3,14 @@
  * fixed box is the only surface that takes pointer events, so the page behind
  * stays fully operable while the prompt is unanswered.
  *
- * Bottom-LEFT: the bottom-right corner already belongs to the pet overlay
- * (default 24/24) and the memory toast. */
+ * Bottom-RIGHT is the repo's toast corner (`MemoryToast` sits at 20/20), and the
+ * only viewport corner the app shell keeps clear: the top edge is the tab strip
+ * and the workspace toolbar, and the bottom-left is the chat composer, whose
+ * mode selector a bottom-left card covered. */
 
 .card {
   position: fixed;
-  left: max(20px, env(safe-area-inset-left));
+  right: max(20px, env(safe-area-inset-right));
   bottom: max(20px, env(safe-area-inset-bottom));
   z-index: 1400;
   display: flex;
