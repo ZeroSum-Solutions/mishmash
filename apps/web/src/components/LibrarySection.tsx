@@ -714,9 +714,12 @@ export function LibrarySection({ active, onOpenProject }: Props) {
   // since wave 7, this parent simply never fed it (INV-7.12).
   const [composerTask, setComposerTask] = useState<LibraryComposerTaskSnapshot | null>(null);
   const composerTaskIdRef = useRef<string | null>(null);
+  /** Set when the shared cancel route refuses to stop the in-flight task. */
+  const [composerCancelError, setComposerCancelError] = useState<string | null>(null);
 
   const generateFromComposer = useCallback(
     async (input: LibraryComposerGenerateInput): Promise<{ ok: boolean; message?: string }> => {
+      setComposerCancelError(null);
       try {
         const { project } = await createProject({
           name: input.prompt.slice(0, 60) || 'Generated image',
@@ -767,11 +770,24 @@ export function LibrarySection({ active, onOpenProject }: Props) {
   );
 
   /** Cancels the generation the composer is currently showing, through the
-   *  same media-task route `od media cancel <taskId>` drives. */
+   *  same media-task route `od media cancel <taskId>` drives.
+   *
+   *  A refusal is a real answer, not a no-op: that route answers 409
+   *  NOT_CANCELABLE unless the task is a tracked encode/download job or a
+   *  video import, which a generate task is not — so today this button's
+   *  honest outcome is "no". Swallowing that leaves a control that appears to
+   *  do nothing, so the refusal is shown, exactly as `VideoImportPanel`
+   *  shows `videoImport.cancelError`. Making generate itself killable is a
+   *  daemon-side follow-up. */
   const cancelComposerTask = useCallback(() => {
     const id = composerTaskIdRef.current;
-    if (id) void cancelMediaTask(id);
-  }, []);
+    if (!id) return;
+    setComposerCancelError(null);
+    void (async () => {
+      const result = await cancelMediaTask(id).catch(() => ({ ok: false }));
+      if (!result.ok) setComposerCancelError(t('library.composer.cancelError'));
+    })();
+  }, [t]);
 
   // --- file upload (drop-anywhere + Upload button) -------------------------
   const openUpload = useCallback((files?: File[]) => {
@@ -1237,6 +1253,11 @@ export function LibrarySection({ active, onOpenProject }: Props) {
           {/* Always available, even on an empty library — generating the
               first asset is a legitimate entry point, not just a follow-up
               action once assets already exist. */}
+          {composerCancelError ? (
+            <p className={styles.composerCancelError} role="alert">
+              {composerCancelError}
+            </p>
+          ) : null}
           <LibraryComposer
             onGenerate={generateFromComposer}
             taskSnapshot={composerTask}

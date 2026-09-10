@@ -190,6 +190,8 @@ export const en: Dict = {
   'library.composer.generate': 'Generate',
   'library.composer.generating': 'Generating…',
   'library.composer.error': 'Could not generate that image. Try again.',
+  'library.composer.cancelError':
+    'Could not cancel that generation. It may have already finished, or the daemon may not be able to stop it yet.',
   'mediaTask.cancel': 'Cancel',
   'common.save': 'Save',
   'common.close': 'Close',
