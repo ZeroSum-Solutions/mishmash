@@ -5660,6 +5660,10 @@ export async function startServer({
         diff: outcome.diff,
         prompt: promptInfo.prompt,
         ...(promptInfo.promptSource ? { promptSource: promptInfo.promptSource } : {}),
+        // F-03: tags every version this run wrote so GET /api/runs/:id/diff can
+        // find them from disk alone, long after the run object is gone.
+        runId: run.id,
+        actorName: run.actorName ?? null,
         metadata: projectRecord?.metadata,
       });
     };

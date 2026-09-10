@@ -3076,6 +3076,16 @@ button.ghost.mcp-copy-btn:hover:not(:disabled) {
   background: color-mix(in srgb, #64748b 10%, var(--bg-panel));
   color: var(--text);
 }
+/* F-03: who asked for the version, next to what produced it. Quieter than the
+   source badge -- it is provenance, not a status. */
+.file-version-actor {
+  max-width: 140px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .file-version-time {
   flex: 1 1 auto;
   min-width: 0;

@@ -43,6 +43,8 @@ import {
   applyJsonInstall,
   removeJsonInstall,
 } from './mcp-agent-install.js';
+import { bootstrapCliActor } from './cli-actor.js';
+import { unifiedDiffLines } from './run-diff-format.js';
 
 const argv = process.argv.slice(2);
 
@@ -1261,10 +1263,17 @@ if (argv[0] === 'mcp' && argv[1] === 'live-artifacts') {
   }
 }
 
-const first = argv.find((a) => !a.startsWith('-'));
+// F-03: `--actor <name>` is a GLOBAL option, so it is consumed here rather
+// than declared on every subcommand -- `parseFlags` refuses an undeclared
+// option, so a flag left in argv would break whichever command received it.
+// This also installs the fetch wrap that stamps `x-od-actor` on daemon
+// requests (and only on daemon requests). `--version` short-circuits above.
+const dispatchArgv = bootstrapCliActor(argv);
+
+const first = dispatchArgv.find((a) => !a.startsWith('-'));
 if (first && SUBCOMMAND_MAP[first]) {
-  const idx = argv.indexOf(first);
-  const rest = [...argv.slice(0, idx), ...argv.slice(idx + 1)];
+  const idx = dispatchArgv.indexOf(first);
+  const rest = [...dispatchArgv.slice(0, idx), ...dispatchArgv.slice(idx + 1)];
   await SUBCOMMAND_MAP[first](rest);
   // Not process.exit(0): that tears down the event loop in the same tick,
   // before a pending stdout write drains. Handlers that end with a bare
@@ -8449,6 +8458,9 @@ async function runRun(args) {
                                             resume.
   od run result-package <runId> [--json]    Inspect run outputs and workspace
                                             provenance without applying them.
+  od run diff   <runId> [--json]            What the run changed: each touched
+                                            file's before/after text and who
+                                            asked for the run.
 
 A following command (--follow, or 'watch') writes stdout ND-JSON unchanged
 and, on the run's terminal frame, writes exactly one "Run finished:
@@ -8457,6 +8469,8 @@ interactive stderr TTY with --json off.
 
 Common options:
   --daemon-url <url>   MishMash daemon HTTP base.
+  --actor <name>       Attribute this request to a person; remembered for the
+                       next invocation. Also settable with OD_ACTOR.
   --json               Emit raw JSON.`);
     process.exit(args.length === 0 ? 2 : 0);
   }
@@ -8475,7 +8489,10 @@ Common options:
       if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       const runs = data?.runs ?? [];
       for (const r of runs) {
-        console.log(`${r.id}\t${r.status}\tproject=${r.projectId ?? '-'}\tplugin=${r.pluginId ?? '-'}`);
+        console.log(
+          `${r.id}\t${r.status}\tproject=${r.projectId ?? '-'}\tplugin=${r.pluginId ?? '-'}`
+          + `\tactor=${r.actorName ?? '-'}`,
+        );
       }
       return;
     }
@@ -8504,11 +8521,51 @@ Common options:
       for (const line of runLines) console.log(line);
       console.log(`project\t${data?.projectId ?? '-'}\tconversation=${data?.conversationId ?? '-'}`);
       console.log(`agent\t${data?.agentId ?? '-'}\tresumable=${data?.resumable === true}`);
+      // F-03: which PERSON asked, next to which AGENT ran it. '-' means
+      // unattributed, which is a normal state, not a missing value.
+      console.log(`actor\t${data?.actorName ?? '-'}`);
       console.log(
         `session-recovery\t${recovery?.state ?? '-'}`
         + `\trecovered=${nativeSessionRecoveryNotice(recovery) ? 'yes' : 'no'}`
         + `\tcontinuation=${recovery?.continuation ?? '-'}`,
       );
+      return;
+    }
+    case 'diff': {
+      const id = rest.find((a) => !a.startsWith('-'));
+      if (!id) {
+        console.error('Usage: od run diff <runId> [--json]');
+        process.exit(2);
+      }
+      const resp = await fetch(`${base}/api/runs/${encodeURIComponent(id)}/diff`);
+      if (!resp.ok) return structuredHttpFailure(resp, 'run-not-found');
+      const data = await resp.json();
+      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      const files = data?.files ?? [];
+      if (files.length === 0) {
+        console.log(`run ${data?.runId ?? id} changed no versioned file`);
+        return;
+      }
+      for (const file of files) {
+        console.log(
+          `${file.fileName}\tactor=${file.actorName ?? '-'}`
+          + `\tat=${new Date(Number(file.at) || 0).toISOString()}`,
+        );
+        const afterText = file.after?.content;
+        if (typeof afterText !== 'string') {
+          // Wave 8 versions text and HTML only; anything else has no stored
+          // text to compare, and a byte dump in a terminal helps nobody.
+          console.log(`  diff not available for ${file.kind}`);
+          continue;
+        }
+        const beforeText = file.before?.content;
+        if (typeof beforeText !== 'string') {
+          console.log('  no prior version');
+          for (const line of afterText.split('\n')) console.log(`  + ${line}`);
+          continue;
+        }
+        for (const line of unifiedDiffLines(beforeText, afterText)) console.log(`  ${line}`);
+      }
       return;
     }
     case 'result-package': {

@@ -3737,6 +3737,19 @@ export interface Dict {
   'fileViewer.versions.sourceAi': string;
   'fileViewer.versions.sourceManual': string;
   'fileViewer.versions.sourceRestore': string;
+  // F-03 named local attribution (W8D). `byActor` is rendered next to the
+  // existing source badge; `unattributed` is the defined fallback for a
+  // pre-migration version with no actor -- never an empty string.
+  'fileViewer.versions.byActor': string;
+  'fileViewer.versions.unattributed': string;
+  'assistant.askedBy': string;
+  'actorPrompt.title': string;
+  'actorPrompt.description': string;
+  'actorPrompt.placeholder': string;
+  'actorPrompt.submit': string;
+  'actorPrompt.skip': string;
+  'settings.actorNameLabel': string;
+  'settings.actorNameHint': string;
   'fileViewer.versions.restoredFrom': string;
   'fileViewer.versions.versionLabel': string;
   'fileViewer.versions.listAria': string;

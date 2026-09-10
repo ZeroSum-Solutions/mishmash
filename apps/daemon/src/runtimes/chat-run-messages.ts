@@ -12,6 +12,8 @@ type ChatRunMessageState = {
   assistantMessageId?: string | null;
   conversationId?: string | null;
   agentId?: string | null;
+  /** Client-asserted human name behind the request that created the run (F-03). */
+  actorName?: string | null;
   status?: string;
   createdAt?: number;
   sessionMode?: string | null;
@@ -336,6 +338,9 @@ export function pinAssistantMessageOnRunCreate(db: SqliteDb, run: ChatRunMessage
               END,
               session_mode = ?,
               run_context_json = ?,
+              -- F-03: COALESCE so a re-pin of an already-attributed row never
+              -- erases the name. A run only ever gains an actor, never loses one.
+              actor_name = COALESCE(?, actor_name),
               started_at = COALESCE(started_at, ?)
         WHERE id = ?`,
     ).run(
@@ -343,6 +348,7 @@ export function pinAssistantMessageOnRunCreate(db: SqliteDb, run: ChatRunMessage
       run.status,
       run.sessionMode ?? null,
       run.context ? JSON.stringify(run.context) : null,
+      run.actorName ?? null,
       run.createdAt,
       run.assistantMessageId,
     );
@@ -356,6 +362,7 @@ export function pinAssistantMessageOnRunCreate(db: SqliteDb, run: ChatRunMessage
     events: [],
     runId: run.id,
     runStatus: run.status,
+    actorName: run.actorName ?? undefined,
     sessionMode: run.sessionMode ?? undefined,
     runContext: run.context ?? undefined,
     startedAt: run.createdAt,

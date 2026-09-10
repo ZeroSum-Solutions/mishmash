@@ -23,6 +23,8 @@ import {
   type TrackingDesignSystemEditSurface,
 } from '@open-design/contracts/analytics';
 import type { OdNativeEvent } from '@open-design/agui-adapter';
+import { resolveActorName } from '../actor.js';
+import { registerRunDiffRoutes } from './run-diff.js';
 import { newInsertId, readAnalyticsContext } from '../analytics.js';
 import type { AnalyticsContext } from '../analytics.js';
 import { spawnEnvForAgent } from '../agents.js';
@@ -154,6 +156,8 @@ interface ChatRun {
   appliedPluginSnapshotId?: string | null;
   pluginId?: string | null;
   clientType?: 'desktop' | 'web';
+  /** Client-asserted human name behind the request (F-03 / D-2); null when unattributed. */
+  actorName?: string | null;
   sessionMode?: string | null;
   context?: Record<string, unknown> | null;
   events: RunEventRecord[];
@@ -535,6 +539,17 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
     reconcileAssistantMessageOnRunEnd,
   } = ctx.messages;
 
+  // F-03: the run before/after data route. Registered here (not in server.ts)
+  // because everything it needs -- db, the run map, PROJECTS_DIR, sendApiError
+  // -- is already in scope, and `routes/runs.ts` is long enough without another
+  // handler in it.
+  registerRunDiffRoutes(app, {
+    db,
+    design: { runs: design.runs },
+    projects: { PROJECTS_DIR, getProject },
+    http: { sendApiError },
+  });
+
   function runToolBundleDeliveryTargetForProject(
     projectId: unknown,
     metadata: ProjectMetadata,
@@ -746,6 +761,11 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
         ? normalizeConversationSessionMode(meta.sessionMode)
         : normalizeConversationSessionMode(conversationSession?.sessionMode);
     const run = design.runs.create(meta);
+    // Before the pin, not after: `pinAssistantMessageOnRunCreate` copies the
+    // run's fields onto the message row, so an actor assigned later would
+    // never reach it. (`clientType` below is set after the pin because nothing
+    // persists it on the message.)
+    run.actorName = resolveActorName(req);
     try {
       pinAssistantMessageOnRunCreate(db, run);
     } catch (err) {

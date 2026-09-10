@@ -27,6 +27,7 @@ import { InterviewView } from './components/interview/InterviewView';
 import { PluginDetailView } from './components/PluginDetailView';
 import type { CreateInput, ImportClaudeDesignOutcome } from './components/NewProjectPanel';
 import { MemoryToast } from './components/MemoryToast';
+import { ActorPromptDialog } from './components/ActorPromptDialog';
 import { UpdateDialog } from './components/UpdateDialog';
 import { Toast } from './components/Toast';
 import { CenteredLoader } from './components/Loading';
@@ -2727,6 +2728,9 @@ function AppInner() {
       )}
       <TooltipLayer />
       <UpdateDialog />
+      {/* F-03: the one-time "who are you" prompt. Self-gating on localStorage,
+          so mounting it unconditionally costs nothing after the first answer. */}
+      <ActorPromptDialog />
       <AmrArtifactUpgradeGate
         homeVisible={route.kind === 'home' && route.view === 'home'}
         activeProjectId={route.kind === 'project' ? route.projectId : null}

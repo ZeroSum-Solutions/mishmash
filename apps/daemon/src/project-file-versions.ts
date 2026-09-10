@@ -1,3 +1,4 @@
+import { normalizeActorName } from '@open-design/contracts';
 import type {
   ProjectFileKind,
   ProjectFileVersion,
@@ -13,6 +14,11 @@ import { isSafeId, kindFor, mimeFor, resolveProjectDir, validateProjectPath } fr
 const VERSION_ROOT = '.file-versions';
 const VERSION_MANIFEST = 'manifest.json';
 const VERSION_ID_RE = /^[A-Za-z0-9_-]+$/u;
+/**
+ * Kinds whose stored version blob is text a `run diff` can print. Wave 8
+ * versions text and HTML only; every other kind reports `content: null`.
+ */
+const TEXT_VERSION_KINDS: ReadonlySet<ProjectFileKind> = new Set(['html', 'text', 'code']);
 const versionFileLocks = new Map<string, Promise<void>>();
 
 type VersionPromptSource = ProjectFileVersionPromptSource;
@@ -32,6 +38,10 @@ interface VersionEntry {
   mime: string;
   kind: ProjectFileKind;
   contentPath: string;
+  /** Run that wrote this version (F-03). Absent for a manual save or a pre-W8D entry. */
+  runId?: string;
+  /** Who asked for that run (F-03 / D-2). `null`/absent means unattributed. */
+  actorName?: string | null;
 }
 
 interface VersionManifestState {
@@ -45,6 +55,14 @@ interface CreateProjectFileVersionOptions {
   source?: VersionSource;
   label?: string | null;
   restoreFromVersionId?: string;
+  /**
+   * F-03 run identity. Both are OPTIONAL on purpose: the manual-save and
+   * restore call sites (`routes/project/index.ts:3999,4068,4528`) have no run
+   * behind them and must keep producing untagged versions rather than a
+   * fabricated one.
+   */
+  runId?: string;
+  actorName?: string | null;
 }
 
 export interface ProjectFileVersionLockContext {
@@ -220,6 +238,13 @@ function normalizeManifestEntry(raw: Record<string, unknown>, fileName: string, 
   if (restoreFromVersionId) {
     entry.restoreFromVersionId = restoreFromVersionId;
   }
+  // INVARIANT: this function rebuilds an entry field by field, so anything it
+  // does not name is erased on the next manifest read. The F-03 run tag has to
+  // be carried here or `listProjectFileVersionsForRun` answers empty for every
+  // run after the first read -- including after a daemon restart, which is
+  // exactly the case the route exists to serve.
+  if (typeof raw.runId === 'string' && raw.runId) entry.runId = raw.runId;
+  if (typeof raw.actorName === 'string' && raw.actorName) entry.actorName = raw.actorName;
   return entry;
 }
 
@@ -304,6 +329,8 @@ function publicVersion(entry: VersionEntry, currentId: string | null): ProjectFi
   };
   if (entry.promptSource) version.promptSource = entry.promptSource;
   if (entry.restoreFromVersionId) version.restoreFromVersionId = entry.restoreFromVersionId;
+  if (entry.runId) version.runId = entry.runId;
+  if (entry.actorName != null) version.actorName = entry.actorName;
   return version;
 }
 
@@ -431,6 +458,9 @@ async function createProjectFileVersionUnlocked(
   if (typeof options.restoreFromVersionId === 'string' && VERSION_ID_RE.test(options.restoreFromVersionId)) {
     entry.restoreFromVersionId = options.restoreFromVersionId;
   }
+  if (typeof options.runId === 'string' && options.runId) entry.runId = options.runId;
+  const actorName = normalizeActorName(options.actorName);
+  if (actorName) entry.actorName = actorName;
   await writeFile(path.join(root, contentPath), text);
   const nextEntries = [...entries, entry];
   await writeVersionManifest(projectsRoot, projectId, safeName, nextEntries);
@@ -563,6 +593,91 @@ async function ensureCurrentProjectFileVersionUnlocked(
     }
   }
   return createProjectFileVersionUnlocked(projectsRoot, projectId, safeName, text, options);
+}
+
+/** One file a run touched, with the version before it and the version it wrote. */
+export interface ProjectFileVersionsForRunEntry {
+  fileName: string;
+  kind: ProjectFileKind;
+  before: (ProjectFileVersion & { content: string | null }) | null;
+  after: ProjectFileVersion & { content: string | null };
+  actorName: string | null;
+  at: number;
+}
+
+/**
+ * Answers "which file versions did this run write, and what was there before".
+ *
+ * INVARIANT: this reads only the on-disk version manifests. It never consults
+ * the in-memory run map, so it answers identically for a run that finished
+ * three restarts ago -- which is the whole point of the route built on it.
+ *
+ * The version roots are content-addressed by a hash of the file name
+ * (`fileVersionKey`), so the file name cannot be recovered from the directory
+ * name; each manifest is read to get it. A manifest that is missing,
+ * unreadable, or has no entry for this run contributes nothing rather than
+ * failing the whole scan -- one corrupt file must not hide every other file
+ * the run touched.
+ */
+export async function listProjectFileVersionsForRun(
+  projectsRoot: string,
+  projectId: string,
+  runId: string,
+  metadata?: unknown,
+): Promise<ProjectFileVersionsForRunEntry[]> {
+  const wanted = String(runId || '').trim();
+  if (!wanted) return [];
+  assertProjectAvailable(projectsRoot, projectId, metadata);
+  if (!isSafeId(projectId)) return [];
+  const versionsRoot = path.join(projectsRoot, projectId, VERSION_ROOT);
+  const dirNames = await readdir(versionsRoot).catch(() => [] as string[]);
+
+  const results: ProjectFileVersionsForRunEntry[] = [];
+  for (const dirName of dirNames) {
+    const manifestPath = path.join(versionsRoot, dirName, VERSION_MANIFEST);
+    const raw = await readFile(manifestPath, 'utf8').catch(() => null);
+    if (raw == null) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw) as unknown;
+    } catch {
+      continue;
+    }
+    const fileName = typeof (parsed as { fileName?: unknown })?.fileName === 'string'
+      ? (parsed as { fileName: string }).fileName
+      : null;
+    if (!fileName) continue;
+    const entries = normalizeManifest(parsed, fileName);
+    const index = entries.findIndex((entry) => entry.runId === wanted);
+    if (index < 0) continue;
+    const after = entries[index];
+    const before = index > 0 ? entries[index - 1] : null;
+    if (!after) continue;
+    const currentId = currentVersionId(entries);
+    const root = path.join(versionsRoot, dirName);
+    results.push({
+      fileName,
+      kind: after.kind,
+      before: before
+        ? { ...publicVersion(before, currentId), content: await readVersionText(root, before) }
+        : null,
+      after: { ...publicVersion(after, currentId), content: await readVersionText(root, after) },
+      actorName: after.actorName ?? null,
+      at: after.createdAt,
+    });
+  }
+  results.sort((a, b) => a.fileName.localeCompare(b.fileName));
+  return results;
+}
+
+/**
+ * Reads one version's stored text. Returns `null` when the blob is missing or
+ * the entry is not a text kind -- wave 8 versions text and HTML only, and a
+ * caller renders `null` as "diff not available" rather than as an empty file.
+ */
+async function readVersionText(root: string, entry: VersionEntry): Promise<string | null> {
+  if (!TEXT_VERSION_KINDS.has(entry.kind)) return null;
+  return readFile(path.join(root, entry.contentPath), 'utf8').catch(() => null);
 }
 
 export async function getProjectFileVersionRootStats(

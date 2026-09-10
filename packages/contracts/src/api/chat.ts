@@ -755,6 +755,13 @@ export interface ChatMessage {
   content: string;
   agentId?: string;
   agentName?: string;
+  /**
+   * Who asked for this turn (F-03 / D-2). `agentName` says which AGENT ran
+   * it; this says which PERSON requested it. `null`/absent means
+   * unattributed — a pre-W8D row or a request with no `x-od-actor` header.
+   * Client-asserted, never authenticated.
+   */
+  actorName?: string | null;
   events?: PersistedAgentEvent[];
   createdAt?: number;
   runId?: string;
