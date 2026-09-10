@@ -4,10 +4,8 @@
 //
 // D-2 makes this attribution, not authentication, so the prompt is skippable
 // and never gates anything. The behaviour under test is the one-time gate: it
-// shows once per browser profile, and once the user answers (or skips) it never
-// comes back on its own.
-//
-// Disclosed red shape: red on base only because the component does not exist.
+// asks once per browser profile, and once it has asked it never comes back on
+// its own.
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,12 +18,19 @@ import {
   setStoredActorName,
 } from '../../src/runtime/actor-identity';
 
-function renderPrompt(homeVisible = true) {
-  return render(
+function renderPrompt(
+  homeVisible = true,
+  onOpenActorNameSettings = vi.fn(),
+) {
+  const result = render(
     <I18nProvider>
-      <ActorPromptDialog homeVisible={homeVisible} />
+      <ActorPromptDialog
+        homeVisible={homeVisible}
+        onOpenActorNameSettings={onOpenActorNameSettings}
+      />
     </I18nProvider>,
   );
+  return { ...result, onOpenActorNameSettings };
 }
 
 beforeEach(() => {
@@ -42,17 +47,62 @@ describe('ActorPromptDialog', () => {
   it('asks for a name when no name is stored yet', () => {
     renderPrompt();
     expect(screen.getByTestId('actor-prompt-dialog')).toBeTruthy();
-    expect(screen.getByTestId('actor-prompt-input')).toBeTruthy();
+    expect(screen.getByText('What should we call you?')).toBeTruthy();
   });
 
-  it('stores the submitted name and closes', () => {
+  // W8D fix r3 — the mechanism behind the third placement failure.
+  //
+  // As an in-flow `<aside>` in the Home column the prompt added ~250px of
+  // height ABOVE the create rail (measured: the "More" shortcuts trigger sat
+  // at document y=829 with the prompt mounted, y=580 without). `ShortcutsMenu`
+  // portals its dropdown to <body> with
+  // `position: fixed; top = trigger.getBoundingClientRect().bottom + 6`
+  // (apps/web/src/components/HomeHero.tsx), so pushing the trigger down pushed
+  // the panel's lower items below the fold — `home-hero-rail-create-brand-kit`
+  // at viewport y 1115-1151 in a 1000px viewport, versus 916-952 without the
+  // prompt. A `position: fixed` element cannot be scrolled into view, so
+  // Playwright retried the click 110 times and timed out
+  // (e2e/ui/home-hero-rail.test.ts:1330, :1594, :1844).
+  //
+  // The fix is to stop taking a row at all: the prompt is raised through the
+  // app's own transient toast (`Toast`, `.od-toast`), which is fixed to the
+  // bottom of the viewport, contributes no layout to the surface it appears
+  // on, and clears itself after its normal TTL.
+  it('takes no row in the surface it appears on', () => {
     renderPrompt();
-    fireEvent.change(screen.getByTestId('actor-prompt-input'), {
-      target: { value: 'Devin' },
-    });
-    fireEvent.click(screen.getByTestId('actor-prompt-submit'));
+    const prompt = screen.getByTestId('actor-prompt-dialog');
+    // The app's transient toast surface — `position: fixed` in
+    // apps/web/src/styles/viewer/routines.css, so it displaces nothing.
+    expect(prompt.classList.contains('od-toast')).toBe(true);
+    // And it is no longer an in-flow landmark competing for the column.
+    expect(prompt.tagName).not.toBe('ASIDE');
+  });
 
-    expect(getStoredActorName()).toBe('Devin');
+  // The toast carries no text field: a 4-second surface is the wrong place to
+  // type a name into. Its one action hands the user to the Settings row that
+  // already owns the name (`settings-actor-name`, SettingsDialog's Appearance
+  // section), which is also the only way to change it later.
+  it('offers one action that opens the Settings display-name row', () => {
+    const { onOpenActorNameSettings } = renderPrompt();
+    expect(screen.queryByTestId('actor-prompt-input')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add your name' }));
+    expect(onOpenActorNameSettings).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('actor-prompt-dialog')).toBeNull();
+  });
+
+  // A toast auto-dismisses. If the gate were only spent on an answer, the
+  // prompt would come back on the next Home visit — for ever, for anyone who
+  // simply let it fade. Showing it IS the question; asking once is the promise.
+  it('spends the once-per-profile gate as soon as it is shown', () => {
+    renderPrompt();
+    expect(hasSeenActorPrompt()).toBe(true);
+    // Asking is not answering: nothing is attributed until the user types a
+    // name in Settings.
+    expect(getStoredActorName()).toBeNull();
+
+    cleanup();
+    renderPrompt();
     expect(screen.queryByTestId('actor-prompt-dialog')).toBeNull();
   });
 
@@ -62,11 +112,11 @@ describe('ActorPromptDialog', () => {
     expect(screen.queryByTestId('actor-prompt-dialog')).toBeNull();
   });
 
-  it('lets the user skip, and does not ask again', () => {
+  it('can be dismissed, and does not come back', () => {
     renderPrompt();
-    fireEvent.click(screen.getByTestId('actor-prompt-skip'));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByTestId('actor-prompt-dialog')).toBeNull();
-    // Skipping means unattributed, not a fake name.
+    // Dismissing means unattributed, not a fake name.
     expect(getStoredActorName()).toBeNull();
 
     cleanup();
@@ -81,8 +131,7 @@ describe('ActorPromptDialog', () => {
   // because the prompt rendered through the shared modal Dialog, which always
   // wraps its panel in a full-viewport backdrop (packages/components/src/dialog.tsx).
   // Every browser profile that has not answered yet — which is every Playwright
-  // test — had the whole page sealed behind it. The prompt's own docblock says it
-  // "never blocks anything"; this pins that invariant.
+  // test — had the whole page sealed behind it.
   it('never blocks the page behind it', () => {
     const clickedBehind = vi.fn();
     render(
@@ -91,7 +140,7 @@ describe('ActorPromptDialog', () => {
           <button type="button" data-testid="page-behind" onClick={clickedBehind}>
             behind
           </button>
-          <ActorPromptDialog homeVisible />
+          <ActorPromptDialog homeVisible onOpenActorNameSettings={vi.fn()} />
         </>
       </I18nProvider>,
     );
@@ -121,7 +170,7 @@ describe('ActorPromptDialog', () => {
       <I18nProvider>
         <>
           <div role="dialog" aria-label="Settings" data-testid="real-dialog" />
-          <ActorPromptDialog homeVisible />
+          <ActorPromptDialog homeVisible onOpenActorNameSettings={vi.fn()} />
         </>
       </I18nProvider>,
     );
@@ -135,16 +184,18 @@ describe('ActorPromptDialog', () => {
     expect(dialogs[0]?.getAttribute('data-testid')).toBe('real-dialog');
   });
 
-  // The other eleven failures were "subtree intercepts pointer events" over
-  // controls the card sat on top of — a deck's Next slide button, the HTML
-  // preview toolbar, a plugin details modal's Use button. A fixed corner card
-  // cannot promise it will miss every control on every surface, so it is
-  // scoped to the one surface it belongs on: the Home view, with no project
-  // open and no sub-view (Plugins, Projects, Tasks…) in front of it.
+  // W8D fix r1 — the other eleven failures were "subtree intercepts pointer
+  // events" over controls the fixed corner card sat on. Scoping it to Home was
+  // the first half of that fix and still holds: it must not appear on any other
+  // surface, and being held back must not spend its one question.
   it('stays off every surface except Home, without spending the one-time gate', () => {
+    const onOpenActorNameSettings = vi.fn();
     const { rerender } = render(
       <I18nProvider>
-        <ActorPromptDialog homeVisible={false} />
+        <ActorPromptDialog
+          homeVisible={false}
+          onOpenActorNameSettings={onOpenActorNameSettings}
+        />
       </I18nProvider>,
     );
 
@@ -155,38 +206,12 @@ describe('ActorPromptDialog', () => {
 
     rerender(
       <I18nProvider>
-        <ActorPromptDialog homeVisible />
+        <ActorPromptDialog
+          homeVisible
+          onOpenActorNameSettings={onOpenActorNameSettings}
+        />
       </I18nProvider>,
     );
-    expect(screen.getByTestId('actor-prompt-dialog')).toBeTruthy();
-  });
-
-  // Scoping it to Home was not enough: on Home itself the fixed corner card
-  // still sat on the create rail's "More" shortcuts trigger
-  // (e2e/ui/entry-chrome-flows.test.ts:129 -> home-hero-shortcuts-trigger,
-  // "<aside …> intercepts pointer events"). No corner of a viewport is
-  // reliably free of controls, so the card stops floating: it renders in the
-  // Home surface's own flow, where it can only ever push content, never cover
-  // it.
-  it('renders inside the Home surface instead of floating over it', () => {
-    const { container } = render(
-      <I18nProvider>
-        <ActorPromptDialog homeVisible />
-      </I18nProvider>,
-    );
-
-    const prompt = screen.getByTestId('actor-prompt-dialog');
-    expect(container.contains(prompt)).toBe(true);
-    // Not portalled onto document.body, which is what put it on top of the
-    // page in the first place.
-    expect(prompt.parentElement).not.toBe(document.body);
-  });
-
-  it('refuses to store an empty name', () => {
-    renderPrompt();
-    fireEvent.click(screen.getByTestId('actor-prompt-submit'));
-    expect(getStoredActorName()).toBeNull();
-    // An empty submit is not an answer: the dialog stays up.
     expect(screen.getByTestId('actor-prompt-dialog')).toBeTruthy();
   });
 });
