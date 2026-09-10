@@ -810,28 +810,6 @@ describe('uploadProjectFiles', () => {
     vi.unstubAllGlobals();
   });
 
-  it('marks the unmatched tail as failed when the server drops files mid-flight', async () => {
-    const a = new File(['a'], 'a.txt', { type: 'text/plain' });
-    const b = new File(['b'], 'b.txt', { type: 'text/plain' });
-    const c = new File(['c'], 'c.txt', { type: 'text/plain' });
-
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(JSON.stringify({
-        files: [
-          { name: 't1-a.txt', path: 't1-a.txt', size: 1, originalName: 'a.txt' },
-          { name: 't2-b.txt', path: 't2-b.txt', size: 1, originalName: 'b.txt' },
-        ],
-      }), { status: 200 })),
-    );
-
-    const result = await uploadProjectFiles('project-1', [a, b, c]);
-
-    expect(result.uploaded).toHaveLength(2);
-    expect(result.failed).toHaveLength(1);
-    expect(result.failed[0]).toMatchObject({ name: 'c.txt' });
-  });
-
   // Supersedes the previous version of this test, which fixtured a flat
   // `{code, error: string}` body — a shape the daemon never actually sends.
   // The real envelope (`ApiErrorResponse`, `api-errors.ts:20-29`) nests the
@@ -1185,6 +1163,35 @@ describe('uploadProjectFiles (staged transport, W8A)', () => {
     expect(result.failed).toEqual([]);
     expect(result.uploaded).toHaveLength(1);
     expect(result.uploaded[0]).toMatchObject({ path: composed, name: decomposed, size: 5 });
+  });
+
+  // Supersedes "marks the unmatched tail as failed when the server drops
+  // files mid-flight" (legacy transport). That test fixtured a multipart
+  // reply listing two of three files and asserted a PARTIAL commit (a, b
+  // uploaded; c failed) — the legacy route's silent tail drop. A staged
+  // session has exactly one terminal event and `upload-failed` means
+  // nothing was committed (contracts `ProjectUploadFailed`), so the same
+  // mid-session failure now fails every file with the daemon's code and
+  // message and commits none.
+  it('fails every file in the session, committing none, when a file fails mid-session', async () => {
+    const a = new File(['a'], 'a.txt', { type: 'text/plain' });
+    const b = new File(['b'], 'b.txt', { type: 'text/plain' });
+    const c = new File(['c'], 'c.txt', { type: 'text/plain' });
+    const { fetchMock, calls } = stagedDaemon({
+      failAt: { index: 2, status: 415, code: 'UNSUPPORTED_MEDIA_TYPE', message: 'file contents are not valid UTF-8 text' },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await uploadProjectFiles('project-1', [a, b, c], undefined, { limits: STAGED_LIMITS });
+
+    expect(result.uploaded).toEqual([]);
+    expect(result.error).toBe('file contents are not valid UTF-8 text');
+    expect(result.failed).toEqual([
+      { name: 'a.txt', code: 'UNSUPPORTED_MEDIA_TYPE', error: 'file contents are not valid UTF-8 text' },
+      { name: 'b.txt', code: 'UNSUPPORTED_MEDIA_TYPE', error: 'file contents are not valid UTF-8 text' },
+      { name: 'c.txt', code: 'UNSUPPORTED_MEDIA_TYPE', error: 'file contents are not valid UTF-8 text' },
+    ]);
+    expect(putBodies(calls)).toEqual([a, b, c]);
   });
 });
 
