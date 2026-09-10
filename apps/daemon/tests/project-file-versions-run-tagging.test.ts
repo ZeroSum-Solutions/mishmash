@@ -119,6 +119,41 @@ describe('W8D: project file versions carry the run and actor that wrote them', (
     expect(entries[0]?.before?.content).toBe('<h1>one</h1>');
   });
 
+  it('reports the LAST snapshot a run took of a file, not the first', async () => {
+    // A run that writes the same file twice tags two entries with the same run
+    // id. `after` must be the run's final state; `before` stays the entry
+    // immediately preceding the run's FIRST tagged entry, so the pair still
+    // reads "what the run found" -> "what the run left".
+    await versions.createProjectFileVersion(
+      projectsRoot,
+      projectId,
+      FILE_NAME,
+      '<h1>one</h1>',
+      createOptions(RUN_A, 'Devin'),
+    );
+    await versions.createProjectFileVersion(
+      projectsRoot,
+      projectId,
+      FILE_NAME,
+      '<h1>two</h1>',
+      createOptions(RUN_B, 'Sam'),
+    );
+    await versions.createProjectFileVersion(
+      projectsRoot,
+      projectId,
+      FILE_NAME,
+      '<h1>three</h1>',
+      createOptions(RUN_B, 'Sam'),
+    );
+
+    const entries = await versions.listProjectFileVersionsForRun(projectsRoot, projectId, RUN_B);
+    expect(entries.length).toBe(1);
+    // RED before the fix: `findIndex` stops at the run's first tagged entry, so
+    // `after` reports '<h1>two</h1>' -- the mid-run snapshot, not the result.
+    expect(entries[0]?.after.content).toBe('<h1>three</h1>');
+    expect(entries[0]?.before?.content).toBe('<h1>one</h1>');
+  });
+
   it('reports a null before for the first version a run created', async () => {
     await versions.createProjectFileVersion(
       projectsRoot,
