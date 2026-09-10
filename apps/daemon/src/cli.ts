@@ -36,6 +36,8 @@ import {
 import { findAcceptedKind } from './uploads/staging.js';
 import { buildExportCliRequestBody, buildExportCliResultEnvelope, resolveExportCliDeckMode } from './export-cli-request.js';
 import { exportRoutePath } from './export-cli-routing.js';
+import { readCurrentAppVersionInfo } from './app-version.js';
+import { readBuildStamp } from './build-stamp.js';
 import {
   AGENT_SLUGS,
   isAgentSlug,
@@ -1251,6 +1253,24 @@ async function runExport(args) {
   console.log(`wrote ${out} (${buffer.length} bytes)`);
 }
 
+if (argv[0] === '--version') {
+  const versionInfo = await readCurrentAppVersionInfo();
+  const buildStamp = readBuildStamp();
+  const wantJson = argv.includes('--json');
+  const payload = {
+    version: versionInfo.version,
+    channel: versionInfo.channel,
+    commit: buildStamp.commit,
+    builtAt: buildStamp.builtAt,
+  };
+  if (wantJson) {
+    process.stdout.write(JSON.stringify(payload) + '\n');
+  } else {
+    console.log(`od ${payload.version} (${payload.channel}) commit=${payload.commit} builtAt=${payload.builtAt}`);
+  }
+  process.exit(0);
+}
+
 if (argv[0] === 'mcp' && argv[1] === 'live-artifacts') {
   try {
     const { exitCode } = await runLiveArtifactsMcpServer();
@@ -1390,6 +1410,10 @@ function printRootHelp() {
   console.log(`Usage:
   od [--port <n>] [--host <addr>] [--no-open]
       Start the local daemon and open the web UI.
+
+  od --version [--json]
+      Print the app version, channel, and the commit/build time the running
+      dist was built from.
 
   od tools live-artifacts <create|list|update|refresh> [options]
       Manage live artifacts through daemon wrapper commands.
@@ -9969,6 +9993,7 @@ Commands:
   edit-as-page <id>         Turn a captured html asset into a new editable OD project (prints projectId).
   figma <id>                Export an html asset's OD Figma capture IR (clipper-captured pages).
   sync                      Pull design systems + agent-generated project artifacts into the Library.
+  broken                    List referenced assets marked broken by the last sync (gone origin project or missing bytes).
   pair                      Mint a browser-extension pairing code.
 
 Options:
@@ -10058,6 +10083,18 @@ async function runLibrary(args) {
             `(showing ${shown} of ${data.total} matching assets — pass --offset ${nextOffset} for the next page, ` +
               `a higher --limit, or narrow the filter)`,
           );
+        }
+        return;
+      }
+      case 'broken': {
+        const resp = await fetch(`${base}/api/library/assets/broken`);
+        if (!resp.ok) return structuredHttpFailure(resp);
+        const data = await resp.json();
+        if (flags.json) return writeJson(data);
+        for (const asset of data.assets ?? []) {
+          const dims = asset.width && asset.height ? `${asset.width}x${asset.height}` : '';
+          const label = asset.sourceTitle || asset.sourceUrl || asset.caption || '';
+          console.log(`${asset.id}\t${asset.kind}\t${dims}\t${label}`);
         }
         return;
       }

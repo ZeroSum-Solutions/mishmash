@@ -24,6 +24,7 @@ import { isTodoWriteToolName, stopReasonIsTruncation, todoItemsFromTodoWriteInpu
 // `routingOverride` field before it ever reaches resolveDispatchRouting.
 import { isRoutingOverrideRequest } from '@open-design/contracts';
 import type { DaemonHealthResponse } from '@open-design/contracts';
+import { readBuildStamp } from './build-stamp.js';
 import {
   composeSystemPrompt,
   detectDeckIntentSignal,
@@ -3208,10 +3209,13 @@ export async function startServer({
 
   app.get('/api/health', async (_req, res) => {
     const versionInfo = await readCurrentAppVersionInfo();
+    const buildStamp = readBuildStamp();
     const body: DaemonHealthResponse = {
       ok: true,
       version: versionInfo.version,
       bootId: daemonBootId,
+      commit: buildStamp.commit,
+      builtAt: buildStamp.builtAt,
     };
     res.json(body);
   });
