@@ -810,21 +810,6 @@ describe('uploadProjectFiles', () => {
     vi.unstubAllGlobals();
   });
 
-  it('falls back to a status-derived message when the error response has no JSON body', async () => {
-    const a = new File(['a'], 'a.txt', { type: 'text/plain' });
-
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('not json', { status: 500 })),
-    );
-
-    const result = await uploadProjectFiles('project-1', [a]);
-
-    expect(result.uploaded).toEqual([]);
-    expect(result.error).toBe('upload failed (500)');
-    expect(result.failed).toEqual([{ name: 'a.txt', code: undefined, error: 'upload failed (500)' }]);
-  });
-
   it('marks every file failed when the upload request itself throws (network error)', async () => {
     const a = new File(['a'], 'a.txt', { type: 'text/plain' });
     const b = new File(['b'], 'b.txt', { type: 'text/plain' });
@@ -1190,6 +1175,21 @@ describe('uploadProjectFiles (staged transport, W8A)', () => {
       { name: 'b.txt', code: 'UNSUPPORTED_MEDIA_TYPE', error: 'file type not allowed' },
     ]);
     expect(calls.map((c) => c.method)).toEqual(['POST']);
+  });
+
+  // Supersedes "falls back to a status-derived message when the error
+  // response has no JSON body" (legacy transport): same fallback, now on
+  // the session-create response instead of the multipart POST.
+  it('falls back to a status-derived message when the session-create error has no JSON body', async () => {
+    const a = new File(['a'], 'a.txt', { type: 'text/plain' });
+    const { fetchMock } = stagedDaemon({ create: { status: 500, body: 'not json' } });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await uploadProjectFiles('project-1', [a], undefined, { limits: STAGED_LIMITS });
+
+    expect(result.uploaded).toEqual([]);
+    expect(result.error).toBe('upload failed (500)');
+    expect(result.failed).toEqual([{ name: 'a.txt', code: undefined, error: 'upload failed (500)' }]);
   });
 });
 
