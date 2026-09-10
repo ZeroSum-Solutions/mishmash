@@ -810,40 +810,6 @@ describe('uploadProjectFiles', () => {
     vi.unstubAllGlobals();
   });
 
-  it('treats every response entry as a success regardless of originalName drift', async () => {
-    // Simulates an encoding edge case: the browser File.name carries a
-    // composed CJK name (NFC) but multer round-trips it through latin1 and
-    // returns a slightly different decoded form. The old name-equality
-    // matching marked these as failed even though the server stored them.
-    const composed = '测试.pdf';
-    const decomposed = '测试.pdf'; // pretend the server returned a normalized variant
-    const file = new File(['hello'], composed, { type: 'application/pdf' });
-
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(JSON.stringify({
-        files: [
-          {
-            name: 'mxk7-test.pdf',
-            path: 'mxk7-test.pdf',
-            size: 5,
-            originalName: decomposed,
-          },
-        ],
-      }), { status: 200 })),
-    );
-
-    const result = await uploadProjectFiles('project-1', [file]);
-
-    expect(result.failed).toEqual([]);
-    expect(result.uploaded).toHaveLength(1);
-    expect(result.uploaded[0]).toMatchObject({
-      path: 'mxk7-test.pdf',
-      name: decomposed,
-      size: 5,
-    });
-  });
-
   it('marks the unmatched tail as failed when the server drops files mid-flight', async () => {
     const a = new File(['a'], 'a.txt', { type: 'text/plain' });
     const b = new File(['b'], 'b.txt', { type: 'text/plain' });
@@ -1198,6 +1164,27 @@ describe('uploadProjectFiles (staged transport, W8A)', () => {
     const last = onEvents.mock.calls.at(-1)?.[0] as ProjectUploadSseEvent[];
     expect(last.every((e) => isProjectUploadSseEvent(e))).toBe(true);
     expect(last.map((e) => e.type)).toEqual(['upload-started', 'upload-progress', 'upload-completed']);
+  });
+
+  // Supersedes "treats every response entry as a success regardless of
+  // originalName drift" (legacy transport). That test fixtured a one-shot
+  // `{files:[...]}` reply to a multipart `POST /upload` — the very request
+  // shape this track stops sending — and so pinned the legacy route as the
+  // web client's transport. The behaviour it protected (a committed file is
+  // a success even when the daemon's `originalName` drifts from `File.name`)
+  // is kept, now read off the `upload-completed` event.
+  it('treats every committed file in upload-completed as a success regardless of originalName drift', async () => {
+    const composed = '测试.pdf';
+    const decomposed = '测试.pdf'; // the daemon's normalized variant
+    const file = new File(['%PDF-'], composed, { type: 'application/pdf' });
+    const { fetchMock } = stagedDaemon({ originalNameFor: () => decomposed });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await uploadProjectFiles('project-1', [file], undefined, { limits: STAGED_LIMITS });
+
+    expect(result.failed).toEqual([]);
+    expect(result.uploaded).toHaveLength(1);
+    expect(result.uploaded[0]).toMatchObject({ path: composed, name: decomposed, size: 5 });
   });
 });
 
