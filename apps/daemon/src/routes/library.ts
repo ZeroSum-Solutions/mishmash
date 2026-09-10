@@ -33,6 +33,7 @@ import {
   countLibraryAssets,
   deleteLibraryAsset,
   getLibraryAsset,
+  listBrokenReferencedAssets,
   listLibraryAssets,
   updateLibraryAsset,
   type LibraryAssetRecord,
@@ -779,6 +780,18 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     const total = countLibraryAssets(db, filter);
     const offset = clampLibraryListOffset(filter.offset);
     res.json({ assets, total, truncated: offset + assets.length < total });
+  });
+
+  // The operator-facing follow-through on the reconcile summary log line
+  // (library-sync.ts): every row `WHERE storage = 'referenced' AND broken =
+  // 1`, the exact candidate set `listBrokenReferencedAssets` already
+  // computes for the reconcile's own self-heal pass. Must be registered
+  // BEFORE `GET /api/library/assets/:id` below, or Express would route
+  // `/broken` into that handler's `:id` param instead. The broken set is not
+  // expected to grow large enough to need paging (see PR notes).
+  app.get('/api/library/assets/broken', (_req, res) => {
+    const assets = listBrokenReferencedAssets(db).map(toPublicAsset);
+    res.json({ assets, total: assets.length, truncated: false });
   });
 
   // Force a full reconcile pass (the web "Sync" button + `od library sync`).

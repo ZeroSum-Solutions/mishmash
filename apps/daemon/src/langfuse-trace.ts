@@ -2281,7 +2281,8 @@ export async function reportRunCompleted(
       // start, so repeated run-level warnings would only add noise.
       missingTelemetrySinkWarned = true;
       console.warn(
-        '[langfuse-trace] Telemetry metrics are enabled but no relay or Langfuse credentials are configured',
+        '[langfuse-trace] Telemetry metrics are enabled but no relay or Langfuse credentials are configured '
+          + '(logged once per daemon process; configure a relay or Langfuse key to silence)',
       );
     }
     return langfuseDelivery;

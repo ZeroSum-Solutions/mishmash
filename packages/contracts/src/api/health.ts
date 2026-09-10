@@ -15,4 +15,17 @@ export interface DaemonHealthResponse {
    * that way. Opaque: a client may only test it for equality, never parse it.
    */
   bootId: string;
+  /**
+   * The git commit the running `dist` was built from (`'unknown'` when no
+   * build stamp is available -- source runs under `tsx`, a tarball install,
+   * or a `.git`-less checkout). Lets a post-restart smoke prove which build
+   * is actually live, and agrees with `od --version`'s own `commit` field.
+   */
+  commit: string;
+  /**
+   * ISO-8601 UTC build timestamp for the running `dist` (`'unknown'` under
+   * the same conditions as `commit`). Paired with `commit` so an operator
+   * can tell how stale a running build is, not just which commit it is.
+   */
+  builtAt: string;
 }
