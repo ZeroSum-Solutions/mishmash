@@ -1145,6 +1145,13 @@ export function EntryShell({
   const browseRegistry = useStableHandler(() => changeView('plugins'));
   const openConnectorsTab = useStableHandler(() => openIntegrationTab('connectors'));
   const openMcpTab = useStableHandler(() => openIntegrationTab('mcp'));
+  // F-03: the actor prompt reaches Settings from inside the home view, so the
+  // shell's own `onOpenSettings` crosses the memo boundary. The parent hands
+  // it a fresh identity on every route switch, so it has to be stabilised the
+  // same way as every other handler the isolated views receive.
+  const openSettingsFromHome = useStableHandler((section?: EntrySettingsSection) => {
+    onOpenSettings(section);
+  });
   const openNewProjectFromHome = useStableHandler((tab?: CreateTab) => {
     openNewProject(tab);
   });
@@ -1381,7 +1388,7 @@ export function EntryShell({
                 onBrowseRegistry={browseRegistry}
                 onOpenIntegrations={openConnectorsTab}
                 onOpenMcp={openMcpTab}
-                onOpenSettings={onOpenSettings}
+                onOpenSettings={openSettingsFromHome}
                 onOpenNewProject={openNewProjectFromHome}
                 onStartBlankProject={startBlankProject}
                 promptHandoff={homePromptHandoff}

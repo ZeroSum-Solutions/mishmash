@@ -8557,9 +8557,12 @@ Common options:
       for (const line of runLines) console.log(line);
       console.log(`project\t${data?.projectId ?? '-'}\tconversation=${data?.conversationId ?? '-'}`);
       console.log(`agent\t${data?.agentId ?? '-'}\tresumable=${data?.resumable === true}`);
-      // F-03: which PERSON asked, next to which AGENT ran it. '-' means
-      // unattributed, which is a normal state, not a missing value.
-      console.log(`actor\t${data?.actorName ?? '-'}`);
+      // F-03: which PERSON asked, next to which AGENT ran it. An unattributed
+      // run prints no `actor` line at all -- that is a normal state, and this
+      // command's stdout is pinned line-for-line, so an empty placeholder line
+      // would change what every unattributed run reports.
+      const actorName = typeof data?.actorName === 'string' ? data.actorName.trim() : '';
+      if (actorName !== '') console.log(`actor\t${actorName}`);
       console.log(
         `session-recovery\t${recovery?.state ?? '-'}`
         + `\trecovered=${nativeSessionRecoveryNotice(recovery) ? 'yes' : 'no'}`
