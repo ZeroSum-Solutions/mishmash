@@ -790,6 +790,16 @@ test('[P1] home Figma import uploads a .fig file into a new project and opens it
   await expect.poll(() => importBodies.length, { timeout: 10_000 }).toBe(1);
   expect(importBodies[0]).toContain('marketing-home.fig');
   expect(importBodies[0]).toContain('Use bold sections.');
+
+  // "Import & build" only decodes the .fig now. The 2026-08-04 multi-page
+  // detection turned this into a two-step flow: the decode summary renders
+  // with its own confirm button, and only that button hands the result back to
+  // Home (`onImported`), which is what patches the project's pending prompt.
+  // Without the second click `patchBodies` stayed empty forever.
+  const buildAllPages = figmaImport.getByRole('button', { name: 'Build all pages' });
+  await expect(buildAllPages).toBeVisible();
+  await buildAllPages.click();
+
   await expect.poll(() => patchBodies.length, { timeout: 10_000 }).toBe(1);
   expect(createBodies[0]?.name).toBe('Imported from Figma');
   expect(createBodies[0]?.pendingPrompt ?? null).toBeNull();
