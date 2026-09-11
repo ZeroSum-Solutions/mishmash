@@ -1759,6 +1759,20 @@ test('[P0] reloading a project keeps the Design Files entry reachable when it wa
 
   const t0 = Date.now();
   const stamp = () => `+${Date.now() - t0}ms`;
+  page.on('console', (msg) => {
+    const text = msg.text();
+    if (text.startsWith('[diag-ls]')) console.log(`[diag] ${stamp()} ${text}`);
+  });
+  await page.addInitScript(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function patched(key: string, value: string) {
+      if (String(key).includes('project-tabs')) {
+        // eslint-disable-next-line no-console
+        console.log('[diag-ls]', value, new Error('write').stack);
+      }
+      return original.call(this, key, value);
+    };
+  });
   page.on('request', (req) => {
     if (!/\/tabs$/.test(new URL(req.url()).pathname)) return;
     console.log(`[diag] ${stamp()} ${req.method()} ${new URL(req.url()).pathname} body=${req.postData() ?? ''}`);
