@@ -124,20 +124,26 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   const skillSubresourceCacheTtlMs = 60_000;
   let cachedSkillLikeEntries: {
     entries: Awaited<ReturnType<typeof listAllSkillLikeEntries>>;
-    expiresAt: number;
+    staleAt: number;
   } | null = null;
 
   /**
    * Resolve the on-disk directory a skill-like entry owns, for a sub-resource
    * or example request.
    *
-   * INVARIANT: a hit is answered from a listing at most
-   * `skillSubresourceCacheTtlMs` old, and a miss always rescans before it
-   * answers 404 -- so an entry installed a moment ago is never hidden by the
-   * cache, and the only thing the cache can do is skip work.
+   * INVARIANT: a hit is answered at once from the last listing, and a miss
+   * always rescans before it answers 404 -- so an entry installed a moment ago
+   * is never hidden by the cache. A listing older than
+   * `skillSubresourceCacheTtlMs` still answers hits, but the first hit that
+   * finds it stale starts a refresh behind its response, so a hit is at most
+   * one refresh behind the registry. Blocking that hit on the refresh made the
+   * most common gallery visit (Templates opened more than a TTL after the last
+   * template request) pay a full scan per card on its first screenful.
    *
-   * Removal is the one direction a lookup miss cannot catch: for up to the TTL
-   * a hit can still name the directory of an entry that has just been deleted.
+   * Removal is the one direction a lookup miss cannot catch: until the next
+   * refresh a hit can still name the directory of an entry that has just been
+   * deleted (or, for the same window, the built-in directory a newly installed
+   * user entry now shadows).
    * That is harmless because the directory is what the entry OWNS, not what it
    * serves -- `sendSkillSubresource` still resolves the file under it and
    * answers 404 when it is gone, which is the same status a cold listing would
@@ -159,7 +165,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
    * 1.8 ms, so the scan is also what load stretches.
    *
    * Retention, not peak memory, is what the cache adds: the listing was
-   * already built in full on every request; it is now held for the TTL.
+   * already built in full on every request; it is now held between refreshes.
    */
   // Concurrent callers share one scan. A screenful of Templates cards asks for
   // its example documents together, and each starting its own scan made every
@@ -168,7 +174,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   const scanSkillLikeEntries = () => {
     skillLikeScan ??= listAllSkillLikeEntries()
       .then((entries) => {
-        cachedSkillLikeEntries = { entries, expiresAt: Date.now() + skillSubresourceCacheTtlMs };
+        cachedSkillLikeEntries = { entries, staleAt: Date.now() + skillSubresourceCacheTtlMs };
         return entries;
       })
       .finally(() => {
@@ -177,9 +183,16 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
     return skillLikeScan;
   };
   const resolveSkillLikeEntry = async (id: unknown) => {
-    if (cachedSkillLikeEntries && cachedSkillLikeEntries.expiresAt > Date.now()) {
+    if (cachedSkillLikeEntries) {
       const cached = findSkillById(cachedSkillLikeEntries.entries, id);
-      if (cached) return cached;
+      if (cached) {
+        if (cachedSkillLikeEntries.staleAt <= Date.now()) {
+          // A failed background refresh keeps the old listing; the next stale
+          // hit tries again, and a miss still surfaces the scan error.
+          void scanSkillLikeEntries().catch(() => undefined);
+        }
+        return cached;
+      }
     }
     // A scan already in flight may have read the registry before this request
     // arrived, so a miss against it scans again: the 404 must come from a scan

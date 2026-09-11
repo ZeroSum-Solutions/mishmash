@@ -597,6 +597,19 @@ describe('GET /api/skills/:id/example catalogue reuse', () => {
     seedTemplate(templatesRoot, 'alpha', { 'example.html': '<p>alpha example</p>' });
     seedTemplate(templatesRoot, 'beta', { 'examples/one.html': '<p>beta one</p>' });
     const scans = { count: 0 };
+    // While set, every scan reads the registry and then waits here, so a test
+    // can observe what a request does while a refresh is still running.
+    let scanGate: Promise<void> | null = null;
+    const holdScans = () => {
+      let release = () => {};
+      scanGate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return () => {
+        scanGate = null;
+        release();
+      };
+    };
     let server: http.Server | undefined;
     const app = express();
     registerStaticResourceRoutes(app, {
@@ -640,7 +653,9 @@ describe('GET /api/skills/:id/example catalogue reuse', () => {
         listAllDesignTemplates: async () => listSkills([templatesRoot]),
         listAllSkillLikeEntries: async () => {
           scans.count += 1;
-          return listSkills([templatesRoot]);
+          const entries = await listSkills([templatesRoot]);
+          if (scanGate) await scanGate;
+          return entries;
         },
         mimeFor: () => 'application/octet-stream',
       },
@@ -650,7 +665,7 @@ describe('GET /api/skills/:id/example catalogue reuse', () => {
     });
     servers.push(server);
     const { port } = server.address() as { port: number };
-    return { baseUrl: `http://127.0.0.1:${port}`, scans, templatesRoot };
+    return { baseUrl: `http://127.0.0.1:${port}`, scans, templatesRoot, holdScans };
   }
 
   const exampleUrl = (baseUrl: string, id: string) =>
@@ -675,6 +690,29 @@ describe('GET /api/skills/:id/example catalogue reuse', () => {
 
     expect(responses.map((res) => res.status)).toEqual(ids.map(() => 200));
     expect(scans.count).toBe(1);
+  });
+
+  // The common gallery visit arrives more than a TTL after the last template
+  // request: the user works elsewhere, then opens Templates. Waiting for a full
+  // rescan there made the first screenful pay for it (112 ms per card on a
+  // 362-entry test daemon, several hundred on the live catalogue).
+  it('answers a hit from a listing past its TTL at once and refreshes the listing behind it', async () => {
+    const { baseUrl, scans, holdScans } = await mount();
+    expect((await fetch(exampleUrl(baseUrl, 'alpha'))).status).toBe(200);
+    expect(scans.count).toBe(1);
+
+    const release = holdScans();
+    const later = Date.now() + 61_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => later);
+    try {
+      const stale = await fetch(exampleUrl(baseUrl, 'alpha'), { signal: AbortSignal.timeout(2_000) });
+      expect(stale.status).toBe(200);
+      expect(await stale.text()).toContain('alpha example');
+      expect(scans.count).toBe(2);
+    } finally {
+      vi.restoreAllMocks();
+      release();
+    }
   });
 
   it('rescans on a miss, so a template installed after the listing was cached still resolves', async () => {
