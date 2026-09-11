@@ -123,9 +123,10 @@ describe('DELETE /api/skills/:id', () => {
   });
 
   it('stops serving the deleted skill\'s sub-resources immediately', async () => {
-    // `sendSkillSubresource` resolves the entry through a 60 s listing cache
-    // (`resolveSkillLikeEntry`), and a delete does not invalidate it: for the
-    // rest of the TTL a lookup can still name the removed entry's directory.
+    // `sendSkillSubresource` resolves the entry through a shared listing cache
+    // (`resolveSkillLikeEntry`). The delete route drops that listing, but a
+    // removal made outside the daemon does not: until the next refresh a lookup
+    // can still name the removed entry's directory.
     // What must stay true is the OBSERVABLE half — the asset stops being
     // served — and it does, because the handler resolves the file under that
     // directory and answers 404 when it is gone. Fetching before AND after is

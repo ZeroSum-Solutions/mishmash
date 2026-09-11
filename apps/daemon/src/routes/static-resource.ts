@@ -124,20 +124,29 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
   const skillSubresourceCacheTtlMs = 60_000;
   let cachedSkillLikeEntries: {
     entries: Awaited<ReturnType<typeof listAllSkillLikeEntries>>;
-    expiresAt: number;
+    staleAt: number;
   } | null = null;
 
   /**
    * Resolve the on-disk directory a skill-like entry owns, for a sub-resource
-   * request.
+   * or example request.
    *
-   * INVARIANT: a hit is answered from a listing at most
-   * `skillSubresourceCacheTtlMs` old, and a miss always rescans before it
-   * answers 404 -- so an entry installed a moment ago is never hidden by the
-   * cache, and the only thing the cache can do is skip work.
+   * INVARIANT: a miss always rescans before it answers 404, so an entry
+   * installed a moment ago is never hidden by the cache, and every route in
+   * this file that imports, updates, installs or deletes a skill drops the
+   * listing, so the next request sees that change. A hit is answered at once
+   * from the last listing, and that listing has no age limit: the first hit
+   * that finds it older than `skillSubresourceCacheTtlMs` starts a refresh
+   * behind its response, so after an idle period that hit can still answer
+   * from a listing of any age. Only changes made on disk outside the daemon
+   * wait for that refresh. Blocking the hit on the refresh made the most
+   * common gallery visit (Templates opened more than a TTL after the last
+   * template request) pay a full scan per card on its first screenful.
    *
-   * Removal is the one direction a lookup miss cannot catch: for up to the TTL
-   * a hit can still name the directory of an entry that has just been deleted.
+   * Removal outside the daemon is the one direction a lookup miss cannot
+   * catch: until the next refresh a hit can still name the directory of an
+   * entry that has just been deleted (or, for the same window, the built-in
+   * directory a user entry copied in by hand now shadows).
    * That is harmless because the directory is what the entry OWNS, not what it
    * serves -- `sendSkillSubresource` still resolves the file under it and
    * answers 404 when it is gone, which is the same status a cold listing would
@@ -159,17 +168,58 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
    * 1.8 ms, so the scan is also what load stretches.
    *
    * Retention, not peak memory, is what the cache adds: the listing was
-   * already built in full on every request; it is now held for the TTL.
+   * already built in full on every request; it is now held between refreshes.
    */
+  // Concurrent callers share one scan. A screenful of Templates cards asks for
+  // its example documents together, and each starting its own scan made every
+  // card pay for all of them (2.8 s per card for 12 at once on the live daemon).
+  let skillLikeScan: ReturnType<typeof listAllSkillLikeEntries> | null = null;
+  // Bumped by every route in this file that changes a skill-like entry. A scan
+  // that started before the change must not write its listing back, and the
+  // next request must not join it.
+  let skillLikeGeneration = 0;
+  const invalidateSkillLikeEntries = () => {
+    skillLikeGeneration += 1;
+    cachedSkillLikeEntries = null;
+    skillLikeScan = null;
+  };
+  const scanSkillLikeEntries = () => {
+    if (skillLikeScan) return skillLikeScan;
+    const generation = skillLikeGeneration;
+    const scan = listAllSkillLikeEntries()
+      .then((entries) => {
+        if (generation === skillLikeGeneration) {
+          cachedSkillLikeEntries = { entries, staleAt: Date.now() + skillSubresourceCacheTtlMs };
+        }
+        return entries;
+      })
+      .finally(() => {
+        if (skillLikeScan === scan) skillLikeScan = null;
+      });
+    skillLikeScan = scan;
+    return scan;
+  };
   const resolveSkillLikeEntry = async (id: unknown) => {
-    const now = Date.now();
-    if (cachedSkillLikeEntries && cachedSkillLikeEntries.expiresAt > now) {
+    if (cachedSkillLikeEntries) {
       const cached = findSkillById(cachedSkillLikeEntries.entries, id);
-      if (cached) return cached;
+      if (cached) {
+        if (cachedSkillLikeEntries.staleAt <= Date.now()) {
+          // A failed background refresh keeps the old listing; the next stale
+          // hit tries again, and a miss still surfaces the scan error.
+          void scanSkillLikeEntries().catch((err) => {
+            console.warn('[skills] background listing refresh failed:', err);
+          });
+        }
+        return cached;
+      }
     }
-    const entries = await listAllSkillLikeEntries();
-    cachedSkillLikeEntries = { entries, expiresAt: Date.now() + skillSubresourceCacheTtlMs };
-    return findSkillById(entries, id);
+    // A scan already in flight may have read the registry before this request
+    // arrived, so a miss against it scans again: the 404 must come from a scan
+    // that started after the request did.
+    const joined = skillLikeScan !== null;
+    const found = findSkillById(await scanSkillLikeEntries(), id);
+    if (found || !joined) return found;
+    return findSkillById(await scanSkillLikeEntries(), id);
   };
 
   const sendSkillSubresource = async (
@@ -473,6 +523,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
     if (!requireLocalOrigin(req, res)) return;
     try {
       const result = await importUserSkill(USER_SKILLS_DIR, req.body || {});
+      invalidateSkillLikeEntries();
       const skills = await listAllSkills();
       const skill = findSkillById(skills, result.id);
       if (!skill) {
@@ -524,6 +575,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
         id: skill.id,
         sourceDir: skill.dir,
       });
+      invalidateSkillLikeEntries();
       const next = await listAllSkills();
       const updated = findSkillById(next, result.id);
       if (!updated) {
@@ -718,8 +770,9 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       // Span both functional skills and design templates: rendered example
       // HTML rewrites assets to /api/skills/<id>/... and we want those URLs
       // to keep resolving regardless of which root owns the backing folder
-      // after the skills/design-templates split.
-      const skills = await listAllSkillLikeEntries();
+      // after the skills/design-templates split. Resolved through the shared
+      // short-lived listing: the Templates gallery issues one of these per
+      // card, and a full registry scan per request cost 420-590 ms a card.
 
       // 1. Derived `<parent>:<child>` id — resolve straight to the matching
       // file under <parentDir>/examples/. Done before findSkillById so the
@@ -727,7 +780,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       // file when a sample is missing (we'd rather 404 explicitly).
       const derived = splitDerivedSkillId(req.params.id);
       if (derived) {
-        const parent = findSkillById(skills, derived.parentId);
+        const parent = await resolveSkillLikeEntry(derived.parentId);
         if (!parent) {
           return res.status(404).type('text/plain').send('skill not found');
         }
@@ -748,7 +801,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
           .send('derived example not found');
       }
 
-      const skill = findSkillById(skills, req.params.id);
+      const skill = await resolveSkillLikeEntry(req.params.id);
       if (!skill) {
         return res.status(404).type('text/plain').send('skill not found');
       }
@@ -861,6 +914,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
     try {
       const result = await installFromTarget(req.body, USER_SKILLS_DIR, 'skill');
       if (!result.ok) return res.status(400).json({ error: result.error });
+      invalidateSkillLikeEntries();
       if (typeof result.dir !== 'string' || !result.dir) {
         return res.status(500).json({ error: 'skill install did not return an installation directory' });
       }
@@ -888,6 +942,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
     try {
       const result = await uninstallById(req.params.id, USER_SKILLS_DIR, SKILLS_DIR, 'skill');
       if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
+      invalidateSkillLikeEntries();
       res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ error: String(err) });

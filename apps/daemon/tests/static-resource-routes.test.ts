@@ -557,3 +557,240 @@ describe('design system import catalog lookup', () => {
     }
   });
 });
+
+// The Templates gallery loads one `/api/skills/:id/example` document per card
+// that ships no poster (358 of 561 cards on the live catalogue). The route
+// resolved each id through a fresh `listAllSkillLikeEntries` scan -- every
+// SKILL.md under every registry root read and parsed -- so on the live daemon
+// one card took 420-590 ms and a screenful of 12 concurrent cards took 2.8 s
+// each (measured 2026-09-11 UTC). These tests pin that the route answers from the
+// same short-lived listing the asset route uses, that concurrent cold requests
+// share one scan, and that a miss still rescans before it answers 404.
+describe('GET /api/skills/:id/example catalogue reuse', () => {
+  const servers: http.Server[] = [];
+  const tempRoots: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(
+      servers.splice(0).map((s) => new Promise<void>((resolve) => s.close(() => resolve()))),
+    );
+    for (const root of tempRoots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  function seedTemplate(root: string, id: string, files: Record<string, string>) {
+    const dir = path.join(root, id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'SKILL.md'),
+      `---\nname: ${id}\ndescription: example route fixture\n---\nbody`,
+    );
+    for (const [rel, content] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+      fs.writeFileSync(path.join(dir, rel), content);
+    }
+  }
+
+  async function mount() {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'od-example-route-'));
+    tempRoots.push(tempRoot);
+    const templatesRoot = path.join(tempRoot, 'design-templates');
+    const userSkillsRoot = path.join(tempRoot, 'user-skills');
+    seedTemplate(templatesRoot, 'alpha', { 'example.html': '<p>alpha example</p>' });
+    seedTemplate(templatesRoot, 'beta', { 'examples/one.html': '<p>beta one</p>' });
+    const scans = { count: 0 };
+    // While set, every scan reads the registry and then waits here, so a test
+    // can observe what a request does while a refresh is still running.
+    let scanGate: Promise<void> | null = null;
+    const holdScans = () => {
+      let release = () => {};
+      scanGate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return () => {
+        scanGate = null;
+        release();
+      };
+    };
+    // Resolves once the next scan has read the registry, before any gate.
+    const scanReadWaiters: Array<() => void> = [];
+    const nextScanRead = () => new Promise<void>((resolve) => scanReadWaiters.push(resolve));
+    const arrivals = { count: 0 };
+    // Waits until `n` requests have entered the app, then one more turn so each
+    // has run its handler up to its first await.
+    const waitForArrivals = async (n: number) => {
+      while (arrivals.count < n) await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+    };
+    let server: http.Server | undefined;
+    const app = express();
+    app.use((_req, _res, next) => {
+      arrivals.count += 1;
+      next();
+    });
+    registerStaticResourceRoutes(app, {
+      http: {
+        createSseResponse: () => undefined,
+        isLocalSameOrigin,
+        requireLocalDaemonRequest: (_req: unknown, _res: unknown, next: () => void) => next(),
+        resolvedPortRef: {
+          get current() {
+            const address = server?.address();
+            return typeof address === 'object' && address ? address.port : 0;
+          },
+        },
+        sendApiError: (res: express.Response, status: number, code: string, message: string) =>
+          res.status(status).json({ error: message, code }),
+        sendLiveArtifactRouteError: () => undefined,
+        sendMulterError: () => undefined,
+      },
+      paths: {
+        ARTIFACTS_DIR: path.join(tempRoot, 'artifacts'),
+        BRANDS_DIR: path.join(tempRoot, 'brands'),
+        BUNDLED_PETS_DIR: path.join(tempRoot, 'pets'),
+        CRAFT_DIR: path.join(tempRoot, 'craft'),
+        DESIGN_SYSTEMS_DIR: path.join(tempRoot, 'design-systems'),
+        DESIGN_TEMPLATES_DIR: templatesRoot,
+        LIBRARY_DIR: path.join(tempRoot, 'library'),
+        OD_BIN: path.join(tempRoot, 'od'),
+        PROJECT_ROOT: tempRoot,
+        PROJECTS_DIR: path.join(tempRoot, 'projects'),
+        PROMPT_TEMPLATES_DIR: path.join(tempRoot, 'prompt-templates'),
+        RUNTIME_DATA_DIR: path.join(tempRoot, 'data'),
+        RUNTIME_DATA_DIR_CANONICAL: path.join(tempRoot, 'data'),
+        SKILLS_DIR: path.join(tempRoot, 'skills'),
+        USER_DESIGN_SYSTEMS_DIR: path.join(tempRoot, 'user-design-systems'),
+        USER_DESIGN_TEMPLATES_DIR: path.join(tempRoot, 'user-design-templates'),
+        USER_SKILLS_DIR: userSkillsRoot,
+      },
+      resources: {
+        listAllDesignSystems: async () => [],
+        listAllSkills: async () => [],
+        listAllDesignTemplates: async () => listSkills([templatesRoot]),
+        listAllSkillLikeEntries: async () => {
+          scans.count += 1;
+          const entries = await listSkills([userSkillsRoot, templatesRoot]);
+          for (const notify of scanReadWaiters.splice(0)) notify();
+          if (scanGate) await scanGate;
+          return entries;
+        },
+        mimeFor: () => 'application/octet-stream',
+      },
+    });
+    server = await new Promise<http.Server>((resolve) => {
+      const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+    });
+    servers.push(server);
+    const { port } = server.address() as { port: number };
+    return {
+      baseUrl: `http://127.0.0.1:${port}`,
+      scans,
+      templatesRoot,
+      userSkillsRoot,
+      holdScans,
+      nextScanRead,
+      waitForArrivals,
+    };
+  }
+
+  const exampleUrl = (baseUrl: string, id: string) =>
+    `${baseUrl}/api/skills/${encodeURIComponent(id)}/example`;
+
+  it('answers repeated example requests from one catalogue scan', async () => {
+    const { baseUrl, scans } = await mount();
+
+    for (const id of ['alpha', 'beta:one', 'alpha', 'beta:one', 'alpha']) {
+      const res = await fetch(exampleUrl(baseUrl, id));
+      expect(res.status).toBe(200);
+      expect(await res.text()).toContain(id === 'alpha' ? 'alpha example' : 'beta one');
+    }
+    expect(scans.count).toBe(1);
+  });
+
+  it('shares one catalogue scan across concurrent cold example requests', async () => {
+    const { baseUrl, scans, holdScans, waitForArrivals } = await mount();
+    const ids = Array.from({ length: 12 }, (_, i) => (i % 2 === 0 ? 'alpha' : 'beta:one'));
+
+    // Hold the first scan until all 12 requests are in, so they truly overlap.
+    const release = holdScans();
+    const pending = ids.map((id) => fetch(exampleUrl(baseUrl, id)));
+    await waitForArrivals(ids.length);
+    release();
+    const responses = await Promise.all(pending);
+
+    expect(responses.map((res) => res.status)).toEqual(ids.map(() => 200));
+    expect(scans.count).toBe(1);
+  });
+
+  // The common gallery visit arrives more than a TTL after the last template
+  // request: the user works elsewhere, then opens Templates. Waiting for a full
+  // rescan there made the first screenful pay for it (122 ms per card on a
+  // 362-entry test daemon, several hundred on the live catalogue).
+  it('answers a hit from a listing past its TTL at once and refreshes the listing behind it', async () => {
+    const { baseUrl, scans, holdScans } = await mount();
+    expect((await fetch(exampleUrl(baseUrl, 'alpha'))).status).toBe(200);
+    expect(scans.count).toBe(1);
+
+    const release = holdScans();
+    // 61 s is past the route's 60 s `skillSubresourceCacheTtlMs`.
+    const realNow = Date.now.bind(Date);
+    vi.spyOn(Date, 'now').mockImplementation(() => realNow() + 61_000);
+    try {
+      const stale = await fetch(exampleUrl(baseUrl, 'alpha'), { signal: AbortSignal.timeout(2_000) });
+      expect(stale.status).toBe(200);
+      expect(await stale.text()).toContain('alpha example');
+      expect(scans.count).toBe(2);
+    } finally {
+      vi.restoreAllMocks();
+      release();
+    }
+  });
+
+  it('scans again when a miss joins a scan that read the registry before the entry existed', async () => {
+    const { baseUrl, scans, templatesRoot, holdScans, nextScanRead, waitForArrivals } = await mount();
+
+    const release = holdScans();
+    const read = nextScanRead();
+    const first = fetch(exampleUrl(baseUrl, 'alpha'));
+    await read;
+    seedTemplate(templatesRoot, 'gamma', { 'example.html': '<p>gamma example</p>' });
+    const gamma = fetch(exampleUrl(baseUrl, 'gamma'));
+    await waitForArrivals(2);
+    release();
+
+    expect((await first).status).toBe(200);
+    const res = await gamma;
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('gamma example');
+    expect(scans.count).toBe(2);
+  });
+
+  it('drops the listing when a skill is deleted, so the entry it shadowed is served next', async () => {
+    const { baseUrl, userSkillsRoot } = await mount();
+    seedTemplate(userSkillsRoot, 'alpha', { 'example.html': '<p>user alpha example</p>' });
+    const before = await fetch(exampleUrl(baseUrl, 'alpha'));
+    expect(await before.text()).toContain('<p>user alpha example</p>');
+
+    const deleted = await fetch(`${baseUrl}/api/skills/alpha`, {
+      method: 'DELETE',
+      headers: { Origin: baseUrl },
+    });
+    expect(deleted.status).toBe(200);
+
+    const after = await fetch(exampleUrl(baseUrl, 'alpha'));
+    expect(after.status).toBe(200);
+    expect(await after.text()).toContain('<p>alpha example</p>');
+  });
+
+  it('rescans on a miss, so a template installed after the listing was cached still resolves', async () => {
+    const { baseUrl, scans, templatesRoot } = await mount();
+    expect((await fetch(exampleUrl(baseUrl, 'alpha'))).status).toBe(200);
+
+    seedTemplate(templatesRoot, 'gamma', { 'example.html': '<p>gamma example</p>' });
+    const installed = await fetch(exampleUrl(baseUrl, 'gamma'));
+    expect(installed.status).toBe(200);
+    expect(await installed.text()).toContain('gamma example');
+
+    expect((await fetch(exampleUrl(baseUrl, 'missing'))).status).toBe(404);
+    expect(scans.count).toBe(3);
+  });
+});
