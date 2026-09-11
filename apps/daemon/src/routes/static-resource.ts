@@ -129,7 +129,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
 
   /**
    * Resolve the on-disk directory a skill-like entry owns, for a sub-resource
-   * request.
+   * or example request.
    *
    * INVARIANT: a hit is answered from a listing at most
    * `skillSubresourceCacheTtlMs` old, and a miss always rescans before it
@@ -161,15 +161,33 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
    * Retention, not peak memory, is what the cache adds: the listing was
    * already built in full on every request; it is now held for the TTL.
    */
+  // Concurrent callers share one scan. A screenful of Templates cards asks for
+  // its example documents together, and each starting its own scan made every
+  // card pay for all of them (2.8 s per card for 12 at once on the live daemon).
+  let skillLikeScan: ReturnType<typeof listAllSkillLikeEntries> | null = null;
+  const scanSkillLikeEntries = () => {
+    skillLikeScan ??= listAllSkillLikeEntries()
+      .then((entries) => {
+        cachedSkillLikeEntries = { entries, expiresAt: Date.now() + skillSubresourceCacheTtlMs };
+        return entries;
+      })
+      .finally(() => {
+        skillLikeScan = null;
+      });
+    return skillLikeScan;
+  };
   const resolveSkillLikeEntry = async (id: unknown) => {
-    const now = Date.now();
-    if (cachedSkillLikeEntries && cachedSkillLikeEntries.expiresAt > now) {
+    if (cachedSkillLikeEntries && cachedSkillLikeEntries.expiresAt > Date.now()) {
       const cached = findSkillById(cachedSkillLikeEntries.entries, id);
       if (cached) return cached;
     }
-    const entries = await listAllSkillLikeEntries();
-    cachedSkillLikeEntries = { entries, expiresAt: Date.now() + skillSubresourceCacheTtlMs };
-    return findSkillById(entries, id);
+    // A scan already in flight may have read the registry before this request
+    // arrived, so a miss against it scans again: the 404 must come from a scan
+    // that started after the request did.
+    const joined = skillLikeScan !== null;
+    const found = findSkillById(await scanSkillLikeEntries(), id);
+    if (found || !joined) return found;
+    return findSkillById(await scanSkillLikeEntries(), id);
   };
 
   const sendSkillSubresource = async (
@@ -718,8 +736,9 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       // Span both functional skills and design templates: rendered example
       // HTML rewrites assets to /api/skills/<id>/... and we want those URLs
       // to keep resolving regardless of which root owns the backing folder
-      // after the skills/design-templates split.
-      const skills = await listAllSkillLikeEntries();
+      // after the skills/design-templates split. Resolved through the shared
+      // short-lived listing: the Templates gallery issues one of these per
+      // card, and a full registry scan per request cost 420-590 ms a card.
 
       // 1. Derived `<parent>:<child>` id — resolve straight to the matching
       // file under <parentDir>/examples/. Done before findSkillById so the
@@ -727,7 +746,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       // file when a sample is missing (we'd rather 404 explicitly).
       const derived = splitDerivedSkillId(req.params.id);
       if (derived) {
-        const parent = findSkillById(skills, derived.parentId);
+        const parent = await resolveSkillLikeEntry(derived.parentId);
         if (!parent) {
           return res.status(404).type('text/plain').send('skill not found');
         }
@@ -748,7 +767,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
           .send('derived example not found');
       }
 
-      const skill = findSkillById(skills, req.params.id);
+      const skill = await resolveSkillLikeEntry(req.params.id);
       if (!skill) {
         return res.status(404).type('text/plain').send('skill not found');
       }
