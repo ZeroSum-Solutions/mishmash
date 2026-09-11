@@ -907,6 +907,17 @@ test('[P2] home topbar overlays close on outside click, Escape, and Settings ope
 });
 
 test('[P1] entry execution pill remains available across secondary entry pages', async ({ page }) => {
+  // Same setup the '[P0] @critical entry execution pill opens the Local CLI and
+  // BYOK switcher from Home' case above documents: InlineModelSwitcher closes
+  // its popover when the anchor chip leaves the safe region of
+  // `.entry-main--scroll` (the anchor-visibility effect in
+  // apps/web/src/components/InlineModelSwitcher.tsx). At the default 720px-tall
+  // Desktop Chrome viewport the popover does not fit, the scroll container
+  // moves, and the popover unmounts before this assertion reads it — on the box
+  // that failed as "element(s) not found" on the first repeat and passed on the
+  // next two. Give the popover room to render fully. The auto-close behavior is
+  // correct and is not what we're dodging.
+  await page.setViewportSize({ width: 1280, height: 1000 });
   await routeDesignSystems(page);
   await gotoEntryHome(page);
 
