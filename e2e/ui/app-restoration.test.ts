@@ -1819,6 +1819,7 @@ test('[P0] reloading a project keeps the Design Files entry reachable when it wa
     ),
   );
   console.log(`[diag] ${stamp()} localStorage before reload ${JSON.stringify(before)}`);
+  console.log(`[diag] ${stamp()} url before reload ${page.url()}`);
 
   await page.reload();
   await expect(page.getByTestId('file-workspace')).toBeVisible({ timeout: 20_000 });
