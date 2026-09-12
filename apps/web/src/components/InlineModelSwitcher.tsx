@@ -394,11 +394,19 @@ export function InlineModelSwitcher({
       const safeBottom = Math.min(window.innerHeight, scrollRect.bottom);
       const safeLeft = Math.max(0, scrollRect.left);
       const safeRight = Math.min(window.innerWidth, scrollRect.right);
+      // On the secondary entry pages the execution pill is a topbar control, so
+      // its rect rests flush with the topbar bottom (measured: chip bottom 78,
+      // topbar bottom 78). Counting a touching anchor as outside closed the
+      // popover in the same frame it opened, so no secondary page could ever
+      // show it. Treat the anchor as gone only once it is past the boundary by a
+      // margin: that keeps the intended close-on-scroll-away behaviour without
+      // depending on sub-pixel layout.
+      const ANCHOR_GONE_MARGIN = 2;
       if (
-        triggerRect.bottom <= safeTop ||
-        triggerRect.top >= safeBottom ||
-        triggerRect.right <= safeLeft ||
-        triggerRect.left >= safeRight
+        triggerRect.bottom < safeTop - ANCHOR_GONE_MARGIN ||
+        triggerRect.top > safeBottom + ANCHOR_GONE_MARGIN ||
+        triggerRect.right < safeLeft - ANCHOR_GONE_MARGIN ||
+        triggerRect.left > safeRight + ANCHOR_GONE_MARGIN
       ) {
         setOpen(false);
       }
