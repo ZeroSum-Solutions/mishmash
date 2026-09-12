@@ -728,6 +728,15 @@ function readCachedTabs(projectId: string): OpenTabsState | null {
 function writeCachedTabs(projectId: string, state: OpenTabsState): OpenTabsState {
   const next: OpenTabsState = {
     ...state,
+    // The cache is canonical between daemon writes (see `cacheTabsLocally`): the
+    // daemon PUT is debounced, so a reload can land while it is still in flight
+    // and `listTabs` then reports hasSavedState=false because no tabs_state row
+    // exists yet. `loadTabs` reconciles cache vs daemon by `updatedAt` and keeps
+    // the cache, but without this stamp the hydration still read
+    // hasSavedState=false and force-opened the primary file, dropping the
+    // restored workspace surface. Stamping it here keeps the cache honest: this
+    // function only runs when there is state worth saving.
+    hasSavedState: true,
     updatedAt: Date.now(),
   };
   if (typeof window !== 'undefined') {
