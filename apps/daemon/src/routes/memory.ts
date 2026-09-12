@@ -554,12 +554,12 @@ export function registerMemoryRoutes(app: Express, ctx: RegisterMemoryRoutesDeps
         typeof body.assistantMessage === 'string' ? body.assistantMessage : '';
       const hasAssistant = assistantMessage.trim().length > 0;
       const memoryConfig = await readMemoryConfig(RUNTIME_DATA_DIR);
-      if (memoryConfig.chatExtractionEnabled === false) {
-        return res.json({ changed: [], attemptedLLM: false });
-      }
       const changed = hasAssistant
         ? []
         : await extractFromMessage(RUNTIME_DATA_DIR, userMessage);
+      if (memoryConfig.chatExtractionEnabled === false) {
+        return res.json({ changed, attemptedLLM: false });
+      }
       // BYOK chat config — only forwarded by the web app for API-mode
       // chats. We strip the surface to the five fields pickProvider()
       // actually consumes and validate the provider against the four
