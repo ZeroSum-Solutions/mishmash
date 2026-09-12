@@ -528,6 +528,62 @@ leaves the model id alone.
 
 ---
 
+## CANVAS-20 — In Edit mode, switching to another file loses the per-element edit popup
+
+**Reported** 2026-09-09 by Devin from the alex roth ceramics project (`.od/projects/f7cd…`):
+with the file viewer in Edit mode, toggling from one page tab to another (e.g. `lighting.html`
+→ `drops.html`) leaves the toolbar in Edit, but clicking an element on the new page no longer
+brings up the edit popup. Leaving and re-entering Edit restores it.
+
+**Evidence grade:** symptom reported by the user; the analysis below is a code reading at
+`bc55a44cf`. Not reproduced in a browser here — the app's sign-in wall blocks a headless
+session, and the popup depends on a trusted click in a signed-in workspace. Treat the two
+candidate causes as ranked hypotheses, each with the check that confirms or kills it.
+
+**What the code reading rules out.**
+- The document-side bridge is always injected (`FileViewer.tsx:8021`, `editBridge: true` on
+  every preview srcDoc), and boots dormant until `od-edit-mode {enabled:true}`
+  (`edit-mode/bridge.ts:548`). It is present in the new document.
+- The host re-sends the mode to a freshly loaded iframe: `syncBridgeModes` runs from the
+  iframe load handlers (`FileViewer.tsx:13287`, `13316`, `13379`) and again whenever `srcDoc`
+  changes (`8503–8507`). So "the new document never learns it is in Edit" is unlikely on its own.
+
+**What the reading points at: Edit mode survives a file switch as a half-state.**
+`manualEditMode` is never cleared on `file.name` change. Every per-document piece of Edit
+state *is* cleared: the frozen snapshot and srcDoc flag (`6688–6692`), the selected target and
+panel position (`8614–8615`), the undo stack and error (`8620–8624`). After the switch the
+viewer is therefore "in Edit" with no frozen source, no selection, and a document that has just
+been rebuilt underneath it.
+
+1. **Ranked first — the freeze never re-arms, so the preview is re-sourced mid-mode.** The
+   freeze effect (`7885–7894`) captures `manualEditFrozenSource` only when
+   `previewReadyToFreeze` is true; until then `previewSource` is the live source (`7467`). If
+   `previewReadyToFreeze` stays false for the new file while `manualEditMode` is true (it is
+   computed from inlining/ready state that Edit mode itself suppresses — see the comment at
+   `7460–7466`, F004), the srcDoc keeps re-rendering from the live source and every rebuild
+   re-parses the document, dropping the bridge's selection and the host's just-set
+   `manualEditPanelPosition` — the popup opens and is torn down in the same tick, or never
+   receives the `od-edit-select` because the iframe was replaced between click and message.
+   *Check:* enter Edit, switch file, then log `manualEditFrozenSource`, `previewReadyToFreeze`
+   and the number of `srcDoc` recomputations after the switch; if the frozen source stays
+   `null` and `srcDoc` keeps changing, this is it.
+2. **Ranked second — the select listener guards reject the new frame.** The host listener for
+   `od-edit-select` (`8863–8972`) drops any message that fails
+   `isOurPreviewIframeSource` / `isActivePreviewIframeSource` (`6587–6590`, ref-based). If the
+   file switch remounts the preview iframe and the message arrives from the old
+   `contentWindow`, or from a URL-load frame while the srcDoc frame is the one deemed active,
+   the click is silently ignored. *Check:* log rejected `od-edit-select` events by source
+   after a switch.
+
+**Why it matters.** Edit is a modal state with a frozen snapshot, an undo stack and a live
+in-frame selection; today the flag outlives all of them. Either exit Edit on file switch
+(`setManualEditMode(false)` alongside the other resets at `6688–6692` — predictable, one line)
+or re-enter it cleanly once the new document has loaded (re-arm the freeze after the load
+handler that already calls `syncBridgeModes`). Exiting is the smaller change and matches what
+the user already does by hand to recover.
+
+---
+
 ### Reviewed and dismissed, with evidence
 
 Two findings from that review did **not** survive checking, recorded so they are not re-raised:
