@@ -765,6 +765,101 @@ interface ExtractionPattern {
   bodyTemplate: string;
 }
 
+type ExplicitMemoryKind = 'bug' | 'idea' | 'feature' | 'note' | 'remembered';
+
+interface ExplicitMemoryCommand {
+  kind: ExplicitMemoryKind;
+  type: 'feedback' | 'project';
+  content: string;
+}
+
+interface ExplicitMemoryCommandPattern {
+  re: RegExp;
+  kind: ExplicitMemoryKind | null;
+  type: 'feedback' | 'project' | null;
+  kindGroup?: number;
+  contentGroup: number;
+}
+
+const EXPLICIT_MEMORY_COMMAND_PATTERNS: ExplicitMemoryCommandPattern[] = [
+  {
+    re: /^\s*(?:(?:please|kindly)\s+|(?:can|could|would|will)\s+you\s+|go\s+ahead\s+and\s+)*(?:save|add|record|lo\s*,?\s*g)\s+(?:this\s+)?(?:to|in|into)\s+(?:the\s+)?durable\s+(?:notes?|memory)\s*(?:[:—,\-]\s*)?([\s\S]{4,1200}?)\s*$/i,
+    kind: 'note',
+    type: 'project',
+    contentGroup: 1,
+  },
+  {
+    re: /^\s*(?:(?:please|kindly)\s+|(?:can|could|would|will)\s+you\s+|go\s+ahead\s+and\s+)*(?:save|add|record|lo\s*,?\s*g)\s+(?:this\s+)?(?:to|in|into)\s+(?:the\s+)?(?:mishmash|mishmask|mishmag)\s+log(?:\s+log)?\s*(?:[:—,\-]\s*)?([\s\S]{4,1200}?)\s*$/i,
+    kind: 'note',
+    type: 'project',
+    contentGroup: 1,
+  },
+  {
+    re: /^\s*(?:(?:please|kindly)\s+|(?:can|could|would|will)\s+you\s+|go\s+ahead\s+and\s+)*remember\s+(?:this|that)\s*(?:[:—,\-]\s*)?([\s\S]{4,1200}?)\s*$/i,
+    kind: 'remembered',
+    type: 'feedback',
+    contentGroup: 1,
+  },
+  {
+    re: /^\s*(?:(?:please|kindly)\s+|(?:can|could|would|will)\s+you\s+|go\s+ahead\s+and\s+)*(?:save|add|record|lo\s*,?\s*g)\s+(?:of\s+)?(?:this\s+)?(?:as\s+)?(?:an?\s+)?(bug|idea|feature)(?:\s+(?:to|in|into)\s+(?:the\s+)?(?:(?:mishmash|mishmask|mishmag)\s+)?log(?:\s+log)?)?\s*(?:[:—,\-]\s*)?([\s\S]{4,1200}?)\s*$/i,
+    kind: null,
+    type: null,
+    kindGroup: 1,
+    contentGroup: 2,
+  },
+  {
+    re: /^\s*(?:(?:please|kindly)\s+|(?:can|could|would|will)\s+you\s+|go\s+ahead\s+and\s+)*lo\s*,?\s*g\s+this\s*[:—,\-]\s*([\s\S]{4,1200}?)\s*$/i,
+    kind: 'note',
+    type: 'project',
+    contentGroup: 1,
+  },
+];
+
+function parseExplicitMemoryCommand(userMessage: string): ExplicitMemoryCommand | null {
+  for (const pattern of EXPLICIT_MEMORY_COMMAND_PATTERNS) {
+    const match = pattern.re.exec(userMessage);
+    if (!match) continue;
+    const capturedKind = pattern.kindGroup == null
+      ? pattern.kind
+      : match[pattern.kindGroup]?.toLowerCase();
+    if (
+      capturedKind !== 'bug'
+      && capturedKind !== 'idea'
+      && capturedKind !== 'feature'
+      && capturedKind !== 'note'
+      && capturedKind !== 'remembered'
+    ) {
+      continue;
+    }
+    const content = match[pattern.contentGroup]?.trim();
+    if (!content || content.length < 4) continue;
+    return {
+      kind: capturedKind,
+      type: pattern.type ?? (capturedKind === 'bug' ? 'feedback' : 'project'),
+      content: truncate(content, 1200),
+    };
+  }
+  return null;
+}
+
+function explicitMemoryEntry(command: ExplicitMemoryCommand) {
+  const label = {
+    bug: 'Bug',
+    idea: 'Idea',
+    feature: 'Feature',
+    note: 'Note',
+    remembered: 'Remembered',
+  }[command.kind];
+  const summary = command.content.replace(/\s+/g, ' ').trim();
+  return {
+    id: deriveMemoryId(command.type, command.content),
+    type: command.type,
+    name: truncate(`${label}: ${summary}`, 80),
+    description: truncate(`${label} logged explicitly from chat: ${summary}`, 200),
+    body: `- ${label}: ${command.content}`,
+  };
+}
+
 const REMEMBER_PATTERNS: ExtractionPattern[] = [
   // English
   {
@@ -1094,11 +1189,46 @@ export async function extractFromMessage(dataDir, userMessage) {
     recordSkip({ userMessage, reason: 'memory-disabled', kind: 'heuristic' });
     return [];
   }
-  if (!cfg.chatExtractionEnabled) {
-    return [];
-  }
   const seen = new Set();
   const changed = [];
+  const explicitCommand = parseExplicitMemoryCommand(userMessage);
+  if (explicitCommand) {
+    const input = explicitMemoryEntry(explicitCommand);
+    seen.add(input.id);
+    try {
+      const existing = await readMemoryEntry(dataDir, input.id);
+      if (!existing) {
+        const entry = await upsertMemoryEntry(dataDir, input, {
+          silent: true,
+          source: 'heuristic',
+        });
+        changed.push({
+          id: entry.id,
+          name: entry.name,
+          description: entry.description,
+          type: entry.type,
+          updatedAt: entry.updatedAt,
+        });
+      }
+    } catch (err) {
+      console.warn('[memory] explicit memory write failed', err);
+    }
+  }
+  if (!cfg.chatExtractionEnabled) {
+    if (changed.length > 0) {
+      emitChange({
+        kind: 'extract',
+        count: changed.length,
+        source: 'heuristic',
+      });
+      recordHeuristic({
+        userMessage,
+        writtenCount: changed.length,
+        writtenIds: changed.map((entry) => entry.id),
+      });
+    }
+    return changed;
+  }
   // Onboarding → profile capture. When the user's message is the round-tripped
   // answer block from a discovery / task-type / profile question-form, seed (or
   // merge into) the singleton `user_profile` BEFORE the regex pack runs so the
@@ -1142,6 +1272,7 @@ export async function extractFromMessage(dataDir, userMessage) {
     // "我是" matches — e.g. "我是张三" then "我是软件工程师" — coexist
     // instead of overwriting one another.
     const id = deriveMemoryId(pattern.type, trimmedCaptured);
+    if (seen.has(id)) continue;
     try {
       const entry = await upsertMemoryEntry(
         dataDir,
@@ -1163,6 +1294,7 @@ export async function extractFromMessage(dataDir, userMessage) {
         type: entry.type,
         updatedAt: entry.updatedAt,
       });
+      seen.add(entry.id);
     } catch (err) {
       console.warn('[memory] auto-extract write failed', err);
     }

@@ -358,6 +358,56 @@ describe('memory routes', () => {
     expect(listJson.entries).toEqual([]);
   });
 
+  it('saves explicit durable notes when passive chat learning is disabled', async () => {
+    const configRes = await fetch(`${baseUrl}/api/memory/config`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chatExtractionEnabled: false }),
+    });
+    expect(configRes.status).toBe(200);
+
+    const res = await fetch(`${baseUrl}/api/memory/extract`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        userMessage: 'Log a feature: Support Vimeo imports.',
+      }),
+    });
+    expect(res.status).toBe(200);
+
+    const json = await res.json() as {
+      changed: Array<{ id: string; name: string; type: string }>;
+      attemptedLLM: boolean;
+    };
+    expect(json.attemptedLLM).toBe(false);
+    expect(json.changed).toHaveLength(1);
+    expect(json.changed[0]).toMatchObject({
+      id: 'project_support_vimeo_imports',
+      name: 'Feature: Support Vimeo imports.',
+      type: 'project',
+    });
+
+    const stored = await readMemoryEntry(
+      dataDir,
+      'project_support_vimeo_imports',
+    );
+    expect(stored?.body).toContain('Support Vimeo imports.');
+
+    const duplicateRes = await fetch(`${baseUrl}/api/memory/extract`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        userMessage: 'Log a feature: Support Vimeo imports.',
+      }),
+    });
+    expect(duplicateRes.status).toBe(200);
+    const duplicateJson = await duplicateRes.json() as {
+      changed: Array<unknown>;
+      attemptedLLM: boolean;
+    };
+    expect(duplicateJson).toEqual({ changed: [], attemptedLLM: false });
+  });
+
   it('reports attemptedLLM for post-turn extraction requests without triggering a real provider call', async () => {
     await fetch(`${baseUrl}/api/memory/config`, {
       method: 'PATCH',

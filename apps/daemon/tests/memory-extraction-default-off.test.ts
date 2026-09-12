@@ -7,6 +7,7 @@ import {
   extractFromMessage,
   listMemoryEntries,
   readMemoryConfig,
+  readMemoryEntry,
   writeMemoryConfig,
 } from '../src/memory.js';
 
@@ -56,6 +57,83 @@ describe('chat auto-extraction default', () => {
     await writeMemoryConfig(dataDir, { chatExtractionEnabled: true });
     const changed = await extractFromMessage(dataDir, '记住：主色永远用品牌绿');
     expect(changed.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    {
+      message:
+        'Please save this to durable notes: Use the Vimeo API for drag-and-drop video editing.',
+      type: 'project',
+      body: 'Use the Vimeo API for drag-and-drop video editing.',
+    },
+    {
+      message: 'Save this to durable memory — Keep exported videos non-destructive.',
+      type: 'project',
+      body: 'Keep exported videos non-destructive.',
+    },
+    {
+      message: 'Log this in the Mishmag log log: Add inline video trimming.',
+      type: 'project',
+      body: 'Add inline video trimming.',
+    },
+    {
+      message: 'Remember this: Prefer non-destructive media edits.',
+      type: 'feedback',
+      body: 'Prefer non-destructive media edits.',
+    },
+    {
+      message: 'Log a bug: The canvas drops the selected layer after undo.',
+      type: 'feedback',
+      body: 'The canvas drops the selected layer after undo.',
+    },
+    {
+      message: 'Log an idea: Add reusable timeline presets.',
+      type: 'project',
+      body: 'Add reusable timeline presets.',
+    },
+    {
+      message: 'Lo,g of a feature: Support Vimeo imports.',
+      type: 'project',
+      body: 'Support Vimeo imports.',
+    },
+  ])('saves explicit natural-language memory commands while passive extraction is off: $message', async ({
+    message,
+    type,
+    body,
+  }) => {
+    const changed = await extractFromMessage(dataDir, message);
+
+    expect(changed).toHaveLength(1);
+    expect(changed[0]?.type).toBe(type);
+    const entry = await readMemoryEntry(dataDir, changed[0]!.id);
+    expect(entry?.body).toContain(body);
+  });
+
+  it('does not treat discussion of logging as an explicit save command', async () => {
+    const changed = await extractFromMessage(
+      dataDir,
+      'When we log a feature, the UI should confirm it clearly.',
+    );
+
+    expect(changed).toEqual([]);
+    expect(await listMemoryEntries(dataDir)).toEqual([]);
+  });
+
+  it('does not create an empty memory from a command with no note content', async () => {
+    const changed = await extractFromMessage(dataDir, 'Log a feature');
+
+    expect(changed).toEqual([]);
+    expect(await listMemoryEntries(dataDir)).toEqual([]);
+  });
+
+  it('deduplicates an explicitly logged note by its normalized content', async () => {
+    const message = 'Log an idea: Add reusable timeline presets.';
+
+    await extractFromMessage(dataDir, message);
+    const duplicate = await extractFromMessage(dataDir, message);
+
+    expect(duplicate).toEqual([]);
+    expect(await listMemoryEntries(dataDir)).toHaveLength(1);
   });
 
   it('round-trips an explicit opt-in through writeMemoryConfig', async () => {
