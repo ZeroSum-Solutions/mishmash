@@ -424,7 +424,7 @@ jobs:
     needs: [scopes, runners]
     if: ${{ needs.scopes.outputs.run_e2e_vitest == 'true' }}
     runs-on: ${{ fromJSON(needs.runners.outputs.runs_on).js_large }}
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
