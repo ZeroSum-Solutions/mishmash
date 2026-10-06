@@ -104,16 +104,14 @@ no branch protection or rulesets — so no required status check can wedge a PR
 waiting on a job that no longer runs. Re-check that last point if branch
 protection is ever enabled.
 
-**CI needs `OD_CI_RUNNER_MODE=economic` on this fork.** `.github/scripts/runners.py`
-defaults to mode `default`, which resolves the `control` runner profile to
-upstream's self-hosted Contabo labels (`self-hosted`, `od-persistent-ci`,
-`od-ci-hot-poc`) and the hot-path profiles to the paid `blacksmith-4vcpu-ubuntu-2404`
-service. Neither exists for this repo, so `Static gate` and `Detect validation
-scopes` sit queued forever and no PR can ever go green. Mode `economic` resolves
-every Linux profile to GitHub-hosted `ubuntu-24.04`. Set as a repo variable
-(`gh variable set OD_CI_RUNNER_MODE --body economic`); re-set it on any new
-clone or fork. Note that a run already queued against a missing self-hosted
-runner cannot be cancelled promptly — push a new commit to get a fresh run.
+**CI runs on GitHub-hosted runners in every mode on this fork.** Upstream's
+`.github/scripts/runners.py` sends the `control` profile to its self-hosted Contabo
+labels and the hot-path profiles to Blacksmith; neither exists here (Blacksmith was
+retired on 2026-10-05), and a job on a missing label sits queued forever. The fork's
+`runners.py` therefore resolves every Linux profile to `ubuntu-24.04` whatever
+`OD_CI_RUNNER_MODE` says; the mode is still reported in the `decision` output. Keep this
+change when syncing `runners.py` from upstream. A run already queued against a missing
+self-hosted runner cannot be cancelled promptly — push a new commit to get a fresh run.
 
 **Deleting a bundled plugin needs a daemon restart.** The plugin registry is
 cached: after removing the directory the daemon kept serving the entry with a

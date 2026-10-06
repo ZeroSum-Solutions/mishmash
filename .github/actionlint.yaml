@@ -13,8 +13,3 @@ self-hosted-runner:
     - od-persistent-ci
     - open-design-ci
     - release-beta
-    - blacksmith-2vcpu-ubuntu-2404-arm
-    - blacksmith-4vcpu-ubuntu-2404-arm
-    - blacksmith-8vcpu-ubuntu-2404-arm
-    - blacksmith-4vcpu-ubuntu-2404
-    - blacksmith-8vcpu-ubuntu-2404

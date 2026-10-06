@@ -14,6 +14,8 @@ topology, not as a description of what runs here.
 
 This directory is still only partially standardized. Several historical workflows and helper locations do not yet follow one uniform shape. Do not copy old patterns blindly. For new work, bug fixes, and cleanup, use the `ci.yml` + `comment.atom.yml` + `autofix.atom.yml` + `report.atom.yml` + `.github/scripts/handoff.py` system as the reference topology unless a maintainer explicitly chooses a different boundary.
 
+ZeroSum fork note (2026-10-05): `comment.atom.yml`, `autofix.atom.yml` and `report.atom.yml` were removed here because every job was guarded by `github.repository == 'nexu-io/open-design'` and never ran in this fork. Restore them from upstream before relying on the handoff consumers.
+
 ## Required reading
 
 Before changing GitHub automation, read the current versions of:
